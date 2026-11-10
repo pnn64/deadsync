@@ -3,6 +3,7 @@ use super::*;
 use crate::memory::fallible;
 #[cfg(test)]
 mod allocation_tests;
+mod scalar;
 
 pub(super) const TAB_FIRST: u64 = 96;
 pub(super) const TAB_CONCAT: u64 = 96;
@@ -37,6 +38,8 @@ pub(super) struct Sort {
     j: i64,
     pivot: Value,
     saved: [Value; 2],
+    // A weak identity hint: always compare against the live argument before use.
+    scalar: Option<FunctionId>,
 }
 impl Sort {
     pub(super) fn roots(&self) -> [Value; 3] {
@@ -269,6 +272,7 @@ impl Vm {
         right: Value,
         stage: SortStage,
         base: usize,
+        error_line: &mut Option<u32>,
     ) -> Result<Option<usize>, Error> {
         self.sorts[index].stage = stage;
         let frame = self.frames[self.sorts[index].owner];
@@ -279,7 +283,12 @@ impl Vm {
             self.registers[base] = comparator;
             self.registers[base + 1] = left;
             self.registers[base + 2] = right;
-            if let Some(actual) = self.start_call(base, 2, 1, false)? {
+            if let Some(function) = self.sorts[index].scalar
+                && comparator == Value::Function(function)
+                && let Some(actual) = self.try_sort_leaf(function, base, error_line)?
+            {
+                self.finish_call(base, actual, 1);
+            } else if let Some(actual) = self.start_call(base, 2, 1, false)? {
                 self.finish_call(base, actual, 1);
             }
         }
@@ -304,25 +313,60 @@ impl Vm {
         sort.j = high - 1;
         Ok(())
     }
-    fn sort_left(&mut self, index: usize, base: usize) -> Result<Option<usize>, Error> {
+    fn sort_left(
+        &mut self,
+        index: usize,
+        base: usize,
+        error_line: &mut Option<u32>,
+    ) -> Result<Option<usize>, Error> {
         self.sorts[index].i += 1;
         let sort = &self.sorts[index];
         let (i, pivot) = (sort.i, sort.pivot);
         let table = self.sort_table(index)?;
         let value = self.raw_index(table, i);
         self.sorts[index].saved[0] = value;
-        self.sort_compare(index, value, pivot, SortStage::Left, base)
+        self.sort_compare(index, value, pivot, SortStage::Left, base, error_line)
     }
-    fn sort_right(&mut self, index: usize, base: usize) -> Result<Option<usize>, Error> {
+    fn sort_right(
+        &mut self,
+        index: usize,
+        base: usize,
+        error_line: &mut Option<u32>,
+    ) -> Result<Option<usize>, Error> {
         self.sorts[index].j -= 1;
         let sort = &self.sorts[index];
         let (j, pivot) = (sort.j, sort.pivot);
         let table = self.sort_table(index)?;
         let value = self.raw_index(table, j);
         self.sorts[index].saved[1] = value;
-        self.sort_compare(index, pivot, value, SortStage::Right, base)
+        self.sort_compare(index, pivot, value, SortStage::Right, base, error_line)
     }
-    pub(super) fn sort_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
+    #[inline(never)]
+    pub(super) fn sort_step(
+        &mut self,
+        mut frame: Frame,
+        error_line: &mut Option<u32>,
+    ) -> Result<Option<usize>, Error> {
+        let owner = self.frames.len() - 1;
+        loop {
+            let result = self.sort_step_once(frame, error_line)?;
+            if result.is_some()
+                || self.frames.len() != owner + 1
+                || !matches!(self.frames[owner].function, FrameKind::Native(TAB_SORT))
+                || self.transition.is_some()
+                || !self.sort_fast_context()
+                || !self.sort_gc_ready()
+            {
+                return Ok(result);
+            }
+            frame = self.frames[owner];
+        }
+    }
+    fn sort_step_once(
+        &mut self,
+        mut frame: Frame,
+        error_line: &mut Option<u32>,
+    ) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let mut base = frame.base;
         let index = if frame.pc() == 0 {
@@ -339,6 +383,16 @@ impl Vm {
                 Value::Nil | Value::Function(_) | Value::Native(_)
             ) {
                 return Err(self.argument_type_error(args, count, 1, "function"));
+            }
+            // Numeric permutations cannot change collector roots. Run before
+            // allocating continuation state, but retain ordinary argument and
+            // C-stack validation and every observer/GC-work boundary.
+            if comparator == Value::Nil
+                && self.sort_fast_context()
+                && self.numeric_sort_gc_ready()
+                && self.tables[slot_index(table.0)].sort_finite_numbers(len as usize)
+            {
+                return self.return_frame(frame, base, 0);
             }
             let before = self.sorts.capacity();
             let reserved = self.sorts.try_reserve(1);
@@ -375,6 +429,7 @@ impl Vm {
                 j: 0,
                 pivot: Value::Nil,
                 saved: [Value::Nil; 2],
+                scalar: self.sort_leaf_candidate(comparator),
             });
             self.frames[owner].pc = (index + 1) as u32;
             index
@@ -404,7 +459,7 @@ impl Vm {
                     sort.low = low;
                     sort.high = high;
                     sort.saved = [a, b];
-                    return self.sort_compare(index, b, a, SortStage::Edge, base);
+                    return self.sort_compare(index, b, a, SortStage::Edge, base, error_line);
                 }
                 SortStage::Edge => {
                     if result {
@@ -420,7 +475,7 @@ impl Vm {
                     let a = self.raw_index(table, (low + high) / 2);
                     let b = self.raw_index(table, low);
                     self.sorts[index].saved = [a, b];
-                    return self.sort_compare(index, a, b, SortStage::MiddleLow, base);
+                    return self.sort_compare(index, a, b, SortStage::MiddleLow, base, error_line);
                 }
                 SortStage::MiddleLow => {
                     let table = self.sort_table(index)?;
@@ -430,13 +485,20 @@ impl Vm {
                     } else {
                         let b = self.raw_index(table, high);
                         self.sorts[index].saved[1] = b;
-                        return self.sort_compare(index, b, saved[0], SortStage::MiddleHigh, base);
+                        return self.sort_compare(
+                            index,
+                            b,
+                            saved[0],
+                            SortStage::MiddleHigh,
+                            base,
+                            error_line,
+                        );
                     }
                     self.sort_partition(index)?;
                     if high - low == 2 {
                         continue;
                     }
-                    return self.sort_left(index, base);
+                    return self.sort_left(index, base, error_line);
                 }
                 SortStage::MiddleHigh => {
                     if result {
@@ -448,29 +510,29 @@ impl Vm {
                     if high - low == 2 {
                         continue;
                     }
-                    return self.sort_left(index, base);
+                    return self.sort_left(index, base, error_line);
                 }
                 SortStage::Left => {
                     if result {
                         if i > high {
                             return Err(failure("invalid order function for sorting"));
                         }
-                        return self.sort_left(index, base);
+                        return self.sort_left(index, base, error_line);
                     }
-                    return self.sort_right(index, base);
+                    return self.sort_right(index, base, error_line);
                 }
                 SortStage::Right => {
                     if result {
                         if j < low {
                             return Err(failure("invalid order function for sorting"));
                         }
-                        return self.sort_right(index, base);
+                        return self.sort_right(index, base, error_line);
                     }
                     let table = self.sort_table(index)?;
                     if j >= i {
                         self.set_index(table, i, saved[1])?;
                         self.set_index(table, j, saved[0])?;
-                        return self.sort_left(index, base);
+                        return self.sort_left(index, base, error_line);
                     }
                     let a = self.raw_index(table, high - 1);
                     let b = self.raw_index(table, i);

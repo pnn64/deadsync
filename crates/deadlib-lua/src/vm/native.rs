@@ -577,7 +577,12 @@ impl Vm {
             PRINT => self.print_step(frame),
             strings::STR_GSUB => self.substitute_step(frame),
             tables::TAB_FOREACH | tables::TAB_FOREACHI => self.foreach_step(id, frame),
-            tables::TAB_SORT => self.sort_step(frame),
+            tables::TAB_SORT => {
+                let mut line = None;
+                let result = self.sort_step(frame, &mut line);
+                self.sort_line = line;
+                result
+            }
             threads::CO_RESUME | threads::CO_YIELD => self.coroutine_step(id, frame),
             _ if scheduled == 1 => self.coroutine_step(id, frame),
             _ => {

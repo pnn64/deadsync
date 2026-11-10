@@ -284,6 +284,26 @@ impl Table {
         }
         (old != Value::Nil).then_some(old)
     }
+    // Equal finite numbers have identical bits after excluding negative zero,
+    // so an unstable numeric sort cannot expose a changed tie permutation.
+    pub(crate) fn sort_finite_numbers(&mut self, len: usize) -> bool {
+        let Some(values) = self.array.get_mut(..len) else {
+            return false;
+        };
+        if !values.iter().all(|value| {
+            matches!(value, Value::Number(n)
+            if n.is_finite() && (*n != 0.0 || !n.is_sign_negative()))
+        }) {
+            return false;
+        }
+        values.sort_unstable_by(|left, right| {
+            let (Value::Number(a), Value::Number(b)) = (*left, *right) else {
+                unreachable!("validated numeric array")
+            };
+            a.total_cmp(&b)
+        });
+        true
+    }
     pub fn get(&self, key: Value) -> Value {
         if let Some(i) = array_index(key)
             && let Some(value) = self.array.get(i)
