@@ -614,7 +614,26 @@ fn find_closest_match(buffer: &[i16], correlate: &[i16]) -> usize {
     find_closest_match_after_first(buffer, correlate, first_score)
 }
 
-fn find_closest_match_pcm(buffer: &[i16], correlate: &[i16], mut best_score: u32) -> usize {
+fn find_closest_match_pcm(buffer: &[i16], correlate: &[i16], best_score: u32) -> usize {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if correlate.len() >= 32 && std::arch::is_x86_feature_detected!("avx2") {
+        // SAFETY: runtime detection checks CPU and OS support for AVX2.
+        // The specialized search uses the same safe slice operations.
+        return unsafe { find_closest_match_pcm_avx2(buffer, correlate, best_score) };
+    }
+    find_closest_match_pcm_inner(buffer, correlate, best_score)
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 before entering.
+unsafe fn find_closest_match_pcm_avx2(buffer: &[i16], correlate: &[i16], best_score: u32) -> usize {
+    find_closest_match_pcm_inner(buffer, correlate, best_score)
+}
+
+#[inline(always)]
+fn find_closest_match_pcm_inner(buffer: &[i16], correlate: &[i16], mut best_score: u32) -> usize {
     let mut best_offset = 0;
     for (offset, frames) in buffer.windows(correlate.len()).enumerate().skip(1) {
         let score = pcm_correlation_score(frames, correlate, best_score);

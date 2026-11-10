@@ -298,3 +298,66 @@ fn crossfade_preserves_original_float_formula_across_pcm_range() {
         assert_eq!(actual.to_bits(), (b - a).mul_add(weight, a).to_bits());
     }
 }
+
+#[test]
+fn dispatched_pcm_search_preserves_unaligned_windows_winners_and_ties() {
+    use crate::stream::perf_tests::allocations;
+
+    for len in [31, 32, 33, 63, 64, 65, 255, 256, 257, 264, 360, 720] {
+        for distance in [1, 3, 31, 97] {
+            for seed in 0..12 {
+                let mut input = noise(len + distance + 3, seed);
+                let mut pattern = noise(len + 1, seed + 100);
+                let input = &mut input[3..];
+                let pattern = &mut pattern[1..];
+                match seed % 6 {
+                    0 => {
+                        input.iter_mut().for_each(|sample| *sample /= 128);
+                        pattern.iter_mut().for_each(|sample| *sample /= 128);
+                    }
+                    1 => input[distance..].copy_from_slice(pattern),
+                    2 => {
+                        input.fill(i16::MAX);
+                        pattern.fill(i16::MIN);
+                    }
+                    3 => {
+                        input.fill(0);
+                        pattern.fill(1);
+                    }
+                    4 => {
+                        input[..len].copy_from_slice(pattern);
+                        input[distance..].copy_from_slice(pattern);
+                    }
+                    _ => {}
+                }
+                let expected = reference(input, pattern);
+                allocations::assert_no_churn(|| {
+                    assert_eq!(find_closest_match(input, pattern), expected);
+                });
+                let first_score: u32 = input
+                    .iter()
+                    .zip(pattern.iter())
+                    .map(|(&a, &b)| u32::from(a.abs_diff(b)))
+                    .sum();
+                // The integer search is valid when the initial score is in
+                // the exact f32 PCM domain, including its upper boundary.
+                if first_score <= 1 << 24 {
+                    allocations::assert_no_churn(|| {
+                        assert_eq!(
+                            find_closest_match_pcm_inner(input, pattern, first_score),
+                            expected
+                        );
+                        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                        if std::arch::is_x86_feature_detected!("avx2") {
+                            // SAFETY: runtime detection establishes AVX2 support.
+                            assert_eq!(
+                                unsafe { find_closest_match_pcm_avx2(input, pattern, first_score) },
+                                expected
+                            );
+                        }
+                    });
+                }
+            }
+        }
+    }
+}
