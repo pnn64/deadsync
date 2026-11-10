@@ -52,6 +52,7 @@ struct Function<'a> {
     gc_live: Vec<u32>,
     gc_maps: Vec<[u64; 4]>,
     gc_index: HashMap<[u64; 4], u16>,
+    gc_last: Option<u16>,
     live: [u64; 4],
     debug_hidden: [u64; 4],
     debug_named: [u64; 4],
@@ -277,17 +278,41 @@ impl<'a> Compiler<'a> {
     }
     fn live_map(&mut self) -> Result<u16, Error> {
         let mask = self.function.live;
-        if let Some(&index) = self.function.gc_index.get(&mask) {
+        // Most instructions reuse the preceding map, including the before/after
+        // pair of instructions that do not change register liveness.
+        if let Some(index) = self.function.gc_last
+            && self.function.gc_maps[usize::from(index)] == mask
+        {
+            return Ok(index);
+        }
+        // Small functions need only a few maps. Their dense vector avoids both
+        // hashing and an additional allocation until a larger index is useful.
+        let present = if self.function.gc_maps.len() <= 16 {
+            self.function
+                .gc_maps
+                .iter()
+                .position(|m| *m == mask)
+                .map(|i| i as u16)
+        } else {
+            self.function.gc_index.get(&mask).copied()
+        };
+        if let Some(index) = present {
+            self.function.gc_last = Some(index);
             return Ok(index);
         }
         let index = u16::try_from(self.function.gc_maps.len())
             .map_err(|_| self.error(ErrorKind::Limit, "too many GC register maps"))?;
         self.function.gc_maps.try_push(mask)?;
-        self.function
-            .gc_index
-            .try_reserve(1)
-            .map_err(|_| Error::memory())?;
-        self.function.gc_index.insert(mask, index);
+        if index == 16 {
+            self.function.gc_index.try_reserve(17)?;
+            for (i, &mask) in self.function.gc_maps.iter().enumerate() {
+                self.function.gc_index.insert(mask, i as u16);
+            }
+        } else if index > 16 {
+            self.function.gc_index.try_reserve(1)?;
+            self.function.gc_index.insert(mask, index);
+        }
+        self.function.gc_last = Some(index);
         Ok(index)
     }
     fn emit(&mut self, op: Op, a: u8, mut b: u16, mut c: u32) -> Result<usize, Error> {
