@@ -251,11 +251,11 @@ impl<'a> Compiler<'a> {
                     }
                 }
                 Task::TailEnd(line) => {
-                    *self
-                        .function
-                        .lines
+                    self.function
+                        .code
                         .last_mut()
-                        .expect("tail call emits return") = line;
+                        .expect("tail call emits return")
+                        .line = line;
                 }
                 Task::WhileCond(id, saved, start, reg) => {
                     let Stmt::While(cond, body) = &self.ast.stmts[id].0 else {
@@ -451,11 +451,16 @@ impl<'a> Compiler<'a> {
                         },
                     );
                     if op == Kind::Concat
-                        && let Some(&line) = self.function.hook_lines.last().filter(|&&l| l != 0)
+                        && let Some(line) = self
+                            .function
+                            .code
+                            .last()
+                            .map(|i| i.hook)
+                            .filter(|&l| l != 0)
                     {
                         // A copied concat operand is discharged at the operator;
                         // callbacks and hook inspection must see that location.
-                        *self.function.lines.last_mut().expect("concat operand") = line;
+                        self.function.code.last_mut().expect("concat operand").line = line;
                     }
                     let right_reg =
                         self.right_register(right, left_reg, work, op == Kind::Concat)?;

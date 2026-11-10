@@ -3,7 +3,7 @@ use super::*;
 
 /// Resolve shared unconditional jumps once, including cycles in empty loops.
 /// Boolean LOADBOOL skips remain adjacent to their two materializers.
-pub(super) fn thread_jumps(code: &mut [Instruction]) -> Result<(), Error> {
+pub(super) fn thread_jumps(code: &mut [Emission]) -> Result<(), Error> {
     if !code.iter().any(|i| i.op == Op::Jump && i.b == 0) {
         return Ok(());
     }
@@ -104,11 +104,10 @@ impl Compiler<'_> {
         }
     }
     fn pop_boolean_code(&mut self) -> Instruction {
-        self.function.hook_visible -= usize::from(self.function.hook_lines.pop().unwrap() != 0);
-        self.function.lines.pop();
+        let removed = self.function.code.pop().unwrap();
+        self.function.hook_visible -= usize::from(removed.hook != 0);
         self.function.debug_lines.pop();
-        self.function.gc_live.pop();
-        self.function.code.pop().unwrap()
+        removed.instruction
     }
     pub(super) fn boolean_node(&mut self, id: ExprId, work: u8) -> Result<(), Error> {
         let inner = self.unparen(id);
@@ -312,8 +311,8 @@ impl Compiler<'_> {
                     self.function.code[pc].a = dst;
                     self.live_register(u16::from(dst));
                     let after = self.live_map()?;
-                    self.function.gc_live[pc] =
-                        (self.function.gc_live[pc] & 0xffff) | (u32::from(after) << 16);
+                    self.function.code[pc].live =
+                        (self.function.code[pc].live & 0xffff) | (u32::from(after) << 16);
                 }
                 _ => unreachable!("negated boolean result"),
             }

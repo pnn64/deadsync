@@ -287,9 +287,9 @@ impl<'a> Compiler<'a> {
             let pc = self.function.code.len() - 1;
             self.live_register(u16::from(dst));
             let after = self.live_map()?;
-            self.function.gc_live[pc] =
-                (self.function.gc_live[pc] & 0xffff) | (u32::from(after) << 16);
-            self.function.lines[pc] = self.line;
+            self.function.code[pc].live =
+                (self.function.code[pc].live & 0xffff) | (u32::from(after) << 16);
+            self.function.code[pc].line = self.line;
             self.debug_line(self.line);
             return Ok(());
         }
@@ -399,7 +399,7 @@ impl<'a> Compiler<'a> {
             && tail.b == left + 1
         {
             let pc = self.function.code.len() - 1;
-            self.function.code[pc] = Instruction {
+            self.function.code[pc].instruction = Instruction {
                 op: Op::ConcatRange,
                 a: dst,
                 b: left,
@@ -409,9 +409,9 @@ impl<'a> Compiler<'a> {
             // remain roots through callbacks. The result has the outer scope.
             self.live_register(u16::from(dst));
             let after = self.live_map()?;
-            self.function.gc_live[pc] =
-                (self.function.gc_live[pc] & 0xffff) | (u32::from(after) << 16);
-            self.function.lines[pc] = self.line;
+            self.function.code[pc].live =
+                (self.function.code[pc].live & 0xffff) | (u32::from(after) << 16);
+            self.function.code[pc].line = self.line;
             self.debug_line(self.line);
             return Ok(());
         }

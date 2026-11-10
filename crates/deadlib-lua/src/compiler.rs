@@ -45,11 +45,29 @@ enum LineUse {
     Copy,
 }
 
+// Keep the instruction and its temporary metadata together during emission.
+// Projecting the instruction lets lowering and jump patching share their fields.
+#[derive(Clone, Copy)]
+struct Emission {
+    instruction: Instruction,
+    line: u32,
+    live: u32,
+    hook: u32,
+}
+impl std::ops::Deref for Emission {
+    type Target = Instruction;
+    fn deref(&self) -> &Instruction {
+        &self.instruction
+    }
+}
+impl std::ops::DerefMut for Emission {
+    fn deref_mut(&mut self) -> &mut Instruction {
+        &mut self.instruction
+    }
+}
 #[derive(Default)]
 struct Function<'a> {
-    code: Vec<Instruction>,
-    lines: Vec<u32>,
-    gc_live: Vec<u32>,
+    code: Vec<Emission>,
     gc_maps: Vec<[u64; 4]>,
     gc_index: HashMap<[u64; 4], u16>,
     gc_last: Option<u16>,
@@ -70,7 +88,6 @@ struct Function<'a> {
     debug_calls: Vec<DebugCall>,
     debug_temporaries: Vec<u8>,
     debug_lines: Vec<u32>,
-    hook_lines: Vec<u32>,
     hook_visible: usize,
     logical_tests: Vec<usize>,
     debug_stack: u16,
@@ -159,7 +176,7 @@ impl<'a> Compiler<'a> {
                         matches!(next.op, Op::JumpFalse | Op::JumpTrue) && next.a == i.a
                     });
             if consumed_branch || branch_value {
-                f.hook_lines[pc] = 0;
+                f.code[pc].hook = 0;
             }
         }
         f.debug_lines.retain(|&l| l != 0);
@@ -177,10 +194,20 @@ impl<'a> Compiler<'a> {
             upvalues.push(value);
         }
         let id = self.prototypes.len() as u32;
+        let mut code = fallible::with_capacity(f.code.len())?;
+        let mut lines = fallible::with_capacity(f.code.len())?;
+        let mut live = fallible::with_capacity(f.code.len())?;
+        let mut hooks = fallible::with_capacity(f.code.len())?;
+        for emitted in f.code {
+            code.push(emitted.instruction);
+            lines.push(emitted.line);
+            live.push(emitted.live);
+            hooks.push(emitted.hook);
+        }
         self.prototypes.try_push(Prototype {
-            code: f.code.try_into_boxed_slice()?,
-            lines: f.lines.try_into_boxed_slice()?,
-            gc_live: f.gc_live.try_into_boxed_slice()?,
+            code: code.try_into_boxed_slice()?,
+            lines: lines.try_into_boxed_slice()?,
+            gc_live: live.try_into_boxed_slice()?,
             gc_maps: f.gc_maps.try_into_boxed_slice()?,
             constants: f.constants.finish()?,
             registers: f.max.max(f.debug_stack).max(2),
@@ -197,7 +224,7 @@ impl<'a> Compiler<'a> {
                 locals: f.debug_locals.try_into_boxed_slice()?,
                 calls: f.debug_calls.try_into_boxed_slice()?,
                 active_lines: f.debug_lines.try_into_boxed_slice()?,
-                hook_lines: f.hook_lines.try_into_boxed_slice()?,
+                hook_lines: hooks.try_into_boxed_slice()?,
                 temporaries: f.debug_temporaries.try_into_boxed_slice()?,
             },
         })?;
@@ -329,12 +356,11 @@ impl<'a> Compiler<'a> {
                 if c == u32::from(load.a) {
                     c = value;
                 }
-                let before = self.function.gc_live.pop().unwrap() as u16 as usize;
+                let removed = self.function.code.pop().unwrap();
+                let before = removed.live as u16 as usize;
                 self.function.live = self.function.gc_maps[before];
-                self.function.code.pop();
-                self.function.lines.pop();
                 self.function.debug_lines.pop();
-                assert_eq!(self.function.hook_lines.pop(), Some(0));
+                assert_eq!(removed.hook, 0);
             }
         }
         let pc = self.function.code.len();
@@ -385,18 +411,15 @@ impl<'a> Compiler<'a> {
             _ => {}
         }
         let after = self.live_map()?;
-        self.function.code.try_push(Instruction { op, a, b, c })?;
+        let hook = if op == Op::Close { 0 } else { self.line };
+        self.function.code.try_push(Emission {
+            instruction: Instruction { op, a, b, c },
+            line: self.line,
+            live: u32::from(before) | (u32::from(after) << 16),
+            hook,
+        })?;
         self.function.hook_visible += usize::from(op != Op::Close && self.line != 0);
-        self.function.lines.try_push(self.line)?;
-        self.function
-            .hook_lines
-            .try_push(if op == Op::Close { 0 } else { self.line })?;
-        self.function
-            .debug_lines
-            .try_push(if op == Op::Close { 0 } else { self.line })?;
-        self.function
-            .gc_live
-            .try_push(u32::from(before) | (u32::from(after) << 16))?;
+        self.function.debug_lines.try_push(hook)?;
         if op == Op::Move
             && (c == OPEN
                 || u16::from(a) == b
@@ -411,7 +434,7 @@ impl<'a> Compiler<'a> {
         self.function.code[pc].c = self.function.code.len() as u32;
     }
     fn debug_line(&mut self, line: u32) {
-        let previous = *self.function.hook_lines.last().expect("emitted hook line");
+        let previous = self.function.code.last().expect("emitted hook line").hook;
         self.function.hook_visible =
             self.function.hook_visible + usize::from(line != 0) - usize::from(previous != 0);
         *self
@@ -419,11 +442,11 @@ impl<'a> Compiler<'a> {
             .debug_lines
             .last_mut()
             .expect("emitted debug line") = line;
-        *self
-            .function
-            .hook_lines
+        self.function
+            .code
             .last_mut()
-            .expect("emitted hook line") = line;
+            .expect("emitted hook line")
+            .hook = line;
     }
     fn constant(&mut self, mut k: Constant) -> Result<u32, Error> {
         if let Constant::Number(number) = &mut k
