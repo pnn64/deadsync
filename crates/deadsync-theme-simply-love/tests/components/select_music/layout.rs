@@ -47,6 +47,14 @@ fn wide_song_select_retains_reference_widget_geometry() {
         layout.chart_panel.bounds,
         WidgetBounds::new(0.0, 0.0, 384.5, 64.0)
     );
+    assert_eq!(
+        layout.chart_panel.steps_display_list.bounds,
+        WidgetBounds::new(384.5, 231.0, 32.0, 152.0)
+    );
+    assert_eq!(
+        layout.chart_panel.steps_display_list.slot_centers_y,
+        [247.0, 277.0, 307.0, 337.0, 367.0]
+    );
 }
 
 #[test]
@@ -83,12 +91,12 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
             (StepArtistBarY::Default, 23.0, 32.0, 1.0 / 56.0, 49.5),
             (StepArtistBarY::Expanded, 62.0, 80.0, 0.0, 45.0),
         ] {
-            let chart_panel = layout
+            let density_graphs = layout
                 .chart_panel
                 .compose(screen_height, vertical_layout, 99.9);
             for (index, p2_offset) in [0.0, 88.0].into_iter().enumerate() {
-                let graph = chart_panel.density_graphs[index];
-                let line = chart_panel.step_artist_peak_nps[index];
+                let graph = density_graphs[index];
+                let line = graph.step_artist_peak_nps;
                 let gap = 8.0 * layout.zoom;
                 let graph_center_y = screen_height * 0.5 + graph_offset;
                 let graph_center_y = graph_center_y + p2_offset;
@@ -103,18 +111,21 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                 );
                 assert!((graph.breakdown_text_zoom - 0.8 * layout.zoom).abs() < f32::EPSILON);
                 assert!((line.step_header_y - expected_header_y).abs() < f32::EPSILON);
-                assert!(line.peak_bounds.x >= 0.0);
-                assert!((line.peak_bounds.right() - panel.width).abs() < f32::EPSILON);
-                assert!((graph_top + line.peak_bounds.y - line.step_header_y).abs() < f32::EPSILON);
+                assert!(line.nps_text_bounds.x >= 0.0);
+                assert!((line.nps_text_bounds.right() - (panel.width - 5.0)).abs() < f32::EPSILON);
                 assert!(
-                    (line.artist_background_width + line.peak_bounds.width + gap - panel.width)
+                    (graph_top + line.nps_text_bounds.y - line.step_header_y).abs() < f32::EPSILON
+                );
+                assert!(
+                    (line.artist_background_width + line.nps_text_bounds.width + gap + 5.0
+                        - panel.width)
                         .abs()
                         < f32::EPSILON
                 );
                 assert_eq!(line.artist_x_offset, artist_x_offset);
                 assert!(line.artist_max_width > 0.0);
-                assert!(line.peak_text_zoom > 0.0);
-                assert!(line.peak_text_max_width > 0.0);
+                assert!(line.nps_text_zoom > 0.0);
+                assert!(line.nps_text_max_width > 0.0);
             }
         }
     }

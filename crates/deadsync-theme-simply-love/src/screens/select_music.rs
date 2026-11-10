@@ -13364,13 +13364,11 @@ pub fn push_actors(
             })
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
-    let chart_panel_widgets = chart_panel_layout.compose(
+    let density_graphs = chart_panel_layout.compose(
         screen_height(),
         StepArtistBarY::from(step_artist_expanded),
         peak_text_logical_width,
     );
-    let artist_peak_lines = chart_panel_widgets.step_artist_peak_nps;
-    let density_graphs = chart_panel_widgets.density_graphs;
 
     // Step Artist & Steps
     let mut push_step_artist =
@@ -13402,7 +13400,7 @@ pub fn push_actors(
 
     if is_versus {
         push_step_artist(
-            artist_peak_lines[0],
+            density_graphs[0].step_artist_peak_nps,
             graph_left,
             sel_col_p1,
             step_artist,
@@ -13410,7 +13408,7 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
         push_step_artist(
-            artist_peak_lines[1],
+            density_graphs[1].step_artist_peak_nps,
             graph_left,
             sel_col_p2,
             step_artist_p2,
@@ -13418,7 +13416,7 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
-        let line_layout = artist_peak_lines[is_p2_single as usize];
+        let line_layout = density_graphs[is_p2_single as usize].step_artist_peak_nps;
         push_step_artist(
             line_layout,
             graph_left,
@@ -13442,11 +13440,11 @@ pub fn push_actors(
     let preview_marker_p2 = preview_marker(state.displayed_chart_p2.as_ref(), preview_sec, panel_w);
     let push_breakdown_panel = |out: &mut Vec<Actor>,
                                 graph_layout: DensityGraphLayout,
-                                line_layout: StepArtistPeakNpsLayout,
                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                 preview_marker: Option<PreviewMarker>,
                                 displayed: Option<&DisplayedChart>| {
         let graph_bounds = graph_layout.bounds;
+        let line_layout = graph_layout.step_artist_peak_nps;
         let mut push_child = |actor: Actor| {
             push_flat_breakdown_child(out, actor, graph_bounds.x, graph_bounds.y, 51)
         };
@@ -13544,7 +13542,7 @@ pub fn push_actors(
                 ));
             }
             push_child(
-                act!(text: font("miso"): settext(peak): align(1.0, 0.5): xy(line_layout.peak_bounds.right(), line_layout.peak_bounds.y): zoom(line_layout.peak_text_zoom): maxwidth(line_layout.peak_text_max_width): diffuse(1.0, 1.0, 1.0, 1.0): z(71)),
+                act!(text: font("miso"): settext(peak): align(1.0, 0.5): xy(line_layout.nps_text_bounds.right(), line_layout.nps_text_bounds.y): zoom(line_layout.nps_text_zoom): maxwidth(line_layout.nps_text_max_width): diffuse(1.0, 1.0, 1.0, 1.0): z(71)),
             );
             push_child(
                 act!(quad: align(0.0, 0.0): xy(0.0, graph_layout.body_height): setsize(graph_bounds.width, graph_bounds.height - graph_layout.body_height): diffuse(0.0, 0.0, 0.0, 0.5): z(2)),
@@ -13561,7 +13559,6 @@ pub fn push_actors(
                 push_breakdown_panel(
                     actors,
                     density_graphs[0],
-                    artist_peak_lines[0],
                     state.current_graph_mesh.clone(),
                     preview_marker_p1,
                     state.displayed_chart_p1.as_ref(),
@@ -13571,7 +13568,6 @@ pub fn push_actors(
                 push_breakdown_panel(
                     actors,
                     density_graphs[1],
-                    artist_peak_lines[1],
                     state.current_graph_mesh_p2.clone(),
                     preview_marker_p2,
                     state.displayed_chart_p2.as_ref(),
@@ -13582,7 +13578,6 @@ pub fn push_actors(
             push_breakdown_panel(
                 actors,
                 density_graphs[graph_index],
-                artist_peak_lines[graph_index],
                 state.current_graph_mesh.clone(),
                 preview_marker_p1,
                 state.displayed_chart_p1.as_ref(),
@@ -14062,11 +14057,11 @@ pub fn push_actors(
     );
 
     // Steps Display List
-    let lst_cx = screen_center_x() - 26.0;
-    let lst_cy = screen_center_y() + 67.0;
-    actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy): setsize(32.0, 152.0): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+    let steps_display_list = chart_panel_layout.steps_display_list;
+    let lst_cx = steps_display_list.bounds.center_x();
+    let visible_steps_slots = steps_display_list.slot_centers_y.len();
+    actors.push(act!(quad: align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), steps_display_list.bounds.center_y()): setsize(steps_display_list.bounds.width, steps_display_list.bounds.height): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
-    const VISIBLE_STEPS_SLOTS: usize = 5;
     let (steps_song, sel_p1, sel_p2) = match entry_opt {
         Some(MusicWheelEntry::Song(song)) => (
             Some(song),
@@ -14114,20 +14109,20 @@ pub fn push_actors(
     } else {
         sel_p1
     };
-    let top_index = if list_len > VISIBLE_STEPS_SLOTS {
+    let top_index = if list_len > visible_steps_slots {
         // Simply Love: keep Edit charts off-screen until you scroll past Expert.
         // Once you're in Edit charts, keep the selected chart in the bottom slot and
         // shift the other difficulties upward as you move deeper.
         focus_sel
-            .saturating_sub(VISIBLE_STEPS_SLOTS - 1)
-            .min(list_len - VISIBLE_STEPS_SLOTS)
+            .saturating_sub(visible_steps_slots - 1)
+            .min(list_len - visible_steps_slots)
     } else {
         0
     };
 
-    for slot in 0..VISIBLE_STEPS_SLOTS {
-        let y = (slot as i32 - 2) as f32 * 30.0;
-        actors.push(act!(quad: align(0.5, 0.5): xy(lst_cx, lst_cy + y): setsize(28.0, 28.0): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
+    for slot in 0..visible_steps_slots {
+        let slot_center_y = steps_display_list.slot_centers_y[slot];
+        actors.push(act!(quad: align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), slot_center_y): setsize(steps_display_list.slot_size, steps_display_list.slot_size): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
         let idx = top_index + slot;
         if idx >= list_len {
             continue;
@@ -14146,7 +14141,7 @@ pub fn push_actors(
                 state.active_color_index,
                 presentation.difficulty_color_scheme,
             );
-            actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(lst_cx, lst_cy + y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), slot_center_y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
@@ -14352,8 +14347,8 @@ pub fn push_actors(
     let dx_p1 = -3.0 * bounce;
     let dx_p2 = 3.0 * bounce;
     if is_versus {
-        let slot_p1 = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let y_p1 = ((slot_p1 as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
+        let slot_p1 = (sel_p1.saturating_sub(top_index)).min(visible_steps_slots - 1);
+        let y_p1 = steps_display_list.slot_centers_y[slot_p1] + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(screen_center_x() - 53.0 + dx_p1, y_p1):
@@ -14362,8 +14357,8 @@ pub fn push_actors(
             z(122)
         ));
 
-        let slot_p2 = (sel_p2.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let y_p2 = ((slot_p2 as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
+        let slot_p2 = (sel_p2.saturating_sub(top_index)).min(visible_steps_slots - 1);
+        let y_p2 = steps_display_list.slot_centers_y[slot_p2] + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(lst_cx + 8.0 + dx_p2, y_p2):
@@ -14372,8 +14367,8 @@ pub fn push_actors(
             z(122)
         ));
     } else {
-        let arrow_slot = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
-        let arrow_y = ((arrow_slot as i32 - 2) as f32).mul_add(30.0, lst_cy) + 1.0;
+        let arrow_slot = (sel_p1.saturating_sub(top_index)).min(visible_steps_slots - 1);
+        let arrow_y = steps_display_list.slot_centers_y[arrow_slot] + 1.0;
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_solo {
             let x0 = lst_cx + 8.0;
             (x0, dx_p2, 180.0)

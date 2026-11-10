@@ -99,7 +99,7 @@ impl SongSelectLayout {
         let zoom = left_pane.zoom;
         let banner = SongBannerLayout::new(left_pane);
         let song_details = SongDetailsLayout::new(left_pane, screen_height);
-        let chart_panel = ChartPanelLayout::new(left_pane, layout_type);
+        let chart_panel = ChartPanelLayout::new(left_pane, layout_type, screen_height);
 
         Self {
             zoom,
