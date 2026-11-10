@@ -1011,10 +1011,14 @@ impl RuntimeSegment {
             return false;
         }
 
-        // Amortize feature dispatch over several properties; smaller batches
-        // do not consistently recover the specialized call's overhead.
+        // Several properties or weighted easing can amortize feature dispatch.
+        // Weighted easing runs a Bezier solver even for a single property.
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        if self.prepared.len() >= 4 && std::arch::is_x86_feature_detected!("fma") {
+        if (self.prepared.len() >= 4
+            || matches!(self.ease, Ease::EaseInOut { bias }
+                if bias > -100.0 && bias < 100.0 && bias != 0.0))
+            && std::arch::is_x86_feature_detected!("fma")
+        {
             // SAFETY: runtime detection checks CPU and OS support for FMA.
             unsafe { self.apply_current_fma(s) };
             return false;
