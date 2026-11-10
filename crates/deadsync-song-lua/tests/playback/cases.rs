@@ -7516,6 +7516,8 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
         Actor::ReusableTexturedMesh {
             vertices: glow_vertices,
             blend: glow_blend,
+            tint: glow_tint,
+            glow: glow_color,
             ..
         },
     ] = glowing.as_slice()
@@ -7523,11 +7525,13 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
         panic!("expected reusable base and glow meshes, got {glowing:?}");
     };
     assert_eq!(*glow_blend, BlendMode::Alpha);
+    assert_eq!(*glow_tint, [1.0, 1.0, 1.0, 0.0]);
+    assert_eq!(*glow_color, [0.2, 0.4, 0.8, 0.75]);
     assert_ne!(Arc::as_ptr(base_vertices), Arc::as_ptr(glow_vertices));
     for (source, glow_vertex) in vertices.iter().zip(glow_vertices.iter()) {
         assert_eq!(glow_vertex.pos, source.pos);
         assert_eq!(glow_vertex.uv, source.uv);
-        assert_eq!(glow_vertex.color, [1.0, 1.0, 1.0, source.color[3]]);
+        assert_eq!(glow_vertex.color, [1.0; 4]);
     }
     let base_ptr = Arc::as_ptr(base_vertices);
     let glow_ptr = Arc::as_ptr(glow_vertices);

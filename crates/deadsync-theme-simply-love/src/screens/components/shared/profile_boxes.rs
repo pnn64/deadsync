@@ -2331,8 +2331,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "profile_boxes_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
 #[path = "profile_boxes_buffers_perf.rs"]
 mod buffers_perf;

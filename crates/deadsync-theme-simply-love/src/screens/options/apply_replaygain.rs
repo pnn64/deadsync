@@ -375,10 +375,3 @@ fn push_apply_replaygain_overlay_actors_unreserved(
         z(301)
     ));
 }
-
-#[cfg(test)]
-#[path = "apply_replaygain_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "apply_replaygain_buffers_perf.rs"]
-mod buffers_perf;

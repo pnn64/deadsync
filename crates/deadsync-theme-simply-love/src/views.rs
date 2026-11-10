@@ -145,7 +145,6 @@ pub struct GameplayPolicyView {
     pub bpm_position: deadsync_config::theme::GameplayBpmPosition,
     pub machine_font: deadsync_config::theme::MachineFont,
     pub scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter,
-    pub smx_profile_enabled: bool,
 }
 
 impl Default for GameplayPolicyView {
@@ -163,7 +162,6 @@ impl Default for GameplayPolicyView {
             bpm_position: config.gameplay_bpm_position,
             machine_font: config.machine_font,
             scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter::default(),
-            smx_profile_enabled: false,
         }
     }
 }

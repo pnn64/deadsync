@@ -213,17 +213,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-pub(super) const fn performance_reports(state: &State) -> [[u8; REPORT_SIZE]; 2] {
-    [build_cabinet_report(state), build_pad_report(state)]
-}
-
-#[cfg(test)]
-pub(super) const fn performance_cabinet_report(state: &State) -> [u8; REPORT_SIZE] {
-    build_cabinet_report(state)
-}
-#[cfg(test)]
-pub(super) const fn performance_pad_report(state: &State) -> [u8; REPORT_SIZE] {
-    build_pad_report(state)
-}

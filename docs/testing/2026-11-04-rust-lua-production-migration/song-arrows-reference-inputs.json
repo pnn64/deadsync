@@ -1,6 +1,0 @@
-{
-  "crates/deadsync-song-lua/assets/itgmania/arrow-x-native-reference-v1.json": "be32ac31ab203448873171625f09dee30b14b38bb7291bec8004f750caa8ec04",
-  "crates/deadsync-song-lua/assets/itgmania/arrow-y-native-reference-v1.json": "64cb3d0b2f02e0ef0ad68651502f7f85dac0c925f22f7f1f5d6a5306dc1cbf76",
-  "crates/deadsync-song-lua/assets/itgmania/arrow-zoom-native-reference-v1.json": "6909e842550d539c4e353cbd4650ef4416bfc9820479f1c3c1d696ac0a5db28b",
-  "tests/fixtures/itgmania-actors/pause-offset.json": "f87087d3888f39080c20cca4e698c6f5e0051ee82f8977bf9330e1e3bb010b4c"
-}

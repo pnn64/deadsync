@@ -6,8 +6,6 @@
 !/songs/instructions.txt
 /target
 /crates/deadsync-song-lua/target/
-# Generated MSVC linker maps; keep the small validation reports instead.
-/docs/testing/**/*.map
 deadsync.ini
 prompt.txt
 AGENTS.md

@@ -1,13 +1,9 @@
 use deadlib_audio_decode::resample::write_resampler_output;
-use std::hint::black_box;
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
-type WriteOutput = fn(&[Vec<f32>], usize, usize, &mut Vec<i16>) -> usize;
 
 #[test]
 fn resampler_keeps_channel_order_shortest_input_and_complete_frames() {
@@ -89,50 +85,5 @@ fn multichannel_rounding_preserves_half_boundaries_and_float_bits() {
             "{:08x}",
             input[0][frame].to_bits()
         );
-    }
-}
-
-#[test]
-#[ignore = "release CPU and allocation benchmark"]
-fn benchmark_resampler_output() {
-    for (in_ch, out_ch) in [
-        (1, 1),
-        (1, 2),
-        (2, 2),
-        (2, 6),
-        (3, 3),
-        (4, 6),
-        (6, 6),
-        (6, 8),
-        (8, 3),
-        (8, 8),
-    ] {
-        for frames in [64usize, 4096] {
-            let input: Vec<Vec<f32>> = (0..in_ch)
-                .map(|channel| {
-                    (0..frames)
-                        .map(|frame| {
-                            (frame.wrapping_mul(71).wrapping_add(channel) as i16) as f32 / 32768.0
-                        })
-                        .collect()
-                })
-                .collect();
-            let mut output = Vec::with_capacity(frames * out_ch);
-            let label = format!("resampler/{in_ch}to{out_ch}/frames={frames}");
-            let mut work = || {
-                let write: WriteOutput = black_box(write_resampler_output);
-                black_box(write(
-                    black_box(&input),
-                    black_box(frames),
-                    black_box(out_ch),
-                    black_box(&mut output),
-                ));
-                black_box(&output);
-            };
-            work();
-            let (_, counts) = perf::measure(&mut work);
-            println!("{label}: allocation {counts:?}");
-            bench::measure(&label, (1_000_000 / (frames * out_ch)).max(32), &mut work);
-        }
     }
 }

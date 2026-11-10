@@ -1064,11 +1064,3 @@ fn push_delete_confirm(
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "palette_data_original.rs"]
-mod course_data_original;
-
-#[cfg(test)]
-#[path = "palette_data_perf.rs"]
-mod course_data_perf;

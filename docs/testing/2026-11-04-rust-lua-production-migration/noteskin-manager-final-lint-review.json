@@ -1,6 +1,0 @@
-{
-  "diagnostics_identical_after_build_preamble": true,
-  "diagnostic_diff": [],
-  "baseline": "gamestate-lint-song-linux-debug",
-  "final": "noteskin-manager-final-lint-song-linux-debug"
-}

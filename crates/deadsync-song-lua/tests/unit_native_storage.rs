@@ -4,7 +4,7 @@ use deadsync_song_lua::{
     SongLuaCompileContext, SongLuaOverlayState, {SongRuntime, test_support},
 };
 use std::sync::{Arc, Mutex};
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
 mod api;

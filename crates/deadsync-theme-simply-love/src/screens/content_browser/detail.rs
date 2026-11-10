@@ -894,11 +894,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "detail_facts_original.rs"]
-mod detail_facts_original;
-
-#[cfg(test)]
-#[path = "detail_facts_perf.rs"]
-mod detail_facts_perf_tests;

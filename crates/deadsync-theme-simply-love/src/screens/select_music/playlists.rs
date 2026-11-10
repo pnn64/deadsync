@@ -164,10 +164,3 @@ pub(super) fn lobby_song_path(song: &SongData, _song_scan_roots: &[PathBuf]) -> 
     let (pack, song) = song_pack_and_dir_name(song)?;
     Some(format!("{pack}/{song}"))
 }
-
-#[cfg(test)]
-#[path = "playlists_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "playlists_buffers_perf.rs"]
-mod buffers_perf;

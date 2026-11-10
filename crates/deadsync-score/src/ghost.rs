@@ -246,7 +246,3 @@ mod tests {
         assert_eq!(load(&dir.0, "abc").unwrap().into_histories(), valid);
     }
 }
-
-#[cfg(test)]
-#[path = "ghost_performance.rs"]
-mod ghost_performance;

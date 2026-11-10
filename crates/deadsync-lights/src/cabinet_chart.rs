@@ -798,7 +798,5 @@ mod tests {
             max_bpm: 120.0,
         }
     }
-    mod perf {
-        include!("cabinet_chart_perf.rs");
-    }
+
 }

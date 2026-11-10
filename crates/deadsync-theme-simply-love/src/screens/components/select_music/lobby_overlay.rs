@@ -1731,11 +1731,3 @@ mod tests {
         assert_eq!(SoundCue::Boom.asset_path(), "assets/sounds/boom.ogg");
     }
 }
-
-#[cfg(test)]
-mod perf_traversal {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/lobby_text.rs"
-    ));
-}

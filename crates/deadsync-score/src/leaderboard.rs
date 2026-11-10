@@ -1274,9 +1274,6 @@ impl PlayerLeaderboardCacheState {
     }
 }
 
-#[cfg(test)]
-#[path = "leaderboard_perf.rs"]
-mod performance_refresh;
 
 static RUNTIME_PLAYER_LEADERBOARD_CACHE: LazyLock<Mutex<PlayerLeaderboardCacheState>> =
     LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
@@ -2656,9 +2653,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "leaderboard_request_perf.rs"]
-mod request_perf;
 
 #[cfg(test)]
 mod golf_tests {

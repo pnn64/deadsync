@@ -1,8 +1,0 @@
-{
-  "library_diagnostics_byte_identical": true,
-  "comparison_start": "first warning/error located in crates/deadsync-song-lua; all subsequent bytes included",
-  "diagnostics_sha256": "2695788c79a1f0653f80f5e681b8ae1b471c31406dd1ff4be97809368d668f50",
-  "library_warnings": 166,
-  "existing_library_error": "cmd.rs:349 clippy::while_immutable_condition",
-  "integration_test_lint_completed": false
-}

@@ -1,6 +1,0 @@
-{
-  "exit_code": 1,
-  "tests_run": 0,
-  "error": "FileNotFoundError: cargo was not on PATH under direct wsl -- python3 invocation",
-  "retry": "Launch checks.py through Debian bash -lc to load the Rust toolchain PATH."
-}

@@ -1,6 +1,6 @@
 """Generate bounded song Lua programs and compare them with ITGmania observations.
 
-Uses only Python's standard library. See docs/testing/song-lua-fuzzing.md.
+Uses only Python's standard library.
 """
 import argparse
 from collections import Counter

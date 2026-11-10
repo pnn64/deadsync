@@ -11,6 +11,13 @@ fn rosewood_loads_skin_and_compiles_chart() {
     let temporary = tempfile::tempdir().unwrap();
     let song = temporary.path().join("song");
     skin_fixture::install("rosewood", &song);
+    // Copied development assets may include the author's original skin name.
+    // Give this song-local fixture its own identity so it cannot resolve there.
+    let local_skin = format!("deadsync-rosewood-fixture-{}", std::process::id());
+    std::fs::rename(song.join("SCH-CLASSIC-RAINBOW"), song.join(&local_skin)).unwrap();
+    let entry = song.join("lua/default.lua");
+    let source = std::fs::read_to_string(&entry).unwrap();
+    std::fs::write(&entry, source.replace("SCH-CLASSIC-RAINBOW", &local_skin)).unwrap();
     let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()
@@ -28,7 +35,7 @@ fn rosewood_loads_skin_and_compiles_chart() {
             num_players: 1,
         },
         &song,
-        "SCH-CLASSIC-RAINBOW",
+        &local_skin,
         "",
     )
     .expect("chart-local noteskin loads");
@@ -103,7 +110,7 @@ fn rosewood_loads_skin_and_compiles_chart() {
             num_players: 1,
         },
         &song,
-        "SCH-CLASSIC-RAINBOW",
+        &local_skin,
         "Reverse",
     )
     .unwrap();
@@ -124,8 +131,8 @@ fn rosewood_loads_skin_and_compiles_chart() {
     assert_eq!(
         compiled.startup.noteskins,
         [
-            Some("SCH-CLASSIC-RAINBOW".into()),
-            Some("SCH-CLASSIC-RAINBOW".into())
+            Some(local_skin.clone()),
+            Some(local_skin.clone())
         ]
     );
     assert_eq!(compiled.startup.min_seconds_to_music, Some(6.01));
@@ -149,5 +156,5 @@ fn rosewood_loads_skin_and_compiles_chart() {
     assert!(!compiled.overlays.is_empty());
     assert_eq!(compiled.sound_paths.len(), 6);
     assert!(compiled.sound_paths.iter().all(|path| path.is_file()));
-    assert!(!noteskin::song_lua_noteskin_exists("SCH-CLASSIC-RAINBOW"));
+    assert!(!noteskin::song_lua_noteskin_exists(&local_skin));
 }

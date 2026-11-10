@@ -1,9 +1,0 @@
-{
-  "goal_complete": false,
-  "watched_dependency_sources_still_match": true,
-  "source_count": 1207,
-  "relevant_changes": [],
-  "concurrent_out_of_graph_changes_after_review": [],
-  "documentation_review": "song-pose-output-doc-review.json",
-  "captured_at_utc": "2026-11-06T14:21:17.7649931Z"
-}

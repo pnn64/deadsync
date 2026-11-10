@@ -1505,9 +1505,6 @@ impl TweenSeq {
     }
 }
 
-#[cfg(test)]
-#[path = "anim_performance.rs"]
-mod performance;
 
 #[cfg(test)]
 mod tests {

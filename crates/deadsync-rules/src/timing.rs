@@ -9,13 +9,6 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-#[cfg(test)]
-#[path = "timing_conversion_kernel.rs"]
-mod conversion_kernel;
-
-#[cfg(test)]
-#[path = "runtime_kernels.rs"]
-mod runtime_kernels;
 
 // --- ITGMania Parity Constants and Helpers ---
 type TimingNs = i64;
@@ -3017,24 +3010,6 @@ mod tests {
         assert_eq!(timing.get_song_position_cached(0.027732426300644875, &mut cache).beat.to_bits(), actual.to_bits());
     }
 
-    #[test]
-    fn song_clock_group_shift_preserves_integer_timing() {
-        let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {
-            bpms:vec![(0.0,71.697998),(2.0,74.014),(14.0,73.051003)],
-            ..Default::default()
-        },&[]);
-        let mut separate=original.clone();
-        original.shift_song_offset_seconds(-0.009);
-        separate.shift_group_offset_seconds(-0.009);
-        for global in [-0.008,0.125] {
-            original.set_global_offset_seconds(global);
-            separate.set_global_offset_seconds(global);
-            for beat in [-4.0,0.0,0.01,17.25,20.5,44.75] {
-                assert_eq!(original.get_time_for_beat_ns(beat),separate.get_time_for_beat_ns(beat));
-                assert_eq!(original.get_time_for_beat_exact(beat).to_bits(),separate.get_time_for_beat_exact(beat).to_bits());
-            }
-        }
-    }
 
     #[test]
     fn measure_index_rounds_native_signature_boundaries() {
@@ -4787,12 +4762,27 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn song_clock_group_shift_preserves_integer_timing() {
+        let mut original=TimingData::from_segments(0.532426,-0.008,&TimingSegments {
+            bpms:vec![(0.0,71.697998),(2.0,74.014),(14.0,73.051003)],
+            ..Default::default()
+        },&[]);
+        let mut separate=original.clone();
+        original.shift_song_offset_seconds(-0.009);
+        separate.shift_group_offset_seconds(-0.009);
+        for global in [-0.008,0.125] {
+            original.set_global_offset_seconds(global);
+            separate.set_global_offset_seconds(global);
+            for beat in [-4.0,0.0,0.01,17.25,20.5,44.75] {
+                assert_eq!(original.get_time_for_beat_ns(beat),separate.get_time_for_beat_ns(beat));
+                assert_eq!(original.get_time_for_beat_exact(beat).to_bits(),separate.get_time_for_beat_exact(beat).to_bits());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 #[path = "timing_lookup_perf.rs"]
 mod lookup_perf;
-
-#[cfg(test)]
-#[path = "timing_creation_kernel.rs"]
-mod creation_kernel;

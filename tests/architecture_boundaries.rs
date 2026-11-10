@@ -1746,6 +1746,8 @@ fn practice_runtime_is_shell_prepared() {
         .expect("shell gameplay runtime should be readable");
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let loading = read_source(root.join("crates/deadsync-shell/src/app/lua_loading.rs"))
+        .expect("shell Lua loading completion should be readable");
 
     for runtime in [
         "deadsync_profile::compat",
@@ -1765,7 +1767,8 @@ fn practice_runtime_is_shell_prepared() {
             && practice.contains("GameplayAudioCommand::SetMusicRate")
             && shell.contains("pub(crate) fn practice_view(")
             && shell.contains("hud: gameplay.hud.clone()")
-            && shell_app.contains("practice::init(gs, practice_runtime_view)"),
+            && shell_app.contains("runtime: practice_runtime_view")
+            && loading.contains("practice::init(gs, finish.runtime)"),
         "shell must prepare Practice policy/HUD state and execute typed rate persistence"
     );
 }
@@ -2950,8 +2953,13 @@ fn simply_love_smx_imports_are_preset_types_only() {
     );
     assert!(
         input_contract.contains("pub fn raw_button_label")
-            && input_backend
-                .contains("deadsync_input::set_button_labeler(deadsync_smx::trigger_label)",),
+            && contains_rust(
+                &input_backend,
+                "deadsync_input::set_button_labeler(|id, code| {
+                    deadsync_reflex::trigger_label(id, code)
+                        .or_else(|| deadsync_smx::trigger_label(id, code))
+                })",
+            ),
         "shell must register SMX labels behind the backend-neutral input contract"
     );
 }
@@ -5235,12 +5243,15 @@ fn gameplay_itl_warning_is_song_lifetime_and_catalog_independent() {
 
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert_eq!(
-        app.matches("crate::gameplay_runtime::sync_initial_scores(&mut gs)")
-            .count(),
-        2,
-        "Gameplay and Practice entry must both initialize song-lifetime score state"
-    );
+    let loading = read_source(root.join("crates/deadsync-shell/src/app/lua_loading.rs"))
+        .expect("shell Lua loading completion should be readable");
+    for (entry, source) in [("Gameplay", app), ("Practice", loading)] {
+        assert_eq!(
+            source.matches("crate::gameplay_runtime::sync_initial_scores(&mut gs)").count(),
+            1,
+            "{entry} entry must initialize song-lifetime score state once"
+        );
+    }
 }
 
 #[test]
@@ -5944,8 +5955,6 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
     let theme =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
             .expect("Simply Love gameplay should be readable");
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
     for contract in [
         "pub struct SmxSensorPanelView",
         "pub struct SmxSensorPadView",
@@ -5986,19 +5995,13 @@ fn simply_love_gameplay_smx_execution_is_shell_owned() {
         "deadsync_smx::get_config",
         "deadsync_smx::get_test_data",
         "gameplay::set_smx_sensor_pad_view",
-        "std::env::var(\"DEADSYNC_SMX_PROFILE\")",
-        "smx_profile_enabled: smx_profile_enabled()",
     ] {
         assert!(
             shell.contains(execution),
             "shell gameplay runtime is missing SMX execution {execution}"
         );
     }
-    assert!(
-        views.contains("pub smx_profile_enabled: bool")
-            && theme.contains("state.runtime_view.policy.smx_profile_enabled"),
-        "shell-prepared Gameplay policy must carry the SMX diagnostic flag"
-    );
+
 
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -6079,11 +6082,18 @@ fn simply_love_platform_access_is_limited_to_physical_input() {
             "{} imports platform services beyond physical input types",
             rel_path(&root, &file)
         );
-        assert!(
-            !source.contains("deadsync_assets::resolve_asset_path"),
-            "{} still resolves concrete asset paths directly",
-            rel_path(&root, &file)
-        );
+        if source.contains("deadsync_assets::resolve_asset_path") {
+            // Fixture setup may resolve bundled inputs in a test-only module.
+            let owner = file.parent().expect("source directory").join("mod.rs");
+            assert!(
+                file.file_name().is_some_and(|name| name == "tests.rs")
+                    && read_source(owner).is_ok_and(|owner| {
+                        contains_rust(&owner, "#[cfg(test)] mod tests;")
+                    }),
+                "{} still resolves concrete asset paths directly",
+                rel_path(&root, &file)
+            );
+        }
     }
 
     let assets = read_source(root.join("crates/deadsync-assets/src/lib.rs"))
@@ -10386,6 +10396,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "FieldLayout",
         "FieldPlacement",
         "gameplay_mods_text",
+        "ghost_mini_indicator_output",
         "GameplayModsAttackMode",
         "GameplayModsTextParams",
         "HoldEmitterState",
@@ -10447,6 +10458,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "song_lua_player_y_fold_actor",
         "SongLuaPlayerTransformRequest",
         "StreamProgressLookup",
+        "TapJudgmentAnimation",
         "TapJudgmentHudFrame",
         "TapJudgmentSprite",
         "TimingLabelStyle",

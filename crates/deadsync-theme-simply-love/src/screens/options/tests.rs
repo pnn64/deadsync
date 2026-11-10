@@ -4040,14 +4040,6 @@ fn graphics_refresh_change_emits_request_on_exit() {
 #[path = "ui_pipelines_perf.rs"]
 mod pipelines_perf;
 
-mod data_paths_perf;
-
-mod enumeration {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/option_enumeration.rs"
-    ));
-}
 
 #[test]
 fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {

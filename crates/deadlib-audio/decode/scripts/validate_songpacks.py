@@ -18,7 +18,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True, help="new validation directory")
     parser.add_argument("--target-dir", type=Path, default=repo / "target/vorbis-completion")
     args = parser.parse_args()
-    manifest = json.loads((decode / "vorbis/validation/songpacks.json").read_text(encoding="utf8"))
+    manifest = json.loads((decode / "vorbis/tests/fixtures/external-songpacks.json").read_text(encoding="utf8"))
     pack = next(p for p in manifest["packs"] if p["name"] == args.pack)
     corpus = reference / "corpus" / pack["name"]
     for entry in pack["files"]:

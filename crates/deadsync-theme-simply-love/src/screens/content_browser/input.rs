@@ -2201,7 +2201,7 @@ mod tests {
         assert!(state.sync_dialog.is_some());
     }
 
-    /// Measuring a pack with nothing of the play style in it says so instead
+    /// Measuring a pack with no chart data says so instead
     /// of opening an empty review.
     #[test]
     fn measuring_nothing_says_so() {
@@ -2212,7 +2212,7 @@ mod tests {
         assert!(!sync_dialog::overlay_visible(&state));
         assert_eq!(
             state.remove_result.as_deref(),
-            Some("nothing in Old Pack to measure: no dance-single charts")
+            Some("nothing in Old Pack to measure: no charts with note data")
         );
     }
 

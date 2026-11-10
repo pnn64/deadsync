@@ -423,7 +423,5 @@ mod tests {
         dir
     }
 
-    mod library_perf {
-        include!("artwork_library_perf.rs");
-    }
+
 }

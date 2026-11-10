@@ -78,7 +78,7 @@ are required on either Apple Silicon (`/opt/homebrew`) or Intel (`/usr/local`):
 ```bash
 cargo run                       # fast dev build
 cargo run --profile local       # optimized, but faster to link than full release
-cargo build --release           # fully optimized (LTO) build for benchmarking/play
+cargo build --release           # fully optimized (LTO) build
 ```
 
 Before the first run, grant **Input Monitoring** to your terminal (see the
@@ -103,7 +103,7 @@ pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers
 
 Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
 mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
-revision before compiling or running tests, examples, or benchmarks (Python
+revision before compiling or running tests or examples (Python
 3.11 or newer is required to restore split archives):
 
 ```sh
@@ -125,6 +125,13 @@ new oversized archives or snapshots before committing fixture changes.
 When updating fixtures, commit and push changes in `tests/fixtures` first, then
 commit the updated submodule pointer in this repository. Test runners and fixture
 maintenance scripts stay in this repository; their existing paths still work.
+
+## Performance changes
+
+Keep performance experiments in ignored `target/` output or a temporary
+checkout. Commit the selected production implementation and useful correctness
+tests. Remove timing harnesses, superseded implementations and measurement
+reports before merging; recreate a benchmark when a new investigation needs it.
 
 ## Full song Lua tests
 

@@ -867,7 +867,7 @@ pub(super) fn under_line(rip: &Rip) -> (Cow<'static, str>, bool) {
         Stage::Done => {
             let got = keep(rip).map_or(0, |keep| keep.got);
             let only = if short {
-                crate::i18n::tr_fmt("ContentBrowser", "MessageOnlySongsMatchedeffe01", &[("songs", &(songs).to_string())]).to_string()
+                format!("   {}", crate::i18n::tr_fmt("ContentBrowser", "MessageOnlySongsMatchedeffe01", &[("songs", &(songs).to_string())]))
             } else {
                 String::new()
             };

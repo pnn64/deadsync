@@ -1,7 +1,0 @@
-[
-  "crates/deadsync-song-lua/src/rust_engine.rs",
-  "crates/deadsync-song-lua/src/rust_engine/managers.rs",
-  "crates/deadsync-song-lua/src/rust_engine/managers/screen.rs",
-  "crates/deadsync-song-lua/src/rust_engine/test_support.rs",
-  "crates/deadsync-song-lua/tests/rust_screen_manager.rs"
-]

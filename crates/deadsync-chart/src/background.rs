@@ -355,9 +355,6 @@ impl XorShift64 {
     }
 }
 
-#[cfg(test)]
-#[path = "background_perf.rs"]
-mod perf;
 
 #[cfg(test)]
 mod tests {

@@ -20,8 +20,7 @@ APIs, compiled against each precision's JSAMPLE layout. It emits visible
 natural-order JCO1 coefficients/quantizers, LE-u16 float-IDCT component planes
 and native-precision full-resolution color samples with nearest upsampling.
 Fractional upsampling and unknown color spaces omit the color output. No codec
-source is modified or linked into Rust. Executable identities and configurations
-are retained in `tests/reports/mozjpeg-build.json`.
+source is modified or linked into Rust.
 
 ## Differential matrix
 
@@ -80,8 +79,6 @@ interop regressions, not separately authored standards-compliance vectors.
 The 90 hashed JPEG/coefficient/plane artifacts plus manifest occupy 313,152
 bytes. Cargo checks 16,666 prefixes/boundaries and 3,000 bounded mutations,
 and retains both producer failures and their separately labeled passing inputs.
-All 148 tests pass in release and isolated debug builds. rustfmt, all-target
-Clippy and rustdoc with warnings denied pass; the new Python drivers compile.
 
 ## Explicit reference-producer limitations
 
@@ -103,20 +100,19 @@ diagnostics. The valid-stream gate never accepts runtime C warnings.
    values are zero; that earlier supported case is unchanged.
 
 See [T.81 Annex B](https://www.w3.org/Graphics/JPEG/itu-t81.pdf), the unmodified
-`emit_multi_dht` implementation in the pinned source, and
-`tests/reports/mozjpeg-limitations.json`. These findings describe the tested
+`emit_multi_dht` implementation in the pinned source. These findings describe the tested
 release/configuration and inputs; they do not imply that all optimized output
 or all progressive restart combinations fail. Native parser rules are unchanged.
 
 ## Reproduction
 
-From the package directory on Windows/MSVC, with the existing Turbo/IJG tools:
+From the workspace root on Windows/MSVC, with the existing Turbo/IJG tools:
 
 ```text
-python tests/build_mozjpeg.py --work experiments/mozjpeg-reference
-cargo build --release --examples --jobs 1
-python tests/reference_mozjpeg.py --build experiments/mozjpeg-reference/build.json --native INSPECT --colors COLORS --rewrite REWRITE --turbo TURBO --ijg IJG --out experiments/mozjpeg-gate --fixtures tests/fixtures/mozjpeg
-python tests/reference_mozjpeg_limitation.py --build experiments/mozjpeg-reference/build.json --native INSPECT --turbo TURBO --ijg IJG --out experiments/mozjpeg-limitations --fixtures tests/fixtures/mozjpeg-limitations
+python crates/deadlib-image/jpeg/tests/build_mozjpeg.py --work target/jpeg-reference/mozjpeg-reference
+cargo build -p deadlib-image-jpeg --release --examples --jobs 1
+python crates/deadlib-image/jpeg/tests/reference_mozjpeg.py --build target/jpeg-reference/mozjpeg-reference/build.json --native INSPECT --colors COLORS --rewrite REWRITE --turbo TURBO --ijg IJG --out target/jpeg-reference/mozjpeg-gate --fixtures crates/deadlib-image/jpeg/tests/fixtures/mozjpeg
+python crates/deadlib-image/jpeg/tests/reference_mozjpeg_limitation.py --build target/jpeg-reference/mozjpeg-reference/build.json --native INSPECT --turbo TURBO --ijg IJG --out target/jpeg-reference/mozjpeg-limitations --fixtures crates/deadlib-image/jpeg/tests/fixtures/mozjpeg-limitations
 cargo test -p deadlib-image-jpeg --test mozjpeg -- --nocapture
 ```
 

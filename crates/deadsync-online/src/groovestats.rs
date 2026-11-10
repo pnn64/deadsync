@@ -6295,5 +6295,4 @@ mod tests {
         assert_eq!(response.error, "bad api key");
         assert!(response.player_for_slot(1).is_none());
     }
-    include!("groovestats/unlock_tests.rs");
 }

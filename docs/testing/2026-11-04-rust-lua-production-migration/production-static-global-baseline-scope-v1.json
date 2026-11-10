@@ -1,9 +1,0 @@
-{
-  "candidate_count": 47,
-  "all_names_present_in_frozen_pre_migration_source": true,
-  "verified_baseline_sha256": {
-    "crates/deadsync-song-lua/src/compat.rs": "459c02b0825dcc7f36f7838c7d2da76c39f7dafdad9fefd97cab8ba634161fc0",
-    "crates/deadsync-song-lua/src/host.rs": "87c0f27f0b50be52bbcf3d03485b9e29f54b10502fd0ba811de09d43d80a908f"
-  },
-  "scope": "These names predate the migration; this review adds no new StepMania features or interpreter-parity requirement."
-}

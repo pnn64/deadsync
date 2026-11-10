@@ -762,7 +762,3 @@ mod tests {
         assert!(parse_page(r#"{"nope": 1}"#).is_err());
     }
 }
-
-#[cfg(test)]
-#[path = "smo_details_perf.rs"]
-mod perf_tests;

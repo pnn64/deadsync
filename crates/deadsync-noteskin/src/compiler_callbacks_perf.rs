@@ -1,6 +1,5 @@
 use super::*;
-use crate::resource_perf_support as support;
-use std::hint::black_box;
+use crate::test_directory::Directory;
 const LOADER: &str = r#"
 return {Load = function()
     local game = GAMESTATE:GetCurrentGame():GetName()
@@ -92,7 +91,7 @@ fn command_extraction_preserves_holes_coercions_errors_and_callback_effects() {
 
 #[test]
 fn complete_compiled_noteskin_bytes_match_baseline() {
-    let directory = support::Directory::new("callback-parity");
+    let directory = Directory::new("callback-parity");
     fs::write(directory.0.join("NoteSkin.lua"), LOADER).unwrap();
     let mut data = super::data();
     data.search_dirs = vec![directory.0.clone()];
@@ -111,151 +110,4 @@ fn complete_compiled_noteskin_bytes_match_baseline() {
         bundle.loader.entries.len(),
         4 * crate::compiler::CORE_ELEMENTS.len()
     );
-}
-
-#[cfg(windows)]
-fn cycles() -> u64 {
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetCurrentThread() -> *mut std::ffi::c_void;
-        fn QueryThreadCycleTime(thread: *mut std::ffi::c_void, cycles: *mut u64) -> i32;
-    }
-    let mut cycles = 0;
-    // SAFETY: the pseudo-handle is this live thread; cycles is a valid output.
-    assert_ne!(
-        unsafe { QueryThreadCycleTime(GetCurrentThread(), &mut cycles) },
-        0
-    );
-    cycles
-}
-
-#[cfg(windows)]
-pub(super) fn pin() {
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetCurrentThread() -> *mut std::ffi::c_void;
-        fn SetThreadAffinityMask(thread: *mut std::ffi::c_void, mask: usize) -> usize;
-    }
-    // SAFETY: the pseudo-handle identifies this worker; CPU 2 matches the song harness.
-    assert_ne!(
-        unsafe { SetThreadAffinityMask(GetCurrentThread(), 1 << 2) },
-        0
-    );
-}
-
-#[cfg(windows)]
-pub(super) fn measure(name: &str, batch: usize, mut work: impl FnMut()) {
-    for sample in 0..10 {
-        {
-            let start = std::time::Instant::now();
-            let first = cycles();
-            let (_, counts) = support::measure(|| {
-                for _ in 0..batch {
-                    work();
-                }
-            });
-            let elapsed_cycles = cycles() - first;
-            if sample != 0 {
-                println!(
-                    "LUA_BOUNDARY_METRIC {}",
-                    serde_json::json!({
-                        "workload": name, "engine": "rust", "sample": sample,
-                        "operations": batch, "ns": start.elapsed().as_nanos() as u64,
-                        "cycles": elapsed_cycles, "allocations": counts.allocs,
-                        "reallocations": counts.reallocs, "bytes": counts.allocated_bytes,
-                    })
-                );
-            }
-        }
-    }
-}
-
-#[cfg(windows)]
-#[test]
-#[ignore = "release benchmark; run alone"]
-fn benchmark_noteskin_callbacks_and_commands() {
-    pin();
-    let directory = support::Directory::new("callback-bench");
-    fs::write(directory.0.join("NoteSkin.lua"), LOADER).unwrap();
-    let mut data = super::data();
-    data.search_dirs = vec![directory.0.clone()];
-    let mut session = installed(&data);
-    let calls = run(
-        &mut session,
-        r#"
-        local state, game, arg = GAMESTATE:GetPlayerState(), GAMESTATE:GetCurrentGame(), {}
-        return function()
-            for i = 1, 128 do
-                GAMESTATE:GetPlayerState(arg, game, state)
-                GAMESTATE:GetCurrentGame(arg, game, state)
-                game:GetName(arg, game, state)
-                state:GetPlayerOptionsString(arg, game, state)
-                THEME:GetThemeAuthor(arg, game, state)
-                cmd(arg, game, state)
-            end
-        end
-    "#,
-    );
-    run(&mut session, "collectgarbage('stop')");
-    measure("noteskin_ignored_callbacks_768", 128, || {
-        black_box(session.vm.call(calls, &[]).unwrap());
-    });
-    for receiver in [false, true] {
-        let arguments = if receiver { "state" } else { "" };
-        let source = format!(
-            r#"
-            local state, game = GAMESTATE:GetPlayerState(), GAMESTATE:GetCurrentGame()
-            return function()
-                for i = 1, 128 do
-                    GAMESTATE.GetPlayerState({arguments})
-                    GAMESTATE.GetCurrentGame({arguments})
-                    game.GetName({arguments})
-                    state.GetPlayerOptionsString({arguments})
-                    THEME.GetThemeAuthor({arguments})
-                    cmd({arguments})
-                end
-            end
-        "#
-        );
-        let runner = run(&mut session, &source);
-        let name = if receiver {
-            "noteskin_ignored_receivers_768"
-        } else {
-            "noteskin_ignored_empty_768"
-        };
-        measure(name, 128, || {
-            black_box(session.vm.call(runner, &[]).unwrap());
-        });
-    }
-    for count in [0, 1, 8, 64] {
-        let commands = (0..count)
-            .map(|index| format!("'x,{index}'"))
-            .collect::<Vec<_>>()
-            .join(",");
-        let actor = run(
-            &mut session,
-            &format!("return {{__loader_commands={{{commands}}}}}"),
-        );
-        let expected = (0..count)
-            .map(|index| format!("x,{index}"))
-            .collect::<Vec<_>>()
-            .join(";");
-        assert_eq!(
-            session
-                .read_entry("Down", "Tap Note", actor)
-                .unwrap()
-                .init_command,
-            if count == 0 { None } else { Some(expected) }
-        );
-        measure(&format!("noteskin_commands_{count}"), 1024, || {
-            black_box(
-                session
-                    .scoped(|session| session.read_entry("Down", "Tap Note", actor))
-                    .unwrap(),
-            );
-        });
-    }
-    measure("noteskin_complete_compile", 4, || {
-        black_box(compile_data("dance", &data, "source", "Mirror").unwrap());
-    });
 }

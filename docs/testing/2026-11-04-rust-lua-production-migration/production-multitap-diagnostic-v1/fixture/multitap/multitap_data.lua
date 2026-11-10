@@ -1,1 +1,0 @@
-multitaps = {_version={0,9}, Challenge={{lane=1,taps={8,12},peak=6},{lane=2,taps={}},{lane=3,taps={}},{lane=4,taps={}}}}

@@ -997,9 +997,3 @@ pub(super) fn arcade_row_uses_choice_focus(state: &State, player_idx: usize) -> 
         .and_then(|&id| state.pane().row_map.get(id))
         .is_some_and(row_supports_inline_nav)
 }
-
-#[cfg(test)]
-mod direct_scan_perf {
-    use super::*;
-    include!("../../../../../tests/perf/parent_anchor.rs");
-}

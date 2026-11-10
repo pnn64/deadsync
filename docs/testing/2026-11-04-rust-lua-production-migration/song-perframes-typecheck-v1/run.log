@@ -1,7 +1,0 @@
-    Checking deadlib-render-backend-vulkan v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render-backend-vulkan)
-    Checking deadlib-render v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-render)
-    Checking deadlib-assets v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-assets)
-    Checking deadsync-theme v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-theme)
-    Checking deadsync-notefield v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-notefield)
-    Checking deadsync-song-lua v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadsync-song-lua)
-    Finished `dev` profile [unoptimized] target(s) in 5m 17s

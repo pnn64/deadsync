@@ -1,7 +1,0 @@
-Get:1 https://deb.debian.org/debian trixie/main amd64 libdbus-1-3 amd64 1.16.2-2 [178 kB]
-Get:2 https://deb.debian.org/debian trixie/main amd64 libdbus-1-dev amd64 1.16.2-2 [215 kB]
-Fetched 392 kB in 0s (3,128 kB/s)
-Get:1 https://deb.debian.org/debian trixie/main amd64 libsystemd-dev amd64 257.13-1~deb13u1 [1,359 kB]
-Get:2 https://deb.debian.org/debian trixie/main amd64 libsystemd0 amd64 257.13-1~deb13u1 [455 kB]
-Fetched 1,813 kB in 0s (19.6 MB/s)
--I/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include/dbus-1.0 -I/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu/dbus-1.0/include -I/var/tmp/deadsync-rust-adapters-native-deps/root/usr/include -L/var/tmp/deadsync-rust-adapters-native-deps/root/usr/lib/x86_64-linux-gnu -ldbus-1 

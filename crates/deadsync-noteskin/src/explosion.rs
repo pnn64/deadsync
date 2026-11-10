@@ -2220,7 +2220,3 @@ mod tests {
         assert_eq!(parse_explosion_animation("draworder,90").duration(), 0.0);
     }
 }
-
-#[cfg(test)]
-#[path = "explosion_perf_tests.rs"]
-mod explosion_perf_tests;

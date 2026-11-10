@@ -351,7 +351,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "popular_packs_perf.rs"]
-mod perf_tests;

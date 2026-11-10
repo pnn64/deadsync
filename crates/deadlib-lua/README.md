@@ -2,8 +2,7 @@
 
 Independent Lua 5.1 parser/compiler, bytecode VM, garbage collector, standard
 library and host API, implemented in Rust. Normal production builds have no
-third-party runtime crates or C Lua linkage. The pinned C Lua runtime remains a
-development/test oracle through `deadlib-lua-legacy`.
+third-party runtime crates or C Lua linkage. Language and host behavior are checked against pinned native reference fixtures.
 
 Lua C API/ABI compatibility is permanently outside the supported interface.
 There is no C compatibility feature, exported Lua C entry point, compatibility
@@ -91,29 +90,11 @@ Scripts may assign `cpath`, but it has no effect. There is no `_LOADLIB` registr
 or host library-loader hook. Supply native functionality through Rust callbacks
 and preload modules.
 
-## Scope and evidence
+## Testing
 
-The [interpreter milestone](../../docs/testing/2026-11-04-rust-lua-interpreter.md)
-was completed against its recorded source snapshot. The separately requested
-[C compatibility removal](../../docs/testing/2026-11-04-rust-lua-capi-removal.md)
-has its own finish line and current validation. Historical reports describe
-their original snapshots, including removed C facilities; they are not active
-requirements or promises of those facilities.
-
-Windows x64 MSVC and Linux GNU x64/i686 SSE2 are the available validation
-profiles. OS/locale behavior remains platform-specific; other libc/target
-combinations need their own validation. Test-oracle failures and unsupported C
-module/private T cases must be reported explicitly, not counted as passing.
-
-The separately authorized [production migration](../../docs/testing/2026-11-04-rust-lua-production-migration/objective.txt)
-is active. Noteskin preparation, Simply Love GIF definitions and the public song
-preparation/live/reload facade use this engine unconditionally. The normal and
-instrumented application dependency graphs omit the legacy runtime; final
-executable, rendering, content and measurement validation remains pending.
-Native song comparisons are available only in an explicit development-oracle
-configuration. The private table attachment is an embedding
-facility required for retained song-actor lifetime. It does not reopen the completed
-interpreter or C compatibility removal milestones. See the
-[architecture](../../docs/lua-architecture.md) and migration ledger for current
-validation. New scene-baking capabilities and performance backends remain separate
-work. Completing an authorized goal does not authorize another stage.
+Initialize the pinned [test fixtures](../../README.md#test-fixtures) before
+running the crate suite. Language, host ownership, allocation recovery, coroutine
+and module behavior are covered by the current implementation's regression
+tests. Native fixture generation tools are development utilities; production
+consumers use the shared Rust engine described in the
+[architecture guide](../../docs/lua-architecture.md).

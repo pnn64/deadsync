@@ -1798,13 +1798,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "gs_scorebox/select_data_original.rs"]
-mod select_data_original;
-
-#[cfg(test)]
-#[path = "gs_scorebox/select_data_perf.rs"]
-mod select_data_perf;
 
 #[cfg(test)]
 mod cycle_clock_tests {

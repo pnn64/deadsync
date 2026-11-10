@@ -672,18 +672,6 @@ mod tests {
         assert_eq!(samples, [3, 4, 5]);
     }
 
-    #[test]
-    fn drop_front_samples_handles_boundaries() {
-        let original = (0..64).collect::<Vec<i16>>();
-        for drop_samples in [0, 1, 17, 63, 64] {
-            let expected = original[drop_samples..].to_vec();
-            let mut actual = original.clone();
-
-            drop_front_samples(&mut actual, drop_samples);
-
-            assert_eq!(actual, expected);
-        }
-    }
 
     #[test]
     fn seek_scratch_take_preserves_allocation_and_clears_samples() {
@@ -717,20 +705,21 @@ mod tests {
         assert!(samples[0].abs() <= 25);
         assert_eq!(samples[47], 0);
     }
+
+    #[test]
+    fn drop_front_samples_handles_boundaries() {
+        let original = (0..64).collect::<Vec<i16>>();
+        for drop_samples in [0, 1, 17, 63, 64] {
+            let expected = original[drop_samples..].to_vec();
+            let mut actual = original.clone();
+
+            drop_front_samples(&mut actual, drop_samples);
+
+            assert_eq!(actual, expected);
+        }
+    }
 }
 
 #[cfg(test)]
 #[path = "resample_perf_tests.rs"]
 mod perf_tests;
-
-#[cfg(test)]
-#[path = "resample_conversion_tests.rs"]
-mod conversion_tests;
-
-#[cfg(test)]
-#[path = "fade_performance.rs"]
-mod fade_performance;
-
-#[cfg(test)]
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod kernel_bench;

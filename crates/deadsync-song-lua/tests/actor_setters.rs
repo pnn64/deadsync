@@ -194,26 +194,38 @@ fn sound_initialization_preserves_common_actor_setters_and_sound_methods() {
 
 #[test]
 fn custom_assignment_hooks_observe_writes_to_the_captured_target() {
-    compare(
-        r#"
-        local a,b=root[1],root[2]
-        local writes={}
-        local mt=getmetatable(b)
-        local assign=mt.__newindex
-        assert(type(assign)=='function')
-        mt.__newindex=function(self,key,value)
-            writes[#writes+1]=key..'='..(type(value)=='table' and type(value) or tostring(value))
-            return assign(self,key,value)
-        end
-        rawset(b,'__songlua_visible',nil)
-        rawset(a,'visible',b.__songlua_bound_methods.visible)
-        assert(a:visible(false)==b and not b:GetVisible() and a:GetVisible())
-        assert(b.__songlua_capture_block.visible==false)
-        assert(b.__songlua_capture_block.__songlua_has_changes==true)
-        assert(b.__songlua_state_visible==false)
-        return table.concat(writes,'|')
-    "#,
-    );
+    for live in [false, true] {
+        let mut context = SongLuaCompileContext::new(std::path::Path::new("."), "Actor setters");
+        context.live = live;
+        let mut runtime = SongRuntime::new(&context).unwrap();
+        let declaration = run(
+            &mut runtime,
+            "return Def.ActorFrame{Def.Quad{Name='left'},Def.Quad{Name='right'}}",
+        )[0];
+        let scene = runtime.instantiate_actor(declaration).unwrap();
+        let root = runtime.actor_scene_root(scene).unwrap();
+        runtime.vm_mut().set_global(b"root", root).unwrap();
+        run(&mut runtime, r#"
+            local a,b=root[1],root[2]
+            local writes=0
+            local mt=getmetatable(b)
+            local assign=mt.__newindex
+            assert(type(assign)=='function')
+            mt.__newindex=function(self,key,value)
+                assert(self==b, 'assignment must reach the captured actor')
+                if key=='__songlua_visible' then
+                    assert(value==false)
+                    writes=writes+1
+                end
+                return assign(self,key,value)
+            end
+            rawset(b,'__songlua_visible',nil)
+            rawset(a,'visible',b.__songlua_bound_methods.visible)
+            assert(a:visible(false)==b and not b:GetVisible() and a:GetVisible())
+            assert(writes==1, 'the visibility assignment must invoke the hook once')
+        "#);
+        assert!(runtime.take_actor_diagnostics().is_empty());
+    }
 }
 
 #[test]

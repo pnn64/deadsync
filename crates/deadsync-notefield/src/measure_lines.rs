@@ -1461,7 +1461,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "edit_bars_performance.rs"]
-mod edit_bars_performance;

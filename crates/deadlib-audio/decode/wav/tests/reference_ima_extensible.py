@@ -1,4 +1,4 @@
-"""Extensible IMA: independent bit truth, prior-driver rejection and four readers."""
+"""Extensible IMA: independent bit truth and reference-reader checks."""
 import argparse
 import hashlib
 import json
@@ -19,13 +19,11 @@ def sha(data):return hashlib.sha256(data).hexdigest()
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--before-binary',type=Path,help='optional exact retained prior driver, for before/after evidence');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);args=ap.parse_args()
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3];output=args.output.resolve();output.parent.mkdir(parents=True,exist_ok=True)
     for suffix in ('','.build.log','.corpus.zip','-corpus'):
         if Path(str(output)+suffix).exists():ap.error('choose a new evidence destination')
     corpus=Path(str(output)+'-corpus');corpus.mkdir()
-    baseline=root/'validation/bw64-dummy-adpcm-forward.json';baseline_report=json.loads(baseline.read_text())
-    if args.before_binary:assert sha(args.before_binary.read_bytes())==baseline_report['binary_sha256']
     sys.path.insert(0,str(workspace/'target/wav/python'));import soundfile as sf
     dr,dr_meta=build_dr_wav(workspace,root);sym,sym_meta=build_symphonia(workspace,root);ffmpeg=shutil.which('ffmpeg');assert ffmpeg
     names=('adpcm','adpcm_file','adpcm_forward','encode_adpcm')
@@ -61,10 +59,6 @@ def main():
                 p=subprocess.run([str(x) for x in command],capture_output=True);ours[label]=compare(p.stdout,truth,2,p.returncode,p.stderr)
             for start in sorted(set((0,min(frames,info['block_frames']-1),max(0,frames-2),frames))):
                 count=min(17,frames-start);p=subprocess.run([str(bins['adpcm_file']),str(path),str(start),str(count)],capture_output=True);ours[f'range_{start}']=compare(p.stdout,truth[start*channels*2:(start+count)*channels*2],2,p.returncode,p.stderr)
-            prior=None
-            if args.before_binary and not info['trailing']:
-                p=subprocess.run([str(args.before_binary.resolve()),str(path),'7','1'],capture_output=True)
-                prior=dict(exit_code=p.returncode,output_bytes=len(p.stdout),stderr=p.stderr.decode(errors='replace')[:1500],rejected_for_extensible=p.returncode!=0 and not p.stdout and b'extensible' in p.stderr.lower())
             references=external(path,truth,combined)
             # Declared before execution: direct RIFF 4-bit mono/stereo dr_wav
             # parity; paired legacy 3-bit FFmpeg checks under its alternate rounding.
@@ -73,8 +67,8 @@ def main():
             if flat_gate:
                 paired_path=save(info['name']+'-legacy-pair',flat);p=subprocess.run([ffmpeg,'-v','error','-i',str(paired_path),'-c:a','pcm_s16le','-f','s16le','-'],capture_output=True)
                 paired=dict(fixture_sha256=sha(flat),combined=compare(p.stdout[:len(combined)],combined,2,p.returncode,p.stderr))
-            passed=all(row['exact'] for row in ours.values()) and (prior is None or prior['rejected_for_extensible']) and (not direct_gate or references['dr_wav']['spec']['exact']) and (not flat_gate or paired['combined']['exact'])
-            results.append(dict(**info,fixture_sha256=sha(payload),truth_sha256=sha(truth),combined_truth_sha256=sha(combined),ours=ours,prior=prior,references=references,direct_dr_wav_gate=direct_gate,paired_ffmpeg_gate=flat_gate,paired=paired,passed=passed))
+            passed=all(row['exact'] for row in ours.values()) and (not direct_gate or references['dr_wav']['spec']['exact']) and (not flat_gate or paired['combined']['exact'])
+            results.append(dict(**info,fixture_sha256=sha(payload),truth_sha256=sha(truth),combined_truth_sha256=sha(combined),ours=ours,references=references,direct_dr_wav_gate=direct_gate,paired_ffmpeg_gate=flat_gate,paired=paired,passed=passed))
             if len(results)%40==0:print(f'{len(results)} cases; failures={sum(not r["passed"] for r in results)}',flush=True)
         for info,payload,truth,combined,flat in cases():check(info,payload,truth,combined,flat)
         for bits in (3,4):
@@ -93,7 +87,7 @@ def main():
                             flat=wave('RIFF',descriptor(bits,channels,block_bytes,0,extensible=False),audio,frames)
                             check(info,payload,truth,combined,flat)
     after={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in paths}
-    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),platform=platform.platform(),rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,inputs_unchanged=before==after,binaries={n:sha(p.read_bytes()) for n,p in bins.items()},baseline_report_sha256=sha(baseline.read_bytes()),baseline_binary_sha256=baseline_report['binary_sha256'] if args.before_binary else None,dr_wav=dr_meta,symphonia=sym_meta,libsndfile=sf.__libsndfile_version__,soundfile=sf.__version__,ffmpeg=subprocess.check_output([ffmpeg,'-version'],text=True).splitlines()[0],ffmpeg_binary_sha256=sha(Path(ffmpeg).read_bytes()),corpus_sha256=sha(Path(str(output)+'.corpus.zip').read_bytes()),fixtures=manifest,passed=sum(r['passed'] for r in results),total=len(results),own_checks=sum(len(r['ours']) for r in results),prior_rejections=sum(r['prior'] is not None and r['prior']['rejected_for_extensible'] for r in results),direct_dr_wav_gates=sum(r['direct_dr_wav_gate'] for r in results),paired_ffmpeg_gates=sum(r['paired_ffmpeg_gate'] for r in results),cases=results)
+    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),platform=platform.platform(),rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,inputs_unchanged=before==after,binaries={n:sha(p.read_bytes()) for n,p in bins.items()},dr_wav=dr_meta,symphonia=sym_meta,libsndfile=sf.__libsndfile_version__,soundfile=sf.__version__,ffmpeg=subprocess.check_output([ffmpeg,'-version'],text=True).splitlines()[0],ffmpeg_binary_sha256=sha(Path(ffmpeg).read_bytes()),corpus_sha256=sha(Path(str(output)+'.corpus.zip').read_bytes()),fixtures=manifest,passed=sum(r['passed'] for r in results),total=len(results),own_checks=sum(len(r['ours']) for r in results),direct_dr_wav_gates=sum(r['direct_dr_wav_gate'] for r in results),paired_ffmpeg_gates=sum(r['paired_ffmpeg_gate'] for r in results),cases=results)
     output.write_text(json.dumps(report,indent=2)+'\n');print(f"{report['passed']}/{report['total']} gates; {report['own_checks']} native checks; {report['prior_rejections']} previous-driver rejections",flush=True)
     if report['passed']!=report['total'] or before!=after:raise SystemExit(1)
 

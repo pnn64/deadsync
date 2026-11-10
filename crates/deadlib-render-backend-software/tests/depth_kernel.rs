@@ -1,7 +1,5 @@
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 #[allow(dead_code)]
@@ -10,9 +8,9 @@ mod backend {
 
     mod depth_kernel {
         use super::*;
-        use crate::{bench, perf};
+
         use deadlib_render_core::DepthMode;
-        use std::hint::black_box;
+
 
         fn check(z: f32) {
             for mode in DepthMode::ALL {
@@ -81,36 +79,5 @@ mod backend {
             rows.test(0, z)
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_depth_kernel() {
-            for unorm16 in [true, false] {
-                for mode in [
-                    DepthMode::Write,
-                    DepthMode::TestWrite,
-                    DepthMode::TestFailWrite,
-                ] {
-                    let values: Vec<_> = (0..4096)
-                        .map(|i| ((i * 73) % 4096) as f32 / 4095.0)
-                        .collect();
-                    let mut pixels = [0.5];
-                    let label = format!("depth/{unorm16}/{mode:?}");
-                    let mut work = || {
-                        let mut depth = DepthRows {
-                            pixels: &mut pixels,
-                            unorm16,
-                            mode,
-                        };
-                        for &z in &values {
-                            black_box(write_depth(black_box(&mut depth), black_box(z)));
-                        }
-                    };
-                    let (_, counts) = perf::measure(&mut work);
-                    println!("{label}: allocation {counts:?}");
-                    assert_eq!(counts, perf::Churn::default());
-                    bench::measure(&label, 300, work);
-                }
-            }
-        }
     }
 }

@@ -194,7 +194,7 @@ fn safe_libraries_and_module_failures_match_the_production_baseline() {
 
 #[test]
 fn complete_compiled_callback_fixture_bytes_match_the_frozen_baseline() {
-    let directory = crate::resource_perf_support::Directory::new("rust-callback-parity");
+    let directory = crate::test_directory::Directory::new("rust-callback-parity");
     let mut data = data();
     data.search_dirs = vec![directory.0.clone()];
     fs::write(

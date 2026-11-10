@@ -503,7 +503,3 @@ mod tests {
         assert!(snapshot.get(3).is_none());
     }
 }
-
-#[cfg(test)]
-#[path = "smo_describe_perf.rs"]
-mod perf_tests;

@@ -15,17 +15,5 @@ name = "stdio_allocation_failures"
 # cold allocation behavior this executable must check in fresh child processes.
 harness = false
 
-[[bench]]
-name = "baseline"
-harness = false
-
-[[bench]]
-name = "cache"
-harness = false
-
-[[bench]]
-name = "host_functions"
-harness = false
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

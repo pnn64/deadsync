@@ -67,8 +67,6 @@ end
 hook(ActorProxy, 'ActorProxy', 'SetTarget')
 hook(Sprite, 'Sprite', 'GetTexture')
 hook(ActorFrameTexture, 'ActorFrameTexture', 'GetTexture')
-hook(Actor, 'Sprite', 'loop')
-hook(Actor, 'Sprite', 'rate')
 hook(Sprite, 'Sprite', 'loop')
 hook(Sprite, 'Sprite', 'rate')
 end

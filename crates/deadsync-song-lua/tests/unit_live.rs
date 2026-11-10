@@ -12338,7 +12338,7 @@ end
     );
 }
 
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod allocations;
 fn scene_copy_pose(scene: &SongLuaLiveScene, source: Root, into: Root) -> Result<(), Error> {
     let mut runtime = scene.runtime();

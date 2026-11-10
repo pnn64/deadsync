@@ -1,14 +1,10 @@
 //! Lead-in submission through the actual worker and music-block transport.
-use super::super::stretch::perf_tests::bench;
 use super::super::*;
-use super::allocations;
 use deadlib_audio_core::{
     AudioRenderHandle, AudioStreamHandle, CallbackClockSource, CallbackInfo, MixControls,
     MusicMapSeg, OutputBufferMut, RenderState, activate_music_track, music_map_generation,
     music_transport, reset_music_stream_clock_state, reset_music_target_gain,
 };
-use std::hint::black_box;
-use std::time::Instant;
 
 struct Fixture {
     stream: AudioStreamHandle,
@@ -105,73 +101,6 @@ fn silence_preserves_samples_block_boundaries_and_exact_timing() {
                 assert_eq!(emitted, frames);
                 assert_eq!(end.to_bits(), expected.to_bits());
             }
-        }
-    }
-}
-
-#[test]
-#[ignore = "write PCM and transport timing for archived binary comparison"]
-fn dump_lead_in() {
-    reset_music_stream_clock_state();
-    reset_music_target_gain();
-    activate_music_track();
-    let mut bytes = Vec::new();
-    for channels in [1, 2, 3, 6, 8] {
-        for frames in [0, 1, 255, 256, 257, 731, 2048, 2049, 8192] {
-            for rate in [0.05, 1.0, 1.2, 8.0] {
-                let mut fixture = Fixture::new(channels);
-                let end = fixture.push(frames, rate / 48_000.0);
-                bytes.extend_from_slice(&end.to_bits().to_le_bytes());
-                let (samples, segments) = fixture.capture(frames);
-                for sample in samples {
-                    bytes.extend_from_slice(&sample.to_le_bytes());
-                }
-                bytes.extend_from_slice(&(segments.len() as u64).to_le_bytes());
-                for (_, segment) in segments {
-                    bytes.extend_from_slice(&segment.stream_frame_start.to_le_bytes());
-                    bytes.extend_from_slice(&segment.frames.to_le_bytes());
-                    bytes.extend_from_slice(&segment.music_start_sec.to_bits().to_le_bytes());
-                    bytes.extend_from_slice(&segment.music_sec_per_frame.to_bits().to_le_bytes());
-                }
-            }
-        }
-    }
-    std::fs::write(
-        std::env::var_os("LEAD_IN_CAPTURE").expect("LEAD_IN_CAPTURE path"),
-        bytes,
-    )
-    .unwrap();
-}
-
-#[test]
-#[ignore = "CPU-cycle benchmark; one test thread"]
-fn benchmark_lead_in() {
-    bench::pin_thread();
-    for channels in [1, 2, 6, 8] {
-        for frames in [1, 731, 2048, 8192] {
-            let label = format!("lead-in/{channels}ch/{frames}");
-            let mut fixture = Fixture::new(channels);
-            let (_, churn) =
-                allocations::measure(|| black_box(fixture.push(frames, 1.2 / 48_000.0)));
-            println!("{label}: allocation {churn:?}");
-            let mut samples = Vec::new();
-            for round in 0..12 {
-                // Pool allocation/destruction stays outside the timed region.
-                let mut fixtures: Vec<_> = (0..64).map(|_| Fixture::new(channels)).collect();
-                let start_cycles = bench::cycles();
-                let start = Instant::now();
-                for fixture in &mut fixtures {
-                    black_box(fixture.push(black_box(frames), black_box(1.2 / 48_000.0)));
-                }
-                let ns = start.elapsed().as_nanos() as f64 / 64.0;
-                let cpu = (bench::cycles() - start_cycles) as f64 / 64.0;
-                if round > 0 {
-                    samples.push((cpu, ns));
-                }
-            }
-            samples.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
-            let (cpu, ns) = samples[5];
-            println!("{label}: cycles/op {cpu:.2}; ns/op {ns:.2}");
         }
     }
 }

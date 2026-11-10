@@ -110,17 +110,10 @@ External evidence (2026-10-27):
   streams report unavailable. Two headerless official files are excluded because
   they do not supply native metadata for remuxing; native frame tests cover them.
 
-Reports: [ogg-matrix.tsv](validation/ogg-matrix.tsv),
-[ogg-corpus.tsv](validation/ogg-corpus.tsv),
-[ogg-manifest.json](validation/ogg-manifest.json).
-Input provenance and native corpus hashes are in [COVERAGE.md](COVERAGE.md) and
-its linked manifest. Byte sizes are correctness-corpus observations, not
-representative music compression or speed measurements. No Ogg fuzz campaign
-has run yet.
-
 ## Reproduce
 
-Prepare the pinned libFLAC and corpus checkouts as described in COVERAGE.md.
+Provide a libFLAC checkout at `target/deadlib-flac-reference/flac` and its
+conformance corpus at `target/deadlib-flac-reference/conformance`.
 The C oracle also needs libogg 1.3.6, commit
 `be05b13e98b048f0b5a0f5fa8ce514d56db5f822`. Existing checkouts may be reused:
 
@@ -134,8 +127,8 @@ cmake --build target/deadlib-flac-reference/oracle-build --config Release --targ
 $env:DEADLIB_FLAC_ORACLE = (Resolve-Path target/deadlib-flac-reference/oracle-build/Release/deadlib_flac_oracle.exe).Path
 $env:DEADLIB_FLAC_CORPUS = (Resolve-Path target/deadlib-flac-reference/conformance).Path
 $env:DEADLIB_FLAC_GENERATED = "$pwd/target/deadlib-flac-reference/generated"
-$env:DEADLIB_FLAC_OGG_REPORT = "$pwd/crates/deadlib-audio/decode/flac/validation/ogg-matrix.tsv"
-$env:DEADLIB_FLAC_OGG_CORPUS_REPORT = "$pwd/crates/deadlib-audio/decode/flac/validation/ogg-corpus.tsv"
+$env:DEADLIB_FLAC_OGG_REPORT = "$pwd/target/flac-ogg-matrix.tsv"
+$env:DEADLIB_FLAC_OGG_CORPUS_REPORT = "$pwd/target/flac-ogg-corpus.tsv"
 cargo test -p deadlib-audio-decode-flac --target-dir target/deadlib-flac --release --test ogg_reference -- --ignored --test-threads=1
 ```
 

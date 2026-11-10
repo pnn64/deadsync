@@ -1,6 +1,0 @@
-{
-  "tests/fixtures/song_lua/display-size.lua": {
-    "baseline": "f1d00fd72d3f0f4daab558635a2fadb896cb699844ebffcc85e01145a6059ad9",
-    "current": "f1d00fd72d3f0f4daab558635a2fadb896cb699844ebffcc85e01145a6059ad9"
-  }
-}

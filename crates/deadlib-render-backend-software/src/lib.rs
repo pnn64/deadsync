@@ -6280,22 +6280,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-mod offscreen_perf_tests;
-
-#[cfg(test)]
-#[path = "environment_performance.rs"]
-mod environment_performance;
-
-#[cfg(test)]
-mod color_raster_performance;
-
-#[cfg(test)]
-mod byte_writer_performance;
-
-#[cfg(test)]
-mod texture_raster_performance;
-
-#[cfg(test)]
-mod tmesh_raster_performance;

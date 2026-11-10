@@ -284,7 +284,3 @@ pub fn fetch_and_store_grade_from_app_runtime(
         },
     )
 }
-
-#[cfg(test)]
-#[path = "score_import_perf.rs"]
-mod perf_tests;

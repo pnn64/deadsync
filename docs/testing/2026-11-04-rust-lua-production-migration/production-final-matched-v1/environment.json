@@ -1,7 +1,0 @@
-{
-  "platform": "Windows-11-10.0.26100-SP0",
-  "machine": "AMD64",
-  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
-  "order": "native, Rust, Rust, native for each workload; preparation uses 3 iterations per process; live uses 481 frames/60 warmup",
-  "timing_scope": "Original complete preparation and gameplay-update tools; no GPU/audio device. Compilation checked before and after each run. Ordinary system load remains uncontrolled."
-}

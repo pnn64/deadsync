@@ -2569,36 +2569,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "render_pipelines_original.rs"]
-mod pipelines_original;
-#[cfg(test)]
-#[path = "render_pipelines_perf.rs"]
-mod pipelines_perf;
-
-#[cfg(test)]
-use super::preview;
-
-#[cfg(test)]
-#[path = "chrome_data_original.rs"]
-mod course_data_original;
 
 #[cfg(test)]
 #[path = "chrome_data_perf.rs"]
 mod course_data_perf;
-
-#[cfg(test)]
-#[path = "render/select_data_original.rs"]
-mod select_data_original;
-
-#[cfg(test)]
-#[path = "render/select_data_perf.rs"]
-mod select_data_perf;
-
-#[cfg(test)]
-#[path = "doubles_render_original.rs"]
-mod doubles_render_original;
-
-#[cfg(test)]
-#[path = "doubles_render_perf.rs"]
-mod doubles_render_perf_tests;

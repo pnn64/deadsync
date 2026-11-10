@@ -575,46 +575,6 @@ fn itg_parse_milkshape_mesh_material_index(header: &str) -> i32 {
         .unwrap_or(0)
 }
 
-#[cfg(test)]
-#[inline]
-fn itg_contains_milkshape_ascii_signature(mut content: &[u8], signature: &[u8]) -> bool {
-    while content.len() >= signature.len() {
-        let candidate_bytes = content.len() - signature.len() + 1;
-        let Some(offset) = content[..candidate_bytes]
-            .iter()
-            .position(|byte| *byte == b'm' || *byte == b'M')
-        else {
-            return false;
-        };
-        content = &content[offset..];
-        if content[..signature.len()].eq_ignore_ascii_case(signature) {
-            return true;
-        }
-        content = &content[1..];
-    }
-    false
-}
-
-#[cfg(test)]
-#[inline]
-fn has_milkshape_ascii_signature(content: &str) -> bool {
-    const SIGNATURE: &[u8] = b"milkshape 3d ascii";
-    const FAST_PREFIX_BYTES: usize = 256;
-
-    let bytes = content.as_bytes();
-    let prefix_len = bytes.len().min(FAST_PREFIX_BYTES);
-    if itg_contains_milkshape_ascii_signature(&bytes[..prefix_len], SIGNATURE) {
-        return true;
-    }
-    if bytes.len() <= FAST_PREFIX_BYTES {
-        return false;
-    }
-
-    // The overlap preserves matches crossing the fast-prefix boundary while
-    // avoiding a lowercase copy of the complete model source.
-    let suffix_start = FAST_PREFIX_BYTES.saturating_sub(SIGNATURE.len() - 1);
-    itg_contains_milkshape_ascii_signature(&bytes[suffix_start..], SIGNATURE)
-}
 
 fn itg_finish_model_auto_rot_keys(mut keys: Vec<ModelAutoRotKey>) -> Arc<[ModelAutoRotKey]> {
     keys.sort_by(|a, b| {
@@ -707,11 +667,15 @@ fn itg_resolve_model_material_texture(
     if texture_ref.is_empty() {
         return None;
     }
-    // Model::LoadMaterialsFromMilkshapeAscii anchors both texture names to
-    // the materials file. Noteskin inheritance must not supply a substitute.
+    // A pack replaces a base-relative resource's contents. Its material names
+    // still belong to that resource's directory, even when the selected file
+    // lives elsewhere in the pack. Unreplaced materials keep their own anchor.
+    let material_identity = data.overrides.iter()
+        .find(|(_, replacement)| replacement == model_path)
+        .map_or(model_path, |(target, _)| target.as_path());
     let texture_ref = itg_normalized_asset_ref(texture_ref)?;
     let texture_path = data.override_path(itg_resolve_relative_file(
-        model_path.parent()?,
+        material_identity.parent()?,
         Path::new(&texture_ref),
     )?);
     let ext = texture_path
@@ -1766,7 +1730,3 @@ fn expand_mesh_vertices(
     }
     (vertices, bounds)
 }
-
-#[cfg(test)]
-#[path = "model_merge_perf.rs"]
-mod resource_perf;

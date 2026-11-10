@@ -1,6 +1,6 @@
 //! Check actual production preparation and reversal tracks without a window or gameplay Lua VM.
 use deadsync_gameplay::{SongLuaRuntimeBuilder, SongLuaRuntimeWindowBuild};
-use std::{path::PathBuf, sync::Arc, time::Instant};
+use std::{path::PathBuf, sync::Arc};
 
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
@@ -49,7 +49,6 @@ fn main() {
         profiles[0].mini_percent = args[3].parse().unwrap();
     }
     let scroll = [profiles[0].scroll_speed, profiles[1].scroll_speed];
-    let start = Instant::now();
     let mut prepared = deadsync_shell::gameplay_entry::prepare_song_lua(
         &song,
         &charts,
@@ -72,7 +71,6 @@ fn main() {
         prepared.take_live_scene().unwrap().is_none(),
         "production retained a Lua VM"
     );
-    let compile_ms = start.elapsed().as_secs_f64() * 1000.0;
     let (constants, eases, visuals) = prepared.build_song_lua_runtime(SongLuaRuntimeWindowBuild {
         song_title: &song.title,
         timing_players: [&payloads[0].timing, &payloads[1].timing],
@@ -231,11 +229,11 @@ fn main() {
     let checks = observations.len() + reverse_samples.len();
     let result = serde_json::json!({"song":song.title,"chart_hash":charts[0].short_hash,"retained_lua_vm":false,"aft_stages":afts,
         "mini_percent":profiles[0].mini_percent,"scroll_speed":format!("{:?}", profiles[0].scroll_speed),
-        "compile_ms":compile_ms,"reversal_checks_passed":checks,"observations":observations,"reverse_modifier_samples":reverse_samples,
+        "reversal_checks_passed":checks,"observations":observations,"reverse_modifier_samples":reverse_samples,
         "whole_song_parity_proven":false,"pixel_parity_proven":false});
     std::fs::write(&args[1], serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     println!(
-        "PASS production_retained_lua_vm=false reversal_checks={} compile_ms={compile_ms}",
+        "PASS production_retained_lua_vm=false reversal_checks={}",
         checks
     );
 }

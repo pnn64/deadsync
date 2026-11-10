@@ -1,7 +1,0 @@
-{
-  "sources_unchanged": true,
-  "changed_sources": [],
-  "migration_sources_unchanged": true,
-  "migration_changed_sources": [],
-  "scope": "Original inventory sites, seven original Lua regression packages, root application sources and all manifests; full workspace differences retained separately"
-}

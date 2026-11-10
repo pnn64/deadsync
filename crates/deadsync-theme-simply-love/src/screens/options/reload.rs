@@ -360,10 +360,3 @@ pub(super) fn push_reload_overlay_actors_unreserved(
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "reload_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "reload_buffers_perf.rs"]
-mod buffers_perf;

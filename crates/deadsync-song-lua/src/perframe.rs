@@ -243,7 +243,7 @@ pub(crate) fn update_function_replay_beats(
         .ceil()
         .max(0.0) as usize;
     // Empty timing maps have no prefix to reuse. Keep their original build
-    // path: pre-sizing this case regressed allocator-sensitive benchmarks.
+    // path without pre-sizing the temporary argument storage.
     if context.song_timing_bpms.is_empty() || context.song_timing.is_some() {
         let mut out = vec![(f64::from(start), 0.0)];
         let mut previous_seconds = start_seconds;
