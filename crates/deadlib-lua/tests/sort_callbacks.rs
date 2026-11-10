@@ -208,3 +208,123 @@ fn special_numeric_sort_values_retain_ordinary_dispatch_permutations() {
         assert_eq!(plain, observed);
     }
 }
+
+#[test]
+fn numeric_global_updates_match_observed_sort_dispatch() {
+    let program = compile(
+        br#"
+local out={}
+for _,less in ipairs{
+ function(a,b)counter=counter+3;return a<b end,
+ function(a,b)counter=counter-0.25;return b>a end,
+ function(a,b)counter=counter*1.125;return not(a>=b)end,
+}do
+ counter=1
+ local t={9,2,7,1,8,3,6,4,5};table.sort(t,less)
+ for i=1,9 do assert(t[i]==i) end
+ out[#out+1]=counter
+end
+local env=setmetatable({counter=2},{__newindex=function()error('existing numeric field')end})
+local function less(a,b)counter=counter+1;return a<b end
+setfenv(less,env);table.sort({4,3,2,1},less)
+out[#out+1]=env.counter
+return unpack(out)
+"#,
+    )
+    .unwrap();
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    let mut plain = Vm::new();
+    let mut observed = Vm::new();
+    observed.execute(&hook).unwrap();
+    assert_eq!(
+        plain.execute(&program).unwrap(),
+        observed.execute(&program).unwrap()
+    );
+}
+
+#[test]
+fn numeric_global_update_fallbacks_preserve_metamethod_effects() {
+    let program = compile(
+        br#"
+local reads,writes=0,0
+local env=setmetatable({}, {__index=function()reads=reads+1;return 10 end,
+ __newindex=function(_,_,n)writes=writes+1;assert(n==11)end})
+local function less(a,b)counter=counter+1;return a<b end
+setfenv(less,env);table.sort({9,3,8,2,7,1,6,4,5},less)
+assert(reads==writes and reads>0)
+counter='0';table.sort({4,3,2,1},function(a,b)counter=counter+1;return a<b end)
+local coerced=counter
+local additions=0
+counter=setmetatable({},{__add=function(_,n)additions=additions+1;return 10+n end})
+table.sort({4,3,2,1},function(a,b)counter=counter+1;return a<b end)
+assert(additions==1);local added=counter
+counter=0;local calls=0
+local mt={__lt=function(a,b)calls=calls+1;assert(counter==calls);return a.n<b.n end}
+local t={};for i=1,8 do t[i]=setmetatable({n=9-i},mt)end
+table.sort(t,function(a,b)counter=counter+1;return a<b end)
+assert(counter==calls)
+return reads,writes,coerced,additions,added,counter,calls
+"#,
+    )
+    .unwrap();
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    let mut plain = Vm::new();
+    let mut observed = Vm::new();
+    observed.execute(&hook).unwrap();
+    assert_eq!(
+        plain.execute(&program).unwrap(),
+        observed.execute(&program).unwrap()
+    );
+}
+
+#[test]
+fn numeric_global_update_sort_errors_keep_completed_writes_and_return_lines() {
+    let program=compile(b"counter=0;local t={};for i=1,100 do t[i]=i end\nlocal function less(a,b)\n counter=counter+1\n return true\nend\ntable.sort(t,less)").unwrap();
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.execute(&hook).unwrap();
+        }
+        let error = vm.execute(&program).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::Runtime);
+        assert_eq!(error.line(), 4);
+        assert!(
+            error
+                .message_bytes()
+                .ends_with(b"invalid order function for sorting")
+        );
+        assert_eq!(vm.global(b"counter"), Value::Number(102.));
+    }
+}
+
+#[test]
+fn numeric_global_updates_keep_budget_side_effects_in_order() {
+    let program=compile(b"counter=0;local t={1,2,3};table.sort(t,function(a,b)counter=counter+1;return nil end);return counter").unwrap();
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    for limit in 0..120 {
+        let mut plain = Vm::new();
+        let mut observed = Vm::new();
+        observed.execute(&hook).unwrap();
+        plain.set_instruction_limit(Some(limit));
+        observed.set_instruction_limit(Some(limit));
+        let a = plain
+            .execute(&program)
+            .map(<[Value]>::to_vec)
+            .map_err(|e| (e.kind(), e.line(), e.message_bytes().to_vec()));
+        let b = observed
+            .execute(&program)
+            .map(<[Value]>::to_vec)
+            .map_err(|e| (e.kind(), e.line(), e.message_bytes().to_vec()));
+        assert_eq!(a, b, "limit {limit}");
+        assert_eq!(
+            plain.global(b"counter"),
+            observed.global(b"counter"),
+            "limit {limit}"
+        );
+    }
+}
