@@ -3490,6 +3490,8 @@ fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '
 }
 
 fn half_writer(buffer: &mut [u64], alpha: bool) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    // Keep half-attachment blending inside the caller's CPU-feature context.
+    #[inline(always)]
     move |index, color, mode| {
         let mut color = blend_color(unpack_half(buffer[index]), color, mode);
         if !alpha {
@@ -4959,6 +4961,46 @@ mod tests {
             (1.0 + 3.0 * 2.0_f32.powi(-11), 0x3c02),
         ] {
             assert_eq!(encode_half(value), bits, "value {value}");
+        }
+    }
+
+    #[test]
+    fn half_attachment_blends_preserve_hdr_and_alpha_policy() {
+        let vertex = |x, y| ScreenVertexColor {
+            x,
+            y,
+            color: [0.25, 0.5, 2.0, 0.5],
+        };
+        let vertices = [vertex(0.0, 0.0), vertex(4.0, 0.0), vertex(0.0, 4.0)];
+        // The first sample has exact binary weights. Expected RGBA16F encodings
+        // include values above one and below zero, without normalized clamping.
+        for (blend, expected) in [
+            (BlendMode::Alpha, 0x3c00_3d00_3600_3200_u64),
+            (BlendMode::Add, 0x3c00_3e00_3800_3400),
+            (BlendMode::Multiply, 0x3c00_3c00_3000_2800),
+            (BlendMode::Subtract, 0x0000_ba00_b000_ac00),
+            (BlendMode::NoEffect, 0x3c00_3800_3400_3000),
+        ] {
+            for alpha in [false, true] {
+                let mut pixels = [0x3c00_3800_3400_3000; 16];
+                rasterize_triangle_color(
+                    &vertices[0],
+                    &vertices[1],
+                    &vertices[2],
+                    blend,
+                    4,
+                    4,
+                    0,
+                    4,
+                    &mut half_writer(&mut pixels, alpha),
+                );
+                let expected = if alpha {
+                    expected
+                } else {
+                    (expected & 0x0000_ffff_ffff_ffff) | 0x3c00_0000_0000_0000
+                };
+                assert_eq!(pixels[0], expected, "{blend:?}, alpha={alpha}");
+            }
         }
     }
 
