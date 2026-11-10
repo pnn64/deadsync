@@ -754,20 +754,21 @@ pub fn set_show_select_music_scorebox(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_select_music_scorebox, enabled)
 }
 
-pub fn set_select_music_scorebox_cycle_itg(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_itg, enabled)
+/// Set the `GrooveStats` scorebox boards from a mask of ITG (bit 0), EX
+/// (bit 1) and event boards (bit 2).
+pub fn set_groovestats_scorebox_boards(cfg: &mut Config, mask: u8) -> bool {
+    let itg = set_if_changed(&mut cfg.groovestats_scorebox_itg, mask & 1 != 0);
+    let ex = set_if_changed(&mut cfg.groovestats_scorebox_ex, mask & (1 << 1) != 0);
+    let events = set_if_changed(&mut cfg.groovestats_scorebox_events, mask & (1 << 2) != 0);
+    itg || ex || events
 }
 
-pub fn set_select_music_scorebox_cycle_ex(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_ex, enabled)
+pub fn set_arrowcloud_regular_boards(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.arrowcloud_regular_boards, Some(enabled))
 }
 
-pub fn set_select_music_scorebox_cycle_hard_ex(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_hard_ex, enabled)
-}
-
-pub fn set_select_music_scorebox_cycle_tournaments(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_tournaments, enabled)
+pub fn set_arrowcloud_event_boards(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.arrowcloud_event_boards, enabled)
 }
 
 pub fn set_select_music_chart_info_peak_nps(cfg: &mut Config, enabled: bool) -> bool {
@@ -922,9 +923,6 @@ mod tests {
     }
 }
 
-pub fn set_select_music_scorebox_cycle_golf(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_golf, enabled)
-}
 pub fn set_select_music_scorebox_events_first(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.select_music_scorebox_events_first, enabled)
 }

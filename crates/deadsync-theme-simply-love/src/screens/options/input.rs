@@ -1163,6 +1163,20 @@ pub(super) fn apply_submenu_choice_delta(
             _ => return None,
         };
         let effect = online_config_effect(request);
+        if row.id == SubRowId::EnableGrooveStats && !state.arrowcloud_regular_boards_set {
+            // An unset ArrowCloud Regular Boards follows GrooveStats; keep its
+            // row showing what the scorebox will do.
+            let arrowcloud = &mut state.sub[SubmenuKind::ArrowCloud];
+            for indices in [&mut arrowcloud.choice_indices, &mut arrowcloud.cursor_indices] {
+                if let Some(index) = get_choice_by_id_mut(
+                    indices,
+                    ARROWCLOUD_OPTIONS_ROWS,
+                    SubRowId::ArrowCloudRegularBoards,
+                ) {
+                    *index = yes_no_choice_index(arrowcloud_regular_boards_shown(None, enabled));
+                }
+            }
+        }
         if matches!(
             row.id,
             SubRowId::EnableGrooveStats | SubRowId::EnableBoogieStats
@@ -1183,25 +1197,26 @@ pub(super) fn apply_submenu_choice_delta(
                     &mut select_music.choice_indices,
                     &mut select_music.cursor_indices,
                 ] {
-                    if enabled {
-                        // Mirror the shell: enabling golf defaults the wheel par
-                        // badges on, so the switch has a visible effect right away.
-                        if let Some(index) = get_choice_by_id_mut(
+                    // Mirror the shell: enabling golf defaults the wheel par
+                    // badges on, so the switch has a visible effect right away.
+                    if enabled
+                        && let Some(index) = get_choice_by_id_mut(
                             indices,
                             SELECT_MUSIC_OPTIONS_ROWS,
                             SubRowId::ShowGolfPars,
-                        ) {
-                            *index = 1;
-                        }
-                    } else if let Some(index) = get_choice_by_id_mut(
-                        indices,
-                        SELECT_MUSIC_OPTIONS_ROWS,
-                        SubRowId::GsBoxLeaderboards,
-                    ) {
-                        *index = (*index).min(3);
+                        )
+                    {
+                        *index = 1;
                     }
                 }
                 crate::SimplyLoveOnlineConfigRequest::EnableGolf(enabled)
+            }
+            SubRowId::ArrowCloudRegularBoards => {
+                state.arrowcloud_regular_boards_set = true;
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudRegularBoards(enabled)
+            }
+            SubRowId::ArrowCloudEventBoards => {
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudEventBoards(enabled)
             }
             SubRowId::ArrowCloudSubmitFails => {
                 crate::SimplyLoveOnlineConfigRequest::SubmitArrowCloudFails(enabled)
@@ -1857,14 +1872,7 @@ pub(super) fn activate_current_selection(
             {
                 let rows = submenu_rows(kind);
                 let row_id = rows.get(row_idx).map(|row| row.id);
-                if row_id == Some(SubRowId::GsBoxLeaderboards) {
-                    let choice_idx = submenu_cursor_indices(state, kind)
-                        .get(row_idx)
-                        .copied()
-                        .unwrap_or(0)
-                        .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
-                    return toggle_select_music_scorebox_cycle_option(state, choice_idx);
-                } else if row_id == Some(SubRowId::ChartInfo) {
+                if row_id == Some(SubRowId::ChartInfo) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
                         .copied()
@@ -1872,6 +1880,18 @@ pub(super) fn activate_current_selection(
                         .min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
                     return toggle_select_music_chart_info_option(state, choice_idx);
                 }
+            }
+            if matches!(kind, SubmenuKind::GrooveStats)
+                && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)
+                && submenu_rows(kind).get(row_idx).map(|row| row.id)
+                    == Some(SubRowId::GrooveStatsScoreboxBoards)
+            {
+                let choice_idx = submenu_cursor_indices(state, kind)
+                    .get(row_idx)
+                    .copied()
+                    .unwrap_or(0)
+                    .min(GROOVESTATS_SCOREBOX_NUM_CHOICES.saturating_sub(1));
+                return toggle_groovestats_scorebox_board(state, choice_idx);
             }
             if matches!(kind, SubmenuKind::Gameplay)
                 && let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row)

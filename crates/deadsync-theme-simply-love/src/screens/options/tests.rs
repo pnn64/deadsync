@@ -1569,38 +1569,17 @@ fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
     let assets = AssetManager::new();
     let mut state = init_with_config(config::app_config::Config {
         select_music_show_golf_pars: true,
-        select_music_scorebox_cycle_golf: true,
         ..Default::default()
     });
     let pars_row = SELECT_MUSIC_OPTIONS_ROWS
         .iter()
         .position(|row| row.id == SubRowId::ShowGolfPars)
         .unwrap();
-    let boards_row = SELECT_MUSIC_OPTIONS_ROWS
-        .iter()
-        .position(|row| row.id == SubRowId::GsBoxLeaderboards)
-        .unwrap();
-    let original_mask = state.scorebox_cycle_mask;
     assert!(!golf_features_enabled(&state));
     assert!(
         !submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
             .contains(&pars_row)
     );
-    assert_eq!(
-        row_choices(
-            &state,
-            SubmenuKind::SelectMusic,
-            SELECT_MUSIC_OPTIONS_ROWS,
-            boards_row
-        )
-        .len(),
-        4
-    );
-    assert!(matches!(
-        toggle_select_music_scorebox_cycle_option(&mut state, 4),
-        ThemeEffect::None
-    ));
-    assert_eq!(state.scorebox_cycle_mask, original_mask);
 
     state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
     select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
@@ -1618,28 +1597,125 @@ fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
         submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
             .contains(&pars_row)
     );
-    assert_eq!(
-        row_choices(
-            &state,
-            SubmenuKind::SelectMusic,
-            SELECT_MUSIC_OPTIONS_ROWS,
-            boards_row
-        )
-        .len(),
-        5
-    );
-    state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row] = 4;
     apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
     assert!(!golf_features_enabled(&state));
-    assert_eq!(
-        state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row],
-        3
-    );
-    assert_eq!(state.scorebox_cycle_mask, original_mask);
     assert_eq!(
         state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
         1
     );
+}
+
+#[test]
+fn groovestats_scorebox_boards_toggle_each_board() {
+    let mut state = init_with_config(config::app_config::Config {
+        groovestats_scorebox_itg: true,
+        groovestats_scorebox_ex: false,
+        groovestats_scorebox_events: true,
+        ..Default::default()
+    });
+    assert_eq!(state.groovestats_scorebox_mask, 0b101);
+    let row = GROOVESTATS_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::GrooveStatsScoreboxBoards)
+        .unwrap();
+    assert!(
+        submenu_visible_row_indices(&state, SubmenuKind::GrooveStats, GROOVESTATS_OPTIONS_ROWS)
+            .contains(&row)
+    );
+
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 1),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::GrooveStatsScoreboxBoards(0b111)
+            )
+        ))
+    ));
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 0),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::GrooveStatsScoreboxBoards(0b110)
+            )
+        ))
+    ));
+    assert_eq!(state.sub[SubmenuKind::GrooveStats].cursor_indices[row], 0);
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 3),
+        ThemeEffect::None
+    ));
+    assert_eq!(state.groovestats_scorebox_mask, 0b110);
+    assert!(
+        !SELECT_MUSIC_OPTIONS_ROWS
+            .iter()
+            .any(|row| row.id == SubRowId::GrooveStatsScoreboxBoards)
+    );
+}
+
+#[test]
+fn arrowcloud_regular_boards_follow_groovestats_until_set() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let regular_row = ARROWCLOUD_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ArrowCloudRegularBoards)
+        .unwrap();
+    let regular = |state: &State| state.sub[SubmenuKind::ArrowCloud].choice_indices[regular_row];
+    // Each Enable GrooveStats change queues an online reinitialize, which the
+    // input loop drains before the next change.
+    let toggle_groovestats = |state: &mut State, delta| {
+        apply_submenu_choice_delta(state, &assets, delta, NavWrap::Clamp).unwrap();
+        state.online_reinit_pending = false;
+    };
+    // Neither service is enabled on a fresh config, so the boards start on.
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    state.view = OptionsView::Submenu(SubmenuKind::GrooveStats);
+    select_visible_row(&mut state, SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    toggle_groovestats(&mut state, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    toggle_groovestats(&mut state, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    // Once picked, the choice no longer follows GrooveStats.
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudRegularBoards);
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    state.view = OptionsView::Submenu(SubmenuKind::GrooveStats);
+    select_visible_row(&mut state, SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    toggle_groovestats(&mut state, 1);
+    toggle_groovestats(&mut state, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+}
+
+#[test]
+fn arrowcloud_board_rows_turn_regular_and_event_boards_on_or_off() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudRegularBoards);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudRegularBoards(false)
+            )
+        ))
+    ));
+
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudEventBoards);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudEventBoards(false)
+            )
+        ))
+    ));
 }
 
 #[test]

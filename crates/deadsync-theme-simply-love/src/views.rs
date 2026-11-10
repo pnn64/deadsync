@@ -1410,11 +1410,21 @@ impl Default for SelectMusicPresentationPolicyView {
         Self {
             show_golf_pars: false,
             show_scorebox: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
-            scorebox_cycle_enabled:
-                deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG
-                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX
-                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX
-                    || deadsync_config::defaults::DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+            scorebox_cycle_enabled: deadsync_score::select_music_scorebox_filter_has_any(
+                deadsync_score::SelectMusicScoreboxFilter {
+                    groovestats_itg: deadsync_config::defaults::DEFAULT_GROOVESTATS_SCOREBOX_ITG,
+                    groovestats_ex: deadsync_config::defaults::DEFAULT_GROOVESTATS_SCOREBOX_EX,
+                    groovestats_events:
+                        deadsync_config::defaults::DEFAULT_GROOVESTATS_SCOREBOX_EVENTS,
+                    arrowcloud_regular: deadsync_config::options::arrowcloud_regular_boards_shown(
+                        None,
+                        deadsync_config::defaults::DEFAULT_ENABLE_GROOVESTATS,
+                    ),
+                    arrowcloud_events: deadsync_config::defaults::DEFAULT_ARROWCLOUD_EVENT_BOARDS,
+                    golf: false,
+                    events_first: true,
+                },
+            ),
             scorebox_in_step_pane: false,
             show_stage_display: deadsync_config::defaults::DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
             show_gameplay_timer:

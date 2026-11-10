@@ -1,10 +1,9 @@
 use super::super::*;
 
 pub(in crate::screens::options) use deadsync_config::options::{
-    SELECT_MUSIC_CHART_INFO_NUM_CHOICES, SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES,
-    auto_screenshot_bit_from_choice, auto_screenshot_cursor_index, bg_brightness_choice_index,
+    SELECT_MUSIC_CHART_INFO_NUM_CHOICES, auto_screenshot_bit_from_choice,
+    auto_screenshot_cursor_index, bg_brightness_choice_index,
     music_wheel_scroll_speed_choice_index, music_wheel_scroll_speed_from_choice,
-    scorebox_cycle_bit_from_choice, scorebox_cycle_cursor_index, scorebox_cycle_mask,
     select_music_chart_info_bit_from_choice, select_music_chart_info_cursor_index,
     select_music_chart_info_mask,
 };
@@ -339,18 +338,6 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::GsBoxLeaderboards,
-        label: lookup_key("OptionsSelectMusic", "GSBoxLeaderboards"),
-        choices: &[
-            localized_choice("OptionsSelectMusic", "ScoreboxCycleITG"),
-            localized_choice("OptionsSelectMusic", "ScoreboxCycleEX"),
-            localized_choice("OptionsSelectMusic", "ScoreboxCycleHEX"),
-            localized_choice("OptionsSelectMusic", "ScoreboxCycleTournaments"),
-            localized_choice("OptionsSelectMusic", "ScoreboxCycleGolf"),
-        ],
-        inline: true,
-    },
-    SubRow {
         id: SubRowId::GsBoxEventsFirst,
         label: lookup_key("OptionsSelectMusic", "GSBoxEventsFirst"),
         choices: &[
@@ -643,14 +630,6 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
-        id: ItemId::SmScoreboxCycle,
-        name: lookup_key("OptionsSelectMusic", "GSBoxLeaderboards"),
-        help: &[
-            HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GsBoxLeaderboardsHelp")),
-            HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GolfLeaderboardHelp")),
-        ],
-    },
-    Item {
         id: ItemId::SmScoreboxEventsFirst,
         name: lookup_key("OptionsSelectMusic", "GSBoxEventsFirst"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -667,60 +646,6 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-#[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(
-    cfg: &config::app_config::Config,
-) -> u8 {
-    scorebox_cycle_mask(
-        cfg.select_music_scorebox_cycle_itg,
-        cfg.select_music_scorebox_cycle_ex,
-        cfg.select_music_scorebox_cycle_hard_ex,
-        cfg.select_music_scorebox_cycle_tournaments,
-    ) | ((cfg.select_music_scorebox_cycle_golf as u8) << 4)
-}
-
-pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
-    state: &mut State,
-    choice_idx: usize,
-) -> ThemeEffect {
-    let bit = scorebox_cycle_bit_from_choice(choice_idx);
-    if bit == 0 || (choice_idx == 4 && !golf_features_enabled(state)) {
-        return ThemeEffect::None;
-    }
-    let mut mask = state.scorebox_cycle_mask;
-    if (mask & bit) != 0 {
-        mask &= !bit;
-    } else {
-        mask |= bit;
-    }
-    state.scorebox_cycle_mask = mask;
-
-    let clamped = choice_idx.min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
-    if let Some(slot) = get_choice_by_id_mut(
-        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
-        SELECT_MUSIC_OPTIONS_ROWS,
-        SubRowId::GsBoxLeaderboards,
-    ) {
-        *slot = clamped;
-    }
-    if let Some(slot) = get_choice_by_id_mut(
-        &mut state.sub[SubmenuKind::SelectMusic].cursor_indices,
-        SELECT_MUSIC_OPTIONS_ROWS,
-        SubRowId::GsBoxLeaderboards,
-    ) {
-        *slot = clamped;
-    }
-    queue_sfx(state, "assets/sounds/change_value.ogg");
-    select_music_config_effect(crate::SimplyLoveSelectMusicConfigRequest::ScoreboxCycleMask(mask))
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn select_music_scorebox_cycle_enabled_mask(
-    state: &State,
-) -> u8 {
-    state.scorebox_cycle_mask
-}
 
 #[inline(always)]
 pub(in crate::screens::options) const fn auto_screenshot_enabled_mask(state: &State) -> u8 {

@@ -1638,10 +1638,11 @@ mod tests {
         let panes = gameplay_panes_from_snapshot(
             &snapshot,
             score_data::SelectMusicScoreboxFilter {
-                itg: false,
-                ex: false,
-                hard_ex: true,
-                tournaments: false,
+                groovestats_itg: false,
+                groovestats_ex: false,
+                groovestats_events: false,
+                arrowcloud_regular: true,
+                arrowcloud_events: false,
                 golf: false,
                 events_first: true,
             },

@@ -331,11 +331,9 @@ pub(crate) fn policy_view(config: &config::app_config::Config) -> SelectMusicPol
         presentation: SelectMusicPresentationPolicyView {
             show_golf_pars: config.enable_golf && config.select_music_show_golf_pars,
             show_scorebox: config.show_select_music_scorebox,
-            scorebox_cycle_enabled: config.select_music_scorebox_cycle_itg
-                || config.select_music_scorebox_cycle_ex
-                || config.select_music_scorebox_cycle_hard_ex
-                || config.select_music_scorebox_cycle_tournaments
-                || (config.enable_golf && config.select_music_scorebox_cycle_golf),
+            scorebox_cycle_enabled: deadsync_score::select_music_scorebox_filter_has_any(
+                crate::app::scorebox_pane_filter(config),
+            ),
             scorebox_in_step_pane: config.select_music_scorebox_placement
                 == config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_stage_display: config.show_select_music_stage_display,
@@ -566,11 +564,11 @@ mod tests {
     fn golf_master_switch_gates_saved_wheel_preferences() {
         let mut config = config::app_config::Config {
             select_music_show_golf_pars: true,
-            select_music_scorebox_cycle_golf: true,
-            select_music_scorebox_cycle_itg: false,
-            select_music_scorebox_cycle_ex: false,
-            select_music_scorebox_cycle_hard_ex: false,
-            select_music_scorebox_cycle_tournaments: false,
+            arrowcloud_event_boards: true,
+            groovestats_scorebox_itg: false,
+            groovestats_scorebox_ex: false,
+            groovestats_scorebox_events: false,
+            arrowcloud_regular_boards: Some(false),
             ..Default::default()
         };
         let disabled = policy_view(&config).presentation;
@@ -578,7 +576,7 @@ mod tests {
         config.enable_golf = true;
         let enabled = policy_view(&config).presentation;
         assert!(enabled.show_golf_pars && enabled.scorebox_cycle_enabled);
-        assert!(config.select_music_show_golf_pars && config.select_music_scorebox_cycle_golf);
+        assert!(config.select_music_show_golf_pars && config.arrowcloud_event_boards);
     }
 
     #[test]
@@ -608,10 +606,10 @@ mod tests {
             music_select_shortcut_load_songs: deadlib_platform::input::KeyCode::KeyE,
             music_select_shortcut_test_input: deadlib_platform::input::KeyCode::KeyR,
             show_select_music_scorebox: false,
-            select_music_scorebox_cycle_itg: false,
-            select_music_scorebox_cycle_ex: false,
-            select_music_scorebox_cycle_hard_ex: false,
-            select_music_scorebox_cycle_tournaments: true,
+            groovestats_scorebox_itg: false,
+            groovestats_scorebox_ex: false,
+            arrowcloud_regular_boards: Some(false),
+            groovestats_scorebox_events: true,
             select_music_scorebox_placement: config::theme::SelectMusicScoreboxPlacement::StepPane,
             show_select_music_stage_display: false,
             show_select_music_gameplay_timer: false,
