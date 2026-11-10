@@ -296,7 +296,7 @@ fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
     }
 }
 
-#[inline]
+#[inline(always)]
 fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
     if gain == 0.0
         || (gain.is_normal()
@@ -336,7 +336,12 @@ mod fma {
 
     #[target_feature(enable = "fma")]
     unsafe fn mix_panned(src: &[i16], dst: &mut [f32], gain: f32, channel: usize) {
-        for (source, target) in src.as_chunks::<2>().0.iter().zip(dst.as_chunks_mut::<2>().0) {
+        for (source, target) in src
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(dst.as_chunks_mut::<2>().0)
+        {
             target[channel] = super::i16_to_f32(source[1]).mul_add(gain, target[channel]);
         }
     }
@@ -346,15 +351,123 @@ mod fma {
         if !std::is_x86_feature_detected!("fma") {
             return false;
         }
-        // SAFETY: Rust's detector checks CPU and OS support for FMA/AVX.
-        unsafe { mix_samples(src, dst, gain) };
+        if std::is_x86_feature_detected!("avx2") {
+            // SAFETY: both features and their OS support were detected.
+            unsafe { mix_samples_avx2(src, dst, gain) };
+        } else {
+            // SAFETY: Rust's detector checks CPU and OS support for FMA/AVX.
+            unsafe { mix_samples(src, dst, gain) };
+        }
         true
+    }
+
+    // AVX2 widens eight PCM samples per instruction.
+    #[target_feature(enable = "avx2,fma")]
+    unsafe fn mix_samples_avx2(src: &[i16], dst: &mut [f32], gain: f32) {
+        mix_samples_impl(src, dst, gain);
     }
 
     #[target_feature(enable = "fma")]
     unsafe fn mix_samples(src: &[i16], dst: &mut [f32], gain: f32) {
+        mix_samples_impl(src, dst, gain);
+    }
+
+    #[inline(always)]
+    fn mix_samples_impl(src: &[i16], dst: &mut [f32], gain: f32) {
         for (dst, &src) in dst.iter_mut().zip(src) {
             *dst = super::i16_to_f32(src).mul_add(gain, *dst);
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn packed_mixing_matches_fused_reference_for_every_pcm_value() {
+            if !std::is_x86_feature_detected!("avx2") || !std::is_x86_feature_detected!("fma") {
+                return;
+            }
+            let src: Vec<_> = (i16::MIN..=i16::MAX).collect();
+            for gain in [
+                0.0,
+                -0.0,
+                0.7,
+                0.9,
+                1.3,
+                f32::MIN_POSITIVE,
+                f32::from_bits(1),
+                f32::MAX,
+                f32::INFINITY,
+                f32::NAN,
+            ] {
+                for initial in [
+                    0.0,
+                    -0.0,
+                    0.5,
+                    -0.5,
+                    f32::from_bits(1),
+                    f32::MAX,
+                    f32::INFINITY,
+                    f32::NEG_INFINITY,
+                    f32::from_bits(0x7fc0_1234),
+                    f32::from_bits(0xff80_1234),
+                ] {
+                    let mut expected = vec![initial; src.len()];
+                    for (dst, &sample) in expected.iter_mut().zip(&src) {
+                        *dst = super::super::i16_to_f32(sample).mul_add(gain, *dst);
+                    }
+                    let mut actual = vec![initial; src.len()];
+                    // SAFETY: both required features were detected above.
+                    unsafe { mix_samples_avx2(&src, &mut actual, gain) };
+                    assert!(
+                        actual
+                            .iter()
+                            .zip(&expected)
+                            .all(|(a, b)| a.to_bits() == b.to_bits()),
+                        "gain={gain}, initial={initial:?}"
+                    );
+                }
+            }
+        }
+
+        #[test]
+        fn packed_mixing_preserves_unaligned_tails_and_guards() {
+            let src: Vec<_> = (0..80usize).map(|i| i.wrapping_mul(7919) as i16).collect();
+            let mut seed = 0x1937_4682_u32;
+            for start in 0..8 {
+                for src_len in 0..=65 {
+                    for dst_len in 0..=65 {
+                        let mut actual: Vec<_> = (0..dst_len + start + 2)
+                            .map(|_| {
+                                seed ^= seed << 13;
+                                seed ^= seed >> 17;
+                                seed ^= seed << 5;
+                                f32::from_bits(seed)
+                            })
+                            .collect();
+                        let mut expected = actual.clone();
+                        let source = &src[start..start + src_len];
+                        for (dst, &sample) in
+                            expected[start..start + dst_len].iter_mut().zip(source)
+                        {
+                            *dst = super::super::i16_to_f32(sample).mul_add(0.7, *dst);
+                        }
+                        super::super::mix_sfx_samples(
+                            source,
+                            &mut actual[start..start + dst_len],
+                            0.7,
+                        );
+                        assert!(
+                            actual
+                                .iter()
+                                .zip(&expected)
+                                .all(|(a, b)| a.to_bits() == b.to_bits()),
+                            "start={start}, src={src_len}, dst={dst_len}"
+                        );
+                    }
+                }
+            }
         }
     }
 }
