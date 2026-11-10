@@ -92,6 +92,11 @@ and preload modules.
 
 ## Testing
 
+The unchanged [official Lua 5.1 suite](benches/README.md) is retained in this
+crate for repeatable benchmarks. Run
+`python crates/deadlib-lua/benches/run_lua51.py --samples 9` from the repository
+root; inputs and assertions are preserved, and results stay in ignored output.
+
 Initialize the pinned [test fixtures](../../README.md#test-fixtures) before
 running the crate suite. Language, host ownership, allocation recovery, coroutine
 and module behavior are covered by the current implementation's regression

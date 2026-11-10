@@ -133,6 +133,10 @@ checkout. Commit the selected production implementation and useful correctness
 tests. Remove timing harnesses, superseded implementations and measurement
 reports before merging; recreate a benchmark when a new investigation needs it.
 
+The official Lua 5.1 suite and its runner in `crates/deadlib-lua/benches/` are
+retained for repeatable interpreter benchmarks. Comparator runtimes and timing
+reports remain temporary output.
+
 ## Full song Lua tests
 
 Run a full song Lua fixture with live progress and a final comparison tally:

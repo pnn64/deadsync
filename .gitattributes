@@ -5,4 +5,6 @@ crates/deadsync-song-lua/tests/fixtures/fof-input-system.lua -text whitespace=bl
 # Preserve upstream font definitions; trailing spaces in glyph rows are data.
 assets/fonts/Unprofessional/*.ini text eol=lf whitespace=-blank-at-eol
 assets/fonts/_combo/Unprofessional/*.ini text eol=lf
+# Preserve the official Lua 5.1 benchmark archive's original bytes.
+crates/deadlib-lua/benches/lua5.1-tests/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,-cr-at-eol
 "assets/fonts/miso/_miso unprof.ini" text eol=lf
