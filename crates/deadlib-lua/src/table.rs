@@ -1,5 +1,6 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
+pub(crate) mod sort;
 use crate::memory::{Buffer, Memory};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
@@ -286,6 +287,20 @@ impl Table {
     }
     // Equal finite numbers have identical bits after excluding negative zero,
     // so an unstable numeric sort cannot expose a changed tie permutation.
+    pub(crate) fn scalar_sort_values(&mut self, len: usize, numbers: bool) -> Option<&mut [Value]> {
+        if self.metatable().is_some() {
+            return None;
+        }
+        let values = self.array.get_mut(..len)?;
+        values
+            .iter()
+            .all(|value| match value {
+                Value::Number(_) => true,
+                Value::Boolean(_) | Value::Nil => !numbers,
+                _ => false,
+            })
+            .then_some(values)
+    }
     pub(crate) fn sort_finite_numbers(&mut self, len: usize) -> bool {
         let Some(values) = self.array.get_mut(..len) else {
             return false;

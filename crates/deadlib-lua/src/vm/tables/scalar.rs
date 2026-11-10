@@ -4,6 +4,7 @@
 //! comparator stays in its native argument slot; cached eligibility never roots
 //! an old comparator or replaces the live function's identity check.
 use super::*;
+mod bulk;
 use crate::bytecode::{Instruction, OPEN, Op, RK};
 
 #[derive(Clone, Copy)]

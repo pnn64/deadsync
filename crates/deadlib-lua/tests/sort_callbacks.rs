@@ -328,3 +328,58 @@ fn numeric_global_updates_keep_budget_side_effects_in_order() {
         );
     }
 }
+
+#[test]
+fn direct_scalar_partitions_match_observed_counts_and_partial_results() {
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    let bits = |values: &[Value]| {
+        values
+            .iter()
+            .map(|value| match value {
+                Value::Number(number) => (0, number.to_bits()),
+                Value::Boolean(boolean) => (1, u64::from(*boolean)),
+                Value::Nil => (2, 0),
+                _ => panic!("primitive sort result"),
+            })
+            .collect::<Vec<_>>()
+    };
+    for array in [
+        "",
+        "1",
+        "9,2,7,1,8,3,6,4,5",
+        "3,1,3,1,3,1,0,-0.0,0,-0.0",
+        "1/0,-1/0,0/0,3,0/0,-2,0",
+        "false,false,false,false,false,false,false",
+        "nil,false,nil,3,nil,2,false,1",
+    ] {
+        for update in [
+            "counter=counter+1",
+            "counter=1+counter",
+            "counter=counter-0.25",
+            "counter=counter*1.01",
+            "counter=counter+counter",
+        ] {
+            for predicate in [
+                "a<b", "b>a", "b<a", "a>b", "nil", "false", "true", "counter",
+            ] {
+                let source = format!(
+                    "counter=1.25;local t={{{array}}};local n=select('#',{array});\
+                     local ok=pcall(table.sort,t,function(a,b){update};return {predicate} end);\
+                     return ok,counter,unpack(t,1,n)"
+                );
+                // select('#',) would be invalid for the empty constructor.
+                let source = source.replace("select('#',)", "0");
+                let program = compile(source.as_bytes()).unwrap();
+                let mut plain = Vm::new();
+                let mut observed = Vm::new();
+                observed.execute(&hook).unwrap();
+                assert_eq!(
+                    bits(plain.execute(&program).unwrap()),
+                    bits(observed.execute(&program).unwrap()),
+                    "{array}; {update}; {predicate}"
+                );
+            }
+        }
+    }
+}

@@ -394,6 +394,9 @@ impl Vm {
             {
                 return self.return_frame(frame, base, 0);
             }
+            if self.try_bulk_sort(table, len as usize, comparator, error_line)? {
+                return self.return_frame(frame, base, 0);
+            }
             let before = self.sorts.capacity();
             let reserved = self.sorts.try_reserve(1);
             self.gc_note_control((self.sorts.capacity() - before) * size_of::<Sort>());
