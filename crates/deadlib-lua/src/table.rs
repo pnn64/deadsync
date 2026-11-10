@@ -101,6 +101,9 @@ struct Entry {
     value: Value,
 }
 
+#[derive(Debug)]
+pub(crate) struct InvalidNextKey;
+
 #[derive(Debug, Default)]
 pub(crate) struct Table {
     array: Buffer<Value>,
@@ -454,6 +457,10 @@ impl Table {
         hi
     }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
+        self.next_entry(key)
+            .map_err(|_| Error::new(ErrorKind::Runtime, 0, "invalid key to 'next'"))
+    }
+    pub(crate) fn next_entry(&self, key: Value) -> Result<Option<(Value, Value)>, InvalidNextKey> {
         let (array, hash) = if key == Value::Nil {
             (0, 0)
         } else if let Some(i) = array_index(key).filter(|&i| i < self.array.len()) {
@@ -461,7 +468,7 @@ impl Table {
         } else if let Some((_, Some(i))) = Key::from_value(key).and_then(|k| self.slot(k)) {
             (self.array.len(), i + 1)
         } else {
-            return Err(Error::new(ErrorKind::Runtime, 0, "invalid key to 'next'"));
+            return Err(InvalidNextKey);
         };
         for (i, &value) in self.array.iter().enumerate().skip(array) {
             if value != Value::Nil {

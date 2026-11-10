@@ -23,6 +23,7 @@ mod math;
 mod memory_limit;
 mod meta;
 mod native;
+mod native_fast;
 mod os;
 mod package;
 mod reductions;

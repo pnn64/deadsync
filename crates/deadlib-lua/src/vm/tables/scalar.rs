@@ -214,7 +214,7 @@ impl Vm {
         None
     }
 
-    pub(super) fn sort_fast_context(&self) -> bool {
+    pub(in crate::vm) fn sort_fast_context(&self) -> bool {
         if self.budget.is_some()
             || self.hooks.mask != 0
             || self.hooks.enter.is_some()

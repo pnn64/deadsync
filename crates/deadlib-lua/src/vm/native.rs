@@ -120,6 +120,11 @@ impl Vm {
             }
             Value::Native(id) => {
                 self.check_calls()?;
+                if matches!(id, 0 | NEXT | PAIRS_NEXT)
+                    && let Some(actual) = self.try_fast_native(id, call, count)
+                {
+                    return Ok(Some(actual));
+                }
                 let index = self.frames.len();
                 let base = self.registers.len();
                 let host = self.host_callback(id);
