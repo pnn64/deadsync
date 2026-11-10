@@ -1,4 +1,4 @@
-//! Differential checks and CPU/allocation measurements for production queries.
+//! Audio position and telemetry regressions.
 #![allow(dead_code)]
 use deadlib_audio_core::{MusicMapSeg, RenderReport};
 #[path = "../../../tests/support/allocations.rs"]
@@ -9,7 +9,23 @@ mod output;
 mod position {
     include!("../src/position.rs");
     mod probes {
+        #[cfg(not(debug_assertions))]
+        use super::*;
 
+        #[cfg(not(debug_assertions))]
+        fn verify(map: &mut PlaybackPosMap, query: f64) {
+            let search = map.search(query).map(|(a, b)| (a.to_bits(), b.to_bits()));
+            let inverse = map.invert(query).map(f64::to_bits);
+            let flags = (map.ordered, map.music_ordered);
+            // Compare each shortcut with the full traversal over the same history.
+            map.ordered = false;
+            map.music_ordered = false;
+            let general_search = map.search(query).map(|(a, b)| (a.to_bits(), b.to_bits()));
+            let general_inverse = map.invert(query).map(f64::to_bits);
+            (map.ordered, map.music_ordered) = flags;
+            assert_eq!(search, general_search, "search query={query:?}");
+            assert_eq!(inverse, general_inverse, "inverse query={query:?}");
+        }
 
         #[test]
         #[cfg(not(debug_assertions))]
@@ -26,7 +42,7 @@ mod position {
                     music_sec_per_frame: [1.0, 0.0, -1.0, 1e300][i % 4],
                 });
                 for q in [-1e300, 0.0, 1.0, 80000.0, 1e300, stream as f64] {
-                    verify(&map, q);
+                    verify(&mut map, q);
                 }
                 if map.ordered {
                     for (a, b) in map.queue.iter().zip(map.queue.iter().skip(1)) {
