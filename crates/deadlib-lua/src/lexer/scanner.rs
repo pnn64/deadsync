@@ -1,6 +1,7 @@
 //! Resumable lexical state over append-only input, with no token replay.
 use super::{Kind, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
+use crate::memory::text::Text;
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -45,7 +46,7 @@ fn empty(line: u32) -> Token {
         kind: Kind::Eof,
         line,
         end_line: line,
-        text: Box::default(),
+        text: Text::default(),
         number: 0.0,
     }
 }
@@ -183,7 +184,7 @@ impl Scanner {
         build().unwrap_or_else(|error| error)
     }
     pub(crate) fn heap_bytes(&self) -> usize {
-        self.text.capacity() + self.token.text.len()
+        self.text.capacity() + self.token.text.heap_bytes()
     }
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
@@ -240,7 +241,9 @@ impl Scanner {
     }
 
     fn string(&mut self) -> Result<(), Error> {
-        self.token.text = std::mem::take(&mut self.text).try_into_boxed_slice()?;
+        self.token.text = std::mem::take(&mut self.text)
+            .try_into_boxed_slice()?
+            .into();
         self.emit(Kind::String);
         Ok(())
     }
@@ -445,7 +448,7 @@ impl Scanner {
                         _ => Kind::Name,
                     };
                     if kind == Kind::Name {
-                        self.token.text = text.try_boxed()?;
+                        self.token.text = Text::new(text)?;
                     }
                     self.emit(kind);
                 }
@@ -711,7 +714,7 @@ mod tests {
                     token.kind,
                     token.line,
                     token.end_line,
-                    token.text.into_vec(),
+                    token.text.to_vec(),
                     token.number.to_bits(),
                 ));
                 if done {

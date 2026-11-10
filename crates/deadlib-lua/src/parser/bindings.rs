@@ -1,4 +1,5 @@
 //! Lexical capture limits while parsing, including unfinished reader input.
+use crate::memory::text::Text;
 use crate::{
     Error, ErrorKind,
     memory::fallible::{self, VecExt},
@@ -153,7 +154,7 @@ impl Bindings {
         &mut self,
         input: &[u8],
         line: u32,
-        params: &[Box<[u8]>],
+        params: &[Text],
         vararg: bool,
     ) -> Result<(), Error> {
         self.scopes.try_push(Scope {

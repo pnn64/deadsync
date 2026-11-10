@@ -384,7 +384,9 @@ impl Decoder {
                             StringTarget::Constant(_) => {
                                 NativeRootEvent::Constant(Constant::String(bytes.try_boxed()?))
                             }
-                            _ => NativeRootEvent::DebugString(bytes.try_boxed()?),
+                            _ => {
+                                NativeRootEvent::DebugString(crate::memory::text::Text::new(bytes)?)
+                            }
                         })?;
                     }
                     match target {

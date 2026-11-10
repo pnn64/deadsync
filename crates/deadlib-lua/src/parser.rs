@@ -1,4 +1,5 @@
 //! A bounded Pratt parser with flat expression and statement arenas.
+use crate::memory::text::Text;
 
 use crate::{
     Error, ErrorKind,
@@ -15,10 +16,10 @@ pub(crate) type Block = Box<[StmtId]>;
 pub(crate) enum NativeRootEvent {
     Open,
     Close,
-    Anchor(Box<[u8]>),
+    Anchor(Text),
     Constant(crate::bytecode::Constant),
     Source(Box<[u8]>),
-    DebugString(Box<[u8]>),
+    DebugString(Text),
 }
 pub(crate) fn native_root_bytes(events: &Option<Vec<NativeRootEvent>>) -> usize {
     events.as_ref().map_or(0, |events| {
@@ -26,9 +27,8 @@ pub(crate) fn native_root_bytes(events: &Option<Vec<NativeRootEvent>>) -> usize 
             + events
                 .iter()
                 .map(|event| match event {
-                    NativeRootEvent::Anchor(s)
-                    | NativeRootEvent::Source(s)
-                    | NativeRootEvent::DebugString(s)
+                    NativeRootEvent::Anchor(s) | NativeRootEvent::DebugString(s) => s.heap_bytes(),
+                    NativeRootEvent::Source(s)
                     | NativeRootEvent::Constant(crate::bytecode::Constant::String(s)) => s.len(),
                     _ => 0,
                 })
@@ -41,17 +41,17 @@ pub(crate) enum Expr {
     Nil,
     Boolean(bool),
     Number(f64),
-    String(Box<[u8]>),
-    Name(Box<[u8]>),
+    String(Text),
+    Name(Text),
     Unary(Kind, ExprId),
     Binary(Kind, ExprId, ExprId, u32),
     Paren(ExprId),
     Index(ExprId, ExprId),
     Table(Box<[(Option<ExprId>, ExprId)]>, u32),
     Call(ExprId, Box<[ExprId]>, u32),
-    Method(ExprId, Box<[u8]>, Box<[ExprId]>, u32),
+    Method(ExprId, Text, Box<[ExprId]>, u32),
     Function {
-        params: Box<[Box<[u8]>]>,
+        params: Box<[Text]>,
         vararg: bool,
         body: Block,
         end_line: u32,
@@ -61,8 +61,8 @@ pub(crate) enum Expr {
 
 #[derive(Debug)]
 pub(crate) enum Stmt {
-    Local(Box<[Box<[u8]>]>, Box<[ExprId]>),
-    LocalFunction(Box<[u8]>, ExprId),
+    Local(Box<[Text]>, Box<[ExprId]>),
+    LocalFunction(Text, ExprId),
     Assign(Box<[ExprId]>, Box<[ExprId]>),
     FunctionDefinition(Box<[ExprId]>, Box<[ExprId]>),
     Call(ExprId),
@@ -73,14 +73,14 @@ pub(crate) enum Stmt {
     Repeat(Block, ExprId),
     If(Box<[(ExprId, Block)]>, Option<Block>),
     For {
-        name: Box<[u8]>,
+        name: Text,
         start: ExprId,
         limit: ExprId,
         step: Option<ExprId>,
         do_line: u32,
         body: Block,
     },
-    ForIn(Box<[Box<[u8]>]>, Box<[ExprId]>, Block, [u32; 2]),
+    ForIn(Box<[Text]>, Box<[ExprId]>, Block, [u32; 2]),
 }
 
 #[derive(Debug, Default)]

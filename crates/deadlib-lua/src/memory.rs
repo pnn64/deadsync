@@ -18,6 +18,7 @@ mod buffer;
 pub(crate) use buffer::Buffer;
 pub(crate) mod bytes;
 mod shared;
+pub(crate) mod text;
 pub(crate) use shared::Shared;
 pub(crate) mod compilation;
 pub(crate) mod fallible;

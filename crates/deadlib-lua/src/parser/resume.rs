@@ -17,12 +17,12 @@ enum Task {
     RestoreLocals(u16),
     Statement,
     Local(u32),
-    LocalName(u32, Vec<Box<[u8]>>),
-    LocalNames(u32, Vec<Box<[u8]>>),
-    LocalEnd(u32, Vec<Box<[u8]>>),
+    LocalName(u32, Vec<Text>),
+    LocalNames(u32, Vec<Text>),
+    LocalEnd(u32, Vec<Text>),
     LocalFunctionName(u32),
-    LocalFunctionBody(u32, Box<[u8]>),
-    LocalFunctionEnd(u32, Box<[u8]>),
+    LocalFunctionBody(u32, Text),
+    LocalFunctionEnd(u32, Text),
     FunctionName(u32),
     FunctionTarget(u32, ExprId),
     FunctionField(u32, ExprId, bool),
@@ -39,16 +39,16 @@ enum Task {
     IfArm(u32, Vec<(ExprId, Block)>, ExprId),
     IfElse(u32, Vec<(ExprId, Block)>),
     ForName(u32),
-    ForChoice(u32, Box<[u8]>),
-    ForStart(u32, Box<[u8]>),
-    ForLimit(u32, Box<[u8]>, ExprId),
-    ForStep(u32, Box<[u8]>, ExprId, ExprId),
-    ForEnd(u32, Box<[u8]>, ExprId, ExprId, Option<ExprId>, u32),
-    ForNames(u32, Vec<Box<[u8]>>),
-    ForMoreName(u32, Vec<Box<[u8]>>),
-    ForBegin(u32, Vec<Box<[u8]>>),
-    ForValues(u32, Vec<Box<[u8]>>, u32),
-    ForInEnd(u32, Vec<Box<[u8]>>, Vec<ExprId>, [u32; 2]),
+    ForChoice(u32, Text),
+    ForStart(u32, Text),
+    ForLimit(u32, Text, ExprId),
+    ForStep(u32, Text, ExprId, ExprId),
+    ForEnd(u32, Text, ExprId, ExprId, Option<ExprId>, u32),
+    ForNames(u32, Vec<Text>),
+    ForMoreName(u32, Vec<Text>),
+    ForBegin(u32, Vec<Text>),
+    ForValues(u32, Vec<Text>, u32),
+    ForInEnd(u32, Vec<Text>, Vec<ExprId>, [u32; 2]),
     ExpressionStatement(u32),
     AssignTargets(u32, Vec<ExprId>),
     AssignTarget(u32, Vec<ExprId>),
@@ -56,11 +56,11 @@ enum Task {
     List,
     ListAfter(Vec<ExprId>),
     Function(u32, bool),
-    Params(u32, Vec<Box<[u8]>>, bool),
-    ParamAfter(u32, Vec<Box<[u8]>>),
-    ParamsEnd(u32, Vec<Box<[u8]>>, bool),
-    FunctionEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16, u32),
-    FunctionAfterEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16, u32, u32),
+    Params(u32, Vec<Text>, bool),
+    ParamAfter(u32, Vec<Text>),
+    ParamsEnd(u32, Vec<Text>, bool),
+    FunctionEnd(u32, Vec<Text>, bool, u16, bool, u16, u32),
+    FunctionAfterEnd(u32, Vec<Text>, bool, u16, bool, u16, u32, u32),
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
@@ -71,7 +71,7 @@ enum Task {
     ParenEnd(u32),
     Suffix(u32, ExprId),
     Field(u32, ExprId),
-    FieldName(u32, ExprId, Box<[u8]>, Option<bool>),
+    FieldName(u32, ExprId, Text, Option<bool>),
     Index(u32, ExprId),
     IndexEnd(u32, ExprId, ExprId),
     FunctionFieldEnd(u32, ExprId, ExprId, bool),
@@ -79,8 +79,8 @@ enum Task {
     ResourceInfix(ExprId, Kind),
     ResourceKey(ExprId),
     MethodName(u32, ExprId),
-    MethodArgs(u32, ExprId, Box<[u8]>),
-    MethodEnd(u32, ExprId, Box<[u8]>, u32),
+    MethodArgs(u32, ExprId, Text),
+    MethodEnd(u32, ExprId, Text, u32),
     CallEnd(u32, ExprId, u32),
     Args,
     ArgsParen(u32),
@@ -197,8 +197,8 @@ impl Parser {
             + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
-        fn names(v: &[Box<[u8]>]) -> usize {
-            std::mem::size_of_val(v) + v.iter().map(|n| n.len()).sum::<usize>()
+        fn names(v: &[Text]) -> usize {
+            std::mem::size_of_val(v) + v.iter().map(|n| n.heap_bytes()).sum::<usize>()
         }
         fn block(v: &[StmtId]) -> usize {
             std::mem::size_of_val(v)
@@ -206,14 +206,14 @@ impl Parser {
         let mut bytes = self.arena_bytes()
             + self.list.capacity() * std::mem::size_of::<ExprId>()
             + block(&self.body);
-        bytes += self.token.as_ref().map_or(0, |t| t.text.len())
-            + self.lookahead.as_ref().map_or(0, |t| t.text.len());
+        bytes += self.token.as_ref().map_or(0, |t| t.text.heap_bytes())
+            + self.lookahead.as_ref().map_or(0, |t| t.text.heap_bytes());
         for (expr, _) in &self.ast.exprs {
             bytes += match expr {
-                Expr::String(s) | Expr::Name(s) => s.len(),
+                Expr::String(s) | Expr::Name(s) => s.heap_bytes(),
                 Expr::Table(v, _) => std::mem::size_of_val(v.as_ref()),
                 Expr::Call(_, v, _) => std::mem::size_of_val(v.as_ref()),
-                Expr::Method(_, n, v, _) => n.len() + std::mem::size_of_val(v.as_ref()),
+                Expr::Method(_, n, v, _) => n.heap_bytes() + std::mem::size_of_val(v.as_ref()),
                 Expr::Function { params, body, .. } => names(params) + block(body),
                 _ => 0,
             };
@@ -221,7 +221,7 @@ impl Parser {
         for (stmt, _) in &self.ast.stmts {
             bytes += match stmt {
                 Stmt::Local(n, v) => names(n) + std::mem::size_of_val(v.as_ref()),
-                Stmt::LocalFunction(n, _) => n.len(),
+                Stmt::LocalFunction(n, _) => n.heap_bytes(),
                 Stmt::Assign(a, b) | Stmt::FunctionDefinition(a, b) => {
                     std::mem::size_of_val(a.as_ref()) + std::mem::size_of_val(b.as_ref())
                 }
@@ -232,7 +232,7 @@ impl Parser {
                         + a.iter().map(|(_, b)| block(b)).sum::<usize>()
                         + b.as_deref().map_or(0, block)
                 }
-                Stmt::For { name, body, .. } => name.len() + block(body),
+                Stmt::For { name, body, .. } => name.heap_bytes() + block(body),
                 Stmt::ForIn(n, v, b, _) => names(n) + std::mem::size_of_val(v.as_ref()) + block(b),
                 _ => 0,
             };
@@ -258,7 +258,7 @@ impl Parser {
                 | Task::ParamsEnd(_, v, _)
                 | Task::FunctionEnd(_, v, ..)
                 | Task::FunctionAfterEnd(_, v, ..) => {
-                    names(v) + (v.capacity() - v.len()) * std::mem::size_of::<Box<[u8]>>()
+                    names(v) + (v.capacity() - v.len()) * std::mem::size_of::<Text>()
                 }
                 Task::LocalFunctionEnd(_, n)
                 | Task::LocalFunctionBody(_, n)
@@ -267,8 +267,8 @@ impl Parser {
                 | Task::ForLimit(_, n, _)
                 | Task::ForStep(_, n, ..)
                 | Task::ForEnd(_, n, ..)
-                | Task::MethodEnd(_, _, n, _) => n.len(),
-                Task::MethodArgs(_, _, n) | Task::FieldName(_, _, n, _) => n.len(),
+                | Task::MethodEnd(_, _, n, _) => n.heap_bytes(),
+                Task::MethodArgs(_, _, n) | Task::FieldName(_, _, n, _) => n.heap_bytes(),
                 Task::RepeatEnd(_, b) => block(b),
                 Task::IfCond(_, v) | Task::IfArm(_, v, _) | Task::IfElse(_, v) => {
                     v.capacity() * std::mem::size_of::<(ExprId, Block)>()
@@ -276,7 +276,7 @@ impl Parser {
                 }
                 Task::ForInEnd(_, n, v, _) => {
                     names(n)
-                        + (n.capacity() - n.len()) * std::mem::size_of::<Box<[u8]>>()
+                        + (n.capacity() - n.len()) * std::mem::size_of::<Text>()
                         + v.capacity() * std::mem::size_of::<ExprId>()
                 }
                 Task::TableNext(_, v)
@@ -453,7 +453,7 @@ impl Parser {
         &mut self,
         input: &[u8],
         line: u32,
-        params: Vec<Box<[u8]>>,
+        params: Vec<Text>,
         vararg: bool,
     ) -> Result<(), Error> {
         let count = params.len() + usize::from(vararg);
@@ -481,7 +481,7 @@ impl Parser {
         &mut self,
         input: &[u8],
         line: u32,
-        name: Box<[u8]>,
+        name: Text,
         start: ExprId,
         limit: ExprId,
         step: Option<ExprId>,
@@ -533,7 +533,7 @@ impl Parser {
             && let Some(events) = &mut self.native_events
         {
             let text = match token.kind {
-                Kind::Name | Kind::String => Some(token.text.try_boxed()?),
+                Kind::Name | Kind::String => Some(token.text.try_clone()?),
                 Kind::And
                 | Kind::Break
                 | Kind::Do
@@ -554,7 +554,9 @@ impl Parser {
                 | Kind::Then
                 | Kind::True
                 | Kind::Until
-                | Kind::While => Some(token.kind.try_label()?.try_into_boxed_slice()?),
+                | Kind::While => Some(Text::new(
+                    token.kind.static_label().expect("keyword label"),
+                )?),
                 _ => None,
             };
             if let Some(text) = text {
@@ -889,7 +891,7 @@ impl Parser {
                     if self.kind() == Kind::Assign {
                         if let Some(events) = &mut self.native_events {
                             for name in [b"(for index)".as_slice(), b"(for limit)", b"(for step)"] {
-                                events.try_push(NativeRootEvent::Anchor(name.try_boxed()?))?;
+                                events.try_push(NativeRootEvent::Anchor(Text::new(name)?))?;
                             }
                         }
                         self.check_local_count(usize::from(self.locals) + 4)?;
@@ -903,7 +905,7 @@ impl Parser {
                                 b"(for state)",
                                 b"(for control)",
                             ] {
-                                events.try_push(NativeRootEvent::Anchor(name.try_boxed()?))?;
+                                events.try_push(NativeRootEvent::Anchor(Text::new(name)?))?;
                             }
                         }
                         self.tasks
@@ -1086,7 +1088,7 @@ impl Parser {
                     }
                     self.expect(Kind::LParen)?;
                     let params = if method {
-                        fallible::vec([b"self".try_boxed()?])?
+                        fallible::vec([Text::new(b"self")?])?
                     } else {
                         Vec::new()
                     };
@@ -1097,7 +1099,7 @@ impl Parser {
                         && !params.is_empty()
                         && let Some(events) = &mut self.native_events
                     {
-                        events.try_push(NativeRootEvent::Anchor(b"self".try_boxed()?))?;
+                        events.try_push(NativeRootEvent::Anchor(Text::new(b"self")?))?;
                     }
                     if self.kind() == Kind::Dots {
                         self.take();
@@ -1123,7 +1125,7 @@ impl Parser {
                 }
                 Task::ParamsEnd(line, params, vararg) => {
                     if vararg && let Some(events) = &mut self.native_events {
-                        events.try_push(NativeRootEvent::Anchor(b"arg".try_boxed()?))?;
+                        events.try_push(NativeRootEvent::Anchor(Text::new(b"arg")?))?;
                     }
                     self.start_function_body(input, line, params, vararg)?
                 }
@@ -1163,7 +1165,7 @@ impl Parser {
                         if let Some(token) = &self.token
                             && matches!(token.kind, Kind::Name | Kind::String)
                         {
-                            events.try_push(NativeRootEvent::Anchor(token.text.try_boxed()?))?;
+                            events.try_push(NativeRootEvent::Anchor(token.text.try_clone()?))?;
                         }
                     }
                     self.loops = loops;
