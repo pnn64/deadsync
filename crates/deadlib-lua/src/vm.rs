@@ -458,6 +458,8 @@ pub struct Vm {
     io: io::Io,
     userdata_order: u64,
     standalone: u64,
+    // Completed scalar returns, consumed immediately by native dispatch.
+    sort_line: Option<u32>,
 }
 
 impl Default for Vm {
@@ -571,6 +573,7 @@ impl Vm {
             },
             userdata_order: 0,
             standalone: 0,
+            sort_line: None,
         };
         vm.memory_error = vm.strings.try_intern(b"not enough memory")?;
         for (slot, name) in vm.meta_names.iter_mut().zip(META_NAMES) {
@@ -1663,6 +1666,9 @@ impl Vm {
                         .step_native(id, frame)
                         .map_err(|error| self.attach_error_value(error, 1));
                     self.active_native = previous;
+                    if let Some(line) = self.sort_line.take() {
+                        *error_line = line;
+                    }
                     if let Some(count) = result? {
                         return Ok(count);
                     }

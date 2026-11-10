@@ -1,0 +1,210 @@
+use deadlib_lua::{ErrorKind, Value, Vm, compile};
+
+#[test]
+fn scalar_sort_callbacks_preserve_parameters_results_and_metamethods() {
+    let source = br#"
+local comparators = {
+ function(a,b) return a<b end,
+ function(a,b) return b>a end,
+ function(a,b) return not(a>=b) end,
+}
+for _,less in ipairs(comparators) do
+ local t={9,2,7,1,8,3,6,4,5}
+ table.sort(t,less)
+ for i=1,9 do assert(t[i]==i) end
+end
+for _,less in ipairs{
+ function(a,b,c) return c end,
+ function(a,b) return nil end,
+ function(a,b) return false end,
+ function(a,b) end,
+} do
+ local t={false,false,false,false}
+ table.sort(t,less)
+ assert(#t==4)
+ for i=1,4 do assert(t[i]==false) end
+end
+local hits=0
+local mt={__eq=function(a,b) hits=hits+1; return true end}
+local t={};for i=1,12 do t[i]=setmetatable({},mt) end
+local function unequal(a,b) return not(a==b) end
+table.sort(t,unequal)
+assert(hits>0 and #t==12)
+return 42
+"#;
+    let mut vm = Vm::new();
+    assert_eq!(
+        vm.execute(&compile(source).unwrap()).unwrap(),
+        [Value::Number(42.)]
+    );
+}
+
+#[test]
+fn invalid_sort_comparator_preserves_its_last_executed_line() {
+    let program = compile(b"local t={};for i=1,100 do t[i]=i end\nlocal function less(a,b)\n return true\nend\ntable.sort(t,less)").unwrap();
+    let mut vm = Vm::new();
+    let error = vm.execute(&program).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Runtime);
+    assert_eq!(error.line(), 3);
+    assert!(
+        error
+            .message_bytes()
+            .ends_with(b"invalid order function for sorting")
+    );
+    assert_eq!(
+        vm.execute(&compile(b"return 42").unwrap()).unwrap(),
+        [Value::Number(42.)]
+    );
+}
+
+#[test]
+fn sort_hooks_keep_comparator_frames_and_balanced_call_returns() {
+    let source = br#"
+local function less(a,b) return a<b end
+local calls,returns=0,0
+local t={8,3,7,2,6,1,5,4}
+debug.sethook(function(event)
+ if debug.getinfo(2,'f').func==less then
+  if event=='call' then
+   calls=calls+1
+   local name,a=debug.getlocal(2,1)
+   local name2,b=debug.getlocal(2,2)
+   assert(name=='a' and name2=='b' and type(a)=='number' and type(b)=='number')
+  elseif event=='return' then returns=returns+1 end
+ end
+end,'cr')
+table.sort(t,less)
+debug.sethook()
+assert(calls>0 and calls==returns)
+for i=1,8 do assert(t[i]==i) end
+return 42
+"#;
+    let mut vm = Vm::new();
+    assert_eq!(
+        vm.execute(&compile(source).unwrap()).unwrap(),
+        [Value::Number(42.)]
+    );
+}
+
+#[test]
+fn sort_budgets_match_dispatch_with_a_nonfiring_count_hook() {
+    let hook =
+        compile(b"debug.sethook(function() error('unexpected hook') end, '', 2147483647)").unwrap();
+    for source in [
+        b"local t={3,1,2};table.sort(t);return t[1],t[2],t[3]".as_slice(),
+        b"local t={false,false,false};table.sort(t,function(a,b)return nil end);return #t"
+            .as_slice(),
+        b"local t={false,false,false};table.sort(t,function(a,b)return b end);return #t".as_slice(),
+    ] {
+        let program = compile(source).unwrap();
+        for limit in 0..180 {
+            let mut ordinary = Vm::new();
+            let mut hooked = Vm::new();
+            hooked.execute(&hook).unwrap();
+            ordinary.set_instruction_limit(Some(limit));
+            hooked.set_instruction_limit(Some(limit));
+            match (
+                ordinary.execute(&program).map(<[Value]>::to_vec),
+                hooked.execute(&program).map(<[Value]>::to_vec),
+            ) {
+                (Ok(a), Ok(b)) => assert_eq!(a, b, "limit {limit}"),
+                (Err(a), Err(b)) => {
+                    assert_eq!(a.kind(), b.kind(), "limit {limit}");
+                    assert_eq!(a.line(), b.line(), "limit {limit}");
+                    assert_eq!(a.message_bytes(), b.message_bytes(), "limit {limit}");
+                }
+                other => panic!("sort budget differs at {limit}: {other:?}"),
+            }
+        }
+    }
+}
+
+#[test]
+fn numeric_sort_callbacks_keep_their_instruction_limit_boundary() {
+    let program =
+        compile(b"local t={3,1,2};table.sort(t,function(a,b)return a<b end);return t[1],t[2],t[3]")
+            .unwrap();
+    let hook =
+        compile(b"debug.sethook(function() error('unexpected hook') end, '', 2147483647)").unwrap();
+    // Established by ordinary frame dispatch: count hooks prevent comparison /
+    // boolean fusion, so its two extra dispatches have their own budget charges.
+    for (count_hook, needed) in [(false, 21), (true, 23)] {
+        for limit in [needed - 1, needed] {
+            let mut vm = Vm::new();
+            if count_hook {
+                vm.execute(&hook).unwrap();
+            }
+            vm.set_instruction_limit(Some(limit));
+            let result = vm.execute(&program);
+            if limit < needed {
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::Limit);
+            } else {
+                assert_eq!(
+                    result.unwrap(),
+                    [Value::Number(1.), Value::Number(2.), Value::Number(3.)]
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn completed_scalar_sort_lines_do_not_override_later_errors() {
+    let mut vm = Vm::new();
+    let program =
+        compile(b"table.sort({3,1,2},function(a,b)\nreturn a<b\nend)\nerror('later')").unwrap();
+    let error = vm.execute(&program).unwrap_err();
+    assert_eq!(error.kind(), ErrorKind::Runtime);
+    assert_eq!(error.line(), 4);
+    let error = vm
+        .execute(&compile(b"error('next entry')").unwrap())
+        .unwrap_err();
+    assert_eq!(error.line(), 1);
+}
+
+#[test]
+fn numeric_sort_preserves_duplicates_and_fields_outside_the_sequence() {
+    let source = br#"
+local t={5,2,5,-3,0,4};t.extra='kept';t[100]='tail'
+table.sort(t)
+assert(table.concat(t,',')=='-3,0,2,4,5,5' and t.extra=='kept' and t[100]=='tail')
+local a={};for i=1,4096 do a[i]=(i*37)%401-200 end
+table.sort(a)
+for i=2,#a do assert(a[i-1]<=a[i]) end
+assert(#a==4096)
+return 42
+"#;
+    let mut vm = Vm::new();
+    assert_eq!(
+        vm.execute(&compile(source).unwrap()).unwrap(),
+        [Value::Number(42.)]
+    );
+}
+
+#[test]
+fn special_numeric_sort_values_retain_ordinary_dispatch_permutations() {
+    let hook =
+        compile(b"debug.sethook(function()error('unexpected hook')end,'',2147483647)").unwrap();
+    for source in [
+        b"local p=0;local n=-p;local t={p,n,1,-1,p,n};table.sort(t);return unpack(t)".as_slice(),
+        b"local z=0;local n=z/z;local t={n,1,2,n,-1};table.sort(t);return unpack(t)".as_slice(),
+        b"local z=0;local p=1/z;local t={p,3,-p,0,p};table.sort(t);return unpack(t)".as_slice(),
+    ] {
+        let program = compile(source).unwrap();
+        let mut plain = Vm::new();
+        let mut observed = Vm::new();
+        observed.execute(&hook).unwrap();
+        let bits = |values: &[Value]| {
+            values
+                .iter()
+                .map(|value| match value {
+                    Value::Number(n) => n.to_bits(),
+                    _ => panic!("expected numbers"),
+                })
+                .collect::<Vec<_>>()
+        };
+        let plain = bits(plain.execute(&program).unwrap());
+        let observed = bits(observed.execute(&program).unwrap());
+        assert_eq!(plain, observed);
+    }
+}

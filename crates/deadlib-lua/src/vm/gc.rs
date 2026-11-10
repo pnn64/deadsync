@@ -945,6 +945,30 @@ impl Vm {
         }
         Ok(())
     }
+    // Numbers carry no collector edges, so their permutation is safe in any
+    // phase when the next ordinary checkpoint would have no work to perform.
+    pub(super) fn numeric_sort_gc_ready(&self) -> bool {
+        self.gc.running == 0
+            && !self.gc.closing
+            && (self.gc.stopped
+                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
+    }
+    // Scalar callbacks and batched continuations can skip only a checkpoint
+    // with no collector work. Keep pending-state behavior identical to maybe_gc.
+    pub(super) fn sort_gc_ready(&mut self) -> bool {
+        if self.gc.phase == Phase::Pause
+            && self.gc.running == 0
+            && !self.gc.closing
+            && (self.gc.stopped
+                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
+        {
+            self.gc.pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {
         self.gc.pending = false;
         if !self.gc.stopped
