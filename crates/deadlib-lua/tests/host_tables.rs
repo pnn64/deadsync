@@ -73,6 +73,47 @@ fn protected_fields_follow_metatable_chains_and_keep_operands_alive_during_colle
 }
 
 #[test]
+fn ordinary_field_reads_preserve_results_and_observe_later_table_changes() {
+    fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let target = call.arguments()[0];
+        let key = call.arguments()[1];
+        call.push(Value::Number(17.))?;
+        let value = call.table_get(target, key)?;
+        call.push(value)?;
+        // A later nested call must preserve the results already appended.
+        call.call(call.arguments()[2], &[target, key])?;
+        let changed = call.table_get(target, key)?;
+        call.push(changed)?;
+        call.push(call.arguments()[3])
+    }
+    let mut vm = vm();
+    let function = vm.new_host_function(read, &[]).unwrap();
+    vm.set_global(b"read", function).unwrap();
+    assert_eq!(
+        vm.execute(
+            &compile(
+                br#"
+            local marker = {}
+            local t = setmetatable({x = false}, {
+                __index = function(_, key) collectgarbage(); return key end
+            })
+            local function remove(t, key) t[key] = nil; collectgarbage() end
+            local a,b,c,d = read(t, 'x', remove, marker)
+            assert(a == 17 and b == false and c == 'x' and d == marker)
+            setmetatable(t, nil)
+            a,b,c,d = read(t, 'x', function(t,k) t[k] = 42 end, marker)
+            assert(a == 17 and b == nil and c == 42 and d == marker)
+            return true
+        "#
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[test]
 fn rust_can_handle_exact_metamethod_errors_and_continue_using_the_callback() {
     fn recover(call: &mut HostCall<'_>) -> Result<(), Error> {
         let object = call.arguments()[0];
@@ -108,15 +149,21 @@ fn ignoring_a_field_instruction_limit_still_aborts_the_outer_entry() {
     fn ignore(call: &mut HostCall<'_>) -> Result<(), Error> {
         let key = call.try_intern(b"missing")?;
         let _ = call.table_get(call.arguments()[0], key);
+        // The primitive fast path must still reject an already-aborted call.
+        assert_eq!(
+            call.table_get(call.arguments()[1], key).unwrap_err().kind(),
+            ErrorKind::Limit
+        );
         Ok(())
     }
     let mut vm = vm();
     let function = vm.new_host_function(ignore, &[]).unwrap();
     vm.set_global(b"ignore", function).unwrap();
     vm.set_instruction_limit(Some(100));
-    let program =
-        compile(b"ignore(setmetatable({}, {__index=function() while true do end end})); return 42")
-            .unwrap();
+    let program = compile(
+        b"ignore(setmetatable({}, {__index=function() while true do end end}), {}); return 42",
+    )
+    .unwrap();
     assert_eq!(vm.execute(&program).unwrap_err().kind(), ErrorKind::Limit);
     assert_eq!(
         vm.execute(&compile(b"return 42").unwrap()).unwrap(),
@@ -146,6 +193,28 @@ fn raw_reads_reject_collected_handles_and_do_not_invoke_metamethods() {
     vm.collect_garbage().unwrap();
     assert!(vm.raw_table_get(id, Value::Number(1.)).is_err());
     assert!(vm.raw_table_len(id).is_err());
+}
+
+#[test]
+fn ordinary_field_reads_reject_collected_tables_and_keys() {
+    fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let stale = *call.function_data::<[Value; 2]>().unwrap();
+        for (target, key) in [(stale[0], Value::Nil), (call.arguments()[0], stale[1])] {
+            let error = call.table_get(target, key).unwrap_err();
+            assert!(error.message().contains("invalid or collected"));
+        }
+        call.push(Value::Boolean(true))
+    }
+    let mut vm = Vm::new();
+    let stale = [Value::Table(vm.new_table()), vm.intern(b"collected key")];
+    vm.collect_garbage().unwrap();
+    // Opaque data deliberately does not trace these handles.
+    let function = vm.new_host_function_with_data(read, &[], stale).unwrap();
+    vm.set_global(b"read", function).unwrap();
+    assert_eq!(
+        vm.execute(&compile(b"return read({})").unwrap()).unwrap(),
+        &[Value::Boolean(true)]
+    );
 }
 
 #[test]

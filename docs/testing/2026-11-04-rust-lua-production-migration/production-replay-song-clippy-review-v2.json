@@ -1,9 +1,0 @@
-{
-  "stage": "production-replay-song-clippy-v2-song-windows-debug",
-  "exit_code": 101,
-  "preexisting_denied_error": "clippy::while_immutable_condition at cmd.rs:349; entire file byte-identical to frozen source",
-  "warnings": 501,
-  "new_warning": "clippy::needless_update at rust_engine/live_scene.rs:490: explicit coverage_gaps now fills the final formerly defaulted field. Redundant default expression has no effect; it is not suppressed or treated as a passing Clippy run.",
-  "sources_unchanged": true,
-  "baseline_proof": "production-final-song-clippy-baseline-review-v1.json"
-}

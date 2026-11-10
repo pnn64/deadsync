@@ -17,16 +17,16 @@ $env:DEADLIB_LIBVORBIS_ORACLE = (Resolve-Path target/deadlib-audio-reference/vor
 $env:DEADLIB_VORBIS_CORPUS = (Resolve-Path assets).Path
 cargo test -p deadlib-audio-decode-vorbis --release --test libvorbis -- --ignored --nocapture
 cargo test -p deadlib-audio-decode-vorbis --release --test headers -- --ignored --nocapture
-$env:DEADLIB_VORBIS_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/raw-pcm.tsv"
+$env:DEADLIB_VORBIS_REPORT = "$pwd/target/vorbis-raw-pcm.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test pcm -- --ignored --skip historical_floor0 --skip regenerate_surround_pcm_golden --nocapture
-$env:DEADLIB_VORBIS_MAPPING_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/ogg-pcm.tsv"
+$env:DEADLIB_VORBIS_MAPPING_REPORT = "$pwd/target/vorbis-ogg-pcm.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test ogg_mapping -- --include-ignored --nocapture
-$env:DEADLIB_VORBIS_SEEK_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/seeks.tsv"
+$env:DEADLIB_VORBIS_SEEK_REPORT = "$pwd/target/vorbis-seeks.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test seeking -- --include-ignored --skip historical_floor0 --nocapture
 ```
 
 Skip clones already present. Use platform executable paths and omit `-A x64`
-for other generators. Pinned source commits are in `COVERAGE.md`.
+for other generators.
 
 The corpus helpers require single-stream Ogg Vorbis files. Generated mapping
 tests separately exercise multiplexing natively and mixed-rate chains against
@@ -37,38 +37,6 @@ overlap frame counts independently, including the zero-frame priming packet.
 It does not verify the Ogg Vorbis initial/final sample mapping. `mdct` tests the
 reference inverse transform directly, independently of headers or packet decode.
 
-`pcm-cases` reads the same three length-prefixed headers, then a u64 case count.
-Each case starts with a u64 packet count followed by length-prefixed raw packets.
-It restarts synthesis between cases and resets packet numbering to three.
-Output starts with channels (u32) and case count (u64), then the existing `P`/`S`
-records for each packet, grouped by case. The prefix/recovery suite checks this
-mode against fresh-process `pcm` runs byte for byte; see [PARITY.md](../../PARITY.md).
-`bookheaders` reads a u64 count followed by length-prefixed bare codebooks. It
-calls only `vorbis_staticbook_unpack`, emitting the count and one accepted byte /
-u64 consumed-bit position per declaration. It neither builds synthesis tables nor
-evaluates VQ data. The codebook extent suite independently checks its decisions
-against complete three-header `pcm` initialization without audio packets.
-`floor0cases` reads three headers, a u64 case count, then u64 long-block flag,
-u64 prefix-bit count and a length-prefixed floor payload per case. It invokes
-the unmodified private floor-zero callbacks, emitting count, presence (u8),
-consumed bits (u64), sticky EOF (u8), bins (u32), amplitude bits (u32), then every
-Bark index (u32) and curve sample (f32). A pinned object-layout prefix is copied
-with `memcpy` to inspect the actual integer maps without aliasing the opaque
-look object. [Floor-zero parameters](../../FLOOR0_PARAMETERS.md) records scope.
-`mdct-cases` reads a u64 count and that many existing length-prefixed `mdct`
-requests, emitting their concatenated f32 outputs. It calls `mdct_backward`
-unchanged, allowing every nonfinite spectral position to be checked in batches.
-`floatcases` receives a u64 count and that many u64 packed words (upper 32 bits
-must be zero). It calls unmodified `_float32_unpack` and emits count plus f32 bits.
-`bookcases` receives count, then prefix bits (u64, 0..7) and a length-prefixed
-buffer per case. It advances that prefix, calls `vorbis_staticbook_unpack`, and
-emits acceptance (u8), absolute consumed bits (u64) and successful
-`vorbis_book_init_decode` (u8). The existing `bookheaders` format remains unchanged.
-The synthetic bounds grid uses only complete valid Huffman trees and avoids
-nonempty dimension-zero lookup-one books; no undefined VQ context is evaluated.
-`mdctforward` receives N time samples instead of N/2 coefficients and emits the
-N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
-
 `oggpcm` reads an actual Ogg file, reports each link's serial, channels, rate and
 `ov_pcm_total`, and emits planar `ov_read_float` records tagged by link. The Rust
 test checks both decoded and declared reference lengths before comparison.
@@ -77,13 +45,6 @@ avoids libvorbisfile skipping the first short link at its raw-open position.
 Zero-total files have no PCM seek target and produce no sample records. This
 mode verifies final counts, trimming and mixed-rate chains separately from raw
 synthesis. Symphonia's format-reader path checks timestamps, durations and PCM.
-
-`oggpcmraw` has the same output protocol but establishes its initial position
-with `ov_raw_seek(0)`. The native encoder matrix uses this path. A named
-regression shows `ov_pcm_seek(0)` losing the first 4,096 frames of a legal
-eight-channel/N8192 native stream whose 65,810-byte priming packet spans pages;
-raw-start decoding returns all 16,401 declared frames. The original `oggpcm`
-mode and existing decoder corpus tests are unchanged. See [ENCODING.md](../../ENCODING.md).
 
 `oggseek input.ogg requests.bin` opens libvorbisfile once, then performs repeated
 `ov_pcm_seek`/`ov_pcm_tell`/`ov_read_float` operations without reopening. Requests
@@ -106,16 +67,6 @@ cargo test -p deadlib-audio-decode-vorbis --release --test pcm historical_floor0
 cargo test -p deadlib-audio-decode-vorbis --release --test seeking historical_floor0 -- --ignored --nocapture
 ```
 
-Create the destination directory before download. Expected SHA-256:
-`1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0`.
-This file has known nonconforming container granules. Its raw test deliberately
-uses the independent Rust Ogg development dependency to extract codec packets,
-without relaxing the native container's strict validation. See COVERAGE.md for
-the separate floor-zero numerical criteria. [LEGACY.md](../../LEGACY.md) covers
-the explicit native container option and separate indexed endpoint policy.
-The seek test repacketizes unchanged floor-zero codec packets with strict native
-granules; it validates floor-zero pre-roll without accepting the legacy container.
-
 ## Pinned upstream coded test grid
 
 The `deadlib_vorbis_upstream_vectors` target compiles the pinned upstream
@@ -128,7 +79,7 @@ coded test material, not a claim of an exhaustive formal conformance suite.
 crates/deadlib-audio/decode/scripts/generate_upstream_vectors.ps1
 # Set this to the fresh directory printed by that command:
 $env:DEADLIB_VORBIS_UPSTREAM_CORPUS = 'target/deadlib-audio-reference/corpus/upstream-<id>'
-$env:DEADLIB_VORBIS_UPSTREAM_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/upstream.tsv"
+$env:DEADLIB_VORBIS_UPSTREAM_REPORT = "$pwd/target/vorbis-upstream.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test upstream -- --ignored --nocapture
 ```
 
@@ -143,7 +94,7 @@ Windows build's hashes; floating-point encoders on other platforms may produce
 different valid bitstreams and must be validated by the numerical tests.
 
 External historical and ITGmania song files have a separate hash/size-pinned
-manifest in `validation/corpus.json`. Fetch/verify them with Python 3.11+:
+manifest in [external-corpus.json](../fixtures/external-corpus.json). Fetch/verify them with Python 3.11+:
 
 ```powershell
 python crates/deadlib-audio/decode/scripts/fetch_corpus.py
@@ -164,7 +115,7 @@ options, set the oracle variable above, fetch the manifest, then run:
 
 ```powershell
 $env:DEADLIB_VORBIS_EXTERNAL_CORPUS = "$pwd/target/deadlib-audio-reference/corpus"
-$env:DEADLIB_VORBIS_LEGACY_REPORT = "$pwd/crates/deadlib-audio/decode/vorbis/validation/legacy.tsv"
+$env:DEADLIB_VORBIS_LEGACY_REPORT = "$pwd/target/vorbis-legacy.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test legacy -- --include-ignored --nocapture
 ```
 
@@ -172,21 +123,6 @@ The diagnostic accepts `--allow-zero-span-granules` and
 `--trim-to-final-granule` separately. The second uses indexed decoding because a
 forward-only reader cannot retract PCM emitted before a decreasing EOS granule.
 Reports keep reference declared/emitted counts separate for the malformed song.
-
-The additional `--test historical` suite uses the `ffmpeg` group with the same
-external-corpus and oracle variables. It checks strict floor-zero and six-channel
-aoTuV files against both independent decoders, streaming/reset/seek PCM bits,
-and five named rejection cases. Set `DEADLIB_VORBIS_HISTORICAL_REPORT` to retain
-its PCM table. See [HISTORICAL.md](../../HISTORICAL.md) for commands and results.
-
-The `eos_clamping` suite uses the same oracle/corpus variables. `oggstream`
-decodes through unseekable callbacks without the older helper's zero-total
-shortcut. `oggseekstates` reports real status/tell/read results, including zero
-declared durations. `pcm-timed-cases` assigns granules/EOS to each raw packet;
-`eos-state-cases` injects only clock counters after real overlap priming and
-calls unmodified synthesis/blockin. These test-only protocols add no production
-dependencies. See [EOS_CLAMPING.md](../../EOS_CLAMPING.md) for the bounded policy,
-goldens, counter-wrap witnesses and remaining seek differences.
 
 `synthesis-ops` accepts decode, track-only, read, drain, restart and fresh-context
 operations. It calls the unmodified libvorbis backends and reports statuses,
@@ -204,11 +140,3 @@ helper snapshot, patch inventory, commands and hashes are retained. Then run:
 ```powershell
 python crates/deadlib-audio/decode/vorbis/tests/oracle/replay_seek_trace.py --input FILE.ogg --requests REQUESTS.bin --oracle ORACLE.exe --trace TRACE.exe --output NEW_DIRECTORY
 ```
-
-Requests use the existing `oggseekstates` protocol. Replay requires byte-identical
-file responses from ordinary/traced helpers, reconstructs the actual raw DSP
-schedule, checks every clock/queue transition and requires byte-identical returned
-PCM chunks. The resulting `schedule.bin` / `schedule.out` also drive the native
-test with `DEADLIB_VORBIS_SYNTHESIS_TRACES` set to their parent directory. This
-debugger currently accepts a single logical stream. The ordinary seek tests
-continue to cover chains independently. See [synthesis state](../../SYNTHESIS_STATE.md).

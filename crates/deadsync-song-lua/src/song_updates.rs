@@ -13,7 +13,6 @@ use actors::{
 };
 use std::{
     collections::{BTreeMap, HashMap},
-    time::Instant,
 };
 type MotionSample = (Option<[f32; 2]>, Option<[f32; 3]>);
 
@@ -485,15 +484,7 @@ impl SongRuntime {
             let mut scheduled = baseline.clone();
             let mut masks = self.update_masks(&players)?;
             let mut broadcasts = Vec::new();
-            let profile = std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some();
-            let mut reset_ms = 0.;
-            let mut message_ms = 0.;
-            let mut update_ms = 0.;
-            let mut player_ms = 0.;
-            let mut mod_ms = 0.;
-            let mut column_ms = 0.;
-            let mut overlay_ms = 0.;
-            let mut frame_count = 0;
+
             for (frame, (exact_beat, delta)) in frames.into_iter().enumerate().skip(1) {
                 if frame & 63 == 0 {
                     context.report_bake_progress(
@@ -504,15 +495,11 @@ impl SongRuntime {
                 let prior_time = frame_time(beat, seconds);
                 seconds += delta;
                 let next_time = frame_time(next_beat, seconds);
-                frame_count = frame;
-                let stage = profile.then(Instant::now);
                 for &value in tracked_values {
                     access
                         .reset_frame(&mut self.vm, value)
                         .map_err(|e| e.to_string())?;
                 }
-                reset_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 replay_states.copy_from_slice(&current);
                 let started = replay.advance(
                     self,
@@ -522,8 +509,6 @@ impl SongRuntime {
                     &mut replay_states,
                     next_beat,
                 )?;
-                message_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 self.sample_song_overlay_schedule(
                     screen,
                     &capture,
@@ -576,8 +561,6 @@ impl SongRuntime {
                 for (i, &value) in values.iter().enumerate().take(count) {
                     replay_states[i] = self.update_pose(value, replay_states[i])?;
                 }
-                update_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
                 update_states.copy_from_slice(&replay_states);
                 let next_masks = self.update_masks(&players)?;
@@ -661,8 +644,6 @@ impl SongRuntime {
                         &value,
                     );
                 }
-                overlay_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 let music = self.update_music_seconds(seconds, context)?;
                 for (i, &value) in values.iter().enumerate() {
                     let (time, spin) = self.update_motion(value, [music, next_beat], true)?;
@@ -721,8 +702,6 @@ impl SongRuntime {
                 sample_beats.push(next_beat);
                 sample_seconds.push((seconds * rate) as f32);
                 player_samples.push(next_players);
-                player_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 mod_samples.push(
                     options
                         .sample(&mut self.vm, false)
@@ -733,11 +712,8 @@ impl SongRuntime {
                         .sample(&mut self.vm, true)
                         .map_err(|e| e.to_string())?,
                 );
-                mod_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
-                let stage = profile.then(Instant::now);
                 column_samples.push(self.read_song_note_column_transform_samples()?);
                 self.capture_song_column_splines(&mut splines, (seconds * rate) as f32)?;
-                column_ms += stage.map_or(0., |started| started.elapsed().as_secs_f64() * 1000.);
                 self.capture_update_fields(
                     tracked,
                     tracked_values,
@@ -777,11 +753,6 @@ impl SongRuntime {
                 }
                 std::mem::swap(&mut current, &mut replay_states);
                 beat = next_beat;
-            }
-            if profile {
-                eprintln!(
-                    "Song lua update timing: frames={frame_count} reset_ms={reset_ms:.3} message_ms={message_ms:.3} update_ms={update_ms:.3} player_ms={player_ms:.3} mod_ms={mod_ms:.3} column_ms={column_ms:.3} overlay_ms={overlay_ms:.3}"
-                );
             }
             let fallback_bpms = [(0., song_display_bps(context) * 60.)];
             let bpms = if context.song_timing_bpms.is_empty() {

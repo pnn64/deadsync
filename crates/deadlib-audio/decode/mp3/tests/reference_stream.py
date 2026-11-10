@@ -9,10 +9,11 @@ from pathlib import Path
 from reference_pcm import frames
 
 p=argparse.ArgumentParser()
-for name in ['native','corpus','reference','output']:p.add_argument('--'+name,type=Path,required=True)
-args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False)
-framing_path=Path(__file__).parent/'validation/2026-10-27-foundation/reference-framing.json'
+for name in ['native','corpus','reference','output','framing-report']:p.add_argument('--'+name,type=Path,required=True)
+args=p.parse_args()
+framing_path=args.framing_report
 framing={Path(r['command'][-1]).name:r for r in json.loads(framing_path.read_text())}
+args.output.mkdir(parents=True,exist_ok=False)
 records=[];chunks=[0,1,2,3,7,31,127,1024,8192]
 for source in sorted(args.corpus.glob('*.mp3')):
     proof=framing[source.name]

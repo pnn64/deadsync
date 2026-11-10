@@ -2023,10 +2023,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "download_packs_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "download_packs_buffers_perf.rs"]
-mod buffers_perf;

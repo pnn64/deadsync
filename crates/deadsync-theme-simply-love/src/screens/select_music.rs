@@ -21475,11 +21475,3 @@ mod tests {
         assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
     }
 }
-
-#[cfg(test)]
-#[path = "select_music/ui_dataflows_original.rs"]
-mod ui_dataflows_original;
-
-#[cfg(test)]
-#[path = "select_music/ui_dataflows_perf.rs"]
-mod ui_dataflows_perf_tests;

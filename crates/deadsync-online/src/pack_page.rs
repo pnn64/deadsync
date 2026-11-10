@@ -889,19 +889,3 @@ mod tests {
         assert_eq!(page.difficulty_span(), None);
     }
 }
-
-#[cfg(test)]
-#[path = "pack_response_original.rs"]
-mod response_original;
-
-#[cfg(test)]
-#[path = "pack_response_perf.rs"]
-mod response_perf_tests;
-
-#[cfg(test)]
-#[path = "pack_meter_perf.rs"]
-mod meter_perf_tests;
-
-#[cfg(test)]
-#[path = "pack_page_perf.rs"]
-mod perf_tests;

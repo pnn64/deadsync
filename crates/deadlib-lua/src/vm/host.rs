@@ -5,6 +5,8 @@ use std::any::Any;
 mod api;
 pub(in crate::vm) mod stack;
 mod thread;
+#[cfg(test)]
+mod tests;
 pub(super) use api::ApiCall;
 pub(in crate::vm) use stack::Body;
 pub use stack::{
@@ -521,6 +523,20 @@ impl HostCall<'_> {
         let arguments = action.arguments();
         for &value in arguments {
             self.vm.validate_value(value)?;
+        }
+        if let Action::Get([Value::Table(id), key]) = action {
+            let table = &self.vm.tables[slot_index(id.0)];
+            let value = table.get(key);
+            if value != Value::Nil || table.metatable().is_none() {
+                // Ordinary field reads need no continuation frame or driver
+                // cleanup. Keep the result in the same scratch register as the
+                // slow path, so it stays rooted until the next call/result write.
+                let scratch = self.output + self.results;
+                self.vm.reserve_registers(scratch + 1)?;
+                self.vm.truncate_registers(scratch);
+                self.vm.registers.push(value);
+                return Ok((scratch..scratch + 1, false));
+            }
         }
         if arguments.len() > u32::MAX as usize {
             let error = Error::new(ErrorKind::Limit, 0, "too many host call arguments");

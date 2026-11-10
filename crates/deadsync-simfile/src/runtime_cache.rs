@@ -561,7 +561,5 @@ mod tests {
         );
     }
 
-    mod ownership_perf {
-        include!("runtime_cache_ownership_perf.rs");
-    }
+
 }

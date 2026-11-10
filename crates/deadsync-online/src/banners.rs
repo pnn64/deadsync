@@ -731,17 +731,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "banners_failure_original.rs"]
-mod banners_failure_original;
-
-#[cfg(test)]
-#[path = "banners_failure_perf.rs"]
-mod banners_failure_perf_tests;
-
-#[cfg(test)]
-#[path = "banners_original.rs"]
-mod original;
 
 #[cfg(test)]
 #[path = "banners_perf.rs"]

@@ -36,7 +36,7 @@ const VULKAN_PRESENT_DISPLAY_TIMING_TELEMETRY: bool = false;
 const VULKAN_TMESH_CACHE_MAX_BYTES: usize = 16 * 1024 * 1024;
 const PROJECTION_PUSH_BYTES: u32 = mem::size_of::<[f32; 16]>() as u32;
 #[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 #[allow(dead_code)]
 mod perf;
 #[cfg(test)]

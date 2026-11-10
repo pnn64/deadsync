@@ -1,8 +1,0 @@
-{
-  "native_source": "crates/deadsync-song-lua/tests/actor_input.rs",
-  "native_sha256": "769a14ed6a103c1f659fcdbd6d896aecb6c88f6bf9a9f69b3a7ce0c34457542f",
-  "mirror": "crates/deadsync-song-lua/tests/rust_actor_input_contract.rs",
-  "changes": [
-    "Only scene/owner type aliases and compiler selection. All native assertions and fixture bodies are preserved."
-  ]
-}

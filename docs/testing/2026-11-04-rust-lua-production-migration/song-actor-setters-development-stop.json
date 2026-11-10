@@ -1,8 +1,0 @@
-{
-  "reason": "Review found non-setter class fallback regression; stop before more checks, then fix and rerun.",
-  "checker_pid": 3080972,
-  "stopped_processes": [
-    3080972,
-    3081730
-  ]
-}

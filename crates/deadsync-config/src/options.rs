@@ -4366,8 +4366,3 @@ mod tests {
         assert_eq!(srpg_shop_folder_from_choice(99), SrpgShopFolder::Unlocks);
     }
 }
-
-#[cfg(test)]
-mod legacy_performance {
-    include!("legacy_performance.rs");
-}

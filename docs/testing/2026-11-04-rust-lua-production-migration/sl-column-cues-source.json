@@ -1,7 +1,0 @@
-{
-  "production_source": "crates/deadsync-song-lua/src/compat.rs",
-  "production_sha256": "459c02b0825dcc7f36f7838c7d2da76c39f7dafdad9fefd97cab8ba634161fc0",
-  "helper": "crates/deadsync-song-lua/src/rust_engine/managers/column_cues.lua",
-  "helper_sha256": "b5aabe0554c4d1f2ec70d96409d39ff00867732d11c3bd6d4275d0ecb5922cb1",
-  "unchanged_function_body": true
-}

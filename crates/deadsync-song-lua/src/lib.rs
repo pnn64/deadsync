@@ -55,15 +55,11 @@ pub use input::CompiledInput as SongLuaCompiledInput;
 mod lua_util;
 
 mod live;
-#[cfg(feature = "performance")]
-mod live_profile;
 pub use live::{
     SongLuaActorSound, SongLuaLiveBroadcast, SongLuaLiveFrame, SongLuaLiveOutput,
     SongLuaLivePlayer, SongLuaLivePlayerWrite, SongLuaLiveRequest, SongLuaLiveSourceRequest,
     SongLuaLiveTarget,
 };
-#[cfg(feature = "performance")]
-pub use live_profile::{live_profile_report, reset_live_profile};
 
 #[cfg(feature = "test-support")]
 pub use live::SongLuaOverlayStageObservation;

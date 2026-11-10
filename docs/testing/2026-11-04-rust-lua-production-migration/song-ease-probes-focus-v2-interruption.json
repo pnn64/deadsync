@@ -1,6 +1,0 @@
-{
-  "result_metadata_missing": true,
-  "tests_executed": false,
-  "cargo_log_sha256": "958b19ed5b2e6f850abee1d5a31cd46ed0d41751c8b87a76b9e699edd9aaaf8c",
-  "reason": "Input/output error during Cargo launch reporting followed by ENOSPC saving result.json; preserved as an interrupted validation, not a test pass or failure."
-}

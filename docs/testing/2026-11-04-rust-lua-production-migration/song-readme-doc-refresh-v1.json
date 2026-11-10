@@ -1,7 +1,0 @@
-{
-  "source": "crates\\deadsync-song-lua\\README.md",
-  "archive": "docs\\testing\\2026-11-04-rust-lua-production-migration\\song-readme-before-production-doc-refresh-2026-11-08.md",
-  "archive_sha256": "48553bfbf969a89cf237f108627c07caf3fb29458d0ebf8ba78ba29c6a6a0771",
-  "current_sha256": "d8343a984565536c725e03e88a060b7ea0ba7a706463bb593d78cca1f5409f21",
-  "scope": "Active production routing documentation refreshed. Previous progress notes preserved byte-for-byte; source code and historical reports unchanged."
-}

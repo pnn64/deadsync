@@ -5232,23 +5232,3 @@ Content-Range:bytes 7-8/10\r\n\r\nhi\r\n--SEPARATOR--\r\n";
         }
     }
 }
-
-#[cfg(test)]
-#[path = "match_keys_original.rs"]
-mod match_keys_original;
-
-#[cfg(test)]
-#[path = "match_keys_perf.rs"]
-mod match_keys_perf_tests;
-
-#[cfg(test)]
-#[path = "archive_metadata_original.rs"]
-mod metadata_original;
-
-#[cfg(test)]
-#[path = "archive_metadata_perf.rs"]
-mod metadata_perf_tests;
-
-#[cfg(test)]
-#[path = "pack_archive_perf.rs"]
-mod perf_tests;

@@ -1,10 +1,7 @@
 use deadlib_audio_decode::resample::{PlanarAccum, append_channel_mapped_i16};
-use std::hint::black_box;
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 #[test]
@@ -29,32 +26,6 @@ fn planar_preserves_every_pcm_value_and_partial_frames() {
     }
 }
 
-#[test]
-#[ignore = "release CPU and allocation benchmark"]
-fn benchmark_planar_kernel() {
-    for channels in [1usize, 2, 3, 4, 6, 8] {
-        for frames in [64, 4096] {
-            let input: Vec<i16> = (0..frames * channels)
-                .map(|i| i.wrapping_mul(71) as i16)
-                .collect();
-            let mut planar = PlanarAccum::new(channels, frames);
-            let label = format!("planar/channels={channels}/frames={frames}");
-            let (_, counts) = perf::measure(|| planar.push_i16_interleaved(&input, channels));
-            println!("{label}: allocation {counts:?}");
-            bench::measure(&label, 2_000_000 / (frames * channels), || {
-                let append: fn(&mut PlanarAccum, &[i16], usize) =
-                    black_box(PlanarAccum::push_i16_interleaved);
-                planar.clear();
-                append(
-                    black_box(&mut planar),
-                    black_box(&input),
-                    black_box(channels),
-                );
-                black_box(&planar.channels);
-            });
-        }
-    }
-}
 
 #[test]
 fn channel_mapping_preserves_prefix_and_complete_frames() {
@@ -85,51 +56,6 @@ fn channel_mapping_preserves_prefix_and_complete_frames() {
                 assert_eq!(actual, expected);
                 assert_eq!(actual.as_ptr(), pointer);
             }
-        }
-    }
-}
-
-#[test]
-#[ignore = "release CPU and allocation benchmark"]
-fn benchmark_mapping_kernel() {
-    for (in_ch, out_ch) in [
-        (1usize, 3),
-        (1, 6),
-        (1, 8),
-        (2, 3),
-        (2, 5),
-        (6usize, 1),
-        (8, 1),
-        (2, 6),
-        (2, 8),
-        (6, 8),
-        (8, 3),
-        (2, 2),
-        (1, 2),
-        (6, 2),
-    ] {
-        for frames in [64, 4096] {
-            let input: Vec<i16> = (0..frames * in_ch)
-                .map(|i| i.wrapping_mul(71) as i16)
-                .collect();
-            let mut output = Vec::with_capacity(frames * out_ch + 2);
-            output.extend_from_slice(&[123, -456]);
-            let label = format!("mapping/{in_ch}to{out_ch}/frames={frames}");
-            let (_, counts) =
-                perf::measure(|| append_channel_mapped_i16(&input, in_ch, out_ch, &mut output));
-            println!("{label}: allocation {counts:?}");
-            bench::measure(&label, 2_000_000 / (frames * out_ch), || {
-                let append: fn(&[i16], usize, usize, &mut Vec<i16>) -> usize =
-                    black_box(append_channel_mapped_i16);
-                output.truncate(2);
-                black_box(append(
-                    black_box(&input),
-                    black_box(in_ch),
-                    black_box(out_ch),
-                    black_box(&mut output),
-                ));
-                black_box(&output);
-            });
         }
     }
 }

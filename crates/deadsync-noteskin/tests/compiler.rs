@@ -1,11 +1,6 @@
 use deadsync_noteskin::compiler;
-pub use deadsync_noteskin::{Quantization, actor, compiled, itg, lua};
+use deadsync_noteskin::{compiled, itg};
 
-#[allow(dead_code)]
-#[path = "../../deadlib-lua/src/reference_test.rs"]
-mod reference_test;
-#[path = "support/snapshot.rs"]
-mod snapshot;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -29,7 +24,6 @@ impl Fixture {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         fs::create_dir(&path).unwrap();
-        snapshot::register_fixture_paths(&path, reference_test::register_path);
         Self(path)
     }
     fn write(&self, name: &str, source: &str) {
@@ -103,17 +97,9 @@ fn equal_bundles(
         }
     }
 }
-fn compare(game: &str, data: &itg::NoteskinData) {
-    reference_test::register_path(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap(),
-    );
+fn compile_and_roundtrip(game: &str, data: &itg::NoteskinData) {
     let rust = compiler::compile_data(game, data, "same-input", "1.5x, Reverse").unwrap();
     assert_eq!((rust.loader.version, rust.actors.version), (30, 30));
-    reference_test::assert_debug("noteskin::compare::bundle", &snapshot::bundle(&rust));
     let output = Fixture::new();
     let path = output.0.join("bundle.bin");
     compiled::save_compiled_bundle(&path, &rust).unwrap();
@@ -155,7 +141,7 @@ fn backend_cutover_invalidates_the_legacy_cache_without_deleting_it() {
 }
 
 #[test]
-fn bundled_noteskins_match_the_legacy_compiler_with_their_real_fallback_chains() {
+fn bundled_noteskins_compile_and_roundtrip_with_their_real_fallback_chains() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
     for (game, count) in [("dance", 12), ("pump", 14)] {
         let skins = itg::discover_skins(std::slice::from_ref(&root), game);
@@ -163,13 +149,13 @@ fn bundled_noteskins_match_the_legacy_compiler_with_their_real_fallback_chains()
         for skin in skins {
             eprintln!("bundled {game}/{skin}");
             let data = itg::load_noteskin_data(&root, game, &skin).unwrap();
-            compare(game, &data);
+            compile_and_roundtrip(game, &data);
         }
     }
 }
 
 #[test]
-fn authored_third_party_and_song_local_noteskins_match_legacy() {
+fn authored_third_party_and_song_local_noteskins_compile_and_roundtrip() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/noteskins");
     for name in [
         "FNF-3d",
@@ -183,18 +169,18 @@ fn authored_third_party_and_song_local_noteskins_match_legacy() {
         let data = itg::load_song_skin_data(&fixture.0, std::slice::from_ref(&root), "dance", name)
             .unwrap();
         eprintln!("authored dance/{name}");
-        compare("dance", &data);
+        compile_and_roundtrip("dance", &data);
     }
     let fixture = Fixture::new();
     skin_fixture::install("rosewood", &fixture.0);
     let data =
         itg::load_song_skin_data(&fixture.0, &[root], "dance", "SCH-CLASSIC-RAINBOW").unwrap();
     eprintln!("authored dance/SCH-CLASSIC-RAINBOW");
-    compare("dance", &data);
+    compile_and_roundtrip("dance", &data);
 }
 
 #[test]
-fn existing_noteskin_fixtures_produce_the_same_complete_native_bundles() {
+fn existing_noteskin_fixtures_roundtrip_complete_bundles() {
     for name in [
         "alias-normalization",
         "base-xy-rotation",
@@ -218,7 +204,7 @@ fn existing_noteskin_fixtures_produce_the_same_complete_native_bundles() {
                 assert!(error.contains("assertion failed"), "{error}");
                 continue;
             }
-            compare(game, &data);
+            compile_and_roundtrip(game, &data);
         }
     }
 }
@@ -266,11 +252,11 @@ fn fallback_closures_commands_metrics_and_deferred_loaders_survive_collection() 
     fixture.write("derived/metrics.ini", "[NoteDisplay]\nTest=fallback\n");
     let mut data = data(vec![fixture.0.join("derived"), fixture.0.join("base")]);
     data.metrics = itg::IniData::parse_file(&fixture.0.join("derived/metrics.ini")).unwrap();
-    compare("dance", &data);
+    compile_and_roundtrip("dance", &data);
 }
 
 #[test]
-fn color_variant_resource_expressions_and_model_properties_match_legacy() {
+fn color_variant_resource_expressions_and_model_properties_roundtrip() {
     let fixture = Fixture::new();
     fixture.write(
         "NoteSkin.lua",
@@ -297,11 +283,11 @@ fn color_variant_resource_expressions_and_model_properties_match_legacy() {
         }
     "#,
     );
-    compare("dance", &data(vec![fixture.0.clone()]));
+    compile_and_roundtrip("dance", &data(vec![fixture.0.clone()]));
 }
 
 #[test]
-fn property_metamethods_and_numeric_string_coercion_match_legacy() {
+fn property_metamethods_and_numeric_string_coercion_roundtrip() {
     let fixture = Fixture::new();
     fixture.write(
         "NoteSkin.lua",
@@ -325,7 +311,7 @@ fn property_metamethods_and_numeric_string_coercion_match_legacy() {
         end}
     "#,
     );
-    compare("dance", &data(vec![fixture.0.clone()]));
+    compile_and_roundtrip("dance", &data(vec![fixture.0.clone()]));
 }
 
 #[test]

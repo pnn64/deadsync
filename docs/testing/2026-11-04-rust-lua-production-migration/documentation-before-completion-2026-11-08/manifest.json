@@ -1,8 +1,0 @@
-{
-  "docs/testing/2026-11-04-rust-lua-production-migration/completion-audit.md": "3ae60ef8e96830e35e3c732a83717b1a43c71d5aedce53ce8dcbc0220734bcb7",
-  "docs/testing/2026-11-04-rust-lua-production-migration/README.md": "cbe40c1aa99cec3731d76ec4901028bad37e5c5c18252a90e44084cee804f475",
-  "docs/lua-engine.md": "311dd266ebf7307cb9e3dafc9158cc7bb441ec317b4ac964436fffca98d1acb5",
-  "docs/lua-architecture.md": "55ca64b178ad6786a0be3c51148ce6251b2c3279617446864358767a267bdddd",
-  "docs/lua-parity-matrix.md": "2739e17b2ed5442523b84832150d124ba954d228de6e10a51e25001678a290bf",
-  "crates/deadsync-song-lua/README.md": "2508b0b73a8b5d466a394943471ff79759c79721e7671b97bad5254698c544b1"
-}

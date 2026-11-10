@@ -165,8 +165,7 @@ pub struct SolaStretcher {
     /// fully warmed by `new` before streaming. Indexed reads cannot miss or
     /// grow it; there is no eviction, pruning, or gameplay-thread work, and it
     /// is freed with the stretcher on the decoder worker. Per emitted sample,
-    /// the worst-case table cost is one bounded load. `sola_hot_paths` records
-    /// its throughput and reports the one startup allocation separately.
+    /// the worst-case table cost is one bounded load.
     fade_weights: Box<[f32]>,
 
     state: Vec<ChannelState>,

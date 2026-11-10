@@ -1,6 +1,0 @@
-[
-    "crates/deadsync-shell/src/app/mod.rs",
-    "crates/deadsync-shell/src/app/screen_nav.rs",
-    "crates/deadsync-shell/src/course.rs",
-    "crates/deadsync-shell/src/gameplay_regression_tests.rs"
-]

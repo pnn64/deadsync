@@ -11,8 +11,7 @@ API and the `deadlua` CLI. It does not load a native Lua library or regenerate
 expectations. Process expectations for other platforms must be independently
 reviewed and captured before those platform-specific probes can run there.
 
-`gc-finalizer-phase.lua` retains the finalizer-phase regression formerly kept
-under `docs/testing`.
+`gc-finalizer-phase.lua` covers finalizer-phase ordering.
 
 The pinned official Lua suite remains unmodified. Its runner records the precise
 Windows failure at `files.lua:59` separately: native Lua 5.1.5 also refuses that

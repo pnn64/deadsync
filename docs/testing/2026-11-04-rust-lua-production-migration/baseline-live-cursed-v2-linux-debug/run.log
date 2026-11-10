@@ -1,2 +1,0 @@
-retained_lua_vm=false, frames=0, changed_visual_frames=0, startup_smoke_passed=false
-Error: "gameplay Lua startup failed; see /mnt/c/GitHub/deadsync/docs/testing/2026-11-04-rust-lua-production-migration/baseline-live-cursed-v2-linux-debug/output.json"

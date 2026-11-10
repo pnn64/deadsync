@@ -667,11 +667,3 @@ mod tests {
         assert!(lines.iter().any(|line| line.contains("2. Remote [❌]")));
     }
 }
-
-#[cfg(test)]
-mod perf_traversal {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/lobby_order.rs"
-    ));
-}

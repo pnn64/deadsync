@@ -982,7 +982,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/perf/owned_cache.rs"]
-mod owned_pipeline_tests;

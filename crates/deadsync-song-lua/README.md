@@ -70,18 +70,3 @@ ITGmania snapshots provide independent regression expectations.
 cargo test --locked -p deadsync-song-lua --test production_routing
 cargo test --locked -p deadsync-song-lua --tests --features test-support --no-fail-fast -- --test-threads=1
 ```
-
-The [production migration objective](../../docs/testing/2026-11-04-rust-lua-production-migration/objective.txt)
-is complete within its fixed acceptance scope. The
-[completion audit](../../docs/testing/2026-11-04-rust-lua-production-migration/completion-audit.md)
-records original regression coverage, affected-suite refreshes, unchanged-source
-proofs, the normal release/link map and the actual 600-frame rendered smoke.
-Known unrelated and diagnostic assertions remain enabled and documented.
-[Preparation/live/process-memory and paired noteskin readings](../../docs/testing/2026-11-04-rust-lua-production-migration/measurement-summary.md)
-include their environmental limits. The standalone interpreter and C API removal
-milestones remain closed; no new language, baking or native-backend work follows
-from this migration.
-
-Earlier adapter-by-adapter progress notes, including their old opt-in/legacy
-status statements, are preserved in the [historical README snapshot](../../docs/testing/2026-11-04-rust-lua-production-migration/song-readme-before-production-doc-refresh-2026-11-08.md).
-Those notes describe their recorded sources and do not define current routing.

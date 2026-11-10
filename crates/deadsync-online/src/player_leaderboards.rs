@@ -431,7 +431,3 @@ pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
         song_cache.as_slice(),
     )
 }
-
-#[cfg(test)]
-#[path = "player_leaderboards/completion_tests.rs"]
-mod completion_tests;

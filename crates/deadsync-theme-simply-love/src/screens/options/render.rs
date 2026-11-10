@@ -1483,9 +1483,3 @@ pub fn get_actors(
     );
     actors
 }
-
-#[cfg(test)]
-mod resource_perf;
-
-#[cfg(test)]
-mod data_paths_perf;

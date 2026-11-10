@@ -644,7 +644,3 @@ mod tests {
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/perf/owned_charts.rs"]
-mod owned_pipeline_tests;

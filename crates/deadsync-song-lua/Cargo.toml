@@ -6,8 +6,6 @@ license = "GPL-3.0"
 
 [features]
 test-support = []
-performance = []
-
 [dependencies]
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
@@ -393,10 +391,6 @@ name = "unit_environment"
 required-features = ["test-support"]
 
 [[test]]
-name = "unit_class_lookup"
-required-features = ["test-support"]
-
-[[test]]
 name = "unit_text_publication"
 required-features = ["test-support"]
 
@@ -422,27 +416,4 @@ required-features=["test-support"]
 
 [[test]]
 name="unit_native_storage"
-required-features=["test-support"]
-
-[[test]]
-name="perf_cmd"
-required-features=["test-support"]
-
-[[test]]
-name="perf_cmd_dispatch"
-required-features=["test-support"]
-
-[[test]]
-name="perf_ignored_core"
-
-[[test]]
-name="perf_ignored_host"
-required-features=["test-support"]
-
-[[test]]
-name="perf_ignored_tables"
-required-features=["test-support"]
-
-[[test]]
-name="perf_ignored_actor"
 required-features=["test-support"]

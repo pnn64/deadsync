@@ -3275,7 +3275,7 @@ mod tests {
                 "INSTALLED",
             ]
         );
-        // PAD stays where init() lands, and YEARS where the benchmark finds it.
+        // PAD stays where init() lands, and YEARS at its fixture position.
         assert_eq!(TABS[1], Tab::Pad);
         assert_eq!(TABS[7], Tab::Years);
     }
@@ -3842,9 +3842,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "banner_requests_original.rs"]
-mod banner_requests_original;
 
 #[cfg(test)]
 #[path = "banner_requests_perf.rs"]

@@ -1,8 +1,0 @@
-{
-  "baseline": "input-lint-song-linux-debug",
-  "final": "screen-manager-lint-song-linux-debug",
-  "library_diagnostics_identical_to_baseline": true,
-  "baseline_prelude": "    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n",
-  "current_prelude": "    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n    Blocking waiting for file lock on package cache\n",
-  "log_sha256": "0d0336da57deb51a992301fc1cff7ff1747eca276d8387f6e5341bcf7d0fa914"
-}

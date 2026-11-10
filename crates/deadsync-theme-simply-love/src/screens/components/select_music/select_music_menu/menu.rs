@@ -604,11 +604,3 @@ mod tests {
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "menu/borrowed_state_original.rs"]
-mod borrowed_state_original;
-
-#[cfg(test)]
-#[path = "menu/borrowed_state_perf.rs"]
-mod borrowed_state_perf;

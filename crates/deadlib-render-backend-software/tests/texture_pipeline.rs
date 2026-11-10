@@ -1,10 +1,7 @@
 //! Production pixel kernels, measured without a window or GPU.
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod alloc;
-#[allow(dead_code)]
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 
 #[allow(dead_code)]
 mod backend {
@@ -12,7 +9,7 @@ mod backend {
 
     mod pipeline {
         use super::*;
-        use std::hint::black_box;
+
 
         fn reference_alpha(
             texels: Texels<'_>,
@@ -141,49 +138,6 @@ mod backend {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU benchmark"]
-        fn benchmark_alpha_sampling() {
-            let image = RgbaImage::from_fn(128, 128, |x, y| {
-                image::Rgba([x as u8, 71, y as u8, (x * 47 + y * 23) as u8])
-            });
-            let halves: Vec<_> = image
-                .pixels()
-                .map(|p| pack_half(p.0.map(|b| f32::from(b) * U8_TO_F32)))
-                .collect();
-            let coords: Vec<_> = (0..1024)
-                .map(|i| ((i as f32 * 0.37).fract(), (i as f32 * 0.61).fract()))
-                .collect();
-            for half in [false, true] {
-                let texels = Texels {
-                    half: if half { &halves } else { &[] },
-                    ..(&image).into()
-                };
-                for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
-                    for filter in [SamplerFilter::Nearest, SamplerFilter::Linear] {
-                        let sampler = SamplerDesc {
-                            wrap,
-                            filter,
-                            mipmaps: false,
-                        };
-                        let label = format!("alpha/half={half}/{wrap:?}/{filter:?}/1024");
-                        let work = || {
-                            for &(u, v) in &coords {
-                                black_box(alpha(
-                                    black_box(texels),
-                                    black_box(u),
-                                    black_box(v),
-                                    black_box(sampler),
-                                ));
-                            }
-                        };
-                        let (_, churn) = crate::alloc::measure(work);
-                        println!("{label}: allocation {churn:?}");
-                        crate::bench::measure(&label, 256, work);
-                    }
-                }
-            }
-        }
 
         fn reference_yuv(upload: Yuv420Upload<'_>) -> RgbaImage {
             RgbaImage::from_fn(upload.width, upload.height, |x, y| {
@@ -282,42 +236,6 @@ mod backend {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU benchmark"]
-        fn benchmark_yuv_conversion() {
-            for (width, height) in [
-                (2, 2),
-                (16, 16),
-                (30, 34),
-                (32, 32),
-                (64, 64),
-                (640, 360),
-                (1920, 1080),
-            ] {
-                let count = width as usize * height as usize;
-                let y: Vec<_> = (0..count).map(|i| (i * 71) as u8).collect();
-                let u: Vec<_> = (0..count / 4).map(|i| (i * 47) as u8).collect();
-                let v: Vec<_> = (0..count / 4).map(|i| (i * 23) as u8).collect();
-                let upload = Yuv420Upload {
-                    width,
-                    height,
-                    y: &y,
-                    u: &u,
-                    v: &v,
-                    levels: [1.164_383_5, -0.073_059_365, 1.138_392_9, -0.571_428_6],
-                    coeffs: [1.402, -0.344136, -0.714136, 1.772],
-                };
-                let mut image = RgbaImage::new(width, height);
-                let label = format!("yuv/{width}x{height}");
-                let (_, churn) =
-                    crate::alloc::measure(|| update_yuv420_image(&mut image, upload).unwrap());
-                println!("{label}: allocation {churn:?}");
-                crate::bench::measure(&label, (1_000_000 / count).max(2), || {
-                    update_yuv420_image(black_box(&mut image), black_box(upload)).unwrap();
-                    black_box(image.as_raw());
-                });
-            }
-        }
 
         #[test]
         fn repeat_indices_match_signed_remainder_at_boundaries() {
@@ -350,54 +268,5 @@ mod backend {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU and allocation benchmark"]
-        fn benchmark_repeat_sampling() {
-            for (width, height) in [(127, 127), (128, 127), (128, 128), (640, 360)] {
-                let image = RgbaImage::from_fn(width, height, |x, y| {
-                    image::Rgba([x as u8, 71, y as u8, (x * 47 + y * 23) as u8])
-                });
-                let coords: Vec<_> = (0..1024)
-                    .map(|i| ((i as f32 * 0.371).fract(), (i as f32 * 0.613).fract()))
-                    .collect();
-                for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
-                    for filter in [SamplerFilter::Nearest, SamplerFilter::Linear] {
-                        let sampler = SamplerDesc {
-                            wrap,
-                            filter,
-                            mipmaps: false,
-                        };
-                        let label = format!("sampling/{width}x{height}/{wrap:?}/{filter:?}/1024");
-                        let mut work = || {
-                            for &(u, v) in &coords {
-                                let texels = black_box(Texels::from(&image));
-                                let color = match filter {
-                                    SamplerFilter::Nearest => sample_tex_nearest::<false, 4>(
-                                        texels,
-                                        black_box(width as usize),
-                                        black_box(height as usize),
-                                        black_box(u),
-                                        black_box(v),
-                                        black_box(sampler),
-                                    ),
-                                    SamplerFilter::Linear => sample_tex_linear::<false, 4>(
-                                        texels,
-                                        black_box(width as usize),
-                                        black_box(height as usize),
-                                        black_box(u),
-                                        black_box(v),
-                                        black_box(sampler),
-                                    ),
-                                };
-                                black_box(color);
-                            }
-                        };
-                        let (_, counts) = crate::alloc::measure(work);
-                        println!("{label}: allocation {counts:?}");
-                        crate::bench::measure(&label, 256, &mut work);
-                    }
-                }
-            }
-        }
     }
 }

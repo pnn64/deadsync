@@ -1,8 +1,0 @@
-{
-  "getter_routing_and_pose_metadata_match_saved_source": true,
-  "checked": {
-    "crates/deadsync-song-lua/src/frame_capture.rs": "bd9bdf6c526abdca4f998b032ceaea05d0589119dd12dc7a2d966906ea21b91b",
-    "crates/deadsync-song-lua/src/lua_util.rs": "4cf51422fa2abe49588f291409a5a1212436408c7b0d44bbc2b2d44448600ee0",
-    "crates/deadsync-song-lua/src/rust_engine/actors/song_pose.rs": "8a3fe9e5e954e89ff42ef8b9f43f6ed0dd98dc946a98c26703a8d1f980551118"
-  }
-}

@@ -251,12 +251,3 @@ mod tests {
         assert_eq!(outputs[4], Some(false));
     }
 }
-
-#[cfg(test)]
-pub(super) fn performance_outputs(state: &State, itgio: bool) -> [Option<bool>; OUTPUT_COUNT] {
-    build_outputs(if itgio { &ITGIO_MAP } else { &PIUIO_MAP }, state)
-}
-#[cfg(test)]
-pub(super) fn performance_entry_size() -> usize {
-    std::mem::size_of::<MappedLight>()
-}

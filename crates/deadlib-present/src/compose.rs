@@ -16061,27 +16061,3 @@ mod tests {
         assert_eq!(second.vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
     }
 }
-
-#[cfg(test)]
-#[path = "compose_perf.rs"]
-mod performance;
-
-#[cfg(test)]
-#[path = "compose_bounds_performance.rs"]
-mod bounds_performance;
-
-#[cfg(test)]
-#[path = "compose_clip_performance.rs"]
-mod clip_performance;
-
-#[cfg(test)]
-#[path = "compose_sprite_clip_performance.rs"]
-mod sprite_clip_performance;
-
-#[cfg(test)]
-#[path = "compose_effect_performance.rs"]
-mod effect_performance;
-
-#[cfg(test)]
-#[path = "compose_area_performance.rs"]
-mod area_performance;

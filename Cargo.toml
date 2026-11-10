@@ -99,10 +99,6 @@ name = "live_song_lua"
 path = "tests/live_song_lua.rs"
 harness = false
 
-[[example]]
-name = "song_lua_performance"
-path = "examples/song_lua_performance.rs"
-
 [dependencies]
 deadlib-audio = { path = "crates/deadlib-audio" }
 deadlib-platform = { path = "crates/deadlib-platform" }
@@ -208,13 +204,6 @@ opt-level = 3
 [profile.local]
 inherits = "release"
 lto = "thin"
-
-[profile.profiling]
-inherits = "release"
-debug = 1
-
-[profile.bench]
-debug = 1
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

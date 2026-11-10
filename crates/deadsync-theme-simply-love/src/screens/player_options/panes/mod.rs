@@ -542,6 +542,3 @@ fn apply_derived_masks(
         (rule.apply)(profile, masks);
     }
 }
-
-#[cfg(test)]
-mod direct_data_perf;

@@ -228,10 +228,6 @@ impl Clock {
     }
 }
 
-#[cfg(test)]
-mod perf {
-    include!("../tests/perf/material_clock.rs");
-}
 
 pub fn model_texture_at(
     samples: &[SongLuaTextureSample],

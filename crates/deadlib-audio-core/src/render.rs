@@ -993,9 +993,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "render_perf_tests.rs"]
-mod perf_tests;
 
 #[cfg(test)]
 #[path = "pcm_conversion_tests.rs"]

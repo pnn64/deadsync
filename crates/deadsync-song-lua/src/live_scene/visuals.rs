@@ -68,8 +68,6 @@ impl SongLiveScene {
 
     /// Publish in binding order. Earlier slots and fields survive a later error.
     pub fn write_visuals<N, M>(&self, visuals: &mut Visuals<N, M>) -> Result<(), String> {
-        #[cfg(feature = "performance")]
-        let _profile = crate::live_profile::scope(crate::live_profile::Phase::VisualPublication);
         let mut runtime = self.runtime.access();
         for &(global, target) in &self.targets {
             let actor = match target {

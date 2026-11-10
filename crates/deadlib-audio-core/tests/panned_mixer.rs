@@ -1,10 +1,7 @@
-//! Bit-exact panned SFX checks and CPU-cycle benchmarks of the real mixer.
+//! Bit-exact panned SFX checks for the production mixer.
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod alloc;
-#[allow(dead_code)]
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 
 #[allow(dead_code)]
 mod mixer {
@@ -12,7 +9,7 @@ mod mixer {
 
     mod kernel {
         use super::*;
-        use std::hint::black_box;
+
 
         #[expect(
             clippy::chunks_exact_to_as_chunks,
@@ -139,66 +136,5 @@ mod mixer {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU benchmark"]
-        fn benchmark_panned_mixing() {
-            for frames in [64, 2048] {
-                let src: Vec<_> = (0..frames * 2).map(|i| i as i16).collect();
-                let mut dst = vec![0.0; src.len()];
-                for gain in [0.0, 0.375, 1.0] {
-                    let label = format!("panned/frames={frames}/gain={gain}");
-                    let (_, churn) = crate::alloc::measure(|| {
-                        mix_sfx_panned_stereo(&src, &mut dst, gain, SfxPan::Right)
-                    });
-                    println!("{label}: allocation {churn:?}");
-                    crate::bench::measure(&label, 4096, || {
-                        mix_sfx_panned_stereo(
-                            black_box(&src),
-                            black_box(&mut dst),
-                            black_box(gain),
-                            black_box(SfxPan::Right),
-                        );
-                        black_box(&dst);
-                    });
-                }
-            }
-            let controls = MixControls::new();
-            let data: Arc<[i16]> = Arc::from(vec![1000; 4098]);
-            let mut active: Vec<_> = (0..16)
-                .map(|i| {
-                    ActiveSfx::from_queued(QueuedSfx {
-                        data: Arc::clone(&data),
-                        bus: MixBus::new(0),
-                        generation: 0,
-                        restart_slot: None,
-                        pan: if i % 2 == 0 {
-                            SfxPan::Right
-                        } else {
-                            SfxPan::Left
-                        },
-                        target_stream_frame: 0,
-                        voice: None,
-                    })
-                })
-                .collect();
-            let mut dst = vec![0.0; 4096];
-            let label = "panned/active=16/frames=2048/gain=1";
-            let mut work = || {
-                for sfx in &mut active {
-                    sfx.cursor = 0;
-                }
-                black_box(mix_active_sfx(
-                    black_box(&mut active),
-                    black_box(&mut dst),
-                    0,
-                    2,
-                    black_box(&controls),
-                ));
-                black_box(&dst);
-            };
-            let (_, churn) = crate::alloc::measure(&mut work);
-            println!("{label}: allocation {churn:?}");
-            crate::bench::measure(label, 128, work);
-        }
     }
 }

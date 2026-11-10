@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
     dead_code,
     reason = "this fixture uses scoped measurement from the shared allocation API"
 )]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod allocations;
 #[path = "support/baked_program.rs"]
 mod api;

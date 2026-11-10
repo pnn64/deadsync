@@ -1,14 +1,11 @@
-//! Setup-path regression checks and opt-in benchmarks of production functions.
+//! Setup-path regression checks for production functions.
 use super::*;
 use std::cell::{Cell, RefCell};
-use std::hint::black_box;
 use std::rc::Rc;
 use std::sync::Arc;
 use windows::core::{GUID, HRESULT, Interface, Result, implement};
 
-#[path = "../../../../tests/support/kernel_bench.rs"]
-mod bench;
-#[path = "../../../../tests/support/perf.rs"]
+#[path = "../../../../tests/support/allocations.rs"]
 mod perf;
 
 #[implement(Audio::IMMDevice)]
@@ -208,12 +205,6 @@ fn com_task_free_accepts_null_and_owned_memory_without_rust_allocations() {
     }
 }
 
-pub(crate) fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {
-    work();
-    let (_, counts) = perf::measure(&mut work);
-    println!("{label}: allocation {counts:?}");
-    bench::measure(label, iterations, work);
-}
 
 #[test]
 fn frame_time_matches_integer_division_across_rates_and_frame_counts() {
@@ -268,15 +259,6 @@ fn frame_time_matches_integer_division_across_rates_and_frame_counts() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_frame_setup() {
-    for rate in [44_100, 48_000, 96_000, 192_000, 65_536, u32::MAX] {
-        measure(&format!("wasapi/frame_setup_{rate}"), 1_000_000, || {
-            black_box(FramesToNanos::new(black_box(rate)));
-        });
-    }
-}
 
 #[test]
 fn reciprocal_setup_matches_wide_precision() {
@@ -306,27 +288,6 @@ fn reciprocal_setup_matches_wide_precision() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_frame_conversion() {
-    for (rate, frames) in [
-        (48_000, 128),
-        (44_100, 441),
-        (192_000, 512),
-        (96_000, u32::MAX),
-        (1, u32::MAX),
-        (0, u32::MAX),
-    ] {
-        let converter = black_box(FramesToNanos::new(rate));
-        measure(
-            &format!("wasapi/frame_convert_{rate}_{frames}"),
-            1_000_000,
-            || {
-                black_box(converter.convert(black_box(frames)));
-            },
-        );
-    }
-}
 
 #[implement(Audio::IAudioClock)]
 struct FixedClock(u64);
@@ -373,23 +334,6 @@ fn playback_anchor_matches_wide_arithmetic_at_saturation_boundaries() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_playback_anchor() {
-    for (qpc, delay, label) in [
-        (123_456_789_012, 2_666_666, "typical"),
-        (0, 0, "zero"),
-        (u64::MAX / 100, 100, "add_saturates"),
-        (u64::MAX, 1, "multiply_saturates"),
-    ] {
-        let clock: Audio::IAudioClock = FixedClock(qpc).into();
-        measure(&format!("wasapi/anchor_{label}"), 1_000_000, || {
-            black_box(
-                playback_anchor_nanos_after_delay(black_box(&clock), black_box(delay)).unwrap(),
-            );
-        });
-    }
-}
 
 struct Packet {
     words: RefCell<Vec<u32>>,
@@ -505,21 +449,6 @@ fn write_frames_overwrites_one_packet_without_allocating_or_touching_guards() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_write_frames() {
-    for (format, label) in [
-        (WasapiSampleFormat::I16, "i16"),
-        (WasapiSampleFormat::F32, "f32"),
-    ] {
-        for frames in [128, 256, 480] {
-            let mut fixture = RenderFixture::new(format, frames);
-            measure(&format!("wasapi/write_{label}_{frames}"), 20_000, || {
-                fixture.write(black_box(frames));
-            });
-        }
-    }
-}
 
 const MISSING_ENDPOINT: &str = "deadsync-perf-missing-endpoint";
 
@@ -600,64 +529,6 @@ fn startup_failure_forwards_the_error_and_handles_a_closed_ready_channel() {
     );
 }
 
-#[test]
-#[ignore = "manual CPU/allocation benchmark; exercises Windows WASAPI startup failure"]
-fn benchmark_startup_failure() {
-    let _com = ComGuard::new().unwrap();
-    assert!(open_output_device(Some(MISSING_ENDPOINT)).is_err());
-    for (keep_receiver, label) in [(true, "receiver_live"), (false, "receiver_closed")] {
-        let attempt = startup_attempt();
-        let (sender, receiver) = channel();
-        let receiver = keep_receiver.then_some(receiver);
-        // Count the thread entry itself; fixture allocation is outside this scope.
-        let (_, counts) = perf::measure(|| attempt(sender));
-        if let Some(receiver) = receiver {
-            black_box(receiver.recv().unwrap().unwrap_err());
-        }
-        let label = format!("wasapi/startup_{label}");
-        println!("{label}: allocation {counts:?}");
-        // CPU timing includes rebuilding the fixture and channel each attempt.
-        bench::measure(&label, 50, || {
-            let attempt = startup_attempt();
-            let (sender, receiver) = channel();
-            let receiver = keep_receiver.then_some(receiver);
-            attempt(sender);
-            if let Some(receiver) = receiver {
-                black_box(receiver.recv().unwrap().unwrap_err());
-            }
-        });
-    }
-}
-
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_setup() {
-    let _com = ComGuard::new().unwrap();
-    measure("wasapi/com_alloc_free_40", 100_000, || {
-        // SAFETY: a fresh, non-null COM-task allocation is freed once per iteration.
-        unsafe {
-            let ptr = Com::CoTaskMemAlloc(black_box(40));
-            assert!(!ptr.is_null());
-            free_com_task_mem(black_box(ptr));
-        }
-    });
-    for extension in [0, 22, 256] {
-        let device = mix_device(48_000, 2, extension, None);
-        measure(&format!("wasapi/mix_probe_{extension}"), 100_000, || {
-            black_box(device_mix_format(black_box(&device)).unwrap());
-        });
-    }
-    let unicode = "åäö 日本語 🎵😀".repeat(6);
-    for text in [
-        "{0.0.0.00000000}.{12345678-1234-1234-1234-123456789abc}",
-        unicode.as_str(),
-    ] {
-        let label = if text.is_ascii() { "ascii" } else { "unicode" };
-        measure(&format!("wasapi/device_id_{label}"), 100_000, || {
-            black_box(wide_null(black_box(text)));
-        });
-    }
-}
 
 fn format_bytes(tag: u16, bits: u16, subtype: u16) -> Vec<u8> {
     let mut bytes = vec![0; 40];
@@ -690,16 +561,6 @@ fn format_bytes(tag: u16, bits: u16, subtype: u16) -> Vec<u8> {
     bytes
 }
 
-fn format_cases() -> [(u16, u16, u16, &'static str); 6] {
-    [
-        (1, 16, 1, "pcm16"),
-        (3, 32, 3, "float32"),
-        (0xfffe, 16, 1, "ext_pcm16"),
-        (0xfffe, 32, 3, "ext_float32"),
-        (0xfffe, 24, 1, "ext_unsupported_bits"),
-        (0xfffe, 32, 5, "ext_unsupported_guid"),
-    ]
-}
 
 #[test]
 fn format_recognition_accepts_only_pcm16_and_float32() {
@@ -759,34 +620,6 @@ fn format_recognition_checks_the_complete_guid_and_handles_short_buffers() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_formats() {
-    for (tag, bits, subtype, label) in format_cases() {
-        let bytes = format_bytes(tag, bits, subtype);
-        measure(&format!("wasapi/format_{label}"), 1_000_000, || {
-            black_box(sample_format_from_waveformat(black_box(&bytes)));
-        });
-    }
-}
-
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; opens the default audio endpoint"]
-fn benchmark_prepare() {
-    let rate = prepare(None, String::new(), None, WasapiAccessMode::Shared)
-        .unwrap()
-        .sample_rate_hz;
-    for (mode, requested, label) in [
-        (WasapiAccessMode::Shared, None, "shared_mix"),
-        (WasapiAccessMode::Shared, Some(rate), "shared_requested"),
-        (WasapiAccessMode::Shared, Some(1), "shared_rejected"),
-        (WasapiAccessMode::Exclusive, None, "exclusive_mix"),
-    ] {
-        measure(&format!("wasapi/prepare_{label}"), 50, || {
-            black_box(prepare(None, String::new(), black_box(requested), black_box(mode)).unwrap());
-        });
-    }
-}
 
 #[test]
 #[ignore = "requires an available Windows audio endpoint"]

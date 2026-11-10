@@ -1,5 +1,0 @@
-{
-  "before_sha256": "25af39e436dec738b13d27122f497cdb44c3853fe445f7187e8bec4f227d36b1",
-  "after_sha256": "05439883fa88dd9c8f4c4440eed91f484d0aea1648559de28348d92720deb59d",
-  "change": "optional --jobs flag; default remains 4; checks and test selectors unchanged"
-}

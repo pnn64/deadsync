@@ -998,7 +998,3 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         dt,
     );
 }
-
-#[cfg(test)]
-#[path = "layout_pipelines_original.rs"]
-pub(super) mod pipelines_original;

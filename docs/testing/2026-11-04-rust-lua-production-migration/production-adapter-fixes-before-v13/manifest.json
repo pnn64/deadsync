@@ -1,8 +1,0 @@
-{
-  "reason": "Narrow existing directory fallback to production host loader profile; original raw declaration missing-source rejection must remain. All own previous guarded runs terminal or explicitly cancelled and consumed.",
-  "files": {
-    "crates/deadsync-song-lua/src/rust_engine/actor_def.lua": "f86d0ff1bd4bdd473e2648814d0c218d611aa4a505ad627d5f8b0f9d42631ff0",
-    "crates/deadsync-song-lua/src/rust_engine/actors/offline.rs": "e2bc4405614c87076365cef42206eba471e8b11d5dff8875ac5623cc3d622c2d",
-    "crates/deadsync-song-lua/src/rust_engine/gameplay.rs": "70e02b9be0dbb316dfb96a50783b5d76680734e9fd54e03ff1fcc3c72ef0a447"
-  }
-}

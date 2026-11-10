@@ -1691,11 +1691,5 @@ mod tests {
         dir
     }
 
-    mod library_perf {
-        include!("song_library_perf.rs");
-    }
 
-    mod projection_perf {
-        include!("song_projection_perf.rs");
-    }
 }

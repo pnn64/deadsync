@@ -651,11 +651,3 @@ mod tests {
         assert!(parse_exact_credit("{}").unwrap().is_empty());
     }
 }
-
-#[cfg(test)]
-#[path = "smo_catalog_perf.rs"]
-mod catalog_perf_tests;
-
-#[cfg(test)]
-#[path = "smo_search_perf.rs"]
-mod perf_tests;

@@ -1,7 +1,0 @@
-{
-    "result_metadata_missing":  true,
-    "tests_executed":  false,
-    "wrapper_exit_code_after_interrupt":  1,
-    "cargo_log_sha256":  "413dbfd93da0d75576f99d2efb93aa60f163fc7c0a9f31d7298a92c7dfc6984c",
-    "reason":  "Task-owned serial validation intentionally stopped after library compilation and initial executable linking. Confirmed all associated Cargo/rustc/python processes exited. Retry uses the same target selection and checks with default four build jobs to reuse completed cache artifacts."
-}

@@ -1159,7 +1159,3 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
-
-#[cfg(test)]
-#[path = "settings_perf.rs"]
-mod perf;

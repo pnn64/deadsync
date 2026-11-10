@@ -1,12 +1,12 @@
-"""Seed raw frames and streaming inputs from the recorded validation corpora."""
+"""Seed raw frames and streaming inputs from a generated framing corpus."""
 from pathlib import Path
 import argparse, hashlib, json
 
 p = argparse.ArgumentParser()
 p.add_argument('--reference-root', type=Path, required=True)
+p.add_argument('--framing-report', type=Path, required=True, help='JSON output from tests/reference_framing.py')
 p.add_argument('--output', type=Path, required=True)
 args = p.parse_args()
-crate = Path(__file__).resolve().parents[1]
 scratch = args.reference_root
 out = args.output
 out.mkdir(parents=True, exist_ok=False)
@@ -21,9 +21,9 @@ def seed(target, data):
     records.append({'target': target, 'sha256': digest, 'bytes': len(data)})
 
 
-framing = json.loads((crate / 'tests/validation/2026-10-27-foundation/reference-framing.json').read_text())
+framing = json.loads(args.framing_report.read_text(encoding='utf-8'))
 for r in framing:
-    data = (scratch / 'framing-final' / Path(r['command'][-1]).name).read_bytes()
+    data = Path(r['command'][-1]).read_bytes()
     assert hashlib.sha256(data).hexdigest() == r['sha256']
     for control in [0, 3, 7]:
         seed('streams', bytes([control]) + data[:32768])

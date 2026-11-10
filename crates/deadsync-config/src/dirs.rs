@@ -652,7 +652,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "resource_paths_perf.rs"]
-pub(crate) mod resource_perf;

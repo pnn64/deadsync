@@ -3,7 +3,7 @@ use deadlib_audio_core::{ActiveSfx, MixBus, MixControls, QueuedSfx, SfxPan, mix_
 use std::sync::Arc;
 
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod allocations;
 
 fn voice(data: Arc<[i16]>, start: u64) -> ActiveSfx {

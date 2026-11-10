@@ -1,7 +1,0 @@
-{
-  "base_transform_native_behavior_preserved": true,
-  "comparison": "Exact formatted source equality to frozen BaseTransform after removing only legacy-oracle cfg attributes. Existing conversion, field-presence logic, snapshots and tests are unchanged.",
-  "core_sources_changed": false,
-  "reference": "production-actor-copy-field-scope-v1.json",
-  "runtime_status": "v3 comparisons running; v1 failed on test syntax and v2 on omitted native basic-global installer in the new harness."
-}

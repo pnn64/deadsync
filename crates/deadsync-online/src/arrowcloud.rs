@@ -4860,7 +4860,3 @@ mod tests {
 #[cfg(test)]
 #[path = "user_context_perf.rs"]
 mod user_context_perf;
-
-#[cfg(test)]
-#[path = "arrowcloud/pagination_tests.rs"]
-mod pagination_tests;

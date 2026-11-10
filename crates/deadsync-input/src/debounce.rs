@@ -709,9 +709,6 @@ pub(crate) fn next_due_edge(
     None
 }
 
-#[cfg(test)]
-#[path = "debounce_moves_perf.rs"]
-mod moves_perf;
 
 #[cfg(test)]
 mod tests {
@@ -1421,9 +1418,4 @@ mod tests {
         ));
         assert!(emitted.is_empty());
     }
-}
-
-#[cfg(test)]
-mod heap_performance {
-    include!("heap_performance.rs");
 }

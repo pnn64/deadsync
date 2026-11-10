@@ -1,5 +1,0 @@
-{
-  "status": "cancelled before artifact acceptance",
-  "reason": "Two new hook controls failed while this rebuild was starting. Task-owned recorder and Cargo tree were stopped before source correction; no valid final artifacts or measurements claimed.",
-  "source_change": "Hooks corrected only after both task process trees terminated."
-}
