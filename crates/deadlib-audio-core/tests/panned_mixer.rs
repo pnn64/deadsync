@@ -98,15 +98,15 @@ mod mixer {
 
         #[test]
         fn general_gain_preserves_channels_tails_and_guard_samples() {
-            let src: Vec<_> = (0..68usize).map(|i| i.wrapping_mul(7919) as i16).collect();
+            let src: Vec<_> = (0..80usize).map(|i| i.wrapping_mul(7919) as i16).collect();
             let bits = [
                 0_u32, 0x80000000, 0x3e99999a, 0xbf333333, 1, 0x80000001, 0x7f800000, 0xff800000,
                 0x7fc01234, 0xff801234,
             ];
             for pan in [SfxPan::Left, SfxPan::Right] {
                 for start in [0, 1] {
-                    for src_len in 0..=65 {
-                        for dst_len in 0..=65 {
+                    for src_len in 0..=73 {
+                        for dst_len in 0..=73 {
                             for gain in [0.7, 0.9, 1.3] {
                                 let source = &src[start..start + src_len];
                                 let mut expected: Vec<_> = (0..dst_len + 2)

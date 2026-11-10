@@ -266,6 +266,10 @@ pub fn mix_active_sfx(
 #[inline(never)]
 fn mix_sfx_panned_stereo(src: &[i16], dst: &mut [f32], gain: f32, pan: SfxPan) {
     let channel = usize::from(pan == SfxPan::Right);
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if fma::try_mix_panned_wide(src, dst, gain, channel) {
+        return;
+    }
     // RageSoundUtil::Pan at -1/+1 routes the source's right channel entirely
     // to the owning side. The prepared mine OGG is mono expanded to stereo.
     if gain == 0.0
@@ -322,8 +326,71 @@ fn mix_sfx_samples(src: &[i16], dst: &mut [f32], gain: f32) {
 }
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-#[allow(unsafe_code, reason = "CPU feature check guards the specialized entry point")]
+#[allow(unsafe_code, reason = "CPU dispatch and bounded SIMD loads/stores")]
 mod fma {
+    #[inline]
+    pub(super) fn try_mix_panned_wide(
+        src: &[i16],
+        dst: &mut [f32],
+        gain: f32,
+        channel: usize,
+    ) -> bool {
+        if src.len().min(dst.len()) < 64
+            || !std::is_x86_feature_detected!("avx2")
+            || !std::is_x86_feature_detected!("fma")
+        {
+            return false;
+        }
+        // SAFETY: CPU and OS support for both features was detected above.
+        unsafe {
+            if channel == 0 {
+                mix_panned_wide::<0x55>(src, dst, gain);
+            } else {
+                mix_panned_wide::<0xaa>(src, dst, gain);
+            }
+        }
+        true
+    }
+
+    #[target_feature(enable = "avx2,fma")]
+    unsafe fn mix_panned_wide<const MASK: i32>(src: &[i16], dst: &mut [f32], gain: f32) {
+        #[cfg(target_arch = "x86")]
+        use std::arch::x86::*;
+        #[cfg(target_arch = "x86_64")]
+        use std::arch::x86_64::*;
+
+        let samples = src.len().min(dst.len()) / 2 * 2;
+        let (src, src_tail) = src[..samples].as_chunks::<8>();
+        let (dst, dst_tail) = dst[..samples].as_chunks_mut::<8>();
+        let normalization = _mm256_set1_ps(1.0 / 32768.0);
+        let vector_gain = _mm256_set1_ps(gain);
+        for (src, dst) in src.iter().zip(dst) {
+            // SAFETY: each array has eight initialized samples. Unaligned
+            // loads/stores stay inside the exclusively borrowed output.
+            unsafe {
+                let pcm = _mm_loadu_si128(src.as_ptr().cast());
+                let pcm = _mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(pcm));
+                // Duplicate each source right channel for the two output lanes.
+                let pcm = _mm256_shuffle_ps::<0xf5>(pcm, pcm);
+                let pcm = _mm256_mul_ps(pcm, normalization);
+                let previous = _mm256_loadu_ps(dst.as_ptr());
+                let mixed = _mm256_fmadd_ps(pcm, vector_gain, previous);
+                // Select only the owning side; the other channel keeps its bits.
+                let mixed = _mm256_blend_ps::<MASK>(previous, mixed);
+                _mm256_storeu_ps(dst.as_mut_ptr(), mixed);
+            }
+        }
+        let channel = usize::from(MASK == 0xaa);
+        for (src, dst) in src_tail
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .zip(dst_tail.as_chunks_mut::<2>().0)
+        {
+            dst[channel] = super::i16_to_f32(src[1]).mul_add(gain, dst[channel]);
+        }
+    }
+
     #[inline]
     pub(super) fn try_mix_panned(src: &[i16], dst: &mut [f32], gain: f32, channel: usize) -> bool {
         if !std::is_x86_feature_detected!("fma") {

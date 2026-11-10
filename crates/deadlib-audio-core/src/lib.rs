@@ -1,4 +1,4 @@
-// Unsafe code is confined to runtime CPU dispatch and bounded PCM conversion.
+// Unsafe code is confined to runtime CPU dispatch and bounded audio kernels.
 #![deny(unsafe_code)]
 
 pub mod mixer;
