@@ -95,6 +95,19 @@ struct DepthRows<'a> {
 }
 
 impl DepthRows<'_> {
+    #[inline(always)]
+    fn quantize(&self, z: f32) -> f32 {
+        if self.unorm16 {
+            // Valid depths are nonnegative; widen before the half bias to
+            // retain values just below a tie. Restore negative zero's sign.
+            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
+            (rounded as f32 / 65535.0).copysign(z)
+        } else {
+            z
+        }
+    }
+
+    #[inline(always)]
     fn test(&mut self, index: usize, z: f32) -> bool {
         if !(0.0..=1.0).contains(&z) {
             return false;
@@ -102,14 +115,7 @@ impl DepthRows<'_> {
         if self.pixels.is_empty() {
             return true;
         }
-        let z = if self.unorm16 {
-            // Valid depths are nonnegative; widen before the half bias to
-            // retain values just below a tie. Restore negative zero's sign.
-            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
-            (rounded as f32 / 65535.0).copysign(z)
-        } else {
-            z
-        };
+        let z = self.quantize(z);
         if self.mode.tests()
             && if self.mode.on_fail() {
                 z <= self.pixels[index]
@@ -120,7 +126,80 @@ impl DepthRows<'_> {
             return false;
         }
         if self.mode.writes() {
-        self.pixels[index] = z;
+            self.pixels[index] = z;
+        }
+        true
+    }
+
+    #[inline(always)]
+    fn rejects_triangle(
+        &self,
+        vertices: [&ScreenVertexTexColor; 3],
+        width: usize,
+        bounds: (i32, i32, i32, i32, i32),
+    ) -> bool {
+        if !self.mode.tests() || self.pixels.is_empty() {
+            return false;
+        }
+        let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
+        if min_x < 0 || min_y < stripe_start || max_x < min_x || max_y < min_y {
+            return false;
+        }
+        // Small bounds have too little shading work to justify a depth scan.
+        if max_x - min_x < 7 || max_y - min_y < 7 {
+            return false;
+        }
+        let Some(last_index) = max_y
+            .checked_sub(stripe_start)
+            .and_then(|row| (row as usize).checked_mul(width))
+            .and_then(|row| row.checked_add(max_x as usize))
+        else {
+            return false;
+        };
+        if last_index >= self.pixels.len() {
+            // Preserve the late bounds behavior for short depth attachments.
+            return false;
+        }
+        let z = vertices.map(|v| v.z);
+        if !z.into_iter().all(|z| (0.0..=1.0).contains(&z)) {
+            return false;
+        }
+        // Covered weights sum to one within subtraction-rounding error. This
+        // margin also covers the product and two fused interpolation roundings.
+        let margin = 8.0 * f32::EPSILON;
+        let bound = if self.mode.on_fail() {
+            ((z[0].max(z[1]).max(z[2]) + margin).next_up()).min(1.0)
+        } else {
+            ((z[0].min(z[1]).min(z[2]) - margin).next_down()).max(0.0)
+        };
+        // Quantization is monotonic, so outward bounds remain conservative.
+        let bound = self.quantize(bound);
+        let rejects = {
+            #[inline(always)]
+            |stored: f32| {
+                if self.mode.on_fail() {
+                    bound <= stored
+                } else {
+                    bound > stored
+                }
+            }
+        };
+        let center_x = min_x + (max_x - min_x) / 2;
+        let center_y = min_y + (max_y - min_y) / 2;
+        if !rejects(self.pixels[(center_y - stripe_start) as usize * width + center_x as usize]) {
+            return false;
+        }
+        // Probe the far corner before scanning mostly occluded bounds that
+        // contain a passing region near the end of the row traversal.
+        if !rejects(self.pixels[last_index]) {
+            return false;
+        }
+        for y in min_y..=max_y {
+            let start = (y - stripe_start) as usize * width + min_x as usize;
+            let end = (y - stripe_start) as usize * width + max_x as usize + 1;
+            if !self.pixels[start..end].iter().copied().all(rejects) {
+                return false;
+            }
         }
         true
     }
@@ -3858,6 +3937,9 @@ fn rasterize_triangle_tex_color_pixels_impl<
         owns_edge(v2.x, v2.y, v0.x, v0.y, inv_denom),
         owns_edge(v0.x, v0.y, v1.x, v1.y, inv_denom),
     ];
+    if depth.rejects_triangle([v0, v1, v2], width, bounds) {
+        return;
+    }
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -5327,6 +5409,190 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn transparent_foreground_preserves_visible_background_depth() {
+        use deadlib_render_core::DepthMode;
+
+        let transparent = RgbaImage::from_pixel(1, 1, image::Rgba([91, 39, 77, 0]));
+        let blue = RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 255, 255]));
+        let draw = |z, image: &RgbaImage, mode, unorm, pixels: &mut [u32], depth: &mut [f32]| {
+            let vertex = |x, y| ScreenVertexTexColor {
+                inv_w: 1.0,
+                z,
+                x,
+                y,
+                u: 0.5,
+                v: 0.5,
+                color: [1.0; 4],
+            };
+            let vertices = [vertex(0.0, 0.0), vertex(16.0, 0.0), vertex(0.0, 16.0)];
+            rasterize_triangle_tex_color(
+                &vertices[0],
+                &vertices[1],
+                &vertices[2],
+                BlendMode::Alpha,
+                false,
+                image.into(),
+                SamplerDesc {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Clamp,
+                    mipmaps: false,
+                },
+                false,
+                16,
+                16,
+                0,
+                16,
+                &mut byte_writer(pixels),
+                &mut DepthRows {
+                    pixels: depth,
+                    unorm16: unorm,
+                    mode,
+                },
+            );
+        };
+        for unorm in [false, true] {
+            for mode in DepthMode::ALL {
+                let initial = if mode.on_fail() { 0.0_f32 } else { 1.0 };
+                let (front, back) = if mode.on_fail() {
+                    (0.75, 0.25)
+                } else {
+                    (0.25, 0.75)
+                };
+                let mut pixels = [0x9f3f_5f7f; 256];
+                let mut depth = [initial; 256];
+                draw(front, &transparent, mode, unorm, &mut pixels, &mut depth);
+                assert_eq!(pixels, [0x9f3f_5f7f; 256]);
+                assert_eq!(depth.map(f32::to_bits), [initial.to_bits(); 256]);
+
+                draw(back, &blue, mode, unorm, &mut pixels, &mut depth);
+                assert_eq!(pixels[0], 0xff00_00ff, "{mode:?}, unorm={unorm}");
+                let expected = if !mode.writes() {
+                    initial
+                } else if unorm {
+                    if mode.on_fail() {
+                        16384.0 / 65535.0
+                    } else {
+                        49151.0 / 65535.0
+                    }
+                } else {
+                    back
+                };
+                assert_eq!(
+                    depth[0].to_bits(),
+                    expected.to_bits(),
+                    "{mode:?}, unorm={unorm}"
+                );
+            }
+        }
+
+        // Transparent fragments retain the late bounds behavior for short slices.
+        for mut depth in [Vec::new(), vec![1.0]] {
+            let expected = depth.clone();
+            draw(
+                0.25,
+                &transparent,
+                DepthMode::TestWrite,
+                true,
+                &mut [0; 256],
+                &mut depth,
+            );
+            assert_eq!(depth, expected);
+        }
+    }
+
+    #[test]
+    fn coarse_depth_rejection_preserves_passing_samples() {
+        use deadlib_render_core::DepthMode;
+
+        const SIZE: usize = 17;
+        let mut seed = 0x1937_4682_u32;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        let mut checked = 0;
+        for case in 0..2048 {
+            let mode = DepthMode::ALL[case % 6];
+            let unorm16 = case % 7 < 3;
+            let stored = match (case / 6) % 8 {
+                0 => 0.0,
+                1 => 1.0,
+                2 => 0.5,
+                3 => 0.5_f32.next_down(),
+                4 => 0.5_f32.next_up(),
+                5 => 32768.0 / 65535.0,
+                6 => f32::NAN,
+                _ => f32::NEG_INFINITY,
+            };
+            let vertices = std::array::from_fn(|i| {
+                let z = match (case / 3) % 5 {
+                    0 => f32::from_bits(0x3f00_0000 + next() % 32),
+                    1 => f32::from_bits(0x3f00_0000 - next() % 32),
+                    2 => [0.0, 0.5, 1.0][i],
+                    3 => [0.0, f32::from_bits(1), f32::MIN_POSITIVE][i],
+                    _ => [1.0, 1.0_f32.next_down(), 1.0][i],
+                };
+                let [x, y] = match i {
+                    0 => [-4.0, -4.0],
+                    1 => [21.0 + (next() % 8) as f32, -2.0],
+                    _ => [0.0, 21.0 + (next() % 8) as f32],
+                };
+                ScreenVertexTexColor {
+                    inv_w: 1.0,
+                    z,
+                    x,
+                    y,
+                    u: 0.0,
+                    v: 0.0,
+                    color: [1.0; 4],
+                }
+            });
+            let setup = triangle_setup(vertices.map(|v| v.x), vertices.map(|v| v.y), SIZE, SIZE)
+                .expect("nondegenerate test triangle");
+            let bounds = setup.stripe_bounds(0, SIZE).unwrap();
+            let mut pixels = [stored; SIZE * SIZE];
+            let mut depth = DepthRows {
+                pixels: &mut pixels,
+                unorm16,
+                mode,
+            };
+            if !depth.rejects_triangle([&vertices[0], &vertices[1], &vertices[2]], SIZE, bounds) {
+                continue;
+            }
+            assert!(mode.tests());
+            let [a, b, c] = vertices;
+            let edges = [
+                owns_edge(b.x, b.y, c.x, c.y, setup.inv_denom),
+                owns_edge(c.x, c.y, a.x, a.y, setup.inv_denom),
+                owns_edge(a.x, a.y, b.x, b.y, setup.inv_denom),
+            ];
+            for y in setup.min_y..=setup.max_y {
+                for x in setup.min_x..=setup.max_x {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let w0 = edge_function(b.x, b.y, c.x, c.y, px, py) * setup.inv_denom;
+                    let w1 = edge_function(c.x, c.y, a.x, a.y, px, py) * setup.inv_denom;
+                    let w2 = 1.0 - w0 - w1;
+                    if covered([w0, w1, w2], edges) {
+                        let z = c.z.mul_add(w2, a.z.mul_add(w0, b.z * w1));
+                        assert!(
+                            !depth.test(y as usize * SIZE + x as usize, z),
+                            "case {case}"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            checked > 1000,
+            "exercise covered samples behind the depth bound"
+        );
     }
 
     #[test]
