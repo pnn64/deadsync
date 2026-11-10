@@ -322,6 +322,48 @@ fn initialized_elements_and_backing_storage_drop_once_even_on_unwind() {
 }
 
 #[test]
+fn resizing_preserves_the_initialized_tail_when_clone_panics() {
+    struct Item<'a> {
+        clones: &'a Cell<usize>,
+        drops: &'a Cell<usize>,
+    }
+    impl Clone for Item<'_> {
+        fn clone(&self) -> Self {
+            let count = self.clones.get() + 1;
+            self.clones.set(count);
+            assert!(count != 3, "intentional clone failure");
+            Self {
+                clones: self.clones,
+                drops: self.drops,
+            }
+        }
+    }
+    impl Drop for Item<'_> {
+        fn drop(&mut self) {
+            self.drops.set(self.drops.get() + 1);
+        }
+    }
+    let clones = Cell::new(0);
+    let drops = Cell::new(0);
+    let mut buffer = Buffer::default();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        buffer.resize(
+            5,
+            Item {
+                clones: &clones,
+                drops: &drops,
+            },
+        );
+    }));
+    assert!(result.is_err());
+    assert_eq!(buffer.len(), 2);
+    assert_eq!(clones.get(), 3);
+    assert_eq!(drops.get(), 1);
+    drop(buffer);
+    assert_eq!(drops.get(), 3);
+}
+
+#[test]
 fn empty_and_zero_sized_buffers_do_not_call_the_allocator_and_overflow_is_recoverable() {
     let ledger = Ledger::default();
     let endpoint = Endpoint {
@@ -341,6 +383,8 @@ fn empty_and_zero_sized_buffers_do_not_call_the_allocator_and_overflow_is_recove
         ErrorKind::Memory
     );
     assert_eq!(zero.len(), 7);
+    zero.resize(12, ());
+    assert_eq!(zero.len(), 12);
     let mut bytes = Buffer::<u64>::new_in(memory.clone());
     assert_eq!(
         bytes

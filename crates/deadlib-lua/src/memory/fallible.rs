@@ -10,10 +10,16 @@ pub(crate) use map::Map;
 
 /// Reserve growth before allocating. In a bounded compiler workspace the exact
 /// requested layout is charged, including the old storage until the job ends.
+#[inline]
 pub(crate) fn reserve<T>(values: &mut Vec<T>, additional: usize) -> Result<(), Error> {
     if additional <= values.capacity() - values.len() {
         return Ok(());
     }
+    grow(values, additional)
+}
+
+#[cold]
+fn grow<T>(values: &mut Vec<T>, additional: usize) -> Result<(), Error> {
     if !super::compilation::active() {
         return values.try_reserve(additional).map_err(|_| Error::memory());
     }
@@ -71,6 +77,7 @@ pub(crate) trait VecExt<T> {
     fn try_into_boxed_slice(self) -> Result<Box<[T]>, Error>;
 }
 impl<T> VecExt<T> for Vec<T> {
+    #[inline]
     fn try_push(&mut self, value: T) -> Result<(), Error> {
         reserve(self, 1)?;
         self.push(value);

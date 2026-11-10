@@ -83,17 +83,24 @@ impl<T> Buffer<T> {
     pub(crate) fn capacity(&self) -> usize {
         self.raw.capacity
     }
+    #[inline]
     pub(crate) fn try_reserve_exact(&mut self, additional: usize) -> Result<(), Error> {
         self.reserve(additional, true)
     }
+    #[inline]
     pub(crate) fn try_reserve(&mut self, additional: usize) -> Result<(), Error> {
         self.reserve(additional, false)
     }
+    #[inline]
     fn reserve(&mut self, additional: usize, exact: bool) -> Result<(), Error> {
-        let needed = self.len.checked_add(additional).ok_or_else(Error::memory)?;
-        if needed <= self.capacity() {
+        if additional <= self.capacity() - self.len {
             return Ok(());
         }
+        self.grow(additional, exact)
+    }
+    #[cold]
+    fn grow(&mut self, additional: usize, exact: bool) -> Result<(), Error> {
+        let needed = self.len.checked_add(additional).ok_or_else(Error::memory)?;
         let minimum = if size_of::<T>() == 1 {
             8
         } else if size_of::<T>() <= 1024 {
@@ -108,6 +115,7 @@ impl<T> Buffer<T> {
         };
         self.raw.grow(capacity)
     }
+    #[inline]
     pub(crate) fn push(&mut self, value: T) {
         self.try_reserve(1).expect("reserve Lua buffer before push");
         // SAFETY: capacity covers the next, uninitialized slot (also for ZSTs).
@@ -116,6 +124,7 @@ impl<T> Buffer<T> {
         }
         self.len += 1;
     }
+    #[inline]
     pub(crate) fn try_push(&mut self, value: T) -> Result<(), Error> {
         self.try_reserve(1)?;
         self.push(value);
@@ -173,6 +182,7 @@ impl<T> Buffer<T> {
         }
         self.truncate(write);
     }
+    #[inline]
     pub(crate) fn resize(&mut self, len: usize, value: T)
     where
         T: Clone,
@@ -184,9 +194,15 @@ impl<T> Buffer<T> {
         self.try_reserve(len - self.len)
             .expect("reserve Lua buffer before resize");
         while self.len < len {
-            self.push(value.clone());
+            let item = value.clone();
+            // SAFETY: the complete tail was reserved before cloning. No
+            // references to this exclusive buffer survive growth. Advance the
+            // initialized length after each write so unwinding drops its tail.
+            unsafe { self.raw.pointer.as_ptr().add(self.len).write(item) };
+            self.len += 1;
         }
     }
+    #[inline]
     pub(crate) fn extend_from_slice(&mut self, values: &[T])
     where
         T: Copy,
