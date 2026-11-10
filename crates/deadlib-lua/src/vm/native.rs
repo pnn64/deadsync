@@ -1194,34 +1194,79 @@ pub(super) fn format_number(n: f64) -> Vec<u8> {
     try_format_number(n).expect("allocate formatted number")
 }
 pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
+    number_text(n).try_into_localized()
+}
+
+// Binary64 %.14g needs at most 22 ASCII bytes, including sign/exponent.
+pub(super) struct NumberText {
+    bytes: [u8; 64],
+    len: usize,
+}
+impl NumberText {
+    fn new() -> Self {
+        Self {
+            bytes: [0; 64],
+            len: 0,
+        }
+    }
+    pub(super) fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+    pub(super) fn try_into_localized(self) -> Result<Vec<u8>, Error> {
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(self.len)
+            .map_err(|_| Error::memory())?;
+        bytes.extend_from_slice(&self.bytes[..self.len]);
+        crate::locale::try_localize(&mut bytes)?;
+        Ok(bytes)
+    }
+    fn text(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len]).unwrap()
+    }
+}
+impl std::fmt::Write for NumberText {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        let end = self.len + text.len();
+        let target = self.bytes.get_mut(self.len..end).ok_or(std::fmt::Error)?;
+        target.copy_from_slice(text.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+
+fn short_decimal(n: f64) -> Option<(u64, u64, usize)> {
+    let magnitude = n.abs();
+    if magnitude < 0.0001 {
+        return None;
+    }
+    // Below 1e14 the product's rounding error is smaller than half a unit
+    // at fourteen significant digits. An integral product therefore identifies
+    // the same short decimal as the general conversion, including 0.29-like
+    // inputs that require trimming an extra trailing zero after multiplication.
+    for (factor, width) in [
+        (10u64, 1usize),
+        (100, 2),
+        (1000, 3),
+        (10000, 4),
+        (100000, 5),
+        (1000000, 6),
+    ] {
+        let value = magnitude * factor as f64;
+        if value >= 100_000_000_000_000.0 {
+            break;
+        }
+        let integer = value as u64;
+        if value == integer as f64 {
+            return Some((integer, factor, width));
+        }
+    }
+    None
+}
+
+pub(super) fn number_text(n: f64) -> NumberText {
     use std::fmt::Write;
-    // binary64 %.14g needs at most 22 ASCII bytes, including sign/exponent.
-    // Fixed backing storage keeps formatting itself allocation-free.
-    struct Buffer {
-        bytes: [u8; 64],
-        len: usize,
-    }
-    impl Buffer {
-        fn new() -> Self {
-            Self {
-                bytes: [0; 64],
-                len: 0,
-            }
-        }
-        fn text(&self) -> &str {
-            std::str::from_utf8(&self.bytes[..self.len]).unwrap()
-        }
-    }
-    impl Write for Buffer {
-        fn write_str(&mut self, text: &str) -> std::fmt::Result {
-            let end = self.len + text.len();
-            let target = self.bytes.get_mut(self.len..end).ok_or(std::fmt::Error)?;
-            target.copy_from_slice(text.as_bytes());
-            self.len = end;
-            Ok(())
-        }
-    }
-    let mut output = Buffer::new();
+    let mut output = NumberText::new();
     if !n.is_finite() {
         if n.is_nan() {
             write!(
@@ -1244,8 +1289,19 @@ pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
         } else {
             write!(output, "{}", n as i64).unwrap();
         }
+    } else if let Some((scaled, factor, width)) = short_decimal(n) {
+        if n.is_sign_negative() {
+            output.write_str("-").unwrap();
+        }
+        write!(output, "{}.{:0width$}", scaled / factor, scaled % factor).unwrap();
+        while output.bytes[output.len - 1] == b'0' {
+            output.len -= 1;
+        }
+        if output.bytes[output.len - 1] == b'.' {
+            output.len -= 1;
+        }
     } else {
-        let mut scientific = Buffer::new();
+        let mut scientific = NumberText::new();
         write!(scientific, "{n:.13e}").unwrap();
         let (digits, exp) = scientific
             .text()
@@ -1262,24 +1318,42 @@ pub(super) fn try_format_number(n: f64) -> Result<Vec<u8>, Error> {
             )
             .unwrap();
         } else {
-            let decimals = (13 - exponent).max(0) as usize;
-            let mut fixed = Buffer::new();
-            write!(fixed, "{n:.decimals$}").unwrap();
-            let fixed = fixed.text();
-            if fixed.contains('.') {
+            // Reuse the already rounded significant digits for fixed notation.
+            let magnitude = if let Some(rest) = digits.strip_prefix('-') {
+                output.write_str("-").unwrap();
+                rest
+            } else {
+                digits
+            };
+            let mut decimal = [0; 14];
+            for (slot, byte) in decimal
+                .iter_mut()
+                .zip(magnitude.bytes().filter(|&b| b != b'.'))
+            {
+                *slot = byte;
+            }
+            let end = decimal.iter().rposition(|&b| b != b'0').unwrap() + 1;
+            if exponent < 0 {
+                output.write_str("0.").unwrap();
+                for _ in exponent..-1 {
+                    output.write_str("0").unwrap();
+                }
                 output
-                    .write_str(fixed.trim_end_matches('0').trim_end_matches('.'))
+                    .write_str(std::str::from_utf8(&decimal[..end]).unwrap())
                     .unwrap();
             } else {
-                output.write_str(fixed).unwrap();
+                let whole = exponent as usize + 1;
+                output
+                    .write_str(std::str::from_utf8(&decimal[..whole]).unwrap())
+                    .unwrap();
+                if whole < end {
+                    output.write_str(".").unwrap();
+                    output
+                        .write_str(std::str::from_utf8(&decimal[whole..end]).unwrap())
+                        .unwrap();
+                }
             }
         }
     }
-    let mut bytes = Vec::new();
-    bytes
-        .try_reserve_exact(output.len)
-        .map_err(|_| Error::memory())?;
-    bytes.extend_from_slice(&output.bytes[..output.len]);
-    crate::locale::try_localize(&mut bytes)?;
-    Ok(bytes)
+    output
 }
