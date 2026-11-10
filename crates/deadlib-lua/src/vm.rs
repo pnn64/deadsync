@@ -25,6 +25,7 @@ mod meta;
 mod native;
 mod os;
 mod package;
+mod reductions;
 mod standalone;
 mod strings;
 mod tables;
@@ -1979,6 +1980,24 @@ impl Vm {
                         self.registers[a] = Value::Number(start - step);
                         self.registers[a + 1] = Value::Number(limit);
                         self.registers[a + 2] = Value::Number(step);
+                        if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0
+                            // A skipped Close must not capture an intermediate
+                            // register value in an existing open upvalue.
+                            && !self.open_upvalues.iter().any(|&id| {
+                                matches!(self.upvalues[id as usize], Cell::Open(_, r) if r >= base)
+                            })
+                            && let Some(skipped) = reductions::sum_loop(
+                                &mut self.registers,
+                                base,
+                                usize::from(i.a),
+                                c,
+                                &prototype.code,
+                                self.budget.map(|_| self.remaining),
+                            )
+                            && self.budget.is_some()
+                        {
+                            self.remaining -= skipped;
+                        }
                         pc = c;
                     }
                     Op::ForLoop => {
