@@ -457,7 +457,11 @@ impl Prototype {
                     || ((m >> 16) as usize) >= self.gc_maps.len()
             })
             || self.gc_maps.iter().any(|mask| {
-                (usize::from(self.registers)..256).any(|r| mask[r / 64] & (1u64 << (r % 64)) != 0)
+                // Any live bit at or above the register count is invalid.
+                mask.iter().enumerate().any(|(word, &bits)| {
+                    let valid = usize::from(self.registers).saturating_sub(word * 64);
+                    valid < 64 && bits >> valid != 0
+                })
             })
             || self.code.is_empty()
             || self.debug.upvalues.len() != self.upvalues.len()

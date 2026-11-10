@@ -42,7 +42,7 @@ impl Workspace {
     }
 }
 
-pub(super) fn active() -> bool {
+pub(crate) fn active() -> bool {
     ACTIVE.with(|slot| slot.borrow().is_some())
 }
 

@@ -32,6 +32,10 @@ impl<K: Eq + Hash, V> Map<K, V> {
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
+    pub(crate) fn clear(&mut self) {
+        self.entries.clear();
+        self.slots.clear();
+    }
     pub(crate) fn get<Q: Eq + Hash + ?Sized>(&self, key: &Q) -> Option<&V>
     where
         K: Borrow<Q>,

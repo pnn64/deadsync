@@ -94,16 +94,56 @@ struct Function<'a> {
     zero_sign: Option<bool>,
 }
 
+impl Function<'_> {
+    /// Restore the default state while keeping every buffer's capacity.
+    fn reset(&mut self) {
+        self.code.clear();
+        self.gc_maps.clear();
+        self.gc_index.clear();
+        self.gc_last = None;
+        self.live = [0; 4];
+        self.debug_hidden = [0; 4];
+        self.debug_named = [0; 4];
+        self.constants.clear();
+        self.locals.clear();
+        self.upvalues.clear();
+        self.loops.clear();
+        self.next = 0;
+        self.max = 0;
+        self.params = 0;
+        self.vararg = false;
+        self.compat_arg = false;
+        self.defined = [0; 2];
+        self.debug_locals.clear();
+        self.debug_calls.clear();
+        self.debug_temporaries.clear();
+        self.debug_lines.clear();
+        self.hook_visible = 0;
+        self.logical_tests.clear();
+        self.debug_stack = 0;
+        self.zero_sign = None;
+    }
+}
+
 struct Compiler<'a> {
     ast: &'a Ast,
     function: Function<'a>,
     parents: Vec<Function<'a>>,
+    /// Finished functions whose cleared buffers serve later nested functions.
+    spare: Vec<Function<'a>>,
     prototypes: Vec<Prototype>,
     folded: Vec<Option<f64>>,
     tasks: Vec<Task<'a>>,
     result: u8,
     boolean: boolean::Boolean,
     line: u32,
+}
+
+/// Move a buffer's values into an exact-size box, keeping the buffer's capacity.
+fn drain_boxed<T>(values: &mut Vec<T>) -> Result<Box<[T]>, Error> {
+    let mut exact = fallible::with_capacity(values.len())?;
+    exact.append(values);
+    exact.try_into_boxed_slice()
 }
 
 pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
@@ -116,13 +156,23 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
             ..Function::default()
         },
         parents: Vec::new(),
+        spare: Vec::new(),
         prototypes: Vec::new(),
         folded: crate::optimizer::literals(&ast)?,
-        tasks: fallible::vec([Task::Block(&ast.body)])?,
+        tasks: fallible::vec([Task::Block(ast.ids(ast.body))])?,
         result: 0,
         boolean: boolean::Boolean::default(),
         line: 1,
     };
+    if !crate::memory::compilation::active() {
+        // Every AST node emits about one instruction. Sizing the entry
+        // function's buffers up front avoids their growth copies; nested
+        // functions reuse buffers released by earlier functions.
+        let estimate = ast.exprs.len() + ast.stmts.len() + 8;
+        fallible::reserve(&mut c.function.code, estimate)?;
+        fallible::reserve(&mut c.function.debug_lines, estimate)?;
+        fallible::reserve(&mut c.tasks, 64)?;
+    }
     c.run()?;
     c.line = ast.end_line;
     c.emit(Op::Return, 0, 0, 0)?;
@@ -133,6 +183,10 @@ pub(crate) fn compile(ast: Ast, name: &[u8]) -> Result<Program, Error> {
 }
 
 impl<'a> Compiler<'a> {
+    /// A cleared function, reusing the buffers of a finished one when possible.
+    fn fresh_function(&mut self) -> Function<'a> {
+        self.spare.pop().unwrap_or_default()
+    }
     fn finish(&mut self) -> Result<u32, Error> {
         let mut f = std::mem::take(&mut self.function);
         for i in &mut f.code {
@@ -189,7 +243,7 @@ impl<'a> Compiler<'a> {
         }
         let mut names = fallible::with_capacity(f.upvalues.len())?;
         let mut upvalues = fallible::with_capacity(f.upvalues.len())?;
-        for (name, value) in f.upvalues {
+        for &(name, value) in &f.upvalues {
             names.push(name.try_boxed()?);
             upvalues.push(value);
         }
@@ -198,17 +252,19 @@ impl<'a> Compiler<'a> {
         let mut lines = fallible::with_capacity(f.code.len())?;
         let mut live = fallible::with_capacity(f.code.len())?;
         let mut hooks = fallible::with_capacity(f.code.len())?;
-        for emitted in f.code {
+        for emitted in &f.code {
             code.push(emitted.instruction);
             lines.push(emitted.line);
             live.push(emitted.live);
             hooks.push(emitted.hook);
         }
+        let debug_locals = drain_boxed(&mut f.debug_locals)?;
+        let debug_calls = drain_boxed(&mut f.debug_calls)?;
         self.prototypes.try_push(Prototype {
             code: code.try_into_boxed_slice()?,
             lines: lines.try_into_boxed_slice()?,
             gc_live: live.try_into_boxed_slice()?,
-            gc_maps: f.gc_maps.try_into_boxed_slice()?,
+            gc_maps: f.gc_maps.try_boxed()?,
             constants: f.constants.finish()?,
             registers: f.max.max(f.debug_stack).max(2),
             params: f.params,
@@ -221,13 +277,15 @@ impl<'a> Compiler<'a> {
                 native: None,
                 defined: f.defined,
                 upvalues: names.try_into_boxed_slice()?,
-                locals: f.debug_locals.try_into_boxed_slice()?,
-                calls: f.debug_calls.try_into_boxed_slice()?,
-                active_lines: f.debug_lines.try_into_boxed_slice()?,
+                locals: debug_locals,
+                calls: debug_calls,
+                active_lines: f.debug_lines.try_boxed()?,
                 hook_lines: hooks.try_into_boxed_slice()?,
-                temporaries: f.debug_temporaries.try_into_boxed_slice()?,
+                temporaries: f.debug_temporaries.try_boxed()?,
             },
         })?;
+        f.reset();
+        self.spare.try_push(f)?;
         Ok(id)
     }
     fn upvalue(&mut self, name: &'a [u8]) -> Result<Option<u16>, Error> {

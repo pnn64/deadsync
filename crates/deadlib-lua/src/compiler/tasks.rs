@@ -149,6 +149,7 @@ impl<'a> Compiler<'a> {
                     let Stmt::Local(names, _) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
+                    let names = self.ast.names(*names);
                     let base = self.result;
                     self.reset(u16::from(base) + names.len() as u16);
                     for (i, name) in names.iter().enumerate() {
@@ -228,6 +229,7 @@ impl<'a> Compiler<'a> {
                     let Stmt::Return(values, end_line) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
+                    let values = self.ast.ids(*values);
                     if let Some(&value) = values.get(index) {
                         let end = u16::from(base) + index as u16 + 1;
                         if end > self.function.next {
@@ -265,7 +267,7 @@ impl<'a> Compiler<'a> {
                     self.reset(saved);
                     self.function.loops.try_push((saved, Vec::new()))?;
                     self.tasks.try_push(Task::WhileEnd(start, done))?;
-                    self.tasks.try_push(Task::Scope(body))?;
+                    self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?;
                 }
                 Task::WhileEnd(start, done) => {
                     self.emit(Op::Jump, 0, 0, start)?;
@@ -303,6 +305,7 @@ impl<'a> Compiler<'a> {
                     let Stmt::If(arms, other) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
+                    let arms = self.ast.arms(*arms);
                     if let Some((cond, _)) = arms.get(index) {
                         let reg = self.alloc(1)?;
                         self.tasks
@@ -311,7 +314,7 @@ impl<'a> Compiler<'a> {
                     } else {
                         self.tasks.try_push(Task::IfEnd(exits))?;
                         if let Some(other) = other {
-                            self.tasks.try_push(Task::Scope(other))?;
+                            self.tasks.try_push(Task::Scope(self.ast.ids(*other)))?;
                         }
                     }
                 }
@@ -319,11 +322,13 @@ impl<'a> Compiler<'a> {
                     let Stmt::If(arms, _) = &self.ast.stmts[id].0 else {
                         unreachable!()
                     };
+                    let arms = self.ast.arms(*arms);
                     let skip = self.predicate_finish(arms[index].0, reg)?;
                     self.reset(saved);
                     self.tasks
                         .try_push(Task::IfBody(id, index, saved, exits, skip))?;
-                    self.tasks.try_push(Task::Scope(&arms[index].1))?;
+                    self.tasks
+                        .try_push(Task::Scope(self.ast.ids(arms[index].1)))?;
                 }
                 Task::IfBody(id, index, saved, mut exits, skip) => {
                     let Stmt::If(arms, other) = &self.ast.stmts[id].0 else {
@@ -384,7 +389,7 @@ impl<'a> Compiler<'a> {
                     self.function.loops.try_push((saved, Vec::new()))?;
                     self.tasks
                         .try_push(Task::ForEnd(id, base, controls, locals, prep, head))?;
-                    self.tasks.try_push(Task::Scope(body))?;
+                    self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?;
                 }
                 Task::ForEnd(id, base, controls, locals, prep, head) => {
                     self.end_locals(locals);
@@ -493,6 +498,7 @@ impl<'a> Compiler<'a> {
                     let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
                         unreachable!()
                     };
+                    let fields = self.ast.fields(*fields);
                     let key = self.result;
                     let value = fields[state.index].1;
                     let value_reg = self.right_register(value, key, regs, false)?;
@@ -521,6 +527,7 @@ impl<'a> Compiler<'a> {
                     let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
                         unreachable!()
                     };
+                    let fields = self.ast.fields(*fields);
                     self.line = self.ast.exprs[fields[state.index].0.expect("constant key")]
                         .1
                         .discharge;

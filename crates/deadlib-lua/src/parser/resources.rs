@@ -192,6 +192,10 @@ pub(super) struct Resources {
     constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
+    /// Reserve per-expression accounting for an estimated expression count.
+    pub(super) fn reserve_values(&mut self, expressions: usize) -> Result<(), Error> {
+        crate::memory::fallible::reserve(&mut self.values, expressions)
+    }
     pub(super) fn constant_count(&self) -> usize {
         self.function.pool.entries.len()
     }
@@ -816,7 +820,7 @@ impl Resources {
                 Value::new(Form::Temp, u32::from(t.reg))
             }
             Expr::Call(function, args, _) | Expr::Method(function, _, args, _) => {
-                if let Some(&last) = args.last()
+                if let Some(&last) = cx.ast.ids(*args).last()
                     && !self.values[last].multi()
                 {
                     self.next(last, cx)?;

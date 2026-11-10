@@ -1,4 +1,4 @@
-//! A bounded Pratt parser with flat expression and statement arenas.
+//! A bounded Pratt parser with flat expression, statement and list arenas.
 use crate::memory::text::Text;
 
 use crate::{
@@ -8,7 +8,26 @@ use crate::{
 
 pub(crate) type ExprId = usize;
 pub(crate) type StmtId = usize;
-pub(crate) type Block = Box<[StmtId]>;
+/// Statement identifiers stored in [`Ast::ids`].
+pub(crate) type Block = Span;
+
+/// A contiguous run of one of the AST's flat list pools.
+///
+/// Lists are completed in nesting order, so a node's list never moves after
+/// it is published and every node shares the pool allocations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct Span {
+    start: u32,
+    len: u32,
+}
+impl Span {
+    pub(crate) fn len(self) -> usize {
+        self.len as usize
+    }
+    fn range(self) -> std::ops::Range<usize> {
+        self.start as usize..self.start as usize + self.len as usize
+    }
+}
 
 /// Observable collector roots created by the incremental reference grammar.
 /// Events are enabled only for native readers; ordinary compilation owns its AST.
@@ -47,11 +66,14 @@ pub(crate) enum Expr {
     Binary(Kind, ExprId, ExprId, u32),
     Paren(ExprId),
     Index(ExprId, ExprId),
-    Table(Box<[(Option<ExprId>, ExprId)]>, u32),
-    Call(ExprId, Box<[ExprId]>, u32),
-    Method(ExprId, Text, Box<[ExprId]>, u32),
+    /// Fields in [`Ast::fields`] and the constructor's load line.
+    Table(Span, u32),
+    /// Arguments in [`Ast::ids`].
+    Call(ExprId, Span, u32),
+    Method(ExprId, Text, Span, u32),
     Function {
-        params: Box<[Text]>,
+        /// Parameter names in [`Ast::names`].
+        params: Span,
         vararg: bool,
         body: Block,
         end_line: u32,
@@ -59,19 +81,21 @@ pub(crate) enum Expr {
     Vararg,
 }
 
+/// List-valued fields are [`Span`]s: names select [`Ast::names`], arms select
+/// [`Ast::arms`], and expression lists select [`Ast::ids`].
 #[derive(Debug)]
 pub(crate) enum Stmt {
-    Local(Box<[Text]>, Box<[ExprId]>),
+    Local(Span, Span),
     LocalFunction(Text, ExprId),
-    Assign(Box<[ExprId]>, Box<[ExprId]>),
-    FunctionDefinition(Box<[ExprId]>, Box<[ExprId]>),
+    Assign(Span, Span),
+    FunctionDefinition(Span, Span),
     Call(ExprId),
-    Return(Box<[ExprId]>, u32),
+    Return(Span, u32),
     Break,
     Do(Block),
     While(ExprId, Block),
     Repeat(Block, ExprId),
-    If(Box<[(ExprId, Block)]>, Option<Block>),
+    If(Span, Option<Block>),
     For {
         name: Text,
         start: ExprId,
@@ -80,7 +104,7 @@ pub(crate) enum Stmt {
         do_line: u32,
         body: Block,
     },
-    ForIn(Box<[Text]>, Box<[ExprId]>, Block, [u32; 2]),
+    ForIn(Span, Span, Block, [u32; 2]),
 }
 
 #[derive(Debug, Default)]
@@ -101,6 +125,11 @@ const _: () = assert!(
 pub(crate) struct Ast {
     pub exprs: Vec<(Expr, SourceSpan)>,
     pub stmts: Vec<(Stmt, u32)>,
+    /// Statement and expression identifier lists.
+    pub ids: Vec<usize>,
+    pub names: Vec<Text>,
+    pub fields: Vec<(Option<ExprId>, ExprId)>,
+    pub arms: Vec<(ExprId, Block)>,
     pub body: Block,
     pub end_line: u32,
     pub constant_operands: Vec<(ExprId, ConstantOperand)>,
@@ -108,6 +137,48 @@ pub(crate) struct Ast {
     pub root_zero_sign: Option<bool>,
     pub stacks: Vec<(ExprId, u16)>,
     pub root_stack: u16,
+}
+
+impl Ast {
+    pub(crate) fn ids(&self, span: Span) -> &[usize] {
+        &self.ids[span.range()]
+    }
+    pub(crate) fn names(&self, span: Span) -> &[Text] {
+        &self.names[span.range()]
+    }
+    pub(crate) fn fields(&self, span: Span) -> &[(Option<ExprId>, ExprId)] {
+        &self.fields[span.range()]
+    }
+    pub(crate) fn arms(&self, span: Span) -> &[(ExprId, Block)] {
+        &self.arms[span.range()]
+    }
+    /// Pool storage, including owned parameter and local name text.
+    pub(crate) fn list_bytes(&self) -> usize {
+        self.ids.capacity() * size_of::<usize>()
+            + self.names.capacity() * size_of::<Text>()
+            + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
+            + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
+            + self.arms.capacity() * size_of::<(ExprId, Block)>()
+    }
+}
+
+/// Move `scratch[mark..]` to the end of `pool`, returning its published span.
+/// Lists nest, so the scratch tail always belongs to the innermost open list.
+pub(crate) fn publish<T>(
+    pool: &mut Vec<T>,
+    scratch: &mut Vec<T>,
+    mark: usize,
+) -> Result<Span, Error> {
+    let len = scratch.len() - mark;
+    let start = u32::try_from(pool.len()).map_err(|_| Error::memory())?;
+    let end = pool.len().checked_add(len).ok_or_else(Error::memory)?;
+    u32::try_from(end).map_err(|_| Error::memory())?;
+    crate::memory::fallible::reserve(pool, len)?;
+    pool.extend(scratch.drain(mark..));
+    Ok(Span {
+        start,
+        len: len as u32,
+    })
 }
 
 /// Reference constant operands for deferred loads. String indices borrow

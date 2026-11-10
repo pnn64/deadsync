@@ -911,81 +911,99 @@ impl Vm {
                 return Ok(None);
             }
         }
-        if self.substitutions[index].done
-            || self.substitutions[index].count >= self.substitutions[index].maximum
-        {
-            return self.substitution_complete(index, 0);
-        }
-        let state = &self.substitutions[index];
-        let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
-        let found = self.with_pattern(pattern, true, source, |pattern, text, work| {
-            pattern.match_at(text, cursor, work)
-        })?;
-        if let Some(found) = found {
-            self.substitutions[index].matched = Some(found);
-            self.substitutions[index].count += 1;
-            let frame = self.frames[owner];
-            let replacement =
-                self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
-            match replacement {
-                Value::String(_) | Value::Number(_) => {
-                    let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
-                    if !self.replacement_string(index, text, 0)? {
-                        self.substitution_queue(index, 0, SubAction::Advance)?;
-                        return Ok(None);
-                    }
-                    if !self.substitution_advance(index)? {
-                        return Ok(None);
-                    }
-                }
-                Value::Table(_) => {
-                    let key = self.capture_value(source, found.capture(0)?)?;
-                    self.substitution_push(index, key)?;
-                    let call = frame.vararg_start + self.substitutions[index].top - 1;
-                    self.frames[owner].pc |= 2;
-                    self.get_table(replacement, key, call)?;
-                }
-                Value::Function(_) | Value::Native(_) => {
-                    let call = frame.vararg_start + self.substitutions[index].top;
-                    let argc = self.capture_results(call + 1, source, found, true)?;
-                    self.registers[call] = replacement;
-                    self.frames[owner].pc |= 1;
-                    if let Some(actual) = self.start_call(call, argc, 1, false)? {
-                        self.finish_call(call, actual, 1);
-                    }
-                }
-                _ => {
-                    if self.substitutions[index].top == 0 {
-                        return Err(Error::new(
-                            ErrorKind::Runtime,
-                            0,
-                            "invalid native buffer stack",
-                        ));
-                    }
-                    if !self.substitution_replacement(index)? {
-                        self.substitution_queue(index, 0, SubAction::Advance)?;
-                        return Ok(None);
-                    }
-                    if !self.substitution_advance(index)? {
-                        return Ok(None);
-                    }
-                }
+        // Literal replacements never enter Lua. Without an instruction budget
+        // or hooks, consecutive matches run in this step until the first
+        // buffer flush, keeping each call's work bounded by one buffer.
+        let batch = self.budget.is_none() && self.hooks.mask == 0;
+        loop {
+            if self.substitutions[index].done
+                || self.substitutions[index].count >= self.substitutions[index].maximum
+            {
+                return self.substitution_complete(index, 0);
             }
-        } else {
-            if cursor < self.strings.bytes[slot_index(source.0)].len() {
-                self.substitutions[index].cursor += 1;
+            let state = &self.substitutions[index];
+            let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
+            let found = self.with_pattern(pattern, true, source, |pattern, text, work| {
+                pattern.match_at(text, cursor, work)
+            })?;
+            if let Some(found) = found {
+                self.substitutions[index].matched = Some(found);
+                self.substitutions[index].count += 1;
+                let frame = self.frames[owner];
+                let replacement =
+                    self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
+                match replacement {
+                    Value::String(_) | Value::Number(_) => {
+                        let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
+                        if !self.replacement_string(index, text, 0)? {
+                            self.substitution_queue(index, 0, SubAction::Advance)?;
+                            return Ok(None);
+                        }
+                        if !self.substitution_advance(index)? {
+                            return Ok(None);
+                        }
+                    }
+                    Value::Table(_) => {
+                        let key = self.capture_value(source, found.capture(0)?)?;
+                        self.substitution_push(index, key)?;
+                        let call = frame.vararg_start + self.substitutions[index].top - 1;
+                        self.frames[owner].pc |= 2;
+                        self.get_table(replacement, key, call)?;
+                        return Ok(None);
+                    }
+                    Value::Function(_) | Value::Native(_) => {
+                        let call = frame.vararg_start + self.substitutions[index].top;
+                        let argc = self.capture_results(call + 1, source, found, true)?;
+                        self.registers[call] = replacement;
+                        self.frames[owner].pc |= 1;
+                        if let Some(actual) = self.start_call(call, argc, 1, false)? {
+                            self.finish_call(call, actual, 1);
+                        }
+                        return Ok(None);
+                    }
+                    _ => {
+                        if self.substitutions[index].top == 0 {
+                            return Err(Error::new(
+                                ErrorKind::Runtime,
+                                0,
+                                "invalid native buffer stack",
+                            ));
+                        }
+                        if !self.substitution_replacement(index)? {
+                            self.substitution_queue(index, 0, SubAction::Advance)?;
+                            return Ok(None);
+                        }
+                        if !self.substitution_advance(index)? {
+                            return Ok(None);
+                        }
+                    }
+                }
+            } else {
+                if cursor < self.strings.bytes[slot_index(source.0)].len() {
+                    self.substitutions[index].cursor += 1;
+                    if self.patterns[&(pattern, true)].anchored {
+                        self.substitutions[index].done = true;
+                    }
+                    self.substitution_byte(
+                        index,
+                        self.strings.bytes[slot_index(source.0)][cursor],
+                    )?;
+                } else {
+                    self.substitutions[index].done = true;
+                }
                 if self.patterns[&(pattern, true)].anchored {
                     self.substitutions[index].done = true;
                 }
-                self.substitution_byte(index, self.strings.bytes[slot_index(source.0)][cursor])?;
-            } else {
-                self.substitutions[index].done = true;
             }
-            if self.patterns[&(pattern, true)].anchored {
-                self.substitutions[index].done = true;
+            let state = &self.substitutions[index];
+            if !(batch
+                && state.actions.is_empty()
+                && state.level == 0
+                && self.frames.len() == owner + 1)
+            {
+                return Ok(None);
             }
         }
-        Ok(None)
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
         let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());
