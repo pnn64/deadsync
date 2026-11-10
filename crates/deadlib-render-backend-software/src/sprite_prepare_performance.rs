@@ -1,9 +1,6 @@
 use super::*;
 use deadlib_render_core::{SpriteInstanceRaw, SpriteRun};
-use std::hint::black_box;
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[path = "sprite_prepare_original.rs"]
 mod original;
 
@@ -355,84 +352,4 @@ fn sprite_frames_preserve_metadata_pixels_and_counts() {
         }
     }
     println!("{cases} complete sprite frame/stripe cases; {pixels} exact attachment pixels");
-}
-
-type Vertices = fn(&Matrix4, &SpriteInstanceRaw, usize, usize) -> Option<[ScreenVertex; 4]>;
-type Prepare = fn(&RenderFrame, &Textures, usize, usize, &mut Scratch) -> u32;
-
-#[test]
-#[ignore = "release CPU benchmark"]
-fn benchmark_sprite_preparation() {
-    bench::pin_thread();
-    let rotation = std::env::var("SPRITE_PREPARE_ROTATION")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(0);
-    let textures = textures(SamplerFilter::Nearest, SamplerWrap::Clamp);
-    let cases: Vec<_> = [1, 96, 3072]
-        .into_iter()
-        .flat_map(|count| {
-            [
-                Kind::Plain,
-                Kind::Rotated,
-                Kind::Perspective,
-                Kind::Rejected,
-                Kind::Overflow,
-                Kind::ZeroWidth,
-            ]
-            .map(|kind| (count, kind))
-        })
-        .collect();
-    for i in 0..cases.len() {
-        let (count, kind) = cases[(i + rotation) % cases.len()];
-        let frame = frame(count, kind);
-        let width = if matches!(kind, Kind::ZeroWidth) {
-            0
-        } else {
-            640
-        };
-        let n = (100_000 / count).max(16);
-        for batch in [false, true] {
-            let mut scratch = [Scratch::new(count), Scratch::new(count)];
-            for round in 0..10 {
-                for k in 0..2 {
-                    let variant = (round + k + rotation) % 2;
-                    let kernel =
-                        black_box([vertices::<false> as Vertices, vertices::<true>][variant]);
-                    let prepare =
-                        black_box([prepare::<false> as Prepare, prepare::<true>][variant]);
-                    let output = &mut scratch[variant];
-                    let cycles = bench::cycles();
-                    let start = Instant::now();
-                    for _ in 0..n {
-                        if batch {
-                            black_box(prepare(
-                                black_box(&frame),
-                                black_box(&textures),
-                                black_box(width),
-                                480,
-                                black_box(output),
-                            ));
-                            black_box(&output.objects);
-                        } else {
-                            for sprite in black_box(&frame.sprite_instances) {
-                                black_box(kernel(
-                                    black_box(&frame.cameras[0]),
-                                    black_box(sprite),
-                                    black_box(width),
-                                    480,
-                                ));
-                            }
-                        }
-                    }
-                    let ns = start.elapsed().as_nanos() as f64 / n as f64;
-                    let cpu = (bench::cycles() - cycles) as f64 / n as f64;
-                    println!(
-                        "sprite-prepare,{}-{kind:?}-{count},{variant},{round},{n},{cpu:.4},{ns:.4}",
-                        if batch { "frame" } else { "vertices" }
-                    );
-                }
-            }
-        }
-    }
 }

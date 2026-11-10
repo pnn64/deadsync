@@ -1,15 +1,11 @@
 use super::*;
 use deadlib_render_core::{DepthMode, TexturedMeshVertex};
-use std::hint::black_box;
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[path = "environment_raster_original.rs"]
 mod original;
 
 #[derive(Clone, Copy, Debug)]
 struct Case {
-    label: &'static str,
     size: usize,
     texgen: u8,
     mask: bool,
@@ -28,7 +24,6 @@ struct Case {
 
 fn case(size: usize) -> Case {
     Case {
-        label: "nearest",
         size,
         texgen: 0,
         mask: false,
@@ -192,34 +187,6 @@ fn draw<const OLD: bool>(
         c.end,
         writer,
         depth,
-    )
-}
-
-type Draw = fn(&Case, &Fixture, &mut [u32], &mut [f32]) -> u32;
-#[inline(never)]
-fn production(c: &Case, f: &Fixture, p: &mut [u32], d: &mut [f32]) -> u32 {
-    draw::<false>(
-        c,
-        f,
-        &mut byte_writer(p),
-        &mut DepthRows {
-            pixels: d,
-            unorm16: c.unorm16,
-            mode: c.mode,
-        },
-    )
-}
-#[inline(never)]
-fn reference(c: &Case, f: &Fixture, p: &mut [u32], d: &mut [f32]) -> u32 {
-    draw::<true>(
-        c,
-        f,
-        &mut byte_writer(p),
-        &mut DepthRows {
-            pixels: d,
-            unorm16: c.unorm16,
-            mode: c.mode,
-        },
     )
 }
 
@@ -394,104 +361,4 @@ fn environment_raster_preserves_pixels_depth_and_callbacks() {
         "Exceptional NaN encoding differences: {} half lanes, {} callback fields",
         totals[5], totals[6]
     );
-}
-
-#[test]
-#[ignore = "release CPU benchmark"]
-fn benchmark_environment_raster() {
-    bench::pin_thread();
-    let rotation = std::env::var("ENVIRONMENT_RASTER_ROTATION")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(0);
-    let mut cases = Vec::new();
-    for size in [2, 8, 32, 128] {
-        for blend in [BlendMode::Alpha, BlendMode::Add, BlendMode::Multiply] {
-            let c = Case {
-                blend,
-                ..case(size)
-            };
-            cases.extend([
-                c,
-                Case {
-                    label: "sphere-linear",
-                    texgen: 1,
-                    filter: SamplerFilter::Linear,
-                    ..c
-                },
-                Case {
-                    label: "reflection-linear",
-                    texgen: 7,
-                    reflection: true,
-                    filter: SamplerFilter::Linear,
-                    ..c
-                },
-                Case {
-                    label: "mask-linear",
-                    texgen: 6,
-                    mask: true,
-                    filter: SamplerFilter::Linear,
-                    ..c
-                },
-                Case {
-                    label: "perspective",
-                    texgen: 7,
-                    reflection: true,
-                    perspective: true,
-                    filter: SamplerFilter::Linear,
-                    ..c
-                },
-                Case {
-                    label: "texture-control",
-                    control: true,
-                    filter: SamplerFilter::Linear,
-                    ..c
-                },
-            ]);
-        }
-    }
-    cases.push(Case {
-        label: "empty-stripe",
-        end: 0,
-        ..cases[0]
-    });
-    for i in 0..cases.len() {
-        let c = cases[(i + rotation) % cases.len()];
-        let f = fixture(&c);
-        let n = if c.start == c.end {
-            100_000
-        } else {
-            (100_000 / (c.size * c.size)).max(16)
-        };
-        let mut pixels = [vec![0; c.size * c.size], vec![0; c.size * c.size]];
-        let mut depths = [vec![1.0; c.size * c.size], vec![1.0; c.size * c.size]];
-        for round in 0..10 {
-            for k in 0..2 {
-                let variant = (round + k + rotation) % 2;
-                let run = black_box([production as Draw, reference][variant]);
-                let p = &mut pixels[variant];
-                let d = &mut depths[variant];
-                let cycles = bench::cycles();
-                let start = Instant::now();
-                for _ in 0..n {
-                    p.fill(0x9f3f5f7f);
-                    d.fill(1.0);
-                    black_box(run(
-                        black_box(&c),
-                        black_box(&f),
-                        black_box(p),
-                        black_box(d),
-                    ));
-                    black_box(&*p);
-                    black_box(&*d);
-                }
-                let ns = start.elapsed().as_nanos() as f64 / n as f64;
-                let cpu = (bench::cycles() - cycles) as f64 / n as f64;
-                println!(
-                    "environment-raster,{}-{}-{:?},{variant},{round},{n},{cpu:.4},{ns:.4}",
-                    c.label, c.size, c.blend
-                );
-            }
-        }
-    }
 }
