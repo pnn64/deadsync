@@ -35,3 +35,23 @@ fn integer_formatting_preserves_precision_boundaries_and_signed_zero() {
         );
     }
 }
+
+#[test]
+fn numeric_text_preserves_rounding_without_temporary_allocations() {
+    for (number, expected) in [
+        (-0.0, "-0"),
+        (0.29f64.next_down(), "0.29"),
+        (-0.000125, "-0.000125"),
+        (123.45000000000001, "123.45"),
+        (1.234567890123456, "1.2345678901235"),
+        (9.99999999999996, "10"),
+        (0.00009999999999999996, "0.0001"),
+        (0.000009999999999999996, "1e-05"),
+        (9_999_999_999_999.9, "9999999999999.9"),
+        (99_999_999_999_999.5, "1e+14"),
+    ] {
+        let (text, allocations) = crate::allocation_probe::probe(1, || native::number_text(number));
+        assert_eq!(allocations.attempts, 0);
+        assert_eq!(text.as_bytes(), expected.as_bytes());
+    }
+}

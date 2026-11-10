@@ -716,11 +716,18 @@ impl Vm {
                 for index in first..count {
                     let value = self.argument(base, count, index);
                     let formatted;
+                    let localized;
                     let bytes = match value {
                         Value::Number(n) => {
-                            formatted = native::try_format_number(n)
-                                .map_err(|_| self.memory_failure())?;
-                            formatted.as_slice()
+                            formatted = native::number_text(n);
+                            if &*crate::locale::decimal() == b"." {
+                                formatted.as_bytes()
+                            } else {
+                                localized = formatted
+                                    .try_into_localized()
+                                    .map_err(|_| self.memory_failure())?;
+                                localized.as_slice()
+                            }
                         }
                         _ => {
                             let s = self.string_argument(base, count, index)?;
