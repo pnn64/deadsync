@@ -53,20 +53,17 @@ fn wide_left_pane(screen_width: f32, screen_height: f32) -> WidgetLayout {
 
 fn full_left_pane(screen_width: f32, screen_height: f32, zoom: f32) -> WidgetLayout {
     const RIGHT_EDGE_INSET: f32 = 10.0;
-    let pane_width = screen_width * 0.5 - RIGHT_EDGE_INSET;
-    let pane_centre_x = screen_width * 0.5 - pane_width * 0.5 - RIGHT_EDGE_INSET;
+    let screen_center_x = screen_width * 0.5;
+    let pane_width = screen_center_x - RIGHT_EDGE_INSET;
+    let pane_centre_x = screen_center_x - pane_width * 0.5 - RIGHT_EDGE_INSET;
 
-    WidgetLayout {
-        bounds: WidgetLayout::from_center(
-            pane_centre_x,
-            screen_height * 0.5,
-            pane_width,
-            screen_height,
-            zoom,
-        )
-        .bounds,
+    WidgetLayout::from_center(
+        pane_centre_x,
+        screen_height * 0.5,
+        pane_width,
+        screen_height,
         zoom,
-    }
+    )
 }
 
 // Ultra wide pane uses a fixed width and a center offset to position it correctly.
@@ -76,10 +73,7 @@ fn ultra_wide_left_pane(screen_width: f32, screen_height: f32) -> WidgetLayout {
     let screen_center_x = screen_width * 0.5;
     let center_x = screen_center_x - WIDTH * 0.5 - RIGHT_EDGE_INSET;
 
-    WidgetLayout {
-        bounds: WidgetBounds::new(center_x - WIDTH * 0.5, 0.0, WIDTH, screen_height),
-        zoom: 1.0,
-    }
+    WidgetLayout::from_center(center_x, screen_height * 0.5, WIDTH, screen_height, 1.0)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
