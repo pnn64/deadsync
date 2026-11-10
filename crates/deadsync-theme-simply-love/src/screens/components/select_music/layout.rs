@@ -105,7 +105,7 @@ pub(crate) struct SongSelectLayout {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ArtistPeakLineLayout {
+pub(crate) struct StepArtistPeakNpsLayout {
     pub step_header_y: f32,
     pub artist_background_width: f32,
     pub artist_x_offset: f32,
@@ -127,19 +127,17 @@ impl SongSelectLayout {
     pub fn artist_peak_line(
         self,
         screen_height: f32,
-        is_p2_layout: bool,
         expanded: bool,
         peak_text_logical_width: f32,
-    ) -> ArtistPeakLineLayout {
+    ) -> [StepArtistPeakNpsLayout; 2] {
         let panel = self.chart_panel.bounds;
-        let p2_offset = if is_p2_layout { 88.0 } else { 0.0 };
         let center_y = screen_height * 0.5;
         let step_header_y = if expanded {
-            center_y - 18.0 + p2_offset
+            center_y - 18.0
         } else {
-            center_y - screen_height / 56.0 - 9.0 + p2_offset
+            center_y - screen_height / 56.0 - 9.0
         };
-        let graph_center_y = center_y + if expanded { 62.0 } else { 23.0 } + p2_offset;
+        let graph_center_y = center_y + if expanded { 62.0 } else { 23.0 };
         let graph_top = graph_center_y - panel.height * 0.5;
         let peak_text_zoom = 0.8 * self.zoom;
         let peak_width = (peak_text_logical_width * peak_text_zoom).clamp(0.0, panel.width);
@@ -155,7 +153,7 @@ impl SongSelectLayout {
         let artist_max_width =
             (artist_background_width - artist_x_offset - gap).max(0.0) * self.zoom;
 
-        ArtistPeakLineLayout {
+        let p1 = StepArtistPeakNpsLayout {
             step_header_y,
             artist_background_width,
             artist_x_offset,
@@ -163,7 +161,10 @@ impl SongSelectLayout {
             peak_bounds,
             peak_text_zoom,
             peak_text_max_width: peak_width / peak_text_zoom,
-        }
+        };
+        let mut p2 = p1;
+        p2.step_header_y += 88.0;
+        [p1, p2]
     }
 
     pub fn new(screen_width: f32, screen_height: f32, layout_type: UILayoutType) -> Self {
@@ -318,10 +319,9 @@ mod tests {
         ] {
             let layout = SongSelectLayout::new(screen_width, screen_height, layout_type);
             let panel = layout.chart_panel.bounds;
-            for p2_offset in [0.0, 88.0] {
-                for expanded in [false, true] {
-                    let line =
-                        layout.artist_peak_line(screen_height, p2_offset > 0.0, expanded, 99.9);
+            for expanded in [false, true] {
+                let lines = layout.artist_peak_line(screen_height, expanded, 99.9);
+                for (p2_offset, line) in [0.0, 88.0].into_iter().zip(lines) {
                     let gap = 8.0 * layout.zoom;
                     let expected_header_y = screen_height * 0.5
                         + if expanded {
@@ -332,7 +332,7 @@ mod tests {
                         + p2_offset;
                     let graph_offset = if expanded { 62.0 } else { 23.0 };
                     let graph_top =
-                        screen_height * 0.5 + graph_offset + p2_offset - panel.height * 0.5;
+                        (screen_height * 0.5 + graph_offset - panel.height * 0.5) + p2_offset;
 
                     assert!((line.step_header_y - expected_header_y).abs() < f32::EPSILON);
                     assert!(line.peak_bounds.x >= 0.0);

@@ -15,7 +15,7 @@ use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        layout::{ArtistPeakLineLayout, SongDetailsLayout, SongSelectLayout},
+        layout::{SongDetailsLayout, SongSelectLayout, StepArtistPeakNpsLayout},
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
@@ -11088,7 +11088,11 @@ fn handle_raw_key_event_impl(
         }
         // `0` tares the focused threshold(s) to the live reading, like Up+Down.
         if let Some(k) = key
-            && pad_config::handle_raw_key_event_with_modifiers(&mut state.pad_config_overlay, k, shift_held)
+            && pad_config::handle_raw_key_event_with_modifiers(
+                &mut state.pad_config_overlay,
+                k,
+                shift_held,
+            )
         {
             return ThemeInputResult::consumed(ThemeEffect::None);
         }
@@ -13356,22 +13360,15 @@ pub fn push_actors(
             })
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
-    let artist_peak_line_p1 = song_select_layout.artist_peak_line(
+    let artist_peak_lines = song_select_layout.artist_peak_line(
         screen_height(),
-        false,
-        step_artist_expanded,
-        peak_text_logical_width,
-    );
-    let artist_peak_line_p2 = song_select_layout.artist_peak_line(
-        screen_height(),
-        true,
         step_artist_expanded,
         peak_text_logical_width,
     );
 
     // Step Artist & Steps
     let mut push_step_artist =
-        |line_layout: ArtistPeakLineLayout,
+        |line_layout: StepArtistPeakNpsLayout,
          left_x: f32,
          sel_col: [f32; 4],
          step_artist: Arc<str>,
@@ -13399,7 +13396,7 @@ pub fn push_actors(
 
     if is_versus {
         push_step_artist(
-            artist_peak_line_p1,
+            artist_peak_lines[0],
             graph_left,
             sel_col_p1,
             step_artist,
@@ -13407,7 +13404,7 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
         push_step_artist(
-            artist_peak_line_p2,
+            artist_peak_lines[1],
             graph_left,
             sel_col_p2,
             step_artist_p2,
@@ -13415,11 +13412,7 @@ pub fn push_actors(
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
-        let line_layout = if is_p2_single {
-            artist_peak_line_p2
-        } else {
-            artist_peak_line_p1
-        };
+        let line_layout = artist_peak_lines[is_p2_single as usize];
         push_step_artist(
             line_layout,
             graph_left,
@@ -13516,12 +13509,7 @@ pub fn push_actors(
                     BreakdownStyle::Sn => cached_str_ref(&c.sn_simple_breakdown),
                 });
 
-            let line_layout = song_select_layout.artist_peak_line(
-                screen_height(),
-                is_p2_layout,
-                step_artist_expanded,
-                peak_text_logical_width,
-            );
+            let line_layout = artist_peak_lines[is_p2_layout as usize];
             if let Some(mesh) = graph_mesh
                 && !mesh.is_empty()
             {
