@@ -2034,7 +2034,7 @@ fn prepare_mesh_triangles(
 
 /// Clips one triangle against OpenGL's homogeneous near plane (`z >= -w`).
 /// A single plane produces at most four vertices, all kept on the stack.
-#[inline]
+#[inline(always)]
 fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
     let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
     if distances
@@ -2081,6 +2081,76 @@ fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4
 
 #[allow(clippy::too_many_arguments)]
 fn project_tmesh_polygon(
+    mvp: &Matrix4,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    cull_mode: f32,
+) -> Option<([ScreenVertexTexColor; 4], usize)> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe {
+            project_tmesh_polygon_fma(
+                mvp,
+                tint,
+                uv_scale,
+                uv_offset,
+                uv_tex_shift,
+                vertices,
+                width,
+                height,
+                cull_mode,
+            )
+        };
+    }
+    project_tmesh_polygon_impl(
+        mvp,
+        tint,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        vertices,
+        width,
+        height,
+        cull_mode,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn project_tmesh_polygon_fma(
+    mvp: &Matrix4,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    cull_mode: f32,
+) -> Option<([ScreenVertexTexColor; 4], usize)> {
+    project_tmesh_polygon_impl(
+        mvp,
+        tint,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        vertices,
+        width,
+        height,
+        cull_mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn project_tmesh_polygon_impl(
     mvp: &Matrix4,
     tint: [f32; 4],
     uv_scale: [f32; 2],
@@ -5920,6 +5990,84 @@ mod tests {
                 [0.0; 4],
             ]
         );
+    }
+
+    #[test]
+    fn textured_mesh_projection_preserves_perspective_division_bits() {
+        let positions = [
+            [0.0, -0.0],
+            [-0.0, 0.0],
+            [f32::from_bits(1), -f32::from_bits(1)],
+            [f32::MIN_POSITIVE, -f32::MIN_POSITIVE],
+            [0.3, -0.7],
+            [f32::MAX, -f32::MAX],
+        ];
+        for w in [
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            3.0,
+            -3.0,
+            f32::from_bits(1),
+            -f32::from_bits(1),
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::MAX,
+            -f32::MAX,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            let projection = Matrix4::from_cols(
+                Vector4::X,
+                Vector4::Y,
+                Vector4::Z,
+                Vector4::new(0.0, 0.0, 0.0, w),
+            );
+            for [x, y] in positions {
+                for width in [0, 1, 127, usize::MAX] {
+                    // Keep finite vertices inside the near plane for either W sign.
+                    let z = if w < 0.0 { w.abs() } else { 1.0 };
+                    let vertices = [textured_vertex([x, y, z], [0.5; 2]); 3];
+                    let clip = projection * Vector4::new(x, y, z, 1.0);
+                    let actual = project_tmesh_polygon(
+                        &projection,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        &vertices,
+                        width,
+                        73,
+                        0.0,
+                    );
+                    if !clip.is_finite()
+                        || clip.w == 0.0
+                        || !(clip.x / clip.w).is_finite()
+                        || !(clip.y / clip.w).is_finite()
+                    {
+                        assert!(actual.is_none());
+                        continue;
+                    }
+                    let (projected, len) = actual.expect("finite projected X/Y survive");
+                    assert_eq!(len, 3);
+                    let expected = [
+                        clip.w.recip(),
+                        (clip.z / clip.w + 1.0) * 0.5,
+                        f32::midpoint(clip.x / clip.w, 1.0) * width as f32,
+                        ((1.0 - clip.y / clip.w) * 0.5) * 73.0,
+                    ]
+                    .map(f32::to_bits);
+                    for vertex in &projected[..len] {
+                        assert_eq!(
+                            [vertex.inv_w, vertex.z, vertex.x, vertex.y].map(f32::to_bits),
+                            expected,
+                            "position={x:?},{y:?},{z:?}, W={w:?}, width={width}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     #[test]
