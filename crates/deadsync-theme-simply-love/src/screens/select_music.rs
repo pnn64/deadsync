@@ -15,7 +15,10 @@ use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        layout::{SongDetailsLayout, SongSelectLayout, StepArtistPeakNpsLayout},
+        layout::{
+            DensityGraphLayout, SongDetailsLayout, SongSelectLayout, StepArtistBarY,
+            StepArtistPeakNpsLayout,
+        },
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
@@ -13347,7 +13350,8 @@ pub fn push_actors(
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
         chart_panel_stats(immediate_chart_p2, entry_opt);
 
-    let chart_panel = song_select_layout.chart_panel.bounds;
+    let chart_panel_layout = song_select_layout.chart_panel;
+    let chart_panel = chart_panel_layout.bounds;
     let panel_w = chart_panel.width;
     let graph_h = chart_panel.height;
     let graph_left = chart_panel.x;
@@ -13360,11 +13364,13 @@ pub fn push_actors(
             })
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
-    let artist_peak_lines = song_select_layout.artist_peak_line(
+    let chart_panel_widgets = chart_panel_layout.compose(
         screen_height(),
-        step_artist_expanded,
+        StepArtistBarY::from(step_artist_expanded),
         peak_text_logical_width,
     );
+    let artist_peak_lines = chart_panel_widgets.step_artist_peak_nps;
+    let density_graphs = chart_panel_widgets.density_graphs;
 
     // Step Artist & Steps
     let mut push_step_artist =
@@ -13424,7 +13430,6 @@ pub fn push_actors(
     }
 
     // Density Graph
-    let graph_body_h = 47.0 * song_select_layout.zoom;
     let chart_info_cx = chart_panel.center_x();
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
@@ -13436,16 +13441,17 @@ pub fn push_actors(
     let preview_marker_p1 = preview_marker(state.displayed_chart_p1.as_ref(), preview_sec, panel_w);
     let preview_marker_p2 = preview_marker(state.displayed_chart_p2.as_ref(), preview_sec, panel_w);
     let push_breakdown_panel = |out: &mut Vec<Actor>,
-                                graph_cy: f32,
-                                is_p2_layout: bool,
+                                graph_layout: DensityGraphLayout,
+                                line_layout: StepArtistPeakNpsLayout,
                                 graph_mesh: Option<Arc<[MeshVertex]>>,
                                 preview_marker: Option<PreviewMarker>,
                                 displayed: Option<&DisplayedChart>| {
-        let graph_top = graph_cy - graph_h * 0.5;
-        let mut push_child =
-            |actor: Actor| push_flat_breakdown_child(out, actor, graph_left, graph_top, 51);
+        let graph_bounds = graph_layout.bounds;
+        let mut push_child = |actor: Actor| {
+            push_flat_breakdown_child(out, actor, graph_bounds.x, graph_bounds.y, 51)
+        };
         push_child(
-            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(panel_w, graph_h): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
+            act!(quad: align(0.0, 0.0): xy(0.0, 0.0): setsize(graph_bounds.width, graph_bounds.height): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
         );
 
         if let Some(displayed) = displayed
@@ -13509,14 +13515,16 @@ pub fn push_actors(
                     BreakdownStyle::Sn => cached_str_ref(&c.sn_simple_breakdown),
                 });
 
-            let line_layout = artist_peak_lines[is_p2_layout as usize];
             if let Some(mesh) = graph_mesh
                 && !mesh.is_empty()
             {
                 push_child(Actor::Mesh {
                     align: [0.0, 0.0],
                     offset: [0.0, 0.0],
-                    size: [SizeSpec::Px(panel_w), SizeSpec::Px(graph_h)],
+                    size: [
+                        SizeSpec::Px(graph_bounds.width),
+                        SizeSpec::Px(graph_bounds.height),
+                    ],
                     tint: [1.0; 4],
                     vertices: mesh,
                     visible: true,
@@ -13528,7 +13536,7 @@ pub fn push_actors(
                 push_child(act!(quad:
                     align(0.0, 0.0):
                     xy(marker.x, 0.0):
-                    setsize(marker.width, graph_h):
+                    setsize(marker.width, graph_bounds.height):
                     diffuse(1.0, 1.0, 1.0, 1.0):
                     fadeleft(1.0 / 3.0):
                     faderight(1.0 / 3.0):
@@ -13539,10 +13547,10 @@ pub fn push_actors(
                 act!(text: font("miso"): settext(peak): align(1.0, 0.5): xy(line_layout.peak_bounds.right(), line_layout.peak_bounds.y): zoom(line_layout.peak_text_zoom): maxwidth(line_layout.peak_text_max_width): diffuse(1.0, 1.0, 1.0, 1.0): z(71)),
             );
             push_child(
-                act!(quad: align(0.0, 0.0): xy(0.0, graph_body_h): setsize(panel_w, graph_h - graph_body_h): diffuse(0.0, 0.0, 0.0, 0.5): z(2)),
+                act!(quad: align(0.0, 0.0): xy(0.0, graph_layout.body_height): setsize(graph_bounds.width, graph_bounds.height - graph_layout.body_height): diffuse(0.0, 0.0, 0.0, 0.5): z(2)),
             );
             push_child(
-                act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(panel_w * 0.5, graph_h - 8.5 * song_select_layout.zoom): zoom(0.8 * song_select_layout.zoom): maxwidth(panel_w / (0.8 * song_select_layout.zoom)): z(2)),
+                act!(text: font("miso"): settext(bd_text): align(0.5, 0.5): xy(graph_bounds.width * 0.5, graph_layout.breakdown_text_y): zoom(graph_layout.breakdown_text_zoom): maxwidth(graph_layout.breakdown_text_max_width): z(2)),
             );
         }
     };
@@ -13552,8 +13560,8 @@ pub fn push_actors(
             if !state.pattern_info.visible[0] {
                 push_breakdown_panel(
                     actors,
-                    screen_center_y() + 23.0,
-                    false,
+                    density_graphs[0],
+                    artist_peak_lines[0],
                     state.current_graph_mesh.clone(),
                     preview_marker_p1,
                     state.displayed_chart_p1.as_ref(),
@@ -13562,26 +13570,19 @@ pub fn push_actors(
             if !state.pattern_info.visible[1] {
                 push_breakdown_panel(
                     actors,
-                    screen_center_y() + 111.0,
-                    true,
+                    density_graphs[1],
+                    artist_peak_lines[1],
                     state.current_graph_mesh_p2.clone(),
                     preview_marker_p2,
                     state.displayed_chart_p2.as_ref(),
                 );
             }
         } else {
-            let graph_cy = screen_center_y()
-                + if step_artist_expanded {
-                    if is_p2_single { 150.0 } else { 62.0 }
-                } else if is_p2_single {
-                    111.0
-                } else {
-                    23.0
-                };
+            let graph_index = is_p2_single as usize;
             push_breakdown_panel(
                 actors,
-                graph_cy,
-                is_p2_single,
+                density_graphs[graph_index],
+                artist_peak_lines[graph_index],
                 state.current_graph_mesh.clone(),
                 preview_marker_p1,
                 state.displayed_chart_p1.as_ref(),
