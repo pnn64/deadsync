@@ -3374,6 +3374,7 @@ impl Texels<'_> {
 
 // IEEE binary16 conversion, round to nearest with ties to even. Every
 // attachment write is rounded, so chained captures retain GPU precision.
+#[inline(always)]
 fn encode_half(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
@@ -3435,11 +3436,15 @@ fn half_to_byte(bits: u16) -> u8 {
     }
 }
 
+#[inline(always)]
 fn pack_half(color: [f32; 4]) -> u64 {
-    let [r, g, b, a] = color.map(encode_half).map(u64::from);
-    r | (g << 16) | (b << 32) | (a << 48)
+    u64::from(encode_half(color[0]))
+        | (u64::from(encode_half(color[1])) << 16)
+        | (u64::from(encode_half(color[2])) << 32)
+        | (u64::from(encode_half(color[3])) << 48)
 }
 
+#[inline(always)]
 fn unpack_half(pixel: u64) -> [f32; 4] {
     std::array::from_fn(|i| decode_half((pixel >> (i * 16)) as u16))
 }
