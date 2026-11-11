@@ -163,10 +163,13 @@ impl Strings {
         (h ^ (h >> 31)) as usize
     }
     fn find(&self, bytes: &[u8]) -> Option<StringId> {
+        self.find_hashed(bytes, Self::hash(bytes))
+    }
+    fn find_hashed(&self, bytes: &[u8], hash: usize) -> Option<StringId> {
         if self.buckets.is_empty() {
             return None;
         }
-        let mut slot = Self::hash(bytes) & (self.buckets.len() - 1);
+        let mut slot = hash & (self.buckets.len() - 1);
         while self.buckets[slot] != 0 {
             let id = self.buckets[slot] - 1;
             if self.bytes[id as usize].as_ref() == bytes {
@@ -176,7 +179,7 @@ impl Strings {
         }
         None
     }
-    fn try_add(&mut self, bytes: ByteString) -> Result<StringId, Error> {
+    fn try_add(&mut self, bytes: ByteString, hash: usize) -> Result<StringId, Error> {
         let mut replacement = None;
         if (self.bytes.live_len() + 1) * 4 >= self.buckets.len() * 3 {
             let size = self
@@ -199,7 +202,6 @@ impl Strings {
             }
             replacement = Some(buckets);
         }
-        let hash = Self::hash(&bytes);
         let storage = bytes.storage_bytes();
         // Publish neither the hash index nor the string until every allocation
         // has succeeded. Arena accounting includes partially reserved buffers.
@@ -223,11 +225,15 @@ impl Strings {
         self.try_intern(bytes).expect("allocate Lua string")
     }
     fn try_intern(&mut self, bytes: &[u8]) -> Result<StringId, Error> {
-        if let Some(id) = self.find(bytes) {
+        let hash = Self::hash(bytes);
+        if let Some(id) = self.find_hashed(bytes, hash) {
             self.bytes.preserve_new_reference(id.0);
             Ok(id)
         } else {
-            self.try_add(ByteString::try_new(bytes, self.bytes.memory().clone())?)
+            self.try_add(
+                ByteString::try_new(bytes, self.bytes.memory().clone())?,
+                hash,
+            )
         }
     }
     fn substring(
@@ -236,12 +242,13 @@ impl Strings {
         range: std::ops::Range<usize>,
     ) -> Result<StringId, Error> {
         let bytes = &self.bytes[slot_index(id.0)][range];
-        if let Some(id) = self.find(bytes) {
+        let hash = Self::hash(bytes);
+        if let Some(id) = self.find_hashed(bytes, hash) {
             self.bytes.preserve_new_reference(id.0);
             return Ok(id);
         }
         let owned = ByteString::try_new(bytes, self.bytes.memory().clone())?;
-        self.try_add(owned)
+        self.try_add(owned, hash)
     }
 }
 
@@ -748,8 +755,11 @@ impl Vm {
             .map_err(|_| self.memory_failure())
     }
     fn intern_number(&mut self, number: f64) -> Result<Value, Error> {
-        let bytes = native::try_format_number(number).map_err(|_| self.memory_failure())?;
-        self.try_intern(&bytes)
+        let text = native::number_text(number);
+        let mut bytes = self.try_take_buffer(text.as_bytes().len())?;
+        bytes.extend_from_slice(text.as_bytes());
+        crate::locale::try_localize_owned(&mut bytes)?;
+        self.try_finish_buffer(bytes)
     }
     fn try_take_buffer(&mut self, capacity: usize) -> Result<Buffer<u8>, Error> {
         self.buffers
@@ -793,7 +803,7 @@ impl Vm {
         match value {
             Value::String(id) => Ok(Some(id)),
             Value::Number(number) => {
-                let Value::String(id) = self.try_intern(&format_number(number))? else {
+                let Value::String(id) = self.intern_number(number)? else {
                     unreachable!("intern returns a string")
                 };
                 Ok(Some(id))

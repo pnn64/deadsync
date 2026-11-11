@@ -51,9 +51,9 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             }
         }
         Op::GetGlobal => {
-            let value = cx.tables[slot_index(cx.env.0)].get(cx.constant(i.c as usize));
-            // An absent global may have an index metamethod.
-            if value == Value::Nil {
+            let table = &cx.tables[slot_index(cx.env.0)];
+            let value = table.get(cx.constant(i.c as usize));
+            if value == Value::Nil && table.metatable().is_some() {
                 return None;
             }
             cx.registers[a] = value;
@@ -62,8 +62,9 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
                 return None;
             };
-            let value = cx.tables[slot_index(id.0)].get(cx.operand(i.c));
-            if value == Value::Nil {
+            let table = &cx.tables[slot_index(id.0)];
+            let value = table.get(cx.operand(i.c));
+            if value == Value::Nil && table.metatable().is_some() {
                 return None;
             }
             cx.registers[a] = value;
