@@ -74,6 +74,7 @@ pub enum PlayerSlot {
 #[derive(Clone, Debug, Default)]
 pub struct State {
     buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
+    snek: SnekSensorState,
     unmapped: UnmappedTracker,
     event_rate: EventRateTracker,
     /// Game-thread-owned one-entry presentations for the two full-screen Test
@@ -83,6 +84,14 @@ pub struct State {
     presentation_revision: u64,
     select_music_presentation: RefCell<Option<SelectMusicPresentation>>,
     screen_presentation: RefCell<Option<TestInputScreenPresentation>>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SnekSensorState {
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -430,6 +439,29 @@ pub fn clear(state: &mut State) {
     *state = State::default();
 }
 
+/// Replace the Snek diagnostic snapshot without coupling the theme to a HID
+/// implementation. Returns whether presentation data was invalidated.
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) -> bool {
+    let next = SnekSensorState {
+        connected,
+        read_error,
+        sensors,
+        revision,
+    };
+    if state.snek == next {
+        return false;
+    }
+    state.snek = next;
+    state.invalidate_presentations();
+    true
+}
+
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     use VirtualAction::{
         p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
@@ -704,6 +736,45 @@ fn push_pad_scaled_with_texture_policy(
             diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, button)):
             z(z + 1.0)
         ));
+
+        if game == GameFlag::Dance && state.snek.connected {
+            let player = match slot {
+                PlayerSlot::P1 => 0,
+                PlayerSlot::P2 => 1,
+            };
+            let panel = match button {
+                LogicalButton::Up => 0,
+                LogicalButton::Down => 1,
+                LogicalButton::Left => 2,
+                LogicalButton::Right => 3,
+                _ => continue,
+            };
+            // Match the firmware selector order: top, bottom, left, right.
+            // Each marker follows its physical sensor: a wide bar along a
+            // horizontal edge or a tall bar along a vertical edge.
+            let sensor_markers = [
+                (0.0, -27.0, 24.0, 6.0),
+                (0.0, 27.0, 24.0, 6.0),
+                (-27.0, 0.0, 6.0, 24.0),
+                (27.0, 0.0, 6.0, 24.0),
+            ];
+            for (sensor, (sensor_x, sensor_y, sensor_w, sensor_h)) in
+                sensor_markers.into_iter().enumerate()
+            {
+                let active = state.snek.sensors[player][panel][sensor];
+                let alpha = if active { 1.0 } else { 0.24 };
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(
+                        pad_x + offset_x + sensor_x * scale,
+                        pad_y + offset_y + sensor_y * scale
+                    ):
+                    zoomto(sensor_w * scale, sensor_h * scale):
+                    diffuse(0.2, 1.0, 0.35, alpha):
+                    z(z + 2.0)
+                ));
+            }
+        }
     }
 
     if !show_menu_buttons {
@@ -894,6 +965,19 @@ fn push_test_input_screen_content_unreserved(
     );
 
     push_unmapped_lines(actors, &state.unmapped, cx, cy);
+
+    if state.snek.read_error {
+        actors.push(act!(text:
+            font("miso"):
+            settext(crate::i18n::tr_ui("Snek sensor connection lost")):
+            align(0.5, 0.0):
+            xy(cx, cy + 108.0):
+            zoom(0.7):
+            horizalign(center):
+            diffuse(1.0, 0.45, 0.3, 1.0):
+            z(30)
+        ));
+    }
 
     let return_hint = if select_returns {
         "Hold &SELECT; to return to Options."

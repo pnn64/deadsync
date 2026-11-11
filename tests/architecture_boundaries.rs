@@ -7081,6 +7081,7 @@ fn fsr_monitor_lives_in_input_fsr_crate() {
         root.join("crates/deadsync-input-fsr/src/lib.rs"),
         root.join("crates/deadsync-input-fsr/src/fsrio.rs"),
         root.join("crates/deadsync-input-fsr/src/smx.rs"),
+        root.join("crates/deadsync-input-fsr/src/snek.rs"),
     ] {
         if !file.exists() {
             failures.push(format!("{} is missing", rel_path(&root, &file)));

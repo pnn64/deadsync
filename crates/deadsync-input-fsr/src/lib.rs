@@ -30,6 +30,14 @@ mod smx;
     target_os = "freebsd",
     target_os = "macos"
 ))]
+mod snek;
+
+#[cfg(any(
+    windows,
+    target_os = "linux",
+    target_os = "freebsd",
+    target_os = "macos"
+))]
 mod teejusb;
 
 #[cfg(any(
@@ -46,6 +54,7 @@ pub struct Monitor {
     /// mock owns the SMX backend slot: native SMX never starts (no pads, no
     /// USB writes) and SMX-routed calls land here instead.
     mock: Option<mock::Monitor>,
+    snek: snek::Monitor,
 }
 
 #[cfg(any(
@@ -74,6 +83,7 @@ impl Monitor {
             smx: smx::Monitor::new(),
             teejusb: teejusb::Monitor::default(),
             mock: mock::Monitor::from_env(),
+            snek: snek::Monitor::default(),
         }
     }
 
@@ -88,6 +98,27 @@ impl Monitor {
     pub fn set_enabled(&mut self, enabled: bool) {
         // UI mocks must never start native serial probing.
         self.teejusb.set_enabled(enabled && self.mock.is_none());
+    }
+
+    /// Enter or leave Snekboard's config-endpoint sensor test mode.
+    ///
+    /// This is intentionally independent of the FSR feature switch: Snek's
+    /// four switches per panel are binary diagnostics, not pressure sensors.
+    pub fn set_snek_test_active(&mut self, active: bool) {
+        self.snek.set_active(active);
+    }
+
+    /// Latest complete Snek sensor snapshot. Reading it never performs USB I/O.
+    #[must_use]
+    pub fn snek_sensor_snapshot(&self) -> SnekSensorSnapshot {
+        self.snek.snapshot()
+    }
+
+    /// Stop Snek diagnostics and send the config-endpoint disconnect command.
+    /// Call only during application shutdown; ordinary Test Input exit merely
+    /// selects sensor zero and keeps the config endpoint connected.
+    pub fn shutdown_snek(&mut self) {
+        self.snek.shutdown();
     }
 
     pub fn write_debug_dump(&mut self, path: &Path) -> Result<(), String> {
@@ -248,7 +279,7 @@ impl Monitor {
     target_os = "macos"
 )))]
 mod unsupported {
-    use super::{PadDeviceId, PadView};
+    use super::{PadDeviceId, PadView, SnekSensorSnapshot};
     use std::fmt::Write as _;
     use std::path::Path;
     use std::time::SystemTime;
@@ -313,6 +344,14 @@ mod unsupported {
 
         pub fn set_active(&mut self, _active: bool) {}
 
+        pub fn set_snek_test_active(&mut self, _active: bool) {}
+
+        pub const fn snek_sensor_snapshot(&self) -> SnekSensorSnapshot {
+            SnekSensorSnapshot::unavailable()
+        }
+
+        pub fn shutdown_snek(&mut self) {}
+
         pub fn poll_pending_saves(&mut self) {}
 
         pub fn flush_pending_saves(&mut self) {}
@@ -338,6 +377,35 @@ mod unsupported {
     target_os = "macos"
 )))]
 pub use unsupported::Monitor;
+
+/// Panel order used by [`SnekSensorSnapshot::sensors`].
+pub const SNEK_PANEL_UP: usize = 0;
+pub const SNEK_PANEL_DOWN: usize = 1;
+pub const SNEK_PANEL_LEFT: usize = 2;
+pub const SNEK_PANEL_RIGHT: usize = 3;
+
+/// A lock-free-from-the-caller's-perspective copy of Snek's diagnostic state.
+/// Dimensions are `[player][panel][sensor]`, with sensors ordered top, bottom,
+/// left, right. `revision` changes whenever connection or sensor state changes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SnekSensorSnapshot {
+    pub connected: bool,
+    pub read_error: bool,
+    pub sensors: [[[bool; 4]; 4]; 2],
+    pub revision: u64,
+}
+
+impl SnekSensorSnapshot {
+    #[must_use]
+    pub const fn unavailable() -> Self {
+        Self {
+            connected: false,
+            read_error: false,
+            sensors: [[[false; 4]; 4]; 2],
+            revision: 0,
+        }
+    }
+}
 
 fn write_dump_file(path: &Path, content: String) -> Result<(), String> {
     if let Some(parent) = path.parent() {
