@@ -1164,16 +1164,29 @@ pub(super) fn apply_submenu_choice_delta(
         };
         let effect = online_config_effect(request);
         if row.id == SubRowId::EnableGrooveStats && !state.arrowcloud_regular_boards_set {
-            // An unset ArrowCloud Regular Boards follows GrooveStats; keep its
-            // row showing what the scorebox will do.
             let arrowcloud = &mut state.sub[SubmenuKind::ArrowCloud];
-            for indices in [&mut arrowcloud.choice_indices, &mut arrowcloud.cursor_indices] {
-                if let Some(index) = get_choice_by_id_mut(
-                    indices,
-                    ARROWCLOUD_OPTIONS_ROWS,
-                    SubRowId::ArrowCloudRegularBoards,
-                ) {
-                    *index = yes_no_choice_index(arrowcloud_regular_boards_shown(None, enabled));
+            let arrowcloud_enabled = get_choice_by_id(
+                &arrowcloud.choice_indices,
+                ARROWCLOUD_OPTIONS_ROWS,
+                SubRowId::EnableArrowCloud,
+            )
+            .is_some_and(yes_no_from_choice);
+            if enabled && arrowcloud_enabled {
+                // GrooveStats turned on after ArrowCloud: the config keeps the
+                // regular boards on, so the row stops following GrooveStats.
+                state.arrowcloud_regular_boards_set = true;
+            } else {
+                // An unset ArrowCloud Regular Boards follows GrooveStats; keep
+                // its row showing what the scorebox will do.
+                for indices in [&mut arrowcloud.choice_indices, &mut arrowcloud.cursor_indices] {
+                    if let Some(index) = get_choice_by_id_mut(
+                        indices,
+                        ARROWCLOUD_OPTIONS_ROWS,
+                        SubRowId::ArrowCloudRegularBoards,
+                    ) {
+                        *index =
+                            yes_no_choice_index(arrowcloud_regular_boards_shown(None, enabled));
+                    }
                 }
             }
         }
@@ -1231,6 +1244,11 @@ pub(super) fn apply_submenu_choice_delta(
         };
         let effect = online_config_effect(request);
         if row.id == SubRowId::EnableArrowCloud {
+            // Turning ArrowCloud on settles Regular Boards at the value the
+            // row already shows, so it stops following GrooveStats.
+            if enabled {
+                state.arrowcloud_regular_boards_set = true;
+            }
             queue_online_reinitialize(state);
         }
         action = Some(effect);

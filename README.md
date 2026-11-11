@@ -326,9 +326,9 @@ Each online service chooses its own scorebox boards under
   event (ITL, SRPG) boards. All three are on by default.
 - **ArrowCloud Options > Regular Boards** turns ArrowCloud's ITG/EX/H.EX boards
   on or off. Which of them appear is set in your board preferences on the
-  ArrowCloud website. Until you change it, it is on while GrooveStats is
-  disabled and off once GrooveStats is enabled, so players who only use
-  ArrowCloud see its boards without duplicating GrooveStats' ITG and EX boards.
+  ArrowCloud website. Its default is set when ArrowCloud is enabled: off if
+  GrooveStats was already enabled, so GrooveStats' ITG and EX boards aren't
+  duplicated, and on otherwise. Enabling GrooveStats later keeps it on.
 - **ArrowCloud Options > Event Boards** turns ArrowCloud event boards such as
   Golf on or off. On by default.
 

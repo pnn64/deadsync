@@ -984,9 +984,10 @@ struct ScoreboxBoards {
     arrowcloud_events: bool,
 }
 
-/// Whether `ArrowCloud`'s regular boards show. Until the player picks, they
-/// follow `GrooveStats`: on for players who only use `ArrowCloud`, and off once
-/// `GrooveStats` is enabled, whose ITG and EX boards would repeat them.
+/// Whether `ArrowCloud`'s regular boards show. The setting is filled in when
+/// `ArrowCloud` is enabled (off if `GrooveStats` already was, whose ITG and EX
+/// boards would repeat them) or when `GrooveStats` is enabled after it (on).
+/// Until then it follows `GrooveStats`.
 #[inline(always)]
 #[must_use]
 pub const fn arrowcloud_regular_boards_shown(

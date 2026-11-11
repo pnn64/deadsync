@@ -1690,6 +1690,40 @@ fn arrowcloud_regular_boards_follow_groovestats_until_set() {
 }
 
 #[test]
+fn arrowcloud_regular_boards_settle_when_arrowcloud_is_enabled() {
+    let assets = AssetManager::new();
+    let regular_row = ARROWCLOUD_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ArrowCloudRegularBoards)
+        .unwrap();
+    let regular = |state: &State| state.sub[SubmenuKind::ArrowCloud].choice_indices[regular_row];
+    // Each service toggle queues an online reinitialize, which the input loop
+    // drains before the next change.
+    let toggle = |state: &mut State, kind, id, delta| {
+        state.view = OptionsView::Submenu(kind);
+        select_visible_row(state, kind, id);
+        apply_submenu_choice_delta(state, &assets, delta, NavWrap::Clamp).unwrap();
+        state.online_reinit_pending = false;
+    };
+    let gs = (SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    let ac = (SubmenuKind::ArrowCloud, SubRowId::EnableArrowCloud);
+
+    // ArrowCloud first: the boards stay on once GrooveStats is enabled.
+    let mut state = init_with_config(config::app_config::Config::default());
+    toggle(&mut state, ac.0, ac.1, 1);
+    toggle(&mut state, gs.0, gs.1, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    // GrooveStats first: the boards start off and stay off.
+    let mut state = init_with_config(config::app_config::Config::default());
+    toggle(&mut state, gs.0, gs.1, 1);
+    toggle(&mut state, ac.0, ac.1, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    toggle(&mut state, gs.0, gs.1, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+}
+
+#[test]
 fn arrowcloud_board_rows_turn_regular_and_event_boards_on_or_off() {
     let assets = AssetManager::new();
     let mut state = init_with_config(config::app_config::Config::default());
