@@ -25,9 +25,7 @@ pub(super) fn reset(call: &mut HostCall<'_>, owner: TableId) -> Result<(), Error
     call.with_roots(&[Value::Table(state), Value::Table(speeds)], |call| {
         let mut key = Value::Nil;
         loop {
-            let pair = call
-                .call(call.captures()[3], &[Value::Table(state), key])?
-                .to_vec();
+            let pair = call.call(call.captures()[3], &[Value::Table(state), key])?;
             key = pair.first().copied().unwrap_or(Value::Nil);
             if key == Value::Nil {
                 break;

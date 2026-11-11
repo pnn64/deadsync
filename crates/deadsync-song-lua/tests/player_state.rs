@@ -339,6 +339,31 @@ fn clock_validation_and_callback_failures_preserve_native_commit_boundaries() {
 }
 
 #[test]
+fn advancement_deduplicates_coerced_keys_before_ordered_partial_writes() {
+    let mut runtime = SongRuntime::new(&context()).unwrap();
+    test_support::expose_catalog(&mut runtime).unwrap();
+    execute(
+        &mut runtime,
+        r#"
+        current=catalog.player_options[1][4]
+        target=catalog.player_options[1][3]
+        current.__songlua_player_option_state={[1]=0,['1']=0,aaa=0,zzz={}}
+        target.__songlua_player_option_state={[1]=99,['1']=1,aaa=1,zzz=1}
+    "#,
+    );
+    assert!(runtime.advance_options(1.0, Some([0.25; 3])).is_err());
+    execute(
+        &mut runtime,
+        r#"
+        local values=current.__songlua_player_option_state
+        assert(values[1]==0)
+        assert(values['1']==0.25 and values.aaa==0.25)
+        assert(type(values.zzz)=='table')
+    "#,
+    );
+}
+
+#[test]
 fn preference_reentry_gc_and_public_alias_replacement_preserve_native_owners() {
     let mut p = Pair::new(&context());
     p.compare(

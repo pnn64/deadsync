@@ -48,6 +48,10 @@ deadlib-render = { path = "../deadlib-render" }
 winit = "0.30.13"
 
 [[test]]
+name = "performance"
+required-features = ["test-support"]
+
+[[test]]
 name = "live_gameplay"
 required-features = ["test-support"]
 

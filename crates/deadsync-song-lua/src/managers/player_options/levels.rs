@@ -4,7 +4,6 @@ use crate::player_options::{
     OPTION_STRING_NAMES, SONG_LUA_PLAYER_OPTION_CAPABILITIES,
     SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
 };
-use std::collections::BTreeSet;
 
 fn part(parts: &mut Vec<String>, name: &str, value: f32) {
     if value != 0.0 && value.is_finite() {
@@ -68,12 +67,15 @@ pub(super) fn parts(call: &mut HostCall<'_>, owner: TableId) -> Result<Vec<Strin
         {
             parts.push((*name).into());
         }
-        for name in OPTION_STRING_NAMES {
-            let key = match *name {
-                "RandomAttacks" => "randattack".into(),
-                "NoAttacks" => "noattack".into(),
-                _ => name.to_ascii_lowercase(),
-            };
+        let mut key = String::with_capacity(32);
+        for &name in OPTION_STRING_NAMES {
+            key.clear();
+            key.push_str(match name {
+                "RandomAttacks" => "randattack",
+                "NoAttacks" => "noattack",
+                _ => name,
+            });
+            key.make_ascii_lowercase();
             let value = raw(call, state, &key)?;
             let value = if let Value::Boolean(value) = value {
                 f32::from(value)
@@ -81,22 +83,31 @@ pub(super) fn parts(call: &mut HostCall<'_>, owner: TableId) -> Result<Vec<Strin
                 float(call, value).unwrap_or(0.0)
             };
             part(&mut parts, name, value);
-            if *name == "Cosecant" {
+            if name == "Cosecant" {
+                let mut name = String::with_capacity(32);
+                let mut digits = itoa::Buffer::new();
                 for col in 1..=16 {
+                    let column = digits.format(col);
                     for prefix in SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES {
-                        let name = format!("{prefix}{col}");
-                        let value = raw_float(call, state, &name.to_ascii_lowercase(), 0.0)?;
+                        name.clear();
+                        name.push_str(prefix);
+                        name.push_str(column);
+                        key.clear();
+                        key.push_str(&name);
+                        key.make_ascii_lowercase();
+                        let value = raw_float(call, state, &key, 0.0)?;
                         part(&mut parts, &name, value);
                     }
                 }
             }
         }
-        for name in SONG_LUA_PLAYER_OPTION_CAPABILITIES
-            .iter()
-            .filter(|name| player_option_uses_bool(&name.to_ascii_lowercase()))
-        {
-            if !OPTION_STRING_NAMES.contains(name)
-                && truthy(raw(call, state, &name.to_ascii_lowercase())?)
+        for name in SONG_LUA_PLAYER_OPTION_CAPABILITIES {
+            key.clear();
+            key.push_str(name);
+            key.make_ascii_lowercase();
+            if player_option_uses_bool(&key)
+                && !OPTION_STRING_NAMES.contains(name)
+                && truthy(raw(call, state, &key)?)
             {
                 parts.push((*name).into());
             }
@@ -149,9 +160,7 @@ pub(super) fn entries(
     call.with_roots(&[Value::Table(source)], |call| {
         let mut key = Value::Nil;
         loop {
-            let pair = call
-                .call(call.captures()[3], &[Value::Table(source), key])?
-                .to_vec();
+            let pair = call.call(call.captures()[3], &[Value::Table(source), key])?;
             key = pair.first().copied().unwrap_or(Value::Nil);
             if key == Value::Nil {
                 break;
@@ -256,13 +265,15 @@ pub(super) fn advance(
             Value::Table(speeds),
         ],
         |call| {
-            let mut keys = BTreeSet::new();
+            let mut keys = smallvec::SmallVec::<[String; 16]>::new();
             for owner in [current, target] {
                 entries(call, owner, |call, key, _| {
-                    keys.insert(string(call, key)?);
+                    keys.push(string(call, key)?);
                     Ok(())
                 })?;
             }
+            keys.sort_unstable();
+            keys.dedup();
             for key in keys {
                 let value = raw(call, target, &key)?;
                 let value = if value == Value::Nil {
