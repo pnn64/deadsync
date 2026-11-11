@@ -114,6 +114,28 @@ impl Spec {
         }
         Ok(out)
     }
+    /// The bytes Lua 5.1's unmodified `%s` would copy, without a temporary buffer.
+    /// Short inputs use C-string termination; inputs of 100 bytes or more are
+    /// copied in full when no precision is specified, including embedded NULs.
+    pub fn plain_string_bytes<'a>(&self, bytes: &'a [u8]) -> Option<&'a [u8]> {
+        if self.conversion != b's'
+            || self.width != 0
+            || self.precision.is_some()
+            || self.left
+            || self.plus
+            || self.space
+            || self.alternate
+            || self.zero
+            || self.literal_len != 0
+        {
+            return None;
+        }
+        if bytes.len() >= 100 {
+            return Some(bytes);
+        }
+        let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        Some(&bytes[..len])
+    }
     pub fn string(&self, bytes: &[u8], memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.precision.is_none() && bytes.len() >= 100 {
             return copy(memory, bytes);

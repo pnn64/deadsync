@@ -1156,6 +1156,9 @@ impl Vm {
                     let bytes = &self.strings.bytes[slot_index(text.0)];
                     if spec.conversion == b'q' {
                         crate::format::quote(bytes, &mut output, scratch)?;
+                    } else if let Some(bytes) = spec.plain_string_bytes(bytes) {
+                        scratch.reserve(&mut output, bytes.len())?;
+                        output.extend_from_slice(bytes);
                     } else {
                         let bytes = spec.string(bytes, scratch)?;
                         scratch.reserve(&mut output, bytes.len())?;
