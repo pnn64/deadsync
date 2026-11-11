@@ -4063,9 +4063,9 @@ mod tests {
 
         // A choice the player made sticks either way.
         let off = load("[Options]\nEnableGrooveStats=0\nArrowCloudRegularBoards=0\n");
-        assert_eq!(off[3], false);
+        assert!(!off[3]);
         let on = load("[Options]\nEnableGrooveStats=1\nArrowCloudRegularBoards=1\n");
-        assert_eq!(on[3], true);
+        assert!(on[3]);
     }
 
     #[test]
@@ -4113,8 +4113,8 @@ mod tests {
         // ITG, EX and H.EX all off turns them off.
         assert_eq!(migrate(&saved(0, 0, 0, 1, 0, 0)), [false, false, true, false, true]);
         // With golf enabled, the golf switch carries over either way.
-        assert_eq!(migrate(&saved(1, 1, 1, 1, 0, 1))[4], false);
-        assert_eq!(migrate(&saved(1, 1, 1, 1, 1, 1))[4], true);
+        assert!(!migrate(&saved(1, 1, 1, 1, 0, 1))[4]);
+        assert!(migrate(&saved(1, 1, 1, 1, 1, 1))[4]);
         // New keys win over the old switches.
         assert_eq!(
             migrate(&format!(
