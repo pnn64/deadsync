@@ -265,17 +265,25 @@ pub(super) fn advance(
             Value::Table(speeds),
         ],
         |call| {
-            let mut keys = smallvec::SmallVec::<[String; 16]>::new();
+            let mut keys = smallvec::SmallVec::<[smallvec::SmallVec<[u8; 32]>; 16]>::new();
             for owner in [current, target] {
                 entries(call, owner, |call, key, _| {
-                    keys.push(string(call, key)?);
+                    let id = call
+                        .coerce_string(key)?
+                        .ok_or_else(|| call.error(b"string expected"))?;
+                    let bytes = call
+                        .string_bytes(id)
+                        .ok_or_else(|| call.error(b"invalid UTF-8 string"))?;
+                    std::str::from_utf8(bytes).map_err(|_| call.error(b"invalid UTF-8 string"))?;
+                    keys.push(smallvec::SmallVec::from_slice(bytes));
                     Ok(())
                 })?;
             }
             keys.sort_unstable();
             keys.dedup();
             for key in keys {
-                let value = raw(call, target, &key)?;
+                let key = std::str::from_utf8(&key).expect("validated modifier key");
+                let value = raw(call, target, key)?;
                 let value = if value == Value::Nil {
                     default_value(call, &key)?
                 } else {
@@ -283,14 +291,14 @@ pub(super) fn advance(
                 };
                 if matches!(value, Value::Boolean(_) | Value::String(_))
                     || matches!(
-                        key.as_str(),
+                        key,
                         "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
                     )
                 {
                     set(current, key, value, call)?;
                 } else if let Some(target) = float(call, value) {
-                    let value = raw_float(call, current, &key, 0.0)?;
-                    let speed = raw_float(call, speeds, &key, 1.0)?;
+                    let value = raw_float(call, current, key, 0.0)?;
+                    let speed = raw_float(call, speeds, key, 1.0)?;
                     let value = super::super::song_options::approach(
                         call,
                         value,

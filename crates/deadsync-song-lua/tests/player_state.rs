@@ -364,6 +364,35 @@ fn advancement_deduplicates_coerced_keys_before_ordered_partial_writes() {
 }
 
 #[test]
+fn advancement_preserves_long_and_unicode_option_keys() {
+    let mut runtime = SongRuntime::new(&context()).unwrap();
+    test_support::expose_catalog(&mut runtime).unwrap();
+    execute(
+        &mut runtime,
+        r#"
+        local long=string.rep('long_modifier_',6)
+        local current=catalog.player_options[1][4]
+        local target=catalog.player_options[1][3]
+        current.__songlua_player_option_state={[long]=0,['été']=0}
+        target.__songlua_player_option_state={[long]=1,['été']=1}
+        "#,
+    );
+    runtime.advance_options(0.25, Some([0.25; 3])).unwrap();
+    execute(
+        &mut runtime,
+        r#"
+        local long=string.rep('long_modifier_',6)
+        local current=catalog.player_options[1][4].__songlua_player_option_state
+        assert(current[long]==0.25 and current['été']==0.25)
+        "#,
+    );
+    execute(
+        &mut runtime,
+        "catalog.player_options[1][3].__songlua_player_option_state={[string.char(255)]=1}",
+    );
+    assert!(runtime.advance_options(0.5, Some([0.25; 3])).is_err());
+}
+#[test]
 fn preference_reentry_gc_and_public_alias_replacement_preserve_native_owners() {
     let mut p = Pair::new(&context());
     p.compare(

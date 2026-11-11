@@ -264,6 +264,32 @@ fn arrow_effects_accepts_more_than_eight_arguments() {
     assert_eq!(result.first(), Some(&Value::Boolean(true)));
 }
 #[test]
+fn indexed_arrow_modifiers_preserve_signed_numeric_keys() {
+    let mut runtime = SongRuntime::new(&context()).unwrap();
+    let script = br#"
+        local ps=GAMESTATE:GetPlayerState(PLAYER_1)
+        local state=ps:GetCurrentPlayerOptions().__songlua_player_option_state
+        assert(ArrowEffects.GetAlpha(ps,-1,100)==1)
+        state['stealth-1']=1
+        assert(ArrowEffects.GetAlpha(ps,-1,100)==0)
+        for _,pair in ipairs{
+            {'confusionoffset0',0},
+            {'confusionoffset-1',-1},
+            {'confusionoffset2147483647',2147483647},
+            {'confusionoffset-2147483648',-2147483648},
+        } do
+            state[pair[1]]=math.pi/4
+            assert(math.abs(ArrowEffects.GetRotationZ(ps,0,false,pair[2])-45)<0.001)
+        end
+        return true
+    "#;
+    let result = runtime
+        .vm_mut()
+        .execute(&compile_named(script, b"=arrow-indexed-modifiers").unwrap())
+        .unwrap();
+    assert_eq!(result.first(), Some(&Value::Boolean(true)));
+}
+#[test]
 fn cache_commit_is_atomic_and_selected_options_remain_rooted_across_collection() {
     let mut p = Pair::new(&context());
     p.frame(0.2, 3., 7.);

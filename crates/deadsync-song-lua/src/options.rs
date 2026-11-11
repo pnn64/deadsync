@@ -21,7 +21,8 @@ impl SongRuntime {
         seconds: f64,
         deltas: Option<[f32; LUA_PLAYERS + 1]>,
     ) -> Result<(), Error> {
-        let mut values = vec![Value::Number(seconds)];
+        let mut values = [Value::Number(seconds), Value::Nil];
+        let mut count = 1;
         let mut root = None;
         if let Some(deltas) = deltas {
             let table = self.vm.try_new_table()?;
@@ -38,9 +39,10 @@ impl SongRuntime {
                 return Err(error);
             }
             root = Some(pinned);
-            values.push(Value::Table(table));
+            values[1] = Value::Table(table);
+            count = 2;
         }
-        let result = self.option_operation("Advance", &values);
+        let result = self.option_operation("Advance", &values[..count]);
         if let Some(root) = root {
             self.vm.unpin(root)?;
         }
@@ -101,7 +103,7 @@ impl SongRuntime {
     }
 
     fn option_operation(&mut self, name: &str, arguments: &[Value]) -> Result<(), Error> {
-        let mut roots = Vec::new();
+        let mut roots = smallvec::SmallVec::<[Root; 3]>::new();
         let result = (|| {
             for &value in arguments {
                 roots.push(self.vm.pin(value)?);
