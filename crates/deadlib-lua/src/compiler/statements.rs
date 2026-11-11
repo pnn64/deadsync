@@ -15,11 +15,11 @@ impl<'a> Compiler<'a> {
                 self.tasks
                     .try_push(Task::Values(self.ast.ids(*values), names.len()))?;
             }
-            Stmt::Assign(targets, _) | Stmt::FunctionDefinition(targets, _) => {
+            Stmt::Assign(..) | Stmt::FunctionDefinition(..) => {
                 self.tasks.try_push(Task::AssignNext(
                     id,
                     0,
-                    fallible::with_capacity(targets.len())?,
+                    tasks::AssignmentTargets::default(),
                 ))?;
             }
             Stmt::Call(value) => {
@@ -131,7 +131,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         id: StmtId,
         mut index: usize,
-        mut locations: Vec<Target>,
+        mut locations: tasks::AssignmentTargets,
     ) -> Result<(), Error> {
         let (targets, values) = self.assignment(id);
         while let Some(&target) = targets.get(index) {
@@ -164,7 +164,7 @@ impl<'a> Compiler<'a> {
             {
                 let saved = self.alloc(1)?;
                 self.emit(Op::Move, saved, u16::from(reg), 0)?;
-                for target in &mut locations {
+                for target in locations.iter_mut() {
                     if let Target::Index(table, key) = target {
                         if *table == reg {
                             *table = saved;
@@ -175,10 +175,10 @@ impl<'a> Compiler<'a> {
                     }
                 }
             }
-            locations.try_push(target)?;
+            locations.try_push(target, targets.len())?;
             index += 1;
         }
-        if let ([Target::Local(dst)], [value]) = (locations.as_slice(), values) {
+        if let ([Target::Local(dst)], [value]) = (&locations[..], values) {
             let mut expression = *value;
             while let Expr::Paren(inner) = self.ast.exprs[expression].0 {
                 expression = inner;
@@ -209,7 +209,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         id: StmtId,
         index: usize,
-        mut locations: Vec<Target>,
+        mut locations: tasks::AssignmentTargets,
         table: u8,
     ) -> Result<(), Error> {
         let (targets, _) = self.assignment(id);
@@ -227,7 +227,7 @@ impl<'a> Compiler<'a> {
             self.tasks.try_push(Task::Operand(key, reg))?;
             return Ok(());
         };
-        locations.try_push(Target::Index(table, key))?;
+        locations.try_push(Target::Index(table, key), targets.len())?;
         self.tasks
             .try_push(Task::AssignNext(id, index + 1, locations))?;
         Ok(())

@@ -20,6 +20,61 @@ pub(super) struct TableState {
     pub dst: u8,
 }
 
+/// Most assignments have one target; avoid a heap allocation for that case.
+pub(super) enum AssignmentTargets {
+    Inline(Option<Target>),
+    Heap(Vec<Target>),
+}
+
+impl Default for AssignmentTargets {
+    fn default() -> Self {
+        Self::Inline(None)
+    }
+}
+
+impl AssignmentTargets {
+    pub(super) fn try_push(&mut self, target: Target, total: usize) -> Result<(), Error> {
+        match self {
+            Self::Inline(slot) => {
+                if slot.is_none() {
+                    *slot = Some(target);
+                } else {
+                    // Allocate before moving the first target, so failure
+                    // leaves the inline value and its ownership intact.
+                    let mut values = fallible::with_capacity(total.max(2))?;
+                    values.push(slot.take().expect("inline assignment target"));
+                    values.push(target);
+                    *self = Self::Heap(values);
+                }
+                Ok(())
+            }
+            Self::Heap(values) => values.try_push(target),
+        }
+    }
+}
+
+impl std::ops::Deref for AssignmentTargets {
+    type Target = [Target];
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Inline(Some(target)) => std::slice::from_ref(target),
+            Self::Inline(None) => &[],
+            Self::Heap(values) => values,
+        }
+    }
+}
+
+impl std::ops::DerefMut for AssignmentTargets {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Inline(Some(target)) => std::slice::from_mut(target),
+            Self::Inline(None) => &mut [],
+            Self::Heap(values) => values,
+        }
+    }
+}
+
 pub(super) enum Task<'a> {
     Block(&'a [StmtId]),
     Scope(&'a [StmtId]),
@@ -29,10 +84,10 @@ pub(super) enum Task<'a> {
     ValuesNext(&'a [ExprId], u16, u8, u16),
     BindLocal(StmtId),
     LocalFunctionEnd,
-    AssignNext(StmtId, usize, Vec<Target>),
-    AssignKey(StmtId, usize, Vec<Target>),
-    AssignIndex(StmtId, usize, Vec<Target>, u8),
-    AssignEnd(StmtId, Vec<Target>),
+    AssignNext(StmtId, usize, AssignmentTargets),
+    AssignKey(StmtId, usize, AssignmentTargets),
+    AssignIndex(StmtId, usize, AssignmentTargets, u8),
+    AssignEnd(StmtId, AssignmentTargets),
     ReturnNext(StmtId, u8, usize, u32),
     TailEnd(u32),
     WhileCond(StmtId, u16, u32, u8),
@@ -170,7 +225,11 @@ impl<'a> Compiler<'a> {
                     self.assign_key(id, index, locations, table)?;
                 }
                 Task::AssignIndex(id, index, mut locations, table) => {
-                    locations.try_push(Target::Index(table, TargetKey::Register(self.result)))?;
+                    let total = self.assignment(id).0.len();
+                    locations.try_push(
+                        Target::Index(table, TargetKey::Register(self.result)),
+                        total,
+                    )?;
                     self.tasks
                         .try_push(Task::AssignNext(id, index + 1, locations))?;
                 }
