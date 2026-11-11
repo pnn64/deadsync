@@ -59,6 +59,48 @@ return calls, target[1], target[2], target[3], target[4], target[2.5], nil_ok, n
 }
 
 #[test]
+fn live_hash_scalar_overwrites_keep_metamethods_keys_and_collection() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local t = {alpha=1, beta=2, other={value=11}}
+local key = {}
+t[key] = 1
+for i=1,1000 do
+    t.alpha=i
+    t[key]=i
+end
+t.beta=false
+t[-0.0]=17
+t[0.0]=19
+collectgarbage()
+assert(t.other.value==11 and t[key]==1000 and t[0]==19)
+local visits=0
+for k,v in pairs(t) do visits=visits+1 end
+local calls=0
+setmetatable(t, {__newindex=function(o,k,v)
+    calls=calls+1
+    rawset(o,k,v)
+end})
+t.beta=23
+t.alpha=nil
+t.alpha=42
+return t.alpha,t.beta,t[key],visits,calls
+"#,
+        ),
+        [
+            Value::Number(42.0),
+            Value::Number(23.0),
+            Value::Number(1000.0),
+            Value::Number(5.0),
+            Value::Number(1.0),
+        ],
+    );
+}
+
+#[test]
 fn constructor_list_fields_keep_nil_holes_in_array_storage() {
     let mut vm = Vm::new();
     execute(

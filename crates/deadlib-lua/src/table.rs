@@ -5,6 +5,7 @@ use crate::memory::{Buffer, Memory};
 use crate::{
     Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug)]
 enum Key {
@@ -108,6 +109,9 @@ pub(crate) struct Table {
     array: Buffer<Value>,
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
+    // Two one-based hash entry indices, packed into one atomic word. Always
+    // compare keys before reuse: mutations can move or remove entries.
+    next_hash_hint: AtomicU64,
     // Arena identities have a nonzero generation; zero denotes no metatable.
     // The private attachment below uses the same optional-identity encoding.
     metatable: u64,
@@ -130,6 +134,7 @@ impl Table {
             array: Buffer::new_in(memory.clone()),
             entries: Buffer::new_in(memory.clone()),
             slots: Buffer::new_in(memory),
+            next_hash_hint: AtomicU64::new(0),
             metatable: 0,
             host_state: 0,
             trace: TableTrace::Idle,
@@ -367,6 +372,38 @@ impl Table {
             false
         }
     }
+    /// A live string-keyed hash entry already owns its key. Replacing its
+    /// scalar value cannot allocate, add a GC edge or change traversal order.
+    #[inline]
+    pub(crate) fn set_existing_string_scalar(&mut self, key: StringId, value: Value) -> bool {
+        if !matches!(
+            value,
+            Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+        ) {
+            return false;
+        }
+        let hints = self.next_hash_hint.load(Ordering::Relaxed);
+        for hint in [hints as u32, (hints >> 32) as u32] {
+            if let Some(entry) = hint
+                .checked_sub(1)
+                .and_then(|index| self.entries.get_mut(index as usize))
+                && entry.key == Key::String(key)
+                && entry.value != Value::Nil
+            {
+                entry.value = value;
+                return true;
+            }
+        }
+        false
+    }
+    #[inline]
+    fn remember_hash_entry(&self, index: u32) {
+        let previous = self.next_hash_hint.load(Ordering::Relaxed) as u32;
+        self.next_hash_hint.store(
+            (u64::from(previous) << 32) | u64::from(index),
+            Ordering::Relaxed,
+        );
+    }
     pub fn set(&mut self, key: Value, value: Value) -> Result<(), Error> {
         let k = Self::checked_key(key)?;
         if let Some(i) = array_index(key) {
@@ -401,6 +438,9 @@ impl Table {
         let vacant = match self.slot(k) {
             Some((_, Some(i))) => {
                 self.entries[i].value = value;
+                if matches!(k, Key::String(_)) {
+                    self.remember_hash_entry((i + 1) as u32);
+                }
                 return Ok(());
             }
             Some((slot, None)) => Some(slot),
@@ -445,6 +485,9 @@ impl Table {
         };
         self.slots[slot] = index;
         self.entries.push(Entry { key: k, value });
+        if matches!(k, Key::String(_)) {
+            self.remember_hash_entry(index);
+        }
         Ok(())
     }
     #[inline]
@@ -497,18 +540,44 @@ impl Table {
             (0, 0)
         } else if let Some(i) = array_index(key).filter(|&i| i < self.array.len()) {
             (i + 1, 0)
-        } else if let Some((_, Some(i))) = Key::from_value(key).and_then(|k| self.slot(k)) {
-            (self.array.len(), i + 1)
         } else {
-            return Err(InvalidNextKey);
+            let key = Key::from_value(key).ok_or(InvalidNextKey)?;
+            let hints = self.next_hash_hint.load(Ordering::Relaxed);
+            let first = hints as u32 as usize;
+            let second = (hints >> 32) as u32 as usize;
+            let index = if first != 0
+                && self
+                    .entries
+                    .get(first - 1)
+                    .is_some_and(|entry| entry.key == key)
+            {
+                first - 1
+            } else if second != 0
+                && self
+                    .entries
+                    .get(second - 1)
+                    .is_some_and(|entry| entry.key == key)
+            {
+                second - 1
+            } else {
+                self.slot(key)
+                    .and_then(|(_, index)| index)
+                    .ok_or(InvalidNextKey)?
+            };
+            (self.array.len(), index + 1)
         };
         for (i, &value) in self.array.iter().enumerate().skip(array) {
             if value != Value::Nil {
                 return Ok(Some((Value::Number((i + 1) as f64), value)));
             }
         }
-        for entry in self.entries.iter().skip(hash) {
+        for (index, entry) in self.entries.iter().enumerate().skip(hash) {
             if entry.value != Value::Nil {
+                // Hash entries are indexed by u32 in slots, so index+1 fits.
+                // A sequential next cursor always uses this primary hint;
+                // discarding the secondary avoids a read-modify-write per key.
+                self.next_hash_hint
+                    .store((index + 1) as u64, Ordering::Relaxed);
                 return Ok(Some((entry.key.value(), entry.value)));
             }
         }
@@ -598,6 +667,138 @@ mod allocation_tests {
             ErrorKind::Runtime
         );
         assert!(table.next(Value::Number(f64::NAN)).is_err());
+    }
+    #[test]
+    fn next_hint_preserves_mixed_key_order_and_interleaved_cursors() {
+        let mut table = Table::with_capacity(2, 8).unwrap();
+        table.set(Value::Number(1.), Value::Number(11.)).unwrap();
+        table.set(Value::Number(2.), Value::Number(22.)).unwrap();
+        let keys = [
+            Value::String(StringId((1u64 << 32) | 7)),
+            Value::Table(TableId((2u64 << 32) | 3)),
+            Value::Number(-0.0),
+            Value::Boolean(false),
+            Value::Number(-7.5),
+        ];
+        for (index, &key) in keys.iter().enumerate() {
+            table.set(key, Value::Number((index + 30) as f64)).unwrap();
+        }
+
+        let expected = table.pairs().collect::<Vec<_>>();
+        let mut actual = Vec::new();
+        let mut key = Value::Nil;
+        while let Some(pair) = table.next_entry(key).unwrap() {
+            actual.push(pair);
+            key = pair.0;
+        }
+        assert_eq!(actual, expected);
+        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed) as u32, 5);
+        // Another iterator can overwrite the hint; the original cursor still
+        // locates its exact key through the ordinary hash lookup.
+        assert_eq!(
+            table.next(keys[0]).unwrap(),
+            Some((keys[1], Value::Number(31.)))
+        );
+        assert_eq!(
+            table.next(Value::Number(0.)).unwrap(),
+            Some((keys[3], Value::Number(33.)))
+        );
+        assert_eq!(
+            table.next(Value::Number(2.)).unwrap(),
+            Some((keys[0], Value::Number(30.)))
+        );
+        table
+            .next_hash_hint
+            .store(u64::from(u32::MAX), Ordering::Relaxed);
+        assert_eq!(
+            table.next(keys[1]).unwrap(),
+            Some((keys[2], Value::Number(32.)))
+        );
+        assert!(table.next(Value::String(StringId(999))).is_err());
+        assert!(table.next(Value::Table(TableId((3u64 << 32) | 3))).is_err());
+        assert!(table.next(Value::Number(f64::NAN)).is_err());
+
+        let (visited, stats) = probe(1, || {
+            let mut current = Value::Nil;
+            let mut visited = 0;
+            while let Some((next, _)) = table.next_entry(current).unwrap() {
+                visited += 1;
+                current = next;
+            }
+            visited
+        });
+        assert_eq!(visited, expected.len());
+        assert_eq!(stats.attempts, 0);
+    }
+    #[test]
+    fn recent_hash_hint_shortcuts_only_exact_live_string_key_overwrites() {
+        let a = StringId((1_u64 << 32) | 11);
+        let b = StringId((1_u64 << 32) | 12);
+        let mut table = Table::with_capacity(0, 4).unwrap();
+        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed), 0);
+        assert!(!table.set_existing_string_scalar(a, Value::Number(1.)));
+        table.set(Value::String(a), Value::Number(2.)).unwrap();
+        assert_eq!(table.next_hash_hint.load(Ordering::Relaxed), 1);
+        let (updated, stats) = probe(1, || table.set_existing_string_scalar(a, Value::Number(3.)));
+        assert!(updated);
+        assert_eq!(stats.attempts, 0);
+        assert_eq!(table.get(Value::String(a)), Value::Number(3.));
+
+        table.set(Value::String(b), Value::Number(4.)).unwrap();
+        assert!(table.set_existing_string_scalar(a, Value::Number(5.)));
+        assert!(table.set_existing_string_scalar(b, Value::Number(4.)));
+        table.set(Value::String(a), Value::Number(5.)).unwrap();
+        assert!(table.set_existing_string_scalar(a, Value::Number(6.)));
+        table.set(Value::String(a), Value::Nil).unwrap();
+        assert!(!table.set_existing_string_scalar(a, Value::Number(7.)));
+        table.set(Value::String(a), Value::Number(8.)).unwrap();
+        table
+            .next_hash_hint
+            .store(u64::from(u32::MAX), Ordering::Relaxed);
+        assert!(!table.set_existing_string_scalar(a, Value::Number(9.)));
+        table.set(Value::String(a), Value::Number(9.)).unwrap();
+        assert!(table.set_existing_string_scalar(a, Value::Number(10.)));
+        assert_eq!(table.get(Value::String(a)), Value::Number(10.));
+        assert_eq!(
+            table.next(Value::String(a)).unwrap(),
+            Some((Value::String(b), Value::Number(4.)))
+        );
+    }
+    #[test]
+    fn next_hint_allows_deleted_controls_until_tombstones_are_compacted() {
+        let mut table = Table::with_capacity(0, 5).unwrap();
+        for n in 1..=5 {
+            table.set(hash_key(n), Value::Number(n as f64)).unwrap();
+        }
+        assert_eq!(table.next(Value::Nil).unwrap().unwrap().0, hash_key(1));
+        assert_eq!(table.next(hash_key(1)).unwrap().unwrap().0, hash_key(2));
+        table.set(hash_key(2), Value::Nil).unwrap();
+        assert_eq!(
+            table.next(hash_key(2)).unwrap(),
+            Some((hash_key(3), Value::Number(3.)))
+        );
+        table.set(hash_key(1), Value::Nil).unwrap();
+        assert_eq!(
+            table.next(hash_key(1)).unwrap(),
+            Some((hash_key(3), Value::Number(3.)))
+        );
+
+        // The next insertion compacts tombstones. A stale physical index must
+        // not make a removed key valid after it leaves the hash slots.
+        table.set(hash_key(6), Value::Number(6.)).unwrap();
+        assert!(table.next(hash_key(1)).is_err());
+        assert!(table.next(hash_key(2)).is_err());
+        assert_eq!(
+            table.next(hash_key(3)).unwrap(),
+            Some((hash_key(4), Value::Number(4.)))
+        );
+        let expected = table.pairs().collect::<Vec<_>>();
+        let mut current = Value::Nil;
+        for &pair in &expected {
+            assert_eq!(table.next(current).unwrap(), Some(pair));
+            current = pair.0;
+        }
+        assert_eq!(table.next(current).unwrap(), None);
     }
     fn check_hash(table: &Table, count: i32) {
         for n in 1..=count {
