@@ -144,8 +144,12 @@ fn poll_device(device: &HidDevice, stop: &AtomicBool, shared: &Mutex<SnekSensorS
     while !stop.load(Ordering::Acquire) {
         match exchange(device, SET_EXTIO_SENSOR, (sensor + 1) as u8, &mut response) {
             Ok(()) => {
-                states[sensor] = u32::from_le_bytes(response[2..6].try_into().unwrap());
-                publish_sensor_states(shared, states);
+                process_sensor_sample(
+                    shared,
+                    &mut states,
+                    sensor,
+                    u32::from_le_bytes(response[2..6].try_into().unwrap()),
+                );
                 sensor = (sensor + 1) % states.len();
             }
             Err(error) => {
@@ -208,9 +212,7 @@ fn build_request(opcode: u8, payload: u8) -> [u8; PACKET_SIZE] {
     request[0] = OUTPUT_REPORT;
     request[1] = opcode;
     request[2] = payload;
-    request[PACKET_SIZE - 1] = request[..PACKET_SIZE - 1]
-        .iter()
-        .fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+    request[PACKET_SIZE - 1] = OUTPUT_REPORT.wrapping_add(opcode).wrapping_add(payload);
     request
 }
 
@@ -255,18 +257,40 @@ fn publish_connection(shared: &Mutex<SnekSensorSnapshot>, connected: bool, read_
     snapshot.revision = snapshot.revision.wrapping_add(1);
 }
 
-fn publish_sensor_states(shared: &Mutex<SnekSensorSnapshot>, states: [u32; 4]) {
-    let sensors = decode_sensor_states(states);
+fn publish_sensor_state(shared: &Mutex<SnekSensorSnapshot>, sensor: usize, value: u32) {
     let mut snapshot = shared.lock().unwrap_or_else(|e| e.into_inner());
-    if snapshot.sensors == sensors && snapshot.connected && !snapshot.read_error {
-        return;
-    }
     snapshot.connected = true;
     snapshot.read_error = false;
-    snapshot.sensors = sensors;
+    snapshot.sensors[1][SNEK_PANEL_UP][sensor] = value & (1 << 14) != 0;
+    snapshot.sensors[0][SNEK_PANEL_UP][sensor] = value & (1 << 15) != 0;
+    snapshot.sensors[0][SNEK_PANEL_LEFT][sensor] = value & (1 << 16) != 0;
+    snapshot.sensors[1][SNEK_PANEL_LEFT][sensor] = value & (1 << 17) != 0;
+    snapshot.sensors[0][SNEK_PANEL_DOWN][sensor] = value & (1 << 18) != 0;
+    snapshot.sensors[1][SNEK_PANEL_DOWN][sensor] = value & (1 << 19) != 0;
+    snapshot.sensors[1][SNEK_PANEL_RIGHT][sensor] = value & (1 << 20) != 0;
+    snapshot.sensors[0][SNEK_PANEL_RIGHT][sensor] = value & (1 << 21) != 0;
     snapshot.revision = snapshot.revision.wrapping_add(1);
 }
 
+#[inline]
+fn process_sensor_sample(
+    shared: &Mutex<SnekSensorSnapshot>,
+    states: &mut [u32; 4],
+    sensor: usize,
+    value: u32,
+) {
+    // poll_device publishes the connection before reading the first selector.
+    // Only bits 14..21 are displayed, so unrelated firmware bits cannot
+    // invalidate the snapshot or force the UI to rebuild its presentation.
+    const SENSOR_BITS: u32 = 0xff << 14;
+    let changed = (states[sensor] ^ value) & SENSOR_BITS != 0;
+    states[sensor] = value;
+    if changed {
+        publish_sensor_state(shared, sensor, value);
+    }
+}
+
+#[cfg(test)]
 fn decode_sensor_states(states: [u32; 4]) -> [[[bool; 4]; 4]; 2] {
     const MAP: [(u32, usize, usize); 8] = [
         (14, 1, SNEK_PANEL_UP),
@@ -300,6 +324,17 @@ mod tests {
             request[63],
             OUTPUT_REPORT.wrapping_add(SET_EXTIO_SENSOR).wrapping_add(4)
         );
+        for opcode in 0..=u8::MAX {
+            for payload in 0..=u8::MAX {
+                let request = build_request(opcode, payload);
+                assert_eq!(
+                    request[63],
+                    request[..63]
+                        .iter()
+                        .fold(0u8, |sum, byte| sum.wrapping_add(*byte))
+                );
+            }
+        }
     }
 
     #[test]
@@ -351,6 +386,41 @@ mod tests {
                         .count(),
                     1
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn incremental_sensor_updates_match_complete_decoding() {
+        let shared = Mutex::new(SnekSensorSnapshot {
+            connected: true,
+            ..SnekSensorSnapshot::unavailable()
+        });
+        let mut raw = [0u32; 4];
+        for sensor in 0..4 {
+            for value in [
+                0,
+                1 << 14,
+                1 << 15,
+                1 << 16,
+                1 << 17,
+                1 << 18,
+                1 << 19,
+                1 << 20,
+                1 << 21,
+                0xff << 14,
+                u32::MAX,
+                0x1234_5678,
+                0,
+            ] {
+                let before = shared.lock().unwrap().revision;
+                let changed = (raw[sensor] ^ value) & (0xff << 14) != 0;
+                process_sensor_sample(&shared, &mut raw, sensor, value);
+                let snapshot = *shared.lock().unwrap();
+                assert_eq!(snapshot.sensors, decode_sensor_states(raw));
+                assert_eq!(snapshot.revision, before + u64::from(changed));
+                assert!(snapshot.connected);
+                assert!(!snapshot.read_error);
             }
         }
     }
