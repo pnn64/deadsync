@@ -5409,6 +5409,24 @@ const fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
 }
 
+/// Refresh Snek's binary sensor indicators while the Test Input overlay is
+/// visible. HID ownership and polling remain in the shell.
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) {
+    test_input::set_snek_sensor_state(
+        &mut state.test_input_overlay,
+        connected,
+        read_error,
+        sensors,
+        revision,
+    );
+}
+
 fn show_pad_config_overlay(state: &mut State) {
     clear_preview(state);
     state.song_search = select_music_menu::SongSearchState::Hidden;

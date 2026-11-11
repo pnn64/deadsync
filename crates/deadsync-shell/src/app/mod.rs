@@ -4585,18 +4585,48 @@ impl App {
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
         self.fsr_monitor.poll_pending_saves();
-        let snek_test_active = self.state.screens.current_screen == CurrentScreen::Input
+        let standalone_snek_test = self.state.screens.current_screen == CurrentScreen::Input;
+        let select_music_snek_test = self.state.screens.current_screen == CurrentScreen::SelectMusic
+            && self
+                .state
+                .screens
+                .select_music_state
+                .test_input_overlay_visible;
+        let evaluation_snek_test = self.state.screens.current_screen == CurrentScreen::Evaluation
+            && screens::evaluation::test_input_pane_active(
+                &self.state.screens.evaluation_state,
+            );
+        let snek_test_active =
+            (standalone_snek_test || select_music_snek_test || evaluation_snek_test)
             && frame_policy.game_flag == config::theme::GameFlag::Dance;
         self.fsr_monitor.set_snek_test_active(snek_test_active);
         if snek_test_active {
             let snapshot = self.fsr_monitor.snek_sensor_snapshot();
-            screens::input::set_snek_sensor_state(
-                &mut self.state.screens.input_state,
-                snapshot.connected,
-                snapshot.read_error,
-                snapshot.sensors,
-                snapshot.revision,
-            );
+            if standalone_snek_test {
+                screens::input::set_snek_sensor_state(
+                    &mut self.state.screens.input_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            } else if select_music_snek_test {
+                screens::select_music::set_snek_sensor_state(
+                    &mut self.state.screens.select_music_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            } else {
+                screens::evaluation::set_snek_sensor_state(
+                    &mut self.state.screens.evaluation_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            }
         }
         let smx_screen_work = smx_runtime::screen_work(
             self.state.screens.current_screen,
