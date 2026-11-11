@@ -76,18 +76,31 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             cx.registers[a] = Value::Number(Vm::number_op(i.op, x, y));
         }
         Op::Eq | Op::Ne | Op::Lt | Op::Le | Op::Gt | Op::Ge => {
-            let (Value::Number(x), Value::Number(y)) =
-                (cx.operand(u32::from(i.b)), cx.operand(i.c))
-            else {
-                return None;
-            };
-            let result = match i.op {
-                Op::Eq => x == y,
-                Op::Ne => x != y,
-                Op::Lt => x < y,
-                Op::Le => x <= y,
-                Op::Gt => x > y,
-                _ => x >= y,
+            let (left, right) = (cx.operand(u32::from(i.b)), cx.operand(i.c));
+            let result = match (left, right) {
+                (Value::Number(x), Value::Number(y)) => match i.op {
+                    Op::Eq => x == y,
+                    Op::Ne => x != y,
+                    Op::Lt => x < y,
+                    Op::Le => x <= y,
+                    Op::Gt => x > y,
+                    _ => x >= y,
+                },
+                _ if matches!(i.op, Op::Eq | Op::Ne) => {
+                    let equal = left == right;
+                    // Distinct tables or userdata can call a shared __eq handler.
+                    if !equal
+                        && matches!(
+                            (left, right),
+                            (Value::Table(_), Value::Table(_))
+                                | (Value::Userdata(_), Value::Userdata(_))
+                        )
+                    {
+                        return None;
+                    }
+                    equal == (i.op == Op::Eq)
+                }
+                _ => return None,
             };
             cx.registers[a] = Value::Boolean(result);
             // The consumer of a comparison runs with it.

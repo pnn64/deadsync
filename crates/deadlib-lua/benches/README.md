@@ -36,6 +36,18 @@ and optional C test helpers. Those additional entry points need their own
 prerequisites and are not silently counted as benchmark passes. No C test
 helper is compiled or linked into DeadLua.
 
+The separate `primitive-equality.lua` and `scalar-global-overwrites.lua`
+workloads exercise the unobserved interpreter and repeated scalar writes. Build
+the release `official_suite` example as above, then run from this directory:
+
+```sh
+../../../target/release/examples/official_suite rust-bench primitive-equality.lua
+../../../target/release/examples/official_suite rust-bench scalar-global-overwrites.lua
+```
+
+On Windows, append `.exe`. Repeat each command in fresh processes and compare
+the `BENCH` CPU-cycle field; each script asserts its output before returning.
+
 On Windows, `files.lua:59` rejects renaming its open input stream in both
 DeadLua and native Lua 5.1. This precise failure is reported separately and
 has no successful timing. All other failures fail the benchmark command;

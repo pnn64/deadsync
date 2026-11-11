@@ -35,3 +35,51 @@ return total,#dense,#sparse,#empty,#'hello'
     assert_eq!(results[0][3], Value::Number(0.));
     assert_eq!(results[0][4], Value::Number(5.));
 }
+
+#[test]
+fn primitive_equality_keeps_lua_identity_and_shared_eq_handlers() {
+    let program = compile(
+        br#"
+local calls = 0
+local function equal() calls = calls + 1; return 'truthy' end
+local meta = {__eq = equal}
+local a = setmetatable({}, meta)
+local b = setmetatable({}, meta)
+local u = newproxy(true)
+local v = newproxy(u)
+getmetatable(u).__eq = equal
+local function check(left, right, expected)
+  assert((left == right) == expected)
+  assert((left ~= right) == (not expected))
+end
+check(nil, nil, true)
+check(nil, false, false)
+check(true, false, false)
+check('a\0b', 'a\0b', true)
+check('a', 'b', false)
+check(0, -0, true)
+check(0 / 0, 0 / 0, false)
+check(a, a, true)
+check(a, b, true)
+check(u, u, true)
+check(u, v, true)
+assert(calls == 4)
+local count = 0
+for i = 1, 1000 do
+  if nil ~= false and true == true and 'a' ~= 'b' then count = count + 1 end
+end
+return count, calls
+"#,
+    )
+    .unwrap();
+    let mut results = Vec::new();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(1_000_000));
+        }
+        results.push(vm.execute(&program).unwrap().to_vec());
+    }
+    assert_eq!(results[0], results[1]);
+    assert_eq!(results[0], [Value::Number(1000.), Value::Number(4.)]);
+}

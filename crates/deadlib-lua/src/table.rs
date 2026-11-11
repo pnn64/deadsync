@@ -394,6 +394,13 @@ impl Table {
                 return true;
             }
         }
+        if let Some((_, Some(index))) = self.slot(Key::String(key))
+            && self.entries[index].value != Value::Nil
+        {
+            self.entries[index].value = value;
+            self.remember_hash_entry((index + 1) as u32);
+            return true;
+        }
         false
     }
     #[inline]
@@ -755,7 +762,7 @@ mod allocation_tests {
         table
             .next_hash_hint
             .store(u64::from(u32::MAX), Ordering::Relaxed);
-        assert!(!table.set_existing_string_scalar(a, Value::Number(9.)));
+        assert!(table.set_existing_string_scalar(a, Value::Number(9.)));
         table.set(Value::String(a), Value::Number(9.)).unwrap();
         assert!(table.set_existing_string_scalar(a, Value::Number(10.)));
         assert_eq!(table.get(Value::String(a)), Value::Number(10.));
@@ -763,6 +770,31 @@ mod allocation_tests {
             table.next(Value::String(a)).unwrap(),
             Some((Value::String(b), Value::Number(4.)))
         );
+    }
+    #[test]
+    fn scalar_overwrites_find_four_rotating_string_keys_without_allocating() {
+        let keys = [11, 12, 13, 14].map(|slot| StringId((1_u64 << 32) | slot));
+        let mut table = Table::with_capacity(0, keys.len()).unwrap();
+        for &key in &keys {
+            table.set(Value::String(key), Value::Number(0.)).unwrap();
+        }
+        let original_bytes = table.heap_bytes();
+        let ((), stats) = probe(1, || {
+            for i in 1..=64 {
+                for &key in &keys {
+                    assert!(table.set_existing_string_scalar(key, Value::Number(i as f64)));
+                }
+            }
+        });
+        assert_eq!(stats.attempts, 0);
+        assert_eq!(table.heap_bytes(), original_bytes);
+        assert_eq!(
+            table.pairs().collect::<Vec<_>>(),
+            keys.map(|key| (Value::String(key), Value::Number(64.)))
+        );
+        table.set(Value::String(keys[0]), Value::Nil).unwrap();
+        assert!(!table.set_existing_string_scalar(keys[0], Value::Number(65.)));
+        assert_eq!(table.get(Value::String(keys[0])), Value::Nil);
     }
     #[test]
     fn next_hint_allows_deleted_controls_until_tombstones_are_compacted() {
