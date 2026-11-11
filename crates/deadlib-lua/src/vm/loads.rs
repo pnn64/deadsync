@@ -684,7 +684,7 @@ impl Vm {
         };
         if let Some(compiled) = compiled {
             let result = match compiled {
-                Ok(program) => self.load(&program).map_err(|error| {
+                Ok(program) => self.load_fresh(&program).map_err(|error| {
                     error
                         .value()
                         .expect("binding failure has fixed Lua diagnostic")
@@ -842,7 +842,7 @@ impl Vm {
         if let Some(compiled) = compiled {
             match compiled {
                 Ok(program) => {
-                    let function = self.load(&program)?;
+                    let function = self.load_fresh(&program)?;
                     self.retain_load_prototypes(index, function)?;
                     let job = self.loads.pop().expect("completed reader job");
                     if self.buffers.len() < self.buffers.capacity() {

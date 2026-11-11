@@ -1130,7 +1130,7 @@ impl Vm {
                             )
                         })
                     });
-                let compiled = compiled.and_then(|program| self.load(&program));
+                let compiled = compiled.and_then(|program| self.load_fresh(&program));
                 match compiled {
                     Ok(function) => Value::Function(function),
                     Err(error) => {

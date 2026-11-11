@@ -1070,6 +1070,13 @@ impl Vm {
             .map_err(|_| self.memory_failure())
     }
 
+    // A parser returns a new ProgramData owner for every freshly compiled
+    // chunk. Only public Program handles can refer to an already-bound owner.
+    fn load_fresh(&mut self, program: &Program) -> Result<FunctionId, Error> {
+        self.bind_new_program(program)
+            .map_err(|_| self.memory_failure())
+    }
+
     fn bind_program(&mut self, program: &Program) -> Result<FunctionId, Error> {
         let cached = self
             .programs
@@ -1096,6 +1103,10 @@ impl Vm {
             self.gc_new_value(Value::Function(entry));
             return Ok(entry);
         }
+        self.bind_new_program(program)
+    }
+
+    fn bind_new_program(&mut self, program: &Program) -> Result<FunctionId, Error> {
         let memory = self.programs.memory().clone();
         let budget = memory.reserve_external(|| program.heap_bytes())?;
         let mut constants = Buffer::new_in(memory.clone());
