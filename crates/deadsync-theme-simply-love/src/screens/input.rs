@@ -397,6 +397,22 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input, pad_event);
 }
 
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) {
+    test_input::set_snek_sensor_state(
+        &mut state.test_input,
+        connected,
+        read_error,
+        sensors,
+        revision,
+    );
+}
+
 /* ------------------------------- drawing ------------------------------- */
 
 pub fn push_actors(
