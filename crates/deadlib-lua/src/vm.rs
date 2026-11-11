@@ -1723,11 +1723,9 @@ impl Vm {
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0 && self.budget.is_none() {
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
-                        programs: &self.programs,
+                        constants: &self.programs[program_index].constants[proto_index],
                         tables: &self.tables,
                         code: &prototype.code,
-                        program: program_index,
-                        prototype: proto_index,
                         env,
                         base,
                         closed: self.open_upvalues.is_empty(),

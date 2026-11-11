@@ -268,3 +268,53 @@ return tail(-42)
 "#,
     );
 }
+
+#[test]
+fn raw_scalar_builtins_preserve_identity_coercion_and_errors() {
+    check_both(
+        br#"
+local t={[1]=42,[false]=-0.0}
+local other=setmetatable({},{__index=function() error('metamethod ran') end})
+local nan=0/0
+assert(rawequal(0,-0.0) and not rawequal(nan,nan))
+assert(rawequal(t,t) and not rawequal(t,other))
+assert(rawget(t,1)==42 and rawget(t,2)==nil)
+assert(1/rawget(t,false)==-math.huge)
+assert(rawget(other,'missing')==nil and rawget(t,nan)==nil)
+assert(1/tonumber(-0.0)==-math.huge)
+assert(tonumber(nan)~=tonumber(nan))
+assert(tonumber('42')==42 and tonumber('ff',16)==255)
+assert(not pcall(rawget,42,1) and not pcall(rawget,t))
+assert(not pcall(rawequal,1) and tonumber(false)==nil)
+return 42
+"#,
+    );
+}
+
+#[test]
+fn raw_scalar_builtins_still_emit_native_call_and_return_hooks() {
+    let source = br#"
+local functions={rawequal,rawget,tonumber}
+local calls={0,0,0};local returns={0,0,0}
+debug.sethook(function(event)
+  local active=debug.getinfo(2,'f').func
+  for i=1,3 do
+    if active==functions[i] then
+      if event=='call' then calls[i]=calls[i]+1 end
+      if event=='return' then returns[i]=returns[i]+1 end
+    end
+  end
+end,'cr')
+assert(functions[1](4,4))
+assert(functions[2]({42},1)==42)
+assert(functions[3](42)==42)
+debug.sethook()
+for i=1,3 do assert(calls[i]==1 and returns[i]==1) end
+return 42
+"#;
+    let mut vm = Vm::new();
+    assert_eq!(
+        vm.execute(&compile(source).unwrap()).unwrap(),
+        [Value::Number(42.)]
+    );
+}

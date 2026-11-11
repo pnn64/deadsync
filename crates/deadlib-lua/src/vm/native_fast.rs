@@ -10,6 +10,26 @@ impl Vm {
             self.registers.copy_within(call + 1..call + 1 + count, call);
             return Some(count);
         }
+        if id == 3
+            && count == 1
+            && let Value::Number(number) = self.registers[call + 1]
+        {
+            self.registers[call] = Value::Number(number);
+            return Some(1);
+        }
+        if id == 4 && count >= 2 {
+            self.registers[call] =
+                Value::Boolean(self.registers[call + 1] == self.registers[call + 2]);
+            return Some(1);
+        }
+        if id == 5
+            && count >= 2
+            && let Value::Table(id) = self.registers[call + 1]
+            && let Some(table) = self.tables.get(id.0)
+        {
+            self.registers[call] = table.get(self.registers[call + 2]);
+            return Some(1);
+        }
         if count != 0
             && let Value::Number(x) = self.registers[call + 1]
             && let Some(result) = Self::math_unary(id, x)

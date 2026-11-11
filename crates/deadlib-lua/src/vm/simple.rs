@@ -3,17 +3,15 @@
 //! The interpreter runs these without publishing the frame's saved pc or
 //! source line: nothing can observe the frame until an instruction outside
 //! this set runs, and that instruction publishes both first.
-use super::{Arena, LoadedProgram, Table, TableId, Value, Vm, slot_index};
+use super::{Arena, Table, TableId, Value, Vm, slot_index};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 
 /// The registers, constants and tables one simple instruction can touch.
 pub(super) struct Context<'a> {
     pub registers: &'a mut [Value],
-    pub programs: &'a Arena<LoadedProgram>,
+    pub constants: &'a [Value],
     pub tables: &'a Arena<Table>,
     pub code: &'a [Instruction],
-    pub program: usize,
-    pub prototype: usize,
     pub env: TableId,
     pub base: usize,
     /// No upvalue is open, so closing a scope has nothing to do.
@@ -23,7 +21,7 @@ pub(super) struct Context<'a> {
 impl Context<'_> {
     #[inline(always)]
     fn constant(&self, index: usize) -> Value {
-        self.programs[self.program].constants[self.prototype][index]
+        self.constants[index]
     }
     #[inline(always)]
     fn operand(&self, operand: u32) -> Value {
@@ -116,6 +114,12 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             };
             cx.registers[a] = Value::Number(-x);
+        }
+        Op::Len => {
+            let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
+                return None;
+            };
+            cx.registers[a] = Value::Number(cx.tables[slot_index(id.0)].len() as f64);
         }
         Op::Not => {
             cx.registers[a] = Value::Boolean(!cx.registers[base + usize::from(i.b)].is_truthy());
