@@ -280,4 +280,22 @@ fn benchmark_hot_paths() {
             runtime.restart_options().unwrap();
         });
     }
+    let mut runtime = runtime(false);
+    execute(
+        &mut runtime,
+        "PS=GAMESTATE:GetPlayerState(PLAYER_1); PO=PS:GetCurrentPlayerOptions(); PO:Tipsy(0.3); PO:TanTipsy(0.2); function arrow_x() return ArrowEffects.GetXPos(PS,2,64) end; function arrow_zoom() return ArrowEffects.GetZoom(PS,64,2) end; function arrow_alpha() return ArrowEffects.GetAlpha(PS,2,64,nil,nil,1000,0.3) end",
+    );
+    for (label, function_name) in [
+        ("arrows/xpos", b"arrow_x".as_slice()),
+        ("arrows/zoom", b"arrow_zoom".as_slice()),
+        ("arrows/alpha", b"arrow_alpha".as_slice()),
+    ] {
+        let function = runtime.vm_mut().get_global(function_name).unwrap();
+        measure(label, 500, || {
+            black_box(runtime.vm_mut().call(function, &[]).unwrap());
+        });
+    }
+    measure("arrows/update/tipsy", 300, || {
+        runtime.update_arrow_effects().unwrap();
+    });
 }

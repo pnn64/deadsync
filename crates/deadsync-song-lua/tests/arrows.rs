@@ -254,6 +254,16 @@ fn optional_arguments_and_fallible_methods_keep_conversion_and_selection_order()
     }
 }
 #[test]
+fn arrow_effects_accepts_more_than_eight_arguments() {
+    let mut runtime = SongRuntime::new(&context()).unwrap();
+    let script = b"local ps=GAMESTATE:GetPlayerState(PLAYER_1); return ArrowEffects.GetZoom(ps,0,1,nil,nil,nil,nil,nil,nil,42)==ArrowEffects.GetZoom(ps,0,1)";
+    let result = runtime
+        .vm_mut()
+        .execute(&compile_named(script, b"=arrow-args").unwrap())
+        .unwrap();
+    assert_eq!(result.first(), Some(&Value::Boolean(true)));
+}
+#[test]
 fn cache_commit_is_atomic_and_selected_options_remain_rooted_across_collection() {
     let mut p = Pair::new(&context());
     p.frame(0.2, 3., 7.);

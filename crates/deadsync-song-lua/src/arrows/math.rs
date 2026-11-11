@@ -6,7 +6,7 @@ pub(super) fn x_pos(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result
         let player = player_for(call, options)?;
         let column = strict(call, args, 1, 1.0)? as i32 - 1;
         let y = strict(call, args, 2, 0.0)?;
-        let style = crate::song_lua_style_info(&style_name(call));
+        let style = style_info(call);
         let column = usize::try_from(column)
             .ok()
             .filter(|column| *column < style.columns)
@@ -184,7 +184,7 @@ pub(super) fn x_pos(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result
 pub(super) fn zoom(call: &mut HostCall<'_>, _b: &Data, args: &[Value]) -> Result<f32, Error> {
     with_options(call, args, |call, _options, state| {
         let y = strict(call, args, 1, 0.0)?;
-        let style = crate::song_lua_style_info(&style_name(call));
+        let style = style_info(call);
         let column = strict(call, args, 2, 1.0)? as i32 - 1;
         let column = usize::try_from(column)
             .ok()
@@ -260,7 +260,11 @@ pub(super) fn alpha(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result
         }
         let attenuate = n(call, state, "attenuatey")?;
         if attenuate != 0.0 {
-            let x = crate::song_lua_style_column_x(&style_name(call), column.max(0) as usize);
+            let x = style_info(call)
+                .x_offsets
+                .get(column.max(0) as usize)
+                .copied()
+                .unwrap_or(0.0);
             y += attenuate * (offset / 64.0) * (offset / 64.0) * (x / 64.0);
         }
         let beat_y = n(call, state, "beaty")?;
@@ -359,7 +363,7 @@ fn field_zoom(style: &crate::SongLuaStyleInfo) -> f32 {
 pub(super) fn y_pos(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result<f32, Error> {
     let y_offset = loose(call, args, 2, 0.);
     with_options(call, args, |call, options, state| {
-        let style = crate::song_lua_style_info(&style_name(call));
+        let style = style_info(call);
         let column = loose(call, args, 1, 1.0) as i32 - 1;
         let column = usize::try_from(column)
             .ok()

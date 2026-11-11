@@ -158,7 +158,16 @@ impl SongRuntime {
 }
 fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     let b = call.function_data::<Binding>().unwrap().clone();
-    let args = call.arguments().to_vec();
+    let mut inline = [Value::Nil; 8];
+    let overflow;
+    let args: &[Value] = if call.arguments().len() <= inline.len() {
+        let len = call.arguments().len();
+        inline[..len].copy_from_slice(call.arguments());
+        &inline[..len]
+    } else {
+        overflow = call.arguments().to_vec();
+        &overflow
+    };
     let result = match b.name {
         "Update" => return update(call, &b.data),
         "GetYOffset" => y_offset(call, &b.data, &args)?,
@@ -470,7 +479,7 @@ fn query_time(
     };
     time(call, state, raw, true)
 }
-fn style_name(call: &mut HostCall<'_>) -> String {
+fn style_info(call: &mut HostCall<'_>) -> crate::SongLuaStyleInfo {
     let selected = (|| {
         let game = field(call, call.captures()[0], "GAMESTATE", false)?;
         let t = field(call, game, "__songlua_current_style", true)?;
@@ -482,7 +491,7 @@ fn style_name(call: &mut HostCall<'_>) -> String {
         invoke(call, g, "GetCurrentStyle", &[])
     });
     let Ok(Value::Table(t)) = selected else {
-        return "single".into();
+        return crate::song_lua_style_info("single");
     };
     call.with_roots(&[Value::Table(t)], |call| {
         let key = raw(call, t, "__songlua_style_key");
@@ -491,17 +500,17 @@ fn style_name(call: &mut HostCall<'_>) -> String {
             && let Some(id) = call.coerce_string(v)?
             && let Ok(key) = std::str::from_utf8(call.string_bytes(id).unwrap())
         {
-            return Ok(key.to_owned());
+            return Ok(crate::song_lua_style_info(key));
         }
         let v = invoke(call, Value::Table(t), "GetName", &[])?;
         match v {
-            Value::String(id) => {
-                Ok(String::from_utf8_lossy(call.string_bytes(id).unwrap()).into_owned())
-            }
-            _ => Ok("single".into()),
+            Value::String(id) => Ok(crate::song_lua_style_info(&String::from_utf8_lossy(
+                call.string_bytes(id).unwrap(),
+            ))),
+            _ => Ok(crate::song_lua_style_info("single")),
         }
     })
-    .unwrap_or_else(|_| "single".into())
+    .unwrap_or_else(|_| crate::song_lua_style_info("single"))
 }
 fn speed_value(
     call: &mut HostCall<'_>,
@@ -704,7 +713,7 @@ fn update(call: &mut HostCall<'_>, b: &Data) -> Result<(), Error> {
         &[Value::Table(t), positions.map_or(Value::Nil, Value::Table)],
         |call| {
             let mut next = previous;
-            let style = crate::song_lua_style_info(&style_name(call));
+            let style = style_info(call);
             let two_sides = matches!(
                 style.style_type,
                 "StyleType_OnePlayerTwoSides" | "StyleType_TwoPlayersSharedSides"
@@ -802,14 +811,15 @@ fn update(call: &mut HostCall<'_>, b: &Data) -> Result<(), Error> {
                                         let result = if n(call, state, prefix)? == 0. {
                                             0.
                                         } else {
+                                            let (speed, offset) = if tan {
+                                                ("tantipsyspeed", "tantipsyoffset")
+                                            } else {
+                                                ("tipsyspeed", "tipsyoffset")
+                                            };
                                             let angle = times[usize::from(tan)]
-                                                * (n(call, state, &format!("{prefix}speed"))?
-                                                    * 1.2
-                                                    + 1.2)
+                                                * (n(call, state, speed)? * 1.2 + 1.2)
                                                 + column as f32
-                                                    * (n(call, state, &format!("{prefix}offset"))?
-                                                        * 1.8
-                                                        + 1.8);
+                                                    * (n(call, state, offset)? * 1.8 + 1.8);
                                             let wave = if tan {
                                                 if cosecant {
                                                     1. / angle.sin()
