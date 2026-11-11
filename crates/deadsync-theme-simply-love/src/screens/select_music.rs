@@ -13365,7 +13365,6 @@ pub fn push_actors(
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
     let density_graphs = chart_panel_layout.compose(
-        screen_height(),
         StepArtistBarY::from(step_artist_expanded),
         peak_text_logical_width,
     );
@@ -14056,11 +14055,11 @@ pub fn push_actors(
         single_pattern_y,
     );
 
-    // Steps Display List
-    let steps_display_list = chart_panel_layout.steps_display_list;
-    let lst_cx = steps_display_list.bounds.center_x();
-    let visible_steps_slots = steps_display_list.slot_centers_y.len();
-    actors.push(act!(quad: align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), steps_display_list.bounds.center_y()): setsize(steps_display_list.bounds.width, steps_display_list.bounds.height): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+    // Difficulty List
+    let difficulty_list = chart_panel_layout.difficulty_list;
+    let lst_cx = difficulty_list.bounds.center_x();
+    let visible_difficulty_slots = difficulty_list.slot_centers_y.len();
+    actors.push(act!(quad: align(0.5, 0.5): xy(difficulty_list.bounds.center_x(), difficulty_list.bounds.center_y()): setsize(difficulty_list.bounds.width, difficulty_list.bounds.height): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
 
     let (steps_song, sel_p1, sel_p2) = match entry_opt {
         Some(MusicWheelEntry::Song(song)) => (
@@ -14109,20 +14108,20 @@ pub fn push_actors(
     } else {
         sel_p1
     };
-    let top_index = if list_len > visible_steps_slots {
+    let top_index = if list_len > visible_difficulty_slots {
         // Simply Love: keep Edit charts off-screen until you scroll past Expert.
         // Once you're in Edit charts, keep the selected chart in the bottom slot and
         // shift the other difficulties upward as you move deeper.
         focus_sel
-            .saturating_sub(visible_steps_slots - 1)
-            .min(list_len - visible_steps_slots)
+            .saturating_sub(visible_difficulty_slots - 1)
+            .min(list_len - visible_difficulty_slots)
     } else {
         0
     };
 
-    for slot in 0..visible_steps_slots {
-        let slot_center_y = steps_display_list.slot_centers_y[slot];
-        actors.push(act!(quad: align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), slot_center_y): setsize(steps_display_list.slot_size, steps_display_list.slot_size): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
+    for slot in 0..visible_difficulty_slots {
+        let slot_center_y = difficulty_list.slot_centers_y[slot];
+        actors.push(act!(quad: align(0.5, 0.5): xy(difficulty_list.bounds.center_x(), slot_center_y): setsize(difficulty_list.slot_size, difficulty_list.slot_size): z(121): diffuse(0.059, 0.059, 0.059, 1.0)));
         let idx = top_index + slot;
         if idx >= list_len {
             continue;
@@ -14141,7 +14140,7 @@ pub fn push_actors(
                 state.active_color_index,
                 presentation.difficulty_color_scheme,
             );
-            actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(steps_display_list.bounds.center_x(), slot_center_y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
+            actors.push(act!(text: font(machine_font_key(state.policy.machine_font, FontRole::Header)): settext(cached_u32_text(chart.meter)): align(0.5, 0.5): xy(difficulty_list.bounds.center_x(), slot_center_y): zoom(0.45): z(122): diffuse(c[0], c[1], c[2], 1.0)));
         }
     }
 
@@ -14347,8 +14346,8 @@ pub fn push_actors(
     let dx_p1 = -3.0 * bounce;
     let dx_p2 = 3.0 * bounce;
     if is_versus {
-        let slot_p1 = (sel_p1.saturating_sub(top_index)).min(visible_steps_slots - 1);
-        let y_p1 = steps_display_list.slot_centers_y[slot_p1] + 1.0;
+        let slot_p1 = (sel_p1.saturating_sub(top_index)).min(visible_difficulty_slots - 1);
+        let y_p1 = difficulty_list.slot_centers_y[slot_p1] + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(screen_center_x() - 53.0 + dx_p1, y_p1):
@@ -14357,8 +14356,8 @@ pub fn push_actors(
             z(122)
         ));
 
-        let slot_p2 = (sel_p2.saturating_sub(top_index)).min(visible_steps_slots - 1);
-        let y_p2 = steps_display_list.slot_centers_y[slot_p2] + 1.0;
+        let slot_p2 = (sel_p2.saturating_sub(top_index)).min(visible_difficulty_slots - 1);
+        let y_p2 = difficulty_list.slot_centers_y[slot_p2] + 1.0;
         actors.push(act!(sprite("meter_arrow.png"):
             align(0.0, 0.5):
             xy(lst_cx + 8.0 + dx_p2, y_p2):
@@ -14367,8 +14366,8 @@ pub fn push_actors(
             z(122)
         ));
     } else {
-        let arrow_slot = (sel_p1.saturating_sub(top_index)).min(visible_steps_slots - 1);
-        let arrow_y = steps_display_list.slot_centers_y[arrow_slot] + 1.0;
+        let arrow_slot = (sel_p1.saturating_sub(top_index)).min(visible_difficulty_slots - 1);
+        let arrow_y = difficulty_list.slot_centers_y[arrow_slot] + 1.0;
         let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_solo {
             let x0 = lst_cx + 8.0;
             (x0, dx_p2, 180.0)

@@ -1,8 +1,5 @@
 use super::{WidgetBounds, WidgetLayout};
 
-const HEIGHT: f32 = 50.0;
-const CENTER_Y_OFFSET: f32 = -55.0;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct SongDetailsLayout {
     pub widget: WidgetLayout,
@@ -16,17 +13,8 @@ pub(crate) struct SongDetailsLayout {
 }
 
 impl SongDetailsLayout {
-    pub(crate) fn new(left_pane: WidgetLayout, screen_height: f32) -> Self {
-        let design_width = left_pane.bounds.width / left_pane.zoom;
-        let widget = WidgetLayout {
-            bounds: WidgetBounds::new(
-                left_pane.bounds.x,
-                screen_height * 0.5 + CENTER_Y_OFFSET - HEIGHT * 0.5,
-                left_pane.bounds.width,
-                HEIGHT,
-            ),
-            zoom: left_pane.zoom,
-        };
+    pub(crate) fn new(widget: WidgetLayout) -> Self {
+        let design_width = widget.bounds.width / widget.zoom;
         let child = |x, y, width, height| widget.child(WidgetBounds::new(x, y, width, height));
         let length_label_x = design_width - 130.0;
         let length_value_x = design_width - 75.0;

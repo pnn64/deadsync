@@ -20,6 +20,10 @@ impl WidgetBounds {
         self.x + self.width
     }
 
+    pub fn bottom(self) -> f32 {
+        self.y + self.height
+    }
+
     pub fn center_x(self) -> f32 {
         self.x + self.width * 0.5
     }
@@ -45,6 +49,13 @@ impl WidgetLayout {
                 bounds.width * zoom,
                 bounds.height * zoom,
             ),
+            zoom,
+        }
+    }
+
+    pub(super) fn from_edges(left: f32, top: f32, right: f32, bottom: f32, zoom: f32) -> Self {
+        Self {
+            bounds: WidgetBounds::new(left, top, right - left, bottom - top),
             zoom,
         }
     }

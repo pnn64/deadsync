@@ -95,7 +95,7 @@ impl StepArtistPeakNpsLayout {
 
         // The artist background width is the space left for the step artist elements,
         // calculated from the left edge of the panel to the left edge of the NPS text, minus padding.
-        let artist_background_width = (nps_text_bounds.x - padding - graph_bounds.x).max(0.0);
+        let artist_background_width = (nps_text_bounds.x - padding).max(0.0);
 
         let artist_max_width =
             (artist_background_width - offsets.artist_x - padding).max(0.0) * graph_zoom;
