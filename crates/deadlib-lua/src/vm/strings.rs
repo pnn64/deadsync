@@ -394,11 +394,38 @@ impl Vm {
                     let text = &self.strings.bytes[slot_index(source.0)];
                     let found = if raw.is_empty() {
                         Some(start)
+                    } else if raw.len() > len - start {
+                        None
                     } else {
-                        text[start..]
-                            .windows(raw.len())
-                            .position(|w| w == raw)
-                            .map(|i| start + i)
+                        // For long searches, use whichever end of the needle
+                        // occurs less often in a small sample of the haystack.
+                        // This avoids rechecking a repeated leading byte.
+                        let mut anchor = 0;
+                        if raw.len() > 1 && len - start >= 1024 {
+                            let last = raw.len() - 1;
+                            let mut first_hits = 0;
+                            let mut last_hits = 0;
+                            for &byte in &text[start..start + 64] {
+                                first_hits += usize::from(byte == raw[0]);
+                                last_hits += usize::from(byte == raw[last]);
+                            }
+                            if last_hits < first_hits {
+                                anchor = last;
+                            }
+                        }
+                        let mut cursor = start + anchor;
+                        loop {
+                            let Some(offset) =
+                                text[cursor..].iter().position(|&byte| byte == raw[anchor])
+                            else {
+                                break None;
+                            };
+                            cursor += offset;
+                            if text[cursor - anchor..].starts_with(raw) {
+                                break Some(cursor - anchor);
+                            }
+                            cursor += 1;
+                        }
                     };
                     if let Some(pos) = found {
                         let end = pos + raw.len();

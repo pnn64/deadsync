@@ -301,6 +301,32 @@ fn patterns_captures_backtracking_and_boundaries() {
 }
 
 #[test]
+fn plain_find_handles_overlap_offsets_binary_and_repeated_prefixes() {
+    let source = br#"
+local a,b=string.find('aaaaab','aab',1,true)
+assert(a==4 and b==6)
+assert(string.find('aaaaab','aab',5,true)==nil)
+assert(string.find('aaa','aaaa',1,true)==nil)
+a,b=string.find('x\0ab','\0a',1,true)
+assert(a==2 and b==3)
+a,b=string.find('abc','',100,true)
+assert(a==4 and b==3)
+local s=string.rep('a',1200)..'Z'
+a,b=string.find(s,'aaaaZ',1,true)
+assert(a==1197 and b==1201)
+assert(string.find(s,string.rep('a',1500),1,true)==nil)
+assert(string.find(s,'aaaaZ',1200,true)==nil)
+s=string.rep('abccddff',200)..'Za'
+a,b=string.find(s,'Za',1,true)
+assert(a==1601 and b==1602)
+return 42
+"#;
+    let mut vm = Vm::new();
+    let program = compile(source).unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(42.0)]);
+}
+
+#[test]
 fn pattern_iterators_have_independent_state_and_empty_matches() {
     for source in [
         "local s=''; for word in string.gmatch('one two 3','%w+') do s=s..'['..word..']' end; return s",

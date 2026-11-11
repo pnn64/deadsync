@@ -949,6 +949,12 @@ impl Vm {
     }
 
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
+        // A scalar overwrite of an existing numeric array slot cannot allocate
+        // or add a GC edge. Table writes requiring metamethods were resolved by
+        // the caller before reaching raw_set.
+        if self.tables[slot_index(id.0)].set_existing_array_scalar(key, value) {
+            return Ok(());
+        }
         Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
         self.reserve_gc_table_write(id, key, value)?;
         let table = &mut self.tables[slot_index(id.0)];

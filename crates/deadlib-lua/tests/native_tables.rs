@@ -5,6 +5,60 @@ fn execute(vm: &mut Vm, source: &[u8]) -> Vec<Value> {
 }
 
 #[test]
+fn scalar_array_overwrites_preserve_raw_set_metamethods_and_gc() {
+    let mut vm = Vm::new();
+    let Value::Table(table) = execute(&mut vm, b"return {11, 22, 33}")[0] else {
+        panic!("expected table");
+    };
+    vm.set_global(b"target", Value::Table(table)).unwrap();
+
+    for (key, value) in [
+        (1.0, Value::Nil),
+        (2.0, Value::Boolean(false)),
+        (3.0, Value::Number(42.0)),
+        (2.0, Value::LightUserdata(0x1234)),
+    ] {
+        vm.raw_table_set(table, Value::Number(key), value).unwrap();
+        assert_eq!(vm.raw_table_get(table, Value::Number(key)).unwrap(), value);
+    }
+
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local calls = 0
+setmetatable(target, {__newindex = function(t, k, v)
+    calls = calls + 1
+    rawset(t, k, v)
+end})
+target[2] = 12 -- non-nil scalar, no __newindex
+target[1] = 23 -- nil array slot, invokes __newindex
+target[1] = false -- non-nil scalar again
+target[3] = {sentinel = 91} -- object value still follows GC barriers
+collectgarbage()
+assert(target[3].sentinel == 91)
+target[3] = 7
+target[4] = 10 -- absent array slot, invokes __newindex
+target[2.5] = 25 -- non-integer key, invokes __newindex
+local nil_ok = pcall(rawset, target, nil, 1)
+local nan_ok = pcall(rawset, target, 0/0, 1)
+return calls, target[1], target[2], target[3], target[4], target[2.5], nil_ok, nan_ok
+"#,
+        ),
+        [
+            Value::Number(3.0),
+            Value::Boolean(false),
+            Value::Number(12.0),
+            Value::Number(7.0),
+            Value::Number(10.0),
+            Value::Number(25.0),
+            Value::Boolean(false),
+            Value::Boolean(false),
+        ]
+    );
+}
+
+#[test]
 fn constructor_list_fields_keep_nil_holes_in_array_storage() {
     let mut vm = Vm::new();
     execute(

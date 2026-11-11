@@ -348,6 +348,25 @@ impl Table {
     pub fn validate_set_key(key: Value) -> Result<(), Error> {
         Self::checked_key(key).map(|_| ())
     }
+    /// Overwrite an existing array slot when neither the key nor value needs
+    /// tracing. This cannot grow storage or change table traversal positions.
+    #[inline]
+    pub(crate) fn set_existing_array_scalar(&mut self, key: Value, value: Value) -> bool {
+        if !matches!(
+            value,
+            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+        ) {
+            return false;
+        }
+        if let Some(index) = array_index(key)
+            && let Some(slot) = self.array.get_mut(index)
+        {
+            *slot = value;
+            true
+        } else {
+            false
+        }
+    }
     pub fn set(&mut self, key: Value, value: Value) -> Result<(), Error> {
         let k = Self::checked_key(key)?;
         if let Some(i) = array_index(key) {

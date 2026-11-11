@@ -385,7 +385,7 @@ impl Scanner {
                 else {
                     return Ok(false);
                 };
-                text = rest[..len].try_boxed()?.into();
+                text = Text::new(&rest[..len])?;
                 (Kind::String, start + len + 2)
             }
             b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
@@ -947,6 +947,29 @@ mod tests {
                 expected,
                 "one-byte input: {source:?}"
             );
+        }
+    }
+
+    #[test]
+    fn quoted_literals_preserve_bytes_and_inline_storage_boundary() {
+        for (source, decoded, heap_bytes) in [
+            (b"''".as_slice(), b"".as_slice(), 0),
+            (b"\"abcdefg\"", b"abcdefg", 0),
+            (b"'abcdefgh'", b"abcdefgh", 8),
+            (b"'\xff'", b"\xff", 0),
+            (b"\"a\\nb\"", b"a\nb", 3),
+        ] {
+            let mut scanner = Scanner::default();
+            let mut token = Token::default();
+            scanner.next_closed(source, &mut token).unwrap();
+            assert_eq!(token.kind, Kind::String, "{source:?}");
+            assert_eq!(token.text.as_ref(), decoded, "{source:?}");
+            assert_eq!(token.text.heap_bytes(), heap_bytes, "{source:?}");
+
+            let slow = Scanner::default().slow(source, true).unwrap().unwrap();
+            assert_eq!(slow.kind, token.kind, "{source:?}");
+            assert_eq!(slow.text.as_ref(), token.text.as_ref(), "{source:?}");
+            assert_eq!((slow.line, slow.end_line), (token.line, token.end_line));
         }
     }
 
