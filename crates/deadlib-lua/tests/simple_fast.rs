@@ -83,3 +83,36 @@ return count, calls
     assert_eq!(results[0], results[1]);
     assert_eq!(results[0], [Value::Number(1000.), Value::Number(4.)]);
 }
+
+#[test]
+fn distinct_tables_observe_shared_eq_only_when_both_metatables_provide_it() {
+    let program = compile(
+        br#"
+local calls = 0
+local a, b = {}, {}
+local function equal() calls = calls + 1; return true end
+local meta = { __eq = equal }
+assert(a ~= b and not (a == b))
+setmetatable(a, meta)
+assert(a ~= b and not (a == b))
+setmetatable(b, {})
+assert(a ~= b and not (a == b))
+getmetatable(b).__eq = equal
+assert(a == b and not (a ~= b))
+assert(calls == 2)
+getmetatable(b).__eq = function() return true end
+assert(a ~= b and not (a == b))
+setmetatable(b, nil)
+assert(a ~= b and not (a == b))
+return calls
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(1_000_000));
+        }
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(2.)]);
+    }
+}

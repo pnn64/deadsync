@@ -88,15 +88,18 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 },
                 _ if matches!(i.op, Op::Eq | Op::Ne) => {
                     let equal = left == right;
-                    // Distinct tables or userdata can call a shared __eq handler.
-                    if !equal
-                        && matches!(
-                            (left, right),
-                            (Value::Table(_), Value::Table(_))
-                                | (Value::Userdata(_), Value::Userdata(_))
-                        )
-                    {
-                        return None;
+                    // A shared __eq handler needs metatables on both objects.
+                    if !equal {
+                        match (left, right) {
+                            (Value::Table(a), Value::Table(b))
+                                if cx.tables[slot_index(a.0)].metatable().is_some()
+                                    && cx.tables[slot_index(b.0)].metatable().is_some() =>
+                            {
+                                return None;
+                            }
+                            (Value::Userdata(_), Value::Userdata(_)) => return None,
+                            _ => {}
+                        }
                     }
                     equal == (i.op == Op::Eq)
                 }
