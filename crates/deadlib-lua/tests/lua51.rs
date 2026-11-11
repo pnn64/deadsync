@@ -174,6 +174,38 @@ fn metatable_indexing_protection_and_calls() {
 }
 
 #[test]
+fn existing_metatable_keys_skip_newindex_and_invalid_keys_still_fail() {
+    let source = br#"
+local called = 0
+local t = setmetatable({x=1}, {__newindex=function(self,key,value)
+  called = called + 1
+  rawset(self,key,value)
+end})
+t.x = 2
+t.x = nil
+t.x = 3
+local nil_ok = pcall(function() t[nil] = 4 end)
+local nan_ok = pcall(function() t[0/0] = 5 end)
+return called, t.x, nil_ok, nan_ok
+"#;
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            rust(&mut vm, source),
+            [
+                Observed::Number(1.0f64.to_bits()),
+                Observed::Number(3.0f64.to_bits()),
+                Observed::Boolean(false),
+                Observed::Boolean(false),
+            ]
+        );
+    }
+}
+
+#[test]
 fn metatable_arithmetic_comparison_and_observable_arguments() {
     for source in [
         "local mt={__add=function(a,b) return a.x+b.x end,__sub=function(a,b) return a.x-b.x end,__mul=function(a,b) return a.x*b.x end,__div=function(a,b) return a.x/b.x end,__mod=function(a,b) return a.x%b.x end,__pow=function(a,b) return a.x^b.x end}; local a=setmetatable({x=7},mt); local b=setmetatable({x=2},mt); return a+b,a-b,a*b,a/b,a%b,a^b",
