@@ -196,3 +196,75 @@ return table.concat(out,',')
     assert!(results[0].len() > 100_000);
     assert_eq!(results[0], results[1]);
 }
+
+#[test]
+fn unary_math_fast_results_match_observed_dispatch_bit_for_bit() {
+    let program = compile(
+        br#"
+local functions={math.abs,math.floor,math.ceil,math.sqrt,math.sin,math.cos,
+  math.tan,math.exp,math.log,math.log10,math.asin,math.acos,math.atan,
+  math.sinh,math.cosh,math.tanh,math.deg,math.rad}
+local numbers={-0.0,0.0,-2.5,0.25,2.5,0/0,1/0,-1/0}
+local results={}
+for _,f in ipairs(functions) do
+  for _,x in ipairs(numbers) do
+    results[#results+1]=f(x,'ignored extra argument')
+  end
+end
+return unpack(results)
+"#,
+    )
+    .unwrap();
+    let mut outputs = Vec::new();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(u64::MAX));
+        }
+        outputs.push(
+            vm.execute(&program)
+                .unwrap()
+                .iter()
+                .map(|value| match value {
+                    Value::Number(number) => number.to_bits(),
+                    other => panic!("unary math returned non-number: {other:?}"),
+                })
+                .collect::<Vec<_>>(),
+        );
+    }
+    assert_eq!(outputs[0].len(), 144);
+    assert_eq!(outputs[0], outputs[1]);
+    assert_eq!(outputs[0][0], 0.0f64.to_bits()); // abs(-0) is +0.
+    assert_eq!(outputs[0][4 * 8], (-0.0f64).to_bits()); // sin(-0) is -0.
+    assert_eq!(outputs[0][17 * 8], (-0.0f64).to_bits()); // rad(-0) is -0.
+}
+
+#[test]
+fn unary_math_non_numeric_arguments_and_hooks_keep_native_behavior() {
+    check_both(
+        br#"
+for _,value in ipairs{false,{},'not a number'} do
+  assert(not pcall(math.sqrt,value))
+end
+assert(math.floor('42.9')==42)
+assert(math.abs(-42,'ignored')==42)
+assert(not pcall(math.sin))
+local callable=setmetatable({},{__call=math.abs})
+assert(not pcall(callable,-42))
+local fn=math.abs
+local calls,returns=0,0
+debug.sethook(function(event)
+  if debug.getinfo(2,'f').func==fn then
+    if event=='call' then calls=calls+1 end
+    if event=='return' then returns=returns+1 end
+  end
+end,'cr')
+local result=fn(-42)
+debug.sethook()
+assert(calls==1 and returns==1)
+local function tail(x) return math.abs(x) end
+assert(result==42)
+return tail(-42)
+"#,
+    );
+}

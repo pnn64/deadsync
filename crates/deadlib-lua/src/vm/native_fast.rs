@@ -10,6 +10,13 @@ impl Vm {
             self.registers.copy_within(call + 1..call + 1 + count, call);
             return Some(count);
         }
+        if count != 0
+            && let Value::Number(x) = self.registers[call + 1]
+            && let Some(result) = Self::math_unary(id, x)
+        {
+            self.registers[call] = Value::Number(result);
+            return Some(1);
+        }
         if matches!(id, NEXT | PAIRS_NEXT) && count != 0 {
             let Value::Table(table) = self.registers[call + 1] else {
                 return None;

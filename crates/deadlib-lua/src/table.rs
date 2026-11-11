@@ -444,9 +444,11 @@ impl Table {
             .map_err(|_| Error::memory())?;
         self.invalidate_trace();
         self.array.resize(end, Value::Nil);
-        for index in first..end {
-            if let Some(value) = self.take_hash(Key::Number(((index + 1) as f64).to_bits())) {
-                self.array[index] = value;
+        if !self.entries.is_empty() {
+            for index in first..end {
+                if let Some(value) = self.take_hash(Key::Number(((index + 1) as f64).to_bits())) {
+                    self.array[index] = value;
+                }
             }
         }
         Ok(())

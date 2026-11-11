@@ -111,6 +111,30 @@ impl Vm {
         self.set_global(b"math", Value::Table(table))?;
         Ok(())
     }
+    #[inline]
+    pub(super) fn math_unary(id: u64, x: f64) -> Option<f64> {
+        Some(match id {
+            32 => x.abs(),
+            33 => x.floor(),
+            34 => x.ceil(),
+            35 => x.sqrt(),
+            36 => x.sin(),
+            37 => x.cos(),
+            38 => x.tan(),
+            39 => x.exp(),
+            40 => x.ln(),
+            41 => x.log10(),
+            46 => x.asin(),
+            47 => x.acos(),
+            48 => x.atan(),
+            49 => x.sinh(),
+            50 => x.cosh(),
+            51 => x.tanh(),
+            53 => x / (std::f64::consts::PI / 180.0),
+            54 => x * (std::f64::consts::PI / 180.0),
+            _ => return None,
+        })
+    }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
@@ -189,24 +213,6 @@ impl Vm {
         }
         let x = self.math_number(base, count, 0)?;
         let result = match id {
-            32 => x.abs(),
-            33 => x.floor(),
-            34 => x.ceil(),
-            35 => x.sqrt(),
-            36 => x.sin(),
-            37 => x.cos(),
-            38 => x.tan(),
-            39 => x.exp(),
-            40 => x.ln(),
-            41 => x.log10(),
-            46 => x.asin(),
-            47 => x.acos(),
-            48 => x.atan(),
-            49 => x.sinh(),
-            50 => x.cosh(),
-            51 => x.tanh(),
-            53 => x / (std::f64::consts::PI / 180.0),
-            54 => x * (std::f64::consts::PI / 180.0),
             43 | 44 => {
                 let mut best = x;
                 for index in 1..count {
@@ -236,7 +242,7 @@ impl Vm {
                 self.registers[base + 1] = Value::Number(f64::from(exponent));
                 return Ok(2);
             }
-            _ => unreachable!("math ID range is fixed"),
+            _ => Self::math_unary(id, x).expect("math ID range is fixed"),
         };
         self.registers[base] = Value::Number(result);
         Ok(1)

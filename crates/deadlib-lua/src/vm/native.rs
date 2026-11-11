@@ -120,7 +120,7 @@ impl Vm {
             }
             Value::Native(id) => {
                 self.check_calls()?;
-                if matches!(id, 0 | NEXT | PAIRS_NEXT)
+                if matches!(id, 0 | NEXT | PAIRS_NEXT | 32..=41 | 46..=51 | 53 | 54)
                     && let Some(actual) = self.try_fast_native(id, call, count)
                 {
                     return Ok(Some(actual));
