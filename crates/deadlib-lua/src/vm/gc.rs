@@ -279,6 +279,9 @@ impl Strings {
             .max(16)
             .next_power_of_two()
             .min(self.buckets.len());
+        if size == self.buckets.len() {
+            return;
+        }
         self.buckets.resize(size, 0);
         self.buckets.fill(0);
         for (i, bytes) in self.bytes.entries() {

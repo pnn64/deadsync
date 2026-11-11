@@ -166,20 +166,9 @@ impl Vm {
                             output.try_extend_from_slice(&self.strings.bytes[slot_index(id.0)])?
                         }
                         Value::Number(n) => {
-                            let text = native::number_text(n);
-                            let bytes = text.as_bytes();
-                            if let Some(dot) = bytes.iter().position(|&b| b == b'.') {
-                                let decimal = crate::locale::decimal();
-                                if decimal.len() == 1 && decimal[0] == b'.' {
-                                    output.try_extend_from_slice(bytes)?;
-                                } else {
-                                    output.try_extend_from_slice(&bytes[..dot])?;
-                                    output.try_extend_from_slice(&decimal)?;
-                                    output.try_extend_from_slice(&bytes[dot + 1..])?;
-                                }
-                            } else {
-                                output.try_extend_from_slice(bytes)?;
-                            }
+                            let start = output.len();
+                            output.try_extend_from_slice(native::number_text(n).as_bytes())?;
+                            crate::locale::try_localize_owned_from(&mut output, start)?;
                         }
                         _ => {
                             return Err(fallible::diagnostic(

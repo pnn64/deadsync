@@ -158,9 +158,16 @@ pub(crate) fn try_localize(bytes: &mut Vec<u8>) -> Result<(), Error> {
     Ok(())
 }
 pub(crate) fn try_localize_owned(bytes: &mut crate::memory::Buffer<u8>) -> Result<(), Error> {
+    try_localize_owned_from(bytes, 0)
+}
+pub(crate) fn try_localize_owned_from(
+    bytes: &mut crate::memory::Buffer<u8>,
+    start: usize,
+) -> Result<(), Error> {
     if !DECIMAL_DOT.load(AtomicOrdering::Acquire)
-        && let Some(at) = bytes.iter().position(|&b| b == b'.')
+        && let Some(offset) = bytes[start..].iter().position(|&b| b == b'.')
     {
+        let at = start + offset;
         // Snapshot before allocation: a custom callback may enter a distinct
         // state and use numeric formatting without holding this process lock.
         let point = decimal();

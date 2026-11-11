@@ -339,13 +339,24 @@ impl Vm {
         if matches!(left, Value::String(_) | Value::Number(_))
             && matches!(right, Value::String(_) | Value::Number(_))
         {
-            let mut bytes = self.concat_bytes(left)?;
-            let right = self.concat_bytes(right)?;
-            bytes
-                .try_reserve(right.len())
-                .map_err(|_| self.memory_failure())?;
-            bytes.extend_from_slice(&right);
-            self.registers[result] = self.try_intern(&bytes)?;
+            let mut bytes = self.try_take_buffer(0)?;
+            for value in [left, right] {
+                match value {
+                    Value::String(id) => bytes
+                        .try_extend_from_slice(self.string_bytes(id).unwrap_or_default())
+                        .map_err(|_| self.memory_failure())?,
+                    Value::Number(n) => {
+                        let start = bytes.len();
+                        bytes
+                            .try_extend_from_slice(native::number_text(n).as_bytes())
+                            .map_err(|_| self.memory_failure())?;
+                        crate::locale::try_localize_owned_from(&mut bytes, start)
+                            .map_err(|_| self.memory_failure())?;
+                    }
+                    _ => unreachable!("primitive concatenation operands"),
+                }
+            }
+            self.registers[result] = self.try_finish_buffer(bytes)?;
             return Ok(());
         }
         let handler = self.binary_handler(left, right, Meta::Concat);

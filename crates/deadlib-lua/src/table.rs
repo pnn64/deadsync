@@ -379,10 +379,14 @@ impl Table {
                 return Ok(());
             }
         }
-        if let Some((_, Some(i))) = self.slot(k) {
-            self.entries[i].value = value;
-            return Ok(());
-        }
+        let vacant = match self.slot(k) {
+            Some((_, Some(i))) => {
+                self.entries[i].value = value;
+                return Ok(());
+            }
+            Some((slot, None)) => Some(slot),
+            None => None,
+        };
         if value == Value::Nil {
             return Ok(());
         }
@@ -415,7 +419,11 @@ impl Table {
         if rebuild {
             self.rebuild(slots);
         }
-        let (slot, _) = self.slot(k).expect("table rebuild creates slots");
+        let slot = if rebuild {
+            self.slot(k).expect("table rebuild creates slots").0
+        } else {
+            vacant.expect("nonempty table has a vacant hash slot")
+        };
         self.slots[slot] = index;
         self.entries.push(Entry { key: k, value });
         Ok(())
