@@ -37,6 +37,25 @@ impl Vm {
             self.registers[call] = Value::Number(result);
             return Some(1);
         }
+        // Additional arguments, number-to-string coercion, and errors use
+        // ordinary dispatch. An empty string.byte result has zero values.
+        if count == 1
+            && matches!(id, strings::STR_LEN | strings::STR_BYTE)
+            && let Value::String(source) = self.registers[call + 1]
+            && let Some(bytes) = self.strings.bytes.get(source.0)
+        {
+            if id == strings::STR_LEN {
+                self.registers[call] = Value::Number(bytes.len() as f64);
+                return Some(1);
+            }
+            return match bytes.first() {
+                Some(&byte) => {
+                    self.registers[call] = Value::Number(f64::from(byte));
+                    Some(1)
+                }
+                None => Some(0),
+            };
+        }
         if matches!(id, NEXT | PAIRS_NEXT) && count != 0 {
             let Value::Table(table) = self.registers[call + 1] else {
                 return None;
