@@ -34,6 +34,16 @@ enum SubAction {
     Complete(u8),
 }
 
+/// How a batched substitution step found its next position.
+enum Scan {
+    /// A match at the cursor is stored in the substitution.
+    Found,
+    /// Unmatched bytes were copied; the source may be exhausted.
+    Skipped,
+    /// Use one per-position attempt.
+    Single,
+}
+
 #[derive(Debug)]
 pub(super) struct Substitution {
     pub owner: usize,
@@ -911,81 +921,167 @@ impl Vm {
                 return Ok(None);
             }
         }
-        if self.substitutions[index].done
-            || self.substitutions[index].count >= self.substitutions[index].maximum
-        {
-            return self.substitution_complete(index, 0);
-        }
-        let state = &self.substitutions[index];
-        let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
-        let found = self.with_pattern(pattern, true, source, |pattern, text, work| {
-            pattern.match_at(text, cursor, work)
-        })?;
-        if let Some(found) = found {
-            self.substitutions[index].matched = Some(found);
-            self.substitutions[index].count += 1;
-            let frame = self.frames[owner];
-            let replacement =
-                self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
-            match replacement {
-                Value::String(_) | Value::Number(_) => {
-                    let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
-                    if !self.replacement_string(index, text, 0)? {
-                        self.substitution_queue(index, 0, SubAction::Advance)?;
-                        return Ok(None);
-                    }
-                    if !self.substitution_advance(index)? {
-                        return Ok(None);
-                    }
-                }
-                Value::Table(_) => {
-                    let key = self.capture_value(source, found.capture(0)?)?;
-                    self.substitution_push(index, key)?;
-                    let call = frame.vararg_start + self.substitutions[index].top - 1;
-                    self.frames[owner].pc |= 2;
-                    self.get_table(replacement, key, call)?;
-                }
-                Value::Function(_) | Value::Native(_) => {
-                    let call = frame.vararg_start + self.substitutions[index].top;
-                    let argc = self.capture_results(call + 1, source, found, true)?;
-                    self.registers[call] = replacement;
-                    self.frames[owner].pc |= 1;
-                    if let Some(actual) = self.start_call(call, argc, 1, false)? {
-                        self.finish_call(call, actual, 1);
-                    }
-                }
-                _ => {
-                    if self.substitutions[index].top == 0 {
-                        return Err(Error::new(
-                            ErrorKind::Runtime,
-                            0,
-                            "invalid native buffer stack",
-                        ));
-                    }
-                    if !self.substitution_replacement(index)? {
-                        self.substitution_queue(index, 0, SubAction::Advance)?;
-                        return Ok(None);
-                    }
-                    if !self.substitution_advance(index)? {
-                        return Ok(None);
-                    }
-                }
+        // Literal replacements never enter Lua. Without an instruction budget
+        // or hooks, consecutive matches run in this step until the first
+        // buffer flush, keeping each call's work bounded by one buffer.
+        let batch = self.budget.is_none() && self.hooks.mask == 0;
+        loop {
+            if self.substitutions[index].done
+                || self.substitutions[index].count >= self.substitutions[index].maximum
+            {
+                return self.substitution_complete(index, 0);
             }
-        } else {
-            if cursor < self.strings.bytes[slot_index(source.0)].len() {
-                self.substitutions[index].cursor += 1;
+            let state = &self.substitutions[index];
+            let (source, pattern, cursor) = (state.source, state.pattern, state.cursor);
+            let room = io::LINE_BUFFER - state.output.len();
+            let scan = if batch && state.level == 0 && state.actions.is_empty() && room > 0 {
+                self.substitution_scan(index, source, pattern, cursor, room)?
+            } else {
+                Scan::Single
+            };
+            let found = match scan {
+                Scan::Found => self.substitutions[index].matched,
+                Scan::Skipped => continue,
+                Scan::Single => {
+                    let found =
+                        self.with_pattern(pattern, true, source, |pattern, text, work| {
+                            pattern.match_at(text, cursor, work)
+                        })?;
+                    self.substitutions[index].matched = found;
+                    found
+                }
+            };
+            if let Some(found) = found {
+                self.substitutions[index].count += 1;
+                let frame = self.frames[owner];
+                let replacement =
+                    self.argument(frame.vararg_start - 1, self.substitutions[index].top, 2);
+                match replacement {
+                    Value::String(_) | Value::Number(_) => {
+                        let text = self.string_argument(frame.vararg_start - 1, frame.argc(), 2)?;
+                        if !self.replacement_string(index, text, 0)? {
+                            self.substitution_queue(index, 0, SubAction::Advance)?;
+                            return Ok(None);
+                        }
+                        if !self.substitution_advance(index)? {
+                            return Ok(None);
+                        }
+                    }
+                    Value::Table(_) => {
+                        let key = self.capture_value(source, found.capture(0)?)?;
+                        self.substitution_push(index, key)?;
+                        let call = frame.vararg_start + self.substitutions[index].top - 1;
+                        self.frames[owner].pc |= 2;
+                        self.get_table(replacement, key, call)?;
+                        return Ok(None);
+                    }
+                    Value::Function(_) | Value::Native(_) => {
+                        let call = frame.vararg_start + self.substitutions[index].top;
+                        let argc = self.capture_results(call + 1, source, found, true)?;
+                        self.registers[call] = replacement;
+                        self.frames[owner].pc |= 1;
+                        if let Some(actual) = self.start_call(call, argc, 1, false)? {
+                            self.finish_call(call, actual, 1);
+                        }
+                        return Ok(None);
+                    }
+                    _ => {
+                        if self.substitutions[index].top == 0 {
+                            return Err(Error::new(
+                                ErrorKind::Runtime,
+                                0,
+                                "invalid native buffer stack",
+                            ));
+                        }
+                        if !self.substitution_replacement(index)? {
+                            self.substitution_queue(index, 0, SubAction::Advance)?;
+                            return Ok(None);
+                        }
+                        if !self.substitution_advance(index)? {
+                            return Ok(None);
+                        }
+                    }
+                }
+            } else {
+                if cursor < self.strings.bytes[slot_index(source.0)].len() {
+                    self.substitutions[index].cursor += 1;
+                    if self.patterns[&(pattern, true)].anchored {
+                        self.substitutions[index].done = true;
+                    }
+                    self.substitution_byte(
+                        index,
+                        self.strings.bytes[slot_index(source.0)][cursor],
+                    )?;
+                } else {
+                    self.substitutions[index].done = true;
+                }
                 if self.patterns[&(pattern, true)].anchored {
                     self.substitutions[index].done = true;
                 }
-                self.substitution_byte(index, self.strings.bytes[slot_index(source.0)][cursor])?;
-            } else {
-                self.substitutions[index].done = true;
             }
-            if self.patterns[&(pattern, true)].anchored {
-                self.substitutions[index].done = true;
+            let state = &self.substitutions[index];
+            if !(batch
+                && state.actions.is_empty()
+                && state.level == 0
+                && self.frames.len() == owner + 1)
+            {
+                return Ok(None);
             }
         }
-        Ok(None)
+    }
+    /// Advance a batched substitution to its next match within the output
+    /// buffer's free space, appending the skipped bytes at once. This matches
+    /// the per-position path, which emits one unmatched byte per attempt, and
+    /// never flushes. Anchored patterns keep that path.
+    fn substitution_scan(
+        &mut self,
+        index: usize,
+        source: StringId,
+        pattern: StringId,
+        cursor: usize,
+        room: usize,
+    ) -> Result<Scan, Error> {
+        self.prepare_pattern(pattern, true)?;
+        let compiled = &self.patterns[&(pattern, true)];
+        if compiled.anchored {
+            return Ok(Scan::Single);
+        }
+        let first = compiled.first_byte();
+        let text = &self.strings.bytes[slot_index(source.0)];
+        let before = self.pattern_work.heap_bytes();
+        let limit = (cursor + room).min(text.len());
+        let mut at = cursor;
+        let result = loop {
+            if let Some(byte) = first {
+                at += text[at..limit]
+                    .iter()
+                    .position(|&b| b == byte)
+                    .unwrap_or(limit - at);
+            }
+            if at == limit && (at < text.len() || first.is_some()) {
+                break Ok(None);
+            }
+            match compiled.match_at(text, at, &mut self.pattern_work) {
+                Ok(Some(found)) => break Ok(Some(found)),
+                Ok(None) if at < text.len() => at += 1,
+                Ok(None) => break Ok(None),
+                Err(error) => break Err(error),
+            }
+        };
+        let end = text.len();
+        self.gc_note_control(self.pattern_work.heap_bytes().saturating_sub(before));
+        let found = result.map_err(|error| self.pattern_error(error))?;
+        let state = &mut self.substitutions[index];
+        state
+            .output
+            .extend_from_slice(&self.strings.bytes[slot_index(source.0)][cursor..at]);
+        state.cursor = at;
+        if found.is_none() {
+            state.done = at == end;
+            return Ok(Scan::Skipped);
+        }
+        state.matched = found;
+        Ok(Scan::Found)
     }
     fn string_format(&mut self, base: usize, count: usize) -> Result<usize, Error> {
         let mut scratch = crate::format::Scratch::new(self.registers.memory().clone());

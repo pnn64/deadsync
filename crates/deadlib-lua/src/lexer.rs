@@ -139,6 +139,18 @@ pub(crate) struct Token {
     pub number: f64,
 }
 
+impl Default for Token {
+    fn default() -> Self {
+        Self {
+            kind: Kind::Eof,
+            line: 0,
+            end_line: 0,
+            text: Text::default(),
+            number: 0.0,
+        }
+    }
+}
+
 mod scanner;
 pub(crate) use scanner::Scanner;
 

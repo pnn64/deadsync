@@ -41,6 +41,69 @@ enum State {
     Emit,
 }
 
+/// A word of at most eight bytes as a zero-padded integer. Words contain no
+/// NUL byte, so the padding cannot make two different words equal.
+const fn word(text: &[u8]) -> u64 {
+    let mut bytes = [0; 8];
+    let mut index = 0;
+    while index < text.len() {
+        bytes[index] = text[index];
+        index += 1;
+    }
+    u64::from_le_bytes(bytes)
+}
+
+fn keyword(text: &[u8]) -> Kind {
+    const AND: u64 = word(b"and");
+    const BREAK: u64 = word(b"break");
+    const DO: u64 = word(b"do");
+    const ELSE: u64 = word(b"else");
+    const ELSEIF: u64 = word(b"elseif");
+    const END: u64 = word(b"end");
+    const FALSE: u64 = word(b"false");
+    const FOR: u64 = word(b"for");
+    const FUNCTION: u64 = word(b"function");
+    const IF: u64 = word(b"if");
+    const IN: u64 = word(b"in");
+    const LOCAL: u64 = word(b"local");
+    const NIL: u64 = word(b"nil");
+    const NOT: u64 = word(b"not");
+    const OR: u64 = word(b"or");
+    const REPEAT: u64 = word(b"repeat");
+    const RETURN: u64 = word(b"return");
+    const THEN: u64 = word(b"then");
+    const TRUE: u64 = word(b"true");
+    const UNTIL: u64 = word(b"until");
+    const WHILE: u64 = word(b"while");
+    if text.len() > 8 {
+        return Kind::Name;
+    }
+    match word(text) {
+        AND => Kind::And,
+        BREAK => Kind::Break,
+        DO => Kind::Do,
+        ELSE => Kind::Else,
+        ELSEIF => Kind::ElseIf,
+        END => Kind::End,
+        FALSE => Kind::False,
+        FOR => Kind::For,
+        FUNCTION => Kind::Function,
+        IF => Kind::If,
+        IN => Kind::In,
+        LOCAL => Kind::Local,
+        NIL => Kind::Nil,
+        NOT => Kind::Not,
+        OR => Kind::Or,
+        REPEAT => Kind::Repeat,
+        RETURN => Kind::Return,
+        THEN => Kind::Then,
+        TRUE => Kind::True,
+        UNTIL => Kind::Until,
+        WHILE => Kind::While,
+        _ => Kind::Name,
+    }
+}
+
 fn empty(line: u32) -> Token {
     Token {
         kind: Kind::Eof,
@@ -248,7 +311,164 @@ impl Scanner {
         Ok(())
     }
 
+    /// Scan one common token of complete input into `out` in a single pass.
+    /// `false` leaves the cursor at the token start for the resumable states.
+    /// Produced tokens, spans and line counts match the state machine exactly.
+    fn fast(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
+        loop {
+            match input.get(self.pos) {
+                Some(b' ' | b'\t' | 11 | 12) => self.pos += 1,
+                Some(b'\n' | b'\r') => {
+                    self.newline(input, true)?;
+                }
+                _ => break,
+            }
+        }
+        let start = self.pos;
+        let Some(&c) = input.get(start) else {
+            return Ok(false);
+        };
+        let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+        let mut text = Text::default();
+        let mut number = 0.0;
+        let next = input.get(start + 1).copied();
+        let (kind, end) = match c {
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+                let end = start
+                    + 1
+                    + input[start + 1..]
+                        .iter()
+                        .position(|&b| !word(b))
+                        .unwrap_or(input.len() - start - 1);
+                if input.get(end).is_some_and(|&b| b >= 128) {
+                    return Ok(false);
+                }
+                let word = &input[start..end];
+                let kind = keyword(word);
+                if kind == Kind::Name {
+                    text = Text::new(word)?;
+                }
+                (kind, end)
+            }
+            b'0'..=b'9' => {
+                let mut end = start + 1;
+                while input
+                    .get(end)
+                    .is_some_and(|&b| b.is_ascii_digit() || b == b'.')
+                {
+                    end += 1;
+                }
+                if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
+                    end += 1;
+                    if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
+                        end += 1;
+                    }
+                }
+                while input.get(end).copied().is_some_and(word) {
+                    end += 1;
+                }
+                if input.get(end).is_some_and(|&b| b >= 128) {
+                    return Ok(false);
+                }
+                let Some(value) = parse_number(&input[start..end]) else {
+                    return Ok(false);
+                };
+                number = value;
+                (Kind::Number, end)
+            }
+            b'\'' | b'"' => {
+                let rest = &input[start + 1..];
+                let Some(len) = rest
+                    .iter()
+                    .position(|&b| b == c || matches!(b, b'\\' | b'\n' | b'\r'))
+                    .filter(|&len| rest[len] == c)
+                else {
+                    return Ok(false);
+                };
+                text = rest[..len].try_boxed()?.into();
+                (Kind::String, start + len + 2)
+            }
+            b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
+            b'.' if next.is_some_and(crate::locale::is_digit) => return Ok(false),
+            b'.' if matches!(next, Some(b'.' | 0)) => {
+                if matches!(input.get(start + 2), Some(b'.' | 0)) {
+                    (Kind::Dots, start + 3)
+                } else {
+                    (Kind::Concat, start + 2)
+                }
+            }
+            b'.' => (Kind::Dot, start + 1),
+            b'=' | b'<' | b'>' | b'~' => {
+                let equal = next == Some(b'=');
+                let kind = match (c, equal) {
+                    (b'=', true) => Kind::Eq,
+                    (b'=', false) => Kind::Assign,
+                    (b'<', true) => Kind::Le,
+                    (b'<', false) => Kind::Lt,
+                    (b'>', true) => Kind::Ge,
+                    (b'>', false) => Kind::Gt,
+                    (b'~', true) => Kind::Ne,
+                    _ => Kind::Byte(c),
+                };
+                (kind, start + 1 + usize::from(equal))
+            }
+            b'+' => (Kind::Plus, start + 1),
+            b'*' => (Kind::Star, start + 1),
+            b'/' => (Kind::Slash, start + 1),
+            b'%' => (Kind::Percent, start + 1),
+            b'^' => (Kind::Caret, start + 1),
+            b'#' => (Kind::Hash, start + 1),
+            b'(' => (Kind::LParen, start + 1),
+            b')' => (Kind::RParen, start + 1),
+            b'{' => (Kind::LBrace, start + 1),
+            b'}' => (Kind::RBrace, start + 1),
+            b']' => (Kind::RBracket, start + 1),
+            b';' => (Kind::Semi, start + 1),
+            b':' => (Kind::Colon, start + 1),
+            b',' => (Kind::Comma, start + 1),
+            _ => return Ok(false),
+        };
+        // The scanner's own token stays pristine: this path builds its result
+        // directly and records only the span that `emit` would have recorded.
+        self.start = start;
+        self.pos = end;
+        self.buffer = match kind {
+            Kind::String => Buffer::String(start, end),
+            Kind::Dot | Kind::Concat | Kind::Dots => Buffer::Raw(start, start + 1),
+            Kind::Name | Kind::Number => Buffer::Raw(start, end),
+            _ if c.is_ascii_alphabetic() => Buffer::Raw(start, end),
+            _ => Buffer::Empty,
+        };
+        out.kind = kind;
+        out.line = self.line;
+        out.end_line = self.line;
+        out.text = text;
+        out.number = number;
+        Ok(true)
+    }
+
+    /// Scan the next token of complete input into `out`.
+    pub(crate) fn next_closed(&mut self, input: &[u8], out: &mut Token) -> Result<(), Error> {
+        if matches!(self.state, State::Skip) && self.fast(input, out)? {
+            return Ok(());
+        }
+        *out = self
+            .slow(input, true)?
+            .expect("complete input always yields a token");
+        Ok(())
+    }
+
     pub(crate) fn next(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
+        if closed && matches!(self.state, State::Skip) {
+            let mut token = Token::default();
+            if self.fast(input, &mut token)? {
+                return Ok(Some(token));
+            }
+        }
+        self.slow(input, closed)
+    }
+
+    fn slow(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
         loop {
             let current = input.get(self.pos).copied();
             // Lua's character reader fetches the next current byte before a
@@ -423,30 +643,7 @@ impl Scanner {
                         return Ok(None);
                     }
                     let text = &input[self.start..self.pos];
-                    let kind = match text {
-                        b"and" => Kind::And,
-                        b"break" => Kind::Break,
-                        b"do" => Kind::Do,
-                        b"else" => Kind::Else,
-                        b"elseif" => Kind::ElseIf,
-                        b"end" => Kind::End,
-                        b"false" => Kind::False,
-                        b"for" => Kind::For,
-                        b"function" => Kind::Function,
-                        b"if" => Kind::If,
-                        b"in" => Kind::In,
-                        b"local" => Kind::Local,
-                        b"nil" => Kind::Nil,
-                        b"not" => Kind::Not,
-                        b"or" => Kind::Or,
-                        b"repeat" => Kind::Repeat,
-                        b"return" => Kind::Return,
-                        b"then" => Kind::Then,
-                        b"true" => Kind::True,
-                        b"until" => Kind::Until,
-                        b"while" => Kind::While,
-                        _ => Kind::Name,
-                    };
+                    let kind = keyword(text);
                     if kind == Kind::Name {
                         self.token.text = Text::new(text)?;
                     }

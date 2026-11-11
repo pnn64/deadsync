@@ -1601,8 +1601,8 @@ impl Vm {
         }
         self.gc.phase = Phase::Finalize;
         self.gc.collections += 1;
+        // Resetting the debt measures the heap, which also records its peak.
         self.reset_gc_debt();
-        self.heap_stats();
     }
     fn advance_gc_some(&mut self, mut budget: usize) -> Result<bool, Error> {
         if self.gc.phase == Phase::Pause {

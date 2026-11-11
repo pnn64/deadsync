@@ -147,3 +147,52 @@ return 42
         [Value::Number(42.)]
     );
 }
+
+#[test]
+fn literal_substitution_batches_match_stepped_substitution() {
+    // Literal replacements batch matches until the first buffer flush. A
+    // configured budget keeps one native step per match, so both modes must
+    // produce identical strings, counts and diagnostics.
+    let source = br#"
+local out={}
+local function add(...)
+ local n=select('#',...)
+ for i=1,n do out[#out+1]=tostring((select(i,...))) end
+ out[#out+1]='|'
+end
+local long=string.rep('ab-cd ',400)
+local subjects={'',' not ID( ( 1 < 2 ) and ID(x) )','hello world',long,long..'tail'}
+local cases={
+ {'ID',''},{'ID','identity'},{'o','0'},{'%s+','_'},{'(%w+)','<%1>'},
+ {'%w+','%0%0'},{'','-'},{'x*','.'},{'^ab','AB'},{'^','>'},{'b',7},
+ {'()','%1'},{'(a)(b)','%2%1%%'},{'z','none'},{'[%-]',string.rep('#',600)},
+}
+for _,subject in ipairs(subjects) do
+ for _,case in ipairs(cases) do
+  for _,limit in ipairs{false,0,1,3,1000} do
+   if limit then add(string.gsub(subject,case[1],case[2],limit))
+   else add(string.gsub(subject,case[1],case[2])) end
+  end
+ end
+end
+add(pcall(string.gsub,'abc','(b)','%2'))
+add(pcall(string.gsub,long,'d','%9'))
+add(pcall(string.gsub,'abc','(','x'))
+return table.concat(out,',')
+"#;
+    let program = compile(source).unwrap();
+    let mut results = Vec::new();
+    for ordinary in [false, true] {
+        let mut vm = Vm::new();
+        if ordinary {
+            vm.set_instruction_limit(Some(u64::MAX));
+        }
+        let values = vm.execute(&program).unwrap();
+        let [Value::String(id)] = values[..] else {
+            panic!("substitution digest is a string")
+        };
+        results.push(vm.string_bytes(id).unwrap().to_vec());
+    }
+    assert!(results[0].len() > 100_000);
+    assert_eq!(results[0], results[1]);
+}

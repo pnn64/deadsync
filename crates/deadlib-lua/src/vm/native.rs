@@ -1122,6 +1122,7 @@ impl Vm {
                                 &self.strings.bytes[slot_index(source.0)],
                                 &self.strings.bytes[slot_index(name.0)],
                                 depth,
+                                &mut self.compile_spare,
                             )
                         })
                     });

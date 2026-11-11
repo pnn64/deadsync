@@ -14,7 +14,15 @@ impl<'a> Compiler<'a> {
             self.result = dst;
             return Ok(());
         }
-        self.tasks.try_push(Task::ExprEnd(saved, dst))?;
+        // A leaf emits at once, so its end continuation runs here instead of
+        // travelling through the task stack.
+        let leaf = matches!(
+            expr,
+            Expr::Nil | Expr::Boolean(_) | Expr::Number(_) | Expr::String(_) | Expr::Name(_)
+        );
+        if !leaf {
+            self.tasks.try_push(Task::ExprEnd(saved, dst))?;
+        }
         match expr {
             Expr::Nil => self.load(dst, Constant::Nil)?,
             Expr::Boolean(b) => self.load(dst, Constant::Boolean(*b))?,
@@ -136,30 +144,27 @@ impl<'a> Compiler<'a> {
                 body,
                 end_line,
             } => {
-                let parent = std::mem::replace(
-                    &mut self.function,
-                    Function {
-                        vararg: *vararg,
-                        compat_arg: *vararg,
-                        defined: [span.start, *end_line],
-                        debug_stack: self
-                            .ast
-                            .stacks
-                            .binary_search_by_key(&id, |&(id, _)| id)
-                            .map(|i| self.ast.stacks[i].1)
-                            .unwrap(),
-                        zero_sign: self
-                            .ast
-                            .zero_signs
-                            .binary_search_by_key(&id, |&(id, _)| id)
-                            .ok()
-                            .map(|at| self.ast.zero_signs[at].1),
-                        ..Function::default()
-                    },
-                );
+                let mut child = self.fresh_function();
+                child.vararg = *vararg;
+                child.compat_arg = *vararg;
+                child.defined = [span.start, *end_line];
+                child.debug_stack = self
+                    .ast
+                    .stacks
+                    .binary_search_by_key(&id, |&(id, _)| id)
+                    .map(|i| self.ast.stacks[i].1)
+                    .unwrap();
+                child.zero_sign = self
+                    .ast
+                    .zero_signs
+                    .binary_search_by_key(&id, |&(id, _)| id)
+                    .ok()
+                    .map(|at| self.ast.zero_signs[at].1);
+                let parent = std::mem::replace(&mut self.function, child);
                 self.parents.try_push(parent)?;
                 self.function.params = params.len() as u16;
-                for name in params {
+                let ast = self.ast;
+                for name in ast.names(*params) {
                     let reg = self.alloc(1)?;
                     self.bind(name, reg)?;
                 }
@@ -168,9 +173,13 @@ impl<'a> Compiler<'a> {
                     self.bind(b"arg", reg)?;
                 }
                 self.tasks.try_push(Task::ChildEnd(*end_line, dst))?;
-                self.tasks.try_push(Task::Block(body))?;
+                self.tasks.try_push(Task::Block(ast.ids(*body)))?;
             }
             Expr::Vararg => self.vararg(dst, 1)?,
+        }
+        if leaf {
+            self.reset(saved);
+            self.result = dst;
         }
         Ok(())
     }
@@ -182,8 +191,9 @@ impl<'a> Compiler<'a> {
             }
             Expr::Vararg => self.vararg(dst, wanted)?,
             _ => {
+                // The expression is the next continuation: compile it directly.
                 self.tasks.try_push(Task::FillNil(dst, wanted))?;
-                self.tasks.try_push(Task::Expr(id, dst))?;
+                self.expr(id, dst)?;
             }
         }
         Ok(())
@@ -222,8 +232,7 @@ impl<'a> Compiler<'a> {
             self.result = dst;
             return Ok(());
         }
-        self.tasks.try_push(Task::Expr(id, dst))?;
-        Ok(())
+        self.expr(id, dst)
     }
     pub(super) fn unparen(&self, mut id: ExprId) -> ExprId {
         while let Expr::Paren(inner) = self.ast.exprs[id].0 {
@@ -465,7 +474,7 @@ impl<'a> Compiler<'a> {
         let Expr::Table(fields, _) = &self.ast.exprs[state.id].0 else {
             unreachable!()
         };
-        if let Some(&(key, value)) = fields.get(state.index) {
+        if let Some(&(key, value)) = self.ast.fields(*fields).get(state.index) {
             if let Some(key) = key {
                 if let Some(constant) = self.constant_operand(key)? {
                     let reg = self.alloc(1)?;
@@ -528,9 +537,12 @@ impl<'a> Compiler<'a> {
             })
     }
     pub(super) fn call_parts(&self, id: ExprId) -> (ExprId, Option<&'a [u8]>, &'a [ExprId], u32) {
-        match &self.ast.exprs[id].0 {
-            Expr::Call(function, args, line) => (*function, None, args, *line),
-            Expr::Method(receiver, method, args, line) => (*receiver, Some(method), args, *line),
+        let ast = self.ast;
+        match &ast.exprs[id].0 {
+            Expr::Call(function, args, line) => (*function, None, ast.ids(*args), *line),
+            Expr::Method(receiver, method, args, line) => {
+                (*receiver, Some(method), ast.ids(*args), *line)
+            }
             _ => unreachable!("call continuation"),
         }
     }

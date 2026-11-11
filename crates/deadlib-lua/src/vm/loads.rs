@@ -44,14 +44,42 @@ impl NativeRoots {
     }
 }
 
-pub(super) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<Program, Error> {
-    if source.first() == Some(&27) {
-        crate::chunk51::compile(source, name, depth)
-    } else {
-        crate::parser::Parser::with_native_depth(depth)?
-            .resume(source, true)
-            .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), name))
+/// Compiler storage a VM keeps between unbudgeted source loads. It is not
+/// VM heap: budgeted compilations charge and release fresh storage instead.
+#[derive(Default)]
+pub(super) struct Spare {
+    parser: crate::parser::Spare,
+    compiler: crate::compiler::Spare,
+}
+impl std::fmt::Debug for Spare {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.debug_struct("Spare").finish_non_exhaustive()
     }
+}
+/// Sources above this size release their storage instead of retaining it.
+const SPARE_SOURCE_LIMIT: usize = 64 * 1024;
+
+pub(super) fn compile(
+    source: &[u8],
+    name: &[u8],
+    depth: usize,
+    spare: &mut Spare,
+) -> Result<Program, Error> {
+    if source.first() == Some(&27) {
+        return crate::chunk51::compile(source, name, depth);
+    }
+    if crate::memory::compilation::active() || source.len() > SPARE_SOURCE_LIMIT {
+        return crate::parser::Parser::with_native_depth(depth)?
+            .resume(source, true)
+            .and_then(|ast| crate::compiler::compile(ast.expect("closed source"), name));
+    }
+    let mut parser = crate::parser::Parser::try_new_in(&mut spare.parser, depth)?;
+    let parsed = parser.resume(source, true);
+    parser.recycle(&mut spare.parser);
+    let ast = parsed?.expect("closed source");
+    let program = crate::compiler::compile_in(&ast, name, &mut spare.compiler);
+    spare.parser.keep_ast(ast);
+    program
 }
 
 pub(super) fn protected(function: FrameKind) -> bool {
@@ -210,10 +238,10 @@ impl Loading {
                 .as_ref()
                 .map_or(0, |d| std::mem::size_of_val(d.as_ref()) + d.heap_bytes())
     }
-    fn resume(&mut self) -> Result<Option<Program>, Error> {
-        self.workspace.clone().run(|| self.resume_inner())
+    fn resume(&mut self, spare: &mut Spare) -> Result<Option<Program>, Error> {
+        self.workspace.clone().run(|| self.resume_inner(spare))
     }
-    fn resume_inner(&mut self) -> Result<Option<Program>, Error> {
+    fn resume_inner(&mut self, spare: &mut Spare) -> Result<Option<Program>, Error> {
         if self.binary_mode {
             let native = self.native.is_some();
             if self.decoder.is_none() {
@@ -238,24 +266,40 @@ impl Loading {
         if let Some(roots) = &mut self.native {
             roots.started = true;
         }
-        self.parser
-            .resume(&self.source, self.closed)?
-            .map(|ast| crate::compiler::compile(ast, &self.name))
-            .transpose()
+        let Some(ast) = self.parser.resume(&self.source, self.closed)? else {
+            return Ok(None);
+        };
+        if !self.parser.reusable() {
+            return crate::compiler::compile(ast, &self.name).map(Some);
+        }
+        let program = crate::compiler::compile_in(&ast, &self.name, &mut spare.compiler);
+        spare.parser.keep_ast(ast);
+        program.map(Some)
     }
-    fn read_file(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
-        self.workspace.clone().run(|| self.read_file_inner(stream))
+    fn read_file(&mut self, stream: &mut io::Stream, whole: bool) -> Result<(), (i32, bool)> {
+        self.workspace
+            .clone()
+            .run(|| self.read_file_inner(stream, whole))
     }
-    fn read_file_inner(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
+    fn read_file_inner(&mut self, stream: &mut io::Stream, whole: bool) -> Result<(), (i32, bool)> {
         let file = self.file.as_mut().expect("active file reader");
         if !file.prepare(stream, &self.name, &mut self.source, &mut self.binary_mode)? {
             return Ok(());
         }
+        // A file this load opened is closed when the load ends, so reading it
+        // whole is unobservable and lets the parser see complete source.
+        // Shared streams such as stdin keep the reference block size, as do
+        // loads under an instruction limit, which charges each block.
+        let request = if file.owned && whole {
+            usize::MAX / 2
+        } else {
+            io::LINE_BUFFER
+        };
         let before = self.source.len();
         stream
-            .read_chars(&mut self.source, io::LINE_BUFFER)
+            .read_chars(&mut self.source, request)
             .map_err(|e| (e, false))?;
-        self.closed = self.source.len() - before < io::LINE_BUFFER;
+        self.closed = self.source.len() - before < request;
         Ok(())
     }
 }
@@ -333,7 +377,7 @@ impl Vm {
     pub(super) fn resume_native_load(&mut self, index: usize) -> Result<Option<Program>, Error> {
         let job = &mut self.loads[index];
         let before = job.arena_bytes();
-        let result = job.resume();
+        let result = job.resume(&mut self.compile_spare);
         let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
         result
@@ -452,6 +496,7 @@ impl Vm {
     }
     fn finish_file_load(&mut self) {
         let job = self.loads.pop().expect("completed file reader");
+        job.parser.recycle(&mut self.compile_spare.parser);
         if let Some(file) = job.file {
             self.close_file_reader(file);
         }
@@ -577,10 +622,16 @@ impl Vm {
                 self.loads
                     .try_reserve(1)
                     .map_err(|_| self.memory_failure())?;
+                let depth = self.native_depth(owner + 1);
+                let parser = if crate::memory::compilation::active() {
+                    crate::parser::Parser::with_native_depth(depth)?
+                } else {
+                    crate::parser::Parser::try_new_in(&mut self.compile_spare.parser, depth)?
+                };
                 Ok(Loading {
                     owner,
                     workspace: workspace.clone(),
-                    parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1))?,
+                    parser,
                     decoder: None,
                     native_depth: self.native_depth(owner + 1),
                     binary_mode: false,
@@ -608,7 +659,7 @@ impl Vm {
         let stream = &mut self.io.files[slot_index(file.key)];
         let before = stream.heap_bytes();
         let source_before = self.loads[index].source.capacity();
-        let read = self.loads[index].read_file(stream);
+        let read = self.loads[index].read_file(stream, self.budget.is_none());
         let growth = stream.heap_bytes().saturating_sub(before);
         self.io.files.note_alloc(growth);
         self.gc_note_control(self.loads[index].source.capacity() - source_before);
@@ -623,7 +674,7 @@ impl Vm {
         }
         let job = &mut self.loads[index];
         let before = job.arena_bytes();
-        let parsed = job.resume();
+        let parsed = job.resume(&mut self.compile_spare);
         let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
         let compiled = match parsed {
@@ -776,7 +827,7 @@ impl Vm {
         }
         let job = &mut self.loads[index];
         let before = job.arena_bytes();
-        let parsed = job.resume();
+        let parsed = job.resume(&mut self.compile_spare);
         let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
         let mut top = frame.argc();

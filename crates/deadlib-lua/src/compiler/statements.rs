@@ -12,7 +12,8 @@ impl<'a> Compiler<'a> {
         match stmt {
             Stmt::Local(names, values) => {
                 self.tasks.try_push(Task::BindLocal(id))?;
-                self.tasks.try_push(Task::Values(values, names.len()))?;
+                self.tasks
+                    .try_push(Task::Values(self.ast.ids(*values), names.len()))?;
             }
             Stmt::Assign(targets, _) | Stmt::FunctionDefinition(targets, _) => {
                 self.tasks.try_push(Task::AssignNext(
@@ -26,6 +27,7 @@ impl<'a> Compiler<'a> {
                 self.tasks.try_push(Task::Results(*value, dst, 0))?;
             }
             Stmt::Return(values, end_line) => {
+                let values = self.ast.ids(*values);
                 if values.is_empty() {
                     self.line = *end_line;
                     self.emit(Op::Return, 0, 0, 0)?;
@@ -57,7 +59,7 @@ impl<'a> Compiler<'a> {
                 self.tasks
                     .try_push(Task::ReturnNext(id, base, 0, values.len() as u32))?;
             }
-            Stmt::Do(body) => self.tasks.try_push(Task::Scope(body))?,
+            Stmt::Do(body) => self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?,
             Stmt::While(cond, _) => {
                 let start = self.function.code.len() as u32;
                 let reg = self.alloc(1)?;
@@ -71,7 +73,7 @@ impl<'a> Compiler<'a> {
                 self.function.loops.try_push((saved, Vec::new()))?;
                 self.tasks
                     .try_push(Task::RepeatCond(id, saved, start, locals))?;
-                self.tasks.try_push(Task::Block(body))?;
+                self.tasks.try_push(Task::Block(self.ast.ids(*body)))?;
             }
             Stmt::If(arms, _) => self.tasks.try_push(Task::IfNext(
                 id,
@@ -109,16 +111,18 @@ impl<'a> Compiler<'a> {
             }
             Stmt::ForIn(_, values, _, _) => {
                 self.tasks.try_push(Task::ForInInit(id, saved))?;
-                self.tasks.try_push(Task::Values(values, 3))?;
+                self.tasks
+                    .try_push(Task::Values(self.ast.ids(*values), 3))?;
             }
         }
         Ok(())
     }
 
     pub(super) fn assignment(&self, id: StmtId) -> (&'a [ExprId], &'a [ExprId]) {
-        match &self.ast.stmts[id].0 {
+        let ast = self.ast;
+        match &ast.stmts[id].0 {
             Stmt::Assign(targets, values) | Stmt::FunctionDefinition(targets, values) => {
-                (targets, values)
+                (ast.ids(*targets), ast.ids(*values))
             }
             _ => unreachable!("assignment continuation"),
         }
@@ -230,9 +234,11 @@ impl<'a> Compiler<'a> {
     }
 
     pub(super) fn for_in(&mut self, id: StmtId, saved: u16) -> Result<(), Error> {
-        let Stmt::ForIn(names, _, body, lines) = &self.ast.stmts[id].0 else {
+        let ast = self.ast;
+        let Stmt::ForIn(names, _, body, lines) = &ast.stmts[id].0 else {
             unreachable!()
         };
+        let names = ast.names(*names);
         let base = self.result;
         self.reset(u16::from(base) + 3);
         let controls = self.function.debug_locals.len();
@@ -273,7 +279,7 @@ impl<'a> Compiler<'a> {
         self.function.loops.try_push((saved, Vec::new()))?;
         self.tasks
             .try_push(Task::ForInEnd(results, controls, locals, head, done))?;
-        self.tasks.try_push(Task::Scope(body))?;
+        self.tasks.try_push(Task::Scope(ast.ids(*body)))?;
         Ok(())
     }
     pub(super) fn end_controls(&mut self, controls: usize) {
