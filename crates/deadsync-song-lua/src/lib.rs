@@ -1730,6 +1730,8 @@ pub struct SongLuaPlayerContext {
     pub speedmod: SongLuaSpeedMod,
     /// Saved Mini amount already applied before song Lua loads (60% is 0.6).
     pub mini: f32,
+    /// Saved scroll options already applied to every ModsLevel before song Lua loads.
+    pub scroll: deadsync_gameplay::ScrollEffects,
     pub perspective: deadsync_gameplay::PerspectiveEffects,
     pub display_bpms: [f32; 2],
     pub noteskin_name: String,
@@ -1770,6 +1772,7 @@ impl Default for SongLuaPlayerContext {
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
             mini: 0.0,
+            scroll: deadsync_gameplay::ScrollEffects::default(),
             perspective: deadsync_gameplay::PerspectiveEffects::default(),
             display_bpms: [60.0, 60.0],
             noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),

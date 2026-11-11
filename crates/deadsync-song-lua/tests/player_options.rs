@@ -119,6 +119,77 @@ fn eight_initial_objects_match_profiles_and_keep_level_identity() {
 }
 
 #[test]
+fn saved_scroll_options_seed_all_levels_and_allow_fresh_resets() {
+    let mut c = context();
+    c.players[0].scroll = deadsync_gameplay::ScrollEffects {
+        reverse: 1.0,
+        split: 0.25,
+        alternate: 0.5,
+        cross: 0.75,
+        centered: 0.125,
+    };
+    c.players[1].scroll = deadsync_gameplay::ScrollEffects {
+        split: 1.0,
+        cross: 0.5,
+        ..Default::default()
+    };
+    let mut runtime = SongRuntime::new(&c).unwrap();
+    let values = execute(
+        &mut runtime,
+        r#"
+        local out = {}
+        for player = 0, 1 do
+            for _, level in ipairs({'Preferred', 'Stage', 'Song', 'Current'}) do
+                local options = GAMESTATE:GetPlayerState(player):GetPlayerOptions('ModsLevel_' .. level)
+                for _, name in ipairs({'Reverse', 'Split', 'Alternate', 'Cross', 'Centered'}) do
+                    out[#out + 1] = options[name](options)
+                end
+            end
+        end
+        return unpack(out)
+    "#,
+    );
+    let expected: Vec<_> = c
+        .players
+        .iter()
+        .flat_map(|player| {
+            let scroll = player.scroll;
+            (0..4).flat_map(move |_| {
+                [
+                    scroll.reverse,
+                    scroll.split,
+                    scroll.alternate,
+                    scroll.cross,
+                    scroll.centered,
+                ]
+                .map(|value| Value::Number(f64::from(value)))
+            })
+        })
+        .collect();
+    assert_eq!(values, expected);
+
+    // ITGmania assigns a fresh PlayerOptions here. Saved values must be seeded
+    // at construction, not used as fallback defaults after an explicit reset.
+    let values = execute(
+        &mut runtime,
+        r#"
+        local state = GAMESTATE:GetPlayerState(0)
+        state:SetPlayerOptions('ModsLevel_Stage', '')
+        local out = {(state:GetPlayerOptions('ModsLevel_Preferred'):Reverse())}
+        for _, level in ipairs({'Stage', 'Song', 'Current'}) do
+            local options = state:GetPlayerOptions('ModsLevel_' .. level)
+            for _, name in ipairs({'Reverse', 'Split', 'Alternate', 'Cross', 'Centered'}) do
+                out[#out + 1] = options[name](options)
+            end
+        end
+        return unpack(out)
+    "#,
+    );
+    assert_eq!(values[0], Value::Number(1.0));
+    assert_eq!(values[1..], [Value::Number(0.0); 15]);
+}
+
+#[test]
 fn complete_declared_surface_and_column_methods_match_native_dispatch() {
     let mut names = song::SONG_LUA_PLAYER_OPTION_CAPABILITIES
         .iter()

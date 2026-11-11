@@ -76,6 +76,19 @@ fn create(
         let state = nested(call, owner, STATE)?;
         set(state, "playerautoplay", player.autoplay, call)?;
         set(state, "mini", player.mini, call)?;
+        // Native ModsGroup::Assign(Preferred, ...) seeds Stage, Song and Current
+        // before actors load. Charts can save these values before resetting mods.
+        for (name, value) in [
+            ("reverse", player.scroll.reverse),
+            ("split", player.scroll.split),
+            ("alternate", player.scroll.alternate),
+            ("cross", player.scroll.cross),
+            ("centered", player.scroll.centered),
+        ] {
+            if value != 0.0 {
+                set(state, name, value, call)?;
+            }
+        }
         if player.perspective.tilt != 0.0 || player.perspective.skew != 0.0 {
             set(state, "tilt", player.perspective.tilt, call)?;
             set(state, "skew", player.perspective.skew, call)?;

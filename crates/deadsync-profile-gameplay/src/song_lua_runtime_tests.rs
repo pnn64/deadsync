@@ -255,6 +255,128 @@ fn saved_perspective_reaches_lua_for_each_player_side() {
 }
 
 #[test]
+fn ultra_synergy_matrix_preserves_saved_reverse_through_song_lua() {
+    use deadsync_gameplay::{
+        AttackBaseEffects, GameplayAttackRuntimeState, GameplayInputPlayStyle as Style,
+        GameplayInputPlayerSide as Side, GameplaySession, GameplayViewport,
+    };
+    use deadsync_profile::{Profile, ScrollOption};
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ultra-synergy-matrix");
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &root.join("control.ssc"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 2.0,
+    )
+    .expect("Reverse control chart");
+    let charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+    let timing = TimingData::from_segments(
+        0.0,
+        0.0,
+        &TimingSegments {
+            bpms: vec![(0.0, 160.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+
+    for (style, side, reverse) in [
+        (Style::Single, Side::P1, [false, true]),
+        (Style::Single, Side::P1, [true, false]),
+        (Style::Single, Side::P2, [false, true]),
+        (Style::Single, Side::P2, [true, false]),
+        (Style::Versus, Side::P1, [true, false]),
+        (Style::Versus, Side::P1, [false, true]),
+    ] {
+        let profiles = reverse.map(|reverse| {
+            let mut profile = Profile::default();
+            profile.set_scroll_option(if reverse {
+                ScrollOption::Reverse
+            } else {
+                ScrollOption::Normal
+            });
+            profile
+        });
+        let speeds = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let context = super::song_lua_play_context(
+            &song,
+            &charts,
+            [&timing; 2],
+            &profiles,
+            &speeds,
+            1.0,
+            GameplayViewport::design(),
+            (854, 480),
+            16.0 / 9.0,
+            0.0,
+            &GameplaySession {
+                play_style: style,
+                player_side: side,
+                ..Default::default()
+            },
+            &Default::default(),
+            "opengl",
+        );
+        // These are the original, unchanged Beta Pines Lua files. The template
+        // saves Song:Reverse() before its first loop resets every known mod.
+        let compiled = compile_song_lua(
+            &root.join("lua/default.lua"),
+            &context,
+            SongLuaNoteskinResolver::default(),
+            test_read_model_slots,
+            test_model_layer_from_slot,
+            |_, _| None,
+        )
+        .expect("compile original ULTRA SYNERGY MATRIX script");
+        let constants = std::array::from_fn(|player| {
+            deadsync_song_lua::gameplay::build_song_lua_constant_windows_for_player(
+                &compiled, &timing, player, 0.0,
+            )
+        });
+        let eases = std::array::from_fn(|player| {
+            let (eases, unsupported) =
+                deadsync_song_lua::gameplay::build_song_lua_ease_windows_for_player(
+                    &compiled,
+                    &timing,
+                    player,
+                    0.0,
+                    &constants[player],
+                );
+            assert_eq!(unsupported, 0);
+            eases
+        });
+        let mut runtime = GameplayAttackRuntimeState::new(constants, eases);
+        for player in 0..style.player_count() {
+            let source = if style == Style::Single && side == Side::P2 {
+                1
+            } else {
+                player
+            };
+            let base = super::scroll_effects_from_option(profiles[source].scroll_option);
+            for tick in 0..=60 {
+                runtime.refresh_player(
+                    player,
+                    tick as f32 / 60.0,
+                    1.0 / 60.0,
+                    Default::default(),
+                    || AttackBaseEffects {
+                        scroll: base,
+                        ..Default::default()
+                    },
+                    Default::default(),
+                );
+            }
+            assert_eq!(
+                runtime.scroll[player].reverse,
+                Some(f32::from(reverse[source])),
+                "{style:?} {side:?} player {player}, profiles {reverse:?}: the chart must restore saved Reverse",
+            );
+        }
+    }
+}
+
+#[test]
 fn saved_mini_reaches_song_lua_constructor_and_reverse_path() {
     use deadsync_gameplay::{GameplayInputPlayerSide as Side, GameplaySession, GameplayViewport};
     let root = deadsync_root().join("tests/fixtures/song_lua");
