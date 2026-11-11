@@ -7,6 +7,7 @@
 
 use super::*;
 use crate::screens::components::shared::fuzzy;
+use crate::screens::components::shared::setting_search::{frame, ranking, text};
 use deadlib_present::space::screen_width;
 
 /// Maximum number of ranked results shown in the overlay list.
@@ -27,9 +28,9 @@ pub(super) struct SettingMatch {
     pub pane: OptionsPane,
     pub label: Arc<str>,
     pub score: i32,
-    row_text: super::search_ranking::SearchRowText,
+    row_text: ranking::SearchRowText,
     pane_text: Arc<str>,
-    retained_text: super::search_text::SearchResultText,
+    retained_text: text::SearchResultText,
 }
 
 impl SettingMatch {
@@ -46,9 +47,9 @@ impl SettingMatch {
             row_id,
             pane,
             score,
-            row_text: super::search_ranking::SearchRowText::default(),
+            row_text: ranking::SearchRowText::default(),
             pane_text,
-            retained_text: super::search_text::SearchResultText::default(),
+            retained_text: text::SearchResultText::default(),
             label,
         }
     }
@@ -59,8 +60,8 @@ impl SettingMatch {
 pub(super) struct SettingSearchOpen {
     pub component: Option<RowId>,
     pub query: String,
-    query_text: super::search_frame::SearchQueryText,
-    current_text: super::search_frame::SearchCurrentText,
+    query_text: frame::SearchQueryText,
+    current_text: frame::SearchCurrentText,
     pub matches: Vec<SettingMatch>,
     pub selected_index: usize,
     pub blink_t: f32,
@@ -147,7 +148,7 @@ pub(super) fn rebuild_matches(state: &State, query: &str) -> Vec<SettingMatch> {
             seen[id.index()] = true;
 
             if let Some((label, score)) =
-                super::search_ranking::matched_setting_label(&q, &row.name.get(), row_aliases(id))
+                ranking::matched_setting_label(&q, &row.name.get(), row_aliases(id))
             {
                 matches.push(SettingMatch::new(id, pane, label, score, pane_label(pane)));
             }

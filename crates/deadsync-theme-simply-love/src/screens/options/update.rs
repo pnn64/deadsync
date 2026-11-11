@@ -266,6 +266,7 @@ pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
 }
 
 fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+    search::update(&mut state.search, dt);
     if !overlay_visible(&state.download_packs_overlay)
         && !judgment_palette_overlay_visible(&state.judgment_palette_overlay)
         && state.reload_ui.is_none()
@@ -344,8 +345,9 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 state.view = OptionsView::Submenu(target_kind);
                 state.pending_submenu_kind = None;
                 state.submenu_parent_kind = state.pending_submenu_parent_kind.take();
-                state.sub_selected = 0;
-                state.sub_prev_selected = 0;
+                let landing = search::take_jump_row(state, target_kind).unwrap_or(0);
+                state.sub_selected = landing;
+                state.sub_prev_selected = landing;
                 state.sub_inline_x = f32::NAN;
                 sync_submenu_cursor_indices(state);
                 state.cursor_initialized = false;
@@ -534,6 +536,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                         }),
                     ));
                 }
+                search::continue_jump_on_main(state);
             }
         }
         SubmenuTransition::FadeInMain => {

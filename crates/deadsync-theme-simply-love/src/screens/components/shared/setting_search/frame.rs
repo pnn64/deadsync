@@ -7,7 +7,7 @@ use std::sync::Arc;
 /// One detail entry per open overlay. Compare actual text so player changes,
 /// replacement choices and locale reloads cannot leave a stale detail line.
 #[derive(Clone, Debug, Default)]
-pub(super) struct SearchCurrentText {
+pub(crate) struct SearchCurrentText {
     entry: RefCell<Option<CurrentEntry>>,
 }
 
@@ -19,7 +19,7 @@ struct CurrentEntry {
 }
 
 impl SearchCurrentText {
-    pub(super) fn get(&self, value: &TextContent, template: &Arc<str>) -> Arc<str> {
+    pub(crate) fn get(&self, value: &TextContent, template: &Arc<str>) -> Arc<str> {
         let mut entry = self.entry.borrow_mut();
         if let Some(cached) = entry.as_ref()
             && Arc::ptr_eq(template, &cached.template)
@@ -40,16 +40,16 @@ impl SearchCurrentText {
 /// Short queries stay inside frame actors. Longer query/caret variants are
 /// allocated only on first use, then shared until the next query edit.
 #[derive(Clone, Debug, Default)]
-pub(super) struct SearchQueryText {
+pub(crate) struct SearchQueryText {
     variants: [OnceCell<Arc<str>>; 2],
 }
 
 impl SearchQueryText {
-    pub(super) fn invalidate(&mut self) {
+    pub(crate) fn invalidate(&mut self) {
         self.variants = Default::default();
     }
 
-    pub(super) fn get(&self, query: &str, caret_on: bool) -> TextContent {
+    pub(crate) fn get(&self, query: &str, caret_on: bool) -> TextContent {
         let caret = if caret_on { "\u{25ae}" } else { "" };
         if let Some(text) = TextContent::inline_format(format_args!("{query}{caret}")) {
             return text;

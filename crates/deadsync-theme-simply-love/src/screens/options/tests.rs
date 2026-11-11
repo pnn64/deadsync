@@ -4238,3 +4238,219 @@ fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {
     assert!(Arc::ptr_eq(&targets[0].song, &song));
     assert_eq!(targets[0].chart_ix, 0);
 }
+
+fn search_i18n() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        crate::tests::init_paths();
+        crate::i18n::init_for_tests();
+    });
+}
+
+fn search_key(code: KeyCode) -> RawKeyboardEvent {
+    RawKeyboardEvent {
+        code,
+        pressed: true,
+        repeat: false,
+        timestamp: Instant::now(),
+        host_nanos: 0,
+    }
+}
+
+fn open_search(state: &mut State) -> bool {
+    handle_raw_key_event(state, Some(&search_key(KeyCode::KeyF)), None, true, &mut Vec::new())
+}
+
+fn search_for(state: &mut State, query: &str) {
+    handle_raw_key_event(state, None, Some(query), false, &mut Vec::new());
+}
+
+fn focused_search_target(state: &State) -> Option<search::SearchTarget> {
+    match &state.search {
+        search::SettingSearchState::Open(open) => {
+            open.matches.get(open.selected_index).map(|m| m.target)
+        }
+        search::SettingSearchState::Hidden => None,
+    }
+}
+
+fn row_target(kind: SubmenuKind, id: SubRowId) -> search::SearchTarget {
+    search::SearchTarget::Row {
+        kind,
+        row: row_position(submenu_rows(kind), id).expect("row should exist"),
+    }
+}
+
+#[test]
+fn ctrl_f_opens_search_only_with_keyboard_features() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config {
+        keyboard_features: false,
+        ..config::app_config::Config::default()
+    });
+    assert!(!open_search(&mut state));
+    assert!(!state.search.is_open());
+
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(!handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::KeyF)),
+        None,
+        false,
+        &mut Vec::new()
+    ));
+    assert!(open_search(&mut state));
+    assert!(state.search.is_open());
+    // Ctrl-modified text never reaches the query.
+    handle_raw_key_event(&mut state, None, Some("f"), true, &mut Vec::new());
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should stay open");
+    };
+    assert!(open.query.is_empty());
+
+    handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::Escape)),
+        None,
+        false,
+        &mut Vec::new(),
+    );
+    assert!(!state.search.is_open());
+}
+
+#[test]
+fn search_jumps_into_nested_submenu_row() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "enable arrowcloud");
+    let target = row_target(SubmenuKind::ArrowCloud, SubRowId::EnableArrowCloud);
+    assert_eq!(focused_search_target(&state), Some(target));
+
+    handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::Enter)),
+        None,
+        false,
+        &mut Vec::new(),
+    );
+    assert!(!state.search.is_open());
+    settle_submenu(&mut state, &asset_manager);
+
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::ArrowCloud));
+    assert_eq!(state.submenu_parent_kind, Some(SubmenuKind::OnlineScoring));
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::ArrowCloud, state.sub_selected),
+        Some(row)
+    );
+    assert_eq!(state.search_jump, None);
+}
+
+#[test]
+fn search_jump_out_of_graphics_goes_through_main_list() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+
+    let target = row_target(SubmenuKind::Machine, SubRowId::KeyboardFeatures);
+    search::jump(&mut state, target);
+    // Graphics applies its deferred changes on the way back to the main list.
+    assert_eq!(state.submenu_transition, SubmenuTransition::FadeOutToMain);
+    settle_submenu(&mut state, &asset_manager);
+
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Machine));
+    assert_eq!(state.submenu_parent_kind, None);
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::Machine, state.sub_selected),
+        Some(row)
+    );
+}
+
+#[test]
+fn search_selects_main_entries_and_rows_on_the_current_page() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let sound = visible_items(&state)
+        .iter()
+        .position(|item| item.id == ItemId::SoundOptions)
+        .expect("sound options should be listed");
+    search::jump(&mut state, search::SearchTarget::Main(sound));
+    assert_eq!(state.selected, sound);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+
+    state.view = OptionsView::Submenu(SubmenuKind::Machine);
+    let target = row_target(SubmenuKind::Machine, SubRowId::KeyboardFeatures);
+    search::jump(&mut state, target);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::Machine, state.sub_selected),
+        Some(row)
+    );
+
+    // From a submenu, a main entry is selected once the page fades out.
+    search::jump(&mut state, search::SearchTarget::Main(0));
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Main);
+    assert_eq!(state.selected, 0);
+}
+
+#[test]
+fn search_lists_every_reachable_page_but_not_bookkeeping() {
+    search_i18n();
+    let state = init_with_config(config::app_config::Config::default());
+    let matches = search::rebuild_matches(&state, "");
+    let kinds: Vec<SubmenuKind> = matches
+        .iter()
+        .filter_map(|m| match m.target {
+            search::SearchTarget::Row { kind, .. } => Some(kind),
+            search::SearchTarget::Main(_) => None,
+        })
+        .collect();
+    for kind in [
+        SubmenuKind::System,
+        SubmenuKind::Graphics,
+        SubmenuKind::InputBackend,
+        SubmenuKind::GrooveStats,
+        SubmenuKind::ArrowCloud,
+        SubmenuKind::SyncPacks,
+    ] {
+        assert!(kinds.contains(&kind), "{kind:?} rows should be searchable");
+    }
+    assert!(!kinds.contains(&SubmenuKind::Bookkeeping));
+    assert!(
+        matches
+            .iter()
+            .all(|m| m.target != search::SearchTarget::Main(visible_items(&state).len() - 1)),
+        "the Exit entry is not a search result"
+    );
+}
+
+#[test]
+fn search_owns_pad_input_while_open() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let selected = state.selected;
+    assert!(open_search(&mut state));
+    press(&mut state, &asset_manager, VirtualAction::p1_down);
+    assert_eq!(state.selected, selected, "the list under the overlay stays put");
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should stay open");
+    };
+    assert_eq!(open.selected_index, 1);
+    press(&mut state, &asset_manager, VirtualAction::p1_back);
+    assert!(!state.search.is_open());
+}
