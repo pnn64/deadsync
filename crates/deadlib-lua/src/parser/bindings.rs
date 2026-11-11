@@ -66,6 +66,21 @@ fn hash(bytes: &[u8]) -> u64 {
     })
 }
 impl Bindings {
+    /// Return to the state of `try_new`, keeping storage.
+    pub(super) fn reset(&mut self) -> Result<(), Error> {
+        self.names.clear();
+        self.buckets.clear();
+        self.locals.clear();
+        self.captures.clear();
+        self.free = NONE;
+        self.scopes.clear();
+        self.scopes.try_push(Scope {
+            base: 0,
+            head: NONE,
+            count: 0,
+            line: 0,
+        })
+    }
     pub(super) fn heap_bytes(&self) -> usize {
         self.names.capacity() * size_of::<Name>()
             + self.buckets.capacity() * size_of::<u32>()
@@ -103,7 +118,9 @@ impl Bindings {
             return Ok(());
         }
         if (self.names.len() + 1) * 2 >= self.buckets.len() {
-            self.buckets = fallible::repeat(0, (self.buckets.len() * 2).max(16))?;
+            let size = (self.buckets.len() * 2).max(16);
+            self.buckets.clear();
+            self.buckets.try_resize(size, 0)?;
             for (index, name) in self.names.iter().enumerate() {
                 let mut slot = name.hash as usize & (self.buckets.len() - 1);
                 while self.buckets[slot] != 0 {

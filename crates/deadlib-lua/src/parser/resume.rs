@@ -5,21 +5,25 @@ use super::*;
 use crate::lexer::Scanner;
 use crate::memory::fallible::{self, SliceExt, VecExt};
 
+mod recursive;
+
+/// Grammar continuations. List-building tasks hold a mark into one of the
+/// parser's scratch stacks; finished lists are published to the AST pools.
 #[derive(Debug)]
 enum Task {
     RootEnd,
     Expect(Kind),
     Block,
     BlockKeepLocals,
-    BlockNext(Vec<StmtId>),
-    BlockAfter(Vec<StmtId>, bool),
-    BlockEnd(Vec<StmtId>),
+    BlockNext(usize),
+    BlockAfter(usize, bool),
+    BlockEnd(usize),
     RestoreLocals(u16),
     Statement,
     Local(u32),
-    LocalName(u32, Vec<Text>),
-    LocalNames(u32, Vec<Text>),
-    LocalEnd(u32, Vec<Text>),
+    LocalName(u32, usize),
+    LocalNames(u32, usize),
+    LocalEnd(u32, usize),
     LocalFunctionName(u32),
     LocalFunctionBody(u32, Text),
     LocalFunctionEnd(u32, Text),
@@ -35,32 +39,32 @@ enum Task {
     WhileEnd(u32, ExprId),
     RepeatBody(u32),
     RepeatEnd(u32, Block),
-    IfCond(u32, Vec<(ExprId, Block)>),
-    IfArm(u32, Vec<(ExprId, Block)>, ExprId),
-    IfElse(u32, Vec<(ExprId, Block)>),
+    IfCond(u32, usize),
+    IfArm(u32, usize, ExprId),
+    IfElse(u32, usize),
     ForName(u32),
     ForChoice(u32, Text),
     ForStart(u32, Text),
     ForLimit(u32, Text, ExprId),
     ForStep(u32, Text, ExprId, ExprId),
     ForEnd(u32, Text, ExprId, ExprId, Option<ExprId>, u32),
-    ForNames(u32, Vec<Text>),
-    ForMoreName(u32, Vec<Text>),
-    ForBegin(u32, Vec<Text>),
-    ForValues(u32, Vec<Text>, u32),
-    ForInEnd(u32, Vec<Text>, Vec<ExprId>, [u32; 2]),
+    ForNames(u32, usize),
+    ForMoreName(u32, usize),
+    ForBegin(u32, usize),
+    ForValues(u32, usize, u32),
+    ForInEnd(u32, Span, Span, [u32; 2]),
     ExpressionStatement(u32),
-    AssignTargets(u32, Vec<ExprId>),
-    AssignTarget(u32, Vec<ExprId>),
-    AssignEnd(u32, Vec<ExprId>),
+    AssignTargets(u32, usize),
+    AssignTarget(u32, usize),
+    AssignEnd(u32, usize),
     List,
-    ListAfter(Vec<ExprId>),
+    ListAfter(usize),
     Function(u32, bool),
-    Params(u32, Vec<Text>, bool),
-    ParamAfter(u32, Vec<Text>),
-    ParamsEnd(u32, Vec<Text>, bool),
-    FunctionEnd(u32, Vec<Text>, bool, u16, bool, u16, u32),
-    FunctionAfterEnd(u32, Vec<Text>, bool, u16, bool, u16, u32, u32),
+    Params(u32, usize, bool),
+    ParamAfter(u32, usize),
+    ParamsEnd(u32, usize, bool),
+    FunctionEnd(u32, Span, bool, u16, bool, u16, u32),
+    FunctionAfterEnd(u32, Span, bool, u16, bool, u16, u32, u32),
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
@@ -87,12 +91,48 @@ enum Task {
     ArgsEnd(u32),
     ArgsTable,
     Table,
-    TableNext([u32; 2], Vec<(Option<ExprId>, ExprId)>),
-    TableAssign([u32; 2], Vec<(Option<ExprId>, ExprId)>, ExprId),
-    TableKey([u32; 2], Vec<(Option<ExprId>, ExprId)>),
-    TableValue([u32; 2], Vec<(Option<ExprId>, ExprId)>, Option<ExprId>),
-    TableSeparator([u32; 2], Vec<(Option<ExprId>, ExprId)>),
-    TableEnd([u32; 2], Vec<(Option<ExprId>, ExprId)>),
+    TableNext([u32; 2], usize),
+    TableAssign([u32; 2], usize, ExprId),
+    TableKey([u32; 2], usize),
+    TableValue([u32; 2], usize, Option<ExprId>),
+    TableSeparator([u32; 2], usize),
+    TableEnd([u32; 2], usize),
+}
+
+/// Parser storage kept between compilations by one owner.
+#[derive(Debug, Default)]
+pub(crate) struct Spare {
+    tasks: Vec<Task>,
+    scratch: Scratch,
+    bindings: Option<Bindings>,
+    resources: Resources,
+    ast: Ast,
+}
+impl Spare {
+    /// Keep a finished syntax tree's storage for the next parse.
+    pub(crate) fn keep_ast(&mut self, mut ast: Ast) {
+        ast.clear();
+        self.ast = ast;
+    }
+}
+
+/// Open lists, innermost last. Each kind is a LIFO stack because grammar
+/// lists of one kind finish before an enclosing list of that kind continues.
+#[derive(Debug, Default)]
+struct Scratch {
+    ids: Vec<usize>,
+    names: Vec<Text>,
+    fields: Vec<(Option<ExprId>, ExprId)>,
+    arms: Vec<(ExprId, Block)>,
+}
+impl Scratch {
+    fn heap_bytes(&self) -> usize {
+        self.ids.capacity() * size_of::<usize>()
+            + self.names.capacity() * size_of::<Text>()
+            + self.names.iter().map(|n| n.heap_bytes()).sum::<usize>()
+            + self.fields.capacity() * size_of::<(Option<ExprId>, ExprId)>()
+            + self.arms.capacity() * size_of::<(ExprId, Block)>()
+    }
 }
 
 /// A parser that suspends at a lexical input request. AST edges and grammar
@@ -102,6 +142,9 @@ pub(crate) struct Parser {
     scanner: Scanner,
     token: Option<Token>,
     lookahead: Option<Token>,
+    /// The recursive parser scans here, then swaps with the current token, so
+    /// this holds the token most recently consumed.
+    staged: Token,
     previous_line: u32,
     depth: u16,
     base_depth: u16,
@@ -113,12 +156,18 @@ pub(crate) struct Parser {
     resources: Resources,
     tasks: Vec<Task>,
     ast: Ast,
+    scratch: Scratch,
     expr: ExprId,
     stmt: StmtId,
-    list: Vec<ExprId>,
+    list: Span,
     body: Block,
     finished: bool,
     native_events: Option<Vec<NativeRootEvent>>,
+    /// Keep finished storage for `recycle` instead of releasing it.
+    keep: bool,
+    presized: bool,
+    /// Set by the first `resume`; later calls continue the same parse.
+    started: bool,
 }
 
 impl Parser {
@@ -127,6 +176,7 @@ impl Parser {
             scanner: Scanner::default(),
             token: None,
             lookahead: None,
+            staged: Token::default(),
             previous_line: 1,
             depth: 0,
             base_depth: 0,
@@ -138,13 +188,85 @@ impl Parser {
             resources: Resources::default(),
             tasks: fallible::vec([Task::RootEnd, Task::Block])?,
             ast: Ast::default(),
+            scratch: Scratch::default(),
             expr: 0,
             stmt: 0,
-            list: Vec::new(),
-            body: Box::default(),
+            list: Span::default(),
+            body: Span::default(),
             finished: false,
             native_events: None,
+            keep: false,
+            presized: false,
+            started: false,
         })
+    }
+    /// A parser for complete source reusing `spare` storage.
+    pub(crate) fn try_new_in(spare: &mut Spare, native_depth: usize) -> Result<Self, Error> {
+        let ast = std::mem::take(&mut spare.ast);
+        let mut tasks = std::mem::take(&mut spare.tasks);
+        tasks.clear();
+        fallible::reserve(&mut tasks, 64)?;
+        tasks.push(Task::RootEnd);
+        tasks.push(Task::Block);
+        let bindings = match spare.bindings.take() {
+            Some(mut bindings) => {
+                bindings.reset()?;
+                bindings
+            }
+            None => Bindings::try_new()?,
+        };
+        let mut resources = std::mem::take(&mut spare.resources);
+        resources.clear();
+        let mut scratch = std::mem::take(&mut spare.scratch);
+        scratch.ids.clear();
+        scratch.names.clear();
+        scratch.fields.clear();
+        scratch.arms.clear();
+        Ok(Self {
+            scanner: Scanner::default(),
+            token: None,
+            lookahead: None,
+            staged: Token::default(),
+            previous_line: 1,
+            depth: 0,
+            base_depth: native_depth as u16,
+            loops: 0,
+            vararg: true,
+            locals: 0,
+            function_line: 0,
+            bindings,
+            resources,
+            tasks,
+            ast,
+            scratch,
+            expr: 0,
+            stmt: 0,
+            list: Span::default(),
+            body: Span::default(),
+            finished: false,
+            native_events: None,
+            keep: true,
+            presized: false,
+            started: false,
+        })
+    }
+    /// Whether this parser was built from reusable storage.
+    pub(crate) fn reusable(&self) -> bool {
+        self.keep
+    }
+    /// Return storage to `spare` for the next `try_new_in`. A parser that
+    /// failed still holds its partial syntax tree, whose storage is kept too.
+    pub(crate) fn recycle(self, spare: &mut Spare) {
+        if !self.keep {
+            return;
+        }
+        if !self.finished {
+            spare.keep_ast(self.ast);
+        }
+        spare.tasks = self.tasks;
+        spare.scratch = self.scratch;
+        spare.bindings = Some(self.bindings);
+        spare.resources = self.resources;
     }
 }
 
@@ -188,6 +310,8 @@ impl Parser {
         self.tasks.capacity() * std::mem::size_of::<Task>()
             + self.ast.exprs.capacity() * std::mem::size_of::<(Expr, SourceSpan)>()
             + self.ast.stmts.capacity() * std::mem::size_of::<(Stmt, u32)>()
+            + self.ast.list_bytes()
+            + self.scratch.heap_bytes()
             + self.scanner.heap_bytes()
             + native_root_bytes(&self.native_events)
             + self.bindings.heap_bytes()
@@ -197,69 +321,23 @@ impl Parser {
             + self.ast.constant_operands.capacity() * size_of::<(ExprId, ConstantOperand)>()
     }
     pub(crate) fn heap_bytes(&self) -> usize {
-        fn names(v: &[Text]) -> usize {
-            std::mem::size_of_val(v) + v.iter().map(|n| n.heap_bytes()).sum::<usize>()
-        }
-        fn block(v: &[StmtId]) -> usize {
-            std::mem::size_of_val(v)
-        }
-        let mut bytes = self.arena_bytes()
-            + self.list.capacity() * std::mem::size_of::<ExprId>()
-            + block(&self.body);
+        let mut bytes = self.arena_bytes();
         bytes += self.token.as_ref().map_or(0, |t| t.text.heap_bytes())
             + self.lookahead.as_ref().map_or(0, |t| t.text.heap_bytes());
         for (expr, _) in &self.ast.exprs {
             bytes += match expr {
-                Expr::String(s) | Expr::Name(s) => s.heap_bytes(),
-                Expr::Table(v, _) => std::mem::size_of_val(v.as_ref()),
-                Expr::Call(_, v, _) => std::mem::size_of_val(v.as_ref()),
-                Expr::Method(_, n, v, _) => n.heap_bytes() + std::mem::size_of_val(v.as_ref()),
-                Expr::Function { params, body, .. } => names(params) + block(body),
+                Expr::String(s) | Expr::Name(s) | Expr::Method(_, s, ..) => s.heap_bytes(),
                 _ => 0,
             };
         }
         for (stmt, _) in &self.ast.stmts {
             bytes += match stmt {
-                Stmt::Local(n, v) => names(n) + std::mem::size_of_val(v.as_ref()),
-                Stmt::LocalFunction(n, _) => n.heap_bytes(),
-                Stmt::Assign(a, b) | Stmt::FunctionDefinition(a, b) => {
-                    std::mem::size_of_val(a.as_ref()) + std::mem::size_of_val(b.as_ref())
-                }
-                Stmt::Return(v, _) => std::mem::size_of_val(v.as_ref()),
-                Stmt::Do(b) | Stmt::While(_, b) | Stmt::Repeat(b, _) => block(b),
-                Stmt::If(a, b) => {
-                    std::mem::size_of_val(a.as_ref())
-                        + a.iter().map(|(_, b)| block(b)).sum::<usize>()
-                        + b.as_deref().map_or(0, block)
-                }
-                Stmt::For { name, body, .. } => name.heap_bytes() + block(body),
-                Stmt::ForIn(n, v, b, _) => names(n) + std::mem::size_of_val(v.as_ref()) + block(b),
+                Stmt::LocalFunction(n, _) | Stmt::For { name: n, .. } => n.heap_bytes(),
                 _ => 0,
             };
         }
         for task in &self.tasks {
             bytes += match task {
-                Task::BlockNext(v)
-                | Task::BlockAfter(v, _)
-                | Task::BlockEnd(v)
-                | Task::AssignTargets(_, v)
-                | Task::AssignTarget(_, v)
-                | Task::AssignEnd(_, v)
-                | Task::ListAfter(v) => v.capacity() * std::mem::size_of::<usize>(),
-                Task::LocalName(_, v)
-                | Task::LocalNames(_, v)
-                | Task::LocalEnd(_, v)
-                | Task::ForNames(_, v)
-                | Task::ForMoreName(_, v)
-                | Task::ForBegin(_, v)
-                | Task::ForValues(_, v, _)
-                | Task::Params(_, v, _)
-                | Task::ParamAfter(_, v)
-                | Task::ParamsEnd(_, v, _)
-                | Task::FunctionEnd(_, v, ..)
-                | Task::FunctionAfterEnd(_, v, ..) => {
-                    names(v) + (v.capacity() - v.len()) * std::mem::size_of::<Text>()
-                }
                 Task::LocalFunctionEnd(_, n)
                 | Task::LocalFunctionBody(_, n)
                 | Task::ForChoice(_, n)
@@ -267,30 +345,47 @@ impl Parser {
                 | Task::ForLimit(_, n, _)
                 | Task::ForStep(_, n, ..)
                 | Task::ForEnd(_, n, ..)
-                | Task::MethodEnd(_, _, n, _) => n.heap_bytes(),
-                Task::MethodArgs(_, _, n) | Task::FieldName(_, _, n, _) => n.heap_bytes(),
-                Task::RepeatEnd(_, b) => block(b),
-                Task::IfCond(_, v) | Task::IfArm(_, v, _) | Task::IfElse(_, v) => {
-                    v.capacity() * std::mem::size_of::<(ExprId, Block)>()
-                        + v.iter().map(|(_, b)| block(b)).sum::<usize>()
-                }
-                Task::ForInEnd(_, n, v, _) => {
-                    names(n)
-                        + (n.capacity() - n.len()) * std::mem::size_of::<Text>()
-                        + v.capacity() * std::mem::size_of::<ExprId>()
-                }
-                Task::TableNext(_, v)
-                | Task::TableAssign(_, v, _)
-                | Task::TableKey(_, v)
-                | Task::TableValue(_, v, _)
-                | Task::TableSeparator(_, v)
-                | Task::TableEnd(_, v) => {
-                    v.capacity() * std::mem::size_of::<(Option<ExprId>, ExprId)>()
-                }
+                | Task::MethodEnd(_, _, n, _)
+                | Task::MethodArgs(_, _, n)
+                | Task::FieldName(_, _, n, _) => n.heap_bytes(),
                 _ => 0,
             };
         }
         bytes
+    }
+    /// Size the node arenas for a complete source. Lua source averages about
+    /// one expression per 11 bytes, so most sources never grow these arenas.
+    fn presize(&mut self, source: usize) -> Result<(), Error> {
+        let expressions = source / 8 + 8;
+        fallible::reserve(&mut self.ast.exprs, expressions)?;
+        self.resources.reserve_values(expressions)?;
+        fallible::reserve(&mut self.ast.stmts, source / 32 + 4)?;
+        fallible::reserve(&mut self.ast.ids, expressions)?;
+        fallible::reserve(&mut self.tasks, 64)?;
+        Ok(())
+    }
+    /// Publish a one-element identifier list directly; no list is being moved.
+    fn one(&mut self, id: usize) -> Result<Span, Error> {
+        let mark = self.scratch.ids.len();
+        self.scratch.ids.try_push(id)?;
+        publish(&mut self.ast.ids, &mut self.scratch.ids, mark)
+    }
+    fn publish_ids(&mut self, mark: usize) -> Result<Span, Error> {
+        publish(&mut self.ast.ids, &mut self.scratch.ids, mark)
+    }
+    fn publish_names(&mut self, mark: usize) -> Result<Span, Error> {
+        publish(&mut self.ast.names, &mut self.scratch.names, mark)
+    }
+    /// The most recent field of the innermost open table constructor.
+    fn last_field(&self, mark: usize) -> Option<(Option<ExprId>, ExprId)> {
+        self.scratch.fields[mark..].last().copied()
+    }
+    /// Declare published local names in order.
+    fn declare_names(&mut self, input: &[u8], names: Span) -> Result<(), Error> {
+        for name in self.ast.names(names) {
+            self.bindings.declare(input, name)?;
+        }
+        Ok(())
     }
     fn current(&self) -> &Token {
         self.token
@@ -453,13 +548,15 @@ impl Parser {
         &mut self,
         input: &[u8],
         line: u32,
-        params: Vec<Text>,
+        params: usize,
         vararg: bool,
     ) -> Result<(), Error> {
-        let count = params.len() + usize::from(vararg);
+        let count = self.scratch.names.len() - params + usize::from(vararg);
         self.check_local_count_at(count, line)?;
         self.expect(Kind::RParen)?;
-        self.bindings.enter(input, line, &params, vararg)?;
+        let params = self.publish_names(params)?;
+        self.bindings
+            .enter(input, line, self.ast.names(params), vararg)?;
         self.tasks.try_push(Task::FunctionEnd(
             line,
             params,
@@ -501,6 +598,28 @@ impl Parser {
     /// Supply the entire retained prefix and whether the reader has reached EOF.
     /// `None` requests more source; `Some` contains the finished flat AST.
     pub(crate) fn resume(&mut self, input: &[u8], closed: bool) -> Result<Option<Ast>, Error> {
+        let first = !self.started;
+        self.started = true;
+        let unbudgeted = !crate::memory::compilation::active();
+        if closed && !self.presized && unbudgeted {
+            self.presized = true;
+            self.presize(input.len())?;
+        }
+        if first && closed && unbudgeted && self.native_events.is_none() {
+            // Complete source needs no suspension points. A failed attempt
+            // restarts below, where the resumable grammar reports the error.
+            match self.recursive(input) {
+                Ok(ast) => {
+                    self.finished = true;
+                    if !self.keep {
+                        self.resources = Resources::default();
+                    }
+                    return Ok(Some(ast));
+                }
+                Err(error) if error.kind() == ErrorKind::Memory => return Err(error),
+                Err(_) => self.restart()?,
+            }
+        }
         self.resume_inner(input, closed).map_err(|mut error| {
             if !error.near {
                 return error;
@@ -575,7 +694,9 @@ impl Parser {
             if self.tasks.is_empty() {
                 self.finished = true;
                 self.resources.finish(&mut self.ast);
-                self.resources = Resources::default();
+                if !self.keep {
+                    self.resources = Resources::default();
+                }
                 return Ok(Some(std::mem::take(&mut self.ast)));
             }
             // Advance fetches the next token before continuing grammar work.
@@ -615,11 +736,13 @@ impl Parser {
                 Task::Block => {
                     self.enter()?;
                     self.tasks.try_push(Task::RestoreLocals(self.locals))?;
-                    self.tasks.try_push(Task::BlockNext(Vec::new()))?;
+                    self.tasks
+                        .try_push(Task::BlockNext(self.scratch.ids.len()))?;
                 }
                 Task::BlockKeepLocals => {
                     self.enter()?;
-                    self.tasks.try_push(Task::BlockNext(Vec::new()))?;
+                    self.tasks
+                        .try_push(Task::BlockNext(self.scratch.ids.len()))?;
                 }
                 Task::BlockNext(stmts) => {
                     if self.end_block() {
@@ -630,9 +753,9 @@ impl Parser {
                         self.tasks.try_push(Task::Statement)?;
                     }
                 }
-                Task::BlockAfter(mut stmts, terminal) => {
+                Task::BlockAfter(stmts, terminal) => {
                     self.resources.reset();
-                    stmts.try_push(self.stmt)?;
+                    self.scratch.ids.try_push(self.stmt)?;
                     if self.kind() == Kind::Semi {
                         self.take();
                     }
@@ -644,7 +767,7 @@ impl Parser {
                 }
                 Task::BlockEnd(stmts) => {
                     self.depth -= 1;
-                    self.body = stmts.try_into_boxed_slice()?;
+                    self.body = self.publish_ids(stmts)?;
                 }
                 Task::RestoreLocals(count) => {
                     self.locals = count;
@@ -689,7 +812,8 @@ impl Parser {
                         }
                         Kind::If => {
                             self.take();
-                            self.tasks.try_push(Task::IfCond(line, Vec::new()))?;
+                            self.tasks
+                                .try_push(Task::IfCond(line, self.scratch.arms.len()))?;
                             self.tasks.try_push(Task::Expr(0))?;
                         }
                         Kind::For => {
@@ -708,16 +832,19 @@ impl Parser {
                         self.tasks.try_push(Task::LocalFunctionName(line))?;
                     } else {
                         let name = self.expect(Kind::Name)?.text;
-                        self.tasks
-                            .try_push(Task::LocalNames(line, fallible::vec([name])?))?;
+                        let names = self.scratch.names.len();
+                        self.scratch.names.try_push(name)?;
+                        self.tasks.try_push(Task::LocalNames(line, names))?;
                     }
                 }
-                Task::LocalName(line, mut names) => {
-                    names.try_push(self.expect(Kind::Name)?.text)?;
+                Task::LocalName(line, names) => {
+                    let name = self.expect(Kind::Name)?.text;
+                    self.scratch.names.try_push(name)?;
                     self.tasks.try_push(Task::LocalNames(line, names))?;
                 }
                 Task::LocalNames(line, names) => {
-                    self.check_local_count(usize::from(self.locals) + names.len())?;
+                    let count = self.scratch.names.len() - names;
+                    self.check_local_count(usize::from(self.locals) + count)?;
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.try_push(Task::LocalName(line, names))?;
@@ -726,27 +853,23 @@ impl Parser {
                         self.tasks.try_push(Task::LocalEnd(line, names))?;
                         self.tasks.try_push(Task::List)?;
                     } else {
-                        self.account(input, |r, cx| r.adjust(names.len(), &[], cx))?;
-                        self.locals += names.len() as u16;
+                        self.account(input, |r, cx| r.adjust(count, &[], cx))?;
+                        self.locals += count as u16;
                         self.resources.locals(self.locals);
-                        for name in &names {
-                            self.bindings.declare(input, name)?;
-                        }
-                        self.statement(
-                            Stmt::Local(names.try_into_boxed_slice()?, Box::default()),
-                            line,
-                        )?;
+                        let names = self.publish_names(names)?;
+                        self.declare_names(input, names)?;
+                        self.statement(Stmt::Local(names, Span::default()), line)?;
                     }
                 }
                 Task::LocalEnd(line, names) => {
-                    let values = std::mem::take(&mut self.list).try_into_boxed_slice()?;
-                    self.account(input, |r, cx| r.adjust(names.len(), &values, cx))?;
-                    self.locals += names.len() as u16;
+                    let values = std::mem::take(&mut self.list);
+                    let count = self.scratch.names.len() - names;
+                    self.account(input, |r, cx| r.adjust(count, cx.ast.ids(values), cx))?;
+                    self.locals += count as u16;
                     self.resources.locals(self.locals);
-                    for name in &names {
-                        self.bindings.declare(input, name)?;
-                    }
-                    self.statement(Stmt::Local(names.try_into_boxed_slice()?, values), line)?;
+                    let names = self.publish_names(names)?;
+                    self.declare_names(input, names)?;
+                    self.statement(Stmt::Local(names, values), line)?;
                 }
                 Task::LocalFunctionName(line) => {
                     let name = self.expect(Kind::Name)?.text;
@@ -798,25 +921,21 @@ impl Parser {
                 Task::FunctionAssign(line, target) => {
                     let value = self.expr;
                     self.account(input, |r, cx| r.assignment(&[target], &[value], cx))?;
-                    self.statement(
-                        Stmt::FunctionDefinition(
-                            fallible::vec([target])?.try_into_boxed_slice()?,
-                            fallible::vec([self.expr])?.try_into_boxed_slice()?,
-                        ),
-                        line,
-                    )?;
+                    let targets = self.one(target)?;
+                    let values = self.one(value)?;
+                    self.statement(Stmt::FunctionDefinition(targets, values), line)?;
                 }
                 Task::Return(line) => {
                     if self.end_block() || self.kind() == Kind::Semi {
-                        self.statement(Stmt::Return(Box::default(), self.previous_line), line)?;
+                        self.statement(Stmt::Return(Span::default(), self.previous_line), line)?;
                     } else {
                         self.tasks.try_push(Task::ReturnEnd(line))?;
                         self.tasks.try_push(Task::List)?;
                     }
                 }
                 Task::ReturnEnd(line) => {
-                    let values = std::mem::take(&mut self.list).try_into_boxed_slice()?;
-                    self.account(input, |r, cx| r.return_values(&values, cx))?;
+                    let values = std::mem::take(&mut self.list);
+                    self.account(input, |r, cx| r.return_values(cx.ast.ids(values), cx))?;
                     self.statement(Stmt::Return(values, self.previous_line), line)?;
                 }
                 Task::Break(line) => {
@@ -863,8 +982,9 @@ impl Parser {
                     self.tasks.try_push(Task::IfArm(line, arms, self.expr))?;
                     self.tasks.try_push(Task::Block)?;
                 }
-                Task::IfArm(line, mut arms, cond) => {
-                    arms.try_push((cond, std::mem::take(&mut self.body)))?;
+                Task::IfArm(line, arms, cond) => {
+                    let body = std::mem::take(&mut self.body);
+                    self.scratch.arms.try_push((cond, body))?;
                     if self.kind() == Kind::ElseIf {
                         self.take();
                         self.tasks.try_push(Task::IfCond(line, arms))?;
@@ -875,13 +995,15 @@ impl Parser {
                         self.tasks.try_push(Task::Block)?;
                     } else {
                         self.close(Kind::End, Kind::If, line)?;
-                        self.statement(Stmt::If(arms.try_into_boxed_slice()?, None), line)?;
+                        let arms = publish(&mut self.ast.arms, &mut self.scratch.arms, arms)?;
+                        self.statement(Stmt::If(arms, None), line)?;
                     }
                 }
                 Task::IfElse(line, arms) => {
                     self.close(Kind::End, Kind::If, line)?;
                     let body = std::mem::take(&mut self.body);
-                    self.statement(Stmt::If(arms.try_into_boxed_slice()?, Some(body)), line)?;
+                    let arms = publish(&mut self.ast.arms, &mut self.scratch.arms, arms)?;
+                    self.statement(Stmt::If(arms, Some(body)), line)?;
                 }
                 Task::ForName(line) => {
                     let name = self.expect(Kind::Name)?.text;
@@ -908,8 +1030,9 @@ impl Parser {
                                 events.try_push(NativeRootEvent::Anchor(Text::new(name)?))?;
                             }
                         }
-                        self.tasks
-                            .try_push(Task::ForNames(line, fallible::vec([name])?))?;
+                        let names = self.scratch.names.len();
+                        self.scratch.names.try_push(name)?;
+                        self.tasks.try_push(Task::ForNames(line, names))?;
                     } else {
                         return Err(self.error("'=' or 'in' expected"));
                     }
@@ -959,7 +1082,8 @@ impl Parser {
                     )?;
                 }
                 Task::ForNames(line, names) => {
-                    self.check_local_count(usize::from(self.locals) + 3 + names.len())?;
+                    let count = self.scratch.names.len() - names;
+                    self.check_local_count(usize::from(self.locals) + 3 + count)?;
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.try_push(Task::ForMoreName(line, names))?;
@@ -968,8 +1092,9 @@ impl Parser {
                         self.tasks.try_push(Task::ForBegin(line, names))?;
                     }
                 }
-                Task::ForMoreName(line, mut names) => {
-                    names.try_push(self.expect(Kind::Name)?.text)?;
+                Task::ForMoreName(line, names) => {
+                    let name = self.expect(Kind::Name)?.text;
+                    self.scratch.names.try_push(name)?;
                     self.tasks.try_push(Task::ForNames(line, names))?;
                 }
                 Task::ForBegin(line, names) => {
@@ -980,17 +1105,16 @@ impl Parser {
                 Task::ForValues(line, names, iter_line) => {
                     let values = std::mem::take(&mut self.list);
                     self.account(input, |r, cx| {
-                        r.adjust(3, &values, cx)?;
+                        r.adjust(3, cx.ast.ids(values), cx)?;
                         r.check(3)
                     })?;
                     let do_line = self.expect(Kind::Do)?.end_line;
                     self.loops += 1;
+                    let names = self.publish_names(names)?;
                     self.locals += names.len() as u16 + 3;
                     self.resources.locals(self.locals);
                     self.bindings.hidden(3)?;
-                    for name in &names {
-                        self.bindings.declare(input, name)?;
-                    }
+                    self.declare_names(input, names)?;
                     self.tasks.try_push(Task::ForInEnd(
                         line,
                         names,
@@ -1006,30 +1130,23 @@ impl Parser {
                     self.resources.locals(self.locals);
                     self.bindings.truncate(self.locals);
                     let body = std::mem::take(&mut self.body);
-                    self.statement(
-                        Stmt::ForIn(
-                            names.try_into_boxed_slice()?,
-                            values.try_into_boxed_slice()?,
-                            body,
-                            lines,
-                        ),
-                        line,
-                    )?;
+                    self.statement(Stmt::ForIn(names, values, body, lines), line)?;
                 }
                 Task::ExpressionStatement(line) => {
                     let first = self.expr;
                     if matches!(self.ast.exprs[first].0, Expr::Call(..) | Expr::Method(..)) {
                         self.statement(Stmt::Call(first), line)?;
                     } else {
-                        self.tasks
-                            .try_push(Task::AssignTargets(line, fallible::vec([first])?))?;
+                        let targets = self.scratch.ids.len();
+                        self.scratch.ids.try_push(first)?;
+                        self.tasks.try_push(Task::AssignTargets(line, targets))?;
                     }
                 }
                 Task::AssignTargets(line, targets) => {
-                    if !matches!(
-                        self.ast.exprs[*targets.last().expect("assignment target")].0,
-                        Expr::Name(_) | Expr::Index(..)
-                    ) {
+                    let last = *self.scratch.ids[targets..]
+                        .last()
+                        .expect("assignment target");
+                    if !matches!(self.ast.exprs[last].0, Expr::Name(_) | Expr::Index(..)) {
                         return Err(self.error("syntax error"));
                     }
                     if self.kind() == Kind::Comma {
@@ -1037,7 +1154,7 @@ impl Parser {
                         self.tasks.try_push(Task::AssignTarget(line, targets))?;
                         self.tasks.try_push(Task::Prefix)?;
                     } else {
-                        if targets.iter().any(|&i| {
+                        if self.scratch.ids[targets..].iter().any(|&i| {
                             !matches!(self.ast.exprs[i].0, Expr::Name(_) | Expr::Index(..))
                         }) {
                             return Err(self.error("syntax error"));
@@ -1047,31 +1164,40 @@ impl Parser {
                         self.tasks.try_push(Task::List)?;
                     }
                 }
-                Task::AssignTarget(line, mut targets) => {
+                Task::AssignTarget(line, targets) => {
                     let target = self.expr;
-                    self.account(input, |r, _| r.conflict(&targets, target))?;
+                    // Taking the scratch stack moves no elements and lets the
+                    // accounting closure borrow the open target list.
+                    let open = std::mem::take(&mut self.scratch.ids);
+                    let conflict = self.account(input, |r, _| r.conflict(&open[targets..], target));
+                    self.scratch.ids = open;
+                    conflict?;
                     let limit = 200 - i32::from(self.base_depth.wrapping_add(self.depth));
-                    if targets.len() as i32 > limit {
+                    if (self.scratch.ids.len() - targets) as i32 > limit {
                         return Err(self.limit_error(
                             limit,
                             "variables in assignment",
                             self.function_line,
                         ));
                     }
-                    targets.try_push(self.expr)?;
+                    self.scratch.ids.try_push(self.expr)?;
                     self.tasks.try_push(Task::AssignTargets(line, targets))?;
                 }
                 Task::AssignEnd(line, targets) => {
-                    let values = std::mem::take(&mut self.list).try_into_boxed_slice()?;
-                    self.account(input, |r, cx| r.assignment(&targets, &values, cx))?;
-                    self.statement(Stmt::Assign(targets.try_into_boxed_slice()?, values), line)?;
+                    let values = std::mem::take(&mut self.list);
+                    let targets = self.publish_ids(targets)?;
+                    self.account(input, |r, cx| {
+                        r.assignment(cx.ast.ids(targets), cx.ast.ids(values), cx)
+                    })?;
+                    self.statement(Stmt::Assign(targets, values), line)?;
                 }
                 Task::List => {
-                    self.tasks.try_push(Task::ListAfter(Vec::new()))?;
+                    self.tasks
+                        .try_push(Task::ListAfter(self.scratch.ids.len()))?;
                     self.tasks.try_push(Task::Expr(0))?;
                 }
-                Task::ListAfter(mut values) => {
-                    values.try_push(self.expr)?;
+                Task::ListAfter(values) => {
+                    self.scratch.ids.try_push(self.expr)?;
                     if self.kind() == Kind::Comma {
                         let separator = self.take();
                         self.ast.exprs[self.expr].1.discharge = separator.end_line;
@@ -1079,7 +1205,7 @@ impl Parser {
                         self.tasks.try_push(Task::Expr(0))?;
                         self.tasks.try_push(Task::ResourceNext(self.expr))?;
                     } else {
-                        self.list = values;
+                        self.list = self.publish_ids(values)?;
                     }
                 }
                 Task::Function(line, method) => {
@@ -1087,16 +1213,15 @@ impl Parser {
                         events.try_push(NativeRootEvent::Open)?;
                     }
                     self.expect(Kind::LParen)?;
-                    let params = if method {
-                        fallible::vec([Text::new(b"self")?])?
-                    } else {
-                        Vec::new()
-                    };
+                    let params = self.scratch.names.len();
+                    if method {
+                        self.scratch.names.try_push(Text::new(b"self")?)?;
+                    }
                     self.tasks.try_push(Task::Params(line, params, true))?;
                 }
-                Task::Params(line, mut params, allow_end) => {
+                Task::Params(line, params, allow_end) => {
                     if allow_end
-                        && !params.is_empty()
+                        && self.scratch.names.len() > params
                         && let Some(events) = &mut self.native_events
                     {
                         events.try_push(NativeRootEvent::Anchor(Text::new(b"self")?))?;
@@ -1110,12 +1235,13 @@ impl Parser {
                         if self.kind() != Kind::Name {
                             return Err(self.error("<name> or '...' expected"));
                         }
-                        params.try_push(self.take().text)?;
+                        let name = self.take().text;
+                        self.scratch.names.try_push(name)?;
                         self.tasks.try_push(Task::ParamAfter(line, params))?;
                     }
                 }
                 Task::ParamAfter(line, params) => {
-                    self.check_local_count_at(params.len(), line)?;
+                    self.check_local_count_at(self.scratch.names.len() - params, line)?;
                     if self.kind() == Kind::Comma {
                         self.take();
                         self.tasks.try_push(Task::Params(line, params, false))?;
@@ -1182,7 +1308,7 @@ impl Parser {
                     self.expression(
                         input,
                         Expr::Function {
-                            params: params.try_into_boxed_slice()?,
+                            params,
                             vararg,
                             body,
                             end_line,
@@ -1355,13 +1481,13 @@ impl Parser {
                     self.tasks.try_push(Task::Args)?;
                 }
                 Task::MethodEnd(line, id, name, call_line) => {
-                    let args = std::mem::take(&mut self.list).try_into_boxed_slice()?;
+                    let args = std::mem::take(&mut self.list);
                     let call =
                         self.expression(input, Expr::Method(id, name, args, call_line), line)?;
                     self.tasks.try_push(Task::Suffix(line, call))?;
                 }
                 Task::CallEnd(line, id, call_line) => {
-                    let args = std::mem::take(&mut self.list).try_into_boxed_slice()?;
+                    let args = std::mem::take(&mut self.list);
                     let call = self.expression(input, Expr::Call(id, args, call_line), line)?;
                     self.tasks.try_push(Task::Suffix(line, call))?;
                 }
@@ -1382,37 +1508,36 @@ impl Parser {
                     Kind::String => {
                         let token = self.take();
                         let id = self.expression(input, Expr::String(token.text), token.line)?;
-                        self.list = fallible::vec([id])?;
+                        self.list = self.one(id)?;
                     }
                     _ => return Err(self.error("function arguments expected")),
                 },
                 Task::ArgsParen(line) => {
                     if self.kind() == Kind::RParen {
                         self.take();
-                        self.list = Vec::new();
+                        self.list = Span::default();
                     } else {
                         self.tasks.try_push(Task::ArgsEnd(line))?;
                         self.tasks.try_push(Task::List)?;
                     }
                 }
                 Task::ArgsEnd(line) => {
-                    let values = std::mem::take(&mut self.list);
-                    self.account(input, |r, _| r.arguments(&values))?;
-                    self.list = values;
+                    let values = self.list;
+                    self.account(input, |r, cx| r.arguments(cx.ast.ids(values)))?;
                     self.close(Kind::RParen, Kind::LParen, line)?;
                 }
-                Task::ArgsTable => self.list = fallible::vec([self.expr])?,
+                Task::ArgsTable => self.list = self.one(self.expr)?,
                 Task::Table => {
                     self.account(input, |r, _| r.begin_table())?;
                     let previous = self.previous_line;
                     let line = self.expect(Kind::LBrace)?.line;
                     self.tasks
-                        .try_push(Task::TableNext([line, previous], Vec::new()))?;
+                        .try_push(Task::TableNext([line, previous], self.scratch.fields.len()))?;
                 }
                 Task::TableNext(line, fields) => {
                     if self.kind() == Kind::RBrace {
-                        if let Some((None, value)) = fields.last() {
-                            self.ast.exprs[*value].1.discharge = self.current().end_line;
+                        if let Some((None, value)) = self.last_field(fields) {
+                            self.ast.exprs[value].1.discharge = self.current().end_line;
                         }
                         self.take();
                         self.tasks.try_push(Task::TableEnd(line, fields))?;
@@ -1447,33 +1572,30 @@ impl Parser {
                     self.tasks.try_push(Task::Expr(0))?;
                     self.tasks.try_push(Task::ResourceKey(key))?;
                 }
-                Task::TableValue(line, mut fields, key) => {
+                Task::TableValue(line, fields, key) => {
                     let value = self.expr;
                     self.account(input, |r, cx| r.field(key, value, cx))?;
-                    fields.try_push((key, self.expr))?;
+                    self.scratch.fields.try_push((key, self.expr))?;
                     self.tasks.try_push(Task::TableSeparator(line, fields))?;
                 }
                 Task::TableSeparator(line, fields) => {
                     if matches!(self.kind(), Kind::Comma | Kind::Semi) {
                         let separator = self.take();
-                        if let Some((None, value)) = fields.last() {
-                            self.ast.exprs[*value].1.discharge = separator.end_line;
+                        if let Some((None, value)) = self.last_field(fields) {
+                            self.ast.exprs[value].1.discharge = separator.end_line;
                         }
                         self.tasks.try_push(Task::TableNext(line, fields))?;
                     } else {
-                        if let Some((None, value)) = fields.last() {
-                            self.ast.exprs[*value].1.discharge = self.current().end_line;
+                        if let Some((None, value)) = self.last_field(fields) {
+                            self.ast.exprs[value].1.discharge = self.current().end_line;
                         }
                         self.close(Kind::RBrace, Kind::LBrace, line[0])?;
                         self.tasks.try_push(Task::TableEnd(line, fields))?;
                     }
                 }
                 Task::TableEnd(line, fields) => {
-                    self.expression(
-                        input,
-                        Expr::Table(fields.try_into_boxed_slice()?, line[1]),
-                        line[0],
-                    )?;
+                    let fields = publish(&mut self.ast.fields, &mut self.scratch.fields, fields)?;
+                    self.expression(input, Expr::Table(fields, line[1]), line[0])?;
                 }
                 Task::ResourceNext(id) => self.account(input, |r, cx| r.next(id, cx))?,
                 Task::ResourceInfix(id, op) => self.account(input, |r, cx| r.infix(id, op, cx))?,

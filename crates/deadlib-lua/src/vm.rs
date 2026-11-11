@@ -27,6 +27,7 @@ mod native_fast;
 mod os;
 mod package;
 mod reductions;
+mod simple;
 mod standalone;
 mod strings;
 mod tables;
@@ -436,6 +437,8 @@ pub struct Vm {
     native_bodies: Buffer<host::Body>,
     patterns: crate::pattern::Cache,
     pattern_work: crate::pattern::Work,
+    // Parser and code generator storage reused by unbudgeted source loads.
+    compile_spare: loads::Spare,
     pattern_locale: u64,
     native_closures: Arena<threads::NativeClosure>,
     builtin_envs: Buffer<Option<TableId>>,
@@ -548,6 +551,7 @@ impl Vm {
             native_bodies: Buffer::new_in(memory.clone()),
             patterns: crate::pattern::Cache::new_in(memory.clone()),
             pattern_work: crate::pattern::Work::new_in(memory.clone()),
+            compile_spare: loads::Spare::default(),
             pattern_locale: crate::locale::revision(),
             native_closures: Arena::identified_in(memory.clone()),
             builtin_envs,
@@ -1647,6 +1651,10 @@ impl Vm {
     }
 
     fn run(&mut self, error_line: &mut u32) -> Result<usize, Error> {
+        // The executing program's code, retained across frame transitions:
+        // calls and returns within one program keep it without touching its
+        // atomic reference count.
+        let mut held: Option<crate::memory::Shared<ProgramData>> = None;
         'frames: loop {
             self.maybe_gc()?;
             let frame_index = self.frames.len() - 1;
@@ -1687,12 +1695,45 @@ impl Vm {
             let (program_index, proto_index, env) =
                 (closure.program, closure.prototype, closure.env);
             // Hold immutable code independently of VM-vector growth during native calls.
-            // Shared ownership is acquired once on frame entry, never per instruction/value.
-            let data = self.programs[program_index].data.clone();
+            // Shared ownership changes only when a frame runs another program.
+            let current = &self.programs[program_index].data;
+            if !held
+                .as_ref()
+                .is_some_and(|data| crate::memory::Shared::ptr_eq(data, current))
+            {
+                held = Some(current.clone());
+            }
+            let data = held.as_ref().expect("executing program");
             let prototype = &data.prototypes[proto_index];
             let mut pc = frame.pc();
             let base = frame.base;
             loop {
+                // With no hook or instruction limit counting instructions,
+                // runs of simple ones execute without frame bookkeeping.
+                if self.hooks.mask & (hooks::LINE | hooks::COUNT) == 0 && self.budget.is_none() {
+                    let mut cx = simple::Context {
+                        registers: &mut self.registers,
+                        programs: &self.programs,
+                        tables: &self.tables,
+                        code: &prototype.code,
+                        program: program_index,
+                        prototype: proto_index,
+                        env,
+                        base,
+                        closed: self.open_upvalues.is_empty(),
+                    };
+                    while let Some(next) = simple::step(&mut cx, pc) {
+                        pc = next;
+                    }
+                    let i = prototype.code[pc];
+                    if i.op == Op::GetUpvalue {
+                        let id =
+                            self.functions[slot_index(function.0)].upvalues[i.c as usize] as usize;
+                        self.registers[base + usize::from(i.a)] = self.cell_value(id);
+                        pc += 1;
+                        continue;
+                    }
+                }
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0
                     && self.hook_instruction(frame_index, pc, prototype.debug.hook_lines[pc])?
                 {

@@ -365,19 +365,38 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
+    /// A byte every match must start with. Attempts elsewhere fail on the
+    /// first instruction without reaching any later instruction or error.
+    pub fn first_byte(&self) -> Option<u8> {
+        self.code
+            .first()
+            .filter(|i| {
+                matches!(i.kind, Kind::Byte) && matches!(i.repeat, Repeat::One | Repeat::Plus)
+            })
+            .map(|i| i.arg as u8)
+    }
     pub fn find(
         &self,
         source: &[u8],
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        for pos in start..=source.len() {
+        let first = self.first_byte().filter(|_| !self.anchored);
+        let mut pos = start;
+        while pos <= source.len() {
+            if let Some(byte) = first {
+                match source[pos..].iter().position(|&b| b == byte) {
+                    Some(offset) => pos += offset,
+                    None => return Ok(None),
+                }
+            }
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
             }
             if self.anchored {
                 break;
             }
+            pos += 1;
         }
         Ok(None)
     }
@@ -387,8 +406,9 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
+        // Slots at or beyond `count` are never read, and every opened slot is
+        // written before use, so earlier attempts' captures need no reset.
         work.choices.clear();
-        work.captures.fill(EMPTY);
         work.undo_len = 0;
         work.count = 0;
         let mut pc = 0;

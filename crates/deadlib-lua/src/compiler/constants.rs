@@ -71,8 +71,16 @@ impl Key<'_> {
 }
 
 impl Constants {
-    pub fn finish(self) -> Result<Box<[Constant]>, Error> {
-        self.values.try_into_boxed_slice()
+    /// Move the pool into an exact-size box, keeping storage for reuse.
+    pub fn finish(&mut self) -> Result<Box<[Constant]>, Error> {
+        let mut exact = crate::memory::fallible::with_capacity(self.values.len())?;
+        exact.append(&mut self.values);
+        self.slots.clear();
+        exact.try_into_boxed_slice()
+    }
+    pub fn clear(&mut self) {
+        self.values.clear();
+        self.slots.clear();
     }
     fn rebuild(&mut self) -> Result<(), Error> {
         self.slots

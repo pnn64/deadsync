@@ -45,11 +45,8 @@ impl Vm {
         match crate::memory::compilation::Workspace::new(self.registers.memory())
             .and_then(|workspace| {
                 workspace.run(|| {
-                    loads::compile(
-                        source,
-                        name,
-                        usize::from(self.native_calls_for(self.thread, self.frames.len())),
-                    )
+                    let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
+                    loads::compile(source, name, depth, &mut self.compile_spare)
                 })
             })
             .and_then(|program| self.load(&program))

@@ -145,7 +145,9 @@ impl Pool {
             }
         }
         if (self.entries.len() + 1) * 2 >= self.buckets.len() {
-            self.buckets = fallible::repeat(0, (self.buckets.len() * 2).max(16))?;
+            let size = (self.buckets.len() * 2).max(16);
+            self.buckets.clear();
+            self.buckets.try_resize(size, 0)?;
             for (index, entry) in self.entries.iter().enumerate() {
                 let mut slot = entry.hash as usize & (self.buckets.len() - 1);
                 while self.buckets[slot] != 0 {
@@ -192,6 +194,24 @@ pub(super) struct Resources {
     constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
+    /// Return to the default state, keeping storage.
+    pub(super) fn clear(&mut self) {
+        let pool = &mut self.function.pool;
+        pool.entries.clear();
+        pool.buckets.clear();
+        self.function.next = 0;
+        self.function.max = 0;
+        self.function.locals = 0;
+        self.function.zero_sign = None;
+        self.parents.clear();
+        self.values.clear();
+        self.tables.clear();
+        self.constants.clear();
+    }
+    /// Reserve per-expression accounting for an estimated expression count.
+    pub(super) fn reserve_values(&mut self, expressions: usize) -> Result<(), Error> {
+        crate::memory::fallible::reserve(&mut self.values, expressions)
+    }
     pub(super) fn constant_count(&self) -> usize {
         self.function.pool.entries.len()
     }
@@ -816,7 +836,7 @@ impl Resources {
                 Value::new(Form::Temp, u32::from(t.reg))
             }
             Expr::Call(function, args, _) | Expr::Method(function, _, args, _) => {
-                if let Some(&last) = args.last()
+                if let Some(&last) = cx.ast.ids(*args).last()
                     && !self.values[last].multi()
                 {
                     self.next(last, cx)?;

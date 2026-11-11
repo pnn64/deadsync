@@ -3,7 +3,6 @@ use super::{repeat, reserve};
 use crate::Error;
 use std::{
     borrow::Borrow,
-    collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
 
@@ -20,8 +19,37 @@ impl<K, V> Default for Map<K, V> {
         }
     }
 }
+/// Multiply-rotate hashing of compiler-owned keys. Keys never come from
+/// untrusted hashing contexts, so collision resistance is not required.
+struct Fast(u64);
+impl Fast {
+    fn mix(&mut self, word: u64) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+}
+impl Hasher for Fast {
+    fn finish(&self) -> u64 {
+        let hash = self.0;
+        (hash ^ (hash >> 29)).wrapping_mul(0xbf58_476d_1ce4_e5b9) ^ (hash >> 32)
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        let (words, tail) = bytes.as_chunks::<8>();
+        for word in words {
+            self.mix(u64::from_le_bytes(*word));
+        }
+        for &byte in tail {
+            self.mix(u64::from(byte));
+        }
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.mix(value);
+    }
+    fn write_usize(&mut self, value: usize) {
+        self.mix(value as u64);
+    }
+}
 fn hash(key: &(impl Hash + ?Sized)) -> usize {
-    let mut state = DefaultHasher::new();
+    let mut state = Fast(0);
     key.hash(&mut state);
     state.finish() as usize
 }
@@ -31,6 +59,10 @@ impl<K: Eq + Hash, V> Map<K, V> {
     }
     pub(crate) fn len(&self) -> usize {
         self.entries.len()
+    }
+    pub(crate) fn clear(&mut self) {
+        self.entries.clear();
+        self.slots.clear();
     }
     pub(crate) fn get<Q: Eq + Hash + ?Sized>(&self, key: &Q) -> Option<&V>
     where

@@ -71,15 +71,14 @@ impl Key {
             Self::ParserPrototype(v) => (v.0, 10),
         }
     }
+    /// One multiplication mixes every identity bit into the upper half, which
+    /// the fold brings down to the low bits that select a slot. Slot order is
+    /// never observable: traversal follows insertion order.
+    #[inline]
     fn hash(self) -> usize {
         let (bits, tag) = self.identity();
-        let mut h = bits
-            ^ tag
-                .wrapping_mul(0x9e3779b97f4a7c15)
-                .wrapping_add(bits.rotate_left(17));
-        h = (h ^ (h >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-        h = (h ^ (h >> 27)).wrapping_mul(0x94d049bb133111eb);
-        (h ^ (h >> 31)) as usize
+        let h = (bits ^ tag.rotate_left(59)).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        (h ^ (h >> 32)) as usize
     }
 }
 
