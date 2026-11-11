@@ -58,19 +58,26 @@ impl PlanarAccum {
         }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
-                channel.extend(
-                    interleaved
-                        .iter()
-                        .map(|sample| f32::from(*sample) / 32768.0),
-                );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                if interleaved.len() >= 64 && std::arch::is_x86_feature_detected!("avx2") {
+                    // SAFETY: runtime detection checks CPU and OS support for AVX2.
+                    unsafe { append_planar_mono_avx2(interleaved, channel) };
+                    return;
+                }
+                append_planar_mono(interleaved, channel);
                 return;
             }
         } else if channels == 2
             && let [left, right] = self.channels.as_mut_slice()
         {
-            let frames = interleaved.as_chunks::<2>().0;
-            left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
-            right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
+            // Stereo needs larger packets to amortize its strided conversions.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            if interleaved.len() >= 256 * 2 && std::arch::is_x86_feature_detected!("avx2") {
+                // SAFETY: runtime detection checks CPU and OS support for AVX2.
+                unsafe { append_planar_stereo_avx2(interleaved, left, right) };
+                return;
+            }
+            append_planar_stereo(interleaved, left, right);
             return;
         }
         let complete = &interleaved[..frames * channels];
@@ -108,6 +115,34 @@ impl PlanarAccum {
             channel.clear();
         }
     }
+}
+
+#[inline(always)]
+fn append_planar_mono(input: &[i16], output: &mut Vec<f32>) {
+    output.extend(input.iter().map(|sample| f32::from(*sample) / 32768.0));
+}
+
+#[inline(always)]
+fn append_planar_stereo(input: &[i16], left: &mut Vec<f32>, right: &mut Vec<f32>) {
+    let frames = input.as_chunks::<2>().0;
+    left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
+    right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 before entering.
+unsafe fn append_planar_mono_avx2(input: &[i16], output: &mut Vec<f32>) {
+    append_planar_mono(input, output);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 before entering.
+unsafe fn append_planar_stereo_avx2(input: &[i16], left: &mut Vec<f32>, right: &mut Vec<f32>) {
+    append_planar_stereo(input, left, right);
 }
 
 // Fixed strides expose packed loads/shuffles to the vectorizer. Other channel
