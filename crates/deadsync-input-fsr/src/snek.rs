@@ -131,7 +131,12 @@ fn poll_device(device: &HidDevice, stop: &AtomicBool, shared: &Mutex<SnekSensorS
         publish_connection(shared, false, true);
         return;
     }
-    debug!("Opened Snekboard config interface");
+    let version = firmware_version(&response);
+    if version.is_empty() {
+        log::info!("Opened Snekboard config interface (firmware version unavailable)");
+    } else {
+        log::info!("Opened Snekboard config interface, firmware version: {version}");
+    }
     publish_connection(shared, true, false);
 
     let mut states = [0u32; 4];
@@ -228,6 +233,15 @@ fn validate_response(response: &[u8; PACKET_SIZE], read: usize, opcode: u8) -> R
     Ok(())
 }
 
+fn firmware_version(response: &[u8; PACKET_SIZE]) -> String {
+    let payload = &response[2..];
+    let end = payload
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(payload.len());
+    String::from_utf8_lossy(&payload[..end]).trim().to_owned()
+}
+
 fn publish_connection(shared: &Mutex<SnekSensorSnapshot>, connected: bool, read_error: bool) {
     let mut snapshot = shared.lock().unwrap_or_else(|e| e.into_inner());
     if snapshot.connected == connected && snapshot.read_error == read_error {
@@ -298,6 +312,16 @@ mod tests {
         assert!(validate_response(&response, PACKET_SIZE, DISCONNECT).is_err());
         response[1] = ERROR;
         assert!(validate_response(&response, PACKET_SIZE, GET_INFO).is_err());
+    }
+
+    #[test]
+    fn firmware_version_is_bounded_and_null_terminated() {
+        let mut response = [0; PACKET_SIZE];
+        response[2..10].copy_from_slice(b"v1.2.3\0x");
+        assert_eq!(firmware_version(&response), "v1.2.3");
+
+        response[2..].fill(b'a');
+        assert_eq!(firmware_version(&response).len(), PACKET_SIZE - 2);
     }
 
     #[test]
