@@ -1838,9 +1838,27 @@ impl Vm {
                             self.gc.pending = true;
                         }
                         result.map_err(|_| self.memory_failure())?;
-                        for offset in 0..count {
-                            let value = self.registers[a + 1 + offset];
-                            self.raw_set(id, Value::Number((c + offset) as f64), value)?;
+                        if end <= u32::MAX as usize {
+                            for offset in 0..count {
+                                let value = self.registers[a + 1 + offset];
+                                let index = c + offset - 1;
+                                if matches!(
+                                    value,
+                                    Value::Nil | Value::Boolean(_) | Value::Number(_)
+                                ) {
+                                    self.tables[slot_index(id.0)].set_grown_list(index, value);
+                                } else {
+                                    let key = Value::Number((index + 1) as f64);
+                                    self.reserve_gc_table_write(id, key, value)?;
+                                    self.tables[slot_index(id.0)].set_grown_list(index, value);
+                                    self.gc_table_write(id, key, value);
+                                }
+                            }
+                        } else {
+                            for offset in 0..count {
+                                let value = self.registers[a + 1 + offset];
+                                self.raw_set(id, Value::Number((c + offset) as f64), value)?;
+                            }
                         }
                         if self.gc.pending {
                             self.maybe_gc()?;

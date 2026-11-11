@@ -420,6 +420,10 @@ impl Table {
         self.entries.push(Entry { key: k, value });
         Ok(())
     }
+    #[inline]
+    pub(crate) fn set_grown_list(&mut self, index: usize, value: Value) {
+        self.array[index] = value;
+    }
     pub fn grow_list_array(&mut self, end: usize) -> Result<(), Error> {
         let first = self.array.len();
         if end <= first {

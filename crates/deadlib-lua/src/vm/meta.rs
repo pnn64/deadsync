@@ -323,6 +323,19 @@ impl Vm {
         right: Value,
         result: usize,
     ) -> Result<(), Error> {
+        if let (Value::String(left), Value::String(right)) = (left, right) {
+            let size = self
+                .string_bytes(left)
+                .unwrap_or_default()
+                .len()
+                .checked_add(self.string_bytes(right).unwrap_or_default().len())
+                .ok_or_else(|| self.memory_failure())?;
+            let mut bytes = self.try_take_buffer(size)?;
+            bytes.extend_from_slice(self.string_bytes(left).unwrap_or_default());
+            bytes.extend_from_slice(self.string_bytes(right).unwrap_or_default());
+            self.registers[result] = self.try_finish_buffer(bytes)?;
+            return Ok(());
+        }
         if matches!(left, Value::String(_) | Value::Number(_))
             && matches!(right, Value::String(_) | Value::Number(_))
         {
