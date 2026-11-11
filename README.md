@@ -10,11 +10,15 @@ DeadSync, as in "dead on sync", is a StepMania/ITG engine with Vulkan/OpenGL bac
 </div>
 <hr>
 
-## 🎮 Just want to play? [Download the latest release](https://github.com/pnn64/deadsync/releases/latest)
+## 🎮 Just want to play? Download it, no building required
 
 **You do not need to build anything.** Download the ready-to-run game for your
-platform from the **[latest release](https://github.com/pnn64/deadsync/releases/latest)**
-(under "Assets"), extract it, add your
+platform from either of these:
+
+- **[deadsync.dance](https://deadsync.dance)**
+- **[The latest GitHub release](https://github.com/pnn64/deadsync/releases/latest)** (under "Assets")
+
+Then extract it, add your
 songs (see [Song directories](#song-directories)), and run it.
 
 ### Staying up to date
