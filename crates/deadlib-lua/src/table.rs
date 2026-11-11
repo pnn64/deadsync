@@ -86,9 +86,9 @@ fn array_index(value: Value) -> Option<usize> {
     if let Value::Number(n) = value
         && n >= 1.0
         && n <= f64::from(u32::MAX)
-        && n.fract() == 0.0
     {
-        Some(n as usize - 1)
+        let index = n as u32;
+        (f64::from(index) == n).then_some(index as usize - 1)
     } else {
         None
     }
@@ -521,6 +521,83 @@ mod allocation_tests {
     use crate::allocation_probe::probe;
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
+    }
+    #[test]
+    fn array_index_accepts_only_exact_positive_u32_keys() {
+        for (number, expected) in [
+            (f64::NEG_INFINITY, None),
+            (-10.0, None),
+            (-0.0, None),
+            (0.0, None),
+            (0.5, None),
+            (1.0 - f64::EPSILON, None),
+            (1.0, Some(0)),
+            (1.0 + f64::EPSILON, None),
+            (1.5, None),
+            (2.0, Some(1)),
+            (2.5, None),
+            (f64::from(u32::MAX - 1), Some(u32::MAX as usize - 2)),
+            (f64::from(u32::MAX), Some(u32::MAX as usize - 1)),
+            (f64::from(u32::MAX) + 0.5, None),
+            (f64::INFINITY, None),
+            (f64::NAN, None),
+        ] {
+            assert_eq!(
+                array_index(Value::Number(number)),
+                expected,
+                "key {number:?}"
+            );
+        }
+        assert_eq!(array_index(Value::Nil), None);
+        assert_eq!(array_index(Value::Boolean(true)), None);
+    }
+    #[test]
+    fn numeric_hash_keys_and_array_keys_preserve_next_order() {
+        let mut table = Table::with_capacity(3, 8).unwrap();
+        let keys = [
+            1.0,
+            2.0,
+            3.0,
+            -0.0,
+            -3.0,
+            0.5,
+            f64::from(u32::MAX),
+            f64::INFINITY,
+        ];
+        for (i, &key) in keys.iter().enumerate() {
+            table
+                .set(Value::Number(key), Value::Number(i as f64))
+                .unwrap();
+        }
+        assert_eq!(table.get(Value::Number(0.0)), Value::Number(3.0));
+        table.set(Value::Number(0.0), Value::Number(30.0)).unwrap();
+        assert_eq!(table.get(Value::Number(-0.0)), Value::Number(30.0));
+        let mut seen = Vec::new();
+        let mut current = Value::Nil;
+        while let Some((key, value)) = table.next(current).unwrap() {
+            seen.push((key, value));
+            current = key;
+        }
+        let expected: Vec<_> = keys
+            .iter()
+            .enumerate()
+            .map(|(i, &key)| {
+                (
+                    Value::Number(key),
+                    Value::Number(if i == 3 { 30.0 } else { i as f64 }),
+                )
+            })
+            .collect();
+        assert_eq!(seen, expected);
+        assert_eq!(table.get(Value::Number(f64::NAN)), Value::Nil);
+        assert_eq!(
+            table
+                .set(Value::Number(f64::NAN), Value::Nil)
+                .unwrap_err()
+                .kind(),
+            ErrorKind::Runtime
+        );
+        assert!(table.next(Value::Number(f64::NAN)).is_err());
     }
     fn check_hash(table: &Table, count: i32) {
         for n in 1..=count {

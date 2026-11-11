@@ -88,6 +88,25 @@ fn byte_string_primitives_and_methods() {
 }
 
 #[test]
+fn repeated_binary_strings_copy_complete_source_at_all_boundaries() {
+    let source = br#"
+        local piece=string.char(0,255,65,66,0,67,68)
+        for _,count in ipairs({0,1,2,3,7,19,20001}) do
+            local result=string.rep(piece,count)
+            assert(#result==count*#piece)
+            for i=1,count do
+                local at=(i-1)*#piece+1
+                assert(string.sub(result,at,at+#piece-1)==piece)
+            end
+        end
+        return 42
+    "#;
+    let mut vm = Vm::new();
+    let program = compile(source).unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(42.0)]);
+}
+
+#[test]
 fn select_and_unpack_narrow_native_integer_arguments() {
     for index in [
         "4294967297",

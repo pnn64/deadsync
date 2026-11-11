@@ -155,6 +155,22 @@ mod scanner;
 pub(crate) use scanner::Scanner;
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+    // Every decimal integer with at most 15 digits is exactly representable
+    // as binary64, including ones with leading zeroes.
+    if !bytes.is_empty() && bytes.len() <= 15 && bytes[0].is_ascii_digit() {
+        let mut integer = 0u64;
+        let mut all_digits = true;
+        for &byte in bytes {
+            if !byte.is_ascii_digit() {
+                all_digits = false;
+                break;
+            }
+            integer = integer * 10 + u64::from(byte - b'0');
+        }
+        if all_digits {
+            return Some(integer as f64);
+        }
+    }
     let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
     let text = std::str::from_utf8(bytes)
         .ok()?
@@ -202,4 +218,74 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
     }
     // Rust accepts NaN/inf for runtime conversions; source numerals always start with a digit.
     text.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_number;
+
+    #[test]
+    fn short_decimal_integers_match_binary64_parsing_at_every_length() {
+        for len in 1..=15 {
+            let mut digits = vec![b'0'; len];
+            for sample in 0..100 {
+                for (index, byte) in digits.iter_mut().enumerate() {
+                    *byte = b'0' + ((sample * 17 + len * 13 + index * 7) % 10) as u8;
+                }
+                let expected = std::str::from_utf8(&digits)
+                    .unwrap()
+                    .parse::<f64>()
+                    .unwrap();
+                assert_eq!(parse_number(&digits).unwrap().to_bits(), expected.to_bits());
+            }
+        }
+
+        for (digits, integer) in [
+            (b"000000000000000".as_slice(), 0u64),
+            (b"000000000000001", 1),
+            (b"000123456789012", 123_456_789_012),
+            (b"999999999999999", 999_999_999_999_999),
+        ] {
+            assert_eq!(
+                parse_number(digits).unwrap().to_bits(),
+                (integer as f64).to_bits(),
+                "{digits:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn other_number_forms_keep_rounding_and_invalid_input_behavior() {
+        for (input, expected) in [
+            (
+                b"9007199254740991".as_slice(),
+                Some(9_007_199_254_740_991.0),
+            ),
+            (b"9007199254740992", Some(9_007_199_254_740_992.0)),
+            (b"9007199254740993", Some(9_007_199_254_740_992.0)),
+            (b"9007199254740995", Some(9_007_199_254_740_996.0)),
+            (b"0000000000000001", Some(1.0)),
+            (b"-0", Some(-0.0)),
+            (b"+01", Some(1.0)),
+            (b" 01 ", Some(1.0)),
+            (b"1.25", Some(1.25)),
+            (b"1e3", Some(1000.0)),
+            (b"0x10", Some(16.0)),
+            (b"0X1p3", Some(8.0)),
+            (b"1\0ignored", Some(1.0)),
+            (b"", None),
+            (b"1e", None),
+            (b"1e+", None),
+            (b"1.2.3", None),
+            (b"12invalid", None),
+            (b"0x", None),
+            (b"1\xff", None),
+        ] {
+            assert_eq!(
+                parse_number(input).map(f64::to_bits),
+                expected.map(f64::to_bits),
+                "{input:?}"
+            );
+        }
+    }
 }
