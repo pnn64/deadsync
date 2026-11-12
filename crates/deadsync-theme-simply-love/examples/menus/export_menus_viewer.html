@@ -22,10 +22,23 @@
       <legend>Screens</legend>
       <div class="filter-tabs">
         {% for menu in menus %}
+        {% if menu.value == "song-select" %}
+        <div class="screen-filter-group" data-sub-filter-parent="{{ menu.value }}">
         <label class="filter-tab">
           <input type="checkbox" data-filter-group="screen" data-filter-value="{{ menu.value }}" checked>
           {{ menu.label }}
         </label>
+        <label class="filter-tab filter-tab-sub">
+          <input type="checkbox" data-filter-group="variant" data-filter-value="expanded-steps" checked>
+          Expanded Steps
+        </label>
+        </div>
+        {% else %}
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="screen" data-filter-value="{{ menu.value }}" checked>
+          {{ menu.label }}
+        </label>
+        {% endif %}
         {% endfor %}
       </div>
     </fieldset>
@@ -48,7 +61,7 @@
       <h2>{{ menu.label }}</h2>
       <div class="menu-screens">
       {% for image in menu.images %}
-      <figure data-resolution="{{ image.resolution }}">
+      <figure data-resolution="{{ image.resolution }}"{% if let Some(variant) = image.variant %} data-variant="{{ variant }}"{% endif %}>
         <div class="image-frame">
           <a href="{{ image.src }}"><img loading="lazy" src="{{ image.src }}" alt="{{ menu.label }} at {{ image.resolution }}"></a>
           {% if image.disabled %}<span class="disabled">DISABLED · 16:9 ONLY</span>{% endif %}
@@ -66,6 +79,7 @@
       const controls = [...document.querySelectorAll('#gallery-filters input[type=checkbox]')];
       const sections = [...document.querySelectorAll('section[data-screen]')];
       const images = [...document.querySelectorAll('figure[data-resolution]')];
+      const screenFilterGroups = [...document.querySelectorAll('[data-sub-filter-parent]')];
       const key = control => control.dataset.filterGroup + ':' + control.dataset.filterValue;
 
       const apply = () => {
@@ -73,8 +87,14 @@
         for (const section of sections) {
           section.hidden = !enabled.get('screen:' + section.dataset.screen);
         }
+        for (const group of screenFilterGroups) {
+          group.hidden = !enabled.get('screen:' + group.dataset.subFilterParent);
+        }
         for (const image of images) {
-          image.hidden = !enabled.get('resolution:' + image.dataset.resolution);
+          const resolutionEnabled = enabled.get('resolution:' + image.dataset.resolution);
+          const variantEnabled = !image.dataset.variant
+            || enabled.get('variant:' + image.dataset.variant);
+          image.hidden = !resolutionEnabled || !variantEnabled;
         }
       };
 

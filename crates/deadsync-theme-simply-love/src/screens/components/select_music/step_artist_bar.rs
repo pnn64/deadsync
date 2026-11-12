@@ -4,8 +4,31 @@ use deadlib_present::space::screen_height;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StepArtistBarLayout {
-    Legacy,
-    Expanded,
+    Legacy,   // one line, standard layout
+    Expanded, // for arrow-cloud, multi-line
+}
+
+impl From<bool> for StepArtistBarLayout {
+    fn from(expanded: bool) -> Self {
+        Self::from_bool(expanded)
+    }
+}
+
+impl StepArtistBarLayout {
+    pub(crate) const fn from_bool(expanded: bool) -> Self {
+        if expanded {
+            Self::Expanded
+        } else {
+            Self::Legacy
+        }
+    }
+
+    pub(crate) const fn height_screen_divisor(self) -> f32 {
+        match self {
+            Self::Legacy => 28.0,
+            Self::Expanded => 8.0,
+        }
+    }
 }
 
 pub struct StepArtistBarParams {
@@ -24,15 +47,51 @@ pub struct StepArtistBarParams {
     pub artist_color: [f32; 4],
 }
 
+pub struct StepArtistBarGeometry {
+    pub background_y: f32,
+    pub background_height: f32,
+    pub artist_text_y: f32,
+}
+
 pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
+    let background_height = screen_height()
+        / match p.layout {
+            StepArtistBarLayout::Legacy => 28.0,
+            StepArtistBarLayout::Expanded => 8.0,
+        };
+    let background_center_y = p.center_y
+        + match p.layout {
+            StepArtistBarLayout::Legacy => 0.0,
+            StepArtistBarLayout::Expanded => 18.0,
+        };
+    let artist_text_y = p.center_y
+        - match p.layout {
+            StepArtistBarLayout::Legacy => 0.0,
+            StepArtistBarLayout::Expanded => 6.0,
+        };
+    push_with_geometry(
+        out,
+        p,
+        StepArtistBarGeometry {
+            background_y: background_center_y - background_height * 0.5,
+            background_height,
+            artist_text_y,
+        },
+    );
+}
+
+pub fn push_with_geometry(
+    out: &mut Vec<Actor>,
+    p: StepArtistBarParams,
+    geometry: StepArtistBarGeometry,
+) {
     let z_text = p.z_base.saturating_add(1);
     match p.layout {
         StepArtistBarLayout::Legacy => {
-            let comp_h = screen_height() / 28.0;
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.left_x + p.background_width * 0.5, p.center_y):
-                setsize(p.background_width, comp_h):
+                xy(p.left_x + p.background_width * 0.5, geometry.background_y + geometry.background_height * 0.5):
+                setsize(p.background_width, geometry.background_height):
                 z(p.z_base):
                 diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
             ));
@@ -50,7 +109,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.artist_text):
                 align(0.0, 0.5):
-                xy(p.left_x + p.artist_x_offset, p.center_y):
+                xy(p.left_x + p.artist_x_offset, geometry.artist_text_y):
                 maxwidth(p.artist_max_width):
                 zoom(0.8):
                 z(z_text):
@@ -63,17 +122,10 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
             ));
         }
         StepArtistBarLayout::Expanded => {
-            let comp_h = screen_height() / 8.0;
-            let fade_bottom = match p.expanded_line_count {
-                1 => 0.8,
-                2 => 0.5,
-                _ => 0.0,
-            };
             out.push(act!(quad:
                 align(0.5, 0.5):
-                xy(p.left_x + p.background_width * 0.5, p.center_y + 18.0):
-                setsize(p.background_width, comp_h):
-                fadebottom(fade_bottom):
+                xy(p.left_x + p.background_width * 0.5, geometry.background_y + geometry.background_height * 0.5):
+                setsize(p.background_width, geometry.background_height):
                 z(p.z_base):
                 diffuse(p.accent_color[0], p.accent_color[1], p.accent_color[2], 1.0)
             ));
@@ -91,7 +143,7 @@ pub fn push(out: &mut Vec<Actor>, p: StepArtistBarParams) {
                 font("miso"):
                 settext(p.artist_text):
                 align(0.0, 0.0):
-                xy(p.left_x + p.artist_x_offset, p.center_y - 6.0):
+                xy(p.left_x + p.artist_x_offset, geometry.artist_text_y):
                 maxwidth(p.artist_max_width):
                 zoom(0.8):
                 z(z_text):

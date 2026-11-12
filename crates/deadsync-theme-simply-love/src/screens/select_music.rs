@@ -13,11 +13,11 @@ use null_or_die::GraphOrientation;
 
 use crate::color;
 use crate::rgba_const;
+pub use crate::screens::components::select_music::layout::SongSelectLayout;
 use crate::screens::components::{
     select_music::{
         layout::{
-            DensityGraphLayout, SongDetailsLayout, SongSelectLayout, StepArtistBarY,
-            StepArtistPeakNpsLayout,
+            ChartPanelLayout, DensityGraphLayout, SongDetailsLayout, StepArtistPeakNpsLayout,
         },
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
@@ -654,6 +654,8 @@ fn prepare_scorebox_presentation(
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
+    let previous_layout_mode =
+        ChartPanelLayout::uses_expanded_step_artist(state.policy.presentation, state.session);
     let chart_type_changed = view.session.is_some_and(|session| {
         session.play_style.chart_type() != state.session.play_style.chart_type()
     });
@@ -705,6 +707,11 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         state.sync_graph_orientation = settings.sync_graph_orientation;
         state.sync_graph_origin = settings.sync_graph_origin;
         state.sync_confidence_percent = settings.sync_confidence_percent.min(100);
+    }
+    let layout_mode =
+        ChartPanelLayout::uses_expanded_step_artist(state.policy.presentation, state.session);
+    if layout_mode != previous_layout_mode {
+        state.reset_layout();
     }
     if let Some(music_wheel) = view.music_wheel {
         state.music_wheel = music_wheel;
@@ -1943,12 +1950,12 @@ pub struct State {
 
 impl State {
     fn layout(&self) -> &SongSelectLayout {
-        self.layout.get_or_init(SongSelectLayout::current)
+        self.layout
+            .get_or_init(|| SongSelectLayout::current(self.policy.presentation, self.session))
     }
 
-    pub fn density_graph_dimensions(&self) -> [f32; 2] {
-        let bounds = self.layout().chart_panel.bounds;
-        [bounds.width, bounds.height]
+    pub fn reset_layout(&mut self) {
+        self.layout.take();
     }
 }
 
@@ -12429,17 +12436,17 @@ fn step_artist_cycle_text(chart: &ChartData, cycle_elapsed: f32) -> &str {
     }
 }
 
-fn step_artist_expanded_text(chart: &ChartData) -> (Arc<str>, usize) {
+fn step_artist_expanded_text(chart: &ChartData) -> Arc<str> {
     let (values, count) = step_artist_values(chart);
     if count == 0 {
-        return (cached_str_ref(""), 0);
+        return cached_str_ref("");
     }
     let mut text = String::with_capacity(values.iter().take(count).map(|s| s.len() + 1).sum());
     for value in values.iter().take(count) {
         text.push_str(value);
         text.push('\n');
     }
-    (cached_str_ref(&text), count)
+    cached_str_ref(&text)
 }
 
 fn push_sl_select_music_wheel_cascade_mask(
@@ -13080,8 +13087,6 @@ pub fn push_actors(
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
-    let song_select_layout = *state.layout();
-    let left_panel_scale = song_select_layout.zoom;
     actors.reserve(256);
     state.labels.borrow_mut().sync();
     let labels = state.labels.borrow();
@@ -13091,6 +13096,10 @@ pub fn push_actors(
     let is_p2_solo = solo_side == profile_data::PlayerSide::P2;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let is_versus = play_style.is_versus();
+    let presentation = state.policy.presentation;
+    let song_select_layout = *state.layout();
+    let step_artist_expanded = song_select_layout.step_artist_expanded;
+    let left_panel_scale = song_select_layout.zoom;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
     let [immediate_chart_p1, immediate_chart_p2] = immediate_selected_charts(state, play_style);
@@ -13099,8 +13108,6 @@ pub fn push_actors(
         immediate_chart_p2.map(|chart| chart.short_hash.as_str()),
     ];
     let allow_gs_fetch = allow_gs_fetch_for_selection(state);
-    let presentation = state.policy.presentation;
-
     state.bg.push(
         actors,
         visual_style_bg::Params {
@@ -13323,23 +13330,17 @@ pub fn push_actors(
 
     let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
 
-    let step_artist_expanded = presentation.step_artist_expanded && !is_versus;
     let step_artist_layout = if step_artist_expanded {
         step_artist_bar::StepArtistBarLayout::Expanded
     } else {
         step_artist_bar::StepArtistBarLayout::Legacy
     };
-    let (step_artist, step_artist_lines) = if step_artist_expanded {
+    let step_artist = if step_artist_expanded {
         immediate_chart_p1
             .map(step_artist_expanded_text)
-            .unwrap_or_else(|| (cached_str_ref(""), 0))
+            .unwrap_or_else(|| cached_str_ref(""))
     } else {
-        (
-            cached_str_ref(
-                immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed)),
-            ),
-            0,
-        )
+        cached_str_ref(immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed)))
     };
     let (steps, jumps, holds, mines, hands, rolls, meter) =
         chart_panel_stats(immediate_chart_p1, entry_opt);
@@ -13350,11 +13351,11 @@ pub fn push_actors(
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
         chart_panel_stats(immediate_chart_p2, entry_opt);
 
-    let chart_panel_layout = song_select_layout.chart_panel;
-    let chart_panel = chart_panel_layout.bounds;
-    let panel_w = chart_panel.width;
-    let graph_h = chart_panel.height;
-    let graph_left = chart_panel.x;
+    let chart_panel = song_select_layout.chart_panel;
+    let density_panel = song_select_layout.density_panel.bounds;
+    let pattern_panels = song_select_layout.pattern_panels.map(|panel| panel.bounds);
+    let panel_w = density_panel.width;
+    let graph_left = density_panel.x;
     let peak_text_sample = cached_chart_info_text(true, false, false, 0, 99.9, 0.0);
     let peak_text_logical_width = asset_manager
         .with_fonts(|all_fonts| {
@@ -13364,8 +13365,8 @@ pub fn push_actors(
             })
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
-    let density_graphs = chart_panel_layout.compose(
-        StepArtistBarY::from(step_artist_expanded),
+    let density_graphs = song_select_layout.density_graphs(
+        step_artist_bar::StepArtistBarLayout::from_bool(step_artist_expanded),
         peak_text_logical_width,
     );
 
@@ -13375,15 +13376,14 @@ pub fn push_actors(
          left_x: f32,
          sel_col: [f32; 4],
          step_artist: Arc<str>,
-         line_count: usize,
          bar_layout: step_artist_bar::StepArtistBarLayout| {
-            step_artist_bar::push(
+            step_artist_bar::push_with_geometry(
                 actors,
                 step_artist_bar::StepArtistBarParams {
                     left_x,
                     center_y: line_layout.step_header_y,
                     layout: bar_layout,
-                    expanded_line_count: line_count,
+                    expanded_line_count: 0,
                     accent_color: sel_col,
                     z_base: 120,
                     background_width: line_layout.artist_background_width,
@@ -13394,6 +13394,11 @@ pub fn push_actors(
                     artist_max_width: line_layout.artist_max_width,
                     artist_color: [0.0, 0.0, 0.0, 1.0],
                 },
+                step_artist_bar::StepArtistBarGeometry {
+                    background_y: line_layout.artist_background_y,
+                    background_height: line_layout.artist_background_height,
+                    artist_text_y: line_layout.artist_text_y,
+                },
             );
         };
 
@@ -13403,7 +13408,6 @@ pub fn push_actors(
             graph_left,
             sel_col_p1,
             step_artist,
-            0,
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
         push_step_artist(
@@ -13411,7 +13415,6 @@ pub fn push_actors(
             graph_left,
             sel_col_p2,
             step_artist_p2,
-            0,
             step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
@@ -13421,13 +13424,12 @@ pub fn push_actors(
             graph_left,
             sel_col_p1,
             step_artist,
-            step_artist_lines,
             step_artist_layout,
         );
     }
 
     // Density Graph
-    let chart_info_cx = chart_panel.center_x();
+    let chart_info_cx = density_panel.center_x();
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
     let preview_sec = if state.policy.media.show_preview_marker {
@@ -13727,52 +13729,21 @@ pub fn push_actors(
         );
     }
 
-    let single_pattern_y = screen_center_y()
-        + if step_artist_expanded {
-            if is_p2_single { 28.0 } else { 120.0 }
-        } else if is_p2_single {
-            23.0
-        } else {
-            111.0
-        };
-    let single_pattern_h = if step_artist_expanded {
-        graph_h - 10.0
+    let single_pattern = if is_p2_single {
+        pattern_panels[0]
     } else {
-        graph_h
+        pattern_panels[1]
     };
     let pattern_panels = if is_versus {
         [
-            state.pattern_info.visible[0].then_some((
-                chart_info_cx,
-                screen_center_y() + 23.0,
-                graph_h,
-                disp_chart_p1,
-                false,
-            )),
-            state.pattern_info.visible[1].then_some((
-                chart_info_cx,
-                screen_center_y() + 111.0,
-                graph_h,
-                disp_chart_p2,
-                false,
-            )),
+            state.pattern_info.visible[0].then_some((pattern_panels[0], disp_chart_p1)),
+            state.pattern_info.visible[1].then_some((pattern_panels[1], disp_chart_p2)),
         ]
     } else {
-        [
-            Some((
-                chart_info_cx,
-                single_pattern_y,
-                single_pattern_h,
-                disp_chart_p1,
-                step_artist_expanded,
-            )),
-            None,
-        ]
+        [Some((single_pattern, disp_chart_p1)), None]
     };
-    for (pat_cx, pat_cy, pat_h, disp_chart_p1, step_artist_expanded) in
-        pattern_panels.into_iter().flatten()
-    {
-        actors.push(act!(quad: align(0.5, 0.5): xy(pat_cx, pat_cy): setsize(panel_w, pat_h): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
+    for (pattern_bounds, disp_chart_p1) in pattern_panels.into_iter().flatten() {
+        actors.push(act!(quad: align(0.5, 0.5): xy(pattern_bounds.center_x(), pattern_bounds.center_y()): setsize(pattern_bounds.width, pattern_bounds.height): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
         if show_stamina_panel(pattern_info_mode, disp_chart_p1) {
             let (
                 boxes,
@@ -13836,7 +13807,7 @@ pub fn push_actors(
                 )
             };
 
-            let panel_left = pat_cx - panel_w * 0.5;
+            let panel_left = pattern_bounds.x;
             let col_w1 = panel_w / 3.0;
             let col_w2 = panel_w / 3.0;
             let col_w3 = panel_w / 3.0;
@@ -13846,7 +13817,7 @@ pub fn push_actors(
 
             let stamina_row_step = 14.5;
             let stamina_zoom = 0.85;
-            let stamina_base_y = pat_cy - 21.75;
+            let stamina_base_y = pattern_bounds.center_y() - 21.75;
 
             let push_pattern_line = |actors: &mut Vec<Actor>,
                                      col_left: f32,
@@ -14009,38 +13980,25 @@ pub fn push_actors(
                 )
             };
 
-            let p_v_x = pat_cx - panel_w * 0.5
-                + (if step_artist_expanded { 40.0 } else { 39.0 }) * left_panel_scale;
-            let p_l_x = pat_cx - panel_w * 0.5
-                + (if step_artist_expanded { 50.0 } else { 48.0 }) * left_panel_scale;
-            let p_base_y = pat_cy - 18.0 * left_panel_scale;
-            let tech_value_zoom =
-                (if step_artist_expanded { 0.7 } else { 0.78 }) * left_panel_scale;
-            let tech_label_zoom =
-                (if step_artist_expanded { 0.8 } else { 0.78 }) * left_panel_scale;
-            let tech_col_spacing =
-                (if step_artist_expanded { 150.0 } else { 148.0 }) * left_panel_scale;
-            let tech_row_step = (if step_artist_expanded { 17.0 } else { 19.0 }) * left_panel_scale;
-            let tech_stream_max_width =
-                ((tech_col_spacing - 56.0 * left_panel_scale) / tech_value_zoom).clamp(58.0, 100.0);
-            let items: [(Arc<str>, &Arc<str>, u8, u8, Option<f32>); 6] = [
-                (cross, &labels.crossovers, 0_u8, 0_u8, None),
-                (foot, &labels.footswitches, 1_u8, 0_u8, None),
-                (side, &labels.sideswitches, 0_u8, 1_u8, None),
-                (jack, &labels.jacks, 1_u8, 1_u8, None),
-                (brack, &labels.brackets, 0_u8, 2_u8, None),
-                (stream, &labels.total_stream, 1_u8, 2_u8, Some(100.0)),
+            let tech_layout = song_select_layout.tech_info(pattern_bounds);
+            let items: [(Arc<str>, &Arc<str>, usize, usize, Option<f32>); 6] = [
+                (cross, &labels.crossovers, 0, 0, None),
+                (foot, &labels.footswitches, 1, 0, None),
+                (side, &labels.sideswitches, 0, 1, None),
+                (jack, &labels.jacks, 1, 1, None),
+                (brack, &labels.brackets, 0, 2, None),
+                (stream, &labels.total_stream, 1, 2, Some(100.0)),
             ];
 
             for (val, lbl, c, r, mw) in items {
-                let y = f32::from(r).mul_add(tech_row_step, p_base_y);
-                let vx = f32::from(c).mul_add(tech_col_spacing, p_v_x);
-                let lx = f32::from(c).mul_add(tech_col_spacing, p_l_x);
+                let y = tech_layout.row_centers_y[r];
+                let vx = tech_layout.value_columns_x[c];
+                let lx = tech_layout.label_columns_x[c];
                 match mw {
-                    Some(_) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(tech_stream_max_width): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
-                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(tech_value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    Some(_) => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): maxwidth(tech_layout.stream_max_width): zoom(tech_layout.value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
+                    None => actors.push(act!(text: font("miso"): settext(val): align(1.0, 0.5): horizalign(right): xy(vx, y): zoom(tech_layout.value_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0))),
                 }
-                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(tech_label_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
+                actors.push(act!(text: font("miso"): settext(lbl): align(0.0, 0.5): horizalign(left): xy(lx, y): zoom(tech_layout.label_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
             }
         }
     }
@@ -14052,11 +14010,11 @@ pub fn push_actors(
         is_versus,
         chart_info_cx,
         panel_w,
-        single_pattern_y,
+        single_pattern.center_y(),
     );
 
     // Difficulty List
-    let difficulty_list = chart_panel_layout.difficulty_list;
+    let difficulty_list = song_select_layout.difficulty_list;
     let lst_cx = difficulty_list.bounds.center_x();
     let visible_difficulty_slots = difficulty_list.slot_centers_y.len();
     actors.push(act!(quad: align(0.5, 0.5): xy(difficulty_list.bounds.center_x(), difficulty_list.bounds.center_y()): setsize(difficulty_list.bounds.width, difficulty_list.bounds.height): z(120): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])));
@@ -14206,7 +14164,7 @@ pub fn push_actors(
         );
         let footer_top = screen_height() - 32.0;
         let scorebox_center_y_p1_single = footer_top - 44.0;
-        let tech_box_bottom_y = screen_center_y() + 111.0 + 32.0;
+        let tech_box_bottom_y = chart_panel.bottom();
         let pane_to_tech_gap = pane_layout.top() - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
             40.0f32.mul_add(-scorebox_zoom, pane_layout.top()) - pane_to_tech_gap;
@@ -15591,10 +15549,25 @@ mod tests {
 
         let previous = Metrics::centered(screen_width(), screen_height());
         set_current_metrics(Metrics::centered(2.0, 2.0));
-        let state = init_placeholder();
+        let mut state = init_placeholder();
         set_current_metrics(Metrics::centered(853.0, 480.0));
 
-        assert_eq!(state.density_graph_dimensions(), [384.5, 64.0]);
+        let density_bounds = state.layout().density_panel.bounds;
+        let expected_layout =
+            super::SongSelectLayout::new(853.0, 480.0, crate::ui_layout::UILayoutType::current());
+        assert_eq!(density_bounds, expected_layout.density_panel.bounds);
+        state.policy.presentation.step_artist_expanded = true;
+        state.reset_layout();
+        let expanded_layout = state.layout();
+        assert!(expanded_layout.step_artist_expanded);
+        assert!(
+            expanded_layout.step_artist_header.y
+                >= expanded_layout.song_details.widget.bounds.bottom()
+        );
+        assert_eq!(
+            expanded_layout.step_artist_header.bottom(),
+            expanded_layout.chart_panel.y
+        );
 
         set_current_metrics(previous);
     }

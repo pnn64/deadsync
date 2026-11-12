@@ -21,6 +21,7 @@ struct GalleryImage {
     caption: String,
     src: String,
     disabled: bool,
+    variant: Option<&'static str>,
 }
 
 pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
@@ -46,6 +47,7 @@ pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
                             caption: size.name(),
                             src: format!("{}/{menu}.png", size.name()),
                             disabled,
+                            variant: None,
                         });
                     }
                     if PLAYER_VARIANT_MENUS.contains(&menu) {
@@ -58,7 +60,26 @@ pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
                                 suffix = variant.suffix
                             ),
                             disabled: false,
+                            variant: None,
                         }));
+                        if menu == "song-select" {
+                            for (player, label) in [("1p", "1P"), ("2p", "2P")] {
+                                images.push(GalleryImage {
+                                    resolution: size.name(),
+                                    caption: format!(
+                                        "{} · {} · Expanded Steps",
+                                        size.name(),
+                                        label
+                                    ),
+                                    src: format!(
+                                        "{}/song-select-{player}-expanded.png",
+                                        size.name()
+                                    ),
+                                    disabled: false,
+                                    variant: Some("expanded-steps"),
+                                });
+                            }
+                        }
                     }
                     images
                 })

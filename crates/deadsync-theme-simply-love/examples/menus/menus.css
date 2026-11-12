@@ -65,6 +65,8 @@ main { padding: 20px clamp(18px, 4vw, 56px) 40px; }
   background: #101714;
   cursor: pointer;
 }
+.screen-filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-tab-sub { margin-left: 16px; }
 button {
   padding: 7px 10px;
   border: 1px solid #536159;

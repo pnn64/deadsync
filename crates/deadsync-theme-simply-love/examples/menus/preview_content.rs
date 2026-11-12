@@ -253,11 +253,13 @@ impl MenuPreviewContent {
         assets: &AssetManager,
         selection_time: f32,
         player_variant: Option<[bool; 2]>,
+        step_artist_expanded: bool,
     ) -> Vec<Actor> {
         let mut init = views::SelectMusicInitView::default();
         init.song_packs.push(self.song_pack.clone());
         init.policy.wheel.show_grades = true;
         init.policy.wheel.show_lamps = true;
+        init.policy.presentation.step_artist_expanded = step_artist_expanded;
         if let Some(joined) = player_variant {
             init.session.joined = joined;
             if joined == [true, true] {
@@ -268,6 +270,10 @@ impl MenuPreviewContent {
             }
         }
         let play_style = init.session.play_style;
+        let song_select_layout = screens::select_music::SongSelectLayout::current(
+            init.policy.presentation,
+            init.session,
+        );
         let mut state = screens::select_music::init(init);
         let joined = player_variant.unwrap_or([true, false]);
         state.preferred_difficulty_index = if joined == [false, true] {
@@ -292,7 +298,7 @@ impl MenuPreviewContent {
             0.0, 0.2, 0.35, 0.25, 0.6, 0.45, 0.3, 0.75, 0.5, 0.4, 0.9, 0.55, 0.3, 0.65, 0.45, 0.8,
             0.35, 0.5, 0.95, 0.6, 0.4, 0.7, 0.3, 0.55, 0.85, 0.45, 0.35, 0.75, 0.5, 0.9, 0.6, 0.2,
         ];
-        let [graph_width, graph_height] = state.density_graph_dimensions();
+        let [graph_width, graph_height] = song_select_layout.density_panel_size();
         let build_density_graph = |chart: &deadsync_chart::ChartData| {
             let first_second = chart.first_second;
             let last_second = song.precise_last_second().max(first_second + 1.0);

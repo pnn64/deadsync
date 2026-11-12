@@ -221,7 +221,7 @@ fn export(
     println!(
         "Exported {} PNGs. Gallery: {}",
         options.sizes.len()
-            * (MENUS.len() - 1 + PLAYER_VARIANT_MENUS.len() * PLAYER_VARIANTS.len()),
+            * (MENUS.len() - 1 + PLAYER_VARIANT_MENUS.len() * (PLAYER_VARIANTS.len() + 2)),
         output.join("index.html").display()
     );
     Ok(())
@@ -262,6 +262,7 @@ fn export_resolution(
                 metrics,
                 &mut captures,
                 &mut timer,
+                false,
             )?;
         }
         if PLAYER_VARIANT_MENUS.contains(&name) {
@@ -278,6 +279,23 @@ fn export_resolution(
                     metrics,
                     &mut captures,
                     &mut timer,
+                    false,
+                )?;
+            }
+            for variant in &PLAYER_VARIANTS[..2] {
+                export_menu(
+                    name,
+                    Some(*variant),
+                    backend,
+                    assets,
+                    size,
+                    output,
+                    song.clone(),
+                    preview,
+                    metrics,
+                    &mut captures,
+                    &mut timer,
+                    true,
                 )?;
             }
         }
@@ -299,19 +317,31 @@ fn export_menu(
     metrics: Metrics,
     captures: &mut export_support::CaptureBatch,
     timer: &mut ScreenshotTimer,
+    expanded_step_artist: bool,
 ) -> Result<()> {
     let folder = output.join(size.name());
     std::fs::create_dir_all(&folder)?;
-    let path = folder.join(format!(
-        "{}{suffix}.png",
-        name,
-        suffix = player_variant.map_or("", |variant| variant.suffix)
-    ));
+    let suffix = if expanded_step_artist {
+        format!(
+            "{}-expanded",
+            player_variant.map_or("", |variant| variant.suffix)
+        )
+    } else {
+        player_variant.map_or(String::new(), |variant| variant.suffix.to_owned())
+    };
+    let path = folder.join(format!("{name}{suffix}.png"));
     if name == "content-browser" && size.aspect != (16, 9) {
         return save_disabled_content_browser(size, &path, timer);
     }
     let prepare_started = Instant::now();
-    let mut actors = menu_actors(name, player_variant, assets, song, preview)?;
+    let mut actors = menu_actors(
+        name,
+        player_variant,
+        expanded_step_artist,
+        assets,
+        song,
+        preview,
+    )?;
     let frame = prepare_frame(&actors, backend, assets, metrics)?;
     captures.draw(backend, &frame, assets.textures(), path)?;
     actors.clear();
@@ -365,6 +395,7 @@ fn save_disabled_content_browser(
 fn menu_actors(
     name: &str,
     player_variant: Option<PlayerVariant>,
+    expanded_step_artist: bool,
     assets: &AssetManager,
     song: Arc<deadsync_chart::SongData>,
     preview: &MenuPreviewContent,
@@ -378,6 +409,7 @@ fn menu_actors(
             assets,
             CAPTURE_TIME,
             player_variant.map(|variant| variant.joined),
+            expanded_step_artist,
         )),
         "course-select" => Ok(preview.course_select_actors(
             assets,
