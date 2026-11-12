@@ -137,7 +137,9 @@ fn create(
                     key: "camod",
                     initial: None,
                 },
-                "CMod" | "MMod" | "XMod" => Method::Speed(name.to_ascii_lowercase()),
+                "CMod" => Method::Speed("cmod"),
+                "MMod" => Method::Speed("mmod"),
+                "XMod" => Method::Speed("xmod"),
                 "FromString" => Method::FromString,
                 "IsEasierForSongAndSteps" | "IsEasierForCourseAndTrail" => Method::Easier,
                 "GetReversePercentForColumn" => Method::ReverseColumn,
@@ -188,7 +190,7 @@ fn create(
 #[derive(Clone)]
 enum Method {
     Scalar(String),
-    Speed(String),
+    Speed(&'static str),
     OtherSpeed {
         key: &'static str,
         initial: Option<f32>,
@@ -400,7 +402,7 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
     let owner = table(call, call.captures()[0])?;
     match method {
         Method::Scalar(key) => scalars::invoke(call, owner, &key),
-        Method::Speed(key) => speed::mode(call, owner, &key),
+        Method::Speed(key) => speed::mode(call, owner, key),
         Method::OtherSpeed { key, initial } => speed::other(call, owner, key, initial),
         Method::FromString => {
             if let Some(value) = text(call, arg(call, 0)) {
@@ -584,7 +586,14 @@ fn reverse_column(call: &mut HostCall<'_>, owner: TableId) -> Result<(), Error> 
             get_float(call, state, key, 0.0)
         })
     };
-    let mut value = read("reverse")? + read(&format!("reverse{}", col + 1))?;
+    let mut number = itoa::Buffer::new();
+    let suffix = number.format(col + 1);
+    // Seven prefix bytes and at most ten decimal digits for a positive i32.
+    let mut key = *b"reverse0000000000";
+    let end = 7 + suffix.len();
+    key[7..end].copy_from_slice(suffix.as_bytes());
+    let key = std::str::from_utf8(&key[..end]).expect("ASCII reverse modifier key");
+    let mut value = read("reverse")? + read(key)?;
     if col >= count / 2 {
         value += read("split")?;
     }

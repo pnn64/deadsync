@@ -30,8 +30,8 @@ fn enum_short(call: &mut HostCall<'_>) -> Result<(), Error> {
     let short = value
         .split_once('_')
         .map_or(value, |(_, short)| short)
-        .as_bytes()
-        .to_vec();
+        .as_bytes();
+    let short = smallvec::SmallVec::<[u8; 64]>::from_slice(short);
     let short = call.try_intern(&short)?;
     call.push(short)
 }
