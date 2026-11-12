@@ -3,8 +3,15 @@ const SPACING: &str = "__songlua_time_spacing";
 const ACTIVE: &str = "__songlua_speedmod_active";
 const EXPLICIT: &str = "__songlua_speedmod_explicit";
 const KEYS: [&str; 4] = ["xmod", "cmod", "mmod", "_spacing"];
-fn field_name(key: &str) -> String {
-    format!("__songlua_speedmod_{key}")
+fn field_name(key: &str) -> &'static str {
+    match key {
+        "xmod" => "__songlua_speedmod_xmod",
+        "cmod" => "__songlua_speedmod_cmod",
+        "mmod" => "__songlua_speedmod_mmod",
+        "amod" => "__songlua_speedmod_amod",
+        "camod" => "__songlua_speedmod_camod",
+        _ => unreachable!("speed mode keys come from bindings or the speed parser"),
+    }
 }
 pub(super) fn set_mode(
     call: &mut HostCall<'_>,
@@ -67,7 +74,7 @@ pub(super) fn mode(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result
         None
     };
     let spacing = raw_float(call, owner, SPACING, 0.0)?;
-    let max = raw_float(call, owner, &field_name("mmod"), 0.0)?;
+    let max = raw_float(call, owner, field_name("mmod"), 0.0)?;
     let active = match key {
         "cmod" => spacing != 0.0,
         "mmod" => spacing == 0.0 && max != 0.0,
@@ -76,7 +83,7 @@ pub(super) fn mode(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result
     let speeds = nested(call, owner, SPEEDS)?;
     let previous = if active {
         [
-            Value::Number(raw_float(call, owner, &field_name(key), 1.0)? as f64),
+            Value::Number(raw_float(call, owner, field_name(key), 1.0)? as f64),
             Value::Number(raw_float(call, speeds, key, 1.0)? as f64),
         ]
     } else {
@@ -159,7 +166,7 @@ pub(super) fn field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Resul
         set(owner, field, value, call)?;
         seed(call, owner)?;
         let spacing = raw_float(call, owner, SPACING, 0.0)?;
-        let max = raw_float(call, owner, &field_name("mmod"), 0.0)?;
+        let max = raw_float(call, owner, field_name("mmod"), 0.0)?;
         set(
             owner,
             ACTIVE,
@@ -228,7 +235,7 @@ pub(super) fn other(
     let value = if active == Value::Nil {
         initial.map_or(Value::Nil, |n| Value::Number(n as f64))
     } else if string(call, active)? == key {
-        let value = raw(call, owner, &field_name(key))?;
+        let value = raw(call, owner, field_name(key))?;
         if value == Value::Nil {
             Value::Nil
         } else {

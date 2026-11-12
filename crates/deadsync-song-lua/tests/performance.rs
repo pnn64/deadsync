@@ -1,4 +1,4 @@
-//! Opt-in measurements of mesh expansion and native PlayerOptions operations.
+//! Opt-in measurements of mesh expansion and native Lua bindings.
 use deadlib_lua::{Value, compile_named};
 use deadsync_song_lua::{
     SongLuaActorMultiVertexPoint, SongLuaCompileContext, SongLuaOverlayMeshVertex, SongRuntime,
@@ -183,6 +183,139 @@ fn measure(label: &str, iterations: usize, mut work: impl FnMut()) {
         let ns = start.elapsed().as_nanos() as f64 / iterations as f64;
         let cpu = (cycles() - start_cycles) as f64 / iterations as f64;
         println!("sample,{label},{round},{iterations},{cpu:.3},{ns:.3}");
+    }
+}
+
+#[test]
+fn enum_short_preserves_utf8_errors_and_inline_capacity_boundaries() {
+    let mut runtime = runtime(false);
+    assert_eq!(
+        execute(
+            &mut runtime,
+            r#"
+            for _,size in ipairs{0,1,63,64,65,256,4096} do
+                local text=string.rep('x',size)..'_tail'
+                assert(ToEnumShortString('Enum_'..text)==text)
+                assert(pname(string.rep('x',size))==string.rep('x',size))
+                collectgarbage('collect')
+            end
+            assert(pname('雪_☃_雪')=='☃_雪')
+            assert(pname('Enum_a\0b')=='a\0b')
+            assert(pname('_')=='')
+            assert(pname(12.5)=='12.5')
+            for _,text in ipairs{'Enum_\255','\255_valid'} do
+                local ok,message=pcall(pname,text)
+                assert(not ok and string.find(message,'invalid UTF-8 string',1,true))
+            end
+            assert(not pcall(pname,nil))
+            assert(not pcall(pname,{}))
+            return true
+            "#,
+        ),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+fn reverse_column_keeps_state_read_order_across_reentry() {
+    let mut runtime = runtime(false);
+    assert_eq!(
+        execute(
+            &mut runtime,
+            r#"
+            local reads={}
+            local replacement=setmetatable({}, {__index=function(t,key)
+                reads[#reads+1]=key;collectgarbage('collect')
+                return ({reverse2=0.125,alternate=0.25,cross=0.5})[key] or 0
+            end})
+            options.__songlua_player_option_state=setmetatable({}, {__index=function(t,key)
+                reads[#reads+1]=key
+                options.__songlua_player_option_state=replacement
+                collectgarbage('collect');return 0.0625
+            end})
+            assert(options:GetReversePercentForColumn(1)==0.9375)
+            assert(table.concat(reads,',')=='reverse,reverse2,alternate,cross')
+            return true
+            "#,
+        ),
+        Value::Boolean(true)
+    );
+}
+
+#[test]
+#[ignore = "CPU/allocation benchmark; run serially in release with --nocapture"]
+fn benchmark_binding_queries() {
+    println!();
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentThread() -> *mut std::ffi::c_void;
+            fn SetThreadAffinityMask(thread: *mut std::ffi::c_void, mask: usize) -> usize;
+        }
+        // SAFETY: only changes the current benchmark thread's affinity.
+        assert_ne!(
+            unsafe { SetThreadAffinityMask(GetCurrentThread(), 1 << 2) },
+            0
+        );
+    }
+    let group = std::env::var("SONG_LUA_BENCH_GROUP").unwrap_or_default();
+    for (label, setup, query) in [
+        ("speed/xmod", "options:XMod(1.5,2)", "options:XMod()"),
+        ("speed/cmod", "options:CMod(350,2)", "options:CMod()"),
+        ("speed/mmod", "options:MMod(650,2)", "options:MMod()"),
+        ("speed/amod", "options:AMod(500)", "options:AMod()"),
+        ("speed/camod", "options:CAMod(250)", "options:CAMod()"),
+        ("speed/set", "options:XMod(1.5,2)", "options:XMod(1.5,2)"),
+        ("control/scalar", "options:Drunk(0.375)", "options:Drunk()"),
+        ("enum/short", "", "ToEnumShortString('PlayerNumber_P1')"),
+        ("enum/plain", "", "pname('P1')"),
+        ("enum/unicode", "", "pname('Thing_☃_雪')"),
+        ("enum/number", "", "pname(12.5)"),
+        (
+            "enum/long",
+            "long='Thing_'..string.rep('x',256)",
+            "pname(long)",
+        ),
+        ("reverse/0", "", "options:GetReversePercentForColumn(0)"),
+        ("reverse/1", "", "options:GetReversePercentForColumn(1)"),
+        ("reverse/3", "", "options:GetReversePercentForColumn(3)"),
+        ("reverse/4", "", "options:GetReversePercentForColumn(4)"),
+        (
+            "reverse/invalid",
+            "",
+            "options:GetReversePercentForColumn(-1)",
+        ),
+    ] {
+        if !label.starts_with(&group) {
+            continue;
+        }
+        let mut runtime = runtime(false);
+        execute(
+            &mut runtime,
+            "options:Reverse(0.25); options:Reverse1(0.125); options:Split(0.5); options:Alternate(0.375); options:Cross(0.625)",
+        );
+        execute(&mut runtime, setup);
+        execute(
+            &mut runtime,
+            &format!("function query() return {query} end"),
+        );
+        let function = runtime.vm_mut().get_global(b"query").unwrap();
+        let result = runtime.vm_mut().call(function, &[]).unwrap().to_vec();
+        let result: Vec<_> = result
+            .into_iter()
+            .map(|value| match value {
+                Value::Number(value) => format!("number:{:016x}", value.to_bits()),
+                Value::String(id) => {
+                    format!("string:{:?}", runtime.vm_mut().string_bytes(id).unwrap())
+                }
+                value => format!("{value:?}"),
+            })
+            .collect();
+        println!("output/{label}: {result:?}");
+        measure(label, 5_000, || {
+            black_box(runtime.vm_mut().call(function, &[]).unwrap());
+        });
     }
 }
 
