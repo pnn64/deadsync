@@ -332,10 +332,25 @@ impl Table {
         {
             return *value;
         }
-        Key::from_value(key)
-            .and_then(|key| self.slot(key))
-            .and_then(|(_, i)| i)
-            .map_or(Value::Nil, |i| self.entries[i].value)
+        let Some(key) = Key::from_value(key) else {
+            return Value::Nil;
+        };
+        if self.slots.is_empty() {
+            return Value::Nil;
+        }
+        let mask = self.slots.len() - 1;
+        let mut slot = key.hash() & mask;
+        loop {
+            let index = self.slots[slot] as usize;
+            if index == 0 {
+                return Value::Nil;
+            }
+            let entry = &self.entries[index - 1];
+            if entry.key == key {
+                return entry.value;
+            }
+            slot = (slot + 1) & mask;
+        }
     }
     fn checked_key(key: Value) -> Result<Key, Error> {
         Key::from_value(key).ok_or_else(|| {

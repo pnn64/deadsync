@@ -116,3 +116,37 @@ return calls
         assert_eq!(vm.execute(&program).unwrap(), [Value::Number(2.)]);
     }
 }
+
+#[test]
+fn scalar_global_overwrites_preserve_newindex_and_deletion() {
+    let program = compile(
+        br#"
+local hits = 0
+local object = {}
+_G.__scalar_global_test = object
+setmetatable(_G, {__newindex = function(table, key, value)
+  hits = hits + 1
+  rawset(table, key, value)
+end})
+for i = 1, 1000 do __scalar_global_test = i end
+assert(__scalar_global_test == 1000 and hits == 0)
+__scalar_global_test = nil
+assert(hits == 0)
+__scalar_global_test = 1001
+assert(hits == 1 and __scalar_global_test == 1001)
+setmetatable(_G, nil)
+return __scalar_global_test, hits
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [Value::Number(1001.), Value::Number(1.)]
+        );
+    }
+}
