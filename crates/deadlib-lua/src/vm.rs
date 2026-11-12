@@ -1747,6 +1747,7 @@ impl Vm {
                         registers: &mut self.registers,
                         constants: &self.programs[program_index].constants[proto_index],
                         tables: &mut self.tables,
+                        strings: &self.strings.bytes,
                         code: &prototype.code,
                         env,
                         base,

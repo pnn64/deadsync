@@ -38,9 +38,10 @@ helper is compiled or linked into DeadLua.
 
 The separate `primitive-equality.lua`, `distinct-table-equality.lua`,
 `scalar-global-overwrites.lua`, `scalar-table-overwrites.lua`,
-`metatable-overwrite.lua`, and `table-reads.lua` workloads exercise unobserved
-interpreter comparisons, repeated global and table writes with and without
-metatables, and eight million string-keyed table reads. Build
+`metatable-overwrite.lua`, `table-reads.lua`, and `string-length.lua` workloads
+exercise unobserved interpreter comparisons, repeated global and table writes
+with and without metatables, eight million string-keyed table reads, and
+repeated string length operations. Build
 the release `official_suite` example as above, then run from this directory:
 
 ```sh
@@ -50,6 +51,7 @@ the release `official_suite` example as above, then run from this directory:
 ../../../target/release/examples/official_suite rust-bench scalar-table-overwrites.lua
 ../../../target/release/examples/official_suite rust-bench metatable-overwrite.lua
 ../../../target/release/examples/official_suite rust-bench table-reads.lua
+../../../target/release/examples/official_suite rust-bench string-length.lua
 ```
 
 On Windows, append `.exe`. Repeat each command in fresh processes and compare

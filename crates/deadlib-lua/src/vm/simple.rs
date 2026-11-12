@@ -3,7 +3,7 @@
 //! The interpreter runs these without publishing the frame's saved pc or
 //! source line: nothing can observe the frame until an instruction outside
 //! this set runs, and that instruction publishes both first.
-use super::{Arena, Table, TableId, Value, Vm, slot_index};
+use super::{Arena, ByteString, Table, TableId, Value, Vm, slot_index};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 
 /// The registers, constants and tables one simple instruction can touch.
@@ -11,6 +11,7 @@ pub(super) struct Context<'a> {
     pub registers: &'a mut [Value],
     pub constants: &'a [Value],
     pub tables: &'a mut Arena<Table>,
+    pub strings: &'a Arena<ByteString>,
     pub code: &'a [Instruction],
     pub env: TableId,
     pub base: usize,
@@ -161,10 +162,12 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             cx.registers[a] = Value::Number(-x);
         }
         Op::Len => {
-            let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
-                return None;
+            let length = match cx.registers[base + usize::from(i.b)] {
+                Value::Table(id) => cx.tables[slot_index(id.0)].len(),
+                Value::String(id) => cx.strings.get(id.0).map_or(0, |s| s.len()),
+                _ => return None,
             };
-            cx.registers[a] = Value::Number(cx.tables[slot_index(id.0)].len() as f64);
+            cx.registers[a] = Value::Number(length as f64);
         }
         Op::Not => {
             cx.registers[a] = Value::Boolean(!cx.registers[base + usize::from(i.b)].is_truthy());
