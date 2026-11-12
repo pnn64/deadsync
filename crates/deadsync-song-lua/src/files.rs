@@ -370,10 +370,15 @@ fn song_dir_files(song_dir: &Path) -> Vec<PathBuf> {
         .ok()
         .into_iter()
         .flat_map(|entries| entries.filter_map(Result::ok))
+        .filter(|entry| match entry.file_type() {
+            // Enumeration already reports each entry's type. Only a link needs
+            // a second lookup, to classify the target it resolves to.
+            Ok(kind) if !kind.is_symlink() => kind.is_file(),
+            _ => entry.path().is_file(),
+        })
         .map(|entry| entry.path())
-        .filter(|path| path.is_file())
         .collect::<Vec<_>>();
-    files.sort_by_key(|path| file_path_string(path));
+    files.sort_by_cached_key(|path| file_path_string(path));
     files
 }
 
