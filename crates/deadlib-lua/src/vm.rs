@@ -1750,6 +1750,7 @@ impl Vm {
                         code: &prototype.code,
                         env,
                         base,
+                        gc_pending: self.gc.pending,
                         closed: self.open_upvalues.is_empty(),
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {

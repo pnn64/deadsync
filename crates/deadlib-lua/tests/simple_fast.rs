@@ -150,3 +150,42 @@ return __scalar_global_test, hits
         );
     }
 }
+
+#[test]
+fn scalar_table_overwrites_preserve_newindex_deletions_and_invalid_keys() {
+    let program = compile(
+        br#"
+local hits = 0
+local t = setmetatable({a = 0, b = 1}, {__newindex = function(table, key, value)
+  hits = hits + 1
+  rawset(table, key, value)
+end})
+for i = 1, 1000 do t.a = i; t.b = i + 1 end
+assert(t.a == 1000 and t.b == 1001 and hits == 0)
+t.a = nil
+t.a = 123
+t.c = 7
+t.b = 'text'
+t.b = 456
+assert(not pcall(function() t[nil] = 1 end))
+assert(not pcall(function() t[0/0] = 1 end))
+return hits, t.a, t.b, t.c
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [
+                Value::Number(2.),
+                Value::Number(123.),
+                Value::Number(456.),
+                Value::Number(7.),
+            ]
+        );
+    }
+}

@@ -14,6 +14,8 @@ pub(super) struct Context<'a> {
     pub code: &'a [Instruction],
     pub env: TableId,
     pub base: usize,
+    /// A pending collection must still be polled by the normal SetTable path.
+    pub gc_pending: bool,
     /// No upvalue is open, so closing a scope has nothing to do.
     pub closed: bool,
 }
@@ -76,6 +78,23 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             }
             cx.registers[a] = value;
+        }
+        Op::SetTable => {
+            if cx.gc_pending {
+                return None;
+            }
+            let Value::Table(id) = cx.registers[a] else {
+                return None;
+            };
+            let Value::String(name) = cx.operand(u32::from(i.b)) else {
+                return None;
+            };
+            let value = cx.operand(i.c);
+            // An existing non-nil field skips __newindex even with a metatable.
+            // Scalar replacement neither allocates nor creates a GC edge.
+            if !cx.tables[slot_index(id.0)].set_existing_string_scalar(name, value) {
+                return None;
+            }
         }
         Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
             let (Value::Number(x), Value::Number(y)) =

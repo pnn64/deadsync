@@ -37,15 +37,17 @@ prerequisites and are not silently counted as benchmark passes. No C test
 helper is compiled or linked into DeadLua.
 
 The separate `primitive-equality.lua`, `distinct-table-equality.lua`,
-`scalar-global-overwrites.lua`, `metatable-overwrite.lua`, and `table-reads.lua`
-workloads exercise unobserved interpreter comparisons, repeated table writes
-with and without metatables, and eight million string-keyed table reads. Build
+`scalar-global-overwrites.lua`, `scalar-table-overwrites.lua`,
+`metatable-overwrite.lua`, and `table-reads.lua` workloads exercise unobserved
+interpreter comparisons, repeated global and table writes with and without
+metatables, and eight million string-keyed table reads. Build
 the release `official_suite` example as above, then run from this directory:
 
 ```sh
 ../../../target/release/examples/official_suite rust-bench primitive-equality.lua
 ../../../target/release/examples/official_suite rust-bench distinct-table-equality.lua
 ../../../target/release/examples/official_suite rust-bench scalar-global-overwrites.lua
+../../../target/release/examples/official_suite rust-bench scalar-table-overwrites.lua
 ../../../target/release/examples/official_suite rust-bench metatable-overwrite.lua
 ../../../target/release/examples/official_suite rust-bench table-reads.lua
 ```
