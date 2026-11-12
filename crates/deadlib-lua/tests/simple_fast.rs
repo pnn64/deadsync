@@ -83,3 +83,109 @@ return count, calls
     assert_eq!(results[0], results[1]);
     assert_eq!(results[0], [Value::Number(1000.), Value::Number(4.)]);
 }
+
+#[test]
+fn distinct_tables_observe_shared_eq_only_when_both_metatables_provide_it() {
+    let program = compile(
+        br#"
+local calls = 0
+local a, b = {}, {}
+local function equal() calls = calls + 1; return true end
+local meta = { __eq = equal }
+assert(a ~= b and not (a == b))
+setmetatable(a, meta)
+assert(a ~= b and not (a == b))
+setmetatable(b, {})
+assert(a ~= b and not (a == b))
+getmetatable(b).__eq = equal
+assert(a == b and not (a ~= b))
+assert(calls == 2)
+getmetatable(b).__eq = function() return true end
+assert(a ~= b and not (a == b))
+setmetatable(b, nil)
+assert(a ~= b and not (a == b))
+return calls
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(1_000_000));
+        }
+        assert_eq!(vm.execute(&program).unwrap(), [Value::Number(2.)]);
+    }
+}
+
+#[test]
+fn scalar_global_overwrites_preserve_newindex_and_deletion() {
+    let program = compile(
+        br#"
+local hits = 0
+local object = {}
+_G.__scalar_global_test = object
+setmetatable(_G, {__newindex = function(table, key, value)
+  hits = hits + 1
+  rawset(table, key, value)
+end})
+for i = 1, 1000 do __scalar_global_test = i end
+assert(__scalar_global_test == 1000 and hits == 0)
+__scalar_global_test = nil
+assert(hits == 0)
+__scalar_global_test = 1001
+assert(hits == 1 and __scalar_global_test == 1001)
+setmetatable(_G, nil)
+return __scalar_global_test, hits
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [Value::Number(1001.), Value::Number(1.)]
+        );
+    }
+}
+
+#[test]
+fn scalar_table_overwrites_preserve_newindex_deletions_and_invalid_keys() {
+    let program = compile(
+        br#"
+local hits = 0
+local t = setmetatable({a = 0, b = 1}, {__newindex = function(table, key, value)
+  hits = hits + 1
+  rawset(table, key, value)
+end})
+for i = 1, 1000 do t.a = i; t.b = i + 1 end
+assert(t.a == 1000 and t.b == 1001 and hits == 0)
+t.a = nil
+t.a = 123
+t.c = 7
+t.b = 'text'
+t.b = 456
+assert(not pcall(function() t[nil] = 1 end))
+assert(not pcall(function() t[0/0] = 1 end))
+return hits, t.a, t.b, t.c
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [
+                Value::Number(2.),
+                Value::Number(123.),
+                Value::Number(456.),
+                Value::Number(7.),
+            ]
+        );
+    }
+}

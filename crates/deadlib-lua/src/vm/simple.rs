@@ -10,10 +10,12 @@ use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 pub(super) struct Context<'a> {
     pub registers: &'a mut [Value],
     pub constants: &'a [Value],
-    pub tables: &'a Arena<Table>,
+    pub tables: &'a mut Arena<Table>,
     pub code: &'a [Instruction],
     pub env: TableId,
     pub base: usize,
+    /// A pending collection must still be polled by the normal SetTable path.
+    pub gc_pending: bool,
     /// No upvalue is open, so closing a scope has nothing to do.
     pub closed: bool,
 }
@@ -56,6 +58,16 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             }
             cx.registers[a] = value;
         }
+        Op::SetGlobal => {
+            let Value::String(name) = cx.constant(i.c as usize) else {
+                return None;
+            };
+            // An existing, non-nil scalar can be overwritten without
+            // invoking __newindex, allocating, or adding a GC edge.
+            if !cx.tables[slot_index(cx.env.0)].set_existing_string_scalar(name, cx.registers[a]) {
+                return None;
+            }
+        }
         Op::GetTable => {
             let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
                 return None;
@@ -66,6 +78,23 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             }
             cx.registers[a] = value;
+        }
+        Op::SetTable => {
+            if cx.gc_pending {
+                return None;
+            }
+            let Value::Table(id) = cx.registers[a] else {
+                return None;
+            };
+            let Value::String(name) = cx.operand(u32::from(i.b)) else {
+                return None;
+            };
+            let value = cx.operand(i.c);
+            // An existing non-nil field skips __newindex even with a metatable.
+            // Scalar replacement neither allocates nor creates a GC edge.
+            if !cx.tables[slot_index(id.0)].set_existing_string_scalar(name, value) {
+                return None;
+            }
         }
         Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Pow => {
             let (Value::Number(x), Value::Number(y)) =
@@ -88,15 +117,18 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 },
                 _ if matches!(i.op, Op::Eq | Op::Ne) => {
                     let equal = left == right;
-                    // Distinct tables or userdata can call a shared __eq handler.
-                    if !equal
-                        && matches!(
-                            (left, right),
-                            (Value::Table(_), Value::Table(_))
-                                | (Value::Userdata(_), Value::Userdata(_))
-                        )
-                    {
-                        return None;
+                    // A shared __eq handler needs metatables on both objects.
+                    if !equal {
+                        match (left, right) {
+                            (Value::Table(a), Value::Table(b))
+                                if cx.tables[slot_index(a.0)].metatable().is_some()
+                                    && cx.tables[slot_index(b.0)].metatable().is_some() =>
+                            {
+                                return None;
+                            }
+                            (Value::Userdata(_), Value::Userdata(_)) => return None,
+                            _ => {}
+                        }
                     }
                     equal == (i.op == Op::Eq)
                 }

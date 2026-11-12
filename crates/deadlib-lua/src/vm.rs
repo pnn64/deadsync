@@ -1746,10 +1746,11 @@ impl Vm {
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
                         constants: &self.programs[program_index].constants[proto_index],
-                        tables: &self.tables,
+                        tables: &mut self.tables,
                         code: &prototype.code,
                         env,
                         base,
+                        gc_pending: self.gc.pending,
                         closed: self.open_upvalues.is_empty(),
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {
@@ -1822,11 +1823,15 @@ impl Vm {
                         self.programs[program_index].constants[proto_index][c],
                         a,
                     )?,
-                    Op::SetGlobal => self.set_table(
-                        Value::Table(env),
-                        self.programs[program_index].constants[proto_index][c],
-                        self.registers[a],
-                    )?,
+                    Op::SetGlobal => {
+                        let key = self.programs[program_index].constants[proto_index][c];
+                        let value = self.registers[a];
+                        if !matches!(key, Value::String(name)
+                            if self.tables[slot_index(env.0)].set_existing_string_scalar(name, value))
+                        {
+                            self.set_table(Value::Table(env), key, value)?;
+                        }
+                    }
                     Op::NewTable => {
                         let id = self.try_new_table()?;
                         self.registers[a] = Value::Table(id);

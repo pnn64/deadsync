@@ -164,9 +164,11 @@ impl Vm {
                 if key == Value::Nil || matches!(key,Value::Number(n) if n.is_nan()) {
                     return Ok(TableWrite::Slot(id));
                 }
-                let old = self.tables[slot_index(id.0)].get(key);
+                if self.tables[slot_index(id.0)].get(key) != Value::Nil {
+                    return Ok(TableWrite::Slot(id));
+                }
                 let handler = self.metafield(target, Meta::NewIndex);
-                if old != Value::Nil || handler == Value::Nil {
+                if handler == Value::Nil {
                     return Ok(TableWrite::Slot(id));
                 }
                 handler
