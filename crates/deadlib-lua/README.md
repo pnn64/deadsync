@@ -55,6 +55,12 @@ not scanned. Nested `HostCall::call` uses a protected Lua boundary. A synchronou
 Rust callback cannot suspend its Rust stack. After an unwinding Rust panic,
 discard the VM; interrupted execution skips Lua finalizers.
 
+`set_host_state` installs one embedding-owned value in the VM. Callbacks borrow
+it through `HostCall::host_state` and `host_state_mut` (also on `NativeStack`),
+so every callback shares it without reference counting or locking. A borrow
+ends before the callback can reenter Lua. The state is not scanned by the
+collector, stays available to closing finalizers and is dropped with the VM.
+
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
 Root or publish the returned value before calling Lua or collecting garbage.

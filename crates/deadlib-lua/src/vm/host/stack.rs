@@ -115,6 +115,18 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    /// Borrow the state installed with [`Vm::set_host_state`].
+    #[inline]
+    pub fn host_state<T: std::any::Any + Send + Sync>(&self) -> Option<&T> {
+        self.call.host_state()
+    }
+
+    /// Mutably borrow the state installed with [`Vm::set_host_state`].
+    #[inline]
+    pub fn host_state_mut<T: std::any::Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.call.host_state_mut()
+    }
+
     fn run_tag_action(&mut self, action: Action<'_>) -> Result<TagResult, Error> {
         let selected = matches!(
             self.call.vm.frames[self.frame].function,

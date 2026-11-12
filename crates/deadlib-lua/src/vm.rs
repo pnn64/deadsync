@@ -471,6 +471,8 @@ pub struct Vm {
     standalone: u64,
     // Completed scalar returns, consumed immediately by native dispatch.
     sort_line: Option<u32>,
+    // Embedding-owned state borrowed by host callbacks; never traced.
+    host_state: Option<Box<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Default for Vm {
@@ -586,6 +588,7 @@ impl Vm {
             userdata_order: 0,
             standalone: 0,
             sort_line: None,
+            host_state: None,
         };
         vm.memory_error = vm.strings.try_intern(b"not enough memory")?;
         for (slot, name) in vm.meta_names.iter_mut().zip(META_NAMES) {

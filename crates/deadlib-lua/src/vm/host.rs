@@ -93,6 +93,59 @@ pub struct HostCall<'vm> {
 }
 
 impl Vm {
+    /// Install the embedding's state for this VM, returning any previous state.
+    ///
+    /// Host callbacks borrow the state through [`HostCall::host_state`] and
+    /// [`HostCall::host_state_mut`], so one value can serve every callback
+    /// without shared ownership or locking. A borrow ends before the callback
+    /// can reenter Lua, which makes nested callbacks see a consistent value.
+    ///
+    /// The VM owns the state until it is replaced, taken or the VM is dropped;
+    /// it remains available to callbacks run by closing finalizers. The state
+    /// is opaque to the collector: keep retained Lua values in traced captures
+    /// or roots. Its destructor must not reenter Lua or panic.
+    ///
+    /// ```
+    /// use deadlib_lua::{Error, HostCall, Value, Vm, compile};
+    /// struct Counter(u32);
+    /// fn next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    ///     let counter = call.host_state_mut::<Counter>().expect("installed state");
+    ///     counter.0 += 1;
+    ///     let value = counter.0;
+    ///     call.push(Value::Number(f64::from(value)))
+    /// }
+    /// let mut vm = Vm::new();
+    /// vm.set_host_state(Box::new(Counter(40)));
+    /// let next = vm.new_host_function(next, &[])?;
+    /// vm.set_global(b"next", next)?;
+    /// assert_eq!(vm.execute(&compile(b"next() return next()")?)?, &[Value::Number(42.0)]);
+    /// assert_eq!(vm.host_state::<Counter>().map(|counter| counter.0), Some(42));
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn set_host_state<T: Any + Send + Sync>(
+        &mut self,
+        state: Box<T>,
+    ) -> Option<Box<dyn Any + Send + Sync>> {
+        self.host_state.replace(state)
+    }
+
+    /// Remove and return the state installed with [`Self::set_host_state`].
+    pub fn take_host_state(&mut self) -> Option<Box<dyn Any + Send + Sync>> {
+        self.host_state.take()
+    }
+
+    /// Borrow the installed state, or `None` if it is absent or of another type.
+    #[inline]
+    pub fn host_state<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.host_state.as_deref()?.downcast_ref()
+    }
+
+    /// Mutably borrow the installed state, or `None` if it is absent or of another type.
+    #[inline]
+    pub fn host_state_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.host_state.as_deref_mut()?.downcast_mut()
+    }
+
     pub(super) fn set_native_capture(
         &mut self,
         function: u64,
@@ -425,6 +478,24 @@ impl HostCall<'_> {
     pub fn hook_event(&self) -> Option<NativeHookEvent> {
         self.hook
     }
+    /// Borrow the state installed with [`Vm::set_host_state`].
+    ///
+    /// Returns `None` if no state is installed or it has another type.
+    #[inline]
+    pub fn host_state<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.vm.host_state()
+    }
+
+    /// Mutably borrow the state installed with [`Vm::set_host_state`].
+    ///
+    /// The borrow ends before this callback can reenter Lua, so a nested
+    /// callback observes every change made here. Returns `None` if no state
+    /// is installed or it has another type.
+    #[inline]
+    pub fn host_state_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.vm.host_state_mut()
+    }
+
     /// Borrow private binding data of the executing host callback.
     /// Direct body invocation keeps this binding separate from the caller's
     /// Lua environment and captured values.
