@@ -6590,6 +6590,30 @@ pub fn apply_overlay_update(
     set_option!(StretchRect, Vec4, stretch_rect);
 }
 
+/// Interpolate samples from the 60 Hz native actor capture. An idle Spin axis
+/// can be recorded as -90 degrees and, much later, as its wrapped +270-degree
+/// equivalent. The capture suppresses unchanged frames; interpolating that
+/// sparse gap would invent a visible full turn that the actor never made.
+/// Consecutive frame samples still interpolate, including authored full turns.
+#[must_use]
+pub fn song_lua_overlay_sample_lerp(
+    target: crate::SongLuaOverlayUpdateTarget,
+    from: &crate::SongLuaOverlayUpdateValue,
+    to: &crate::SongLuaOverlayUpdateValue,
+    t: f32,
+    span_seconds: f32,
+) -> crate::SongLuaOverlayUpdateValue {
+    use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value};
+    if matches!(target, Target::RotationX | Target::RotationY | Target::RotationZ)
+        && span_seconds > 2.0 / 60.0
+        && let (Value::F32(start), Value::F32(end)) = (from, to)
+        && ((end - start).abs() - 360.0).abs() <= 0.001
+    {
+        return if t < 1.0 { from.clone() } else { to.clone() };
+    }
+    from.lerp(to, t)
+}
+
 fn apply_song_lua_overlay_runtime_updates_for(
     now: f32,
     tracks: &[crate::SongLuaOverlayRuntimeUpdateTrack],
@@ -6635,7 +6659,13 @@ fn apply_song_lua_overlay_runtime_updates_for(
         ) {
             from.value.clone()
         } else {
-            from.value.lerp(&to.value, t)
+            song_lua_overlay_sample_lerp(
+                track.target,
+                &from.value,
+                &to.value,
+                t,
+                to.second - from.second,
+            )
         };
         apply_overlay_update(current, track.target, &value);
         if track.target == crate::SongLuaOverlayUpdateTarget::SpriteStateIndex {
