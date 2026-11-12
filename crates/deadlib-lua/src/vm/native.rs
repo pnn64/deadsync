@@ -122,7 +122,7 @@ impl Vm {
                 self.check_calls()?;
                 if matches!(
                     id,
-                    0 | 3..=5 | NEXT | PAIRS_NEXT | 32..=41 | 46..=51 | 53 | 54
+                    0 | 3..=5 | NEXT | PAIRS_NEXT | 32..=41 | 43 | 44 | 46..=51 | 53 | 54
                         | strings::STR_LEN
                         | strings::STR_BYTE
                 ) && let Some(actual) = self.try_fast_native(id, call, count)

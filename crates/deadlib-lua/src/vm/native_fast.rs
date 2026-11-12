@@ -37,6 +37,26 @@ impl Vm {
             self.registers[call] = Value::Number(result);
             return Some(1);
         }
+        if matches!(id, 43 | 44)
+            && count != 0
+            && let Some(args) = self.registers.get(call + 1..call + 1 + count)
+            && let Value::Number(mut best) = args[0]
+        {
+            for &value in &args[1..] {
+                let Value::Number(number) = value else {
+                    return None;
+                };
+                if if id == 43 {
+                    number < best
+                } else {
+                    number > best
+                } {
+                    best = number;
+                }
+            }
+            self.registers[call] = Value::Number(best);
+            return Some(1);
+        }
         // Additional arguments, number-to-string coercion, and errors use
         // ordinary dispatch. An empty string.byte result has zero values.
         if count == 1
