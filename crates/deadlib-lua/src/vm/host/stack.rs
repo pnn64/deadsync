@@ -60,6 +60,11 @@ impl<'vm> HostCall<'vm> {
     /// # Errors
     /// Rejects an existing result writer/stack or more than 8,000 arguments.
     pub fn native_stack(&mut self) -> Result<NativeStack<'_, 'vm>, Error> {
+        // The C-compatible stack can invoke Lua and unwind this activation.
+        // Keep private binding data alive until the Rust callback returns.
+        if self.data.is_none() {
+            self.data = self.vm.host_binding(self.id).and_then(|f| f.data.clone());
+        }
         let frame = self.vm.active_native.expect("active host callback");
         if self.hook.is_some() && !self.stack_opened {
             if self.results != 0 {

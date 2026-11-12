@@ -3,7 +3,9 @@
 //! The interpreter runs these without publishing the frame's saved pc or
 //! source line: nothing can observe the frame until an instruction outside
 //! this set runs, and that instruction publishes both first.
-use super::{Arena, ByteString, Cell, Table, TableId, ThreadId, Value, Vm, slot_index, threads};
+use super::{
+    Arena, ByteString, Cell, StringId, Table, TableId, ThreadId, Value, Vm, slot_index, threads,
+};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 
 /// The registers, constants and tables one simple instruction can touch.
@@ -23,7 +25,13 @@ pub(super) struct Context<'a> {
     pub gc_pending: bool,
     /// No upvalue is open, so closing a scope has nothing to do.
     pub closed: bool,
+    /// The interned `__index` name, for inherited field reads.
+    pub index_name: StringId,
 }
+
+/// Table-valued `__index` handlers followed before deferring to the general
+/// interpreter, which owns the 100-step `loop in gettable` diagnostic.
+const INDEX_CHAIN: usize = 8;
 
 impl Context<'_> {
     #[inline(always)]
@@ -38,6 +46,38 @@ impl Context<'_> {
             self.constant((operand - RK) as usize)
         }
     }
+}
+
+/// Read `key` through table-valued `__index` handlers after a raw miss.
+///
+/// Such handlers neither call out nor fail. `None` defers a function handler,
+/// a non-table handler or a long chain to the general interpreter.
+#[inline]
+pub(super) fn inherited(
+    tables: &Arena<Table>,
+    index_name: StringId,
+    mut metatable: TableId,
+    key: Value,
+) -> Option<Value> {
+    for _ in 0..INDEX_CHAIN {
+        let parent = match tables[slot_index(metatable.0)].get_string(index_name) {
+            Value::Nil => return Some(Value::Nil),
+            Value::Table(parent) => &tables[slot_index(parent.0)],
+            _ => return None,
+        };
+        let value = match key {
+            Value::String(id) => parent.get_string(id),
+            key => parent.get(key),
+        };
+        if value != Value::Nil {
+            return Some(value);
+        }
+        match parent.metatable() {
+            Some(next) => metatable = next,
+            None => return Some(Value::Nil),
+        }
+    }
+    None
 }
 
 /// Execute the instruction at `pc` if it is simple, returning the next pc.
@@ -57,12 +97,15 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
         }
         Op::GetGlobal => {
             let table = &cx.tables[slot_index(cx.env.0)];
-            let value = match cx.constant(i.c as usize) {
+            let key = cx.constant(i.c as usize);
+            let mut value = match key {
                 Value::String(id) => table.get_string(id),
                 key => table.get(key),
             };
-            if value == Value::Nil && table.metatable().is_some() {
-                return None;
+            if value == Value::Nil
+                && let Some(metatable) = table.metatable()
+            {
+                value = inherited(cx.tables, cx.index_name, metatable, key)?;
             }
             cx.registers[a] = value;
         }
@@ -81,12 +124,15 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             };
             let table = &cx.tables[slot_index(id.0)];
-            let value = match cx.operand(i.c) {
+            let key = cx.operand(i.c);
+            let mut value = match key {
                 Value::String(id) => table.get_string(id),
                 key => table.get(key),
             };
-            if value == Value::Nil && table.metatable().is_some() {
-                return None;
+            if value == Value::Nil
+                && let Some(metatable) = table.metatable()
+            {
+                value = inherited(cx.tables, cx.index_name, metatable, key)?;
             }
             cx.registers[a] = value;
         }

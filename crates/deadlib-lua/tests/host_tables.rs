@@ -4,6 +4,17 @@ fn get(call: &mut HostCall<'_>) -> Result<(), Error> {
     let value = call.table_get(call.arguments()[0], call.arguments()[1])?;
     call.push(value)
 }
+fn peek_get(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let target = call.arguments()[0];
+    let key = call.arguments()[1];
+    match call.peek_table_get(target, key)? {
+        Some(value) => call.push(value),
+        None => {
+            let value = call.table_get(target, key)?;
+            call.push(value)
+        }
+    }
+}
 fn set(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.table_set(
         call.arguments()[0],
@@ -15,12 +26,47 @@ fn vm() -> Vm {
     let mut vm = Vm::new();
     for (name, callback) in [
         (b"host_get".as_slice(), get as deadlib_lua::HostFunction),
+        (b"host_peek".as_slice(), peek_get),
         (b"host_set", set),
     ] {
         let function = vm.new_host_function(callback, &[]).unwrap();
         vm.set_global(name, function).unwrap();
     }
     vm
+}
+
+#[test]
+fn peek_table_fields_preserves_inheritance_and_defers_dynamic_handlers() {
+    let mut vm = vm();
+    let program = compile(
+        br#"
+        local base = {name = 'base', absent = false}
+        local child = setmetatable({}, {__index = setmetatable({}, {__index = base})})
+        assert(host_peek(child, 'name') == child.name)
+        assert(host_peek(child, 'absent') == false)
+        assert(host_peek(child, 'missing') == nil)
+        base.name = 'changed'
+        assert(host_peek(child, 'name') == 'changed')
+
+        local calls = 0
+        local dynamic = setmetatable({}, {__index = function(_, key)
+            calls = calls + 1
+            collectgarbage('collect')
+            return { key = key }
+        end})
+        local result = host_peek(setmetatable({}, {__index = dynamic}), 'fresh')
+        collectgarbage('collect')
+        assert(result.key == 'fresh' and calls == 1)
+
+        local deep = base
+        for _ = 1, 20 do deep = setmetatable({}, {__index = deep}) end
+        assert(host_peek(deep, 'name') == 'changed')
+        assert(host_peek('text', 'sub') == string.sub)
+        return true
+    "#,
+    )
+    .unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
 }
 
 #[test]
@@ -273,4 +319,39 @@ fn field_metamethods_cannot_suspend_the_rust_callback_stack() {
     )
     .unwrap();
     assert_eq!(vm.execute(&program).unwrap(), &[Value::Boolean(true)]);
+}
+
+#[test]
+fn inherited_fields_resolve_through_table_handlers_like_lua_indexing() {
+    let source = br#"
+        local base = {shared = 'base', no = false}
+        local leaf = setmetatable({mine = 1}, {__index = setmetatable({own = 2}, {__index = base})})
+        local deep = base
+        for _ = 1, 20 do deep = setmetatable({}, {__index = deep}) end
+        local calls = 0
+        local dynamic = setmetatable({}, {__index = setmetatable({}, {
+            __index = function(_, key) calls = calls + 1; return key end
+        })})
+        local cycle = {}
+        setmetatable(cycle, {__index = cycle})
+        for _, object in ipairs{leaf, deep, dynamic, setmetatable({}, {})} do
+            for _, key in ipairs{'mine', 'own', 'shared', 'no', 'missing', 7} do
+                local expected = object[key]
+                local actual = host_get(object, key)
+                assert(actual == expected, tostring(key))
+            end
+        end
+        assert(calls == 12)
+        local ok, message = pcall(host_get, cycle, 'anything')
+        assert(not ok and message == 'loop in gettable', message)
+        -- The result stays rooted in the callback's scratch slot across a collection.
+        base.fresh = {}
+        collectgarbage()
+        return host_get(leaf, 'fresh') == base.fresh
+    "#;
+    let mut vm = vm();
+    assert_eq!(
+        vm.execute(&compile(source).unwrap()).unwrap(),
+        &[Value::Boolean(true)]
+    );
 }

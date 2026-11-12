@@ -1757,6 +1757,7 @@ impl Vm {
                         base,
                         gc_pending: self.gc.pending,
                         closed: self.open_upvalues.is_empty(),
+                        index_name: self.meta_names[Meta::Index as usize],
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {
                         pc = next;

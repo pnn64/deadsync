@@ -286,3 +286,82 @@ return during, closed(2000), suspended, finished
         );
     }
 }
+
+#[test]
+fn inherited_reads_match_observed_execution_for_table_and_function_handlers() {
+    let program = compile(
+        br#"
+local calls = 0
+local base = {shared = 'base', zero = 0, no = false}
+local middle = setmetatable({own = 'middle'}, {__index = base})
+local leaf = setmetatable({mine = 'leaf'}, {__index = middle})
+local dynamic = setmetatable({}, {__index = function(_, key) calls = calls + 1; return key .. '!' end})
+local below = setmetatable({}, {__index = dynamic})
+local text = setmetatable({}, {__index = 'abc'})
+local bare = setmetatable({}, {})
+local deep = base
+for _ = 1, 20 do deep = setmetatable({}, {__index = deep}) end
+local out = {}
+for i = 1, 300 do
+  out[1], out[2], out[3] = leaf.mine, leaf.own, leaf.shared
+  out[4], out[5], out[6] = leaf.zero, leaf.no, leaf.missing
+  out[7], out[8] = below.late, text.len
+  out[9], out[10] = bare.missing, deep.shared
+  out[11] = leaf[i]
+end
+assert(calls == 300 and out[8] == string.len and rawget(leaf, 'shared') == nil)
+-- A shadowing write is visible to the next inherited read.
+middle.shared = 'shadow'
+local shadowed = leaf.shared
+middle.shared = nil
+base[7] = 'seven'
+local numeric = leaf[7]
+-- Global reads resolve through a sandbox environment the same way.
+local sandbox = setmetatable({}, {__index = _G})
+local function globals() return tostring, missing_global end
+setfenv(globals, sandbox)
+local found, absent = globals()
+local cycle = {}
+setmetatable(cycle, {__index = cycle})
+local ok, message = pcall(function() return cycle.anything end)
+return out[1], out[2], out[3], out[4], out[5], out[6], out[7], out[9], out[10], out[11],
+  shadowed, numeric, found == tostring, absent, ok, message
+"#,
+    )
+    .unwrap();
+    let mut results = Vec::new();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(u64::MAX));
+        }
+        let values = vm.execute(&program).unwrap().to_vec();
+        let text = |vm: &Vm, value: Value| match value {
+            Value::String(id) => String::from_utf8(vm.string_bytes(id).unwrap().to_vec()).unwrap(),
+            other => format!("{other:?}"),
+        };
+        results.push(values.iter().map(|&value| text(&vm, value)).collect::<Vec<_>>());
+    }
+    assert_eq!(results[0], results[1]);
+    assert_eq!(
+        results[0],
+        [
+            "leaf",
+            "middle",
+            "base",
+            "Number(0.0)",
+            "Boolean(false)",
+            "Nil",
+            "late!",
+            "Nil",
+            "base",
+            "Nil",
+            "shadow",
+            "seven",
+            "Boolean(true)",
+            "Nil",
+            "Boolean(false)",
+            "(deadlib-lua):34: loop in gettable",
+        ]
+    );
+}

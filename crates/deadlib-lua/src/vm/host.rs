@@ -80,6 +80,8 @@ pub struct HostCall<'vm> {
     vm: &'vm mut Vm,
     hook: Option<NativeHookEvent>,
     id: u64,
+    // Native body/hook contexts can supply private data independently of the
+    // closure arena. Ordinary host functions borrow directly from that arena.
     data: Option<Shared<dyn Any + Send + Sync>>,
     activation: Option<Value>,
     arguments: usize,
@@ -214,14 +216,13 @@ impl Vm {
         callback: HostFunction,
     ) -> Result<(usize, usize), Error> {
         let arguments = self.frames[self.active_native.expect("native host frame")].vararg_start;
-        let data = self.host_binding(id).and_then(|f| f.data.clone());
         let activation = self.builtin_context(id);
         let hook = self.builtin_hook(id);
         let mut context = HostCall {
             vm: self,
             hook,
             id,
-            data,
+            data: None,
             activation,
             arguments,
             count,
@@ -429,7 +430,13 @@ impl HostCall<'_> {
     /// Lua environment and captured values.
     /// The borrow ends before a mutable operation can reenter Lua.
     pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&T> {
-        self.data.as_deref()?.downcast_ref()
+        // The executing native closure is kept alive by its active VM frame,
+        // including while nested Lua calls collect garbage. Borrow its owned
+        // data directly to avoid cloning a shared pointer on every host call.
+        self.data
+            .as_deref()
+            .or_else(|| self.vm.host_binding(self.id)?.data.as_deref())?
+            .downcast_ref()
     }
 
     /// Invoke a Lua/native function or callable value without leaving this callback.
@@ -526,10 +533,18 @@ impl HostCall<'_> {
         }
         if let Action::Get([Value::Table(id), key]) = action {
             let table = &self.vm.tables[slot_index(id.0)];
-            let value = table.get(key);
-            if value != Value::Nil || table.metatable().is_none() {
-                // Ordinary field reads need no continuation frame or driver
-                // cleanup. Keep the result in the same scratch register as the
+            let value = match (table.get(key), table.metatable()) {
+                (Value::Nil, Some(metatable)) => simple::inherited(
+                    &self.vm.tables,
+                    self.vm.meta_names[Meta::Index as usize],
+                    metatable,
+                    key,
+                ),
+                (value, _) => Some(value),
+            };
+            if let Some(value) = value {
+                // Ordinary and inherited field reads need no continuation frame
+                // or driver cleanup. Keep the result in the same scratch register as the
                 // slow path, so it stays rooted until the next call/result write.
                 let scratch = self.output + self.results;
                 self.vm.reserve_registers(scratch + 1)?;
@@ -542,6 +557,13 @@ impl HostCall<'_> {
             let error = Error::new(ErrorKind::Limit, 0, "too many host call arguments");
             self.abort = Some(error.clone());
             return Err(error);
+        }
+        // A nested Lua execution may unwind its waiting native frame through
+        // a nonlocal coroutine error. Retain private binding data only when
+        // entering that boundary, so Rust can still inspect it after the
+        // nested call fails. Ordinary callbacks need no shared-pointer clone.
+        if self.data.is_none() {
+            self.data = self.vm.host_binding(self.id).and_then(|f| f.data.clone());
         }
         let owner = self.vm.thread;
         let depth = self.vm.frames.len();
@@ -933,6 +955,39 @@ impl HostCall<'_> {
     pub fn table_get(&mut self, target: Value, key: Value) -> Result<Value, Error> {
         let range = self.run_action(Action::Get([target, key]), true)?;
         Ok(self.vm.registers[range.start])
+    }
+
+    /// Read a table field without entering Lua when its `__index` chain contains only tables.
+    ///
+    /// Returns `None` when a Lua/native metamethod, a non-table handler, or a
+    /// long chain requires [`Self::table_get`]. Unlike that method, a returned
+    /// value is **not rooted** in the callback's scratch registers. The caller
+    /// must keep it reachable or append it to the results before any operation
+    /// that may collect garbage. This is useful for class methods whose owner
+    /// tables are already rooted by the embedding's global namespace.
+    ///
+    /// # Errors
+    /// Returns an error for invalid or collected object handles.
+    pub fn peek_table_get(&self, target: Value, key: Value) -> Result<Option<Value>, Error> {
+        self.vm.validate_value(target)?;
+        self.vm.validate_value(key)?;
+        let Value::Table(id) = target else {
+            return Ok(None);
+        };
+        let table = &self.vm.tables[slot_index(id.0)];
+        let value = table.get(key);
+        if value != Value::Nil {
+            return Ok(Some(value));
+        }
+        Ok(match table.metatable() {
+            Some(metatable) => simple::inherited(
+                &self.vm.tables,
+                self.vm.meta_names[Meta::Index as usize],
+                metatable,
+                key,
+            ),
+            None => Some(Value::Nil),
+        })
     }
 
     /// Write a value's field, honoring Lua's `__newindex` semantics.
