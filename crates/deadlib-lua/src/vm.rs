@@ -1746,7 +1746,7 @@ impl Vm {
                     let mut cx = simple::Context {
                         registers: &mut self.registers,
                         constants: &self.programs[program_index].constants[proto_index],
-                        tables: &self.tables,
+                        tables: &mut self.tables,
                         code: &prototype.code,
                         env,
                         base,

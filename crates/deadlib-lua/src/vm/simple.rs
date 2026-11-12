@@ -10,7 +10,7 @@ use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 pub(super) struct Context<'a> {
     pub registers: &'a mut [Value],
     pub constants: &'a [Value],
-    pub tables: &'a Arena<Table>,
+    pub tables: &'a mut Arena<Table>,
     pub code: &'a [Instruction],
     pub env: TableId,
     pub base: usize,
@@ -55,6 +55,16 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             }
             cx.registers[a] = value;
+        }
+        Op::SetGlobal => {
+            let Value::String(name) = cx.constant(i.c as usize) else {
+                return None;
+            };
+            // An existing, non-nil scalar can be overwritten without
+            // invoking __newindex, allocating, or adding a GC edge.
+            if !cx.tables[slot_index(cx.env.0)].set_existing_string_scalar(name, cx.registers[a]) {
+                return None;
+            }
         }
         Op::GetTable => {
             let Value::Table(id) = cx.registers[base + usize::from(i.b)] else {
