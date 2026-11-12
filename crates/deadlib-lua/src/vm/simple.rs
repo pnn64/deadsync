@@ -3,7 +3,7 @@
 //! The interpreter runs these without publishing the frame's saved pc or
 //! source line: nothing can observe the frame until an instruction outside
 //! this set runs, and that instruction publishes both first.
-use super::{Arena, ByteString, Table, TableId, Value, Vm, slot_index};
+use super::{Arena, ByteString, Cell, Table, TableId, ThreadId, Value, Vm, slot_index, threads};
 use crate::bytecode::{COMPARE_BRANCH, Instruction, OPEN, Op, RK};
 
 /// The registers, constants and tables one simple instruction can touch.
@@ -12,6 +12,10 @@ pub(super) struct Context<'a> {
     pub constants: &'a [Value],
     pub tables: &'a mut Arena<Table>,
     pub strings: &'a Arena<ByteString>,
+    pub upvalue_ids: &'a [u32],
+    pub upvalues: &'a Arena<Cell>,
+    pub threads: &'a Arena<threads::Thread>,
+    pub thread: ThreadId,
     pub code: &'a [Instruction],
     pub env: TableId,
     pub base: usize,
@@ -53,7 +57,10 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
         }
         Op::GetGlobal => {
             let table = &cx.tables[slot_index(cx.env.0)];
-            let value = table.get(cx.constant(i.c as usize));
+            let value = match cx.constant(i.c as usize) {
+                Value::String(id) => table.get_string(id),
+                key => table.get(key),
+            };
             if value == Value::Nil && table.metatable().is_some() {
                 return None;
             }
@@ -74,11 +81,24 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
                 return None;
             };
             let table = &cx.tables[slot_index(id.0)];
-            let value = table.get(cx.operand(i.c));
+            let value = match cx.operand(i.c) {
+                Value::String(id) => table.get_string(id),
+                key => table.get(key),
+            };
             if value == Value::Nil && table.metatable().is_some() {
                 return None;
             }
             cx.registers[a] = value;
+        }
+        Op::GetUpvalue => {
+            let id = cx.upvalue_ids[i.c as usize] as usize;
+            cx.registers[a] = match cx.upvalues[id] {
+                Cell::Closed(value) => value,
+                Cell::Open(thread, register) if thread == cx.thread => cx.registers[register],
+                Cell::Open(thread, register) => {
+                    cx.threads[slot_index(thread.0)].registers[register]
+                }
+            };
         }
         Op::SetTable => {
             if cx.gc_pending {
@@ -87,13 +107,18 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             let Value::Table(id) = cx.registers[a] else {
                 return None;
             };
-            let Value::String(name) = cx.operand(u32::from(i.b)) else {
-                return None;
-            };
+            let key = cx.operand(u32::from(i.b));
             let value = cx.operand(i.c);
-            // An existing non-nil field skips __newindex even with a metatable.
-            // Scalar replacement neither allocates nor creates a GC edge.
-            if !cx.tables[slot_index(id.0)].set_existing_string_scalar(name, value) {
+            let table = &mut cx.tables[slot_index(id.0)];
+            // An existing non-nil string field skips __newindex even with a
+            // metatable. Array writes need an absent metatable because a nil
+            // slot can trigger __newindex. Scalar writes create no GC edge.
+            let written = match key {
+                Value::String(name) => table.set_existing_string_scalar(name, value),
+                _ if table.metatable().is_none() => table.set_existing_array_scalar(key, value),
+                _ => false,
+            };
+            if !written {
                 return None;
             }
         }

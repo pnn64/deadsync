@@ -347,6 +347,16 @@ impl Table {
         let Some(key) = Key::from_value(key) else {
             return Value::Nil;
         };
+        self.get_key(key)
+    }
+    /// String keys are already interned; field access need not classify them
+    /// as a possible array index or reconstruct a generic Lua table key.
+    #[inline]
+    pub(crate) fn get_string(&self, key: StringId) -> Value {
+        self.get_key(Key::String(key))
+    }
+    #[inline]
+    fn get_key(&self, key: Key) -> Value {
         if self.slots.is_empty() {
             return Value::Nil;
         }

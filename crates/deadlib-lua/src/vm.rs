@@ -1748,6 +1748,10 @@ impl Vm {
                         constants: &self.programs[program_index].constants[proto_index],
                         tables: &mut self.tables,
                         strings: &self.strings.bytes,
+                        upvalue_ids: &self.functions[slot_index(function.0)].upvalues,
+                        upvalues: &self.upvalues,
+                        threads: &self.threads,
+                        thread: self.thread,
                         code: &prototype.code,
                         env,
                         base,
@@ -1756,14 +1760,6 @@ impl Vm {
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {
                         pc = next;
-                    }
-                    let i = prototype.code[pc];
-                    if i.op == Op::GetUpvalue {
-                        let id =
-                            self.functions[slot_index(function.0)].upvalues[i.c as usize] as usize;
-                        self.registers[base + usize::from(i.a)] = self.cell_value(id);
-                        pc += 1;
-                        continue;
                     }
                 }
                 if self.hooks.mask & (hooks::LINE | hooks::COUNT) != 0

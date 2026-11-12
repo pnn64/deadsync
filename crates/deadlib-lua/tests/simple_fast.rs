@@ -189,3 +189,100 @@ return hits, t.a, t.b, t.c
         );
     }
 }
+
+#[test]
+fn scalar_array_overwrites_preserve_newindex_on_nil_slots() {
+    let program = compile(
+        br#"
+local hits = 0
+local t = setmetatable({10, 20, 30}, {__newindex = function(table, key, value)
+  hits = hits + 1
+  rawset(table, key, value)
+end})
+for i = 1, 1000 do t[1] = i; t[2] = i + 1 end
+assert(hits == 0)
+t[2] = nil
+t[2] = 9
+t[4] = 11
+assert(hits == 2)
+assert(not pcall(function() t[nil] = 1 end))
+assert(not pcall(function() t[0/0] = 1 end))
+setmetatable(t, nil)
+local sum = 0
+for i = 1, 5000 do
+  t[1] = i; t[2] = i + 1; t[3] = i + 2; t[4] = i + 3
+  sum = sum + t[1] + t[4]
+end
+return sum, hits, t[4]
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(2_000_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [
+                Value::Number(25_020_000.),
+                Value::Number(2.),
+                Value::Number(5003.),
+            ]
+        );
+    }
+}
+
+#[test]
+fn fast_upvalue_reads_preserve_open_closed_and_suspended_thread_values() {
+    let program = compile(
+        br#"
+local function parent()
+  local factor = 2
+  local function add(n)
+    local sum = 0
+    for i = 1, n do sum = sum + factor end
+    return sum
+  end
+  local during = add(2000)
+  factor = 3
+  return during, add
+end
+local during, closed = parent()
+assert(during == 4000 and closed(2000) == 6000)
+local shared
+local co = coroutine.create(function()
+  local factor = 4
+  shared = function(n)
+    local sum = 0
+    for i = 1, n do sum = sum + factor end
+    return sum
+  end
+  coroutine.yield()
+  factor = 5
+end)
+assert(coroutine.resume(co))
+local suspended = shared(2000)
+assert(coroutine.resume(co))
+local finished = shared(2000)
+assert(suspended == 8000 and finished == 10000)
+return during, closed(2000), suspended, finished
+"#,
+    )
+    .unwrap();
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(1_000_000));
+        }
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            [
+                Value::Number(4000.),
+                Value::Number(6000.),
+                Value::Number(8000.),
+                Value::Number(10_000.),
+            ]
+        );
+    }
+}
