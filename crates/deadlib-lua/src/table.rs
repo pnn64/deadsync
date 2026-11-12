@@ -22,7 +22,19 @@ enum Key {
 }
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
-        self.identity() == other.identity()
+        match (*self, *other) {
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::Number(a), Self::Number(b)) => a == b || (a << 1 == 0 && b << 1 == 0),
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Table(a), Self::Table(b)) => a == b,
+            (Self::Function(a), Self::Function(b)) => a == b,
+            (Self::Native(a), Self::Native(b)) => a == b,
+            (Self::Thread(a), Self::Thread(b)) => a == b,
+            (Self::Userdata(a), Self::Userdata(b)) => a == b,
+            (Self::LightUserdata(a), Self::LightUserdata(b)) => a == b,
+            (Self::ParserPrototype(a), Self::ParserPrototype(b)) => a == b,
+            _ => false,
+        }
     }
 }
 impl Eq for Key {}
@@ -612,6 +624,44 @@ mod allocation_tests {
     use crate::allocation_probe::probe;
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
+    }
+    #[test]
+    fn key_equality_preserves_each_variant_and_numeric_signed_zero() {
+        let pairs = [
+            (Key::Boolean(false), Key::Boolean(true)),
+            (
+                Key::Number(1.0_f64.to_bits()),
+                Key::Number(2.0_f64.to_bits()),
+            ),
+            (Key::String(StringId(1)), Key::String(StringId(2))),
+            (Key::Table(TableId(1)), Key::Table(TableId(2))),
+            (Key::Function(FunctionId(1)), Key::Function(FunctionId(2))),
+            (Key::Native(1), Key::Native(2)),
+            (Key::Thread(ThreadId(1)), Key::Thread(ThreadId(2))),
+            (Key::Userdata(UserdataId(1)), Key::Userdata(UserdataId(2))),
+            (Key::LightUserdata(1), Key::LightUserdata(2)),
+            (
+                Key::ParserPrototype(ParserPrototypeId(1)),
+                Key::ParserPrototype(ParserPrototypeId(2)),
+            ),
+        ];
+        for (left, right) in pairs {
+            assert_eq!(left, left);
+            assert_eq!(right, right);
+            assert_ne!(left, right, "{left:?} vs {right:?}");
+        }
+
+        let zero = Key::Number(0.0_f64.to_bits());
+        let negative_zero = Key::Number((-0.0_f64).to_bits());
+        assert_eq!(zero, negative_zero);
+        assert_eq!(zero.hash(), negative_zero.hash());
+
+        let distinct_tags = pairs.map(|(key, _)| key);
+        for (i, left) in distinct_tags.iter().enumerate() {
+            for right in &distinct_tags[i + 1..] {
+                assert_ne!(left, right, "different key variants must not alias");
+            }
+        }
     }
     #[test]
     fn array_index_accepts_only_exact_positive_u32_keys() {
