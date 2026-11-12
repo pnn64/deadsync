@@ -41,6 +41,18 @@ fn scene() -> (SongRuntime, ActorScene, deadlib_lua::TableId) {
 }
 
 #[test]
+fn metatable_callbacks_keep_their_native_capture_counts() {
+    let (mut runtime, _scene, _) = scene();
+    assert_eq!(
+        execute(
+            &mut runtime,
+            "local mt=getmetatable(root[1]); return debug.getinfo(mt.__index, 'u').nups, debug.getinfo(mt.__newindex, 'u').nups",
+        ),
+        [Value::Number(2.), Value::Number(2.)],
+    );
+}
+
+#[test]
 fn method_identity_is_exact_and_does_not_root_replaced_functions() {
     let (mut runtime, _scene, actor) = scene();
     let values = execute(

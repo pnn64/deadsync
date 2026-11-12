@@ -1,5 +1,6 @@
 //! Original setter identities and captured targets for existing input snapshots.
 use super::*;
+use smallvec::SmallVec;
 use std::sync::Weak;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +58,16 @@ struct Binding {
     store: Shared,
     identity: Arc<Method>,
 }
+struct LookupKeys {
+    actor_type: Value,
+    classes: [Value; 10],
+}
+struct LookupBinding {
+    // Keep the same native method and Store lifetimes as other bindings.
+    _store: Shared,
+    _identity: Arc<Method>,
+    keys: LookupKeys,
+}
 
 fn is_frame(kind: &str) -> bool {
     matches!(
@@ -106,6 +117,39 @@ fn class_name(kind: &str) -> &'static str {
         _ => "Actor",
     }
 }
+
+// Prepare the method lookup keys once per VM. A private, traced symbol table
+// owns the strings; the native binding only holds copyable IDs. Keeping two
+// native captures also preserves debug.getinfo(..., 'u').nups.
+const CLASS_KEYS: [&str; 10] = [
+    "Actor",
+    "ActorFrame",
+    "Sprite",
+    "Banner",
+    "ActorFrameTexture",
+    "ActorMultiVertex",
+    "ActorProxy",
+    "BitmapText",
+    "Player",
+    "NoteField",
+];
+
+fn class_key(keys: &LookupKeys, class: &str) -> Value {
+    let offset = match class {
+        "Actor" => 0,
+        "ActorFrame" => 1,
+        "Sprite" => 2,
+        "Banner" => 3,
+        "ActorFrameTexture" => 4,
+        "ActorMultiVertex" => 5,
+        "ActorProxy" => 6,
+        "BitmapText" => 7,
+        "Player" => 8,
+        "NoteField" => 9,
+        _ => unreachable!("all actor classes map to a captured method key"),
+    };
+    keys.classes[offset]
+}
 fn method_flags(call: &HostCall<'_>, key: Value) -> Result<(bool, bool), Error> {
     let Value::String(id) = key else {
         return Ok((false, false));
@@ -138,8 +182,13 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     if !matches!(key, Value::String(_)) {
         return call.push(Value::Nil);
     }
+    let type_key = call
+        .function_data::<LookupBinding>()
+        .unwrap()
+        .keys
+        .actor_type;
     let (_, frame_callback) = method_flags(call, key)?;
-    let kind = get(call, actor, b"__songlua_actor_type")?;
+    let kind = call.raw_table_get(actor, type_key)?;
     let (public, core, frame) = if kind == Value::Nil {
         ("Actor", true, false)
     } else {
@@ -150,11 +199,18 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
             .map_err(|e| call.error(e.to_string().as_bytes()))?;
         (class_name(kind), is_core(kind), is_frame(kind))
     };
-    let class_key = call.try_intern(public.as_bytes())?;
-    let class = call.table_get(call.captures()[0], class_key)?;
+    let class_key = class_key(&call.function_data::<LookupBinding>().unwrap().keys, public);
+    let globals = call.captures()[0];
+    let class = match call.peek_table_get(globals, class_key)? {
+        Some(value) => value,
+        None => call.table_get(globals, class_key)?,
+    };
     if class != Value::Nil {
         table(call, class)?;
-        let method = call.table_get(class, key)?;
+        let method = match call.peek_table_get(class, key)? {
+            Some(value) => value,
+            None => call.table_get(class, key)?,
+        };
         if method != Value::Nil || core {
             return call.push(method);
         }
@@ -175,7 +231,9 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     };
     let scalar = matches!(call.string_bytes(name).unwrap(), b"visible" | b"x" | b"y");
     if class == Value::Nil && result == Value::Nil && !scalar {
-        let originals = table(call, call.captures()[1])?;
+        // The private symbol table also keeps the original classes reachable.
+        let symbols = table(call, call.captures()[1])?;
+        let originals = table(call, call.raw_table_get(symbols, Value::Number(1.))?)?;
         let mut original = call.raw_table_get(originals, class_key)?;
         if original == Value::Nil {
             let name = if frame {
@@ -215,35 +273,64 @@ pub(super) fn install_metatable(
     let stringify = vm.new_host_function(stringify, &[])?;
     super::super::put(vm, methods, "Stringify", stringify)?;
     let globals = vm.get_global(b"_G")?;
-    for (name, method, callback) in [
-        (
-            "Lookup",
-            Method::Lookup,
-            lookup as deadlib_lua::HostFunction,
-        ),
-        (
-            "Assign",
-            Method::Assign,
-            assign as deadlib_lua::HostFunction,
-        ),
-    ] {
-        let identity = Arc::new(method);
-        let function = vm.new_host_function_with_data(
-            callback,
-            &[globals, Value::Table(methods)],
-            Binding {
-                store: store.clone(),
-                identity: identity.clone(),
-            },
-        )?;
-        store
-            .lock()
-            .unwrap()
-            .scalar_methods
-            .insert(function, &identity);
-        super::super::put(vm, methods, name, function)?;
-    }
-    Ok(())
+    let symbols = vm.try_new_table()?;
+    let pin = vm.pin(Value::Table(symbols))?;
+    let result = (|| {
+        vm.raw_table_set(symbols, Value::Number(1.), Value::Table(methods))?;
+        let actor_type = vm.try_intern(b"__songlua_actor_type")?;
+        vm.raw_table_set(symbols, Value::Number(2.), actor_type)?;
+        let mut classes = [Value::Nil; CLASS_KEYS.len()];
+        for (index, class) in CLASS_KEYS.iter().enumerate() {
+            let value = vm.try_intern(class.as_bytes())?;
+            vm.raw_table_set(symbols, Value::Number((index + 3) as f64), value)?;
+            classes[index] = value;
+        }
+
+        for method in [Method::Lookup, Method::Assign] {
+            let identity = Arc::new(method);
+            let function = match method {
+                Method::Lookup => vm.new_host_function_with_data(
+                    lookup,
+                    &[globals, Value::Table(symbols)],
+                    LookupBinding {
+                        _store: store.clone(),
+                        _identity: identity.clone(),
+                        keys: LookupKeys {
+                            actor_type,
+                            classes,
+                        },
+                    },
+                )?,
+                Method::Assign => vm.new_host_function_with_data(
+                    assign,
+                    &[globals, Value::Table(methods)],
+                    Binding {
+                        store: store.clone(),
+                        identity: identity.clone(),
+                    },
+                )?,
+                _ => unreachable!("only metatable callbacks are registered here"),
+            };
+            store
+                .lock()
+                .unwrap()
+                .scalar_methods
+                .insert(function, &identity);
+            super::super::put(
+                vm,
+                methods,
+                match method {
+                    Method::Lookup => "Lookup",
+                    Method::Assign => "Assign",
+                    _ => unreachable!(),
+                },
+                function,
+            )?;
+        }
+        Ok(())
+    })();
+    vm.unpin(pin)?;
+    result
 }
 
 fn stringify(call: &mut HostCall<'_>) -> Result<(), Error> {
@@ -348,9 +435,12 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
 }
 
 fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let data = call.function_data::<Binding>().unwrap().clone();
-    let Method::Forward(setter) = *data.identity else {
-        unreachable!()
+    let (setter, store) = {
+        let data = call.function_data::<Binding>().unwrap();
+        let Method::Forward(setter) = *data.identity else {
+            unreachable!()
+        };
+        (setter, data.store.clone())
     };
     let Value::Table(actor) = arg(call, 0) else {
         return Err(
@@ -372,29 +462,28 @@ fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
             .as_bytes(),
         ));
     }
-    let args = call.arguments().to_vec();
-    let results = live_trace::scalar_forward(call, &data.store, setter.name(), function, &args)?;
-    for value in results {
-        call.push(value)?;
-    }
-    Ok(())
+    let args = SmallVec::<[Value; 4]>::from_slice(call.arguments());
+    live_trace::scalar_forward(call, &store, setter.name(), function, &args)
 }
 fn bound_setter(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let data = call.function_data::<Binding>().unwrap().clone();
-    let Method::Bound(setter, identity) = *data.identity else {
-        unreachable!()
+    let (setter, identity, store) = {
+        let data = call.function_data::<Binding>().unwrap();
+        let Method::Bound(setter, identity) = *data.identity else {
+            unreachable!()
+        };
+        (setter, identity, data.store.clone())
     };
     let actor = table(call, call.captures()[2])?;
     debug_assert_eq!(actor, identity);
-    if !data.store.lock().unwrap().actors.contains_key(&actor) {
+    if !store.lock().unwrap().actors.contains_key(&actor) {
         return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
     }
-    ease_probe::method(call, &data.store, actor, setter.name())?;
-    set_scalar(call, &data.store, actor, setter.name())?;
+    ease_probe::method(call, &store, actor, setter.name())?;
+    set_scalar(call, &store, actor, setter.name())?;
     if setter == Setter::Visible
         && let Some(value) = boolish(call, arg(call, 1))
     {
-        publish_plain_visibility(call, &data.store, actor, value)?;
+        publish_plain_visibility(call, &store, actor, value)?;
     }
     call.push(Value::Table(actor))
 }

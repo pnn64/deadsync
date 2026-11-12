@@ -1,10 +1,11 @@
 //! Opt-in measurements of mesh expansion and native Lua bindings.
 use deadlib_lua::{Value, compile_named};
 use deadsync_song_lua::{
-    SongLuaActorMultiVertexPoint, SongLuaCompileContext, SongLuaOverlayMeshVertex, SongRuntime,
-    test_support,
+    SongLuaActorMultiVertexPoint, SongLuaCompileContext, SongLuaOverlayKind,
+    SongLuaOverlayMeshVertex, SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaSpeedMod,
+    SongRuntime, test_support,
 };
-use std::{hint::black_box, path::Path, time::Instant};
+use std::{hint::black_box, path::Path, sync::Arc, time::Instant};
 
 #[path = "../../../tests/support/allocations.rs"]
 #[expect(
@@ -316,6 +317,126 @@ fn benchmark_binding_queries() {
         measure(label, 5_000, || {
             black_box(runtime.vm_mut().call(function, &[]).unwrap());
         });
+    }
+}
+
+#[test]
+#[ignore = "actor lookup/call benchmark; run alone in release with --nocapture"]
+fn benchmark_actor_calls() {
+    #[cfg(windows)]
+    {
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetCurrentThread() -> *mut std::ffi::c_void;
+            fn SetThreadAffinityMask(thread: *mut std::ffi::c_void, mask: usize) -> usize;
+        }
+        // SAFETY: only changes the current benchmark thread's affinity.
+        assert_ne!(
+            unsafe { SetThreadAffinityMask(GetCurrentThread(), 1 << 2) },
+            0
+        );
+    }
+
+    let context = SongLuaCompileContext::new(Path::new("."), "actor call benchmark");
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let definition = execute(&mut runtime, "return Def.ActorFrame{Def.Quad{}}");
+    let scene = runtime.instantiate_actor(definition).unwrap();
+    let root = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"root", root).unwrap();
+    execute(
+        &mut runtime,
+        "actor=root[1]; assert(type(actor.zoom)=='function' and type(actor.x)=='function')",
+    );
+
+    const ITERATIONS: usize = 20_000;
+    println!("actor_call,minimum_ns,median_ns");
+    for (label, call) in [
+        ("empty loop", ""),
+        ("zoom lookup", "local result = actor.zoom"),
+        ("zoom call", "actor:zoom(i)"),
+        ("diffusealpha call", "actor:diffusealpha(0.5)"),
+        ("GetX call", "actor:GetX()"),
+        ("x call", "actor:x(i)"),
+    ] {
+        execute(
+            &mut runtime,
+            &format!(
+                "function actor_bench() local actor=actor; for i=1,{ITERATIONS} do {call} end end"
+            ),
+        );
+        let function = runtime.vm_mut().get_global(b"actor_bench").unwrap();
+        let pin = runtime.vm_mut().pin(function).unwrap();
+        for _ in 0..4 {
+            runtime.vm_mut().call(function, &[]).unwrap();
+        }
+        let mut samples = Vec::with_capacity(15);
+        for _ in 0..15 {
+            let start = Instant::now();
+            runtime.vm_mut().call(function, &[]).unwrap();
+            samples.push(start.elapsed().as_nanos() as f64 / ITERATIONS as f64);
+        }
+        samples.sort_by(f64::total_cmp);
+        println!("{label},{:.1},{:.1}", samples[0], samples[7]);
+        runtime.vm_mut().unpin(pin).unwrap();
+    }
+}
+
+#[test]
+#[ignore = "whole prepared-song bake benchmark; run alone in release with --nocapture"]
+fn benchmark_prepared_song_bakes() {
+    type Kind = SongLuaOverlayKind<(), (), deadlib_present::actors::TextAttribute>;
+    fn slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, String> {
+        Ok(Arc::from([]))
+    }
+    fn layer(_: &()) -> Option<SongLuaOverlayModelLayer<()>> {
+        None
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    println!("song_bake,minimum_ms,median_ms");
+    for (name, seconds, background) in [
+        ("tests/fixtures/song-lua/late-pulse.lua", 7., false),
+        ("tests/fixtures/song-lua/motion-body.lua", 2., true),
+        ("tests/fixtures/song-lua/message-wag-stop.lua", 4., true),
+    ] {
+        let path = root.join(name);
+        let mut context = SongLuaCompileContext::new(path.parent().unwrap(), name);
+        context.music_length_seconds = seconds;
+        context.song_display_bpms = [60.; 2];
+        context.song_timing_bpms = vec![(0., 60.)];
+        context.background_layer_count = usize::from(background);
+        context.screen_width = 854.;
+        context.screen_height = 480.;
+        context.display_width = 854.;
+        context.display_height = 480.;
+        context.display_aspect_ratio = 854. / 480.;
+        context.video_renderers = "opengl,software".into();
+        for (index, player) in context.players.iter_mut().enumerate() {
+            player.enabled = true;
+            player.screen_x = ((if index == 0 { 0.85 } else { 2.15 }) / 3. * 854_f32).floor();
+            player.screen_y = 240.;
+            player.speedmod = SongLuaSpeedMod::X(1.);
+        }
+
+        let mut samples = Vec::with_capacity(7);
+        for _ in 0..7 {
+            let started = Instant::now();
+            let compiled = deadsync_song_lua::compile_prepared_song_lua_layers(
+                &[path.as_path()],
+                0,
+                &context,
+                Default::default(),
+                slots,
+                layer,
+                |_, _| None::<(Kind, SongLuaOverlayState)>,
+            )
+            .unwrap();
+            assert_eq!(compiled.len(), 1, "one compiled layer for {name}");
+            black_box(compiled);
+            samples.push(started.elapsed().as_secs_f64() * 1000.);
+        }
+        samples.sort_by(f64::total_cmp);
+        println!("{name},{:.3},{:.3}", samples[0], samples[3]);
     }
 }
 

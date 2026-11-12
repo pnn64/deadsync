@@ -1,7 +1,41 @@
 //! Transfer an outgoing scene from process roots to Lua-owned reachability.
 use super::*;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-type Collected = Arc<Mutex<Vec<(u64, TableId)>>>;
+/// Collected scene notifications are rare compared with actor method calls.
+/// Publish an atomic pending bit while holding the queue lock so the common
+/// path can skip both mutexes without missing a concurrent finalizer.
+pub(super) type Collected = Arc<CollectedQueue>;
+
+#[derive(Default)]
+pub(super) struct CollectedQueue {
+    pending: AtomicBool,
+    records: Mutex<Vec<(u64, TableId)>>,
+}
+impl CollectedQueue {
+    #[inline]
+    pub(super) fn pending(&self) -> bool {
+        self.pending.load(Ordering::Acquire)
+    }
+
+    fn enqueue(&self, scene: u64, owner: TableId) {
+        let mut records = self.records.lock().unwrap_or_else(|e| e.into_inner());
+        records.push((scene, owner));
+        self.pending.store(true, Ordering::Release);
+    }
+
+    fn take(&self) -> Vec<(u64, TableId)> {
+        if !self.pending() {
+            return Vec::new();
+        }
+        let mut records = self.records.lock().unwrap_or_else(|e| e.into_inner());
+        let collected = std::mem::take(&mut *records);
+        // Keep the reset under the lock: a concurrent Drop can only set true
+        // after this point, once it has enqueued its own notification.
+        self.pending.store(false, Ordering::Release);
+        collected
+    }
+}
 struct CollectedScene {
     queue: Collected,
     id: u64,
@@ -11,10 +45,7 @@ impl Drop for CollectedScene {
     fn drop(&mut self) {
         // GC/shutdown only notifies. Never acquire Store or reenter the VM from
         // a closure destructor, including collection inside an actor callback.
-        self.queue
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push((self.id, self.owner));
+        self.queue.enqueue(self.id, self.owner);
     }
 }
 fn lifetime(_: &mut HostCall<'_>) -> Result<(), Error> {
@@ -23,7 +54,7 @@ fn lifetime(_: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn sweep(store: &Shared) {
     let queue = store.lock().unwrap().collected_scenes.clone();
-    let collected = std::mem::take(&mut *queue.lock().unwrap_or_else(|e| e.into_inner()));
+    let collected = queue.take();
     if collected.is_empty() {
         return;
     }

@@ -30,10 +30,7 @@ pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Err
             let function = call.new_host_function_with_data(
                 callback,
                 &captures,
-                Binding {
-                    store: store.clone(),
-                    op: Op::OfflineConstructor(class),
-                },
+                Binding::new(store, Op::OfflineConstructor(class)),
             )?;
             let key = call.try_intern(class.as_bytes())?;
             call.raw_table_set(table(call, def)?, key, function)?;
@@ -49,10 +46,7 @@ pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Err
         let loader = call.new_host_function_with_data(
             callback,
             &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::LoadPreparationActor,
-            },
+            Binding::new(store, Op::LoadPreparationActor),
         )?;
         sprites::set(call, globals, "LoadActor", loader)?;
         let null = get(call, globals, b"NullActor")?;

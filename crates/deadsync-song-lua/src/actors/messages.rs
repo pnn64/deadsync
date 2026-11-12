@@ -40,10 +40,7 @@ pub(super) fn install(vm: &mut Vm, store: &Shared, captures: &[Value]) -> Result
     let callback = vm.new_host_function_with_data(
         super::callback,
         captures,
-        Binding {
-            store: store.clone(),
-            op: Op::Message(MessageOp::Host),
-        },
+        Binding::new(store, Op::Message(MessageOp::Host)),
     )?;
     vm.pin(callback)
 }

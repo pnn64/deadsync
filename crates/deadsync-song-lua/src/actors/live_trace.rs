@@ -193,14 +193,14 @@ pub(super) fn scalar_forward(
     name: &str,
     original: Value,
     args: &[Value],
-) -> Result<Vec<Value>, Error> {
+) -> Result<(), Error> {
     if !enabled(store) {
-        return call.call(original, args).map(|values| values.to_vec());
+        return call.call_and_return(original, args);
     }
     let wrapped = call.with_roots(&[original], |call| {
         wrap(call, store, "Actor".into(), name.into(), original)
     })?;
-    call.call(wrapped, args).map(|values| values.to_vec())
+    call.call_and_return(wrapped, args)
 }
 
 #[derive(Clone)]

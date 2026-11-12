@@ -8,6 +8,7 @@ mod input_snapshot;
 pub use input_snapshot::{CompiledActorInputs, CompiledActorInteractions};
 pub(super) mod perframes;
 mod scalar_methods;
+mod registry;
 #[cfg(feature = "test-support")]
 pub(super) fn method_flags_probe(vm: &mut Vm) -> Result<Value, Error> {
     scalar_methods::method_flags_probe(vm)
@@ -307,12 +308,12 @@ struct Store {
     song_callback_depth: usize,
     trace_dynamic_commands: bool,
     next: u64,
-    actors: HashMap<TableId, Actor>,
+    actors: registry::Registry<Actor>,
     actor_order: Vec<TableId>,
     scenes: HashMap<u64, Scene>,
     retired_scenes: HashMap<u64, TableId>,
     retired_subscriptions: HashSet<TableId>,
-    collected_scenes: Arc<Mutex<Vec<(u64, TableId)>>>,
+    collected_scenes: retirement::Collected,
     constructor_scenes: HashSet<u64>,
     offline_definitions: bool,
     song_dir: std::path::PathBuf,
@@ -435,10 +436,20 @@ enum Op {
     Set(&'static str),
     Get(&'static str),
 }
-#[derive(Clone)]
 struct Binding {
     store: Shared,
     op: Op,
+    collected: retirement::Collected,
+}
+impl Binding {
+    fn new(store: &Shared, op: Op) -> Self {
+        let collected = store.lock().unwrap().collected_scenes.clone();
+        Self {
+            store: store.clone(),
+            op,
+            collected,
+        }
+    }
 }
 
 pub(super) struct Actors {
@@ -756,10 +767,7 @@ impl Actors {
         let load_font = vm.new_host_function_with_data(
             callback,
             &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::LoadFont,
-            },
+            Binding::new(&store, Op::LoadFont),
         )?;
         vm.set_global(b"LoadFont", load_font)?;
         let color = vm.new_host_function(text::global_color, &captures)?;
@@ -805,38 +813,20 @@ impl Actors {
         let instantiate = vm.new_host_function_with_data(
             callback,
             &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::Instantiate,
-            },
+            Binding::new(&store, Op::Instantiate),
         )?;
         let instantiate = vm.pin(instantiate)?;
         let template = vm.new_host_function_with_data(
             callback,
             &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::Template,
-            },
+            Binding::new(&store, Op::Template),
         )?;
         let template = vm.pin(template)?;
-        let release = vm.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::Release,
-            },
-        )?;
+        let release =
+            vm.new_host_function_with_data(callback, &captures, Binding::new(&store, Op::Release))?;
         let release = vm.pin(release)?;
-        let retire = vm.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding {
-                store: store.clone(),
-                op: Op::Retire,
-            },
-        )?;
+        let retire =
+            vm.new_host_function_with_data(callback, &captures, Binding::new(&store, Op::Retire))?;
         let retire = vm.pin(retire)?;
         let mut phases = Vec::new();
         for op in [
@@ -858,14 +848,8 @@ impl Actors {
             Op::Append,
             Op::PrepareDefinitions,
         ] {
-            let function = vm.new_host_function_with_data(
-                callback,
-                &captures,
-                Binding {
-                    store: store.clone(),
-                    op,
-                },
-            )?;
+            let function =
+                vm.new_host_function_with_data(callback, &captures, Binding::new(&store, op))?;
             phases.push(vm.pin(function)?);
         }
         vm.unpin(methods_root)?;
@@ -1404,14 +1388,7 @@ fn install_method(
     store: &Shared,
     captures: &[Value],
 ) -> Result<(), Error> {
-    let function = vm.new_host_function_with_data(
-        callback,
-        captures,
-        Binding {
-            store: store.clone(),
-            op,
-        },
-    )?;
+    let function = vm.new_host_function_with_data(callback, captures, Binding::new(store, op))?;
     super::put(vm, table, name, function)
 }
 fn table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
@@ -2463,8 +2440,17 @@ fn parent_scene(
 }
 
 fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let Binding { store, op } = call.function_data::<Binding>().unwrap().clone();
-    retirement::sweep(&store);
+    let (store, op, collected) = {
+        let binding = call.function_data::<Binding>().unwrap();
+        (
+            binding.store.clone(),
+            binding.op,
+            binding.collected.pending(),
+        )
+    };
+    if collected {
+        retirement::sweep(&store);
+    }
     if matches!(op, Op::Retire) {
         let id = call.number(0)? as u64;
         let retired = retirement::retire(call, &store, id)?;
@@ -2593,10 +2579,13 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         return call.push(Value::Boolean(removed));
     }
     let actor = table(call, arg(call, 0))?;
-    if !store.lock().unwrap().actors.contains_key(&actor) {
-        return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
-    }
-    let raw_epoch = store.lock().unwrap().actors[&actor].raw_live_epoch;
+    let (raw_epoch, actor_class) = {
+        let guard = store.lock().unwrap();
+        let Some(owned) = guard.actors.get(&actor) else {
+            return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
+        };
+        (owned.raw_live_epoch, owned.state.class)
+    };
     if let Op::Get(name) | Op::Render(name) = op
         && raw_epoch
         && live_epoch::getter(call, &store, actor, name)?
@@ -2617,7 +2606,13 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             | Op::PropagateCommand
     ) || matches!(op, Op::Render(name) if render::FRAME_METHODS.contains(&name))
         || matches!(op, Op::Draw("SetDrawFunction" | "GetDrawFunction"));
-    let actor_class = store.lock().unwrap().actors[&actor].state.class;
+    // A saved actor's live-epoch getter may refresh metadata. Preserve the
+    // post-getter class observation when that path was entered.
+    let actor_class = if raw_epoch && matches!(op, Op::Get(_) | Op::Render(_)) {
+        store.lock().unwrap().actors[&actor].state.class
+    } else {
+        actor_class
+    };
     let private_child_query = matches!(op, Op::GetChild | Op::GetChildren | Op::GetNumChildren)
         && matches!(
             actor_class,
@@ -3053,11 +3048,14 @@ fn set_scalar(
             Value::Boolean(first != 0.),
         )?;
     }
-    let preparation = {
+    let (preparation, raw_epoch) = {
         let store = store.lock().unwrap();
-        !store.playback || store.actors[&actor].replay.is_some()
+        let instance = &store.actors[&actor];
+        (
+            !store.playback || instance.replay.is_some(),
+            instance.raw_live_epoch,
+        )
     };
-    let raw_epoch = store.lock().unwrap().actors[&actor].raw_live_epoch;
     let captured_position = if raw_epoch && matches!(name, "addx" | "addy" | "addz") {
         Some(live_epoch::destination(call, actor, &name[3..])?)
     } else if preparation && matches!(name, "addx" | "addy" | "addz") {
