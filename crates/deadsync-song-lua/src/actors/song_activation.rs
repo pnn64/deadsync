@@ -290,14 +290,17 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
 
             // Loader children have no native parent of their own. Begin walks
             // direct unique roots; On below follows the raw sequence including aliases.
-            native_children::with_children(call, roots, |call, actor| {
-                let beat = get(call, actor, b"__songlua_background_start_beat")?;
-                if beat != Value::Nil {
-                    sprites::number(call, beat)?;
-                    return Ok(());
-                }
-                named_tree(call, &data.store, actor, b"Begin")
-            })?;
+            {
+                let _capture = song_capture::capture_startup_commands(&data.store);
+                native_children::with_children(call, roots, |call, actor| {
+                    let beat = get(call, actor, b"__songlua_background_start_beat")?;
+                    if beat != Value::Nil {
+                        sprites::number(call, beat)?;
+                        return Ok(());
+                    }
+                    named_tree(call, &data.store, actor, b"Begin")
+                })?;
+            }
             let top = get(call, globals, b"__songlua_top_screen")?;
             if top != Value::Nil {
                 call.with_roots(&[top], |call| {
@@ -343,7 +346,10 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
             }
             messages::record(call, b"ScreenChanged", false)?;
             messages::dispatch(call, &data.store, b"ScreenChanged", None, true)?;
-            startup(call, &data.store, roots)?;
+            {
+                let _capture = song_capture::capture_startup_commands(&data.store);
+                startup(call, &data.store, roots)?;
+            }
             let wrapper_initials = song_capture::wrapper_initials(call, &data.store, roots)?;
             let options = read_options(call, globals, &data.context)?;
             *data.output.lock().unwrap() = Some(SongActivation {

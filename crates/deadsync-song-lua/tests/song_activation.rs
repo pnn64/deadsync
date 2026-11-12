@@ -193,6 +193,8 @@ fn startup_broadcast_capture_preserves_phase_params_and_nested_delivery() {
                     .map(|(_, name, has_params)| (name.as_str(), *has_params))
                     .collect::<Vec<_>>(),
                 [
+                    ("BeginEvent", false),
+                    ("OnEvent", true),
                     ("UpdateEvent", true),
                     ("NestedEvent", false),
                     ("NilParams", true)

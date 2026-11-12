@@ -290,10 +290,151 @@ fn startup_capture_excludes_reload_construction_init_and_end_broadcasts() {
             .count(),
         1
     );
+    assert_eq!(
+        out[0]
+            .messages
+            .iter()
+            .filter(|m| m.message == "FinalOn" && m.beat == 0.0)
+            .count(),
+        1
+    );
     assert!(out[0].messages.iter().all(|m| !matches!(
         m.message.as_str(),
-        "ReloadConstruction" | "AuthoredInit" | "OutgoingEnd" | "FinalOn"
+        "ReloadConstruction" | "AuthoredInit" | "OutgoingEnd" | "ScreenChanged"
     )));
+}
+
+#[test]
+fn startup_begin_and_on_broadcasts_retain_native_beat_zero_timeline() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("startup.lua");
+    std::fs::write(
+        &path,
+        r#"
+        return Def.ActorFrame{
+            InitCommand=function() MESSAGEMAN:Broadcast('ConstructionOnly') end,
+            BeginCommand=function() MESSAGEMAN:Broadcast('BeginSignal') end,
+            OnCommand=function()
+                MESSAGEMAN:Broadcast('OnSignal')
+                MESSAGEMAN:Broadcast('ScreenChanged')
+            end,
+            BeginSignalMessageCommand=function(self) self:x(4) end,
+            OnSignalMessageCommand=function(self) self:y(8) end,
+            ScreenChangedMessageCommand=function(self) self:z(16) end,
+        }
+    "#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(dir.path(), "startup timeline parity");
+    context.music_length_seconds = 0.05;
+    let compiled = song::compile_prepared_song_lua_layers::<(), ()>(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap();
+    let timeline = &compiled[0].messages;
+    for name in ["BeginSignal", "OnSignal", "ScreenChanged"] {
+        let events = timeline
+            .iter()
+            .filter(|event| event.message == name)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events.len(),
+            1,
+            "missing or duplicate startup {name}: {timeline:?}"
+        );
+        assert_eq!(
+            events[0].beat, 0.0,
+            "startup message {name} shifted in time"
+        );
+    }
+    // The internal ScreenChanged dispatch runs between Begin and On; only the
+    // authored OnCommand broadcast of the same name belongs in this timeline.
+    assert!(
+        timeline
+            .iter()
+            .all(|event| event.message != "ConstructionOnly")
+    );
+}
+
+#[test]
+fn startup_subscriber_rng_uses_authored_paths_before_draw_order_sort() {
+    // The native MessageManager iterates subscriber pointers. Its imported
+    // rank paths refer to authored definition child positions, while the
+    // ActorFrame's drawing children are sorted by draworder before OnCommand.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ranked.lua");
+    std::fs::write(
+        &path,
+        r#"
+        return Def.ActorFrame{
+            Name='FuzzRoot',
+            OnCommand=function() MESSAGEMAN:Broadcast('FuzzMove') end,
+            Def.ActorFrame{Name='FuzzOuter',
+                Def.ActorFrame{Name='FuzzGroup',
+                    Def.Quad{Name='FuzzActor1',InitCommand=function(self)self:draworder(0)end,
+                        FuzzMoveMessageCommand=function(self)self:aux(math.random(1,2))end},
+                    Def.Quad{Name='FuzzActor2',InitCommand=function(self)self:draworder(1)end,
+                        FuzzMoveMessageCommand=function(self)self:aux(math.random(1,2))end},
+                    Def.Quad{Name='FuzzActor3',InitCommand=function(self)self:draworder(1)end,
+                        FuzzMoveMessageCommand=function(self)self:aux(math.random(1,2))end},
+                    Def.Quad{Name='FuzzActor4',InitCommand=function(self)self:draworder(-1)end,
+                        FuzzMoveMessageCommand=function(self)self:aux(math.random(1,2))end},
+                    Def.Quad{Name='FuzzActor5',InitCommand=function(self)self:draworder(-1)end,
+                        FuzzMoveMessageCommand=function(self)self:aux(math.random(1,2))end},
+                },
+            },
+        }
+    "#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(dir.path(), "subscriber path RNG");
+    context.music_length_seconds = 0.05;
+    // Recorded seed 12345 / case 2. MSVC MT19937 uniform_int(1,2) returns
+    // [1,1,1,1,2] for its first five calls. The fifth native listener is a2.
+    context.random_seed = 204_804_767;
+    context.message_actor_order = [
+        ("1/1/1/1", 2),
+        ("1/1/1/2", 8),
+        ("1/1/1/3", 7),
+        ("1/1/1/4", 4),
+        ("1/1/1/5", 3),
+    ]
+    .into_iter()
+    .map(|(path, rank)| (path.to_owned(), rank))
+    .collect();
+    let compiled = song::compile_prepared_song_lua_layers::<(), ()>(
+        &[&path],
+        0,
+        &context,
+        Default::default(),
+        slots,
+        layer,
+        |_, _| None,
+    )
+    .unwrap();
+    for (name, expected) in [
+        ("FuzzActor1", 1.0),
+        ("FuzzActor2", 2.0),
+        ("FuzzActor3", 1.0),
+        ("FuzzActor4", 1.0),
+        ("FuzzActor5", 1.0),
+    ] {
+        let actor = compiled[0]
+            .overlays
+            .iter()
+            .find(|actor| actor.name.as_deref() == Some(name))
+            .unwrap();
+        assert_eq!(
+            actor.initial_state.aux, expected,
+            "native FuzzMove pointer ordering assigned the wrong random draw to {name}"
+        );
+    }
 }
 
 #[test]

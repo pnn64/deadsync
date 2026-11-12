@@ -2289,7 +2289,17 @@ fn initialize_body(
     }
     // The production host materializes the complete tree before Init. Every
     // child is observable while child-first Init applies names and draw order.
-    for child in declared_children(store, actor) {
+    for (index, child) in declared_children(store, actor).into_iter().enumerate() {
+        #[cfg(feature = "test-support")]
+        {
+            // The native subscriber identity is tied to this definition's
+            // authored child index. Init will sort the parent's numeric slots
+            // by draworder, so retain the index before that mutation.
+            let key = call.try_intern(b"__songlua_message_authored_index")?;
+            call.raw_table_set(child, key, Value::Number((index + 1) as f64))?;
+        }
+        #[cfg(not(feature = "test-support"))]
+        let _ = index;
         native_children::adopt_declared(call, store, child, actor)?;
         initialize(call, store, child)?;
     }

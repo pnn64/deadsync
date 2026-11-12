@@ -12,6 +12,7 @@ pub(crate) struct InitialUpdate {
 pub(super) struct Broadcasts {
     pub overlay_started: bool,
     pub zero_update: bool,
+    pub startup_commands: bool,
     pub events: Vec<(f32, String, bool)>,
 }
 
@@ -24,6 +25,35 @@ impl Drop for BroadcastScope {
         if let Some(previous) = self.previous.take() {
             self.store.lock().unwrap().song_broadcasts = Some(previous);
         }
+    }
+}
+
+/// Retain authored Begin/On broadcasts while keeping the surrounding screen
+/// transition messages outside the captured song timeline.
+pub(super) struct StartupBroadcastScope {
+    store: Shared,
+    previous: Option<bool>,
+}
+impl Drop for StartupBroadcastScope {
+    fn drop(&mut self) {
+        if let Some(previous) = self.previous {
+            let mut guard = self.store.lock().unwrap();
+            if let Some(capture) = guard.song_broadcasts.as_mut() {
+                capture.startup_commands = previous;
+            }
+        }
+    }
+}
+pub(super) fn capture_startup_commands(store: &Shared) -> StartupBroadcastScope {
+    let previous = store
+        .lock()
+        .unwrap()
+        .song_broadcasts
+        .as_mut()
+        .map(|capture| std::mem::replace(&mut capture.startup_commands, true));
+    StartupBroadcastScope {
+        store: store.clone(),
+        previous,
     }
 }
 
@@ -537,9 +567,14 @@ pub(super) fn broadcast(
     let active = {
         let guard = store.lock().unwrap();
         guard.song_broadcasts.as_ref().is_some_and(|capture| {
+            // Begin/On broadcasts occur while startup queues are still owned;
+            // they are native events, unlike the screen transition dispatch
+            // between those command passes.
             guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
                 || (capture.overlay_started
-                    && (capture.zero_update || guard.startup_queues.is_none()))
+                    && (capture.startup_commands
+                        || capture.zero_update
+                        || guard.startup_queues.is_none()))
         })
     };
     if store.lock().unwrap().song_broadcasts.is_none() {

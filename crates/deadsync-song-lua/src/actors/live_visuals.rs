@@ -327,8 +327,20 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
         }
         let parent = table(call, parent)?;
         let mut component = None;
+        let index_key = call.try_intern(b"__songlua_message_authored_index")?;
+        let authored = call.raw_table_get(current, index_key)?;
+        if authored != Value::Nil {
+            let Value::Number(index) = authored else {
+                return Err(call.error(b"invalid native subscriber child index"));
+            };
+            if !index.is_finite() || index < 1. || index.fract() != 0. || index > usize::MAX as f64
+            {
+                return Err(call.error(b"invalid native subscriber child index"));
+            }
+            component = Some((index as usize).to_string());
+        }
         let wrappers = get(call, parent, b"__songlua_wrappers")?;
-        if wrappers != Value::Nil {
+        if component.is_none() && wrappers != Value::Nil {
             let wrappers = table(call, wrappers)?;
             for index in 1usize.. {
                 let wrapper = call.raw_table_get(wrappers, Value::Number(index as f64))?;
