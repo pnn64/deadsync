@@ -387,12 +387,3 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     append_disabled_timing_windows(&mut out, params.disabled_timing_windows);
     out
 }
-
-#[cfg(test)]
-#[path = "text_performance.rs"]
-mod text_performance;
-
-#[cfg(test)]
-mod number_performance {
-    include!("number_performance.rs");
-}

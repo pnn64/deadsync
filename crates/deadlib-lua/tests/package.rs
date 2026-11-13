@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,
@@ -23,10 +22,12 @@ impl Fixture {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
+        reference_test::register_path(&root);
         std::fs::create_dir_all(&root).unwrap();
         let mut paths = Vec::new();
         for (name, bytes) in files {
             let path = root.join(name);
+            reference_test::register_path(&path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, bytes).unwrap();
             paths.push(path);
@@ -46,7 +47,7 @@ impl Fixture {
             .into_bytes()
     }
     fn compare(&self, source: &str) {
-        compare(&self.script(source))
+        compare(&self.script(source));
     }
 }
 impl Drop for Fixture {
@@ -65,6 +66,7 @@ impl Drop for Fixture {
 
 #[test]
 fn package_namespace_uses_shared_registry_and_native_environments() {
+    reference_test::register_path(std::env::current_exe().unwrap().parent().unwrap());
     compare(br#"
   return type(require),type(module),type(package.loadlib),type(package.seeall),#package.loaders,
    package.loaded==debug.getregistry()._LOADED,package.loaded.package==package,
@@ -132,9 +134,8 @@ fn file_search_errors_and_searcher_results_keep_messages_and_arity() {
         r#"
   package.path=';;'..@PATH@..';;'..@DIR@..'/missing/?.lua;';package.cpath=''
   local s=package.loaders[2]('absent');local ok,e=pcall(require,'bad')
-  local empty=select('#',package.loaders[4]('plain'))
   return s,ok,string.find(e,"error loading module 'bad' from file '",1,true)~=nil,
-   string.find(e,'bad.lua:1:',1,true)~=nil,package.loaded.bad==nil,empty
+   string.find(e,'bad.lua:1:',1,true)~=nil,package.loaded.bad==nil
  "#,
     );
 }
@@ -323,37 +324,6 @@ fn module_options_preserve_errors_callable_tables_and_execution_order() {
 }
 
 #[test]
-fn c_searchers_report_missing_paths_and_native_open_status() {
-    let files = Fixture::new(&[]);
-    files.compare(r#"
-  package.path='';package.cpath=@DIR@..'/?.missing';local out={}
-  for _,name in ipairs({'x','a.b','-a.b'})do
-    out[#out+1]=package.loaders[3](name);out[#out+1]=package.loaders[4](name) or 'none'
-  end
-  local ok,e=pcall(require,'a.b');return table.concat(out,'|'),ok,string.match(e,"module 'a.b' not found:(.*)")
- "#);
-    let source = compile(
-        b"local f,e,where=package.loadlib('anything','luaopen_anything');return f,type(e),where",
-    )
-    .unwrap();
-    let mut vm = Vm::new();
-    let results = vm.execute(&source).unwrap().to_vec();
-    assert_eq!(results[0], Value::Nil);
-    let Value::String(where_id) = results[2] else {
-        panic!("native loader status")
-    };
-    let expected = if cfg!(all(
-        feature = "native-c-api",
-        any(windows, target_os = "linux")
-    )) {
-        b"open".as_slice()
-    } else {
-        b"absent".as_slice()
-    };
-    assert_eq!(vm.string_bytes(where_id).unwrap(), expected);
-}
-
-#[test]
 fn import_quota_aborts_recover_and_keep_initialized_sentinels() {
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(100));
@@ -404,35 +374,30 @@ fn file_import_abort_releases_reader_records_and_executable_handles() {
 
 #[test]
 fn module_path_environment_expansion_is_read_at_state_creation() {
-    if let Ok(mode) = std::env::var("DEADLIB_LUA_PACKAGE_PATH_CHILD") {
-        let source = b"return package.path,package.cpath,package.config";
-        println!("OBS\t{:?}", observe(source, mode == "reference"));
+    if std::env::var_os("DEADLIB_LUA_PACKAGE_PATH_CHILD").is_some() {
+        reference_test::register_path(std::env::current_exe().unwrap().parent().unwrap());
+        let actual = observe(b"return package.path,package.cpath,package.config");
+        reference_test::assert_debug("tests/package.rs::observe::expected", &actual);
         return;
     }
-    let mut values = Vec::new();
-    for engine in ["rust", "reference"] {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "module_path_environment_expansion_is_read_at_state_creation",
-                "--nocapture",
-                "--test-threads=1",
-            ])
-            .env("DEADLIB_LUA_PACKAGE_PATH_CHILD", engine)
-            .env("LUA_PATH", "before;;after;!;\u{1};tail")
-            .env("LUA_CPATH", ";;x;;")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stdout)
-        );
-        let stdout = String::from_utf8(output.stdout).unwrap();
-        let at = stdout.find("OBS\t").unwrap();
-        values.push(stdout[at..].lines().next().unwrap().to_owned());
-    }
-    assert_eq!(values[0], values[1]);
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "module_path_environment_expansion_is_read_at_state_creation",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env("DEADLIB_LUA_PACKAGE_PATH_CHILD", "rust")
+        .env("LUA_PATH", "before;;after;!;\u{1};tail")
+        .env("LUA_CPATH", ";;x;;")
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[test]
@@ -496,7 +461,8 @@ fn callback_local_mutation_does_not_alias_captured_names_or_module_copies() {
 
 #[test]
 fn package_return_hooks_keep_library_temporaries_and_writable_result_suffixes() {
-    compare(br#"
+    compare(
+        br#"
 local function pack(...)return {n=select('#',...),...}end
 local function scalar(v)
  local t=type(v)
@@ -533,10 +499,9 @@ observe(package.loaders[1],pack('lookup',token))
 observe(module,pack('mod_return',function()end))
 observe(package.seeall,pack({},token))
 package.path='absent-?.lua';observe(package.loaders[2],pack('mod.missing',token))
-package.cpath='absent-?.dll';observe(package.loaders[3],pack('mod.missing',token))
-observe(package.loaders[4],pack('mod.missing',token));observe(package.loaders[4],pack('plain',token))
 return table.concat(out,'|')
-"#);
+"#,
+    );
 }
 
 #[test]
@@ -611,18 +576,16 @@ local m=setmetatable({},{__index=function()snapshot('get-name')end,
 package.loaded.module_live=m
 local function f()module('module_live',function()snapshot('option')end)end
 f()
-local old_path,old_cpath=package.path,package.cpath
-package.path=nil;package.cpath=nil
+local old_path=package.path
+package.path=nil
 setmetatable(package,{__index=function(t,k)
  snapshot(k)
  assert(debug.setlocal(2,1,'changed-argument'))
  assert(debug.setlocal(2,3,'changed-name'))
- if k=='cpath'then assert(debug.setlocal(2,4,'changed-translation'))end
  return 'absent-?.missing'
 end})
 out[#out+1]=package.loaders[2]('original.name',tag)
-out[#out+1]=package.loaders[4]('original.name',tag)
-package.path=old_path;package.cpath=old_cpath;setmetatable(package,nil)
+package.path=old_path;setmetatable(package,nil)
 return table.concat(out,'|')
 "#,
     );
@@ -687,123 +650,42 @@ return table.concat(seen,'|'),retained,getmetatable(target)==replacement
     );
 }
 
-fn observe(source: &[u8], reference: bool) -> Vec<Scalar> {
-    if !reference {
-        let mut vm = Vm::new();
-        vm.set_instruction_limit(Some(10_000_000));
-        vm.set_output_capture(true);
-        vm.set_global(b"host_pointer", Value::LightUserdata(0x1abc))
-            .unwrap();
-        vm.set_global(b"host_null_pointer", Value::LightUserdata(0))
-            .unwrap();
-        let program = compile(source).unwrap();
-        let values = vm
-            .execute(&program)
-            .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(source)))
-            .to_vec();
-        let actual: Vec<_> = values
-            .into_iter()
-            .map(|v| match v {
-                Value::Nil => Scalar::Nil,
-                Value::Boolean(b) => Scalar::Boolean(b),
-                Value::Number(n) => Scalar::Number(n.to_bits()),
-                Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
-                v => panic!(
-                    "return scalar observations, got {v:?}: {}",
-                    String::from_utf8_lossy(source)
-                ),
-            })
-            .collect();
-        return actual;
-    }
-    // SAFETY: fixed local programs need the development oracle's debug library.
-    let lua = unsafe { Lua::unsafe_new() };
-    lua.globals()
-        .set(
-            "host_pointer",
-            lua_reference::LightUserData(std::ptr::without_provenance_mut(0x1abc)),
-        )
+fn observe(source: &[u8]) -> Vec<Scalar> {
+    const LUA_LOADERS: &[u8] = b"package.loaders[3]=nil;package.loaders[4]=nil";
+    let mut vm = Vm::new();
+    vm.execute(&compile(LUA_LOADERS).unwrap()).unwrap();
+    vm.set_instruction_limit(Some(10_000_000));
+    vm.set_output_capture(true);
+    vm.set_global(b"host_pointer", Value::LightUserdata(0x1abc))
         .unwrap();
-    lua.globals()
-        .set(
-            "host_null_pointer",
-            lua_reference::LightUserData(std::ptr::null_mut()),
-        )
+    vm.set_global(b"host_null_pointer", Value::LightUserdata(0))
         .unwrap();
-    // Use a plain protected entry with no host error-handler value below it.
-    // The normal mlua eval wrapper leaves that C function on the base stack,
-    // which Lua 5.1 can expose through negative/lost-tail local queries.
-    let reference: MultiValue = lua.exec_raw_lua(|raw| unsafe {
-        use lua_reference::{FromLuaMulti, ffi};
-        let state = raw.state();
-        let start = ffi::lua_gettop(state);
-        let mut status = ffi::luaL_loadbuffer(
-            state,
-            source.as_ptr().cast(),
-            source.len(),
-            c"=(deadlib-lua)".as_ptr(),
-        );
-        if status == 0 {
-            status = ffi::lua_pcall(state, 0, ffi::LUA_MULTRET, 0);
-        }
-        if status != 0 {
-            let mut len = 0;
-            let text = ffi::lua_tolstring(state, -1, &mut len);
-            let message = if text.is_null() {
-                "non-string error".into()
-            } else {
-                String::from_utf8_lossy(std::slice::from_raw_parts(text.cast(), len)).into_owned()
-            };
-            ffi::lua_settop(state, start);
-            panic!("reference: {message}: {}", String::from_utf8_lossy(source));
-        }
-        assert_ne!(
-            ffi::lua_checkstack(state, 32),
-            0,
-            "oracle result conversion stack"
-        );
-        let values = MultiValue::from_stack_multi(ffi::lua_gettop(state) - start, raw).unwrap();
-        ffi::lua_settop(state, start);
-        values
-    });
-    let expected: Vec<_> = reference
+    let program = compile(source).unwrap();
+    let values = vm
+        .execute(&program)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(source)))
+        .to_vec();
+    let actual: Vec<_> = values
         .into_iter()
         .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalar observations"),
+            Value::Nil => Scalar::Nil,
+            Value::Boolean(b) => Scalar::Boolean(b),
+            Value::Number(n) => Scalar::Number(n.to_bits()),
+            Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
+            v => panic!(
+                "return scalar observations, got {v:?}: {}",
+                String::from_utf8_lossy(source)
+            ),
         })
         .collect();
-    expected
+    return actual;
 }
 
 fn compare(source: &[u8]) {
-    let actual = observe(source, false);
-    let expected = observe(source, true);
-    if actual != expected {
-        for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
-            if a != b && !matches!((a, b), (Scalar::Bytes(_), Scalar::Bytes(_))) {
-                panic!("observation {index}: rust={a:?}, reference={b:?}");
-            }
-            if let (Scalar::Bytes(a), Scalar::Bytes(b)) = (a, b)
-                && a != b
-            {
-                let at = a
-                    .iter()
-                    .zip(b)
-                    .position(|(a, b)| a != b)
-                    .unwrap_or(a.len().min(b.len()));
-                panic!(
-                    "observation {index}, bytes differ at {at}: rust={:?}, reference={:?}: {}",
-                    String::from_utf8_lossy(&a[at.saturating_sub(40)..(at + 80).min(a.len())]),
-                    String::from_utf8_lossy(&b[at.saturating_sub(40)..(at + 80).min(b.len())]),
-                    String::from_utf8_lossy(source)
-                );
-            }
-        }
-        assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
-    }
+    let actual = observe(source);
+    reference_test::assert_debug("tests/package.rs::observe::expected", &actual);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

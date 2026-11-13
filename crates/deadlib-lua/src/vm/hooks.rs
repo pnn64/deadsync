@@ -1,6 +1,8 @@
 //! Per-thread hook controls and non-recursive event delivery.
 use super::*;
 use crate::bytecode::Prototype;
+#[cfg(test)]
+mod allocation_tests;
 mod returns;
 
 pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -> Option<usize> {
@@ -15,7 +17,10 @@ pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -
                 .and_then(|pc| proto.code.get(pc));
             Some(
                 if previous.is_some_and(|i| {
-                    matches!(i.op, Op::Call | Op::Vararg | Op::Move) && i.c == OPEN
+                    // A native tail call retains this Lua frame until its
+                    // following return, with open results beyond fixed slots.
+                    (matches!(i.op, Op::Call | Op::Vararg | Op::Move) && i.c == OPEN)
+                        || i.op == Op::TailCall
                 }) {
                     next.result
                 } else {
@@ -41,12 +46,12 @@ pub(super) struct Hooks {
     pub host_running: Option<u64>,
     pub host_owner: Option<usize>,
     pub hidden_start: usize,
-    pub hidden: Vec<Value>,
+    pub hidden: Buffer<Value>,
     // Unrooted physical slots beneath a C hook's saved top. Lowering the
     // public top releases roots without erasing their bits. Stack traversal
     // clears them, and writes followed by another pop replace the saved bits.
     pub popped_start: usize,
-    pub popped: Vec<Value>,
+    pub popped: Buffer<Value>,
     pub yielding: bool,
     pub yield_base: usize,
     pub yield_end: usize,
@@ -70,6 +75,13 @@ pub(super) enum Callback {
     Host(u64),
 }
 impl Hooks {
+    pub fn new_in(memory: Memory) -> Self {
+        Self {
+            hidden: Buffer::new_in(memory.clone()),
+            popped: Buffer::new_in(memory),
+            ..Self::default()
+        }
+    }
     pub fn preserve_popped(&mut self, registers: &[Value], end: usize) {
         if self.popped.is_empty() {
             return;
@@ -98,7 +110,7 @@ impl Hooks {
             mask: self.mask,
             count: self.count,
             ticks: self.count,
-            ..Self::default()
+            ..Self::new_in(self.hidden.memory().clone())
         }
     }
 }
@@ -125,7 +137,7 @@ impl Vm {
         if let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) {
             return Ok(table);
         }
-        let table = self.new_table();
+        let table = self.try_new_table()?;
         self.raw_set(self.registry, REGISTRY_KEY, Value::Table(table))?;
         Ok(table)
     }
@@ -240,14 +252,18 @@ impl Vm {
                 len += 1;
             }
         }
-        self.resize_registers(self.registers.len().max(base + 3));
-        self.registers[base] = if matches!(callback, Callback::Host(_)) {
-            self.intern(b"external hook")
+        let end = self.registers.len().max(base + 3);
+        self.reserve_registers(end)?;
+        let function = if matches!(callback, Callback::Host(_)) {
+            self.try_intern(b"external hook")?
         } else {
             let table = self.hook_table()?;
             self.tables[slot_index(table.0)].get(Value::LightUserdata(thread.0))
         };
-        self.registers[base + 1] = self.intern(&text[..len]);
+        let mask = self.try_intern(&text[..len])?;
+        self.resize_registers(end);
+        self.registers[base] = function;
+        self.registers[base + 1] = mask;
         self.registers[base + 2] = Value::Number(f64::from(count));
         Ok(3)
     }
@@ -280,7 +296,9 @@ impl Vm {
         }
         let base = self.registers.len();
         let top = self.top;
-        let event = self.intern(event);
+        self.reserve_frames(2)?;
+        self.reserve_registers(base + 4)?;
+        let event = self.try_intern(event)?;
         self.registers.extend_from_slice(&[
             Value::Table(table),
             function,
@@ -344,8 +362,7 @@ impl Vm {
         {
             return Ok(());
         }
-        self.hooks.tail = None;
-        let frame = self.frames.pop().expect("pending tail callee");
+        let frame = *self.frames.last().expect("pending tail callee");
         let FrameKind::Lua(id) = frame.function else {
             unreachable!("Lua tail callee");
         };
@@ -356,6 +373,13 @@ impl Vm {
             .compat_arg
             .then(|| self.registers[frame.base + params]);
         let call = self.registers.len();
+        let count = params + frame.argc();
+        let copied = call + 1 + count;
+        let caller = self.frames[index - 1];
+        let end = caller.stack_start + frame.argc() + usize::from(proto.registers);
+        self.reserve_registers(copied.max(end) + count)?;
+        self.hooks.tail = None;
+        self.frames.pop();
         self.registers.push(Value::Function(id));
         self.registers
             .extend_from_within(frame.base..frame.base + params);
@@ -411,6 +435,11 @@ impl Vm {
             );
         let line_event = self.hooks.mask & LINE != 0
             && (pc == 0 || pc <= previous || line != proto.debug.hook_lines[previous]);
+        if self.hooks.allowed()
+            && (line_event || (self.hooks.mask & COUNT != 0 && self.hooks.ticks == 1))
+        {
+            self.reserve_frames(1)?;
+        }
         self.hooks.last = Some((index as u16, pc as u32));
         let count = self.hooks.tick();
         if !self.hooks.allowed() || (!count && !line_event) {
@@ -438,13 +467,14 @@ impl Vm {
         mut frame: Frame,
         mut source: usize,
         count: usize,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         if self.hooks.mask & RETURN == 0 || !self.hooks.allowed() || !visible(frame) {
-            return false;
+            return Ok(false);
         }
+        self.reserve_frames(1)?;
         self.close_upvalues(frame.base);
         if let FrameKind::Native(id) = frame.function {
-            source = self.native_return_stack(id, &mut frame, source, count);
+            source = self.native_return_stack(id, &mut frame, source, count)?;
             *self.frames.last_mut().expect("returning native frame") = frame;
         }
         let base = self.registers.len();
@@ -461,7 +491,7 @@ impl Vm {
             tail_calls: 0,
             c_level_bias: 0,
         });
-        true
+        Ok(true)
     }
     pub(super) fn hook_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let index = self.frames.len() - 1;
@@ -540,11 +570,7 @@ impl Vm {
                     self.hook_callback(b"tail return", None, owner, self.frames[owner].pc)?;
                 } else {
                     self.frames.pop();
-                    return Ok(self.finish_frame(
-                        self.frames[owner],
-                        frame.vararg_start,
-                        frame.argc(),
-                    ));
+                    return self.finish_frame(self.frames[owner], frame.vararg_start, frame.argc());
                 }
             }
             _ => unreachable!("hook continuation"),

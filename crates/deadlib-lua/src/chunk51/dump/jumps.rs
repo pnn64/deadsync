@@ -2,6 +2,7 @@
 use super::fail;
 use crate::Error;
 use crate::bytecode::Prototype;
+use crate::memory::fallible::{self, VecExt};
 
 const LIMIT: i64 = 131071;
 const STEP: usize = 65536;
@@ -55,13 +56,13 @@ pub(super) fn relax(
     patches: &[(usize, usize)],
     prototype: &Prototype,
 ) -> Result<Vec<LocalRange>, Error> {
-    let mut safe = vec![false; code.len() + 1];
+    let mut safe = fallible::repeat(false, code.len() + 1)?;
     for &pc in pcs.iter() {
         if pc != 0 && (pc as usize) < code.len() {
             safe[pc as usize] = true;
         }
     }
-    let mut edges = Vec::with_capacity(patches.len());
+    let mut edges = fallible::with_capacity(patches.len())?;
     let mut patch = 0;
     let mut pc = 0;
     while pc < code.len() {
@@ -90,11 +91,11 @@ pub(super) fn relax(
                 return Err(fail());
             }
             let origin = pcs.partition_point(|&p| p as usize <= pc).saturating_sub(1);
-            edges.push(Edge {
+            edges.try_push(Edge {
                 site: pc,
                 target,
                 origin,
-            });
+            })?;
         }
         pc += if op == 34 && (word >> 14) & 511 == 0 {
             2
@@ -107,11 +108,12 @@ pub(super) fn relax(
     }
     let mut sites: Vec<Site> = Vec::new();
     loop {
-        let cuts: Vec<_> = safe
-            .iter()
-            .enumerate()
-            .filter_map(|(pc, &yes)| yes.then_some(pc))
-            .collect();
+        let mut cuts = Vec::new();
+        cuts.try_extend(
+            safe.iter()
+                .enumerate()
+                .filter_map(|(pc, &yes)| yes.then_some(pc)),
+        )?;
         let mut requests = Vec::new();
         for (index, &edge) in edges.iter().enumerate() {
             let distance = offset(edge);
@@ -138,22 +140,22 @@ pub(super) fn relax(
                 }
                 cut
             };
-            requests.push(Request {
+            requests.try_push(Request {
                 edge: index,
                 cut,
                 target: edge.target,
                 origin: edge.origin,
-            });
+            })?;
         }
         if requests.is_empty() {
             for edge in edges {
                 code[edge.site] = encode(code[edge.site], offset(edge))?;
             }
-            return Ok(scopes(prototype, pcs, &sites));
+            return scopes(prototype, pcs, &sites);
         }
         requests.sort_unstable_by_key(|r| (r.cut, r.target, r.origin));
-        let mut relays: Vec<Relay> = Vec::with_capacity(requests.len());
-        let mut redirects = vec![usize::MAX; edges.len()];
+        let mut relays: Vec<Relay> = fallible::with_capacity(requests.len())?;
+        let mut redirects = fallible::repeat(usize::MAX, edges.len())?;
         for request in requests {
             if relays.last().is_none_or(|r| {
                 r.cut != request.cut || r.target != request.target || r.origin != request.origin
@@ -167,13 +169,13 @@ pub(super) fn relax(
                         },
                         |index| sites[index].origin,
                     );
-                relays.push(Relay {
+                relays.try_push(Relay {
                     cut: request.cut,
                     target: request.target,
                     site: 0,
                     origin: request.origin,
                     context,
-                });
+                })?;
             }
             redirects[request.edge] = relays.len() - 1;
         }
@@ -182,29 +184,29 @@ pub(super) fn relax(
             .checked_add(relays.len().checked_mul(2).ok_or_else(fail)?)
             .filter(|&n| n <= i32::MAX as usize)
             .ok_or_else(fail)?;
-        let mut next = Vec::with_capacity(new_len);
-        let mut next_lines = Vec::with_capacity(new_len);
-        let mut next_safe = vec![false; new_len + 1];
-        let mut positions = Vec::with_capacity(code.len() + 1);
+        let mut next = fallible::with_capacity(new_len)?;
+        let mut next_lines = fallible::with_capacity(new_len)?;
+        let mut next_safe = fallible::repeat(false, new_len + 1)?;
+        let mut positions = fallible::with_capacity(code.len() + 1)?;
         let mut relay = 0;
         for (pc, (&word, &line)) in code.iter().zip(lines.iter()).enumerate() {
             while relay < relays.len() && relays[relay].cut == pc {
                 // Ordinary fallthrough skips the relay. Only its redirected
                 // branch enters it; neither instruction touches Lua registers.
                 next_safe[next.len()] = true;
-                next.push(JMP);
-                next_lines.push(line);
+                next.try_push(JMP)?;
+                next_lines.try_push(line)?;
                 relays[relay].site = next.len();
-                next.push(JMP);
-                next_lines.push(prototype.lines[relays[relay].origin]);
+                next.try_push(JMP)?;
+                next_lines.try_push(prototype.lines[relays[relay].origin])?;
                 relay += 1;
             }
-            positions.push(next.len());
+            positions.try_push(next.len())?;
             next_safe[next.len()] = safe[pc];
-            next.push(word);
-            next_lines.push(line);
+            next.try_push(word)?;
+            next_lines.try_push(line)?;
         }
-        positions.push(next.len());
+        positions.try_push(next.len())?;
         for (index, edge) in edges.iter_mut().enumerate() {
             edge.site = positions[edge.site];
             edge.target = if redirects[index] == usize::MAX {
@@ -217,26 +219,26 @@ pub(super) fn relax(
             site.pc = positions[site.pc];
         }
         for relay in relays {
-            edges.push(Edge {
+            edges.try_push(Edge {
                 site: relay.site - 1,
                 target: relay.site + 1,
                 origin: relay.context,
-            });
-            edges.push(Edge {
+            })?;
+            edges.try_push(Edge {
                 site: relay.site,
                 target: positions[relay.target],
                 origin: relay.origin,
-            });
-            sites.push(Site {
+            })?;
+            sites.try_push(Site {
                 pc: relay.site - 1,
                 origin: relay.context,
                 relay: false,
-            });
-            sites.push(Site {
+            })?;
+            sites.try_push(Site {
                 pc: relay.site,
                 origin: relay.origin,
                 relay: true,
-            });
+            })?;
         }
         sites.sort_unstable_by_key(|s| s.pc);
         for pc in pcs.iter_mut() {
@@ -248,9 +250,10 @@ pub(super) fn relax(
     }
 }
 
-fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Vec<LocalRange> {
-    let relays: Vec<_> = sites.iter().filter(|s| s.relay).collect();
-    let mut ranges = Vec::with_capacity(prototype.debug.locals.len());
+fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Result<Vec<LocalRange>, Error> {
+    let mut relays = Vec::new();
+    relays.try_extend(sites.iter().filter(|s| s.relay))?;
+    let mut ranges = fallible::with_capacity(prototype.debug.locals.len())?;
     for (index, local) in prototype.debug.locals.iter().enumerate() {
         let mut start = pcs[local.start as usize];
         let end = pcs[local.end as usize];
@@ -261,16 +264,16 @@ fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Vec<LocalRange>
                 break;
             }
             if start < pc {
-                ranges.push(LocalRange {
+                ranges.try_push(LocalRange {
                     index,
                     start,
                     end: pc,
-                });
+                })?;
             }
             start = pc + 1;
         }
         if start < end {
-            ranges.push(LocalRange { index, start, end });
+            ranges.try_push(LocalRange { index, start, end })?;
         }
     }
     // Relay execution inherits its branch's scope, not the scope of the
@@ -285,20 +288,20 @@ fn scopes(prototype: &Prototype, pcs: &[u32], sites: &[Site]) -> Vec<LocalRange>
             && prototype.debug.locals[next].start as usize <= relay.origin
         {
             if relay.origin < prototype.debug.locals[next].end as usize {
-                active.push(next);
+                active.try_push(next)?;
             }
             next += 1;
         }
         for &index in &active {
-            ranges.push(LocalRange {
+            ranges.try_push(LocalRange {
                 index,
                 start: relay.pc as u32,
                 end: relay.pc as u32 + 1,
-            });
+            })?;
         }
     }
     ranges.sort_unstable_by_key(|r| (r.start, r.index));
-    ranges
+    Ok(ranges)
 }
 
 #[cfg(test)]

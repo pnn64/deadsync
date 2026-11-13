@@ -987,10 +987,14 @@ impl State {
         // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
         scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
             .map_err(|error| error.to_string())?;
-        scene.install_tap_row_judgment_callback(&mut self.gameplay);
-        scene.install_step_callback(&mut self.gameplay);
-        scene.install_hold_judgment_callback(&mut self.gameplay);
-        scene.install_avoided_mine_judgment_callback(&mut self.gameplay);
+        scene.install_tap_row_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_step_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_hold_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_avoided_mine_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
         if !self.song_lua_output.errors.is_empty() {
@@ -3039,18 +3043,6 @@ pub fn runtime_profile_side(state: &State, player_idx: usize) -> profile_data::P
     profile_side_from_gameplay(state.runtime_player_side(player_idx))
 }
 
-pub const fn smx_sensor_profile_enabled(state: &State) -> bool {
-    state.runtime_view.policy.smx_profile_enabled
-}
-
-pub fn record_smx_sensor_read_ns(state: &State, elapsed_ns: u64) {
-    smx_profile::record_read(state.runtime_view.policy.smx_profile_enabled, elapsed_ns);
-}
-
-pub fn report_smx_sensor_profile(state: &State) {
-    smx_profile::maybe_report(state.runtime_view.policy.smx_profile_enabled);
-}
-
 pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeEffect>) {
     handle_input_with_device(state, ev, None, effects);
 }
@@ -4936,15 +4928,13 @@ pub fn frame_layers<'a>(
                 let smx_overlay_alpha = view.smx_overlay_alpha.min(exit_alpha);
                 if state.profiles()[0].smx_fsr_display || state.profiles()[1].smx_fsr_display {
                     let before = actors.len();
-                    smx_profile::time_draw(state.runtime_view.policy.smx_profile_enabled, || {
-                        push_smx_sensor_display(
-                            actors,
-                            state,
-                            &field_geom,
-                            is_doubles,
-                            is_centered_single,
-                        );
-                    });
+                    push_smx_sensor_display(
+                        actors,
+                        state,
+                        &field_geom,
+                        is_doubles,
+                        is_centered_single,
+                    );
                     if smx_overlay_alpha < 1.0 {
                         for a in &mut actors[before..] {
                             a.mul_alpha(smx_overlay_alpha);
@@ -5745,102 +5735,6 @@ pub fn draw_field(
     )
 }
 
-// ─── SMX sensor display profiling ──────────────────────────────────────────────
-//
-// Opt-in, zero-cost-when-off instrumentation to attribute the FSR visualizer's
-// per-frame cost. Enable by running with `DEADSYNC_SMX_PROFILE=1`. Once a second
-// it logs the rolling average and max for two regions:
-//   read  — the throttled SDK get_test_data call (captures shared-state lock
-//           wait + the clone); shows whether lock contention is the cost.
-//   draw  — building the bar/text actors each frame.
-// `n` is the sample count in the window (read should sit near 60/s after the
-// throttle; draw tracks the frame rate).
-mod smx_profile {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::{Mutex, OnceLock};
-    use std::time::Instant;
-
-    struct Bucket {
-        sum_ns: AtomicU64,
-        max_ns: AtomicU64,
-        count: AtomicU64,
-    }
-
-    impl Bucket {
-        const fn new() -> Self {
-            Self {
-                sum_ns: AtomicU64::new(0),
-                max_ns: AtomicU64::new(0),
-                count: AtomicU64::new(0),
-            }
-        }
-
-        fn record(&self, ns: u64) {
-            self.sum_ns.fetch_add(ns, Ordering::Relaxed);
-            self.max_ns.fetch_max(ns, Ordering::Relaxed);
-            self.count.fetch_add(1, Ordering::Relaxed);
-        }
-
-        // Average (µs), max (µs), and sample count over the window, resetting it.
-        fn take(&self) -> (f64, f64, u64) {
-            let sum = self.sum_ns.swap(0, Ordering::Relaxed);
-            let max = self.max_ns.swap(0, Ordering::Relaxed);
-            let count = self.count.swap(0, Ordering::Relaxed);
-            let avg_us = if count == 0 {
-                0.0
-            } else {
-                sum as f64 / count as f64 / 1000.0
-            };
-            (avg_us, max as f64 / 1000.0, count)
-        }
-    }
-
-    static READ: Bucket = Bucket::new();
-    static DRAW: Bucket = Bucket::new();
-
-    fn time<T>(enabled: bool, bucket: &Bucket, f: impl FnOnce() -> T) -> T {
-        if !enabled {
-            return f();
-        }
-        let start = Instant::now();
-        let out = f();
-        bucket.record(start.elapsed().as_nanos() as u64);
-        out
-    }
-
-    pub(super) fn record_read(enabled: bool, elapsed_ns: u64) {
-        if enabled {
-            READ.record(elapsed_ns);
-        }
-    }
-
-    pub fn time_draw<T>(enabled: bool, f: impl FnOnce() -> T) -> T {
-        time(enabled, &DRAW, f)
-    }
-
-    /// Log the rolling window once a second. Cheap no-op when profiling is off.
-    pub fn maybe_report(enabled: bool) {
-        if !enabled {
-            return;
-        }
-        static LAST: OnceLock<Mutex<Instant>> = OnceLock::new();
-        let clock = LAST.get_or_init(|| Mutex::new(Instant::now()));
-        let mut last = clock.lock().unwrap();
-        if last.elapsed().as_secs_f32() < 1.0 {
-            return;
-        }
-        *last = Instant::now();
-        drop(last);
-
-        let (read_avg, read_max, read_n) = READ.take();
-        let (draw_avg, draw_max, draw_n) = DRAW.take();
-        // `warn` so this opt-in diagnostic is visible at the default log level.
-        log::warn!(
-            "smx-profile: read avg={read_avg:.1}us max={read_max:.1}us n={read_n} | \
-             draw avg={draw_avg:.1}us max={draw_max:.1}us n={draw_n}"
-        );
-    }
-}
 
 // ─── SMX sensor display ────────────────────────────────────────────────────────
 

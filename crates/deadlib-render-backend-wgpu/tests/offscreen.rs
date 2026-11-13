@@ -430,7 +430,6 @@ impl ApplicationHandler for CaptureApp {
                 )
                 .expect("create hidden GPU test window"),
         );
-        let benchmark = std::env::var_os("DEADSYNC_OFFSCREEN_BENCH").is_some();
         for api in ["dx12", "vulkan"] {
             let mut state = match api {
                 "dx12" => backend::init_dx12(
@@ -438,14 +437,14 @@ impl ApplicationHandler for CaptureApp {
                     Mat4::IDENTITY,
                     false,
                     PresentModePolicy::Immediate,
-                    !benchmark,
+                    true,
                 ),
                 _ => backend::init_vulkan(
                     Arc::clone(&window),
                     Mat4::IDENTITY,
                     false,
                     PresentModePolicy::Immediate,
-                    !benchmark,
+                    true,
                 ),
             }
             .expect("initialize GPU backend");
@@ -470,41 +469,6 @@ impl ApplicationHandler for CaptureApp {
                 image,
                 "{api}: warm frame"
             );
-            if benchmark {
-                for count in [1, 8, 32] {
-                    let mut workload = scene();
-                    let template = workload.render_targets[2].clone();
-                    workload.render_targets.truncate(1);
-                    for index in 1..count {
-                        let mut target = template.clone();
-                        target.texture_handle = render_target_texture_handle(index as u64 + 1);
-                        target.ops[0] = sample(render_target_texture_handle(index as u64));
-                        workload.render_targets.push(target);
-                    }
-                    workload.ops[0] = sample(render_target_texture_handle(count as u64));
-                    let mut samples = Vec::with_capacity(240);
-                    for index in 0..270 {
-                        let stats = backend::draw(&mut state, &workload, &textures, true)
-                            .expect("timed draw");
-                        if index >= 30 {
-                            samples.push(
-                                stats.backend_prepare_us
-                                    + stats.backend_upload_us
-                                    + stats.backend_setup_us
-                                    + stats.backend_record_us
-                                    + stats.submit_us,
-                            );
-                        }
-                    }
-                    samples.sort_unstable();
-                    println!(
-                        "{api} targets={count}: CPU prepare/upload/encode/submit median={}us p95={}us",
-                        samples[120], samples[227]
-                    );
-                }
-                // The benchmark uses these target handles too. Restore the test image.
-                assert_eq!(capture(&mut state, &frame, &textures), image);
-            }
             // Growing either uniform buffer replaces both buffers. Unchanged
             // camera data must still be uploaded into each replacement.
             frame.cameras.resize(17, Mat4::IDENTITY);

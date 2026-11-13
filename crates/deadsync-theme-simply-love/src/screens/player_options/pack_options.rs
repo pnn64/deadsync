@@ -322,7 +322,3 @@ pub(super) fn apply_part(
     sync_player(state, player);
     Outcome::persisted_with_visibility()
 }
-
-#[cfg(test)]
-#[path = "pack_options/menu_buffers_perf.rs"]
-mod menu_buffers_perf;

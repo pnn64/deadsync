@@ -10,6 +10,38 @@ DeadSync, as in "dead on sync", is a StepMania/ITG engine with Vulkan/OpenGL bac
 </div>
 <hr>
 
+## 🎮 Just want to play? Download it, no building required
+
+**You do not need to build anything.** Download the ready-to-run game for your
+platform from either of these:
+
+- **[deadsync.dance](https://deadsync.dance)**
+- **[The latest GitHub release](https://github.com/pnn64/deadsync/releases/latest)** (under "Assets")
+
+Then extract it, add your
+songs (see [Song directories](#song-directories)), and run it.
+
+### Staying up to date
+
+DeadSync has a built-in updater, so you only need to download it once:
+
+- When a new version is out, the main menu shows it next to your current
+  version number, marked "Available".
+- To update, go to **Options > Downloads / Check for Updates > Check for Updates**
+  and confirm. DeadSync downloads, verifies, and installs the new version for you.
+- Something broke? **Roll Back Version** on the same screen reinstalls an
+  earlier release.
+- You can also update without opening the game: run `deadsync --update` from
+  the install folder (see [Updating without starting the game](#updating-without-starting-the-game)).
+
+Your settings, profiles, and scores are stored outside the install folder (see
+[Data Directories](#data-directories)), so updating never touches them.
+
+---
+
+> **Everything below this point is for developers** who want to build DeadSync
+> from source or contribute. Players can stop here.
+
 ## Prerequisites
 
 Before building, ensure you have the following installed on your system:
@@ -78,7 +110,7 @@ are required on either Apple Silicon (`/opt/homebrew`) or Intel (`/usr/local`):
 ```bash
 cargo run                       # fast dev build
 cargo run --profile local       # optimized, but faster to link than full release
-cargo build --release           # fully optimized (LTO) build for benchmarking/play
+cargo build --release           # fully optimized (LTO) build
 ```
 
 Before the first run, grant **Input Monitoring** to your terminal (see the
@@ -103,7 +135,7 @@ pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers
 
 Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
 mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
-revision before compiling or running tests, examples, or benchmarks (Python
+revision before compiling or running tests or examples (Python
 3.11 or newer is required to restore split archives):
 
 ```sh
@@ -117,9 +149,25 @@ Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
 command verifies each part and restores the exact archives locally; restored
 files are ignored by Git. Run both commands again after fixture updates.
 
+Lua regression snapshots live in `tests/fixtures/regression-expectations`, grouped
+by crate. Snapshots of 50 MB or more are stored as gzip files and restored by the
+same setup command. Use `python scripts/prepare_test_fixtures.py --split` to prepare
+new oversized archives or snapshots before committing fixture changes.
+
 When updating fixtures, commit and push changes in `tests/fixtures` first, then
 commit the updated submodule pointer in this repository. Test runners and fixture
 maintenance scripts stay in this repository; their existing paths still work.
+
+## Performance changes
+
+Keep performance experiments in ignored `target/` output or a temporary
+checkout. Commit the selected production implementation and useful correctness
+tests. Remove timing harnesses, superseded implementations and measurement
+reports before merging; recreate a benchmark when a new investigation needs it.
+
+The official Lua 5.1 suite and its runner in `crates/deadlib-lua/benches/` are
+retained for repeatable interpreter benchmarks. Comparator runtimes and timing
+reports remain temporary output.
 
 ## Full song Lua tests
 

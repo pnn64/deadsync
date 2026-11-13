@@ -3,6 +3,127 @@ use deadlib_lua::{Error, ErrorKind, HostCall, Value, Vm, compile};
 fn execute(vm: &mut Vm, source: &[u8]) -> Vec<Value> {
     vm.execute(&compile(source).unwrap()).unwrap().to_vec()
 }
+
+#[test]
+fn scalar_array_overwrites_preserve_raw_set_metamethods_and_gc() {
+    let mut vm = Vm::new();
+    let Value::Table(table) = execute(&mut vm, b"return {11, 22, 33}")[0] else {
+        panic!("expected table");
+    };
+    vm.set_global(b"target", Value::Table(table)).unwrap();
+
+    for (key, value) in [
+        (1.0, Value::Nil),
+        (2.0, Value::Boolean(false)),
+        (3.0, Value::Number(42.0)),
+        (2.0, Value::LightUserdata(0x1234)),
+    ] {
+        vm.raw_table_set(table, Value::Number(key), value).unwrap();
+        assert_eq!(vm.raw_table_get(table, Value::Number(key)).unwrap(), value);
+    }
+
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local calls = 0
+setmetatable(target, {__newindex = function(t, k, v)
+    calls = calls + 1
+    rawset(t, k, v)
+end})
+target[2] = 12 -- non-nil scalar, no __newindex
+target[1] = 23 -- nil array slot, invokes __newindex
+target[1] = false -- non-nil scalar again
+target[3] = {sentinel = 91} -- object value still follows GC barriers
+collectgarbage()
+assert(target[3].sentinel == 91)
+target[3] = 7
+target[4] = 10 -- absent array slot, invokes __newindex
+target[2.5] = 25 -- non-integer key, invokes __newindex
+local nil_ok = pcall(rawset, target, nil, 1)
+local nan_ok = pcall(rawset, target, 0/0, 1)
+return calls, target[1], target[2], target[3], target[4], target[2.5], nil_ok, nan_ok
+"#,
+        ),
+        [
+            Value::Number(3.0),
+            Value::Boolean(false),
+            Value::Number(12.0),
+            Value::Number(7.0),
+            Value::Number(10.0),
+            Value::Number(25.0),
+            Value::Boolean(false),
+            Value::Boolean(false),
+        ]
+    );
+}
+
+#[test]
+fn live_hash_scalar_overwrites_keep_metamethods_keys_and_collection() {
+    let mut vm = Vm::new();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local t = {alpha=1, beta=2, other={value=11}}
+local key = {}
+t[key] = 1
+for i=1,1000 do
+    t.alpha=i
+    t[key]=i
+end
+t.beta=false
+t[-0.0]=17
+t[0.0]=19
+collectgarbage()
+assert(t.other.value==11 and t[key]==1000 and t[0]==19)
+local visits=0
+for k,v in pairs(t) do visits=visits+1 end
+local calls=0
+setmetatable(t, {__newindex=function(o,k,v)
+    calls=calls+1
+    rawset(o,k,v)
+end})
+t.beta=23
+t.alpha=nil
+t.alpha=42
+return t.alpha,t.beta,t[key],visits,calls
+"#,
+        ),
+        [
+            Value::Number(42.0),
+            Value::Number(23.0),
+            Value::Number(1000.0),
+            Value::Number(5.0),
+            Value::Number(1.0),
+        ],
+    );
+}
+
+#[test]
+fn constructor_list_fields_keep_nil_holes_in_array_storage() {
+    let mut vm = Vm::new();
+    execute(
+        &mut vm,
+        br#"
+local function check()
+    local controls = {false, '0', nil, 1}
+    assert(#controls == 4 and controls[1] == false and controls[2] == '0')
+    assert(controls[3] == nil and controls[4] == 1)
+    local values = {[51] = 'kept', 1, nil, 3}
+    assert(#values == 3 and values[2] == nil and values[51] == 'kept')
+    local seen = {}
+    for key, value in pairs(values) do seen[key] = value end
+    assert(seen[1] == 1 and seen[3] == 3 and seen[51] == 'kept')
+    local function tail() return nil, 5, nil end
+    local expanded = {1, nil, 3, tail()}
+    assert(expanded[4] == nil and expanded[5] == 5 and expanded[6] == nil)
+end
+check()
+assert(loadstring(string.dump(check)))()
+"#,
+    );
+}
 fn get(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = call.native_stack()?;
     stack.push(stack.value(2).unwrap())?;

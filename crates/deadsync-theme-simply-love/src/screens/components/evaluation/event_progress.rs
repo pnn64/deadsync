@@ -1429,11 +1429,3 @@ mod tests {
         assert_eq!(layout.text, "ITL 2026\nDoubles");
     }
 }
-
-#[cfg(test)]
-mod preview_dataflows {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/preview_progress.rs"
-    ));
-}

@@ -10,6 +10,7 @@ use deadsync_gameplay::{
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
 #[cfg(test)]
+#[allow(dead_code)]
 #[path = "../../../tests/support/song_fixture.rs"]
 mod song_fixture;
 
@@ -28,7 +29,7 @@ pub(crate) mod tests {
         space,
     };
     use deadlib_render_core::{
-        DrawOp, DrawStorageStats,
+        DrawOp,
         frame_compare::{compare_render_frames, compare_render_frames_semantic},
     };
     use deadsync_assets::noteskin::{self, Noteskin};
@@ -43,129 +44,16 @@ pub(crate) mod tests {
     use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{JudgeGrade, Judgment, TimingWindow};
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
-    use std::alloc::{GlobalAlloc, Layout};
-    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+
     use std::sync::{Arc, LazyLock, Mutex};
     use std::{
         fs,
         path::{Path, PathBuf},
-        time::Instant,
     };
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-    #[global_allocator]
-    static ALLOC: CountingAlloc = CountingAlloc::new();
-
-    struct CountingAlloc {
-        enabled: AtomicBool,
-        allocs: AtomicU64,
-        reallocs: AtomicU64,
-        deallocs: AtomicU64,
-        alloc_bytes: AtomicU64,
-        realloc_bytes: AtomicU64,
-        dealloc_bytes: AtomicU64,
-    }
-
-    impl CountingAlloc {
-        const fn new() -> Self {
-            Self {
-                enabled: AtomicBool::new(false),
-                allocs: AtomicU64::new(0),
-                reallocs: AtomicU64::new(0),
-                deallocs: AtomicU64::new(0),
-                alloc_bytes: AtomicU64::new(0),
-                realloc_bytes: AtomicU64::new(0),
-                dealloc_bytes: AtomicU64::new(0),
-            }
-        }
-
-        fn begin(&self) {
-            assert!(!self.enabled.load(Ordering::Relaxed));
-            self.allocs.store(0, Ordering::Relaxed);
-            self.reallocs.store(0, Ordering::Relaxed);
-            self.deallocs.store(0, Ordering::Relaxed);
-            self.alloc_bytes.store(0, Ordering::Relaxed);
-            self.realloc_bytes.store(0, Ordering::Relaxed);
-            self.dealloc_bytes.store(0, Ordering::Relaxed);
-            self.enabled.store(true, Ordering::Relaxed);
-        }
-
-        fn end(&self) -> AllocCounts {
-            self.enabled.store(false, Ordering::Relaxed);
-            AllocCounts {
-                allocs: self.allocs.load(Ordering::Relaxed),
-                reallocs: self.reallocs.load(Ordering::Relaxed),
-                deallocs: self.deallocs.load(Ordering::Relaxed),
-                alloc_bytes: self.alloc_bytes.load(Ordering::Relaxed),
-                realloc_bytes: self.realloc_bytes.load(Ordering::Relaxed),
-                dealloc_bytes: self.dealloc_bytes.load(Ordering::Relaxed),
-            }
-        }
-
-        #[inline(always)]
-        fn counting(&self) -> bool {
-            self.enabled.load(Ordering::Relaxed)
-        }
-    }
-
-    // SAFETY: every operation delegates to `System` with the caller-provided
-    // pointer and layout. The atomics only observe calls while the isolated
-    // fixture explicitly enables counting and do not affect ownership.
-    unsafe impl GlobalAlloc for CountingAlloc {
-        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-            // SAFETY: `layout` is forwarded unchanged to the system allocator.
-            let ptr = unsafe { crate::perf::CountedSystem.alloc(layout) };
-            if !ptr.is_null() && self.counting() {
-                self.allocs.fetch_add(1, Ordering::Relaxed);
-                self.alloc_bytes
-                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
-            }
-            ptr
-        }
-
-        unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-            // SAFETY: `layout` is forwarded unchanged to the system allocator.
-            let ptr = unsafe { crate::perf::CountedSystem.alloc_zeroed(layout) };
-            if !ptr.is_null() && self.counting() {
-                self.allocs.fetch_add(1, Ordering::Relaxed);
-                self.alloc_bytes
-                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
-            }
-            ptr
-        }
-
-        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            if self.counting() {
-                self.deallocs.fetch_add(1, Ordering::Relaxed);
-                self.dealloc_bytes
-                    .fetch_add(layout.size() as u64, Ordering::Relaxed);
-            }
-            // SAFETY: the allocator caller supplies the original pointer/layout.
-            unsafe { crate::perf::CountedSystem.dealloc(ptr, layout) };
-        }
-
-        unsafe fn realloc(&self, ptr: *mut u8, old: Layout, new_size: usize) -> *mut u8 {
-            // SAFETY: all arguments are forwarded unchanged to `System`.
-            let out = unsafe { crate::perf::CountedSystem.realloc(ptr, old, new_size) };
-            if !out.is_null() && self.counting() {
-                self.reallocs.fetch_add(1, Ordering::Relaxed);
-                self.realloc_bytes
-                    .fetch_add(new_size as u64, Ordering::Relaxed);
-            }
-            out
-        }
-    }
-
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct AllocCounts {
-        allocs: u64,
-        reallocs: u64,
-        deallocs: u64,
-        alloc_bytes: u64,
-        realloc_bytes: u64,
-        dealloc_bytes: u64,
-    }
 
     #[test]
     fn model_cache_prewarms_more_than_legacy_slot_limit() {
@@ -768,7 +656,7 @@ pub(crate) mod tests {
             hud,
             ..Default::default()
         };
-        let prepared = if until_beat.is_none() && !live_diagnostic {
+        let prepared = if until_beat.is_none() {
             crate::gameplay_entry::prepare_song_lua(
                 &song,
                 &charts,
@@ -784,6 +672,12 @@ pub(crate) mod tests {
                 &config,
                 renderer,
                 1,
+                if live_diagnostic {
+                    deadsync_config::options::SongLuaMode::Runtime
+                } else {
+                    deadsync_config::options::SongLuaMode::Baked
+                },
+                None,
             )
         } else {
             let mut context = crate::gameplay_entry::song_lua_context(
@@ -1461,7 +1355,7 @@ return Def.ActorFrame { Name = 'Foreground',
             let mut state = build_test_state_with_lua_mode(&simfile, GameplayViewport::new(640.0, 480.0),
                 GameplaySession::default(), std::array::from_fn(|_| profile_data::Profile::default()),
                 "Software", None, true);
-            assert!(state.song_lua.is_some(), "explicit diagnostic scene retains its VM");
+            assert!(state.song_lua.is_some(), "runtime mode retains its VM");
             let startup = state.take_song_lua_output();
             assert!(startup.errors.is_empty(), "{:?}", startup.errors);
             // Foreground::HandleMessage suppresses loading-time On. Its first
@@ -1822,7 +1716,6 @@ return Def.ActorFrame { Name = 'Foreground',
         normal_path: PathBuf,
         reverse_path: PathBuf,
         manifest_path: PathBuf,
-        timing_path: Option<PathBuf>,
     }
 
     #[cfg(target_os = "windows")]
@@ -1870,81 +1763,6 @@ return Def.ActorFrame { Name = 'Foreground',
         noteskin_sprites: usize,
     }
 
-    #[cfg(target_os = "windows")]
-    const GPU_TIMING_PHASES: [&str; 10] = [
-        "frame_pipeline",
-        "actor_build",
-        "build_screen",
-        "compose",
-        "sort",
-        "draw",
-        "backend_setup",
-        "draw_prepare",
-        "backend_upload",
-        "backend_record",
-    ];
-
-    #[cfg(target_os = "windows")]
-    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-    struct GpuTimingTail {
-        p50: u32,
-        p95: u32,
-        p99: u32,
-        worst: u32,
-    }
-
-    #[cfg(target_os = "windows")]
-    impl std::fmt::Display for GpuTimingTail {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}/{}/{}/{}", self.p50, self.p95, self.p99, self.worst)
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    struct GpuTimingSamples {
-        phases: [Vec<u32>; GPU_TIMING_PHASES.len()],
-    }
-
-    #[cfg(target_os = "windows")]
-    impl GpuTimingSamples {
-        fn new(frames: usize) -> Self {
-            Self {
-                phases: std::array::from_fn(|_| Vec::with_capacity(frames)),
-            }
-        }
-
-        fn push(&mut self, phases: [u32; GPU_TIMING_PHASES.len()]) {
-            for (samples, value) in self.phases.iter_mut().zip(phases) {
-                samples.push(value);
-            }
-        }
-
-        fn tails(&mut self) -> [GpuTimingTail; GPU_TIMING_PHASES.len()] {
-            std::array::from_fn(|index| gpu_timing_tail(&mut self.phases[index]))
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    struct GpuTimingStorage {
-        actor_capacity: usize,
-        compose: compose::ComposeStorageStats,
-        draw: DrawStorageStats,
-    }
-
-    #[cfg(target_os = "windows")]
-    struct GpuFrameTiming {
-        phases: [u32; GPU_TIMING_PHASES.len()],
-        storage: GpuTimingStorage,
-        sort_fallback: bool,
-    }
-
-    #[cfg(target_os = "windows")]
-    #[derive(Clone, Copy)]
-    struct GpuTimingConfig {
-        warmup_frames: usize,
-        measured_frames: usize,
-    }
 
     #[cfg(target_os = "windows")]
     struct CaptureTextureContext<'a> {
@@ -2160,245 +1978,6 @@ return Def.ActorFrame { Name = 'Foreground',
             })
     }
 
-    #[cfg(target_os = "windows")]
-    fn gpu_elapsed_us(started: Instant) -> u32 {
-        started.elapsed().as_micros().min(u128::from(u32::MAX)) as u32
-    }
-
-    #[cfg(target_os = "windows")]
-    fn gpu_timing_tail(samples: &mut [u32]) -> GpuTimingTail {
-        if samples.is_empty() {
-            return GpuTimingTail::default();
-        }
-        samples.sort_unstable();
-        let percentile = |pct: usize| {
-            let rank = samples.len().saturating_mul(pct).saturating_add(99) / 100;
-            samples[rank.saturating_sub(1).min(samples.len() - 1)]
-        };
-        GpuTimingTail {
-            p50: percentile(50),
-            p95: percentile(95),
-            p99: percentile(99),
-            worst: samples[samples.len() - 1],
-        }
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn gpu_timing_tail_uses_ceiling_percentile_rank() {
-        let mut samples = (1..=100).collect::<Vec<_>>();
-
-        assert_eq!(
-            gpu_timing_tail(&mut samples),
-            GpuTimingTail {
-                p50: 50,
-                p95: 95,
-                p99: 99,
-                worst: 100,
-            }
-        );
-    }
-
-    #[cfg(target_os = "windows")]
-    fn gpu_timing_config() -> Result<Option<GpuTimingConfig>, String> {
-        let Some(measured) = std::env::var_os("DEADSYNC_F0_TIMING_FRAMES") else {
-            return Ok(None);
-        };
-        let measured = measured
-            .to_str()
-            .ok_or("DEADSYNC_F0_TIMING_FRAMES must be valid Unicode")?
-            .parse::<usize>()
-            .map_err(|error| format!("invalid DEADSYNC_F0_TIMING_FRAMES: {error}"))?;
-        if !(100..=100_000).contains(&measured) {
-            return Err("DEADSYNC_F0_TIMING_FRAMES must be between 100 and 100000".to_owned());
-        }
-        let warmup = match std::env::var("DEADSYNC_F0_WARMUP_FRAMES") {
-            Ok(value) => value
-                .parse::<usize>()
-                .map_err(|error| format!("invalid DEADSYNC_F0_WARMUP_FRAMES: {error}"))?,
-            Err(std::env::VarError::NotPresent) => 512,
-            Err(error) => {
-                return Err(format!("invalid DEADSYNC_F0_WARMUP_FRAMES: {error}"));
-            }
-        };
-        if !(64..=100_000).contains(&warmup) {
-            return Err("DEADSYNC_F0_WARMUP_FRAMES must be between 64 and 100000".to_owned());
-        }
-        Ok(Some(GpuTimingConfig {
-            warmup_frames: warmup,
-            measured_frames: measured,
-        }))
-    }
-
-    #[cfg(target_os = "windows")]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the timing frame makes every warmed presentation resource explicit"
-    )]
-    fn run_gpu_timing_frame(
-        state: &mut screen_gameplay::State,
-        assets: &deadlib_assets::AssetManager,
-        backend: &mut deadlib_render::Backend,
-        metrics: &space::Metrics,
-        actors: &mut Vec<deadlib_present::actors::Actor>,
-        text_cache: &mut compose::TextLayoutCache,
-        compose_scratch: &mut compose::ComposeScratch,
-        collect_sort_timing: bool,
-    ) -> Result<GpuFrameTiming, String> {
-        let frame_started = Instant::now();
-        actors.clear();
-        let actor_started = Instant::now();
-        let segments = crate::gameplay_runtime::push_actors(
-            actors,
-            state,
-            assets,
-            screen_gameplay::ActorViewOverride::default(),
-            123.0,
-            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
-        );
-        let actor_segments = segments.segments(state.song_frame(), actors);
-        let actor_us = gpu_elapsed_us(actor_started);
-
-        compose_scratch.begin_frame_stats(collect_sort_timing);
-        let build_started = Instant::now();
-        let mut render = compose::build_passes(
-            actor_segments,
-            state.render_targets(),
-            [0.0, 0.0, 0.0, 1.0],
-            metrics,
-            assets.fonts(),
-            10.0,
-            text_cache,
-            compose_scratch,
-            assets.texture_context(),
-            Some(state.actor_resources()),
-        );
-        let build_us = gpu_elapsed_us(build_started);
-        let compose_frame = compose_scratch.frame_stats();
-
-        let draw_started = Instant::now();
-        let draw = backend
-            .draw(&render, assets.textures(), false)
-            .map_err(|error| format!("timing draw failed: {error}"))?;
-        let draw_us = gpu_elapsed_us(draw_started);
-        compose_scratch.recycle_frame(&mut render);
-        let frame_us = gpu_elapsed_us(frame_started);
-
-        Ok(GpuFrameTiming {
-            phases: [
-                frame_us,
-                actor_us,
-                build_us,
-                actor_us.saturating_add(build_us),
-                compose_frame.sort_us,
-                draw_us,
-                draw.backend_setup_us,
-                draw.backend_prepare_us,
-                draw.backend_upload_us,
-                draw.backend_record_us,
-            ],
-            storage: GpuTimingStorage {
-                actor_capacity: actors.capacity(),
-                compose: compose_scratch.storage_stats(),
-                draw: draw.storage,
-            },
-            sort_fallback: compose_frame.sort_fallback,
-        })
-    }
-
-    #[cfg(target_os = "windows")]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "the timing capture owns one explicit value for each warmed presentation resource"
-    )]
-    fn capture_gpu_timing(
-        state: &mut screen_gameplay::State,
-        assets: &deadlib_assets::AssetManager,
-        backend: &mut deadlib_render::Backend,
-        backend_type: deadlib_render_core::BackendType,
-        metrics: &space::Metrics,
-        actors: &mut Vec<deadlib_present::actors::Actor>,
-        text_cache: &mut compose::TextLayoutCache,
-        compose_scratch: &mut compose::ComposeScratch,
-        output_dir: &Path,
-        config: GpuTimingConfig,
-    ) -> Result<PathBuf, String> {
-        let mut last_storage = None;
-        for _ in 0..config.warmup_frames {
-            last_storage = Some(
-                run_gpu_timing_frame(
-                    state,
-                    assets,
-                    backend,
-                    metrics,
-                    actors,
-                    text_cache,
-                    compose_scratch,
-                    false,
-                )?
-                .storage,
-            );
-        }
-        let mut last_storage = last_storage.expect("warmup count is validated as nonzero");
-        let mut storage_change_frames = 0usize;
-        let mut sort_fallbacks = 0usize;
-        let mut samples = GpuTimingSamples::new(config.measured_frames);
-        let measured_started = Instant::now();
-        for _ in 0..config.measured_frames {
-            let sample = run_gpu_timing_frame(
-                state,
-                assets,
-                backend,
-                metrics,
-                actors,
-                text_cache,
-                compose_scratch,
-                true,
-            )?;
-            samples.push(sample.phases);
-            sort_fallbacks += usize::from(sample.sort_fallback);
-            if sample.storage != last_storage {
-                storage_change_frames += 1;
-                last_storage = sample.storage;
-            }
-        }
-        let measured_ms = measured_started.elapsed().as_secs_f64() * 1000.0;
-        if storage_change_frames != 0 {
-            return Err(format!(
-                "timing capture changed retained capacity on {storage_change_frames} measured frames"
-            ));
-        }
-
-        let tails = samples.tails();
-        let profile = if cfg!(debug_assertions) {
-            "debug"
-        } else {
-            "optimized"
-        };
-        let mut manifest = format!(
-            "fixture=F0-sprite-core\nbackend={backend_type}\nprofile={profile}\n\
-             scope=actor-compose-draw\nresolution=640x480\nmusic_time_seconds=2.5\n\
-             present_mode=immediate\nvsync=false\npresent_back_pressure=false\n\
-             warmup_frames={}\nmeasured_frames={}\nmeasured_duration_ms={measured_ms:.3}\n\
-             tail_order=p50/p95/p99/worst_us\nsort_fallbacks={sort_fallbacks}\n\
-             storage_change_frames={storage_change_frames}\n",
-            config.warmup_frames, config.measured_frames,
-        );
-        use std::fmt::Write as _;
-        for ((name, tail), samples) in GPU_TIMING_PHASES
-            .iter()
-            .zip(tails)
-            .zip(samples.phases.iter())
-        {
-            writeln!(manifest, "{name}={tail} samples={}", samples.len())
-                .expect("writing to a String cannot fail");
-        }
-
-        let path = output_dir.join("timing.txt");
-        std::fs::write(&path, manifest)
-            .map_err(|error| format!("failed to write '{}': {error}", path.display()))?;
-        Ok(path)
-    }
 
     #[cfg(target_os = "windows")]
     fn missing_capture_texture_keys(
@@ -2631,23 +2210,6 @@ return Def.ActorFrame { Name = 'Foreground',
                 &mut compose_scratch,
                 output_dir,
             )?;
-            let timing_path = gpu_timing_config()?
-                .map(|config| {
-                    capture_gpu_timing(
-                        &mut state,
-                        &assets,
-                        &mut backend,
-                        backend_type,
-                        &metrics,
-                        &mut actors,
-                        &mut text_cache,
-                        &mut compose_scratch,
-                        output_dir,
-                        config,
-                    )
-                })
-                .transpose()?;
-
             state.profiles_runtime.profiles[0]
                 .set_scroll_option(profile_data::ScrollOption::Reverse);
             state.refresh_live_notefield_options(120.0);
@@ -2698,7 +2260,6 @@ return Def.ActorFrame { Name = 'Foreground',
                 normal_path,
                 reverse_path,
                 manifest_path,
-                timing_path,
             })
         })();
 
@@ -2761,34 +2322,22 @@ return Def.ActorFrame { Name = 'Foreground',
                     artifacts.reverse_path.display(),
                     artifacts.manifest_path.display()
                 );
-                if let Some(timing_path) = artifacts.timing_path {
-                    println!("F0 GPU timing: '{}'", timing_path.display());
-                }
             },
         );
     }
 
     #[test]
-    fn sprite_core_warmed_pipeline_reports_exact_allocations() {
+    fn sprite_core_warmed_pipeline_reuses_storage() {
         const WARMUP_FRAMES: usize = 64;
-        const MEASURE_FRAMES: usize = 256;
+        const VERIFY_FRAMES: usize = 2;
 
-        let simfile = write_fixture("f0-sprite-core-alloc", generated_sprite_core_simfile());
+        let simfile = write_fixture("f0-sprite-core-storage", generated_sprite_core_simfile());
         with_session(
             profile_data::PlayStyle::Single,
             profile_data::PlayerSide::P1,
             true,
             false,
             || {
-                ALLOC.begin();
-                let probe = std::hint::black_box(vec![0u8; std::hint::black_box(1_024)]);
-                std::hint::black_box(probe.as_slice());
-                drop(probe);
-                let probe_counts = ALLOC.end();
-                assert!(probe_counts.allocs >= 1);
-                assert!(probe_counts.deallocs >= 1);
-                assert!(probe_counts.alloc_bytes >= 1_024);
-
                 let (mut state, assets, metrics) = sprite_core_fixture(&simfile);
                 let mut actors = Vec::with_capacity(512);
                 let mut text_cache = compose::TextLayoutCache::default();
@@ -2807,8 +2356,7 @@ return Def.ActorFrame { Name = 'Foreground',
                 }
                 let capacity_before = (actors.capacity(), compose_scratch.storage_stats());
 
-                ALLOC.begin();
-                for _ in 0..MEASURE_FRAMES {
+                for _ in 0..VERIFY_FRAMES {
                     checksum = checksum.wrapping_add(prepare_fixture_frame(
                         &mut state,
                         &assets,
@@ -2818,29 +2366,11 @@ return Def.ActorFrame { Name = 'Foreground',
                         &mut compose_scratch,
                     ));
                 }
-                let counts = ALLOC.end();
                 let capacity_after = (actors.capacity(), compose_scratch.storage_stats());
 
                 assert_ne!(std::hint::black_box(checksum), 0);
                 assert_eq!(capacity_after, capacity_before);
-                println!(
-                    "F0-sprite-core warmed pipeline: frames={MEASURE_FRAMES} \
-                     allocs={} ({:.3}/frame) reallocs={} ({:.3}/frame) \
-                     deallocs={} ({:.3}/frame) alloc_bytes={} ({:.1}/frame) \
-                     realloc_bytes={} ({:.1}/frame) dealloc_bytes={} ({:.1}/frame)",
-                    counts.allocs,
-                    counts.allocs as f64 / MEASURE_FRAMES as f64,
-                    counts.reallocs,
-                    counts.reallocs as f64 / MEASURE_FRAMES as f64,
-                    counts.deallocs,
-                    counts.deallocs as f64 / MEASURE_FRAMES as f64,
-                    counts.alloc_bytes,
-                    counts.alloc_bytes as f64 / MEASURE_FRAMES as f64,
-                    counts.realloc_bytes,
-                    counts.realloc_bytes as f64 / MEASURE_FRAMES as f64,
-                    counts.dealloc_bytes,
-                    counts.dealloc_bytes as f64 / MEASURE_FRAMES as f64,
-                );
+
             },
         );
     }

@@ -79,7 +79,7 @@ def fetch(pack, destination, offline):
 def main():
     decode = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=decode / "vorbis/validation/songpacks.json")
+    parser.add_argument("--manifest", type=Path, default=decode / "vorbis/tests/fixtures/external-songpacks.json")
     parser.add_argument("--destination", type=Path, default=decode.parents[2] / "target/deadlib-audio-reference/corpus")
     parser.add_argument("--offline", action="store_true")
     args = parser.parse_args()

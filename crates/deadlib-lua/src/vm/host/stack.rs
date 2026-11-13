@@ -60,6 +60,11 @@ impl<'vm> HostCall<'vm> {
     /// # Errors
     /// Rejects an existing result writer/stack or more than 8,000 arguments.
     pub fn native_stack(&mut self) -> Result<NativeStack<'_, 'vm>, Error> {
+        // The C-compatible stack can invoke Lua and unwind this activation.
+        // Keep private binding data alive until the Rust callback returns.
+        if self.data.is_none() {
+            self.data = self.vm.host_binding(self.id).and_then(|f| f.data.clone());
+        }
         let frame = self.vm.active_native.expect("active host callback");
         if self.hook.is_some() && !self.stack_opened {
             if self.results != 0 {
@@ -110,12 +115,25 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    /// Borrow the state installed with [`Vm::set_host_state`].
+    #[inline]
+    pub fn host_state<T: std::any::Any + Send + Sync>(&self) -> Option<&T> {
+        self.call.host_state()
+    }
+
+    /// Mutably borrow the state installed with [`Vm::set_host_state`].
+    #[inline]
+    pub fn host_state_mut<T: std::any::Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.call.host_state_mut()
+    }
+
     fn run_tag_action(&mut self, action: Action<'_>) -> Result<TagResult, Error> {
         let selected = matches!(
             self.call.vm.frames[self.frame].function,
             FrameKind::Native(CONT_NATIVE_WINDOW)
         );
         if selected {
+            self.call.vm.reserve_api_call()?;
             self.call.vm.api_calls.push(ApiCall {
                 thread: self.thread_id(),
                 frame: self.call.vm.frames.len(),
@@ -151,10 +169,11 @@ impl NativeStack<'_, '_> {
     ///
     /// # Errors
     /// Propagates finalizer errors with their fault frames and Lua error value.
-    /// A pending unprotected error or an instruction limit also rejects the call.
+    /// Allocation failure, a pending unprotected error or an instruction limit
+    /// also rejects the call.
     pub fn gc(&mut self, operation: GcOperation) -> Result<i32, Error> {
         self.check_error()?;
-        let (result, dispatch) = self.call.vm.gc_control(operation);
+        let (result, dispatch) = self.call.vm.gc_control(operation)?;
         if dispatch && !self.call.vm.gc.finalizers.is_empty() {
             let tag_calls = self.call.vm.gc.tag_calls;
             self.call.run_action(Action::Finalize, false)?;
@@ -377,6 +396,7 @@ impl NativeStack<'_, '_> {
                 };
                 match index {
                     -10000 => {
+                        self.call.vm.reserve_gc_value(value)?;
                         self.call.vm.registry = table;
                         self.call.vm.gc_new_value(value);
                     }
@@ -384,12 +404,12 @@ impl NativeStack<'_, '_> {
                         let function = self
                             .context_function()
                             .ok_or_else(|| self.error(b"no calling environment"))?;
-                        self.call.vm.set_closure_environment(function, table);
+                        self.call.vm.set_closure_environment(function, table)?;
                     }
                     _ => self
                         .call
                         .vm
-                        .set_thread_environment(self.call.vm.thread, table),
+                        .set_thread_environment(self.call.vm.thread, table)?,
                 }
                 return Ok(());
             }
@@ -406,6 +426,7 @@ impl NativeStack<'_, '_> {
         let position = self
             .position(index)
             .ok_or_else(|| self.error(b"invalid native stack index"))?;
+        self.call.vm.reserve_gc_value(value)?;
         self.call.vm.registers[position] = value;
         self.call.vm.gc_new_value(value);
         Ok(())
@@ -636,6 +657,27 @@ impl NativeStack<'_, '_> {
     /// Intern byte strings in this VM; push/store the result before collection.
     pub fn intern(&mut self, bytes: &[u8]) -> Value {
         self.call.intern(bytes)
+    }
+    /// Intern bytes, returning the fixed memory error on allocation failure.
+    ///
+    /// # Errors
+    /// Rejects a pending error or failed string storage reservation.
+    pub fn try_intern(&mut self, bytes: &[u8]) -> Result<Value, Error> {
+        self.check_error()?;
+        self.call.vm.try_intern(bytes)
+    }
+    /// Intern and push bytes, reserving stack space before publishing a string.
+    ///
+    /// # Errors
+    /// Rejects pending errors, stack overflow and allocation failure.
+    pub fn push_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        self.check_error()?;
+        if self.top() == limits::MAX_CSTACK {
+            return Err(self.error(b"native stack overflow"));
+        }
+        self.call.vm.reserve_registers(self.end() + 1)?;
+        let value = self.try_intern(bytes)?;
+        self.push(value)
     }
     /// Construct a native runtime error with exact bytes.
     pub fn error(&self, message: &[u8]) -> Error {

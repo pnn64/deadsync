@@ -27,7 +27,7 @@ impl NativeThreadStack<'_> {
         let function = self
             .vm
             .new_host_function_with_data(callback, &values, data)?;
-        self.vm.set_closure_environment(function, env);
+        self.vm.set_closure_environment(function, env)?;
         self.set_top(prefix)?;
         self.push(function)
     }
@@ -72,16 +72,17 @@ impl NativeThreadStack<'_> {
         };
         let supported = match target {
             Value::Function(_) | Value::Native(_) => {
-                self.vm.set_closure_environment(target, env);
+                self.vm.set_closure_environment(target, env)?;
                 true
             }
             Value::Userdata(id) => {
+                self.vm.reserve_gc_barrier(target, Value::Table(env))?;
                 self.vm.userdata[slot_index(id.0)].env = env;
                 self.vm.gc_barrier(target, Value::Table(env));
                 true
             }
             Value::Thread(id) => {
-                self.vm.set_thread_environment(id, env);
+                self.vm.set_thread_environment(id, env)?;
                 true
             }
             _ => false,

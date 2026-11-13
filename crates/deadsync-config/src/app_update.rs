@@ -9,7 +9,7 @@ use crate::null_or_die::{
     GraphOrigin, clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
     clamp_null_or_die_positive_ms,
 };
-use crate::options::{clamp_bg_brightness, clamp_show_stats_mode, clamped_max_fps};
+use crate::options::{SongLuaMode, clamp_bg_brightness, clamp_show_stats_mode, clamped_max_fps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
@@ -88,6 +88,10 @@ pub fn set_visual_delay_seconds(cfg: &mut Config, delay: f32) -> bool {
 
 pub fn set_note_scroll_clock(cfg: &mut Config, clock: NoteScrollClock) -> bool {
     set_if_changed(&mut cfg.note_scroll_clock, clock)
+}
+
+pub fn set_song_lua_mode(cfg: &mut Config, mode: SongLuaMode) -> bool {
+    set_if_changed(&mut cfg.song_lua_mode, mode)
 }
 
 pub fn set_bg_brightness(cfg: &mut Config, brightness: f32) -> bool {

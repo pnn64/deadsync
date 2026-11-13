@@ -1,7 +1,7 @@
 use deadlib_lua::{Vm, compile};
 
 #[test]
-fn a_zero_file_payload_is_closed_without_requiring_a_native_stream_backend() {
+fn files_require_owned_rust_streams_and_retain_closed_file_behavior() {
     let mut vm = Vm::new();
     let value = vm.new_userdata(std::mem::size_of::<usize>());
     vm.set_global(b"file", value).unwrap();
@@ -10,6 +10,15 @@ fn a_zero_file_payload_is_closed_without_requiring_a_native_stream_backend() {
             br#"
 assert(io.type(file)==nil)
 debug.setmetatable(file,debug.getregistry()['FILE*'])
+-- A raw userdata payload is no longer interpreted as a C FILE**. Copying
+-- the metatable must not manufacture ownership of a Rust stream.
+assert(io.type(file)==nil)
+local ok,err=pcall(file.read,file)
+assert(not ok and err:find('FILE* expected',1,true))
+debug.setmetatable(file,nil)
+file=assert(io.tmpfile())
+assert(io.type(file)=='file')
+assert(file:close())
 assert(io.type(file)=='closed file'and tostring(file)=='file (closed)')
 for _,name in ipairs{'close','read','write','flush','seek','setvbuf','lines'}do
   local ok,err=pcall(file[name],file)

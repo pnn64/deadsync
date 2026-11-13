@@ -1,654 +1,581 @@
-//! Screen-owned native Lua input callbacks. ScreenManager sends these after
-//! normal screen input; a truthy callback stops other callbacks, not gameplay.
-use mlua::{Function, Lua, Table, Value};
+//! Screen-owned input registry. Function values are rooted by the private Lua map.
+use super::*;
+use crate::{SongLuaInputEvent, SongLuaInputType};
+use deadlib_lua::{ErrorKind, NativeHook, NativeStack};
+mod predicate;
+pub use predicate::CompiledInput;
+pub(super) use predicate::{Frame, bindings};
 
-#[path = "input/compiled.rs"]
-pub(crate) mod compiled;
-pub use compiled::SongLuaCompiledInput;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SongLuaInputType {
-    FirstPress,
-    Repeat,
-    Release,
+pub(super) struct Input {
+    root: Root,
+    pub state: Shared,
 }
-
-impl SongLuaInputType {
-    fn native_name(self) -> &'static str {
-        match self {
-            Self::FirstPress => "InputEventType_FirstPress",
-            Self::Repeat => "InputEventType_Repeat",
-            Self::Release => "InputEventType_Release",
+impl Input {
+    pub(super) fn snapshot_functions(&self, vm: &mut Vm) -> Option<Vec<Value>> {
+        let Value::Table(owner) = vm.rooted(self.root).ok()? else {
+            return None;
+        };
+        let key = vm.try_intern(b"functions").ok()?;
+        if !matches!(vm.raw_table_get(owner, key).ok()?, Value::Table(_)) {
+            return None;
         }
+        let state = self.state.lock().unwrap();
+        (!state.dispatching).then(|| state.entries.iter().map(|entry| entry.function).collect())
     }
 }
-
-/// Inputs supplied by the input owner, never inferred from expected Lua output.
-#[derive(Clone, Debug)]
-pub struct SongLuaInputEvent<'a> {
-    pub player: Option<usize>,
-    pub controller: Option<usize>,
-    pub button: &'a str,
-    pub game_button: &'a str,
-    pub kind: SongLuaInputType,
-    pub device: &'a str,
-    pub device_button: &'a str,
-    pub level: f32,
-    pub z: i32,
-    pub down: bool,
-    pub ago: f64,
-    pub is_joystick: bool,
-    pub is_mouse: bool,
-}
-
+pub(super) type Shared = Arc<Mutex<State>>;
 #[derive(Default)]
-struct Callbacks {
-    functions: Vec<Callback>,
+pub(super) struct State {
+    entries: Vec<Entry>,
     dispatching: bool,
     removals: Vec<usize>,
+    required: bool,
 }
-
-struct Callback {
+struct Entry {
     key: usize,
-    function: Function,
-    native: Option<SongLuaCompiledInput>,
+    function: Value,
+    compiled: Option<CompiledInput>,
 }
-
-pub(crate) fn functions(lua: &Lua) -> Option<Vec<Function>> {
-    let callbacks = lua.app_data_ref::<Callbacks>()?;
-    if callbacks.dispatching { return None; }
-    Some(callbacks.functions.iter().map(|entry| entry.function.clone()).collect())
+#[derive(Default, Clone, Copy)]
+struct Cursor {
+    previous: Option<usize>,
+    next: usize,
 }
-
-impl Callbacks {
-    fn remove(&mut self, key: usize) {
-        if let Ok(index) = self
-            .functions
-            .binary_search_by_key(&key, |callback| callback.key)
-        {
-            self.functions.remove(index);
+enum Prefix {
+    Done(bool),
+    Lua(Cursor),
+}
+#[derive(Clone, Copy)]
+enum Op {
+    Add,
+    Remove,
+}
+struct Binding {
+    state: Shared,
+    op: Op,
+}
+#[cfg(feature = "test-support")]
+#[derive(Clone)]
+struct OwnedEvent {
+    player: Option<usize>,
+    controller: Option<usize>,
+    button: String,
+    game_button: String,
+    kind: SongLuaInputType,
+    device: String,
+    device_button: String,
+    level: f32,
+    z: i32,
+    down: bool,
+    ago: f64,
+    is_joystick: bool,
+    is_mouse: bool,
+}
+#[cfg(feature = "test-support")]
+impl OwnedEvent {
+    pub fn new(input: &SongLuaInputEvent<'_>) -> Self {
+        Self {
+            player: input.player,
+            controller: input.controller,
+            button: input.button.into(),
+            game_button: input.game_button.into(),
+            kind: input.kind,
+            device: input.device.into(),
+            device_button: input.device_button.into(),
+            level: input.level,
+            z: input.z,
+            down: input.down,
+            ago: input.ago,
+            is_joystick: input.is_joystick,
+            is_mouse: input.is_mouse,
+        }
+    }
+    fn event(&self) -> SongLuaInputEvent<'_> {
+        SongLuaInputEvent {
+            player: self.player,
+            controller: self.controller,
+            button: &self.button,
+            game_button: &self.game_button,
+            kind: self.kind,
+            device: &self.device,
+            device_button: &self.device_button,
+            level: self.level,
+            z: self.z,
+            down: self.down,
+            ago: self.ago,
+            is_joystick: self.is_joystick,
+            is_mouse: self.is_mouse,
         }
     }
 }
-
-// Sticky across callback removal and screen replacement: an offline sample
-// cannot represent external input, even if its discovery probe later removes it.
-#[derive(Default)]
-struct RequiresRuntime;
-
-pub(crate) const RUNTIME_REQUIRED: &str =
-    "song Lua registers input callbacks and requires runtime Lua (context.live = true)";
-
-pub(crate) fn require_offline_compatible(lua: &Lua) -> Result<(), String> {
-    if lua.app_data_ref::<RequiresRuntime>().is_some() {
-        Err(RUNTIME_REQUIRED.into())
+pub(super) fn event_kind(kind: SongLuaInputType) -> &'static str {
+    match kind {
+        SongLuaInputType::FirstPress => "InputEventType_FirstPress",
+        SongLuaInputType::Repeat => "InputEventType_Repeat",
+        SongLuaInputType::Release => "InputEventType_Release",
+    }
+}
+impl SongRuntime {
+    /// Bind a newly constructed Screen and replace its process-owned callback map.
+    /// Old saved methods address the new map; offline incompatibility stays sticky.
+    pub fn bind_screen_input(&mut self, screen: Value) -> Result<(), Error> {
+        let owner = self.vm.rooted(self.input.root)?;
+        let state = self.input.state.clone();
+        self.vm
+            .with_native_stack(|stack| bind(stack, &state, owner, screen))
+    }
+    /// Input handling only controls subsequent Lua callbacks, not gameplay input.
+    pub fn dispatch_input(
+        &mut self,
+        event: &SongLuaInputEvent<'_>,
+    ) -> Result<(bool, Vec<String>), Error> {
+        let owner = self.vm.rooted(self.input.root)?;
+        let state = self.input.state.clone();
+        let result = self
+            .vm
+            .with_native_stack(|stack| dispatch_stack(stack, &state, owner, event));
+        // Resource aborts unwind to this idle boundary before deferred roots can
+        // be released. Ordinary callback errors are collected inside dispatch.
+        let cleanup = self
+            .vm
+            .with_native_stack(|stack| finish_stack(stack, &state, owner));
+        match result {
+            Err(error) => Err(error),
+            Ok(value) => {
+                cleanup?;
+                Ok(value)
+            }
+        }
+    }
+    pub fn require_input_offline_compatible(&self) -> Result<(), String> {
+        if self.input.state.lock().unwrap().required {
+            Err(crate::runtime_fallback::REQUIRED.into())
+        } else {
+            Ok(())
+        }
+    }
+}
+pub(super) fn install(vm: &mut Vm) -> Result<Input, Error> {
+    let owner = vm.try_new_table()?;
+    let root = vm.pin(Value::Table(owner))?;
+    let state = Arc::new(Mutex::new(State::default()));
+    Ok(Input { root, state })
+}
+fn table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
+    if let Value::Table(t) = value {
+        Ok(t)
     } else {
+        Err(call.error(b"input table expected"))
+    }
+}
+fn function(call: &HostCall<'_>, value: Value) -> Result<Value, Error> {
+    if matches!(value, Value::Function(_) | Value::Native(_)) {
+        Ok(value)
+    } else {
+        Err(call.error(b"input callback function expected"))
+    }
+}
+fn map(call: &mut HostCall<'_>, owner: Value) -> Result<TableId, Error> {
+    let key = call.try_intern(b"functions")?;
+    let value = call.raw_table_get(table(call, owner)?, key)?;
+    table(call, value)
+}
+fn bind(
+    stack: &mut NativeStack<'_, '_>,
+    state: &Shared,
+    owner: Value,
+    screen: Value,
+) -> Result<(), Error> {
+    if !matches!(screen, Value::Table(_)) {
+        return Err(stack.error(b"input table expected"));
+    }
+    let base = stack.top();
+    stack.push(screen)?;
+    let screen_index = stack.top();
+    stack.push(owner)?;
+    let owner_index = stack.top();
+    stack.create_table(0, 0)?;
+    let functions = stack.value(-1).unwrap();
+    stack.push_bytes(b"functions")?;
+    stack.push(functions)?;
+    stack.set_table(owner_index as isize, true)?;
+    {
+        let mut s = state.lock().unwrap();
+        s.entries.clear();
+        s.removals.clear();
+        s.dispatching = false;
+    }
+    for (name, op) in [
+        ("AddInputCallback", Op::Add),
+        ("RemoveInputCallback", Op::Remove),
+    ] {
+        stack.push_bytes(name.as_bytes())?;
+        stack.push(owner)?;
+        stack.push_closure(
+            callback,
+            1,
+            Binding {
+                state: state.clone(),
+                op,
+            },
+        )?;
+        stack.set_table(screen_index as isize, false)?;
+    }
+    stack.set_top(base)
+}
+fn dump(call: &mut HostCall<'_>, value: Value) -> Result<Option<Vec<u8>>, Error> {
+    if !matches!(value, Value::Function(_)) {
+        return Ok(None);
+    }
+    let mut stack = call.native_stack()?;
+    stack.push(value)?;
+    let mut bytes = Vec::new();
+    let status = stack.dump(|_, part| {
+        bytes.extend_from_slice(part);
+        Ok(0)
+    })?;
+    Ok((status == 0).then_some(bytes))
+}
+fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let binding = call.function_data::<Binding>().unwrap();
+    let op = binding.op;
+    let state = binding.state.clone();
+    let owner = call.captures()[0];
+    match op {
+        Op::Add | Op::Remove => {
+            let screen = table(
+                call,
+                call.arguments().first().copied().unwrap_or(Value::Nil),
+            )?;
+            let f = function(call, call.arguments().get(1).copied().unwrap_or(Value::Nil))?;
+            let key = call.object_pointer(f).expect("function identity");
+            if matches!(op, Op::Add) {
+                state.lock().unwrap().required = true;
+                let compiled = dump(call, f)?.and_then(|bytes| CompiledInput::compile(&bytes));
+                let map = map(call, owner)?;
+                call.raw_table_set(map, f, Value::Boolean(true))?;
+                let mut state = state.lock().unwrap();
+                let entry = Entry {
+                    key,
+                    function: f,
+                    compiled,
+                };
+                match state.entries.binary_search_by_key(&key, |e| e.key) {
+                    Ok(i) => state.entries[i] = entry,
+                    Err(i) => state.entries.insert(i, entry),
+                }
+            } else {
+                let deferred = {
+                    let mut state = state.lock().unwrap();
+                    if state.dispatching {
+                        state.removals.push(key);
+                        true
+                    } else {
+                        false
+                    }
+                };
+                if !deferred {
+                    remove(call, &state, owner, key)?;
+                }
+            }
+            call.push(Value::Table(screen))
+        }
+    }
+}
+fn remove(call: &mut HostCall<'_>, shared: &Shared, owner: Value, key: usize) -> Result<(), Error> {
+    let value = {
+        let state = shared.lock().unwrap();
+        state
+            .entries
+            .binary_search_by_key(&key, |e| e.key)
+            .ok()
+            .map(|i| state.entries[i].function)
+    };
+    if let Some(value) = value {
+        let map = map(call, owner)?;
+        call.raw_table_set(map, value, Value::Nil)?;
+        let mut state = shared.lock().unwrap();
+        if let Ok(i) = state.entries.binary_search_by_key(&key, |e| e.key) {
+            state.entries.remove(i);
+        }
+    }
+    Ok(())
+}
+fn prefix(shared: &Shared, input: &SongLuaInputEvent<'_>, hook: bool) -> Prefix {
+    let mut cursor = Cursor::default();
+    let mut state = shared.lock().unwrap();
+    if !hook && !state.dispatching {
+        if state.entries.is_empty() {
+            return Prefix::Done(false);
+        }
+        if state.entries.first().is_some_and(|e| e.compiled.is_some()) {
+            let frame = predicate::Frame::new(input);
+            let values = frame.values(input);
+            for entry in &mut state.entries {
+                let Some(compiled) = entry.compiled.as_mut() else {
+                    return Prefix::Lua(cursor);
+                };
+                cursor.previous = Some(entry.key);
+                cursor.next += 1;
+                if compiled.evaluate_frame(&values) {
+                    return Prefix::Done(true);
+                }
+            }
+            return Prefix::Done(false);
+        }
+    }
+    Prefix::Lua(cursor)
+}
+// The idle VM stack introduces no authored call frame. In particular, debug
+// call hooks observe the input callbacks, not an internal dispatcher closure.
+fn dispatch_stack(
+    stack: &mut NativeStack<'_, '_>,
+    state: &Shared,
+    owner: Value,
+    input: &SongLuaInputEvent<'_>,
+) -> Result<(bool, Vec<String>), Error> {
+    let hook = stack.hook(stack.thread_id())?;
+    let mut cursor = match prefix(state, input, !matches!(hook.function, NativeHook::None)) {
+        Prefix::Done(handled) => return Ok((handled, Vec::new())),
+        Prefix::Lua(cursor) => cursor,
+    };
+    let base = stack.top();
+    let event = create_event(stack, input)?;
+    let event_top = stack.top();
+    state.lock().unwrap().dispatching = true;
+    let result = (|| {
+        let mut handled = false;
+        let mut errors = Vec::new();
+        loop {
+            let next = {
+                let state = state.lock().unwrap();
+                let i = match cursor.previous {
+                    None => 0,
+                    Some(key)
+                        if cursor.next > 0
+                            && state
+                                .entries
+                                .get(cursor.next - 1)
+                                .is_some_and(|e| e.key == key) =>
+                    {
+                        cursor.next
+                    }
+                    Some(key) => state.entries.partition_point(|e| e.key <= key),
+                };
+                cursor.next = i + 1;
+                state.entries.get(i).map(|e| (e.key, e.function))
+            };
+            let Some((key, f)) = next else {
+                break;
+            };
+            cursor.previous = Some(key);
+            stack.push(f)?;
+            stack.push(event)?;
+            match stack.call(1, Some(1)) {
+                Ok(_) => handled = stack.to_boolean(-1),
+                Err(error) if matches!(error.kind(), ErrorKind::Limit | ErrorKind::Memory) => {
+                    return Err(error);
+                }
+                Err(error) => errors.push(format!("Error running input callback: {error}")),
+            }
+            stack.set_top(event_top)?;
+            if handled {
+                break;
+            }
+        }
+        Ok((handled, errors))
+    })();
+    state.lock().unwrap().dispatching = false;
+    if result.is_ok() {
+        finish_stack(stack, state, owner)?;
+        stack.set_top(base)?;
+    }
+    result
+}
+fn finish_stack(
+    stack: &mut NativeStack<'_, '_>,
+    shared: &Shared,
+    owner: Value,
+) -> Result<(), Error> {
+    loop {
+        let entry = {
+            let state = shared.lock().unwrap();
+            state.removals.last().copied().map(|key| {
+                (
+                    key,
+                    state
+                        .entries
+                        .binary_search_by_key(&key, |e| e.key)
+                        .ok()
+                        .map(|i| state.entries[i].function),
+                )
+            })
+        };
+        let Some((key, f)) = entry else {
+            return Ok(());
+        };
+        if let Some(f) = f {
+            let base = stack.top();
+            stack.push(owner)?;
+            stack.get_field(-1, b"functions")?;
+            stack.push(f)?;
+            stack.push(Value::Nil)?;
+            stack.set_table(-3, true)?;
+            stack.set_top(base)?;
+        }
+        let mut state = shared.lock().unwrap();
+        if let Ok(i) = state.entries.binary_search_by_key(&key, |e| e.key) {
+            state.entries.remove(i);
+        }
+        state.removals.pop();
+    }
+}
+fn create_event(
+    stack: &mut NativeStack<'_, '_>,
+    input: &SongLuaInputEvent<'_>,
+) -> Result<Value, Error> {
+    fn put(
+        stack: &mut NativeStack<'_, '_>,
+        table: usize,
+        name: &str,
+        value: Value,
+    ) -> Result<(), Error> {
+        stack.push_bytes(name.as_bytes())?;
+        stack.push(value)?;
+        stack.set_table(table as isize, true)
+    }
+    fn text(
+        stack: &mut NativeStack<'_, '_>,
+        table: usize,
+        name: &str,
+        value: &str,
+    ) -> Result<(), Error> {
+        stack.push_bytes(name.as_bytes())?;
+        stack.push_bytes(value.as_bytes())?;
+        stack.set_table(table as isize, true)
+    }
+    stack.create_table(0, 0)?;
+    let event = stack.top();
+    stack.create_table(0, 0)?;
+    let device = stack.top();
+    text(stack, device, "device", input.device)?;
+    text(stack, device, "button", input.device_button)?;
+    put(stack, device, "level", Value::Number(input.level.into()))?;
+    put(stack, device, "z", Value::Number(input.z.into()))?;
+    put(stack, device, "down", Value::Boolean(input.down))?;
+    put(stack, device, "ago", Value::Number(input.ago))?;
+    put(
+        stack,
+        device,
+        "is_joystick",
+        Value::Boolean(input.is_joystick),
+    )?;
+    put(stack, device, "is_mouse", Value::Boolean(input.is_mouse))?;
+    put(
+        stack,
+        event,
+        "DeviceInput",
+        stack.value(device as isize).unwrap(),
+    )?;
+    stack.set_top(event)?;
+    if let Some(p) = input.controller {
+        text(
+            stack,
+            event,
+            "controller",
+            &format!("GameController_{}", p + 1),
+        )?;
+    } else {
+        put(stack, event, "controller", Value::Nil)?;
+    }
+    text(stack, event, "button", input.button)?;
+    text(stack, event, "GameButton", input.game_button)?;
+    text(stack, event, "type", event_kind(input.kind))?;
+    if let Some(p) = input.player {
+        text(
+            stack,
+            event,
+            "PlayerNumber",
+            &format!("PlayerNumber_P{}", p + 1),
+        )?;
+    } else {
+        put(stack, event, "PlayerNumber", Value::Nil)?;
+    }
+    put(stack, event, "MultiPlayer", Value::Nil)?;
+    Ok(stack.value(event as isize).unwrap())
+}
+
+#[cfg(feature = "test-support")]
+pub(super) mod testing {
+    use super::*;
+    pub fn input_functions(runtime: &SongRuntime) -> Option<Vec<Value>> {
+        let state = runtime.input.state.lock().unwrap();
+        (!state.dispatching).then(|| state.entries.iter().map(|e| e.function).collect())
+    }
+    pub fn input_compiled_count(runtime: &SongRuntime) -> usize {
+        runtime
+            .input
+            .state
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .filter(|e| e.compiled.is_some())
+            .count()
+    }
+    pub fn seed_pending_input_removal(runtime: &mut SongRuntime, function: Value) {
+        let key = runtime
+            .vm
+            .object_pointer(function)
+            .expect("input function identity") as usize;
+        let mut state = runtime.input.state.lock().unwrap();
+        state.dispatching = true;
+        state.removals.push(key);
+    }
+    pub fn input_dispatch_state(runtime: &SongRuntime) -> (bool, usize, usize) {
+        let state = runtime.input.state.lock().unwrap();
+        (state.dispatching, state.removals.len(), state.entries.len())
+    }
+    struct Control {
+        state: Shared,
+        event: OwnedEvent,
+        reset: bool,
+    }
+    // Drive real registry replacement/reentry through the same VM activation.
+    pub fn install_input_controls(
+        runtime: &mut SongRuntime,
+        event: &SongLuaInputEvent<'_>,
+    ) -> Result<(), Error> {
+        let owner = runtime.vm.rooted(runtime.input.root)?;
+        for (name, reset) in [("NESTED", false), ("RESET", true)] {
+            let f = runtime.vm.new_host_function_with_data(
+                control,
+                &[owner],
+                Control {
+                    state: runtime.input.state.clone(),
+                    event: OwnedEvent::new(event),
+                    reset,
+                },
+            )?;
+            runtime.vm.set_global(name.as_bytes(), f)?;
+        }
         Ok(())
     }
-}
-
-pub(crate) fn install(lua: &Lua, screen: &Table) -> mlua::Result<()> {
-    // A gameplay reload retains the VM but replaces Screen's callback map.
-    lua.set_app_data(Callbacks::default());
-    screen.set(
-        "AddInputCallback",
-        lua.create_function(|lua, (screen, callback): (Table, Function)| {
-            lua.set_app_data(RequiresRuntime);
-            let key = callback.to_pointer() as usize;
-            let native = SongLuaCompiledInput::compile(&callback);
-            let mut callbacks = lua
-                .app_data_mut::<Callbacks>()
-                .expect("screen callback registry");
-            let entry = Callback {
-                key,
-                function: callback,
-                native,
-            };
-            match callbacks
-                .functions
-                .binary_search_by_key(&key, |callback| callback.key)
-            {
-                Ok(index) => callbacks.functions[index] = entry,
-                Err(index) => callbacks.functions.insert(index, entry),
-            }
-            Ok(screen)
-        })?,
-    )?;
-    screen.set(
-        "RemoveInputCallback",
-        lua.create_function(|lua, (screen, callback): (Table, Function)| {
-            let mut callbacks = lua
-                .app_data_mut::<Callbacks>()
-                .expect("screen callback registry");
-            let key = callback.to_pointer() as usize;
-            if callbacks.dispatching {
-                callbacks.removals.push(key);
-            } else {
-                callbacks.remove(key);
-            }
-            Ok(screen)
-        })?,
-    )
-}
-
-pub(crate) fn dispatch(
-    lua: &Lua,
-    input: &SongLuaInputEvent<'_>,
-) -> mlua::Result<(bool, Vec<String>)> {
-    let mut previous = None;
-    let mut next_index = 0;
-    if !lua.has_hook() {
-        let mut callbacks = lua
-            .app_data_mut::<Callbacks>()
-            .expect("screen callback registry");
-        // Reentrant dispatch retains the existing deferred-removal protocol.
-        if !callbacks.dispatching {
-            if callbacks.functions.is_empty() {
-                return Ok((false, Vec::new()));
-            }
-            if callbacks
-                .functions
-                .first()
-                .is_some_and(|callback| callback.native.is_some())
-            {
-                let frame = compiled::Frame::new(input);
-                let values = frame.values(input);
-                let mut all_native = true;
-                for callback in &mut callbacks.functions {
-                    let Some(native) = callback.native.as_mut() else {
-                        all_native = false;
-                        break;
-                    };
-                    previous = Some(callback.key);
-                    next_index += 1;
-                    if native.evaluate_frame(&values) {
-                        return Ok((true, Vec::new()));
-                    }
-                }
-                if all_native {
-                    return Ok((false, Vec::new()));
-                }
-            }
+    fn control(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let data = call.function_data::<Control>().unwrap();
+        let state = data.state.clone();
+        let event = data.event.clone();
+        let reset = data.reset;
+        let owner = call.captures()[0];
+        if reset {
+            let screen = call.arguments().first().copied().unwrap_or(Value::Nil);
+            return bind(&mut call.native_stack()?, &state, owner, screen);
         }
-    }
-    // Input-only callbacks cannot mutate the event or registry. A false native
-    // prefix leaves the original input untouched. Once Lua runs, all remaining
-    // callbacks use its shared mutable event, including otherwise compiled ones.
-    let event = create_event(lua, input)?;
-    lua.app_data_mut::<Callbacks>()
-        .expect("screen callback registry")
-        .dispatching = true;
-    let mut handled = false;
-    let mut errors = Vec::new();
-    loop {
-        let next = {
-            let callbacks = lua
-                .app_data_ref::<Callbacks>()
-                .expect("screen callback registry");
-            // Most callbacks keep the registry unchanged. Validate the prior
-            // key at its old index, then advance in O(1). If callback additions,
-            // nested dispatch or screen replacement moved it, repair from the
-            // previous identity exactly as the original ordered range search.
-            let index = match previous {
-                None => 0,
-                Some(key)
-                    if next_index > 0
-                        && callbacks
-                            .functions
-                            .get(next_index - 1)
-                            .is_some_and(|callback| callback.key == key) =>
-                {
-                    next_index
-                }
-                Some(key) => callbacks
-                    .functions
-                    .partition_point(|callback| callback.key <= key),
-            };
-            next_index = index + 1;
-            callbacks
-                .functions
-                .get(index)
-                .map(|callback| (callback.key, callback.function.clone()))
+        let result = {
+            let mut stack = call.native_stack()?;
+            dispatch_stack(&mut stack, &state, owner, &event.event())?
         };
-        let Some((key, callback)) = next else {
-            break;
-        };
-        previous = Some(key);
-        match callback.call::<Value>(event.clone()) {
-            Ok(value) => handled = !matches!(value, Value::Nil | Value::Boolean(false)),
-            Err(error) => errors.push(format!("Error running input callback: {error}")),
-        }
-        if handled {
-            break;
-        }
-    }
-    let mut callbacks = lua
-        .app_data_mut::<Callbacks>()
-        .expect("screen callback registry");
-    callbacks.dispatching = false;
-    let removals = std::mem::take(&mut callbacks.removals);
-    for key in removals {
-        callbacks.remove(key);
-    }
-    Ok((handled, errors))
-}
-
-// Fresh tables cannot have authored metamethods. Keep the original insertion
-// and conversion order, including nil writes, without changing hash capacity.
-pub(crate) fn create_event(lua: &Lua, input: &SongLuaInputEvent<'_>) -> mlua::Result<Table> {
-    use mlua::Either::{Left, Right};
-    let event = lua.create_table()?;
-    let device = lua.create_table()?;
-    device.raw_set_many([
-        ("device", Left(input.device)),
-        ("button", Left(input.device_button)),
-        ("level", Right(Value::Number(f64::from(input.level)))),
-        ("z", Right(Value::Integer(input.z.into()))),
-        ("down", Right(Value::Boolean(input.down))),
-        ("ago", Right(Value::Number(input.ago))),
-        ("is_joystick", Right(Value::Boolean(input.is_joystick))),
-        ("is_mouse", Right(Value::Boolean(input.is_mouse))),
-    ])?;
-    let mut device = Some(device);
-    event.raw_set_many((0..7).map(|index| match index {
-        0 => (
-            "DeviceInput",
-            Right(Value::Table(device.take().expect("first event field"))),
-        ),
-        1 => (
-            "controller",
-            input.controller.map_or(Right(Value::Nil), |p| {
-                Left(Right(format!("GameController_{}", p + 1)))
-            }),
-        ),
-        2 => ("button", Left(Left(input.button))),
-        3 => ("GameButton", Left(Left(input.game_button))),
-        4 => ("type", Left(Left(input.kind.native_name()))),
-        5 => (
-            "PlayerNumber",
-            input.player.map_or(Right(Value::Nil), |p| {
-                Left(Right(format!("PlayerNumber_P{}", p + 1)))
-            }),
-        ),
-        _ => ("MultiPlayer", Right(Value::Nil)),
-    }))?;
-    Ok(event)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn event(kind: SongLuaInputType) -> SongLuaInputEvent<'static> {
-        SongLuaInputEvent {
-            player: Some(1),
-            controller: Some(1),
-            button: "Up",
-            game_button: "MenuUp",
-            kind,
-            device: "InputDevice_Key",
-            device_button: "DeviceButton_up",
-            level: 1.0,
-            z: 0,
-            down: kind != SongLuaInputType::Release,
-            ago: 0.0,
-            is_joystick: false,
-            is_mouse: false,
-        }
-    }
-
-    #[test]
-    fn screen_callbacks_receive_press_repeat_release_and_deduplicate_registration() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen).unwrap();
-        lua.load(
-            r#"
-SEEN = {}
-CALLBACK = function(event)
-    assert(event.button == 'Up' and event.GameButton == 'MenuUp')
-    assert(event.PlayerNumber == 'PlayerNumber_P2' and event.controller == 'GameController_2')
-    assert(event.DeviceInput.button == 'DeviceButton_up')
-    assert(event.DeviceInput.down == (event.type ~= 'InputEventType_Release'))
-    SEEN[#SEEN+1] = event.type
-end
-SCREEN:AddInputCallback(CALLBACK):AddInputCallback(CALLBACK)
-"#,
-        )
-        .exec()
-        .unwrap();
-        for kind in [
-            SongLuaInputType::FirstPress,
-            SongLuaInputType::Repeat,
-            SongLuaInputType::Release,
-        ] {
-            let (handled, errors) = dispatch(&lua, &event(kind)).unwrap();
-            assert!(!handled && errors.is_empty(), "{errors:?}");
-        }
-        assert_eq!(lua.load("return #SEEN").eval::<usize>().unwrap(), 3);
-        lua.load("SCREEN:RemoveInputCallback(CALLBACK)")
-            .exec()
-            .unwrap();
-        dispatch(&lua, &event(SongLuaInputType::FirstPress)).unwrap();
-        assert_eq!(lua.load("return #SEEN").eval::<usize>().unwrap(), 3);
-        install(&lua, &lua.create_table().unwrap()).unwrap();
-        assert!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .is_empty(),
-            "new screen replaces callbacks"
-        );
-    }
-
-    #[test]
-    fn screen_callbacks_defer_removals_share_event_and_use_lua_truthiness() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen).unwrap();
-        let create = lua
-            .load(
-                r#"return function()
-    local callback
-    callback = function(e)
-        if callback == FIRST then
-            COUNT=COUNT+1; e.mark=true
-            SCREEN:RemoveInputCallback(SECOND)
-            return HANDLED
-        end
-        assert(e.mark); COUNT=COUNT+10
-    end
-    return callback
-end"#,
-            )
-            .eval::<Function>()
-            .unwrap();
-        let first = create.call::<Function>(()).unwrap();
-        let second = create.call::<Function>(()).unwrap();
-        // Map order is native function-pointer order, independent of registration.
-        let (low, high) = if first.to_pointer() < second.to_pointer() {
-            (first, second)
-        } else {
-            (second, first)
-        };
-        lua.globals().set("FIRST", low).unwrap();
-        lua.globals().set("SECOND", high.clone()).unwrap();
-        lua.globals().set("COUNT", 0).unwrap();
-        lua.globals().set("HANDLED", false).unwrap();
-        lua.load("SCREEN:AddInputCallback(SECOND):AddInputCallback(FIRST)")
-            .exec()
-            .unwrap();
-        let (handled, errors) = dispatch(&lua, &event(SongLuaInputType::FirstPress)).unwrap();
-        assert!(!handled && errors.is_empty(), "{errors:?}");
-        assert_eq!(lua.globals().get::<i32>("COUNT").unwrap(), 11);
-        lua.globals().set("HANDLED", 0).unwrap();
-        assert!(
-            dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap().0,
-            "zero is truthy in Lua"
-        );
-        assert_eq!(lua.globals().get::<i32>("COUNT").unwrap(), 12);
-    }
-
-    #[test]
-    fn closed_callbacks_use_native_dispatch_and_debug_hooks_keep_lua_execution() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen).unwrap();
-        lua.load("SCREEN:AddInputCallback(function(e) return e.GameButton=='MenuUp' end)")
-            .exec()
-            .unwrap();
-        assert_eq!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .iter()
-                .filter(|v| v.native.is_none())
-                .count(),
-            0
-        );
-        assert!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .iter()
-                .all(|v| v.native.is_some())
-        );
-        for _ in 0..3 {
-            let (handled, errors) = dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap();
-            assert!(handled && errors.is_empty());
-        }
-        lua.set_hook(mlua::HookTriggers::ON_CALLS, |_, _| {
-            Err(mlua::Error::runtime("observed callback hook"))
-        })
-        .unwrap();
-        let (handled, errors) = dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap();
-        assert!(!handled);
-        assert_eq!(errors.len(), 1);
-        assert!(errors[0].contains("observed callback hook"));
-        lua.remove_hook();
-        assert!(dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap().0);
-    }
-
-    #[test]
-    fn mixed_callbacks_see_mutated_events_and_removals_restore_native_eligibility() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen.clone()).unwrap();
-        let reader: Function = lua
-            .load("return function(e) return e.button=='changed' end")
-            .eval()
-            .unwrap();
-        let mutator: Function = lua
-            .load("return function(e) e.button='changed';SCREEN:RemoveInputCallback(MUTATOR) end")
-            .eval()
-            .unwrap();
-        let mutated_before_read = mutator.to_pointer() < reader.to_pointer();
-        lua.globals().set("MUTATOR", mutator.clone()).unwrap();
-        screen
-            .get::<Function>("AddInputCallback")
-            .unwrap()
-            .call::<()>((screen.clone(), reader))
-            .unwrap();
-        screen
-            .get::<Function>("AddInputCallback")
-            .unwrap()
-            .call::<()>((screen, mutator))
-            .unwrap();
-        assert_eq!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .iter()
-                .filter(|v| v.native.is_none())
-                .count(),
-            1
-        );
-        let (handled, errors) = dispatch(&lua, &event(SongLuaInputType::FirstPress)).unwrap();
-        assert_eq!(handled, mutated_before_read);
-        assert!(errors.is_empty());
-        assert_eq!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .iter()
-                .filter(|v| v.native.is_none())
-                .count(),
-            0
-        );
-        assert!(!dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap().0);
-    }
-
-    #[test]
-    fn native_prefix_stopping_preserves_later_lua_action_order() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen.clone()).unwrap();
-        lua.globals()
-            .set(
-                "TARGET",
-                lua.load("{visible=true}").eval::<Table>().unwrap(),
-            )
-            .unwrap();
-        let predicate: Function = lua
-            .load("return function(e) return e.GameButton=='MenuUp' end")
-            .eval()
-            .unwrap();
-        let action: Function = lua
-            .load("return function(e) TARGET.visible=false end")
-            .eval()
-            .unwrap();
-        let predicate_first = predicate.to_pointer() < action.to_pointer();
-        let add = screen.get::<Function>("AddInputCallback").unwrap();
-        add.call::<()>((screen.clone(), predicate)).unwrap();
-        add.call::<()>((screen, action)).unwrap();
-        let (handled, errors) = dispatch(&lua, &event(SongLuaInputType::FirstPress)).unwrap();
-        assert!(handled && errors.is_empty());
-        assert_eq!(
-            lua.load("return TARGET.visible").eval::<bool>().unwrap(),
-            predicate_first
-        );
-        let mut alternate = event(SongLuaInputType::Release);
-        alternate.game_button = "MenuLeft";
-        let (handled, errors) = dispatch(&lua, &alternate).unwrap();
-        assert!(!handled && errors.is_empty());
-        assert!(!lua.load("return TARGET.visible").eval::<bool>().unwrap());
-    }
-
-    #[test]
-    fn reentrant_dispatch_keeps_existing_pending_removal_protocol() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        let f: Function = lua
-            .load("return function(e) return true end")
-            .eval()
-            .unwrap();
-        let key = f.to_pointer() as usize;
-        screen
-            .get::<Function>("AddInputCallback")
-            .unwrap()
-            .call::<()>((screen, f))
-            .unwrap();
-        {
-            let mut callbacks = lua.app_data_mut::<Callbacks>().unwrap();
-            callbacks.dispatching = true;
-            callbacks.removals.push(key);
-        }
-        assert!(
-            dispatch(&lua, &event(SongLuaInputType::FirstPress))
-                .unwrap()
-                .0
-        );
-        let callbacks = lua.app_data_ref::<Callbacks>().unwrap();
-        assert!(!callbacks.dispatching && callbacks.removals.is_empty());
-        assert!(callbacks.functions.is_empty());
-    }
-
-    #[test]
-    fn additions_on_both_sides_of_current_callback_keep_native_identity_order() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen.clone()).unwrap();
-        lua.globals()
-            .set("SEEN", lua.create_table().unwrap())
-            .unwrap();
-        let mut functions = (0..12).map(|id| {
-            let f:Function=lua.load(format!("return function(e) SEEN[#SEEN+1]={id};if START_ID=={id} and not ADDED then ADDED=true;SCREEN:AddInputCallback(LOW):AddInputCallback(HIGH) end;return false end")).eval().unwrap();
-            (id,f)
-        }).collect::<Vec<_>>();
-        functions.sort_by_key(|(_, f)| f.to_pointer() as usize);
-        let (low_id, low) = functions[0].clone();
-        let (mid_id, mid) = functions[6].clone();
-        let (high_id, high) = functions[11].clone();
-        lua.globals().set("LOW", low).unwrap();
-        lua.globals().set("HIGH", high).unwrap();
-        lua.globals().set("START_ID", mid_id).unwrap();
-        screen
-            .get::<Function>("AddInputCallback")
-            .unwrap()
-            .call::<()>((screen, mid))
-            .unwrap();
-        assert!(
-            !dispatch(&lua, &event(SongLuaInputType::FirstPress))
-                .unwrap()
-                .0
-        );
-        let seen: Vec<usize> = lua.globals().get("SEEN").unwrap();
-        assert_eq!(seen, [mid_id, high_id]);
-        lua.globals()
-            .set("SEEN", lua.create_table().unwrap())
-            .unwrap();
-        assert!(!dispatch(&lua, &event(SongLuaInputType::Repeat)).unwrap().0);
-        let seen: Vec<usize> = lua.globals().get("SEEN").unwrap();
-        assert_eq!(seen, [low_id, mid_id, high_id]);
-    }
-
-    #[test]
-    fn nested_dispatch_removing_earlier_entries_repairs_outer_position() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen.clone()).unwrap();
-        lua.globals()
-            .set("SEEN", lua.create_table().unwrap())
-            .unwrap();
-        lua.globals()
-            .set(
-                "NESTED",
-                lua.create_function(|lua, ()| {
-                    dispatch(lua, &event(SongLuaInputType::Repeat))?;
-                    Ok(())
-                })
-                .unwrap(),
-            )
-            .unwrap();
-        let mut functions=(0..12).map(|id|{
-            let f:Function=lua.load(format!("return function(e) SEEN[#SEEN+1]={id};if START_ID=={id} and not IN_NEST then IN_NEST=true;SCREEN:RemoveInputCallback(LOW);NESTED() end;return false end")).eval().unwrap();(id,f)
-        }).collect::<Vec<_>>();
-        functions.sort_by_key(|(_, f)| f.to_pointer() as usize);
-        let (low_id, low) = functions[0].clone();
-        let (mid_id, mid) = functions[6].clone();
-        let (high_id, high) = functions[11].clone();
-        lua.globals().set("LOW", low.clone()).unwrap();
-        lua.globals().set("START_ID", mid_id).unwrap();
-        let add = screen.get::<Function>("AddInputCallback").unwrap();
-        for f in [low, mid, high] {
-            add.call::<()>((screen.clone(), f)).unwrap();
-        }
-        assert!(
-            !dispatch(&lua, &event(SongLuaInputType::FirstPress))
-                .unwrap()
-                .0
-        );
-        let seen: Vec<usize> = lua.globals().get("SEEN").unwrap();
-        assert_eq!(seen, [low_id, mid_id, low_id, mid_id, high_id, high_id]);
-    }
-
-    #[test]
-    fn compiled_registry_keeps_function_identity_rooted_until_removal() {
-        let lua = Lua::new();
-        let screen = lua.create_table().unwrap();
-        install(&lua, &screen).unwrap();
-        lua.globals().set("SCREEN", screen).unwrap();
-        lua.load("WEAK=setmetatable({}, {__mode='v'});local f=function(e) return e.button=='Up' end;WEAK[1]=f;SCREEN:AddInputCallback(f)").exec().unwrap();
-        lua.gc_collect().unwrap();
-        assert!(lua.load("return WEAK[1]~=nil").eval::<bool>().unwrap());
-        lua.load("SCREEN:RemoveInputCallback(WEAK[1])")
-            .exec()
-            .unwrap();
-        lua.gc_collect().unwrap();
-        assert!(lua.load("return WEAK[1]==nil").eval::<bool>().unwrap());
-        assert!(
-            lua.app_data_ref::<Callbacks>()
-                .unwrap()
-                .functions
-                .is_empty()
-        );
+        call.push(Value::Boolean(result.0))?;
+        call.push(Value::Number(result.1.len() as f64))
     }
 }

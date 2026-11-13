@@ -1,4 +1,0 @@
-imports_granularity = "Module"
-max_width = 110
-comment_width = 100
-wrap_comments = true

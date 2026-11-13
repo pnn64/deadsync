@@ -11,12 +11,6 @@ before entropy encoding. `*.samples` contains the exact final JLP1 target.
 The JSON manifest records generator parameters in each case name, original and
 C-input hashes, tool hashes, comparisons and every binary file hash.
 
-Generate and independently check these with `examples/pyramid_encode.rs` and
-`tests/reference_pyramid.py --fixtures <directory>`. The complete 560-case
-report is `tests/reports/pyramid-jpegxt.json`. Base Pt workarounds and the C
-decoder's omitted-EXP defect are recorded explicitly; the native JPEG bytes
-are not changed. See HIERARCHICAL-VALIDATION.md for interpretation and commands.
-
 These are independently checked native encoder regressions, not an independent
 JPEG standards conformance corpus. The Rust suite checks the original source,
 all 30,164 truncated JPEG prefixes and 1,200 bounded mutations without requiring

@@ -9,29 +9,11 @@ repository = "https://github.com/pnn64/deadsync"
 
 [dependencies]
 
-[features]
-default = ["native-c-api"]
-native-c-api = []
-c-api-runtime = ["native-c-api"]
-
-[dev-dependencies]
-lua_reference = { package = "deadlib-lua-legacy", path = "../deadlib-lua-legacy", features = ["lua51", "vendored"] }
-
-[[bench]]
-name = "baseline"
-harness = false
-
-[[bench]]
-name = "cache"
-harness = false
-
-[[bench]]
-name = "host_functions"
+[[test]]
+name = "stdio_allocation_failures"
+# libtest prints before test entry, warming precisely the global streams whose
+# cold allocation behavior this executable must check in fresh child processes.
 harness = false
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
-
-[[example]]
-name = "native_boundary"
-required-features = ["native-c-api"]

@@ -1,8 +1,8 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
+use crate::memory::bytes::ByteOutput;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
-    process::Child,
 };
 
 pub(in crate::vm) const LINE_BUFFER: usize = if cfg!(windows) { 512 } else { 8192 };
@@ -10,20 +10,18 @@ pub(super) const BUFFER: usize = 4096;
 
 #[derive(Debug)]
 pub(in crate::vm) enum Resource {
-    Native(Box<dyn super::native::File>),
     File(File),
     Input,
     Output,
     Error,
-    Pipe(Child),
+    Pipe(super::process::Pipe),
 }
 impl Resource {
     fn read_into(&mut self, bytes: &mut [u8]) -> Result<usize, i32> {
         match self {
-            Self::Native(file) => return file.read(bytes),
             Self::File(f) => f.read(bytes),
-            Self::Input => std::io::stdin().read(bytes),
-            Self::Pipe(c) => c.stdout.as_mut().ok_or(9)?.read(bytes),
+            Self::Input => super::stdio::read(bytes),
+            Self::Pipe(c) => c.read(bytes),
             _ => return Err(9),
         }
         .map_err(errno)
@@ -31,6 +29,9 @@ impl Resource {
 }
 
 pub(in crate::vm) fn errno(error: std::io::Error) -> i32 {
+    if error.kind() == std::io::ErrorKind::OutOfMemory {
+        return 12;
+    }
     #[cfg(windows)]
     {
         match error.raw_os_error() {
@@ -185,27 +186,18 @@ impl Stream {
         Ok(self.raw()?.map(|byte| (byte, 1)))
     }
     pub fn peek(&mut self) -> Result<Option<u8>, i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.get(true);
-        }
         if self.peek.is_none() {
             self.peek = self.decoded()?;
         }
         Ok(self.peek.map(|p| p.0))
     }
     pub fn get(&mut self) -> Result<Option<u8>, i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.get(false);
-        }
         Ok(match self.peek.take() {
             Some(p) => Some(p.0),
             None => self.decoded()?.map(|p| p.0),
         })
     }
     pub fn clear_eof(&mut self) {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            file.clear_error();
-        }
         self.eof = false;
     }
     #[cfg(windows)]
@@ -216,24 +208,7 @@ impl Stream {
             self.peek = None;
         }
     }
-    pub fn read_chars(&mut self, out: &mut Vec<u8>, mut count: usize) -> Result<bool, i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            if count == 0 {
-                return file.get(true).map(|byte| byte.is_some());
-            }
-            let mut buffer = [0; 4096];
-            let before = out.len();
-            while count != 0 {
-                let capacity = count.min(buffer.len());
-                let read = file.read(&mut buffer[..capacity])?;
-                out.extend_from_slice(&buffer[..read]);
-                count -= read;
-                if read < capacity {
-                    break;
-                }
-            }
-            return Ok(out.len() != before);
-        }
+    pub fn read_chars(&mut self, out: &mut impl ByteOutput, mut count: usize) -> Result<bool, i32> {
         self.flush()?;
         if count == 0 {
             return Ok(self.peek()?.is_some());
@@ -241,23 +216,22 @@ impl Stream {
         while count != 0 {
             if self.peek.is_none() && self.position < self.read.len() {
                 let len = count.min(self.read.len() - self.position);
-                out.extend_from_slice(&self.read[self.position..self.position + len]);
+                out.extend_bytes(&self.read[self.position..self.position + len])
+                    .map_err(|_| 12)?;
                 self.position += len;
                 count -= len;
             } else {
+                out.reserve_bytes(1).map_err(|_| 12)?;
                 let Some(byte) = self.get()? else {
                     break;
                 };
-                out.push(byte);
+                out.push_byte(byte);
                 count -= 1;
             }
         }
         Ok(count == 0 || !out.is_empty())
     }
-    pub fn read_line(&mut self, out: &mut Vec<u8>) -> Result<bool, i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.line(out);
-        }
+    pub fn read_line(&mut self, out: &mut impl ByteOutput) -> Result<bool, i32> {
         self.flush()?;
         // fgets followed by strlen is observable for embedded NUL bytes in 5.1.
         let mut chunk = [0; LINE_BUFFER];
@@ -277,11 +251,12 @@ impl Stream {
                 return Ok(!out.is_empty());
             }
             let visible = chunk[..len].iter().position(|&b| b == 0).unwrap_or(len);
+            out.reserve_bytes(visible).map_err(|_| 12)?;
             if visible != 0 && chunk[visible - 1] == b'\n' {
-                out.extend_from_slice(&chunk[..visible - 1]);
+                out.extend_bytes(&chunk[..visible - 1]).map_err(|_| 12)?;
                 return Ok(true);
             }
-            out.extend_from_slice(&chunk[..visible]);
+            out.extend_bytes(&chunk[..visible]).map_err(|_| 12)?;
         }
     }
     fn reconcile(&mut self) -> Result<(), i32> {
@@ -324,9 +299,6 @@ impl Stream {
         Ok(())
     }
     pub fn write(&mut self, bytes: &[u8]) -> Result<(), i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.write(bytes);
-        }
         if bytes.is_empty() {
             return Ok(());
         }
@@ -337,6 +309,15 @@ impl Stream {
         if matches!(self.resource, Some(Resource::Output)) {
             return super::stdout_write(bytes).map_err(errno);
         }
+        let additional = bytes
+            .len()
+            .checked_add(if cfg!(windows) && self.text {
+                bytes.iter().filter(|&&byte| byte == b'\n').count()
+            } else {
+                0
+            })
+            .ok_or(12)?;
+        self.write.try_reserve(additional).map_err(|_| 12)?;
         if cfg!(windows) && self.text {
             for &byte in bytes {
                 if byte == b'\n' {
@@ -347,11 +328,11 @@ impl Stream {
         } else {
             self.write.extend_from_slice(bytes);
         }
-        // Share Rust's stdout buffer with print, preserving mixed-write order.
+        // Standard stdout has already used the shared Lua buffer above.
         if matches!(self.resource, Some(Resource::Output | Resource::Error)) {
             match self.resource {
-                Some(Resource::Output) => std::io::stdout().write_all(&self.write),
-                _ => std::io::stderr().write_all(&self.write),
+                Some(Resource::Output) => super::stdio::write_all(1, &self.write),
+                _ => super::stdio::write_all(2, &self.write),
             }
             .map_err(errno)?;
             self.write.clear();
@@ -369,18 +350,15 @@ impl Stream {
         Ok(())
     }
     pub fn flush(&mut self) -> Result<(), i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.flush();
-        }
         if matches!(self.resource, Some(Resource::Output)) {
             return super::stdout_flush().map_err(errno);
         }
         if !self.write.is_empty() {
             match self.resource.as_mut() {
                 Some(Resource::File(f)) => f.write_all(&self.write),
-                Some(Resource::Output) => std::io::stdout().write_all(&self.write),
-                Some(Resource::Error) => std::io::stderr().write_all(&self.write),
-                Some(Resource::Pipe(c)) => c.stdin.as_mut().ok_or(9)?.write_all(&self.write),
+                Some(Resource::Output) => super::stdio::write_all(1, &self.write),
+                Some(Resource::Error) => super::stdio::write_all(2, &self.write),
+                Some(Resource::Pipe(c)) => c.write_all(&self.write),
                 _ => return Err(9),
             }
             .map_err(errno)?;
@@ -388,17 +366,13 @@ impl Stream {
         }
         match self.resource.as_mut() {
             Some(Resource::File(f)) => f.flush(),
-            Some(Resource::Output) => std::io::stdout().flush(),
-            Some(Resource::Error) => std::io::stderr().flush(),
-            Some(Resource::Pipe(c)) if self.writable => c.stdin.as_mut().ok_or(9)?.flush(),
+            Some(Resource::Output | Resource::Error) => Ok(()),
+            Some(Resource::Pipe(_)) if self.writable => Ok(()),
             _ => Ok(()),
         }
         .map_err(errno)
     }
     pub fn set_buffering(&mut self, mode: u8, size: usize) -> Result<(), i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.buffering(mode, size);
-        }
         self.flush()?;
         if matches!(self.resource, Some(Resource::Output)) {
             super::output::configure(mode, size).map_err(errno)?;
@@ -408,9 +382,6 @@ impl Stream {
         Ok(())
     }
     pub fn seek(&mut self, mode: usize, offset: i64) -> Result<i64, i32> {
-        if let Some(Resource::Native(file)) = self.resource.as_mut() {
-            return file.seek(mode, offset);
-        }
         self.flush()?;
         self.reconcile()?;
         let Some(Resource::File(f)) = self.resource.as_mut() else {
@@ -433,13 +404,8 @@ impl Stream {
         self.write = Vec::new();
         self.position = 0;
         self.peek = None;
-        if let Some(Resource::Pipe(mut child)) = resource {
-            drop(child.stdin.take());
-            drop(child.stdout.take());
-            return child
-                .wait()
-                .map(|s| Some(s.code().unwrap_or(-1)))
-                .map_err(errno);
+        if let Some(Resource::Pipe(child)) = resource {
+            return child.close().map(Some).map_err(errno);
         }
         flush.map(|_| None)
     }
@@ -447,9 +413,7 @@ impl Stream {
 impl Drop for Stream {
     fn drop(&mut self) {
         // Standard stdout remains a process resource when its Lua userdata dies.
-        if self.resource.is_some()
-            && !matches!(self.resource, Some(Resource::Output | Resource::Native(_)))
-        {
+        if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
             let _ = self.close();
         }
     }

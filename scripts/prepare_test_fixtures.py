@@ -1,12 +1,14 @@
-"""Restore split fixture archives, or split new and tracked archives before committing.
+"""Restore fixture archives and snapshots, or prepare oversized fixtures for Git.
 
 Run after `git submodule update --init tests/fixtures`. Uses only Python's
-standard library. --split keeps every published part below 50,000,000 bytes.
+standard library. --split keeps published archives and snapshots below 50,000,000 bytes.
 """
 import argparse
+import gzip
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -115,21 +117,73 @@ def split(store):
     return archives
 
 
+def prepare_snapshots(store, *, compress=False):
+    if not store.is_dir():
+        return 0
+    if compress:
+        for snapshot in sorted(store.rglob("*.snap")):
+            if snapshot.stat().st_size < MAX_FILE_BYTES:
+                continue
+            compressed = snapshot.with_suffix(".snap.gz")
+            with snapshot.open("rb") as source, compressed.open("wb") as target:
+                with gzip.GzipFile(filename="", mode="wb", fileobj=target, mtime=0) as pending:
+                    shutil.copyfileobj(source, pending)
+            if compressed.stat().st_size >= MAX_FILE_BYTES:
+                raise ValueError(f"compressed snapshot is still oversized: {compressed}")
+        compressed_snapshots = sorted(store.rglob("*.snap.gz"))
+        rules = ["/.snapshot-*"] + [
+            "/" + path.with_suffix("").relative_to(store).as_posix()
+            for path in compressed_snapshots
+        ]
+        (store / ".gitignore").write_text(
+            "# Restored regression snapshots (managed by prepare_test_fixtures.py)\n"
+            + "\n".join(rules) + "\n", encoding="utf-8")
+        if compressed_snapshots:
+            subprocess.run(["git", "update-index", "--force-remove", "--", *[
+                path.with_suffix("").relative_to(store).as_posix()
+                for path in compressed_snapshots
+            ]], cwd=store, check=True)
+    restored = 0
+    for compressed in sorted(store.rglob("*.snap.gz")):
+        destination = compressed.with_suffix("")
+        pending_path = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=store, prefix=".snapshot-", delete=False) as pending:
+                pending_path = Path(pending.name)
+                # Reading to EOF verifies gzip's CRC and uncompressed length.
+                with gzip.open(compressed, "rb") as source:
+                    shutil.copyfileobj(source, pending)
+            if destination.is_file():
+                if (destination.stat().st_size != pending_path.stat().st_size
+                        or digest(destination) != digest(pending_path)):
+                    raise ValueError(f"existing fixture checksum differs: {destination}")
+            else:
+                pending_path.replace(destination)
+                restored += 1
+        finally:
+            if pending_path is not None:
+                pending_path.unlink(missing_ok=True)
+    return restored
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture-root", type=Path,
                         default=Path(__file__).resolve().parents[1] / "tests/fixtures")
     parser.add_argument("--split", action="store_true",
-                        help="split new or tracked oversized archives and untrack the restored originals; keeps local files")
+                        help="split oversized archives, compress oversized snapshots, and untrack restored originals; keeps local files")
     args = parser.parse_args()
     store = args.fixture_root.resolve() / "full_song_lua"
     if not (store / "index.json").is_file():
         parser.error("initialize fixtures first: git submodule update --init tests/fixtures")
     if args.split:
         archives = split(store)
+        prepare_snapshots(args.fixture_root.resolve() / "regression-expectations", compress=True)
         print(f"{len(archives)} split archives; parts are at most {PART_BYTES:,} bytes")
     else:
         print(f"Restored {prepare(store)} archives; split fixture checksums verified")
+        snapshots = prepare_snapshots(args.fixture_root.resolve() / "regression-expectations")
+        print(f"Restored {snapshots} regression snapshots; compressed fixture checksums verified")
 
 
 if __name__ == "__main__":

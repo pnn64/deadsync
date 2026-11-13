@@ -15,6 +15,14 @@ pub(in crate::vm) struct ApiResult {
 }
 
 impl Vm {
+    pub(in crate::vm) fn reserve_api_call(&mut self) -> Result<(), Error> {
+        let before = self.api_calls.capacity();
+        self.api_calls
+            .try_reserve(1)
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control((self.api_calls.capacity() - before) * size_of::<ApiCall>());
+        Ok(())
+    }
     pub(in crate::vm) fn api_yield_allowed(&self, barriers: u16) -> bool {
         self.api_calls
             .iter()
@@ -34,6 +42,23 @@ impl Vm {
         let depth = self.frames.len();
         let active = self.active_native;
         let barriers = self.frames.last().map_or(0, |f| f.barriers);
+        let reserve = self
+            .reserve_api_call()
+            .and_then(|()| self.reserve_frames(1));
+        if let Err(error) = reserve {
+            if !protected {
+                return Err(error);
+            }
+            // The function slot already exists, so publishing a protected
+            // memory failure needs no allocation and bypasses the handler.
+            self.truncate_registers(call + 1);
+            self.registers[call] = Value::String(self.memory_error);
+            self.top = call + 1;
+            return Ok(ApiResult {
+                status: NativeCallStatus::MemoryError,
+                yielded: None,
+            });
+        }
         self.api_calls.push(ApiCall {
             thread: owner,
             frame: depth,

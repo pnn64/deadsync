@@ -693,8 +693,3 @@ mod tests {
         assert_eq!(changed.as_ref(), "StepManiaX P1 [91ff]");
     }
 }
-
-#[cfg(test)]
-mod view_performance {
-    include!("smx_view_performance.rs");
-}

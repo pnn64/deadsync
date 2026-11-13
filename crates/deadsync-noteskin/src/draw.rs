@@ -386,6 +386,59 @@ pub fn model_draw_at(
     )
 }
 
+#[inline]
+fn interpolate_model_draw(from: &ModelDrawState, to: &ModelDrawState, p: f32) -> ModelDrawState {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection includes CPU and OS support for FMA.
+        // The specialized body uses only safe field operations.
+        return unsafe { interpolate_model_draw_fma(from, to, p) };
+    }
+    interpolate_model_draw_samples(from, to, p)
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn interpolate_model_draw_fma(
+    from: &ModelDrawState,
+    to: &ModelDrawState,
+    p: f32,
+) -> ModelDrawState {
+    interpolate_model_draw_samples(from, to, p)
+}
+
+#[inline(always)]
+fn interpolate_model_draw_samples(
+    from: &ModelDrawState,
+    to: &ModelDrawState,
+    p: f32,
+) -> ModelDrawState {
+    #[inline(always)]
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        (b - a).mul_add(t, a)
+    }
+
+    let mut s = *from;
+    for i in 0..3 {
+        s.pos[i] = lerp(from.pos[i], to.pos[i], p);
+        s.rot[i] = lerp(from.rot[i], to.rot[i], p);
+        s.zoom[i] = lerp(from.zoom[i], to.zoom[i], p);
+    }
+    for i in 0..4 {
+        s.tint[i] = lerp(from.tint[i], to.tint[i], p);
+        s.glow[i] = lerp(from.glow[i], to.glow[i], p);
+        s.fade[i] = lerp(from.fade[i], to.fade[i], p);
+    }
+    s.vert_align = lerp(from.vert_align, to.vert_align, p);
+    s.blend_add = if p >= 1.0 {
+        to.blend_add
+    } else {
+        from.blend_add
+    };
+    s.visible = if p >= 1.0 { to.visible } else { from.visible };
+    s
+}
+
 fn model_draw_at_impl(
     base_draw: ModelDrawState,
     timeline: &[ModelTweenSegment],
@@ -438,29 +491,7 @@ fn model_draw_at_impl(
             continue;
         }
         let p = seg.tween.ease(elapsed / duration);
-        let mut s = seg.from;
-        for i in 0..3 {
-            s.pos[i] = lerp(seg.from.pos[i], seg.to.pos[i], p);
-            s.rot[i] = lerp(seg.from.rot[i], seg.to.rot[i], p);
-            s.zoom[i] = lerp(seg.from.zoom[i], seg.to.zoom[i], p);
-        }
-        for i in 0..4 {
-            s.tint[i] = lerp(seg.from.tint[i], seg.to.tint[i], p);
-            s.glow[i] = lerp(seg.from.glow[i], seg.to.glow[i], p);
-            s.fade[i] = lerp(seg.from.fade[i], seg.to.fade[i], p);
-        }
-        s.vert_align = lerp(seg.from.vert_align, seg.to.vert_align, p);
-        s.blend_add = if p >= 1.0 {
-            seg.to.blend_add
-        } else {
-            seg.from.blend_add
-        };
-        s.visible = if p >= 1.0 {
-            seg.to.visible
-        } else {
-            seg.from.visible
-        };
-        out = s;
+        out = interpolate_model_draw(&seg.from, &seg.to, p);
         break;
     }
 
@@ -707,6 +738,47 @@ mod tests {
         assert_eq!(actual.vert_align.to_bits(), expected.vert_align.to_bits());
         assert_eq!(actual.blend_add, expected.blend_add);
         assert_eq!(actual.visible, expected.visible);
+    }
+
+    #[test]
+    fn model_tween_dispatch_preserves_fused_bits_and_flags_without_allocations() {
+        let mut seed = 0x1937_4682_u32;
+        let mut state = || {
+            let mut draw = ModelDrawState::default();
+            for value in draw
+                .pos
+                .iter_mut()
+                .chain(&mut draw.rot)
+                .chain(&mut draw.zoom)
+                .chain(&mut draw.tint)
+                .chain(&mut draw.glow)
+                .chain(&mut draw.fade)
+                .chain([&mut draw.vert_align, &mut draw.texture_seconds])
+            {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                *value = f32::from_bits(seed);
+            }
+            draw.blend_add = seed & 1 != 0;
+            draw.visible = seed & 2 != 0;
+            draw
+        };
+        for _ in 0..4096 {
+            let from = state();
+            let to = state();
+            for p in [0.0, f32::EPSILON, 0.5, 1.0_f32.next_down(), 1.0] {
+                let expected = super::interpolate_model_draw_samples(&from, &to, p);
+                crate::perf::assert_no_churn(|| {
+                    let actual = super::interpolate_model_draw(&from, &to, p);
+                    assert_draw_bits_eq(actual, expected);
+                    assert_eq!(
+                        actual.texture_seconds.to_bits(),
+                        from.texture_seconds.to_bits()
+                    );
+                });
+            }
+        }
     }
 
     #[test]

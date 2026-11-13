@@ -4,9 +4,9 @@ const FIELDS: [&[u8]; 7] = [b"sec", b"min", b"hour", b"day", b"month", b"year", 
 
 pub(super) fn format_with(
     format: &[u8],
-    output: &mut Vec<u8>,
+    output: &mut impl crate::memory::bytes::ByteOutput,
     mut convert: impl FnMut(&[u8; 3], &mut [u8; 200]) -> usize,
-) {
+) -> Result<(), Error> {
     let mut start = 0;
     let mut cursor = 0;
     while cursor + 1 < format.len() {
@@ -14,15 +14,15 @@ pub(super) fn format_with(
             cursor += 1;
             continue;
         }
-        output.extend_from_slice(&format[start..cursor]);
+        output.extend_bytes(&format[start..cursor])?;
         let spec = [b'%', format[cursor + 1], 0];
         let mut bytes = [0; 200];
         let count = convert(&spec, &mut bytes);
-        output.extend_from_slice(&bytes[..count]);
+        output.extend_bytes(&bytes[..count])?;
         cursor += 2;
         start = cursor;
     }
-    output.extend_from_slice(&format[start..]);
+    output.extend_bytes(&format[start..])
 }
 
 impl Vm {
@@ -35,7 +35,7 @@ impl Vm {
             if value == Value::Nil {
                 self.registers[base] =
                     platform::now()?.map_or(Value::Nil, |n| Value::Number(n as f64));
-                return Ok(self.return_frame(frame, base, 1));
+                return self.return_frame(frame, base, 1);
             }
             if !matches!(value, Value::Table(_)) {
                 return Err(self.argument_type_error(
@@ -49,6 +49,7 @@ impl Vm {
             // These are the caller's owned call-argument temporaries; clearing
             // discarded extras also removes them from suspended-call GC maps.
             let start = frame.vararg_start;
+            self.reserve_registers(base + 9)?;
             self.registers[start + 1..start + frame.argc()].fill(Value::Nil);
             self.resize_registers(self.registers.len().max(base + 9));
             self.registers[base] = value;
@@ -75,10 +76,12 @@ impl Vm {
                 } else if index < 3 {
                     [0, 0, 12][index]
                 } else {
-                    let mut text = b"field '".to_vec();
-                    text.extend_from_slice(FIELDS[index]);
-                    text.extend_from_slice(b"' missing in date table");
-                    return Err(Error::from_bytes(ErrorKind::Runtime, 0, text));
+                    return Err(Error::runtime_static(match index {
+                        3 => "field 'day' missing in date table",
+                        4 => "field 'month' missing in date table",
+                        5 => "field 'year' missing in date table",
+                        _ => unreachable!(),
+                    }));
                 };
                 if index == 4 {
                     number = number.wrapping_sub(1);
@@ -100,12 +103,12 @@ impl Vm {
                     date.fields[8] = number;
                     self.registers[base + 1] =
                         platform::make_time(date)?.map_or(Value::Nil, |n| Value::Number(n as f64));
-                    return Ok(self.return_frame(frame, base + 1, 1));
+                    return self.return_frame(frame, base + 1, 1);
                 }
                 frame.pc += 1;
             }
             self.frames[owner] = frame;
-            let key = self.intern(FIELDS[frame.pc() - 1]);
+            let key = self.try_intern(FIELDS[frame.pc() - 1])?;
             let depth = self.frames.len();
             self.get_table(self.registers[base], key, base + 8)?;
             if self.frames.len() != depth {
@@ -145,7 +148,7 @@ impl Vm {
                 self.registers[base] = Value::Nil;
                 return Ok(1);
             };
-            let table = self.new_record_table(8 + usize::from(date.fields[8] >= 0));
+            let table = self.new_record_table(8 + usize::from(date.fields[8] >= 0))?;
             for (index, name) in [
                 b"sec".as_slice(),
                 b"min",
@@ -164,7 +167,7 @@ impl Vm {
                     5 => 1900,
                     _ => 0,
                 };
-                let name = self.intern(name);
+                let name = self.try_intern(name)?;
                 self.raw_set(
                     table,
                     name,
@@ -172,18 +175,18 @@ impl Vm {
                 )?;
             }
             if date.fields[8] >= 0 {
-                let name = self.intern(b"isdst");
+                let name = self.try_intern(b"isdst")?;
                 self.raw_set(table, name, Value::Boolean(date.fields[8] != 0))?;
             }
             self.registers[base] = Value::Table(table);
         } else {
-            let mut output = self.take_buffer(64);
+            let mut output = self.try_take_buffer(64)?;
             let bytes = format.map_or(b"%c".as_slice(), |id| &self.strings.bytes[slot_index(id.0)]);
             let valid = platform::format_date(time, utc, &bytes[start..end], &mut output)?;
             self.registers[base] = if valid {
-                self.finish_buffer(output)
+                self.try_finish_buffer(output)?
             } else {
-                self.buffers.push(output);
+                self.recycle_buffer(output);
                 Value::Nil
             };
         }

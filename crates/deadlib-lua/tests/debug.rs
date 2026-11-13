@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,
@@ -365,41 +364,9 @@ fn compare(source: &[u8]) {
             ),
         })
         .collect();
-    // SAFETY: fixed local programs need the development oracle's debug library.
-    let lua = unsafe { Lua::unsafe_new() };
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap_or_else(|e| panic!("reference: {e}: {}", String::from_utf8_lossy(source)))
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalar observations"),
-        })
-        .collect();
-    if actual != expected {
-        for (a, b) in actual.iter().zip(&expected) {
-            if let (Scalar::Bytes(a), Scalar::Bytes(b)) = (a, b)
-                && a != b
-            {
-                let at = a
-                    .iter()
-                    .zip(b)
-                    .position(|(a, b)| a != b)
-                    .unwrap_or(a.len().min(b.len()));
-                panic!(
-                    "bytes differ at {at}: rust={:?}, reference={:?}: {}",
-                    String::from_utf8_lossy(&a[at.saturating_sub(40)..(at + 80).min(a.len())]),
-                    String::from_utf8_lossy(&b[at.saturating_sub(40)..(at + 80).min(b.len())]),
-                    String::from_utf8_lossy(source)
-                );
-            }
-        }
-        assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
-    }
+    reference_test::assert_debug("tests/debug.rs::compare::expected", &actual);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

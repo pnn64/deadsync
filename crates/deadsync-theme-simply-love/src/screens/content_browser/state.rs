@@ -44,8 +44,9 @@ pub(super) const FEATURED_MAX: usize = FEATURED_VISIBLE * 2;
 
 /// Held-direction repeat, matching the Options overlay exactly -- a player who
 /// learns one list should not find the other feels different.
-pub(super) const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
-pub(super) const NAV_REPEAT_INTERVAL: Duration = Duration::from_millis(125);
+pub(super) const NAV_INITIAL_HOLD_DELAY: Duration =
+    crate::screens::input::OVERLAY_NAV_INITIAL_HOLD_DELAY;
+pub(super) const NAV_REPEAT_INTERVAL: Duration = crate::screens::input::OVERLAY_NAV_REPEAT_INTERVAL;
 
 /// How long the cursor has to rest on a pack before its page is read.
 ///
@@ -782,6 +783,13 @@ pub fn update(state: &mut State, delta_time: f32) {
     // While the pack sync review is up it is the screen: nothing behind it
     // moves.
     if super::sync_dialog::overlay_visible(state) {
+        if crate::screens::pack_sync::update(&mut state.pack_sync_overlay, delta_time) {
+            state
+                .pending_audio
+                .push(deadsync_theme::AudioRequest::PlaySfx(
+                    "assets/sounds/change.ogg",
+                ));
+        }
         return;
     }
     state.caret_elapsed += delta_time;
@@ -3267,7 +3275,7 @@ mod tests {
                 "INSTALLED",
             ]
         );
-        // PAD stays where init() lands, and YEARS where the benchmark finds it.
+        // PAD stays where init() lands, and YEARS at its fixture position.
         assert_eq!(TABS[1], Tab::Pad);
         assert_eq!(TABS[7], Tab::Years);
     }
@@ -3834,9 +3842,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "banner_requests_original.rs"]
-mod banner_requests_original;
 
 #[cfg(test)]
 #[path = "banner_requests_perf.rs"]

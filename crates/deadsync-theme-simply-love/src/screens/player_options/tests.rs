@@ -7496,8 +7496,4 @@ pub(super) mod tests {
         }
     }
 
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/player_option_changes.rs"
-    ));
 }

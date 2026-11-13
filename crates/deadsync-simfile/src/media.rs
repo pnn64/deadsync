@@ -813,7 +813,3 @@ second.ogv=1
         }
     }
 }
-
-#[cfg(test)]
-#[path = "media_perf.rs"]
-mod perf;

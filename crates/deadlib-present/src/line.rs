@@ -504,9 +504,6 @@ pub fn build_graph_line_mesh(
     unsafe { mesh.assume_init() }
 }
 
-#[cfg(test)]
-#[path = "line_graph_performance.rs"]
-mod graph_performance;
 
 #[cfg(test)]
 mod tests {

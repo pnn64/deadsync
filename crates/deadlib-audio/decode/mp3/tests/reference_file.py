@@ -80,12 +80,16 @@ def main():
     p.add_argument('--expected-samples',type=int);p.add_argument('--case',action='append')
     p.add_argument('--symphonia',type=Path);p.add_argument('--mad-reference',type=Path);p.add_argument('--mad-oracle',type=Path)
     p.add_argument('--encoder-corpus',action='store_true')
-    args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False)
+    p.add_argument('--framing-report',type=Path,help='current reference_framing.py output for inputs without source metadata')
+    args=p.parse_args()
     limits={'rms':2e-6,'max':2e-5};records=[]
     sources=json.loads((args.corpus/'sources.json').read_text()) if (args.corpus/'sources.json').exists() else None
     generated={r['file']:r for r in json.loads((args.corpus/'generation.json').read_text())['records']} if args.encoder_corpus else None
-    foundation=json.loads((Path(__file__).parent/'validation/2026-10-27-foundation/reference-framing.json').read_text())
+    if not sources and not generated and not args.framing_report:
+        p.error('--framing-report is required for inputs without sources.json or encoder generation metadata')
+    foundation=json.loads(args.framing_report.read_text(encoding='utf-8')) if args.framing_report else []
     framing={Path(r['command'][-1]).name:r for r in foundation}
+    args.output.mkdir(parents=True,exist_ok=False)
     def run(command,allow_failure=False):
         result=subprocess.run(list(map(str,command)),capture_output=True,text=True)
         record={'command':list(map(str,command)),'exit_code':result.returncode,'stdout':result.stdout,'stderr':result.stderr}

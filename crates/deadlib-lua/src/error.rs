@@ -14,7 +14,7 @@ pub enum ErrorKind {
     Bytecode,
     /// A Lua execution error.
     Runtime,
-    /// A fallible VM allocation failed.
+    /// An engine allocation failed.
     Memory,
     /// A language construct that is not implemented yet.
     Unsupported,
@@ -35,6 +35,62 @@ pub struct Error {
 }
 
 impl Error {
+    pub(crate) fn new_static(kind: ErrorKind, line: u32, message: &'static str) -> Self {
+        Self {
+            kind,
+            line,
+            message: Cow::Borrowed(message),
+            ..Self::memory()
+        }
+    }
+
+    pub(crate) fn from_string(kind: ErrorKind, line: u32, message: String) -> Self {
+        Self {
+            kind,
+            line,
+            message: Cow::Owned(message),
+            ..Self::memory()
+        }
+    }
+
+    pub(crate) fn try_from_bytes(kind: ErrorKind, line: u32, bytes: Vec<u8>) -> Self {
+        use crate::memory::fallible::VecExt;
+        let build = || -> Result<Self, Self> {
+            match String::from_utf8(bytes) {
+                Ok(message) => Ok(Self::from_string(kind, line, message)),
+                Err(error) => {
+                    let bytes = error.into_bytes();
+                    let mut message = String::new();
+                    for chunk in bytes.utf8_chunks() {
+                        message
+                            .try_reserve(chunk.valid().len() + 3)
+                            .map_err(|_| Self::memory())?;
+                        message.push_str(chunk.valid());
+                        if !chunk.invalid().is_empty() {
+                            message.push(char::REPLACEMENT_CHARACTER);
+                        }
+                    }
+                    Ok(Self {
+                        kind,
+                        line,
+                        message: Cow::Owned(message),
+                        bytes: Some(bytes.try_into_boxed_slice()?),
+                        ..Self::memory()
+                    })
+                }
+            }
+        };
+        build().unwrap_or_else(|error| error)
+    }
+
+    pub(crate) fn runtime_static(message: &'static str) -> Self {
+        Self {
+            kind: ErrorKind::Runtime,
+            message: Cow::Borrowed(message),
+            ..Self::memory()
+        }
+    }
+
     pub(crate) fn new(kind: ErrorKind, line: u32, message: impl Into<Box<str>>) -> Self {
         Self {
             kind,
@@ -58,6 +114,14 @@ impl Error {
             bypass_handler: false,
             value: Some(value),
             target_thread: None,
+        }
+    }
+
+    pub(crate) fn raised_static(value: Value, message: &'static str) -> Self {
+        Self {
+            kind: ErrorKind::Runtime,
+            message: Cow::Borrowed(message),
+            ..Self::memory().with_value(value)
         }
     }
 
@@ -91,6 +155,12 @@ impl Error {
     /// [`Self::message`] and display replace invalid UTF-8 for Rust callers.
     pub fn message_bytes(&self) -> &[u8] {
         self.bytes.as_deref().unwrap_or(self.message.as_bytes())
+    }
+
+    pub(crate) fn without_vm_values(mut self) -> Self {
+        self.value = None;
+        self.target_thread = None;
+        self
     }
 
     pub(crate) fn with_value(mut self, value: Value) -> Self {

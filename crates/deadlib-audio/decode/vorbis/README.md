@@ -1,69 +1,6 @@
 # deadlib-audio-decode-vorbis
 
-Independent Vorbis I implementation with [completed decoding validation](DECODING_COMPLETION.md). The only production
-dependency is the sibling `deadlib-audio-decode-ogg` container. Symphonia and
-libvorbis serve only as test oracles. Neither new crate is integrated into
-DeadSync's decoder or playback pipeline.
-
 Raw Vorbis packet APIs remain usable independently of Ogg:
-
-* `bitpack::{BitReader, BitWriter}`: native LSB-first arbitrary-width integers
-  (0..=32), lookahead and sticky end-of-packet semantics.
-* `Identification::{parse, encode}`: stream parameters, bitrate hints, block
-  sizes and framing validation. `channel_order` exposes mapping-zero speaker
-  order for one through eight channels; larger counts remain explicitly unassigned.
-* `Comments::{parse, encode, to_owned}`: borrowed eight-bit-clean metadata, duplicates and
-  unknown/unstructured vectors preserved. `fields` and `values` expose valid
-  field names and ASCII-insensitive lookup. `Metadata` owns fields in two flat
-  allocations. Strict parsing is separate from nonfatal stream comment handling.
-* `codebook::{Codebook, Huffman}`: ordered/unordered/sparse entry lengths,
-  entry-order Huffman assignment, scalar and VQ decode, lookup types 0/1/2,
-  exact integer lattice sizes and the specification's single-entry erratum.
-  Nonempty dimension-zero scalar books work with lookup zero/two.
-  `Codebook::read_with_options` / `Setup::parse_with_options` expose
-  `ParseOptions::allow_empty_codebooks` for explicit reference acceptance.
-  `Limits::max_codebook_extent_bits` defaults to the reference's 24-bit
-  declaration guard; see [codebook limits](CODEBOOK_LIMITS.md).
-  `ParseOptions::codebook_behavior` selects published values/bit bounds or
-  `CodebookBehavior::Libvorbis` exponent clamps and whole-byte array guards.
-  Ogg/seek options preserve the policy through resets and selected setup reparsing;
-  see [codebook values and bounds](CODEBOOK_VALUES.md).
-  Optional, budget-bounded prefix lookup shares the tree allocation.
-  [HUFFMAN.md](HUFFMAN.md) documents exact tail/fallback behavior and the measured
-  throughput/startup tradeoff.
-* `Setup::parse`: codebooks, time placeholders, floor-zero/one configuration,
-  all residue configurations, mapping-zero submaps/coupling, modes and framing.
-  Index/range/tree validation precedes use. Floor-one neighbors and X ordering
-  are precomputed. `read_audio_header` parses a raw packet's mode/window prefix.
-* `PacketDecoder`: floor-zero/one curves, residue-zero/one/two, inverse channel
-  coupling in reverse order, native FFT-based inverse MDCT, Vorbis windows and
-  overlap-add. Output is borrowed planar, unclipped f32 in Vorbis channel order.
-* `SynthesisDecoder`: raw packet timing, track-only insertion, queued PCM,
-  partial reads and retained-buffer restart behavior matching libvorbis.
-  `PacketTiming` supplies sequence/granule/EOS fields independently of Ogg;
-  `SynthesisState` exposes the exact queue and clocks. Numerical policies remain
-  explicit. See [synthesis state](SYNTHESIS_STATE.md) and
-  [reference file seeking](REFERENCE_SEEKING.md).
-  Transform tables/scratch use f64 to retain PCM accuracy through cancellation;
-  [configuration parity](CONFIGURATION_PARITY.md) records the regression.
-  The first block primes overlap and returns zero frames. `reset` keeps tables
-  and allocations; decode/reset perform zero allocations after construction.
-  `with_options` accepts `DecodeOptions`; `Residue2Layout::Libvorbis` selects
-  the pinned reference's unaligned type-two endpoint/phase behavior. The default
-  uses the published interleave rule. The same field in `OggOptions` and
-  `SeekOptions` preserves the choice through streaming/reset/seeking. See
-  [residue geometry](RESIDUE_GEOMETRY.md) for the difference and evidence.
-  `Floor0Behavior::Libvorbis` selects the reference amplitude reader, Bark-grid
-  rounding and partial-LSP concealment through raw/Ogg/seek options. The unsigned
-  0..=63-bit published amplitude remains the default; see
-  [floor-zero parameters](FLOOR0_PARAMETERS.md).
-  `DecodeOptions::allow_nonfinite` selects libvorbis IEEE propagation. It and
-  `allow_empty_codebooks` are preserved by Ogg/reset/seek options; see
-  [degenerate books](DEGENERATE_BOOKS.md) for consumer behavior and validation.
-  `reset_at` also seeds the raw position for caller-managed packet seeks; supply
-  the actual preceding packet to prime overlap before consuming output.
-* `Imdct` / `Mdct`: reusable native inverse/forward transforms for all legal 64..=8192 block sizes,
-  using a paired-spectrum N/4 FFT. [MDCT.md](MDCT.md) gives the derivation.
 
 ```rust
 use deadlib_audio_decode_vorbis::{Identification, Limits, PacketDecoder, Setup};
@@ -179,58 +116,6 @@ Invalid seek arguments preserve the cursor; read/seek IO failures are terminal
 until a successful seek resets state. As with streaming, output is provisional
 until end validation. Wrap unbuffered file sources in `BufReader`.
 
-`SeekOptions` independently bounds the container page count, additional retained
-Vorbis index elements, setup/synthesis memory, and packet resources. Indexing is
-eager and requires two container passes; sparse/index-free codec seeking and
-comparative startup/seek optimization remain performance work.
-The initial [performance baseline](PERFORMANCE.md) compares resident full decode,
-4 KiB fragmented reads and time to first PCM against libvorbisfile and Symphonia.
-The measured N/4 transform update improves the two longer tracks by 1.35–1.67x
-in observed full-file runs, while a native throughput gap remains.
-The later unit-twiddle FFT update adds 1.14-1.27x isolated kernel throughput and
-observed full-file gains of 1.03x / 1.11x on those longer tracks. The report keeps
-trial spreads and mixed short-clip movements alongside these scoped gains.
-The measured [residue cursor update](RESIDUE_PERFORMANCE.md) improves paired song
-full decoding 1.24x / 1.03x, retaining exact heap/IO counters and mixed small-file
-results. Native still trails Symphonia on these song medians.
-[Allocation/memory/seek comparisons](RESOURCES.md) now measure five files:
-native uses less requested heap than Symphonia here. The packet-read update
-addresses the measured page-sized synthesis work; eager indexing and broader
-construction/seek optimization remain open.
-The later one-pass index construction halves source bytes and improves song open
-medians 1.86x / 1.66x with unchanged retained heap. It still scans the complete
-input; mixed batch timings and index-free seeking remain open in that report.
-
-Legacy handling is explicit and disabled by default.
-`OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore
-only granule zero on an unfinished nonempty page. The indexed reader alone
-offers `SeekOptions::trim_to_final_granule`, using the known final length to
-clip PCM across earlier packets/pages. Applied container exceptions are counted;
-`SeekStream` reports trailing padding and extended trimming. See
-[LEGACY.md](LEGACY.md) for the precise policies, strict rejection tests and
-pinned historical/ITGmania evidence, including a reference count discrepancy.
-
-Native PCM encoding is available through `PacketEncoder` and `OggEncoder`.
-The initial implementation uses fixed blocks, a flat adaptive floor and staged
-residue-one quantization. Raw push/finish/reset retain all capacity. Independent
-libvorbisfile/Symphonia checks require exact counts and decoder PCM parity;
-source reconstruction is measured separately because encoding is lossy.
-See [ENCODING.md](ENCODING.md) for usage, policy, measured errors and limitations.
-Perceptual/rate control and competitive encoder quality/performance remain open.
-Raw decoder positions count overlap output before container initial/final trim.
-There is no synthetic final flush; the container mapping supplies final length.
-Do not replace the existing decoding
-pipeline. Application integration remains outside this task.
-See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
-`SeekOptions::seek_behavior = SeekBehavior::Libvorbis` now selects reference
-page/packet scheduling and the granule-aware synthesis queue. It matches the
-172 previously recorded seek-position/count disagreements, including retained
-restart history and continued-packet fallback. The default `Retained` mode
-continues to address sequential PCM exactly. See [reference seeking](REFERENCE_SEEKING.md)
-for policy, independent comparisons and remaining scope.
-The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
-synthesis, streaming/reset and indexed seek error recovery under AddressSanitizer.
-
 Packet prefix truncation discards the packet without advancing overlap. A
 truncated floor produces a zero current window for every channel (spec 4.3.2)
 and still overlaps preceding data. Residue truncation retains completed work;
@@ -244,26 +129,3 @@ The parent `scripts/verify_independent.ps1` copies only the two crates into a
 separate workspace, runs their tests offline and checks production dependency
 trees. Optional [external tests](tests/oracle/README.md) require pinned C oracle
 builds. Resource limits are configurable application policies, not format limits.
-
-The explicit `ParseOptions::residue_behavior = ResidueBehavior::Libvorbis`
-policy accepts reference partial-vector partitions and inverted empty ranges,
-with reference Huffman EOF behavior. The same field in `OggOptions` and
-`SeekOptions` survives resets and setup reparsing. Whole vectors and ordered
-ranges remain the default. Type-two placement is selected separately by
-`Residue2Layout`; see [residue ranges and tails](RESIDUE_TAILS.md).
-
-The [floor-one guard follow-up](FLOOR1_GUARDS.md) adds
-`Floor1Behavior::Libvorbis` for reference 15-bit reconstruction masks, rendering
-clips and EOF decisions. The original range guard remains default. The policy
-is retained through raw reset, streaming and indexed decoder reconstruction;
-finite PCM still uses the original numerical bounds.
-
-The [EOS count follow-up](EOS_CLAMPING.md) adds explicit bounded reference EOS
-clipping and separates declared duration from emitted PCM. It retains the
-original retained-PCM/libvorbisfile differences as an exact inventory. The
-explicit reference seek mode checks all of those requests against C directly.
-
-[Empty EOS pages without timestamps](UNTIMED_EOS.md) inherit the last completed
-audio landmark under the default policy. The explicit reference EOS policy
-preserves libvorbisfile's zero declared duration and separately records emitted
-PCM. Completed audio pages with unknown or negative granules remain errors.

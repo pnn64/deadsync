@@ -3,7 +3,7 @@ use crate::fonts::machine_font_key;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_platform::input::{PadDir, PadEvent};
-use deadlib_present::actors::{Actor, TextContent};
+use deadlib_present::actors::{Actor, SizeSpec, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_config::theme::GameFlag;
 use deadsync_config::theme::MachineFont;
@@ -74,6 +74,7 @@ pub enum PlayerSlot {
 #[derive(Clone, Debug, Default)]
 pub struct State {
     buttons_held: HashMap<(PlayerSlot, LogicalButton), bool>,
+    snek: SnekSensorState,
     unmapped: UnmappedTracker,
     event_rate: EventRateTracker,
     /// Game-thread-owned one-entry presentations for the two full-screen Test
@@ -83,6 +84,46 @@ pub struct State {
     presentation_revision: u64,
     select_music_presentation: RefCell<Option<SelectMusicPresentation>>,
     screen_presentation: RefCell<Option<TestInputScreenPresentation>>,
+    evaluation_pad_presentations: [RefCell<Option<EvaluationPadPresentation>>; 2],
+    evaluation_panel_presentations: [RefCell<Option<EvaluationPanelPresentation>>; 2],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct SnekSensorState {
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EvaluationPadKey {
+    revision: u64,
+    game: GameFlag,
+    x_bits: u32,
+    y_bits: u32,
+    scale_bits: u32,
+}
+
+#[derive(Clone, Debug)]
+struct EvaluationPadPresentation {
+    key: EvaluationPadKey,
+    children: Arc<[Actor]>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct EvaluationPanelKey {
+    pad: EvaluationPadKey,
+    title_font: &'static str,
+    title: Arc<str>,
+    body_font: &'static str,
+    instructions: Arc<str>,
+}
+
+#[derive(Clone, Debug)]
+struct EvaluationPanelPresentation {
+    key: EvaluationPanelKey,
+    children: Arc<[Actor]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -126,6 +167,12 @@ impl State {
         self.presentation_revision = self.presentation_revision.wrapping_add(1);
         self.select_music_presentation.get_mut().take();
         self.screen_presentation.get_mut().take();
+        for cache in &mut self.evaluation_pad_presentations {
+            cache.get_mut().take();
+        }
+        for cache in &mut self.evaluation_panel_presentations {
+            cache.get_mut().take();
+        }
     }
 }
 
@@ -430,6 +477,29 @@ pub fn clear(state: &mut State) {
     *state = State::default();
 }
 
+/// Replace the Snek diagnostic snapshot without coupling the theme to a HID
+/// implementation. Returns whether presentation data was invalidated.
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) -> bool {
+    let next = SnekSensorState {
+        connected,
+        read_error,
+        sensors,
+        revision,
+    };
+    if state.snek == next {
+        return false;
+    }
+    state.snek = next;
+    state.invalidate_presentations();
+    true
+}
+
 const fn player_from_action(act: VirtualAction) -> Option<PlayerSlot> {
     use VirtualAction::{
         p1_center, p1_down, p1_left, p1_menu_down, p1_menu_left, p1_menu_right, p1_menu_up,
@@ -704,6 +774,45 @@ fn push_pad_scaled_with_texture_policy(
             diffuse(1.0, 1.0, 1.0, held_alpha(state, slot, button)):
             z(z + 1.0)
         ));
+
+        if game == GameFlag::Dance && state.snek.connected {
+            let player = match slot {
+                PlayerSlot::P1 => 0,
+                PlayerSlot::P2 => 1,
+            };
+            let panel = match button {
+                LogicalButton::Up => 0,
+                LogicalButton::Down => 1,
+                LogicalButton::Left => 2,
+                LogicalButton::Right => 3,
+                _ => continue,
+            };
+            // Match the firmware selector order: top, bottom, left, right.
+            // Each marker follows its physical sensor: a wide bar along a
+            // horizontal edge or a tall bar along a vertical edge.
+            let sensor_markers = [
+                (0.0, -27.0, 24.0, 6.0),
+                (0.0, 27.0, 24.0, 6.0),
+                (-27.0, 0.0, 6.0, 24.0),
+                (27.0, 0.0, 6.0, 24.0),
+            ];
+            for (sensor, (sensor_x, sensor_y, sensor_w, sensor_h)) in
+                sensor_markers.into_iter().enumerate()
+            {
+                let active = state.snek.sensors[player][panel][sensor];
+                let alpha = if active { 1.0 } else { 0.24 };
+                actors.push(act!(quad:
+                    align(0.5, 0.5):
+                    xy(
+                        pad_x + offset_x + sensor_x * scale,
+                        pad_y + offset_y + sensor_y * scale
+                    ):
+                    zoomto(sensor_w * scale, sensor_h * scale):
+                    diffuse(0.2, 1.0, 0.35, alpha):
+                    z(z + 2.0)
+                ));
+            }
+        }
     }
 
     if !show_menu_buttons {
@@ -895,6 +1004,19 @@ fn push_test_input_screen_content_unreserved(
 
     push_unmapped_lines(actors, &state.unmapped, cx, cy);
 
+    if state.snek.read_error {
+        actors.push(act!(text:
+            font("miso"):
+            settext(crate::i18n::tr_ui("Snek sensor connection lost")):
+            align(0.5, 0.0):
+            xy(cx, cy + 108.0):
+            zoom(0.7):
+            horizalign(center):
+            diffuse(1.0, 0.45, 0.3, 1.0):
+            z(30)
+        ));
+    }
+
     let return_hint = if select_returns {
         "Hold &SELECT; to return to Options."
     } else {
@@ -913,6 +1035,50 @@ fn push_test_input_screen_content_unreserved(
     push_polling_readout(actors, state, 30.0);
 }
 
+fn evaluation_pad_actor_count(state: &State, game: GameFlag) -> usize {
+    match game {
+        GameFlag::Dance if state.snek.connected => 21,
+        GameFlag::Dance => 5,
+        GameFlag::Pump => 6,
+    }
+}
+
+fn evaluation_pad_key(
+    state: &State,
+    game: GameFlag,
+    x: f32,
+    y: f32,
+    scale: f32,
+) -> EvaluationPadKey {
+    EvaluationPadKey {
+        revision: state.presentation_revision,
+        game,
+        x_bits: x.to_bits(),
+        y_bits: y.to_bits(),
+        scale_bits: scale.to_bits(),
+    }
+}
+
+fn evaluation_cache_slot(slot: PlayerSlot) -> usize {
+    match slot {
+        PlayerSlot::P1 => 0,
+        PlayerSlot::P2 => 1,
+    }
+}
+
+fn push_retained_evaluation_actors(actors: &mut Vec<Actor>, children: Arc<[Actor]>) {
+    actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children,
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+}
+
 /// Build a `TestInput` pad for use inside an evaluation pane (SL `ScreenEvaluation` Pane6 parity).
 ///
 /// `scale` scales the entire pad uniformly (1.0 = full size; SL Pane6 uses ~0.8).
@@ -925,8 +1091,20 @@ pub fn build_evaluation_pad(
     pad_y: f32,
     scale: f32,
 ) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(6);
-    push_evaluation_pad(&mut actors, state, game, slot, pad_x, pad_y, scale);
+    let mut actors = Vec::with_capacity(evaluation_pad_actor_count(state, game));
+    push_pad_scaled(
+        &mut actors,
+        state,
+        game,
+        slot,
+        pad_x,
+        pad_y,
+        false,
+        false,
+        None,
+        100.0,
+        scale,
+    );
     actors
 }
 
@@ -940,10 +1118,24 @@ pub fn push_evaluation_pad(
     pad_y: f32,
     scale: f32,
 ) {
-    actors.reserve(6);
-    push_pad_scaled(
-        actors, state, game, slot, pad_x, pad_y, false, false, None, 100.0, scale,
-    );
+    let key = evaluation_pad_key(state, game, pad_x, pad_y, scale);
+    let cache = &state.evaluation_pad_presentations[evaluation_cache_slot(slot)];
+    let cached = cache
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let children: Arc<[Actor]> =
+            build_evaluation_pad(state, game, slot, pad_x, pad_y, scale).into();
+        *cache.borrow_mut() = Some(EvaluationPadPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    actors.reserve(1);
+    push_retained_evaluation_actors(actors, children);
 }
 
 /// Approximate visual half-width of a pad rendered by `build_evaluation_pad` at the given scale.
@@ -1011,8 +1203,61 @@ pub fn push_evaluation_panel(
     body_font: &'static str,
     instructions: Arc<str>,
 ) {
+    let key = EvaluationPanelKey {
+        pad: evaluation_pad_key(state, game, anchor_x, anchor_y, scale),
+        title_font,
+        title,
+        body_font,
+        instructions,
+    };
+    let cache = &state.evaluation_panel_presentations[evaluation_cache_slot(slot)];
+    let cached = cache
+        .borrow()
+        .as_ref()
+        .filter(|presentation| presentation.key == key)
+        .map(|presentation| Arc::clone(&presentation.children));
+    let children = cached.unwrap_or_else(|| {
+        let mut built = Vec::with_capacity(evaluation_pad_actor_count(state, game) + 3);
+        push_evaluation_panel_uncached(
+            &mut built,
+            state,
+            game,
+            slot,
+            anchor_x,
+            anchor_y,
+            scale,
+            title_font,
+            Arc::clone(&key.title),
+            body_font,
+            Arc::clone(&key.instructions),
+        );
+        let children: Arc<[Actor]> = built.into();
+        *cache.borrow_mut() = Some(EvaluationPanelPresentation {
+            key,
+            children: Arc::clone(&children),
+        });
+        children
+    });
+    actors.reserve(1);
+    push_retained_evaluation_actors(actors, children);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_evaluation_panel_uncached(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    game: GameFlag,
+    slot: PlayerSlot,
+    anchor_x: f32,
+    anchor_y: f32,
+    scale: f32,
+    title_font: &'static str,
+    title: Arc<str>,
+    body_font: &'static str,
+    instructions: Arc<str>,
+) {
     use eval_panel_layout::*;
-    actors.reserve(10);
+    actors.reserve(evaluation_pad_actor_count(state, game) + 3);
 
     // Convert a panel-local (x_right, y_down) point in logical px to screen-space actor coords.
     let map = |local_x: f32, local_y_from_top: f32| -> (f32, f32) {
@@ -1246,6 +1491,137 @@ mod tests {
     }
 
     #[test]
+    fn evaluation_snek_pads_retain_equivalent_actors_until_input_or_layout_changes() {
+        let mut state = State::default();
+        set_snek_sensor_state(&mut state, true, false, [[[false; 4]; 4]; 2], 1);
+        let mut actors = Vec::new();
+        push_evaluation_pad(
+            &mut actors,
+            &state,
+            GameFlag::Dance,
+            PlayerSlot::P1,
+            100.0,
+            200.0,
+            0.75,
+        );
+        let [Actor::SharedFrame { children, .. }] = actors.as_slice() else {
+            panic!("Evaluation pad should retain shared actor children");
+        };
+        assert_eq!(children.len(), 21);
+        assert_eq!(
+            format!("{:?}", children.as_ref()),
+            format!(
+                "{:?}",
+                build_evaluation_pad(&state, GameFlag::Dance, PlayerSlot::P1, 100.0, 200.0, 0.75)
+            )
+        );
+
+        set_snek_sensor_state(&mut state, false, false, [[[false; 4]; 4]; 2], 3);
+        actors.clear();
+        push_evaluation_pad(
+            &mut actors,
+            &state,
+            GameFlag::Dance,
+            PlayerSlot::P1,
+            100.0,
+            200.0,
+            0.75,
+        );
+        let Actor::SharedFrame { children, .. } = &actors[0] else {
+            panic!("expected shared Evaluation pad");
+        };
+        assert_eq!(children.len(), 5);
+        let first = Arc::clone(children);
+
+        actors.clear();
+        push_evaluation_pad(
+            &mut actors,
+            &state,
+            GameFlag::Dance,
+            PlayerSlot::P1,
+            100.0,
+            200.0,
+            0.75,
+        );
+        let Actor::SharedFrame { children, .. } = &actors[0] else {
+            panic!("expected shared Evaluation pad");
+        };
+        assert!(Arc::ptr_eq(&first, children));
+
+        actors.clear();
+        push_evaluation_pad(
+            &mut actors,
+            &state,
+            GameFlag::Dance,
+            PlayerSlot::P2,
+            250.0,
+            200.0,
+            0.75,
+        );
+        let Actor::SharedFrame { children, .. } = &actors[0] else {
+            panic!("expected shared Evaluation pad");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+
+        let mut sensors = [[[false; 4]; 4]; 2];
+        sensors[0][0][0] = true;
+        set_snek_sensor_state(&mut state, true, false, sensors, 2);
+        actors.clear();
+        push_evaluation_pad(
+            &mut actors,
+            &state,
+            GameFlag::Dance,
+            PlayerSlot::P1,
+            100.0,
+            200.0,
+            0.75,
+        );
+        let Actor::SharedFrame { children, .. } = &actors[0] else {
+            panic!("expected shared Evaluation pad");
+        };
+        assert!(!Arc::ptr_eq(&first, children));
+        assert_eq!(
+            format!("{:?}", children.as_ref()),
+            format!(
+                "{:?}",
+                build_evaluation_pad(&state, GameFlag::Dance, PlayerSlot::P1, 100.0, 200.0, 0.75)
+            )
+        );
+    }
+
+    #[test]
+    fn evaluation_panel_cache_tracks_text_and_geometry_changes() {
+        let mut state = State::default();
+        set_snek_sensor_state(&mut state, true, false, [[[false; 4]; 4]; 2], 1);
+        let mut actors = Vec::new();
+        let mut draw = |x, title: &str| {
+            actors.clear();
+            push_evaluation_panel(
+                &mut actors,
+                &state,
+                GameFlag::Dance,
+                PlayerSlot::P1,
+                x,
+                70.0,
+                1.0,
+                "miso",
+                Arc::from(title),
+                "miso",
+                Arc::from("Press the panel"),
+            );
+            let Actor::SharedFrame { children, .. } = &actors[0] else {
+                panic!("expected shared Evaluation panel");
+            };
+            assert_eq!(children.len(), 24);
+            Arc::clone(children)
+        };
+        let initial = draw(50.0, "Evaluation");
+        assert!(Arc::ptr_eq(&initial, &draw(50.0, "Evaluation")));
+        assert!(!Arc::ptr_eq(&initial, &draw(51.0, "Evaluation")));
+        assert!(!Arc::ptr_eq(&initial, &draw(50.0, "Other title")));
+    }
+
+    #[test]
     fn pump_center_is_tracked_as_a_player_panel() {
         assert_eq!(
             player_from_action(VirtualAction::p1_center),
@@ -1381,9 +1757,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "test_input_pipelines_original.rs"]
-mod pipelines_original;
 #[cfg(test)]
 #[path = "test_input_pipelines_perf.rs"]
 mod pipelines_perf;

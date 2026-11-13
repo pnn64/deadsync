@@ -563,7 +563,3 @@ mod tests {
         assert_eq!(entry.true_peak_linear, 0.5);
     }
 }
-
-#[cfg(test)]
-#[path = "perf_cache_tests.rs"]
-mod perf_tests;

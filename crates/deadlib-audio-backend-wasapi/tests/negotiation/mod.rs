@@ -65,27 +65,6 @@ fn legal_period_matches_wide_rounding_at_integer_boundaries() {
     }
 }
 
-#[test]
-#[ignore = "manual CPU-cycle/allocation benchmark; no audio endpoint required"]
-fn benchmark_periods() {
-    use std::hint::black_box;
-    for (fundamental, min, max, label) in [
-        (32, 128, 480, "aligned"),
-        (32, 129, 480, "rounded"),
-        (48, 128, 480, "nonpower"),
-        (1, 128, 480, "unit"),
-        (65_537, u32::MAX - 65_536, u32::MAX, "large"),
-        (2, u32::MAX, u32::MAX, "overflow"),
-    ] {
-        crate::performance_tests::measure(&format!("wasapi/period_{label}"), 1_000_000, || {
-            black_box(minimum_period(
-                black_box(fundamental),
-                black_box(min),
-                black_box(max),
-            ));
-        });
-    }
-}
 
 #[test]
 fn aligned_duration_round_trips_to_driver_frame_count() {

@@ -1,5 +1,7 @@
 //! Resumable lexical state over append-only input, with no token replay.
 use super::{Kind, Token, parse_number};
+use crate::memory::fallible::{self, SliceExt, VecExt};
+use crate::memory::text::Text;
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -39,12 +41,75 @@ enum State {
     Emit,
 }
 
+/// A word of at most eight bytes as a zero-padded integer. Words contain no
+/// NUL byte, so the padding cannot make two different words equal.
+const fn word(text: &[u8]) -> u64 {
+    let mut bytes = [0; 8];
+    let mut index = 0;
+    while index < text.len() {
+        bytes[index] = text[index];
+        index += 1;
+    }
+    u64::from_le_bytes(bytes)
+}
+
+fn keyword(text: &[u8]) -> Kind {
+    const AND: u64 = word(b"and");
+    const BREAK: u64 = word(b"break");
+    const DO: u64 = word(b"do");
+    const ELSE: u64 = word(b"else");
+    const ELSEIF: u64 = word(b"elseif");
+    const END: u64 = word(b"end");
+    const FALSE: u64 = word(b"false");
+    const FOR: u64 = word(b"for");
+    const FUNCTION: u64 = word(b"function");
+    const IF: u64 = word(b"if");
+    const IN: u64 = word(b"in");
+    const LOCAL: u64 = word(b"local");
+    const NIL: u64 = word(b"nil");
+    const NOT: u64 = word(b"not");
+    const OR: u64 = word(b"or");
+    const REPEAT: u64 = word(b"repeat");
+    const RETURN: u64 = word(b"return");
+    const THEN: u64 = word(b"then");
+    const TRUE: u64 = word(b"true");
+    const UNTIL: u64 = word(b"until");
+    const WHILE: u64 = word(b"while");
+    if text.len() > 8 {
+        return Kind::Name;
+    }
+    match word(text) {
+        AND => Kind::And,
+        BREAK => Kind::Break,
+        DO => Kind::Do,
+        ELSE => Kind::Else,
+        ELSEIF => Kind::ElseIf,
+        END => Kind::End,
+        FALSE => Kind::False,
+        FOR => Kind::For,
+        FUNCTION => Kind::Function,
+        IF => Kind::If,
+        IN => Kind::In,
+        LOCAL => Kind::Local,
+        NIL => Kind::Nil,
+        NOT => Kind::Not,
+        OR => Kind::Or,
+        REPEAT => Kind::Repeat,
+        RETURN => Kind::Return,
+        THEN => Kind::Then,
+        TRUE => Kind::True,
+        UNTIL => Kind::Until,
+        WHILE => Kind::While,
+        _ => Kind::Name,
+    }
+}
+
 fn empty(line: u32) -> Token {
     Token {
         kind: Kind::Eof,
         line,
         end_line: line,
-        text: Box::default(),
+        text: Text::default(),
         number: 0.0,
     }
 }
@@ -129,17 +194,16 @@ impl Scanner {
     pub(crate) fn line(&self) -> u32 {
         self.line
     }
-    pub(crate) fn near_buffer(&self, input: &[u8]) -> Vec<u8> {
-        match self.buffer {
+    pub(crate) fn near_buffer(&self, input: &[u8]) -> Result<Vec<u8>, Error> {
+        Ok(match self.buffer {
             Buffer::Empty => Vec::new(),
-            Buffer::Raw(start, end) => input[start..end].to_vec(),
+            Buffer::Raw(start, end) => input[start..end].try_to_vec()?,
             Buffer::String(start, end) => {
                 // Decode only a failed diagnostic's completed string token.
                 // Successful scans keep no duplicate lexical byte buffer.
                 let raw = &input[start..end];
                 let token = Self::default()
-                    .next(raw, true)
-                    .expect("completed string token")
+                    .next(raw, true)?
                     .expect("closed string input");
                 let prefix = if matches!(raw[0], b'\'' | b'"') {
                     1
@@ -150,32 +214,40 @@ impl Scanner {
                         .expect("long string delimiter")
                         + 2
                 };
-                let mut out = Vec::with_capacity(prefix * 2 + token.text.len());
-                out.extend_from_slice(&raw[..prefix]);
-                out.extend_from_slice(&token.text);
-                out.extend(
+                let mut out = fallible::with_capacity(prefix * 2 + token.text.len())?;
+                out.try_extend_from_slice(&raw[..prefix])?;
+                out.try_extend_from_slice(&token.text)?;
+                out.try_extend(
                     raw[..prefix]
                         .iter()
                         .map(|&b| if b == b'[' { b']' } else { b }),
-                );
+                )?;
                 out
             }
-        }
+        })
     }
     fn diagnostic(&self, message: &str, near: &[u8]) -> Error {
-        let mut bytes = message.as_bytes().to_vec();
-        bytes.extend_from_slice(b" near '");
-        bytes.extend_from_slice(&near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())]);
-        bytes.push(b'\'');
-        Error::from_bytes(ErrorKind::Syntax, self.line, bytes)
+        let build = || -> Result<Error, Error> {
+            let mut bytes = message.as_bytes().try_to_vec()?;
+            bytes.try_extend_from_slice(b" near '")?;
+            bytes.try_extend_from_slice(
+                &near[..near.iter().position(|&b| b == 0).unwrap_or(near.len())],
+            )?;
+            bytes.try_push(b'\'')?;
+            Ok(Error::try_from_bytes(ErrorKind::Syntax, self.line, bytes))
+        };
+        build().unwrap_or_else(|error| error)
     }
     fn string_error(&self, message: &str, input: &[u8]) -> Error {
-        let mut near = vec![input[self.start]];
-        near.extend_from_slice(&self.text);
-        self.diagnostic(message, &near)
+        let build = || -> Result<Error, Error> {
+            let mut near = fallible::vec([input[self.start]])?;
+            near.try_extend_from_slice(&self.text)?;
+            Ok(self.diagnostic(message, &near))
+        };
+        build().unwrap_or_else(|error| error)
     }
     pub(crate) fn heap_bytes(&self) -> usize {
-        self.text.capacity() + self.token.text.len()
+        self.text.capacity() + self.token.text.heap_bytes()
     }
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
@@ -189,10 +261,9 @@ impl Scanner {
         ) {
             self.pos += 1;
         }
-        self.line = self
-            .line
-            .checked_add(1)
-            .ok_or_else(|| Error::new(ErrorKind::Limit, self.line, "too many source lines"))?;
+        self.line = self.line.checked_add(1).ok_or_else(|| {
+            Error::new_static(ErrorKind::Limit, self.line, "too many source lines")
+        })?;
         Ok(true)
     }
 
@@ -232,12 +303,172 @@ impl Scanner {
         self.state = State::Emit;
     }
 
-    fn string(&mut self) {
-        self.token.text = std::mem::take(&mut self.text).into_boxed_slice();
+    fn string(&mut self) -> Result<(), Error> {
+        self.token.text = std::mem::take(&mut self.text)
+            .try_into_boxed_slice()?
+            .into();
         self.emit(Kind::String);
+        Ok(())
+    }
+
+    /// Scan one common token of complete input into `out` in a single pass.
+    /// `false` leaves the cursor at the token start for the resumable states.
+    /// Produced tokens, spans and line counts match the state machine exactly.
+    fn fast(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
+        loop {
+            match input.get(self.pos) {
+                Some(b' ' | b'\t' | 11 | 12) => self.pos += 1,
+                Some(b'\n' | b'\r') => {
+                    self.newline(input, true)?;
+                }
+                _ => break,
+            }
+        }
+        let start = self.pos;
+        let Some(&c) = input.get(start) else {
+            return Ok(false);
+        };
+        let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+        let mut text = Text::default();
+        let mut number = 0.0;
+        let next = input.get(start + 1).copied();
+        let (kind, end) = match c {
+            b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+                let end = start
+                    + 1
+                    + input[start + 1..]
+                        .iter()
+                        .position(|&b| !word(b))
+                        .unwrap_or(input.len() - start - 1);
+                if input.get(end).is_some_and(|&b| b >= 128) {
+                    return Ok(false);
+                }
+                let word = &input[start..end];
+                let kind = keyword(word);
+                if kind == Kind::Name {
+                    text = Text::new(word)?;
+                }
+                (kind, end)
+            }
+            b'0'..=b'9' => {
+                let mut end = start + 1;
+                while input
+                    .get(end)
+                    .is_some_and(|&b| b.is_ascii_digit() || b == b'.')
+                {
+                    end += 1;
+                }
+                if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
+                    end += 1;
+                    if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
+                        end += 1;
+                    }
+                }
+                while input.get(end).copied().is_some_and(word) {
+                    end += 1;
+                }
+                if input.get(end).is_some_and(|&b| b >= 128) {
+                    return Ok(false);
+                }
+                let Some(value) = parse_number(&input[start..end]) else {
+                    return Ok(false);
+                };
+                number = value;
+                (Kind::Number, end)
+            }
+            b'\'' | b'"' => {
+                let rest = &input[start + 1..];
+                let Some(len) = rest
+                    .iter()
+                    .position(|&b| b == c || matches!(b, b'\\' | b'\n' | b'\r'))
+                    .filter(|&len| rest[len] == c)
+                else {
+                    return Ok(false);
+                };
+                text = Text::new(&rest[..len])?;
+                (Kind::String, start + len + 2)
+            }
+            b'-' if next != Some(b'-') => (Kind::Minus, start + 1),
+            b'.' if next.is_some_and(crate::locale::is_digit) => return Ok(false),
+            b'.' if matches!(next, Some(b'.' | 0)) => {
+                if matches!(input.get(start + 2), Some(b'.' | 0)) {
+                    (Kind::Dots, start + 3)
+                } else {
+                    (Kind::Concat, start + 2)
+                }
+            }
+            b'.' => (Kind::Dot, start + 1),
+            b'=' | b'<' | b'>' | b'~' => {
+                let equal = next == Some(b'=');
+                let kind = match (c, equal) {
+                    (b'=', true) => Kind::Eq,
+                    (b'=', false) => Kind::Assign,
+                    (b'<', true) => Kind::Le,
+                    (b'<', false) => Kind::Lt,
+                    (b'>', true) => Kind::Ge,
+                    (b'>', false) => Kind::Gt,
+                    (b'~', true) => Kind::Ne,
+                    _ => Kind::Byte(c),
+                };
+                (kind, start + 1 + usize::from(equal))
+            }
+            b'+' => (Kind::Plus, start + 1),
+            b'*' => (Kind::Star, start + 1),
+            b'/' => (Kind::Slash, start + 1),
+            b'%' => (Kind::Percent, start + 1),
+            b'^' => (Kind::Caret, start + 1),
+            b'#' => (Kind::Hash, start + 1),
+            b'(' => (Kind::LParen, start + 1),
+            b')' => (Kind::RParen, start + 1),
+            b'{' => (Kind::LBrace, start + 1),
+            b'}' => (Kind::RBrace, start + 1),
+            b']' => (Kind::RBracket, start + 1),
+            b';' => (Kind::Semi, start + 1),
+            b':' => (Kind::Colon, start + 1),
+            b',' => (Kind::Comma, start + 1),
+            _ => return Ok(false),
+        };
+        // The scanner's own token stays pristine: this path builds its result
+        // directly and records only the span that `emit` would have recorded.
+        self.start = start;
+        self.pos = end;
+        self.buffer = match kind {
+            Kind::String => Buffer::String(start, end),
+            Kind::Dot | Kind::Concat | Kind::Dots => Buffer::Raw(start, start + 1),
+            Kind::Name | Kind::Number => Buffer::Raw(start, end),
+            _ if c.is_ascii_alphabetic() => Buffer::Raw(start, end),
+            _ => Buffer::Empty,
+        };
+        out.kind = kind;
+        out.line = self.line;
+        out.end_line = self.line;
+        out.text = text;
+        out.number = number;
+        Ok(true)
+    }
+
+    /// Scan the next token of complete input into `out`.
+    pub(crate) fn next_closed(&mut self, input: &[u8], out: &mut Token) -> Result<(), Error> {
+        if matches!(self.state, State::Skip) && self.fast(input, out)? {
+            return Ok(());
+        }
+        *out = self
+            .slow(input, true)?
+            .expect("complete input always yields a token");
+        Ok(())
     }
 
     pub(crate) fn next(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
+        if closed && matches!(self.state, State::Skip) {
+            let mut token = Token::default();
+            if self.fast(input, &mut token)? {
+                return Ok(Some(token));
+            }
+        }
+        self.slow(input, closed)
+    }
+
+    fn slow(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
         loop {
             let current = input.get(self.pos).copied();
             // Lua's character reader fetches the next current byte before a
@@ -412,32 +643,9 @@ impl Scanner {
                         return Ok(None);
                     }
                     let text = &input[self.start..self.pos];
-                    let kind = match text {
-                        b"and" => Kind::And,
-                        b"break" => Kind::Break,
-                        b"do" => Kind::Do,
-                        b"else" => Kind::Else,
-                        b"elseif" => Kind::ElseIf,
-                        b"end" => Kind::End,
-                        b"false" => Kind::False,
-                        b"for" => Kind::For,
-                        b"function" => Kind::Function,
-                        b"if" => Kind::If,
-                        b"in" => Kind::In,
-                        b"local" => Kind::Local,
-                        b"nil" => Kind::Nil,
-                        b"not" => Kind::Not,
-                        b"or" => Kind::Or,
-                        b"repeat" => Kind::Repeat,
-                        b"return" => Kind::Return,
-                        b"then" => Kind::Then,
-                        b"true" => Kind::True,
-                        b"until" => Kind::Until,
-                        b"while" => Kind::While,
-                        _ => Kind::Name,
-                    };
+                    let kind = keyword(text);
                     if kind == Kind::Name {
-                        self.token.text = text.into();
+                        self.token.text = Text::new(text)?;
                     }
                     self.emit(kind);
                 }
@@ -534,7 +742,7 @@ impl Scanner {
                             continue;
                         }
                         if !comment {
-                            self.text.push(b'[');
+                            self.text.try_push(b'[')?;
                         }
                     }
                     Some(b']') => {
@@ -550,14 +758,14 @@ impl Scanner {
                             return Ok(None);
                         }
                         if !comment {
-                            self.text.push(b'\n');
+                            self.text.try_push(b'\n')?;
                         }
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
                         let count = long_boundary(rest, equals);
                         if !comment {
-                            self.text.extend_from_slice(&rest[..count]);
+                            self.text.try_extend_from_slice(&rest[..count])?;
                         }
                         self.pos += count;
                     }
@@ -584,12 +792,12 @@ impl Scanner {
                         if comment {
                             self.state = State::Skip;
                         } else {
-                            self.string();
+                            self.string()?;
                         }
                     } else {
                         if !comment {
-                            self.text.push(b']');
-                            self.text.extend(std::iter::repeat_n(b'=', seen));
+                            self.text.try_push(b']')?;
+                            self.text.try_extend(std::iter::repeat_n(b'=', seen))?;
                         }
                         self.state = State::Long { comment, equals };
                     }
@@ -601,7 +809,7 @@ impl Scanner {
                     }
                     Some(c) if c == quote => {
                         self.pos += 1;
-                        self.string();
+                        self.string()?;
                     }
                     Some(b'\\') => {
                         self.pos += 1;
@@ -613,7 +821,7 @@ impl Scanner {
                             .iter()
                             .position(|&b| b == quote || matches!(b, b'\\' | b'\n' | b'\r'))
                             .unwrap_or(rest.len());
-                        self.text.extend_from_slice(&rest[..count]);
+                        self.text.try_extend_from_slice(&rest[..count])?;
                         self.pos += count;
                     }
                 },
@@ -623,7 +831,7 @@ impl Scanner {
                         if !self.newline(input, closed)? {
                             return Ok(None);
                         }
-                        self.text.push(b'\n');
+                        self.text.try_push(b'\n')?;
                         self.state = State::Quoted(quote);
                     }
                     Some(c) if crate::locale::is_digit(c) => {
@@ -634,7 +842,7 @@ impl Scanner {
                         }
                     }
                     Some(c) => {
-                        self.text.push(match c {
+                        self.text.try_push(match c {
                             b'a' => 7,
                             b'b' => 8,
                             b'f' => 12,
@@ -643,7 +851,7 @@ impl Scanner {
                             b't' => 9,
                             b'v' => 11,
                             c => c,
-                        });
+                        })?;
                         self.pos += 1;
                         self.state = State::Quoted(quote);
                     }
@@ -670,10 +878,10 @@ impl Scanner {
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
-                    self.text.push(
-                        u8::try_from(value)
-                            .map_err(|_| self.string_error("escape sequence too large", input))?,
-                    );
+                    self.text
+                        .try_push(u8::try_from(value).map_err(|_| {
+                            self.string_error("escape sequence too large", input)
+                        })?)?;
                     self.state = State::Quoted(quote);
                 }
             }
@@ -703,7 +911,7 @@ mod tests {
                     token.kind,
                     token.line,
                     token.end_line,
-                    token.text.into_vec(),
+                    token.text.to_vec(),
                     token.number.to_bits(),
                 ));
                 if done {
@@ -739,6 +947,29 @@ mod tests {
                 expected,
                 "one-byte input: {source:?}"
             );
+        }
+    }
+
+    #[test]
+    fn quoted_literals_preserve_bytes_and_inline_storage_boundary() {
+        for (source, decoded, heap_bytes) in [
+            (b"''".as_slice(), b"".as_slice(), 0),
+            (b"\"abcdefg\"", b"abcdefg", 0),
+            (b"'abcdefgh'", b"abcdefgh", 8),
+            (b"'\xff'", b"\xff", 0),
+            (b"\"a\\nb\"", b"a\nb", 3),
+        ] {
+            let mut scanner = Scanner::default();
+            let mut token = Token::default();
+            scanner.next_closed(source, &mut token).unwrap();
+            assert_eq!(token.kind, Kind::String, "{source:?}");
+            assert_eq!(token.text.as_ref(), decoded, "{source:?}");
+            assert_eq!(token.text.heap_bytes(), heap_bytes, "{source:?}");
+
+            let slow = Scanner::default().slow(source, true).unwrap().unwrap();
+            assert_eq!(slow.kind, token.kind, "{source:?}");
+            assert_eq!(slow.text.as_ref(), token.text.as_ref(), "{source:?}");
+            assert_eq!((slow.line, slow.end_line), (token.line, token.end_line));
         }
     }
 
@@ -780,7 +1011,15 @@ mod tests {
 
     #[test]
     fn next_character_requests_match_the_lua51_reader_boundary() {
-        let lua = lua_reference::Lua::new();
+        let mut vm = crate::Vm::new();
+        let program = crate::compile(
+            br#"
+                local text=...;local tag={};local n=0
+                local ok,f,e=pcall(load,function()n=n+1;if n==1 then return text end;error(tag)end)
+                return n,ok,f==nil,e==tag
+            "#,
+        )
+        .unwrap();
         for fragment in [
             b")".as_slice(),
             b"@",
@@ -790,18 +1029,18 @@ mod tests {
             b"[=[x]=]",
             b"'\\999",
         ] {
-            let observed = lua
-                .load(
-                    br#"
-                local text=...;local tag={};local n=0
-                local ok,f,e=pcall(load,function()n=n+1;if n==1 then return text end;error(tag)end)
-                return n,ok,f==nil,e==tag
-            "#
-                    .as_slice(),
-                )
-                .call::<(u32, bool, bool, bool)>(lua.create_string(fragment).unwrap())
-                .unwrap();
-            assert_eq!(observed, (2, true, true, true), "{fragment:?}");
+            let fragment_value = vm.intern(fragment);
+            let observed = vm.execute_with_args(&program, &[fragment_value]).unwrap();
+            assert_eq!(
+                observed,
+                &[
+                    crate::Value::Number(2.),
+                    crate::Value::Boolean(true),
+                    crate::Value::Boolean(true),
+                    crate::Value::Boolean(true),
+                ],
+                "{fragment:?}"
+            );
             assert!(
                 Scanner::default().next(fragment, false).unwrap().is_none(),
                 "{fragment:?}"

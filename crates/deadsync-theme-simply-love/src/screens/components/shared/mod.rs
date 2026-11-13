@@ -7,6 +7,7 @@ pub mod gamepad_overlay;
 pub mod gs_scorebox;
 pub mod heart_rate;
 pub mod loading_bar;
+pub mod song_lua_loading;
 pub mod lobby_hud;
 pub mod mode_pads;
 pub mod noteskin_draw;

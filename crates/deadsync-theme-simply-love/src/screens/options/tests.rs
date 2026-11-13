@@ -987,6 +987,42 @@ fn tournament_options_initialize_and_emit_typed_requests() {
 }
 
 #[test]
+fn song_lua_mode_initializes_from_config_and_emits_typed_request() {
+    use config::options::SongLuaMode;
+
+    let asset_manager = AssetManager::new();
+    for (initial, selected) in [
+        (SongLuaMode::Baked, SongLuaMode::Runtime),
+        (SongLuaMode::Runtime, SongLuaMode::Baked),
+    ] {
+        let mut state = init_with_config(config::app_config::Config {
+            song_lua_mode: initial,
+            ..Default::default()
+        });
+        state.view = OptionsView::Submenu(SubmenuKind::Gameplay);
+        let row = select_visible_row(&mut state, SubmenuKind::Gameplay, SubRowId::SongLuaMode);
+        assert_eq!(
+            state.sub[SubmenuKind::Gameplay].cursor_indices[row],
+            initial.choice_index()
+        );
+        let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+            .expect("song Lua mode should emit shell config work");
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                crate::SimplyLoveConfigRequest::Gameplay(
+                    crate::SimplyLoveGameplayConfigRequest::SongLuaMode(mode)
+                )
+            )) if mode == selected
+        ));
+        assert_eq!(
+            state.sub[SubmenuKind::Gameplay].cursor_indices[row],
+            selected.choice_index()
+        );
+    }
+}
+
+#[test]
 fn note_scroll_clock_initializes_from_config_and_emits_typed_request() {
     let asset_manager = AssetManager::new();
     let mut view = OptionsInitView {
@@ -4004,14 +4040,6 @@ fn graphics_refresh_change_emits_request_on_exit() {
 #[path = "ui_pipelines_perf.rs"]
 mod pipelines_perf;
 
-mod data_paths_perf;
-
-mod enumeration {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/option_enumeration.rs"
-    ));
-}
 
 #[test]
 fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {

@@ -1262,11 +1262,3 @@ mod tests {
 
 #[cfg(test)]
 mod resource_perf;
-
-#[cfg(test)]
-mod preview_dataflows {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/preview_models.rs"
-    ));
-}

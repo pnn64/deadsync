@@ -46,4 +46,4 @@ From Windows, `--wsl-distro Debian` invokes the supplied Linux binaries through
 WSL while retaining the local NumPy calculation. The output includes exact
 commands, input/PCM/binary/script/numeric hashes and per-frequency disagreement
 lists. The passing native equation gate and explicit reference disagreements are
-archived in `tests/validation/2026-10-28-mixed8`.
+The reference checks are in `tests/reference_mixed8.py`.

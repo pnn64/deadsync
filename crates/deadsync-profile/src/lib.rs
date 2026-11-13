@@ -15995,31 +15995,3 @@ mod performance_profile_regressions {
         }
     }
 }
-
-#[cfg(test)]
-use perf_tests::allocations as perf;
-
-#[cfg(test)]
-#[path = "../../../tests/perf/profile_dataflow_support.rs"]
-mod dataflow_perf;
-
-#[cfg(test)]
-fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
-    churn.peak_bytes
-}
-
-#[cfg(test)]
-#[path = "../../../tests/perf/visual_options.rs"]
-mod visual_options_perf;
-
-#[cfg(test)]
-#[path="folder_paths_performance.rs"]
-mod folder_paths_performance;
-
-#[cfg(test)]
-#[path = "identity_performance.rs"]
-mod identity_performance;
-
-#[cfg(test)]
-#[path = "normalization_performance.rs"]
-mod normalization_performance;

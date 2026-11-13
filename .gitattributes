@@ -2,7 +2,11 @@
 crates/deadsync-song-lua/assets/simply-love/**/*.lua text eol=lf
 # Keep the unmodified FoF module fixture identical to the captured source.
 crates/deadsync-song-lua/tests/fixtures/fof-input-system.lua -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Keep the original Beta Pines regression scripts byte-identical to their source.
+crates/deadsync-profile-gameplay/tests/fixtures/ultra-synergy-matrix/lua/*.lua -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,-cr-at-eol
 # Preserve upstream font definitions; trailing spaces in glyph rows are data.
 assets/fonts/Unprofessional/*.ini text eol=lf whitespace=-blank-at-eol
 assets/fonts/_combo/Unprofessional/*.ini text eol=lf
+# Preserve the official Lua 5.1 benchmark archive's original bytes.
+crates/deadlib-lua/benches/lua5.1-tests/** -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,-cr-at-eol
 "assets/fonts/miso/_miso unprof.ini" text eol=lf

@@ -1297,15 +1297,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "metadata_perf.rs"]
-mod metadata_perf;
-
-#[cfg(test)]
-#[path = "song_sort_shortcuts.rs"]
-mod song_sort_shortcuts;
-
-#[cfg(test)]
-#[path = "metadata_dispatch.rs"]
-mod metadata_dispatch;

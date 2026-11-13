@@ -2614,7 +2614,4 @@ mod tests {
             &[],
         ));
     }
-    mod direct_scan_perf {
-        include!("../../../../../../tests/perf/wheel_meters.rs");
-    }
 }

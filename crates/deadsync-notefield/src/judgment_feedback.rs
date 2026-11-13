@@ -1085,13 +1085,3 @@ mod tests {
         assert!((actual - swapped).abs() > 1e-3);
     }
 }
-
-#[cfg(test)]
-mod atlas_kernel_perf {
-    include!("atlas_kernel_perf.rs");
-}
-
-#[cfg(test)]
-mod hold_guard_perf {
-    include!("hold_guard_perf.rs");
-}

@@ -1,5 +1,6 @@
 //! Protected synchronous text/binary loading from native reader callbacks.
 use super::*;
+use crate::memory::fallible::SliceExt;
 
 /// Lua 5.1 parser outcomes. Instruction limits escape as Rust errors.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,6 +62,9 @@ impl NativeStack<'_, '_> {
         if !self.check_stack(1) {
             return Err(self.error(b"native stack overflow"));
         }
+        // The protected frame delivers status and error in two internal slots,
+        // even though the public loader leaves only one value on this stack.
+        self.call.vm.reserve_registers(self.end() + 2)?;
         let scope = Scope {
             owner: self.call.vm.thread,
             depth: self.call.vm.frames.len(),
@@ -80,6 +84,7 @@ impl NativeStack<'_, '_> {
         } else {
             self.call.vm.native_depth(scope.depth)
         };
+        self.call.vm.reserve_frames(1)?;
         self.call.vm.push_record(Frame {
             function: FrameKind::Native(CONT_HOST_LOAD),
             pc: 1,
@@ -98,13 +103,13 @@ impl NativeStack<'_, '_> {
             .iter()
             .position(|&byte| byte == 0)
             .unwrap_or(name.len())];
-        let index = self
-            .call
-            .vm
-            .start_native_load(scope.depth, name, depth, file);
+        // The first reader runs before parser state or roots exist. In
+        // particular, returning an existing memory error must not require a
+        // new parser allocation merely to deliver that protected error.
+        let mut index = None;
         let mut first = true;
         loop {
-            if !first {
+            if let Some(index) = index {
                 let result = self.call.vm.resume_native_load(index);
                 let end = match self.apply_load_roots(index) {
                     Ok(end) => end,
@@ -112,8 +117,15 @@ impl NativeStack<'_, '_> {
                 };
                 match result {
                     Ok(Some(program)) => {
-                        let function = self.call.vm.load(&program);
-                        self.call.vm.retain_load_prototypes(index, function);
+                        let bound = self.call.vm.load(&program).and_then(|function| {
+                            self.call.vm.retain_load_prototypes(index, function)?;
+                            self.call.vm.reserve_registers(end + 1)?;
+                            Ok(function)
+                        });
+                        let function = match bound {
+                            Ok(function) => function,
+                            Err(error) => return self.catch_load_error(scope, error),
+                        };
                         // A reader's Lua/C frames can remain suspended after
                         // lua_load itself has finished. Keep their stack and
                         // expire the parser's protection without unwinding them.
@@ -133,8 +145,15 @@ impl NativeStack<'_, '_> {
                         return Ok(NativeLoadStatus::Ok);
                     }
                     Err(error) => {
-                        let message = self.call.vm.native_load_message(index, &error);
-                        let value = self.intern(&message);
+                        let value = self
+                            .call
+                            .vm
+                            .native_load_message(index, &error)
+                            .and_then(|message| self.call.vm.try_intern(&message));
+                        let value = match value {
+                            Ok(value) => value,
+                            Err(error) => return self.catch_load_error(scope, error),
+                        };
                         self.call
                             .vm
                             .set_thread_native_bias(scope.owner, scope.native_bias);
@@ -148,16 +167,36 @@ impl NativeStack<'_, '_> {
                 }
             }
             let outcome = reader(self);
-            let error = self
-                .call
-                .abort
-                .take()
-                .or_else(|| outcome.as_ref().err().cloned());
-            if let Some(error) = error {
+            let outcome = self.call.abort.take().map_or(outcome, Err);
+            let bytes = match outcome {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    if index.is_none()
+                        && let Some(file) = file
+                    {
+                        self.call.vm.close_file_reader(file);
+                    }
+                    return self.catch_load_error(scope, error);
+                }
+            };
+            let active = if let Some(index) = index {
+                index
+            } else {
+                match self
+                    .call
+                    .vm
+                    .start_native_load(scope.depth, name, depth, file)
+                {
+                    Ok(created) => {
+                        index = Some(created);
+                        created
+                    }
+                    Err(error) => return self.catch_load_error(scope, error),
+                }
+            };
+            if let Err(error) = self.call.vm.feed_native_load(active, bytes.as_deref()) {
                 return self.catch_load_error(scope, error);
             }
-            let bytes = outcome.expect("reader outcome without error");
-            self.call.vm.feed_native_load(index, bytes.as_deref());
             if first {
                 first = false;
                 if let Err(error) = self.check_gc() {
@@ -176,8 +215,10 @@ impl NativeStack<'_, '_> {
         bytes: &[u8],
         name: Option<&[u8]>,
     ) -> Result<NativeLoadStatus, Error> {
-        let mut bytes = Some(bytes.to_vec());
-        self.load_reader(name, move |_| Ok(bytes.take()))
+        let mut bytes = Some(bytes);
+        self.load_reader(name, move |_| {
+            bytes.take().map(SliceExt::try_to_vec).transpose()
+        })
     }
     fn restore_load_base(&mut self, scope: Scope) {
         if matches!(

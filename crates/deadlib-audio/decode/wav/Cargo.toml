@@ -14,35 +14,3 @@ hound = "=3.5.1"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
-
-[[bench]]
-name = "pcm"
-harness = false
-
-[[bench]]
-name = "metadata"
-harness = false
-
-[[bench]]
-name = "wavl"
-harness = false
-
-[[bench]]
-name = "adpcm_wavl"
-harness = false
-
-[[bench]]
-name = "adpcm_file"
-harness = false
-
-[[bench]]
-name = "adpcm_forward"
-harness = false
-
-[[bench]]
-name = "native"
-harness = false
-
-[[bench]]
-name = "wavl_profile"
-harness = false

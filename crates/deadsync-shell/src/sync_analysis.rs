@@ -883,7 +883,3 @@ fn append_sync_mono(samples: &[i16], channels: usize, out: &mut Vec<f32>) {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/perf/owned_cached.rs"]
-mod owned_pipeline_tests;

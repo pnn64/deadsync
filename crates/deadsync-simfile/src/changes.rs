@@ -723,13 +723,6 @@ fn sort_foreground_changes<T>(
         .expect("foreground beats are finite"));
 }
 
-#[cfg(test)]
-#[path = "changes/background_fields.rs"]
-mod background_fields;
-
-#[cfg(test)]
-#[path = "changes/lookup_growth.rs"]
-mod lookup_growth;
 
 #[cfg(test)]
 mod tests {

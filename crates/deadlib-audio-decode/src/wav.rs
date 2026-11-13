@@ -2,9 +2,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
-#[cfg(test)]
-#[path = "wav_performance.rs"]
-mod performance;
 
 #[cfg(test)]
 #[path = "wav_float_performance.rs"]

@@ -123,22 +123,22 @@ fn captured_eos_and_broadcast_seeks_match_reference_positions_counts_and_pcm() {
     for (label, bytes, requests, response) in [
         (
             "eos-115",
-            include_bytes!("../validation/2026-10-27-synthesis-state-capture-eos-115-input.ogg")
+            include_bytes!("fixtures/seeking/eos-115-input.ogg")
                 .as_slice(),
-            include_bytes!("../validation/2026-10-27-synthesis-state-capture-eos-115-requests.bin")
+            include_bytes!("fixtures/seeking/eos-115-requests.bin")
                 .as_slice(),
-            include_bytes!("../validation/2026-10-27-synthesis-state-capture-eos-115-file.out")
+            include_bytes!("fixtures/seeking/eos-115-file.out")
                 .as_slice(),
         ),
         (
             "origin-900",
-            include_bytes!("../validation/2026-10-27-synthesis-state-capture-origin-900-input.ogg")
+            include_bytes!("fixtures/seeking/origin-900-input.ogg")
                 .as_slice(),
             include_bytes!(
-                "../validation/2026-10-27-synthesis-state-capture-origin-900-requests.bin"
+                "fixtures/seeking/origin-900-requests.bin"
             )
             .as_slice(),
-            include_bytes!("../validation/2026-10-27-synthesis-state-capture-origin-900-file.out")
+            include_bytes!("fixtures/seeking/origin-900-file.out")
                 .as_slice(),
         ),
         (

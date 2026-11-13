@@ -63,13 +63,11 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
         )));
     fs::create_dir(&directory.0).unwrap();
     let source=b"local x=9;local function f(a)return x+a end;local co=coroutine.create(function()coroutine.yield(f(1));collectgarbage();return f(33)end);assert(coroutine.resume(co));local ok,n=coroutine.resume(co);assert(ok);return n";
-    let lua = lua_reference::Lua::new();
-    let native = lua
-        .load(source.as_slice())
-        .set_name("@persisted-native.lua")
-        .into_function()
-        .unwrap()
-        .dump(false);
+
+    let native = reference_test::native_chunk(
+        "tests/cache_persistence.rs::persisted_source_and_native_programs_reload_in_new_processes::chunk0",
+        &(source.as_slice()),
+    );
     for (filename, bytes) in [
         ("text.lua", source.as_slice()),
         ("native.luac", native.as_slice()),
@@ -116,3 +114,7 @@ fn persisted_source_and_native_programs_reload_in_new_processes() {
         8
     );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

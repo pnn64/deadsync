@@ -92,24 +92,6 @@ working set or a bound on an arbitrary output writer.
 
 ## Analysis and packet construction
 
-The forward transform independently transposes the native synthesis fold,
-reuses its symmetric DCT-IV factorization and applies the Vorbis `4/N`
-normalization. A length-N/4 complex FFT uses 7N bytes of table/scratch elements.
-The standard Vorbis window is applied to every time block. A two-half input
-ring avoids moving the preceding half block between analysis calls.
-[MDCT.md](MDCT.md) gives the equations and independent checks.
-
-Each channel uses a flat adaptive floor one with two equal endpoints. The
-endpoint is the smallest inverse-dB table entry sufficient to keep the normalized
-spectral peak below 28. Residue one partitions contain 16 coefficients. A
-one-dimensional classification book separates exactly zero partitions from
-coded partitions. All books are generated from the wire grammar: complete
-Huffman trees and lookup-one two-dimensional radix-16 VQ books. The
-classifier and later stages use ordered fixed-length trees; the first stage
-uses a compact unordered three-/eight-/nine-bit tree. No external training data
-or encoder packet template is embedded. [ENCODING_ENTROPY.md](ENCODING_ENTROPY.md)
-records its measured costs and unchanged-symbol/PCM comparisons.
-
 For P stages, `levels = 16^P`. A normalized scalar v is rounded to
 `q = round(v * levels / 64 + levels/2)`, bounded to its unsigned quantizer range.
 The first additive stage reconstructs `-32 + 4*d0`; subsequent stages contribute
@@ -126,15 +108,6 @@ of the available coding tools; its decoder continues to support the other
 normative floors, residues, mappings and window transitions.
 
 ## Independent validation and measured source error
-
-The retained [144-case matrix](validation/2026-10-27-encoder-entropy-matrix.tsv) checks
-libvorbisfile 1.3.7 decoding of native output: 1/2/3/6/8/16/255 channels, four
-precision stages, zero/one/partial/multiple-block lengths, mixed silent channels
-and packets larger than one Ogg page. Exact declared and emitted frame counts
-are required. All 2,375,544 decoded channel samples meet the existing floor-one
-parity bounds: peak error at most `3e-6 * max(1, reference_peak)` and RMS at most
-`5e-7 * max(1, reference_peak)`. Observed maximum peak error is 5.067e-7; the
-largest per-case RMS is 1.036e-7. No alignment or gain fitting is applied.
 
 Symphonia 0.6.1 independently decodes 128 small cases across all assigned channel
 layouts and all stages, plus the large eight-channel spanning case. Its API
@@ -195,12 +168,6 @@ $env:DEADLIB_VORBIS_ENCODE_REPORT = "$pwd/target/encode-matrix.tsv"
 cargo test -p deadlib-audio-decode-vorbis --release --test encoding --test allocations -- --include-ignored --nocapture
 ```
 
-The [fuzz workspace](../fuzz/README.md) adds `vorbis_encode`: integer/raw-float
-PCM, legal policy combinations, invalid samples, arbitrary planar/interleaved
-chunks, reset replay, Ogg pagination and exact decoded counts. Retained source,
-input, reference-binary, validation and sanitizer hashes accompany this
-milestone's [check manifest](validation/2026-10-27-encode-checks.json).
-
 The initial encoder milestone's release gate passed 106 tests with reference/corpus cases enabled
 (only the fixture regeneration utility is excluded). An extracted, offline
 workspace passes 84 tests, with 23 optional external/generator cases ignored;
@@ -214,36 +181,3 @@ each, the pinned floor-zero fixture and recorded RNG seeds:
 | --- | ---: | ---: | ---: | ---: |
 | `vorbis_encode` | 4,111 | 1,825 | 5,288 | 479 |
 | `vorbis_stream` | 4,310 | 3,158 | 9,149 | 444 |
-
-Both exited zero with no artifacts, assertion failures, sanitizer reports,
-timeouts or RSS-limit failures. All recorded source and binary hashes were
-rechecked. [Results](validation/2026-10-27-encode-fuzz-results.json),
-[provenance](validation/2026-10-27-encode-fuzz-provenance.json) and
-[initial corpus hashes](validation/2026-10-27-encode-fuzz-initial-corpus.sha256.json)
-preserve the run; evolving corpora and binaries remain in ignored scratch
-storage. Sanitizer RSS includes harness/allocator overhead, not just encoder
-elements. Coverage counters are libFuzzer feedback, not line-coverage percentages.
-This bounded campaign supplements the independent parity tests.
-
-Remaining encoder work includes adaptive floor fitting, transient block
-selection, channel coupling, entropy/VQ optimization, perceptual masking,
-quality and bitrate control, wider real-music rate-distortion evaluation and
-comparative throughput/startup/memory measurements against libvorbis encoding.
-The first [resident-PCM encoding baseline](ENCODING_PERFORMANCE.md) now checks
-42 streams through native, libvorbisfile and Symphonia, including two real song
-excerpts. It measures source error, output size, full encoding and warm
-initialization/first-packet time. In that baseline, Xiph q0.9 used lower bitrate
-and achieved higher source SNR than native stage 2. Packet symbol profiling identifies
-a concrete entropy-coding opportunity. The subsequent
-[compact-book update](ENCODING_ENTROPY.md) implements it: paired two-stage song
-files shrink 26–29% with bit-identical PCM, zero raw warmed allocations and
-documented tiny-file header costs. The baseline measurements retain their
-original provenance. Perceptual/rate control and broader resource/quality
-comparisons remain open.
-The [scalar-book evaluation](SCALAR_BOOK_EVALUATION.md) adds paired decoding
-costs for native, Symphonia and libvorbisfile. It rejects a further smaller-book
-candidate as the default because its decode throughput cost outweighs the
-default-stage size saving; production encoding remains unchanged.
-The [decoding completion audit](DECODING_COMPLETION.md) records the separate
-completed decoder goal. Sparse seek strategies, performance and the encoder
-quality work above are future tasks outside that decoding request.

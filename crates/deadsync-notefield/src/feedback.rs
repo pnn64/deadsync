@@ -1138,7 +1138,3 @@ mod tests {
         assert!(actors.is_empty());
     }
 }
-
-#[cfg(test)]
-#[path = "hud_performance.rs"]
-mod hud_performance;

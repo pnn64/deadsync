@@ -1,2 +1,0 @@
-# Retain exact measured/logged bytes so archived SHA-256 identities survive checkout.
-* -text -whitespace

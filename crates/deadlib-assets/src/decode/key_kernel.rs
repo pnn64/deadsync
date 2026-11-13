@@ -1,8 +1,5 @@
 use super::*;
-use std::hint::black_box;
 
-#[path = "../../../../tests/support/kernel_bench.rs"]
-mod bench;
 
 #[test]
 fn key_preserves_edges_alpha_and_trailing_storage() {
@@ -37,42 +34,6 @@ fn key_preserves_edges_alpha_and_trailing_storage() {
                 key_rgba(&mut image);
                 assert_eq!(image.into_raw(), expected);
             }
-        }
-    }
-}
-
-#[test]
-#[ignore = "release CPU and allocation benchmark"]
-fn benchmark_key_kernel() {
-    for size in [32, 256, 1024] {
-        for pattern in ["none", "sparse", "dense"] {
-            let input = RgbaImage::from_fn(size, size, |x, y| {
-                let index = x + y * size;
-                image::Rgba(
-                    if (pattern == "sparse" && index % 97 == 0)
-                        || (pattern == "dense" && index % 3 != 0)
-                    {
-                        [255, 0, 255, 255]
-                    } else {
-                        [x as u8, y as u8, 71, 255]
-                    },
-                )
-            });
-            let mut output = input.clone();
-            let label = format!("key/{size}/{pattern}");
-            let mut work = || {
-                output.as_mut().copy_from_slice(input.as_raw());
-                let key: fn(&mut RgbaImage) = black_box(key_rgba);
-                key(black_box(&mut output));
-                black_box(&output);
-            };
-            let (_, counts) = crate::perf::measure(&mut work);
-            println!("{label}: allocation {counts:?}");
-            bench::measure(
-                &label,
-                (2_000_000 / (size * size) as usize).max(8),
-                &mut work,
-            );
         }
     }
 }

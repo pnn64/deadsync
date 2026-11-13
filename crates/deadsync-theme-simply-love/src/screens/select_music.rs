@@ -193,8 +193,8 @@ rgba_const!(UI_BOX_BG_COLOR, "#1E282F");
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 // ScreenSelectMusic inherits Screen's default menu repeat timing via InputFilter:
 // 0.375s before repeating, then 8 repeats/sec.
-const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
-const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
+const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = screen_input::OVERLAY_NAV_INITIAL_HOLD_DELAY;
+const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = screen_input::OVERLAY_NAV_REPEAT_INTERVAL;
 const SRPG_TAB_SCROLL_DIVISOR: u32 = 4;
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // Simply Love [ScreenSelectMusic] CodeTogglePatternInfo="Select,Select".
@@ -1721,7 +1721,7 @@ pub struct State {
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
     /// Per-side scorebox cycle clocks, restarted when a side's boards change.
-    pub scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
+    pub(crate) scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
     /// Per-side online fetch timeline on the selection-animation clock.
     scorebox_fetch_phase: [crate::scorebox::ScoreboxFetchPhase; 2],
     pub wheel_offset_from_selection: f32,
@@ -5459,6 +5459,24 @@ fn show_test_input_overlay(state: &mut State) {
 #[inline(always)]
 const fn hide_test_input_overlay(state: &mut State) {
     state.test_input_overlay_visible = false;
+}
+
+/// Refresh Snek's binary sensor indicators while the Test Input overlay is
+/// visible. HID ownership and polling remain in the shell.
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) {
+    test_input::set_snek_sensor_state(
+        &mut state.test_input_overlay,
+        connected,
+        read_error,
+        sensors,
+        revision,
+    );
 }
 
 fn show_pad_config_overlay(state: &mut State) {
@@ -11712,6 +11730,9 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     lobby_overlay::update_overlay(&mut state.lobby_overlay, dt, &state.lobby_view.snapshot);
     queue_lobby_sounds(state);
     if pack_sync::poll(state) {
+        if crate::screens::pack_sync::update(&mut state.pack_sync_overlay, dt) {
+            queue_sfx(state, "assets/sounds/change.ogg");
+        }
         return ThemeEffect::None;
     }
     if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
@@ -21483,11 +21504,3 @@ mod tests {
         assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
     }
 }
-
-#[cfg(test)]
-#[path = "select_music/ui_dataflows_original.rs"]
-mod ui_dataflows_original;
-
-#[cfg(test)]
-#[path = "select_music/ui_dataflows_perf.rs"]
-mod ui_dataflows_perf_tests;

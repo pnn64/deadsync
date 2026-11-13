@@ -1,12 +1,12 @@
 //! Lower the shared register ISA to native Lua words; imports retain their words.
 use super::fail;
+use crate::memory::fallible::{self, Map as HashMap, VecExt};
 use crate::{
     Error,
     bytecode::{
         BOOLEAN_SKIP, COMPARE_BRANCH, OPEN, OPEN_ARGS, Op, ProgramData, Prototype, Upvalue,
     },
 };
-use std::collections::HashMap;
 
 pub(super) struct Lowered {
     pub code: Vec<u32>,
@@ -40,20 +40,20 @@ impl Builder {
             return Err(fail());
         }
         self.code
-            .push(op | (u32::from(a) << 6) | (u32::from(b) << 23) | (c << 14));
-        self.lines.push(self.line);
+            .try_push(op | (u32::from(a) << 6) | (u32::from(b) << 23) | (c << 14))?;
+        self.lines.try_push(self.line)?;
         Ok(())
     }
     fn abx(&mut self, op: u32, a: u16, bx: u32) -> Result<(), Error> {
         if a >= 250 || bx > 262143 {
             return Err(fail());
         }
-        self.code.push(op | (u32::from(a) << 6) | (bx << 14));
-        self.lines.push(self.line);
+        self.code.try_push(op | (u32::from(a) << 6) | (bx << 14))?;
+        self.lines.try_push(self.line)?;
         Ok(())
     }
     fn jump(&mut self, op: u32, a: u16, target: usize) -> Result<(), Error> {
-        self.patches.push((self.code.len(), target));
+        self.patches.try_push((self.code.len(), target))?;
         self.abx(op, a, 131071)
     }
     fn reg(&mut self, r: u16) -> Result<u16, Error> {
@@ -74,8 +74,8 @@ struct Gap {
 
 pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error> {
     let n = p.code.len();
-    let mut skip = vec![false; n];
-    let mut methods = vec![None; n];
+    let mut skip = fallible::repeat(false, n)?;
+    let mut methods = fallible::repeat(None, n)?;
     let mut gaps = Vec::new();
     let mut captured = [0u64; 4];
     for instruction in &p.code {
@@ -142,21 +142,21 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             return Err(fail());
         }
         skip[pc + 1..pc + 5].fill(true);
-        gaps.push(Gap {
+        gaps.try_push(Gap {
             start: pc + 5,
             end: p.code[pc + 3].c as usize,
             register: a + c,
             count: c.max(3) + 1 - c,
-        });
+        })?;
     }
     let mut out = Builder {
-        code: Vec::with_capacity(n),
-        lines: Vec::with_capacity(n),
+        code: fallible::with_capacity(n)?,
+        lines: fallible::with_capacity(n)?,
         patches: Vec::new(),
         line: 0,
         max: p.params.max(u16::from(p.compat_arg) + p.params).max(2),
     };
-    let mut pcs = vec![0; n + 1];
+    let mut pcs = fallible::repeat(0, n + 1)?;
     let mut children = Vec::new();
     let mut child_slots = HashMap::new();
     let mut scopes: Vec<&Gap> = Vec::new();
@@ -167,7 +167,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
         captured_scopes.retain(|&(_, end)| pc <= end as usize);
         scopes.retain(|g| pc < g.end);
         while next_gap < gaps.len() && gaps[next_gap].start <= pc {
-            scopes.push(&gaps[next_gap]);
+            scopes.try_push(&gaps[next_gap])?;
             next_gap += 1;
         }
         let mapped = |r: u16| {
@@ -185,7 +185,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             if pc <= local.end as usize
                 && captured[usize::from(local.register) / 64] & (1u64 << (local.register % 64)) != 0
             {
-                captured_scopes.push((local.register, local.end));
+                captured_scopes.try_push((local.register, local.end))?;
             }
             next_local += 1;
         }
@@ -409,8 +409,8 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                     if block < 512 { block } else { 0 },
                 )?;
                 if block >= 512 {
-                    out.code.push(block);
-                    out.lines.push(out.line);
+                    out.code.try_push(block)?;
+                    out.lines.try_push(out.line)?;
                 }
             }
             Op::Close => {
@@ -427,10 +427,15 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
                     return Err(fail());
                 }
                 let child = i.c as usize;
-                let index = *child_slots.entry(child).or_insert_with(|| {
-                    children.push(child);
-                    children.len() - 1
-                });
+                let index = if let Some(&index) = child_slots.get(&child) {
+                    index
+                } else {
+                    let index = children.len();
+                    child_slots.try_reserve(1)?;
+                    children.try_push(child)?;
+                    child_slots.insert(child, index);
+                    index
+                };
                 out.reg(a)?;
                 out.abx(36, a, index as u32)?;
                 for up in &data.prototypes[child].upvalues {

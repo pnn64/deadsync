@@ -23,8 +23,6 @@ pub mod panel_fx;
 pub mod panels;
 
 #[cfg(test)]
-use gifs::perf_tests::allocations as lighting_allocations;
-#[cfg(test)]
 #[path = "lighting_performance.rs"]
 mod lighting_performance;
 

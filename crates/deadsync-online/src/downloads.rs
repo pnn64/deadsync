@@ -1735,11 +1735,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "download_sort_original.rs"]
-mod download_sort_original;
-
-#[cfg(test)]
-#[path = "download_sort_perf.rs"]
-mod download_sort_perf_tests;

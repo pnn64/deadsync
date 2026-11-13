@@ -87,6 +87,11 @@ pub use sprite::{
     sprite_uv_scroll_clock, state_properties_source_plan,
 };
 
+
 #[cfg(test)]
-#[path = "../../../tests/perf/resource_support.rs"]
-mod resource_perf_support;
+#[path = "../../../tests/support/allocations.rs"]
+mod perf;
+
+#[cfg(test)]
+#[path = "../../../tests/support/temp_dir.rs"]
+mod test_directory;

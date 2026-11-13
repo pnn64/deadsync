@@ -19,8 +19,7 @@ use deadsync_theme_simply_love::views::{
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
 };
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::sync::Arc;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
 
@@ -67,13 +66,6 @@ impl ScoreRuntimeCursor {
     }
 }
 
-fn smx_profile_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("DEADSYNC_SMX_PROFILE").is_ok_and(|value| !value.is_empty() && value != "0")
-    })
-}
-
 fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
     GameplayPolicyView {
         translated_titles: config.translated_titles,
@@ -94,7 +86,6 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
             golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
             events_first: config.select_music_scorebox_events_first,
         },
-        smx_profile_enabled: smx_profile_enabled(),
     }
 }
 
@@ -506,10 +497,8 @@ fn enter_smx_sensors(state: &mut gameplay::State, smx_input: bool) {
 
 fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: bool) {
     if !gameplay::smx_sensor_refresh_due(state, delta_time) {
-        gameplay::report_smx_sensor_profile(state);
         return;
     }
-    let profile_started = gameplay::smx_sensor_profile_enabled(state).then(Instant::now);
     let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
     for (store_idx, sdk_pad) in plan.into_iter().flatten() {
         let data = deadsync_smx::get_test_data(sdk_pad);
@@ -522,10 +511,6 @@ fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: 
         };
         gameplay::set_smx_sensor_pad_view(state, store_idx, view);
     }
-    if let Some(started) = profile_started {
-        gameplay::record_smx_sensor_read_ns(state, started.elapsed().as_nanos() as u64);
-    }
-    gameplay::report_smx_sensor_profile(state);
 }
 
 pub(crate) fn exit(state: &mut gameplay::State) {

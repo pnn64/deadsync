@@ -1,9 +1,15 @@
 //! Lua 5.1 environment, files, time differences and process operations.
 use super::*;
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::memory::fallible::SliceExt;
 mod calendar;
+#[allow(unsafe_code)]
+pub(in crate::vm) mod environment;
+#[allow(unsafe_code)]
+mod files;
 mod platform;
 mod process;
+#[allow(unsafe_code)]
+mod temporary;
 
 pub(super) const FIRST: u64 = 159;
 const DIFFTIME: u64 = FIRST;
@@ -18,58 +24,9 @@ pub(super) const TIME: u64 = FIRST + 8;
 const DATE: u64 = FIRST + 9;
 const SETLOCALE: u64 = FIRST + 10;
 pub(super) const LAST: u64 = SETLOCALE;
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
-
-fn temporary_name() -> std::io::Result<std::path::PathBuf> {
-    #[cfg(windows)]
-    let root = std::env::temp_dir();
-    // Lua 5.1's POSIX template uses /tmp and an extensionless basename.
-    // In particular, require(os.tmpname()) with LUA_PATH="?" must not turn
-    // an added filename extension into a module directory separator.
-    #[cfg(not(windows))]
-    let root = std::path::Path::new("/tmp");
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    for _ in 0..64 {
-        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let suffix = if cfg!(windows) { ".tmp" } else { "" };
-        let path = root.join(format!(
-            "deadsync-lua-{}-{stamp}-{nonce}{suffix}",
-            std::process::id()
-        ));
-        #[cfg(windows)]
-        if !path.try_exists()? {
-            // Like the reference's tmpnam, this returns an unused name without
-            // creating a file. The caller must open it before another process can.
-            return Ok(path);
-        }
-        #[cfg(not(windows))]
-        {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            match options.open(&path) {
-                Ok(file) => {
-                    drop(file);
-                    return Ok(path);
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(error),
-            }
-        }
-    }
-    Err(std::io::ErrorKind::AlreadyExists.into())
-}
-
 impl Vm {
-    pub(super) fn open_os(&mut self) {
-        let table = self.new_table();
+    pub(super) fn open_os(&mut self) -> Result<(), Error> {
+        let table = self.try_new_table()?;
         for (name, id) in [
             (b"difftime".as_slice(), DIFFTIME),
             (b"getenv", GETENV),
@@ -83,10 +40,11 @@ impl Vm {
             (b"date", DATE),
             (b"setlocale", SETLOCALE),
         ] {
-            let name = self.intern(name);
-            self.raw_set(table, name, Value::Native(id)).unwrap();
+            let name = self.try_intern(name)?;
+            self.raw_set(table, name, Value::Native(id))?;
         }
-        self.set_global(b"os", Value::Table(table)).unwrap();
+        self.set_global(b"os", Value::Table(table))?;
+        Ok(())
     }
 
     pub(super) fn os_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
@@ -119,7 +77,10 @@ impl Vm {
                     name.map(|id| self.strings.bytes[slot_index(id.0)].as_ref()),
                     category,
                 )?;
-                self.registers[base] = value.map_or(Value::Nil, |s| self.intern(&s));
+                self.registers[base] = match value {
+                    Some(name) => self.try_intern(&name)?,
+                    None => Value::Nil,
+                };
                 return Ok(1);
             }
             DATE => return self.date_native(base, count),
@@ -152,9 +113,9 @@ impl Vm {
                 let to = self.string_argument(base, count, 1)?;
                 let old = &self.strings.bytes[slot_index(from.0)];
                 let new = &self.strings.bytes[slot_index(to.0)];
-                if let Err(code) = platform::rename(&io::path(old), &io::path(new)) {
-                    let name = io::c_bytes(old).to_vec();
-                    return Ok(self.io_failure(base, code, Some(&name)));
+                if let Err(code) = files::rename(io::c_bytes(old), io::c_bytes(new))? {
+                    let name = io::c_bytes(old).try_to_vec()?;
+                    return self.io_failure(base, code, Some(&name));
                 }
                 self.registers[base] = Value::Boolean(true);
             }
@@ -165,7 +126,7 @@ impl Vm {
                     Some(self.string_argument(base, count, 0)?)
                 };
                 let command = name.map(|name| io::c_bytes(&self.strings.bytes[slot_index(name.0)]));
-                let status = process::execute(command).unwrap_or_else(|code| {
+                let status = process::execute(command)?.unwrap_or_else(|code| {
                     io::set_errno(code);
                     -1
                 });
@@ -215,70 +176,28 @@ impl Vm {
                 let value = if bytes.contains(&b'=') {
                     None
                 } else {
-                    #[cfg(unix)]
-                    let key = {
-                        use std::os::unix::ffi::OsStrExt;
-                        std::ffi::OsStr::from_bytes(bytes)
-                    };
-                    #[cfg(not(unix))]
-                    let key = String::from_utf8_lossy(bytes);
-                    #[cfg(not(unix))]
-                    let key = std::ffi::OsStr::new(key.as_ref());
-                    std::env::var_os(key)
+                    environment::value(bytes)?
                 };
                 self.registers[base] = match value {
-                    Some(value) => {
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::ffi::OsStrExt;
-                            self.intern(value.as_bytes())
-                        }
-                        #[cfg(not(unix))]
-                        {
-                            self.intern(value.to_string_lossy().as_bytes())
-                        }
-                    }
+                    Some(value) => self.try_intern(&value)?,
                     None => Value::Nil,
                 };
             }
             REMOVE => {
                 let name = self.string_argument(base, count, 0)?;
                 let bytes = &self.strings.bytes[slot_index(name.0)];
-                let path = io::path(bytes);
-                let result = std::fs::remove_file(&path);
-                #[cfg(unix)]
-                let result = match result {
-                    Err(error) if error.kind() == std::io::ErrorKind::IsADirectory => {
-                        std::fs::remove_dir(path)
-                    }
-                    result => result,
-                };
-                if let Err(error) = result {
-                    let code = io::errno(error);
+                if let Err(code) = files::remove(io::c_bytes(bytes))? {
                     // Keep the argument in its original slot until the error
                     // text has been built; io_failure may grow the string arena.
-                    let name = io::c_bytes(bytes).to_vec();
-                    return Ok(self.io_failure(base, code, Some(&name)));
+                    let name = io::c_bytes(bytes).try_to_vec()?;
+                    return self.io_failure(base, code, Some(&name));
                 }
                 self.registers[base] = Value::Boolean(true);
             }
             TMPNAME => {
-                let path = temporary_name().map_err(|_| {
-                    Error::new(
-                        ErrorKind::Runtime,
-                        0,
-                        "unable to generate a unique filename",
-                    )
-                })?;
-                #[cfg(unix)]
-                {
-                    use std::os::unix::ffi::OsStrExt;
-                    self.registers[base] = self.intern(path.as_os_str().as_bytes());
-                }
-                #[cfg(not(unix))]
-                {
-                    self.registers[base] = self.intern(path.to_string_lossy().as_bytes());
-                }
+                let name = temporary::create()?;
+                self.registers[base] = self.try_intern(name.bytes())?;
+                name.publish();
             }
             _ => unreachable!(),
         }

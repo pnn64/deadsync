@@ -445,6 +445,7 @@ fn sample_state(
     let scorebox_profile = deadsync_score::GameplayScoreboxProfileSnapshot::new(
         true,
         true,
+        false,
         true,
         true,
         String::new(),

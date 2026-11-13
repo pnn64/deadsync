@@ -1,9 +1,12 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
+use crate::memory::Shared;
 use std::any::Any;
 mod api;
 pub(in crate::vm) mod stack;
 mod thread;
+#[cfg(test)]
+mod tests;
 pub(super) use api::ApiCall;
 pub(in crate::vm) use stack::Body;
 pub use stack::{
@@ -53,7 +56,7 @@ pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 #[derive(Clone)]
 pub(super) struct Function {
     callback: HostFunction,
-    data: Option<Arc<dyn Any + Send + Sync>>,
+    data: Option<Shared<dyn Any + Send + Sync>>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,7 +67,7 @@ impl std::fmt::Debug for Function {
 }
 impl Function {
     pub(super) fn heap_bytes(&self) -> usize {
-        self.data.as_deref().map_or(0, std::mem::size_of_val)
+        self.data.as_ref().map_or(0, Shared::heap_bytes)
     }
 }
 
@@ -77,7 +80,9 @@ pub struct HostCall<'vm> {
     vm: &'vm mut Vm,
     hook: Option<NativeHookEvent>,
     id: u64,
-    data: Option<Arc<dyn Any + Send + Sync>>,
+    // Native body/hook contexts can supply private data independently of the
+    // closure arena. Ordinary host functions borrow directly from that arena.
+    data: Option<Shared<dyn Any + Send + Sync>>,
     activation: Option<Value>,
     arguments: usize,
     count: usize,
@@ -88,6 +93,59 @@ pub struct HostCall<'vm> {
 }
 
 impl Vm {
+    /// Install the embedding's state for this VM, returning any previous state.
+    ///
+    /// Host callbacks borrow the state through [`HostCall::host_state`] and
+    /// [`HostCall::host_state_mut`], so one value can serve every callback
+    /// without shared ownership or locking. A borrow ends before the callback
+    /// can reenter Lua, which makes nested callbacks see a consistent value.
+    ///
+    /// The VM owns the state until it is replaced, taken or the VM is dropped;
+    /// it remains available to callbacks run by closing finalizers. The state
+    /// is opaque to the collector: keep retained Lua values in traced captures
+    /// or roots. Its destructor must not reenter Lua or panic.
+    ///
+    /// ```
+    /// use deadlib_lua::{Error, HostCall, Value, Vm, compile};
+    /// struct Counter(u32);
+    /// fn next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    ///     let counter = call.host_state_mut::<Counter>().expect("installed state");
+    ///     counter.0 += 1;
+    ///     let value = counter.0;
+    ///     call.push(Value::Number(f64::from(value)))
+    /// }
+    /// let mut vm = Vm::new();
+    /// vm.set_host_state(Box::new(Counter(40)));
+    /// let next = vm.new_host_function(next, &[])?;
+    /// vm.set_global(b"next", next)?;
+    /// assert_eq!(vm.execute(&compile(b"next() return next()")?)?, &[Value::Number(42.0)]);
+    /// assert_eq!(vm.host_state::<Counter>().map(|counter| counter.0), Some(42));
+    /// # Ok::<(), Error>(())
+    /// ```
+    pub fn set_host_state<T: Any + Send + Sync>(
+        &mut self,
+        state: Box<T>,
+    ) -> Option<Box<dyn Any + Send + Sync>> {
+        self.host_state.replace(state)
+    }
+
+    /// Remove and return the state installed with [`Self::set_host_state`].
+    pub fn take_host_state(&mut self) -> Option<Box<dyn Any + Send + Sync>> {
+        self.host_state.take()
+    }
+
+    /// Borrow the installed state, or `None` if it is absent or of another type.
+    #[inline]
+    pub fn host_state<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.host_state.as_deref()?.downcast_ref()
+    }
+
+    /// Mutably borrow the installed state, or `None` if it is absent or of another type.
+    #[inline]
+    pub fn host_state_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.host_state.as_deref_mut()?.downcast_mut()
+    }
+
     pub(super) fn set_native_capture(
         &mut self,
         function: u64,
@@ -132,7 +190,7 @@ impl Vm {
         callback: HostFunction,
         captures: &[Value],
     ) -> Result<Value, Error> {
-        self.host_function(callback, captures, None)
+        self.publish_host_function(callback, captures, None)
     }
 
     /// Create a host closure with private owned binding data and Lua captures.
@@ -141,7 +199,8 @@ impl Vm {
     /// Lua values must be in `captures`; opaque data is not traced. Data drops
     /// when the closure is collected, or after Lua shutdown finalizers. Its
     /// destructor must not reenter Lua or panic. Heap accounting includes the
-    /// boxed object's size, excluding allocations it owns indirectly.
+    /// owned object's size and shared control storage, excluding allocations it
+    /// owns indirectly.
     ///
     /// # Errors
     /// Rejects invalid/collected captures or more than 255 captures.
@@ -151,15 +210,28 @@ impl Vm {
         captures: &[Value],
         data: T,
     ) -> Result<Value, Error> {
-        self.host_function(callback, captures, Some(Box::new(data)))
+        self.validate_host_captures(captures)?;
+        let data = Shared::try_new_in(data, self.native_closures.memory().clone())
+            .map_err(|_| self.memory_failure())?
+            .project(|value| value as &(dyn Any + Send + Sync));
+        self.publish_host_function(callback, captures, Some(data))
     }
 
-    pub(super) fn host_function(
+    fn publish_host_function(
         &mut self,
         callback: HostFunction,
         captures: &[Value],
-        data: Option<Box<dyn Any + Send + Sync>>,
+        data: Option<Shared<dyn Any + Send + Sync>>,
     ) -> Result<Value, Error> {
+        self.validate_host_captures(captures)?;
+        let function = Function { callback, data };
+        let bytes = function.heap_bytes();
+        let value = self.new_native(threads::NativeKind::Host(function), captures)?;
+        self.native_closures.note_alloc(bytes);
+        Ok(value)
+    }
+
+    fn validate_host_captures(&self, captures: &[Value]) -> Result<(), Error> {
         if captures.len() > 255 {
             return Err(Error::new(
                 ErrorKind::Limit,
@@ -170,12 +242,7 @@ impl Vm {
         for &value in captures {
             self.validate_value(value)?;
         }
-        let function = Function {
-            callback,
-            data: data.map(Arc::from),
-        };
-        self.native_closures.note_alloc(function.heap_bytes());
-        self.new_native(threads::NativeKind::Host(function), captures)
+        Ok(())
     }
 
     #[inline]
@@ -202,14 +269,13 @@ impl Vm {
         callback: HostFunction,
     ) -> Result<(usize, usize), Error> {
         let arguments = self.frames[self.active_native.expect("native host frame")].vararg_start;
-        let data = self.host_binding(id).and_then(|f| f.data.clone());
         let activation = self.builtin_context(id);
         let hook = self.builtin_hook(id);
         let mut context = HostCall {
             vm: self,
             hook,
             id,
-            data,
+            data: None,
             activation,
             arguments,
             count,
@@ -243,13 +309,19 @@ impl Vm {
         Some(function)
     }
 
-    fn host_error(&self, value: Value) -> Error {
+    pub(super) fn host_error(&self, value: Value) -> Error {
+        use crate::memory::fallible::SliceExt;
         let bytes = match value {
-            Value::String(id) => self.string_bytes(id).unwrap().to_vec(),
-            Value::Number(n) => format_number(n),
-            _ => b"Lua error".to_vec(),
+            Value::String(id) => self.string_bytes(id).unwrap().try_to_vec(),
+            Value::Number(n) => native::try_format_number(n),
+            _ => return Error::raised_static(value, "Lua error"),
         };
-        Error::from_bytes(ErrorKind::Runtime, 0, bytes).with_value(value)
+        let error = self.runtime_message(bytes);
+        if error.kind() == ErrorKind::Memory {
+            error
+        } else {
+            error.with_value(value)
+        }
     }
 
     pub(super) fn host_return(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
@@ -361,7 +433,9 @@ impl Vm {
                     return Ok(count);
                 }
                 Ok(count) if self.thread != owner => {
-                    self.finish_thread(0, count, false, false, &mut line);
+                    if let Err(error) = self.finish_thread(0, count, false, false, &mut line) {
+                        pending = Some(Err(error));
+                    }
                 }
                 Err(error) if self.thread == owner && self.frames.len() == depth => {
                     return Err(error.at_line(line));
@@ -376,7 +450,11 @@ impl Vm {
                     let floor = if self.thread == owner { depth } else { 0 };
                     match self.catch_error_from(&error, floor) {
                         Ok(true) => {}
-                        Ok(false) if self.thread != owner => self.fail_thread(&error, &mut line),
+                        Ok(false) if self.thread != owner => {
+                            if let Err(error) = self.fail_thread(&error, &mut line) {
+                                pending = Some(Err(error));
+                            }
+                        }
                         Ok(false) => return Err(error.at_line(line)),
                         Err(error) if error.target_thread.is_some() => pending = Some(Err(error)),
                         Err(error) => return Err(error.at_line(line)),
@@ -400,12 +478,36 @@ impl HostCall<'_> {
     pub fn hook_event(&self) -> Option<NativeHookEvent> {
         self.hook
     }
+    /// Borrow the state installed with [`Vm::set_host_state`].
+    ///
+    /// Returns `None` if no state is installed or it has another type.
+    #[inline]
+    pub fn host_state<T: Any + Send + Sync>(&self) -> Option<&T> {
+        self.vm.host_state()
+    }
+
+    /// Mutably borrow the state installed with [`Vm::set_host_state`].
+    ///
+    /// The borrow ends before this callback can reenter Lua, so a nested
+    /// callback observes every change made here. Returns `None` if no state
+    /// is installed or it has another type.
+    #[inline]
+    pub fn host_state_mut<T: Any + Send + Sync>(&mut self) -> Option<&mut T> {
+        self.vm.host_state_mut()
+    }
+
     /// Borrow private binding data of the executing host callback.
     /// Direct body invocation keeps this binding separate from the caller's
     /// Lua environment and captured values.
     /// The borrow ends before a mutable operation can reenter Lua.
     pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&T> {
-        self.data.as_deref()?.downcast_ref()
+        // The executing native closure is kept alive by its active VM frame,
+        // including while nested Lua calls collect garbage. Borrow its owned
+        // data directly to avoid cloning a shared pointer on every host call.
+        self.data
+            .as_deref()
+            .or_else(|| self.vm.host_binding(self.id)?.data.as_deref())?
+            .downcast_ref()
     }
 
     /// Invoke a Lua/native function or callable value without leaving this callback.
@@ -500,10 +602,39 @@ impl HostCall<'_> {
         for &value in arguments {
             self.vm.validate_value(value)?;
         }
+        if let Action::Get([Value::Table(id), key]) = action {
+            let table = &self.vm.tables[slot_index(id.0)];
+            let value = match (table.get(key), table.metatable()) {
+                (Value::Nil, Some(metatable)) => simple::inherited(
+                    &self.vm.tables,
+                    self.vm.meta_names[Meta::Index as usize],
+                    metatable,
+                    key,
+                ),
+                (value, _) => Some(value),
+            };
+            if let Some(value) = value {
+                // Ordinary and inherited field reads need no continuation frame
+                // or driver cleanup. Keep the result in the same scratch register as the
+                // slow path, so it stays rooted until the next call/result write.
+                let scratch = self.output + self.results;
+                self.vm.reserve_registers(scratch + 1)?;
+                self.vm.truncate_registers(scratch);
+                self.vm.registers.push(value);
+                return Ok((scratch..scratch + 1, false));
+            }
+        }
         if arguments.len() > u32::MAX as usize {
             let error = Error::new(ErrorKind::Limit, 0, "too many host call arguments");
             self.abort = Some(error.clone());
             return Err(error);
+        }
+        // A nested Lua execution may unwind its waiting native frame through
+        // a nonlocal coroutine error. Retain private binding data only when
+        // entering that boundary, so Rust can still inspect it after the
+        // nested call fails. Ordinary callbacks need no shared-pointer clone.
+        if self.data.is_none() {
+            self.data = self.vm.host_binding(self.id).and_then(|f| f.data.clone());
         }
         let owner = self.vm.thread;
         let depth = self.vm.frames.len();
@@ -511,6 +642,8 @@ impl HostCall<'_> {
         let active = self.vm.active_native;
         let scratch = self.output + self.results;
         let base = scratch + usize::from(c_protected);
+        self.vm.reserve_registers(base + 1 + arguments.len())?;
+        self.vm.reserve_frames(1)?;
         if c_protected {
             self.vm
                 .relocate_native_error_functions(scratch..self.vm.registers.len(), base);
@@ -592,14 +725,8 @@ impl HostCall<'_> {
             Action::Concat { first, last, .. } => {
                 self.vm.concat_range(base, first, last).map(|()| None)
             }
-            Action::Finalize => {
-                self.vm.push_finalizers(false);
-                Ok(None)
-            }
-            Action::GcCheck => {
-                self.vm.maybe_gc();
-                Ok(None)
-            }
+            Action::Finalize => self.vm.push_finalizers(false).map(|()| None),
+            Action::GcCheck => self.vm.maybe_gc().map(|()| None),
         }
         .map_err(|error| {
             // There is no Lua call-site location for failure to enter a value
@@ -792,6 +919,8 @@ impl HostCall<'_> {
             ));
         }
         let position = self.output + self.results;
+        self.vm.reserve_registers(position + 1)?;
+        self.vm.reserve_gc_value(value)?;
         self.vm
             .resize_registers(self.vm.registers.len().max(position + 1));
         self.vm.registers[position] = value;
@@ -805,14 +934,143 @@ impl HostCall<'_> {
         self.vm.intern(bytes)
     }
 
+    /// Fallibly intern a byte string in this VM.
+    pub fn try_intern(&mut self, bytes: &[u8]) -> Result<Value, Error> {
+        self.vm.try_intern(bytes)
+    }
+
     /// Borrow the bytes of a live string in this VM.
     pub fn string_bytes(&self, id: StringId) -> Option<&[u8]> {
         self.vm.string_bytes(id)
     }
 
+    /// Return the VM's stable opaque identity for a live object. This does not
+    /// allocate or root the object; the token must never be dereferenced.
+    pub fn object_pointer(&mut self, value: Value) -> Option<usize> {
+        self.vm.object_pointer(value)
+    }
+
+    /// Coerce strings and numbers without invoking `__tostring`.
+    /// Retain the result before reentering Lua.
+    pub fn coerce_string(&mut self, value: Value) -> Result<Option<StringId>, Error> {
+        self.vm.coerce_string(value)
+    }
+
     /// Create a Lua table. Store, capture or return it before leaving this call.
     pub fn new_table(&mut self) -> TableId {
         self.vm.new_table()
+    }
+
+    /// Fallibly create a table. Store, capture or return it before reentering Lua.
+    pub fn try_new_table(&mut self) -> Result<TableId, Error> {
+        self.vm.try_new_table()
+    }
+
+    /// Create a Rust callback with traced Lua captures in this VM.
+    /// Store, capture or return the result before reentering Lua.
+    pub fn new_host_function(
+        &mut self,
+        callback: HostFunction,
+        captures: &[Value],
+    ) -> Result<Value, Error> {
+        self.vm.new_host_function(callback, captures)
+    }
+
+    /// Create a callback with owned Rust binding data during a host call.
+    /// The data and capture contracts are the same as
+    /// [`Vm::new_host_function_with_data`]. Store, root or return the result
+    /// before reentering Lua; values in opaque Rust data are not traced.
+    pub fn new_host_function_with_data<T: Any + Send + Sync>(
+        &mut self,
+        callback: HostFunction,
+        captures: &[Value],
+        data: T,
+    ) -> Result<Value, Error> {
+        self.vm
+            .new_host_function_with_data(callback, captures, data)
+    }
+
+    /// Keep temporary values alive across nested calls for the duration of `run`.
+    ///
+    /// Roots are released on both success and error, including partial setup
+    /// failure. Returned values follow the ordinary rooting contract once this
+    /// scope ends. A Rust panic requires discarding the VM, as for any callback.
+    pub fn with_roots<T>(
+        &mut self,
+        values: &[Value],
+        run: impl FnOnce(&mut Self) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut roots = Buffer::new_in(self.vm.roots.memory().clone());
+        roots
+            .try_reserve(values.len())
+            .map_err(|_| self.vm.memory_failure())?;
+        let result = (|| {
+            for &value in values {
+                roots.push(self.vm.pin(value)?);
+            }
+            run(self)
+        })();
+        for root in roots.iter().copied() {
+            // These handles are private to this scope, so user code cannot
+            // unpin them while `run` is active.
+            self.vm.unpin(root).expect("temporary host root");
+        }
+        result
+    }
+
+    /// Read a value's field, honoring Lua's `__index` semantics.
+    ///
+    /// The result remains rooted until the next nested call or result write.
+    /// Runtime errors are protected and preserve their original Lua value.
+    /// Instruction limits still abort the outer entry, as with [`Self::call`].
+    pub fn table_get(&mut self, target: Value, key: Value) -> Result<Value, Error> {
+        let range = self.run_action(Action::Get([target, key]), true)?;
+        Ok(self.vm.registers[range.start])
+    }
+
+    /// Read a table field without entering Lua when its `__index` chain contains only tables.
+    ///
+    /// Returns `None` when a Lua/native metamethod, a non-table handler, or a
+    /// long chain requires [`Self::table_get`]. Unlike that method, a returned
+    /// value is **not rooted** in the callback's scratch registers. The caller
+    /// must keep it reachable or append it to the results before any operation
+    /// that may collect garbage. This is useful for class methods whose owner
+    /// tables are already rooted by the embedding's global namespace.
+    ///
+    /// # Errors
+    /// Returns an error for invalid or collected object handles.
+    pub fn peek_table_get(&self, target: Value, key: Value) -> Result<Option<Value>, Error> {
+        self.vm.validate_value(target)?;
+        self.vm.validate_value(key)?;
+        let Value::Table(id) = target else {
+            return Ok(None);
+        };
+        let table = &self.vm.tables[slot_index(id.0)];
+        let value = table.get(key);
+        if value != Value::Nil {
+            return Ok(Some(value));
+        }
+        Ok(match table.metatable() {
+            Some(metatable) => simple::inherited(
+                &self.vm.tables,
+                self.vm.meta_names[Meta::Index as usize],
+                metatable,
+                key,
+            ),
+            None => Some(Value::Nil),
+        })
+    }
+
+    /// Write a value's field, honoring Lua's `__newindex` semantics.
+    /// Errors follow the same protected boundary as [`Self::table_get`].
+    pub fn table_set(&mut self, target: Value, key: Value, value: Value) -> Result<(), Error> {
+        self.run_action(Action::Set([target, key, value]), true)?;
+        Ok(())
+    }
+
+    /// Return Lua's raw sequence boundary for a live table.
+    pub fn raw_table_len(&self, table: TableId) -> Result<usize, Error> {
+        self.vm.raw_table_len(table)
     }
 
     /// Read a table without invoking metamethods.
@@ -833,12 +1091,39 @@ impl HostCall<'_> {
         self.vm.raw_table_set(table, key, value)
     }
 
+    /// Read private embedding state attached to a table. See `Vm::table_host_state`.
+    pub fn table_host_state(&self, table: TableId) -> Result<Option<TableId>, Error> {
+        self.vm.table_host_state(table)
+    }
+
+    /// Attach a strongly traced private state table. See `Vm::set_table_host_state`.
+    pub fn set_table_host_state(
+        &mut self,
+        table: TableId,
+        state: Option<TableId>,
+    ) -> Result<(), Error> {
+        self.vm.set_table_host_state(table, state)
+    }
+
     /// Allocate zero-initialized userdata in this native function's environment.
     pub fn new_userdata(&mut self, size: usize) -> Value {
         Value::Userdata(
             self.vm
                 .allocate_userdata(size, self.vm.native_environment(self.id)),
         )
+    }
+
+    /// Try to allocate zeroed userdata in this native function's environment.
+    /// Store or root the result before executing Lua or collecting.
+    ///
+    /// # Errors
+    /// Returns a memory error if payload or arena allocation fails, including
+    /// when the VM's memory limit is exceeded. Requests beyond Lua 5.1's
+    /// block-size guard return a runtime error.
+    pub fn try_new_userdata(&mut self, size: usize) -> Result<Value, Error> {
+        self.vm
+            .try_allocate_userdata(size, self.vm.native_environment(self.id))
+            .map(Value::Userdata)
     }
 
     /// Borrow live userdata storage.
@@ -853,7 +1138,8 @@ impl HostCall<'_> {
 
     /// Construct a Lua runtime error with exact message bytes.
     pub fn error(&self, message: &[u8]) -> Error {
-        Error::from_bytes(ErrorKind::Runtime, 0, message.to_vec())
+        use crate::memory::fallible::SliceExt;
+        self.vm.runtime_message(message.try_to_vec())
     }
 
     /// Construct a Lua error preserving the supplied value's identity.

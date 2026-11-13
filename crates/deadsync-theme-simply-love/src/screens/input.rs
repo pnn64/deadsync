@@ -15,6 +15,10 @@ const MENU_LR_CHORD_WINDOW: Duration = Duration::from_millis(75);
 const MENU_LR_LEFT: u8 = 1 << 0;
 const MENU_LR_RIGHT: u8 = 1 << 1;
 
+// Default menu repeat timing used by list overlays: 0.375s, then 8 repeats/sec.
+pub(super) const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
+pub(super) const OVERLAY_NAV_REPEAT_INTERVAL: Duration = Duration::from_millis(125);
+
 #[inline(always)]
 pub const fn reset_hold_repeat(
     held_for: &mut Duration,
@@ -391,6 +395,22 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
 /// Raw pad events are used to approximate Simply Love's "unmapped" device list.
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input, pad_event);
+}
+
+pub fn set_snek_sensor_state(
+    state: &mut State,
+    connected: bool,
+    read_error: bool,
+    sensors: [[[bool; 4]; 4]; 2],
+    revision: u64,
+) {
+    test_input::set_snek_sensor_state(
+        &mut state.test_input,
+        connected,
+        read_error,
+        sensors,
+        revision,
+    );
 }
 
 /* ------------------------------- drawing ------------------------------- */

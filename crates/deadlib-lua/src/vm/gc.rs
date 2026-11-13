@@ -2,6 +2,12 @@
 use super::*;
 use crate::table::TableTrace;
 use std::sync::atomic::{AtomicU64, Ordering};
+mod finalizers;
+mod storage;
+mod work;
+use work::Work;
+#[cfg(test)]
+mod allocation_tests;
 
 static VM_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -138,7 +144,7 @@ pub struct HeapStats {
     pub reclaimed_objects: u64,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Trace {
     Value(Value),
     MarkedValue(Value),
@@ -170,19 +176,25 @@ pub(super) struct Collector {
     pub(super) tag_calls: u64,
     reclaimed: u64,
     peak: usize,
-    work: Vec<Trace>,
-    erase: Vec<(usize, Value)>,
+    work: Work,
+    live: Buffer<u64>,
+    closed: Work,
     natives: [u64; 4],
     natives_previous: [u64; 4],
     control_allocated: usize,
     pub(super) pending: bool,
-    pub(super) finalizers: std::collections::VecDeque<UserdataId>,
-    pub(super) candidates: Vec<(u64, UserdataId)>,
+    pub(super) finalizers: finalizers::Finalizers,
+    pub(super) candidates: Buffer<(u64, UserdataId)>,
     pub(super) running: usize,
     pub(super) closing: bool,
 }
 impl Default for Collector {
     fn default() -> Self {
+        Self::new_in(Memory::default())
+    }
+}
+impl Collector {
+    pub(super) fn new_in(memory: Memory) -> Self {
         Self {
             phase: Phase::Pause,
             sweep_arena: 0,
@@ -196,14 +208,15 @@ impl Default for Collector {
             tag_calls: 0,
             reclaimed: 0,
             peak: 0,
-            work: Vec::new(),
-            erase: Vec::new(),
+            work: Work::new_in(memory.clone()),
+            live: Buffer::new_in(memory.clone()),
+            closed: Work::new_in(memory.clone()),
             natives: [0; 4],
             natives_previous: [0; 4],
             control_allocated: 0,
             pending: false,
-            finalizers: std::collections::VecDeque::new(),
-            candidates: Vec::new(),
+            finalizers: finalizers::Finalizers::new_in(memory.clone()),
+            candidates: Buffer::new_in(memory),
             running: 0,
             closing: false,
         }
@@ -256,9 +269,19 @@ impl Strings {
         reclaimed
     }
     fn rebuild(&mut self) {
+        if self.buckets.is_empty() {
+            return;
+        }
+        // Sweeping already removes dead entries in place. Rebuilding may compact
+        // the logical index, but must never grow it while reclaiming memory.
+        // The insertion load limit can leave a table smaller than 2 * live.
         let size = (self.bytes.live_len().saturating_mul(2))
             .max(16)
-            .next_power_of_two();
+            .next_power_of_two()
+            .min(self.buckets.len());
+        if size == self.buckets.len() {
+            return;
+        }
         self.buckets.resize(size, 0);
         self.buckets.fill(0);
         for (i, bytes) in self.bytes.entries() {
@@ -277,17 +300,17 @@ fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
         .sum()
 }
 pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
-    let native_roots = std::mem::size_of_val(p.parser_prototypes.as_ref())
+    let native_roots = p.parser_prototypes.capacity() * size_of::<ParserPrototypeId>()
         + p.debug_strings.capacity() * size_of::<StringId>();
-    let mut bytes = p.constants.len() * std::mem::size_of::<Box<[Value]>>()
+    let mut bytes = p.constants.capacity() * size_of::<Buffer<Value>>()
         + p.constants
             .iter()
-            .map(|k| k.len() * std::mem::size_of::<Value>())
+            .map(|k| k.capacity() * size_of::<Value>())
             .sum::<usize>();
-    bytes += std::mem::size_of_val(p.upvalue_names.as_ref())
+    bytes += p.upvalue_names.capacity() * size_of::<Buffer<StringId>>()
         + p.upvalue_names
             .iter()
-            .map(|names| std::mem::size_of_val(names.as_ref()))
+            .map(|names| names.capacity() * size_of::<StringId>())
             .sum::<usize>();
     bytes += p.data.name.len()
         + std::mem::size_of_val(p.data.sources.as_ref())
@@ -323,11 +346,14 @@ fn register_roots(
     registers: &[Value],
     range: std::ops::Range<usize>,
     live: &mut [u64],
-    work: &mut Vec<Trace>,
+    work: &mut Work,
 ) {
     for position in range {
-        live[position / 64] |= 1u64 << (position % 64);
-        work.extend(edge(registers[position]));
+        let bit = 1u64 << (position % 64);
+        if live[position / 64] & bit == 0 {
+            live[position / 64] |= bit;
+            work.extend(edge(registers[position]));
+        }
     }
 }
 fn frames_roots(
@@ -337,7 +363,7 @@ fn frames_roots(
     top: usize,
     cutoff: usize,
     live: &mut [u64],
-    work: &mut Vec<Trace>,
+    work: &mut Work,
 ) {
     if frames.is_empty() {
         register_roots(
@@ -403,8 +429,7 @@ fn frames_roots(
                         let r = word * 64 + bits.trailing_zeros() as usize;
                         let pos = frame.base + r;
                         if pos < registers.len().min(return_top) {
-                            live[pos / 64] |= 1u64 << (pos % 64);
-                            work.extend(edge(registers[pos]));
+                            register_roots(registers, pos..pos + 1, live, work);
                         }
                         bits &= bits - 1;
                     }
@@ -562,7 +587,7 @@ impl Vm {
             .strings
             .bytes
             .iter()
-            .map(|s| s.c_bytes().len())
+            .map(ByteString::storage_bytes)
             .sum::<usize>()
             + self.strings.buckets.capacity() * 4;
         payload += self.tables.iter().map(Table::heap_bytes).sum::<usize>();
@@ -586,7 +611,7 @@ impl Vm {
             .native_closures
             .iter()
             .map(|f| {
-                std::mem::size_of_val(f.captures.as_ref())
+                f.captures.capacity() * size_of::<Value>()
                     + match &f.kind {
                         threads::NativeKind::Host(f) => f.heap_bytes(),
                         _ => 0,
@@ -604,17 +629,9 @@ impl Vm {
         control += self.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
         control += self.native_bodies.capacity() * std::mem::size_of::<host::Body>();
         control += self.api_calls.capacity() * std::mem::size_of::<host::ApiCall>();
-        control += self.library_loads.capacity() * size_of::<package::LoadingLibrary>()
-            + self
-                .library_loads
-                .iter()
-                .map(package::LoadingLibrary::heap_bytes)
-                .sum::<usize>();
         control += self.hooks.hidden.capacity() * std::mem::size_of::<Value>();
         control += self.hooks.popped.capacity() * std::mem::size_of::<Value>();
-        control += self.object_pointers.capacity()
-            * (std::mem::size_of::<((u8, u64), Box<usize>)>() + 1)
-            + self.object_pointers.len() * std::mem::size_of::<usize>();
+        control += self.builtin_envs.capacity() * size_of::<Option<TableId>>();
         for (_, t) in self.threads.entries() {
             control += t.registers.capacity() * std::mem::size_of::<Value>()
                 + t.frames.capacity() * std::mem::size_of::<Frame>()
@@ -632,17 +649,19 @@ impl Vm {
                     .map(host::ThreadData::heap_bytes)
                     .sum::<usize>();
         }
-        control += self.buffers.capacity() * std::mem::size_of::<Vec<u8>>()
-            + self.buffers.iter().map(Vec::capacity).sum::<usize>()
+        control += self.buffers.capacity() * std::mem::size_of::<Buffer<u8>>()
+            + self.buffers.iter().map(Buffer::capacity).sum::<usize>()
             + self.output.as_ref().map_or(0, Vec::capacity)
             + self.pattern_work.heap_bytes()
             + self.gc.work.capacity() * std::mem::size_of::<Trace>()
-            + self.gc.erase.capacity() * std::mem::size_of::<(usize, Value)>()
-            + self.patterns.values().map(crate::pattern::Pattern::heap_bytes).sum::<usize>()
-            // HashMap bucket counts/allocator headers are implementation details;
-            // capacity-based estimates include payloads and one control byte.
-            + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
-            + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
+            + self.gc.live.capacity() * std::mem::size_of::<u64>()
+            + self.gc.closed.capacity() * std::mem::size_of::<Trace>()
+            + self
+                .patterns
+                .values()
+                .map(crate::pattern::Pattern::heap_bytes)
+                .sum::<usize>()
+            + self.patterns.storage_bytes();
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<ByteString>()
@@ -750,7 +769,7 @@ impl Vm {
             .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
-    fn mark_barrier_value(&mut self, value: Value, work: &mut Vec<Trace>) {
+    fn mark_barrier_value(&mut self, value: Value, work: &mut Work) {
         let fresh = match value {
             Value::String(id) => {
                 self.strings.bytes.mark(id.0);
@@ -782,11 +801,11 @@ impl Vm {
         }
     }
     pub(super) fn reserve_gc_new_value(&mut self) -> Result<(), Error> {
+        self.reserve_gc_new_values(1)
+    }
+    pub(super) fn reserve_gc_new_values(&mut self, count: usize) -> Result<(), Error> {
         if self.gc.phase == Phase::Propagate {
-            self.gc
-                .work
-                .try_reserve(1)
-                .map_err(|_| self.memory_failure())?;
+            self.reserve_gc_work(count)?;
         }
         Ok(())
     }
@@ -824,6 +843,32 @@ impl Vm {
             self.gc_new_value(value);
         }
     }
+    pub(super) fn reserve_gc_cell(&mut self, cell: usize, value: Value) -> Result<(), Error> {
+        if self.gc.phase == Phase::Propagate
+            && self
+                .upvalues
+                .key(cell)
+                .is_some_and(|key| self.upvalues.marked(key))
+        {
+            self.reserve_gc_value(value)?;
+        }
+        Ok(())
+    }
+    pub(super) fn gc_close_cell(&mut self, cell: usize, value: Value) {
+        if self.gc.phase == Phase::Propagate
+            && self
+                .upvalues
+                .key(cell)
+                .is_some_and(|key| self.upvalues.marked(key))
+        {
+            // Closing also runs during error unwinding. Each open cell reserved
+            // its slot when captured, before publication. Mark immediately and
+            // retain the forced scan without requiring another allocation.
+            let mut closed = std::mem::take(&mut self.gc.closed);
+            self.mark_barrier_value(value, &mut closed);
+            self.gc.closed = closed;
+        }
+    }
     pub(super) fn gc_new_cell(&mut self, cell: usize) {
         if self.gc.phase == Phase::Propagate
             && let Some(key) = self.upvalues.key(cell)
@@ -845,10 +890,7 @@ impl Vm {
             let value_needed = (!weak_values || matches!(value, Value::String(_)))
                 && !self.marked_value(value)
                 && (!key_needed || key != value);
-            self.gc
-                .work
-                .try_reserve(usize::from(key_needed) + usize::from(value_needed))
-                .map_err(|_| self.memory_failure())?;
+            self.reserve_gc_work(usize::from(key_needed) + usize::from(value_needed))?;
         }
         Ok(())
     }
@@ -885,23 +927,72 @@ impl Vm {
             }
         }
     }
-    pub(super) fn maybe_gc(&mut self) {
+    pub(super) fn reserve_gc_metatable(
+        &mut self,
+        owner: Value,
+        table: Option<TableId>,
+    ) -> Result<(), Error> {
+        if self.gc.phase != Phase::Propagate || matches!(owner, Value::ParserPrototype(_)) {
+            return Ok(());
+        }
+        if let Value::Table(id) = owner {
+            if self.tables.marked(id.0) && self.tables[slot_index(id.0)].trace == TableTrace::Idle {
+                self.reserve_gc_new_value()?;
+            }
+        } else if let Some(table) = table {
+            if matches!(owner, Value::Userdata(_)) {
+                self.reserve_gc_barrier(owner, Value::Table(table))?;
+            } else {
+                self.reserve_gc_value(Value::Table(table))?;
+            }
+        }
+        Ok(())
+    }
+    // Numbers carry no collector edges, so their permutation is safe in any
+    // phase when the next ordinary checkpoint would have no work to perform.
+    pub(super) fn numeric_sort_gc_ready(&self) -> bool {
+        self.gc.running == 0
+            && !self.gc.closing
+            && (self.gc.stopped
+                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
+    }
+    // Scalar callbacks and batched continuations can skip only a checkpoint
+    // with no collector work. Keep pending-state behavior identical to maybe_gc.
+    pub(super) fn sort_gc_ready(&mut self) -> bool {
+        if self.gc.phase == Phase::Pause
+            && self.gc.running == 0
+            && !self.gc.closing
+            && (self.gc.stopped
+                || self.gc.last_live.saturating_add(self.gc_debt()) < self.gc.threshold)
+        {
+            self.gc.pending = false;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {
         self.gc.pending = false;
         if !self.gc.stopped
             && self.gc.running == 0
             && !self.gc.closing
             && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            if self.advance_gc_some(self.gc_step_budget(0)) {
+            if self.advance_gc_some(self.gc_step_budget(0))? {
                 if self.gc.finalizers.is_empty() {
                     self.finish_gc_cycle();
                 } else {
-                    self.push_finalizers(false);
+                    if let Err(error) = self.push_finalizers(false) {
+                        self.defer_gc_until_allocation();
+                        return Err(error);
+                    }
                 }
             } else {
                 self.defer_gc_until_allocation();
             }
         }
+        Ok(())
     }
     fn table_mode(&self, table: &Table) -> (bool, bool) {
         let Some(mt) = table.metatable() else {
@@ -931,7 +1022,7 @@ impl Vm {
             _ => true,
         }
     }
-    fn trace_thread(&mut self, id: ThreadId, work: &mut Vec<Trace>) {
+    fn trace_thread(&mut self, id: ThreadId, work: &mut Work) {
         let t = &self.threads[slot_index(id.0)];
         let hooks = if id == self.thread {
             &self.hooks
@@ -993,7 +1084,10 @@ impl Vm {
         } else {
             registers.len()
         };
-        let mut live = vec![0; registers.len().div_ceil(64)];
+        let mut live = std::mem::take(&mut self.gc.live);
+        assert!(registers.len().div_ceil(64) <= live.capacity());
+        live.resize(registers.len().div_ceil(64), 0);
+        live.fill(0);
         frames_roots(self, registers, frames, top, cutoff, &mut live, work);
         // A Lua activation resumed from an instruction hook retains its
         // additional resume arguments until a stack-normalizing instruction.
@@ -1056,6 +1150,7 @@ impl Vm {
             clear_unused_registers(&mut thread.registers, &thread.frames, &live);
             clear_popped_hook_slots(&mut thread.hooks, &live);
         }
+        self.gc.live = live;
         self.shrink_thread_calls(id);
     }
     fn marked_weak_value(&self, value: Value, key: bool) -> bool {
@@ -1063,12 +1158,14 @@ impl Vm {
             && (key
                 || !matches!(value, Value::Userdata(id) if self.userdata[slot_index(id.0)].finalized))
     }
-    fn trace_some(&mut self, work: &mut Vec<Trace>, budget: usize) -> usize {
+    fn trace_some(&mut self, work: &mut Work, budget: usize) -> Result<usize, Error> {
         let mut visited = 0;
         while visited < budget {
-            let Some(item) = work.pop() else {
+            let Some(item) = work.last().copied() else {
                 break;
             };
+            self.reserve_trace_item(item, work)?;
+            work.pop();
             visited += 1;
             let (item, forced) = match item {
                 Trace::MarkedValue(value) => (Trace::Value(value), true),
@@ -1172,17 +1269,17 @@ impl Vm {
                 _ => {}
             }
         }
-        visited
+        Ok(visited)
     }
-    fn trace_graph(&mut self, work: &mut Vec<Trace>) {
-        self.trace_some(work, usize::MAX);
+    fn trace_graph(&mut self, work: &mut Work) -> Result<(), Error> {
+        self.trace_some(work, usize::MAX).map(|_| ())
     }
-    fn trace_table(&mut self, id: TableId, work: &mut Vec<Trace>) {
+    fn trace_table(&mut self, id: TableId, work: &mut Work) {
         // Fresh marks also discard scan state left by an interrupted cycle.
         self.tables[slot_index(id.0)].trace = TableTrace::Restart;
         self.trace_table_slice(id, 0, work);
     }
-    fn trace_table_slice(&mut self, id: TableId, cursor: usize, work: &mut Vec<Trace>) {
+    fn trace_table_slice(&mut self, id: TableId, cursor: usize, work: &mut Work) {
         let table = &self.tables[slot_index(id.0)];
         // Read __mode once per scan. The atomic metatable refresh observes mode
         // mutations before weak cleanup, just as for an unsliced table scan.
@@ -1206,6 +1303,11 @@ impl Vm {
         {
             work.push(Trace::Value(Value::Table(mt)));
         }
+        if cursor == 0
+            && let Some(state) = table.host_state()
+        {
+            work.push(Trace::Value(Value::Table(state)));
+        }
         for (key, value) in pairs {
             if !weak_keys || matches!(key, Value::String(_)) {
                 work.extend(edge(key));
@@ -1218,9 +1320,16 @@ impl Vm {
             self.tables[slot_index(id.0)].trace = TableTrace::Idle;
         }
     }
-    fn begin_gc_cycle(&mut self) {
+    fn begin_gc_cycle(&mut self) -> Result<(), Error> {
+        if let Err(error) =
+            self.reserve_gc_work(self.seed_gc_root_count().saturating_sub(self.gc.work.len()))
+        {
+            self.defer_gc_until_allocation();
+            return Err(error);
+        }
         self.heap_stats();
         self.gc.phase = Phase::Propagate;
+        self.gc.closed.clear();
         self.protect_new_allocations(false);
         self.strings.bytes.clear_marks();
         self.tables.clear_marks();
@@ -1246,8 +1355,9 @@ impl Vm {
         work.clear();
         self.seed_gc_roots(&mut work);
         self.gc.work = work;
+        Ok(())
     }
-    fn seed_gc_roots(&self, work: &mut Vec<Trace>) {
+    fn seed_gc_roots(&self, work: &mut Work) {
         work.push(Trace::Value(Value::Thread(self.main)));
         work.push(Trace::Value(Value::Table(self.registry)));
         work.push(Trace::Value(Value::String(self.memory_error)));
@@ -1277,15 +1387,62 @@ impl Vm {
         work.extend(
             self.programs
                 .iter()
-                .filter(|p| p.owner.strong_count() != 0)
+                .filter(|p| p.owner.load(std::sync::atomic::Ordering::Acquire) != 0)
                 .map(|p| Trace::Value(Value::Function(p.entry))),
         );
     }
-    fn finish_gc_marking(&mut self) {
+    fn finish_gc_marking(&mut self) -> Result<(), Error> {
         let mut work = std::mem::take(&mut self.gc.work);
-        self.trace_graph(&mut work);
+        let result = self.finish_gc_marking_work(&mut work);
+        self.gc.work = work;
+        if result.is_err() {
+            self.defer_gc_until_allocation();
+        }
+        result
+    }
+    fn finish_gc_marking_work(&mut self, work: &mut Work) -> Result<(), Error> {
+        self.transfer_closed_work(work)?;
+        self.trace_graph(work)?;
         // Snapshot the already reached containers before refreshing roots;
         // newly reached threads/cells still receive their ordinary first scan.
+        let threads = self
+            .threads
+            .entries()
+            .filter(|(index, _)| {
+                self.threads
+                    .key(*index)
+                    .is_some_and(|key| self.threads.marked(key))
+            })
+            .count();
+        let tables = self
+            .tables
+            .entries()
+            .filter(|(index, table)| {
+                table.metatable().is_some()
+                    && self
+                        .tables
+                        .key(*index)
+                        .is_some_and(|key| self.tables.marked(key))
+            })
+            .count();
+        let cells = self
+            .upvalues
+            .entries()
+            .filter(|(index, cell)| {
+                matches!(cell, Cell::Open(..))
+                    && self
+                        .upvalues
+                        .key(*index)
+                        .is_some_and(|key| self.upvalues.marked(key))
+            })
+            .count();
+        self.reserve_trace_work(
+            work,
+            threads
+                .saturating_add(tables)
+                .saturating_add(cells)
+                .saturating_add(self.seed_gc_root_count()),
+        )?;
         for index in 0..self.threads.len() {
             if let Some(key) = self.threads.key(index)
                 && self.threads.marked(key)
@@ -1313,11 +1470,12 @@ impl Vm {
                 work.push(Trace::CellAgain(index));
             }
         }
-        self.seed_gc_roots(&mut work);
-        self.trace_graph(&mut work);
+        self.seed_gc_roots(work);
+        self.trace_graph(work)?;
         // Pending callbacks preserve their graphs only after discovering newly
         // finalizable userdata, including graphs attached after a callback error.
         self.separate_userdata(false);
+        self.reserve_trace_work(work, self.gc.finalizers.iter().len())?;
         work.extend(
             self.gc
                 .finalizers
@@ -1325,27 +1483,8 @@ impl Vm {
                 .copied()
                 .map(|id| Trace::Value(Value::Userdata(id))),
         );
-        self.trace_graph(&mut work);
-        let mut erase = std::mem::take(&mut self.gc.erase);
-        erase.clear();
-        for (i, t) in self.tables.entries() {
-            if self.tables.key(i).is_some_and(|k| self.tables.marked(k)) {
-                let (wk, wv) = self.table_mode(t);
-                if wk || wv {
-                    for (k, v) in t.pairs() {
-                        if (wk && !self.marked_weak_value(k, true))
-                            || (wv && !self.marked_weak_value(v, false))
-                        {
-                            erase.push((i, k));
-                        }
-                    }
-                }
-            }
-        }
-        for (i, key) in erase.drain(..) {
-            self.tables[i].set(key, Value::Nil).expect("existing key");
-        }
-        self.gc.erase = erase;
+        self.trace_graph(work)?;
+        self.clear_weak_tables();
         for (i, t) in self.threads.entries() {
             if self.threads.key(i).is_some_and(|k| !self.threads.marked(k)) {
                 for &cell in &t.open_upvalues {
@@ -1355,11 +1494,50 @@ impl Vm {
                 }
             }
         }
-        self.gc.work = work;
         self.protect_new_allocations(true);
         self.gc.phase = Phase::Sweep;
         self.gc.sweep_arena = 0;
         self.gc.sweep_cursor = self.tables.len();
+        Ok(())
+    }
+    fn clear_weak_tables(&mut self) {
+        for index in 0..self.tables.len() {
+            if !self
+                .tables
+                .key(index)
+                .is_some_and(|key| self.tables.marked(key))
+            {
+                continue;
+            }
+            let (weak_keys, weak_values) = self.table_mode(&self.tables[index]);
+            if !weak_keys && !weak_values {
+                continue;
+            }
+            let mut cursor = 0;
+            loop {
+                let mut erase = [Value::Nil; 64];
+                let mut count = 0;
+                let (next, pairs) = self.tables[index].trace_slice(cursor, erase.len());
+                for (key, value) in pairs {
+                    if (weak_keys && !self.marked_weak_value(key, true))
+                        || (weak_values && !self.marked_weak_value(value, false))
+                    {
+                        erase[count] = key;
+                        count += 1;
+                    }
+                }
+                // Deleting an existing key neither allocates nor compacts its
+                // physical slot. The next cursor therefore remains valid across
+                // array holes, hash tombstones and the array/hash boundary.
+                for key in &erase[..count] {
+                    self.tables[index]
+                        .set(*key, Value::Nil)
+                        .expect("existing key");
+                }
+                let Some(next) = next else { break };
+                cursor = next;
+            }
+        }
     }
     fn protect_new_allocations(&mut self, enabled: bool) {
         self.tables.protect_new(enabled);
@@ -1417,33 +1595,40 @@ impl Vm {
             return;
         }
         self.strings.rebuild();
-        self.prune_object_pointers();
         self.patterns
             .retain(|(id, _), _| self.strings.bytes.contains(id.0));
-        self.native_envs.retain(|id, _| {
-            *id < 256 && self.gc.natives[*id as usize / 64] & (1u64 << (*id % 64)) != 0
-        });
+        for (id, env) in self.builtin_envs.iter_mut().enumerate() {
+            if self.gc.natives[id / 64] & (1u64 << (id % 64)) == 0 {
+                *env = None;
+            }
+        }
         self.gc.phase = Phase::Finalize;
         self.gc.collections += 1;
+        // Resetting the debt measures the heap, which also records its peak.
         self.reset_gc_debt();
-        self.heap_stats();
     }
-    fn advance_gc_some(&mut self, mut budget: usize) -> bool {
+    fn advance_gc_some(&mut self, mut budget: usize) -> Result<bool, Error> {
         if self.gc.phase == Phase::Pause {
-            self.begin_gc_cycle();
+            self.begin_gc_cycle()?;
         }
         if self.gc.phase == Phase::Propagate {
             let mut work = std::mem::take(&mut self.gc.work);
-            budget -= self.trace_some(&mut work, budget);
+            let result = self
+                .transfer_closed_work(&mut work)
+                .and_then(|()| self.trace_some(&mut work, budget));
             self.gc.work = work;
+            if result.is_err() {
+                self.defer_gc_until_allocation();
+            }
+            budget -= result?;
             if self.gc.work.is_empty() {
-                self.finish_gc_marking();
+                self.finish_gc_marking()?;
             }
         }
         if self.gc.phase == Phase::Sweep {
             self.sweep_gc_some(budget);
         }
-        self.gc.phase == Phase::Finalize
+        Ok(self.gc.phase == Phase::Finalize)
     }
     fn gc_step_budget(&self, extra: i32) -> usize {
         let limit = step_limit(self.gc.stepmul);
@@ -1462,7 +1647,7 @@ impl Vm {
         let budget = requested * limit as u128 / 1024 / 16;
         budget.clamp(1, usize::MAX as u128) as usize
     }
-    fn defer_gc_until_allocation(&mut self) {
+    pub(super) fn defer_gc_until_allocation(&mut self) {
         self.gc.threshold = self
             .gc
             .last_live
@@ -1474,20 +1659,21 @@ impl Vm {
             self.sweep_gc_some(usize::MAX);
         }
     }
-    pub(super) fn prepare_gc_finalizers(&mut self) {
+    pub(super) fn prepare_gc_finalizers(&mut self) -> Result<(), Error> {
         if self.gc.phase == Phase::Propagate {
-            self.finish_gc_marking();
+            self.finish_gc_marking()?;
         }
         self.finish_pending_sweep();
+        Ok(())
     }
-    pub(super) fn collect_cycle(&mut self) -> HeapStats {
+    pub(super) fn collect_cycle(&mut self) -> Result<HeapStats, Error> {
         self.finish_pending_sweep();
-        self.begin_gc_cycle();
-        self.finish_gc_marking();
+        self.begin_gc_cycle()?;
+        self.finish_gc_marking()?;
         self.sweep_gc_some(usize::MAX);
-        self.heap_stats()
+        Ok(self.heap_stats())
     }
-    pub(super) fn gc_control(&mut self, operation: GcOperation) -> (i32, bool) {
+    pub(super) fn gc_control(&mut self, operation: GcOperation) -> Result<(i32, bool), Error> {
         let mut dispatch = false;
         let result = match operation {
             GcOperation::Stop => {
@@ -1500,7 +1686,7 @@ impl Vm {
                 0
             }
             GcOperation::Collect => {
-                self.collect_cycle();
+                self.collect_cycle()?;
                 self.finish_gc_cycle();
                 dispatch = true;
                 0
@@ -1511,7 +1697,7 @@ impl Vm {
             GcOperation::SetStepMultiplier(value) => std::mem::replace(&mut self.gc.stepmul, value),
             GcOperation::Step(extra) => {
                 self.gc.stopped = false;
-                let complete = self.advance_gc_some(self.gc_step_budget(extra));
+                let complete = self.advance_gc_some(self.gc_step_budget(extra))?;
                 if complete {
                     self.finish_gc_cycle();
                     dispatch = true;
@@ -1521,7 +1707,7 @@ impl Vm {
                 i32::from(complete)
             }
         };
-        (result, dispatch)
+        Ok((result, dispatch))
     }
     pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<bool, Error> {
         if id == GC_INFO {
@@ -1564,7 +1750,7 @@ impl Vm {
             6 => GcOperation::SetStepMultiplier(extra),
             _ => unreachable!("validated collector option"),
         };
-        let (result, dispatch) = self.gc_control(operation);
+        let (result, dispatch) = self.gc_control(operation)?;
         let value = if choice == 4 {
             Value::Boolean(result != 0)
         } else {
@@ -1579,13 +1765,92 @@ impl Vm {
 mod tests {
     use super::*;
     #[test]
+    fn weak_cleanup_never_allocates_and_preserves_live_entries_across_storage_slices() {
+        let mut vm = Vm::new_bare();
+        let table = vm.new_table();
+        let meta = vm.new_table();
+        let name = vm.intern(b"__mode");
+        let mode = vm.intern(b"kv");
+        vm.raw_set(meta, name, mode).unwrap();
+        vm.set_metatable(Value::Table(table), Some(meta)).unwrap();
+        vm.pin(Value::Table(table)).unwrap();
+        let mut retained = Vec::new();
+        for n in 1..=259 {
+            let value = Value::Table(vm.new_table());
+            let key = Value::Number(f64::from(n));
+            vm.raw_set(table, key, value).unwrap();
+            if n % 11 == 0 {
+                vm.pin(value).unwrap();
+                retained.push((key, value));
+            } else if n % 13 == 0 {
+                vm.raw_set(table, key, Value::Nil).unwrap();
+            }
+        }
+        for n in 1..=193 {
+            let key = Value::Table(vm.new_table());
+            let value = Value::Table(vm.new_table());
+            vm.raw_set(table, key, value).unwrap();
+            if n % 11 == 0 {
+                vm.pin(key).unwrap();
+                vm.pin(value).unwrap();
+                retained.push((key, value));
+            } else if n % 13 == 0 {
+                vm.raw_set(table, key, Value::Nil).unwrap();
+            }
+        }
+        let string = vm.intern(b"strings remain strong");
+        vm.raw_set(table, string, string).unwrap();
+        retained.push((string, string));
+        vm.begin_gc_cycle().unwrap();
+        let mut work = std::mem::take(&mut vm.gc.work);
+        vm.trace_graph(&mut work).unwrap();
+        vm.gc.work = work;
+        let (_, stats) = crate::allocation_probe::probe(1, || vm.clear_weak_tables());
+        assert_eq!(stats.attempts, 0);
+        let table = &vm.tables[slot_index(table.0)];
+        assert_eq!(table.pairs().count(), retained.len());
+        for (key, value) in retained {
+            assert_eq!(table.get(key), value);
+        }
+    }
+
+    #[test]
+    fn fresh_userdata_can_be_finalized_in_the_current_marking_cycle() {
+        fn finalizer(_: &mut HostCall<'_>) -> Result<(), Error> {
+            Ok(())
+        }
+        let mut vm = Vm::new_bare();
+        let callback = vm.new_host_function(finalizer, &[]).unwrap();
+        let mt = vm.new_table();
+        let gc = vm.intern(b"__gc");
+        vm.raw_set(mt, gc, callback).unwrap();
+        vm.begin_gc_cycle().unwrap();
+        let dead = vm.try_new_userdata(0).unwrap();
+        let live = vm.try_new_userdata(0).unwrap();
+        vm.set_metatable(dead, Some(mt)).unwrap();
+        vm.set_metatable(live, Some(mt)).unwrap();
+        assert!(!vm.marked_value(dead));
+        assert!(!vm.marked_value(live));
+        let root = vm.pin(live).unwrap();
+        vm.finish_gc_marking().unwrap();
+        let Value::Userdata(dead) = dead else {
+            unreachable!()
+        };
+        let Value::Userdata(live) = live else {
+            unreachable!()
+        };
+        assert!(vm.gc.finalizers.contains(&dead));
+        assert!(!vm.gc.finalizers.contains(&live));
+        assert_eq!(vm.rooted(root).unwrap(), Value::Userdata(live));
+    }
+    #[test]
     fn mutation_reserves_both_strong_edges_before_publishing_either() {
         let mut vm = Vm::new_bare();
         let table = vm.try_table_with_capacity(0, 2).unwrap();
         let key = Value::Table(vm.new_table());
         let value = Value::Table(vm.new_table());
         vm.gc.phase = Phase::Propagate;
-        vm.gc.work = Vec::with_capacity(1);
+        vm.gc.work = Work::with_capacity(1);
         vm.tables.mark(table.0);
         vm.tables[slot_index(table.0)].trace = TableTrace::Pending(false, false);
         let (result, stats) = crate::allocation_probe::probe(1, || vm.raw_set(table, key, value));
@@ -1620,7 +1885,7 @@ mod tests {
             let name = vm.intern(b"__mode");
             let mode_value = vm.intern(mode);
             vm.raw_set(mt, name, mode_value).unwrap();
-            vm.set_metatable(Value::Table(table), Some(mt));
+            vm.set_metatable(Value::Table(table), Some(mt)).unwrap();
             let key = Value::Table(vm.new_table());
             let value = if same {
                 key
@@ -1628,7 +1893,7 @@ mod tests {
                 Value::Table(vm.new_table())
             };
             vm.gc.phase = Phase::Propagate;
-            vm.gc.work = Vec::with_capacity(expected);
+            vm.gc.work = Work::with_capacity(expected);
             vm.tables.mark(table.0);
             let (result, stats) =
                 crate::allocation_probe::probe(1, || vm.raw_set(table, key, value));
@@ -1673,16 +1938,25 @@ mod tests {
     #[test]
     fn allocation_failure_during_marking_keeps_the_work_queue_and_object_identity_unpublished() {
         let mut attempts = 0;
-        // Payload + collector work queue + the arena's four parallel buffers.
-        for nth in 0..=6 {
+        // Two finalizer buffers + payload + the arena's four parallel buffers.
+        // A new white userdata
+        // needs no mark work until it is retained through a host root/barrier.
+        for nth in 0..=7 {
             let mut vm = Vm::new_bare();
             vm.gc.phase = Phase::Propagate;
-            vm.gc.work = Vec::new();
+            vm.gc.work = Work::default();
             let (result, stats) = crate::allocation_probe::probe(nth, || vm.try_new_userdata(16));
             if nth == 0 {
                 attempts = stats.attempts;
-                assert_eq!(attempts, 6);
-                assert!(result.is_ok());
+                assert_eq!(attempts, 7);
+                let value = result.unwrap();
+                assert!(vm.gc.work.is_empty());
+                let (pinned, stats) = crate::allocation_probe::probe(1, || vm.pin(value));
+                assert_eq!(stats.rejected, 1);
+                assert_eq!(pinned.unwrap_err().kind(), ErrorKind::Memory);
+                assert_eq!(vm.roots.live_len(), 0);
+                assert!(vm.gc.work.is_empty());
+                vm.pin(value).unwrap();
                 assert_eq!(vm.gc.work.len(), 1);
             } else {
                 assert!(nth <= attempts);
@@ -1694,13 +1968,129 @@ mod tests {
                 let Value::Userdata(id) = vm.try_new_userdata(16).unwrap() else {
                     unreachable!()
                 };
-                assert!(vm.userdata.marked(id.0));
-                assert_eq!(vm.gc.work.len(), 1);
+                assert!(!vm.userdata.marked(id.0));
+                assert!(vm.gc.work.is_empty());
                 assert_eq!(vm.userdata_order, 1);
             }
             vm.gc.phase = Phase::Pause;
         }
-        eprintln!("ALLOCATION_GC_FAILURE_POINTS 6");
+        eprintln!("ALLOCATION_GC_FAILURE_POINTS 8");
+    }
+
+    #[test]
+    fn binding_failure_during_marking_does_not_publish_objects_or_mark_work() {
+        let program = crate::compile(b"return 42").unwrap();
+        let run = |nth| {
+            let mut vm = Vm::new_bare();
+            vm.gc.phase = Phase::Propagate;
+            vm.gc.work = Work::default();
+            let (result, stats) =
+                crate::allocation_probe::probe(nth, || vm.try_load_program(&program));
+            if nth == 0 {
+                result.unwrap();
+                assert_eq!(vm.gc.work.len(), 1);
+            } else {
+                assert_eq!(stats.rejected, 1);
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+                assert_eq!(vm.programs.live_len(), 0);
+                assert_eq!(vm.functions.live_len(), 0);
+                assert_eq!(vm.upvalues.live_len(), 0);
+                assert!(vm.gc.work.is_empty());
+                vm.try_load_program(&program).unwrap();
+                assert_eq!(vm.gc.work.len(), 1);
+            }
+            vm.gc.phase = Phase::Pause;
+            stats.attempts
+        };
+        let total = run(0);
+        assert!(total >= 12);
+        for nth in 1..=total {
+            run(nth);
+        }
+        let mut vm = Vm::new_bare();
+        let function = vm.try_load_program(&program).unwrap();
+        vm.gc.phase = Phase::Propagate;
+        vm.gc.work = Work::default();
+        let (result, stats) = crate::allocation_probe::probe(1, || vm.try_load_program(&program));
+        assert_eq!(stats.rejected, 1);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+        assert!(!vm.functions.marked(function.0));
+        assert!(vm.gc.work.is_empty());
+        assert_eq!(vm.try_load_program(&program).unwrap(), function);
+        assert!(vm.functions.marked(function.0));
+        vm.gc.phase = Phase::Pause;
+        eprintln!("BINDING_MARK_REJECTION_POINTS {}", total + 1);
+    }
+
+    #[test]
+    fn host_binding_and_thread_state_failures_during_marking_publish_no_roots() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        struct State {
+            roots: [Value; 2],
+            drops: Arc<AtomicUsize>,
+        }
+        impl host::HostThreadState for State {
+            fn roots(&self) -> &[Value] {
+                &self.roots
+            }
+        }
+        impl Drop for State {
+            fn drop(&mut self) {
+                self.drops.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        fn empty(_: &mut HostCall<'_>) -> Result<(), Error> {
+            Ok(())
+        }
+        let run = |nth, thread_state| {
+            let mut vm = Vm::new_bare();
+            let roots = [Value::Table(vm.new_table()), Value::Table(vm.new_table())];
+            let drops = Arc::new(AtomicUsize::new(0));
+            let state = State {
+                roots,
+                drops: drops.clone(),
+            };
+            vm.gc.phase = Phase::Propagate;
+            vm.gc.work = Work::default();
+            let (result, stats) = crate::allocation_probe::probe(nth, || {
+                if thread_state {
+                    vm.initialize_thread_state(state)
+                } else {
+                    vm.new_host_function_with_data(empty, &roots, state)
+                        .map(|_| ())
+                }
+            });
+            if nth == 0 {
+                result.unwrap();
+                assert!(!vm.gc.work.is_empty());
+                assert_eq!(drops.load(Ordering::Relaxed), 0);
+            } else {
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+                assert_eq!(stats.rejected, 1);
+                assert_eq!(drops.load(Ordering::Relaxed), 1);
+                assert!(vm.gc.work.is_empty());
+                assert!(roots.iter().all(|&v| !vm.marked_value(v)));
+                assert!(vm.threads[slot_index(vm.main.0)].host_states.is_empty());
+                assert_eq!(vm.native_closures.live_len(), 0);
+            }
+            vm.gc.phase = Phase::Pause;
+            drop(vm);
+            assert_eq!(drops.load(Ordering::Relaxed), 1);
+            stats.attempts
+        };
+        let mut total = 0;
+        for thread_state in [false, true] {
+            let points = run(0, thread_state);
+            assert!(points >= 3);
+            for nth in 1..=points {
+                run(nth, thread_state);
+            }
+            total += points;
+        }
+        eprintln!("BINDING_MARK_REJECTION_POINTS {total}");
     }
 
     #[test]
@@ -1723,11 +2113,12 @@ mod tests {
             let function = vm.execute(&crate::compile(source).unwrap()).unwrap()[0];
             let root = vm.pin(function).unwrap();
             let replacement = Value::Table(vm.new_table());
-            vm.begin_gc_cycle();
-            let mut work = vec![Trace::Value(function)];
-            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            vm.begin_gc_cycle().unwrap();
+            let mut work = Work::from([Trace::Value(function)]);
+            assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             assert!(vm.marked_value(function) && !vm.marked_value(replacement));
-            vm.gc.work.extend(work);
+            vm.gc.work.try_reserve(work.len()).unwrap();
+            vm.gc.work.extend(work.iter().copied());
             let Value::Native(id) = function else {
                 panic!("native closure")
             };
@@ -1758,10 +2149,10 @@ mod tests {
             .copied()
             .collect();
         assert_eq!(names.len(), 1);
-        vm.begin_gc_cycle();
-        let mut work = vec![Trace::Value(function)];
+        vm.begin_gc_cycle().unwrap();
+        let mut work = Work::from([Trace::Value(function)]);
         while !work.is_empty() {
-            vm.trace_some(&mut work, 1);
+            vm.trace_some(&mut work, 1).unwrap();
         }
         assert!(names.iter().all(|name| vm.strings.bytes.marked(name.0)));
         finish_marked_cycle(&mut vm);
@@ -1783,10 +2174,10 @@ mod tests {
         }
         let mut vm = Vm::new();
         let table = vm.new_table();
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         while !vm.threads.marked(vm.thread.0) {
             let mut work = std::mem::take(&mut vm.gc.work);
-            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             vm.gc.work = work;
         }
         assert!(!vm.tables.marked(table.0));
@@ -1801,7 +2192,7 @@ mod tests {
     }
 
     fn finish_marked_cycle(vm: &mut Vm) {
-        vm.finish_gc_marking();
+        vm.finish_gc_marking().unwrap();
         vm.sweep_gc_some(usize::MAX);
         vm.finish_gc_cycle();
     }
@@ -1819,7 +2210,7 @@ mod tests {
                 return;
             }
             let mut work = std::mem::take(&mut vm.gc.work);
-            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             vm.gc.work = work;
             assert_eq!(vm.gc.phase, Phase::Propagate);
         }
@@ -1845,11 +2236,11 @@ mod tests {
                 vm.raw_set(table, key, value).unwrap();
                 children.push(value);
             }
-            vm.begin_gc_cycle();
-            let mut work = vec![Trace::Value(Value::Table(table))];
+            vm.begin_gc_cycle().unwrap();
+            let mut work = Work::from([Trace::Value(Value::Table(table))]);
             let mut peak = 0;
             while !work.is_empty() {
-                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
                 peak = peak.max(work.len());
             }
             assert!(peak <= 129, "wide table frontier grew to {peak}");
@@ -1879,14 +2270,14 @@ mod tests {
                 let key = Value::Number(if hash { -f64::from(i) } else { f64::from(i) });
                 vm.raw_set(table, key, Value::Nil).unwrap();
             }
-            vm.begin_gc_cycle();
-            let mut work = vec![Trace::Value(Value::Table(table))];
+            vm.begin_gc_cycle().unwrap();
+            let mut work = Work::from([Trace::Value(Value::Table(table))]);
             for _ in 0..200 {
-                assert_eq!(vm.trace_some(&mut work, 1), 1);
+                assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
                 assert_eq!(work.len(), 1);
                 assert!(!vm.marked_value(child));
             }
-            vm.trace_graph(&mut work);
+            vm.trace_graph(&mut work).unwrap();
             assert!(vm.marked_value(child));
             finish_marked_cycle(&mut vm);
             assert!(vm.validate_value(child).is_ok());
@@ -1897,7 +2288,7 @@ mod tests {
     #[test]
     fn hash_compaction_restarts_an_active_scan_before_shifted_entries() {
         let mut vm = Vm::new();
-        let table = vm.new_record_table(128);
+        let table = vm.new_record_table(128).unwrap();
         let root = vm.pin(Value::Table(table)).unwrap();
         let mut children = Vec::new();
         for i in 1..=191 {
@@ -1910,11 +2301,12 @@ mod tests {
             vm.raw_set(table, Value::Number(-f64::from(i)), Value::Nil)
                 .unwrap();
         }
-        vm.begin_gc_cycle();
-        let mut work = vec![Trace::Value(Value::Table(table))];
-        assert_eq!(vm.trace_some(&mut work, 1), 1);
-        assert!(matches!(work.as_slice(), [Trace::TableSlice(_, 129)]));
-        vm.gc.work.extend(work);
+        vm.begin_gc_cycle().unwrap();
+        let mut work = Work::from([Trace::Value(Value::Table(table))]);
+        assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
+        assert!(matches!(&work[..], [Trace::TableSlice(_, 129)]));
+        vm.gc.work.try_reserve(work.len()).unwrap();
+        vm.gc.work.extend(work.iter().copied());
         vm.raw_set(table, Value::Number(-1000.0), Value::Boolean(true))
             .unwrap();
         assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
@@ -1944,11 +2336,12 @@ mod tests {
                 .unwrap();
             children.push(child);
         }
-        vm.begin_gc_cycle();
-        let mut work = vec![Trace::Value(Value::Table(table))];
-        assert_eq!(vm.trace_some(&mut work, 2), 2);
+        vm.begin_gc_cycle().unwrap();
+        let mut work = Work::from([Trace::Value(Value::Table(table))]);
+        assert_eq!(vm.trace_some(&mut work, 2).unwrap(), 2);
         assert!(children[64..].iter().all(|&v| !vm.marked_value(v)));
-        vm.gc.work.extend(work);
+        vm.gc.work.try_reserve(work.len()).unwrap();
+        vm.gc.work.extend(work.iter().copied());
         vm.raw_set(table, Value::Number(1.0), Value::Boolean(true))
             .unwrap();
         assert_eq!(vm.tables[slot_index(table.0)].trace, TableTrace::Restart);
@@ -1960,22 +2353,24 @@ mod tests {
     #[test]
     fn metatable_writes_keep_one_pending_table_scan() {
         let mut vm = Vm::new();
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         let table = vm.new_table();
         let root = vm.pin(Value::Table(table)).unwrap();
         // A freshly allocated table is marked but its MarkedValue is still queued.
         let before = vm.gc.work.len();
-        vm.set_metatable(Value::Table(table), Some(vm.registry));
-        vm.set_metatable(Value::Table(table), None);
+        vm.set_metatable(Value::Table(table), Some(vm.registry))
+            .unwrap();
+        vm.set_metatable(Value::Table(table), None).unwrap();
         assert_eq!(vm.gc.work.len(), before);
         finish_marked_cycle(&mut vm);
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| {
             vm.tables.marked(table.0) && vm.tables[slot_index(table.0)].trace == TableTrace::Idle
         });
         let before = vm.gc.work.len();
-        vm.set_metatable(Value::Table(table), Some(vm.registry));
-        vm.set_metatable(Value::Table(table), None);
+        vm.set_metatable(Value::Table(table), Some(vm.registry))
+            .unwrap();
+        vm.set_metatable(Value::Table(table), None).unwrap();
         assert_eq!(vm.gc.work.len(), before + 1);
         finish_marked_cycle(&mut vm);
         vm.unpin(root).unwrap();
@@ -1991,7 +2386,7 @@ mod tests {
             let weak = vm.intern(b"v");
             let strong = vm.intern(b"");
             vm.raw_set(mt, mode, weak).unwrap();
-            vm.set_metatable(Value::Table(table), Some(mt));
+            vm.set_metatable(Value::Table(table), Some(mt)).unwrap();
             let root = vm.pin(Value::Table(table)).unwrap();
             let mut children = Vec::new();
             for i in 1..=1024 {
@@ -2000,13 +2395,14 @@ mod tests {
                     .unwrap();
                 children.push(child);
             }
-            vm.begin_gc_cycle();
-            let mut work = vec![Trace::Value(Value::Table(table))];
-            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            vm.begin_gc_cycle().unwrap();
+            let mut work = Work::from([Trace::Value(Value::Table(table))]);
+            assert_eq!(vm.trace_some(&mut work, 1).unwrap(), 1);
             assert!(children.iter().all(|&v| !vm.marked_value(v)));
-            vm.gc.work.extend(work);
+            vm.gc.work.try_reserve(work.len()).unwrap();
+            vm.gc.work.extend(work.iter().copied());
             if remove {
-                vm.set_metatable(Value::Table(table), None);
+                vm.set_metatable(Value::Table(table), None).unwrap();
             } else {
                 vm.raw_set(mt, mode, strong).unwrap();
             }
@@ -2028,7 +2424,7 @@ mod tests {
                 .unwrap();
             children.push(child);
         }
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| vm.tables.marked(table.0));
         assert_eq!(
             vm.tables[slot_index(table.0)].trace,
@@ -2049,7 +2445,7 @@ mod tests {
         let values: Vec<_> = (1..=3)
             .map(|i| vm.tables[slot_index(weak.0)].get(Value::Number(f64::from(i))))
             .collect();
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| {
             vm.tables.marked(holder.0) && vm.tables.marked(weak.0)
         });
@@ -2079,7 +2475,7 @@ mod tests {
         let mt = value_table(vm.global(b"mt"));
         let va = vm.tables[slot_index(a.0)].get(Value::Number(1.0));
         let vb = vm.tables[slot_index(b.0)].get(Value::Number(1.0));
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| {
             vm.tables.marked(a.0) && vm.tables.marked(b.0) && vm.tables.marked(mt.0)
         });
@@ -2087,7 +2483,7 @@ mod tests {
         let mode = vm.intern(b"__mode");
         let strong = vm.intern(b"");
         vm.raw_set(mt, mode, strong).unwrap();
-        vm.set_metatable(Value::Table(b), None);
+        vm.set_metatable(Value::Table(b), None).unwrap();
         finish_marked_cycle(&mut vm);
         assert!(vm.validate_value(va).is_ok() && vm.validate_value(vb).is_ok());
         assert_eq!(vm.tables[slot_index(a.0)].get(Value::Number(1.0)), va);
@@ -2105,7 +2501,7 @@ mod tests {
         let values: Vec<_> = (1..=4)
             .map(|i| vm.tables[slot_index(weak.0)].get(Value::Number(f64::from(i))))
             .collect();
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| {
             vm.marked_value(f) && vm.marked_value(u) && vm.marked_value(n)
         });
@@ -2141,7 +2537,7 @@ mod tests {
         };
         let weak = value_table(vm.global(b"weak"));
         let value = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| {
             vm.upvalues
                 .key(cell)
@@ -2170,9 +2566,9 @@ mod tests {
             .execute(&crate::compile(b"return os.date").unwrap())
             .unwrap()[0];
         let metatable = vm.new_table();
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         assert!(!vm.marked_value(live));
-        vm.set_metatable(live, Some(metatable));
+        vm.set_metatable(live, Some(metatable)).unwrap();
         assert!(vm.tables.marked(metatable.0));
         assert!(vm.pin(retired).is_err());
         let root = vm.pin(live).unwrap();
@@ -2199,7 +2595,7 @@ mod tests {
             let cell = vm.functions[slot_index(get.0)].upvalues[0] as usize;
             let weak = value_table(vm.global(b"weak"));
             let child = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
-            vm.begin_gc_cycle();
+            vm.begin_gc_cycle().unwrap();
             trace_until(&mut vm, |vm| {
                 vm.upvalues
                     .key(cell)
@@ -2236,7 +2632,7 @@ mod tests {
         let holder = value_table(vm.global(b"holder"));
         let weak = value_table(vm.global(b"weak"));
         let child = vm.tables[slot_index(weak.0)].get(Value::Number(1.0));
-        vm.begin_gc_cycle();
+        vm.begin_gc_cycle().unwrap();
         trace_until(&mut vm, |vm| vm.tables.marked(holder.0));
         let key = vm.intern(b"temporary");
         vm.raw_set(holder, key, child).unwrap();
@@ -2295,8 +2691,8 @@ mod tests {
         .unwrap();
         let stale = Value::Table(vm.new_table());
         let old_string = vm.intern(b"revived-during-sweep");
-        vm.begin_gc_cycle();
-        vm.finish_gc_marking();
+        vm.begin_gc_cycle().unwrap();
+        vm.finish_gc_marking().unwrap();
         assert_eq!(vm.gc.phase, Phase::Sweep);
         assert!(vm.pin(stale).is_err());
         assert!(vm.pin(old_string).is_err());
@@ -2347,6 +2743,31 @@ mod tests {
     }
 
     #[test]
+    fn private_host_state_write_traces_white_graph_from_a_black_owner() {
+        let mut vm = Vm::new();
+        let owner = vm.new_table();
+        let root = vm.pin(Value::Table(owner)).unwrap();
+        let state = vm.new_table();
+        let leaf = vm.new_table();
+        vm.raw_table_set(state, Value::Number(1.), Value::Table(leaf))
+            .unwrap();
+        vm.begin_gc_cycle().unwrap();
+        trace_until(&mut vm, |vm| {
+            vm.tables.marked(owner.0) && vm.tables[slot_index(owner.0)].trace == TableTrace::Idle
+        });
+        assert!(!vm.marked_value(Value::Table(state)));
+        vm.set_table_host_state(owner, Some(state)).unwrap();
+        finish_marked_cycle(&mut vm);
+        assert!(vm.validate_value(Value::Table(state)).is_ok());
+        assert!(vm.validate_value(Value::Table(leaf)).is_ok());
+        vm.set_table_host_state(owner, None).unwrap();
+        vm.collect_garbage().unwrap();
+        assert!(vm.validate_value(Value::Table(state)).is_err());
+        assert!(vm.validate_value(Value::Table(leaf)).is_err());
+        vm.unpin(root).unwrap();
+    }
+
+    #[test]
     fn all_registered_builtins_can_be_pinned_across_sweeping() {
         let mut vm = Vm::new();
         let code=crate::compile(b"local out={};for _,lib in ipairs{_G,math,string,table,coroutine,debug,io,os,package}do for _,v in pairs(lib)do if type(v)=='function'then out[#out+1]=v end end end;return unpack(out)").unwrap();
@@ -2355,8 +2776,8 @@ mod tests {
             .iter()
             .map(|&value| vm.pin(value).unwrap_or_else(|e| panic!("{value:?}: {e}")))
             .collect();
-        vm.begin_gc_cycle();
-        vm.finish_gc_marking();
+        vm.begin_gc_cycle().unwrap();
+        vm.finish_gc_marking().unwrap();
         for (&value, &root) in values.iter().zip(&roots) {
             assert_eq!(vm.rooted(root).unwrap(), value);
         }

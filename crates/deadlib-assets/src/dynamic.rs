@@ -20,9 +20,6 @@ use twox_hash::XxHash64;
 
 static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-#[cfg(test)]
-#[path = "cache_filename_perf.rs"]
-mod cache_filename_perf;
 
 #[derive(Clone, Copy, Debug)]
 pub struct BannerCacheOptions {
@@ -755,9 +752,6 @@ pub fn dynamic_video_play_time(
     (anchor_media_sec.max(0.0) + elapsed * normalize_video_rate(rate)).max(0.0)
 }
 
-#[cfg(test)]
-#[path = "dynamic_perf.rs"]
-mod perf_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1109,7 +1103,3 @@ mod tests {
         assert!(!stale_path.exists());
     }
 }
-
-#[cfg(test)]
-#[path = "cache_options_performance.rs"]
-mod cache_options_performance;

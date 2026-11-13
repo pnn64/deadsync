@@ -10,7 +10,7 @@ use deadsync_theme_simply_love::views::{SelectCourseContextView, SelectCourseIni
 
 // App owns the complete screen/runtime state. As with the compositor
 // integration tests, give debug builds enough stack for construction/moves.
-fn on_app_thread(test: impl FnOnce() + Send + 'static) {
+pub(super) fn on_app_thread(test: impl FnOnce() + Send + 'static) {
     std::thread::Builder::new()
         .name("endless-transition".into())
         .stack_size(32 * 1024 * 1024)
@@ -20,14 +20,21 @@ fn on_app_thread(test: impl FnOnce() + Send + 'static) {
         .unwrap();
 }
 
-fn finish_pending_stage(app: &mut App) {
+pub(super) fn finish_pending_stage(app: &mut App) {
     if let Some(pending) = app.pending_gameplay_init.take() {
         let state = pending
             .receiver
             .recv_timeout(Duration::from_secs(30))
             .unwrap()
             .unwrap();
-        app.finish_gameplay_init(state, &pending.finish);
+        match pending.finish {
+            PendingGameplayFinish::Gameplay(finish) => {
+                app.finish_gameplay_init(state, &finish);
+            }
+            PendingGameplayFinish::Practice(finish) => {
+                app.finish_practice_init(state, finish);
+            }
+        }
     }
 }
 
@@ -56,7 +63,7 @@ fn fixture(root: &std::path::Path, name: &str, pump: bool) -> Arc<SongData> {
     Arc::new(build_song_meta(parsed, 0.0))
 }
 
-fn test_app(root: &std::path::Path) -> App {
+pub(super) fn test_app(root: &std::path::Path) -> App {
     let dirs = AppDirs {
         data_dir: root.join("data"),
         cache_dir: root.join("cache"),

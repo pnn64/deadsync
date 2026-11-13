@@ -33,9 +33,6 @@
   ],
   "expected_frame_data": "constructed source coefficients/samples with explicit signed Pt, before entropy coding, never obtained by decoding JPEG bytes",
   "expected_final_samples": "original target integers at Pt=0; explicit Annex J reference plus signed division/rescaling at Pt=1",
-  "reports": [
-    "tests/reports/hierarchical-encode-native-jpegxt.json"
-  ],
   "files": {
     "native-dct-p12-magnitude-boundaries.frame-0.coef": "613bcb336d1b163f436a27ef9af59102153d12f01b2e13cdde7eafcc78dba78f",
     "native-dct-p12-magnitude-boundaries.frame-1.coef": "1a14cd39562a2d6d056eb0216c77d5477bea5017d5f721ea21927117282a30c8",

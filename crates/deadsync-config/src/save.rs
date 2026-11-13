@@ -22,9 +22,9 @@ use crate::options::{
     push_runtime_navigation_option_lines, push_runtime_song_deletion_option_line,
     push_runtime_worker_theme_option_lines, push_select_music_option_lines,
     push_stats_overlay_option_lines, push_system_banner_cache_option_lines,
-    push_system_bg_brightness_option_lines, push_system_cdtitle_center_option_lines,
-    push_system_course_option_lines, push_system_diagnostics_option_lines,
-    push_system_download_option_lines, push_system_input_hardware_option_lines,
+    push_system_cdtitle_center_option_lines, push_system_course_option_lines,
+    push_system_diagnostics_option_lines, push_system_download_option_lines,
+    push_system_gameplay_option_lines, push_system_input_hardware_option_lines,
     push_system_mine_hit_sound_option_lines, push_system_online_option_lines,
     push_system_translation_option_lines,
 };
@@ -133,7 +133,7 @@ where
     push_audio_device_option_lines(content, options.audio_device);
     push_additional_song_folder_option_lines(content, options.additional_song_folders);
     push_system_download_option_lines(content, options.system);
-    push_system_bg_brightness_option_lines(content, options.system);
+    push_system_gameplay_option_lines(content, options.system);
     push_gameplay_bg_color_option_line(content, options.gameplay_bg_color);
     push_system_banner_cache_option_lines(content, options.system);
     push_runtime_cache_option_lines(content, options.runtime);
@@ -183,7 +183,7 @@ where
     push_audio_device_option_lines(content, options.audio_device);
     push_additional_song_folder_option_lines(content, options.additional_song_folders);
     push_system_download_option_lines(content, options.system);
-    push_system_bg_brightness_option_lines(content, options.system);
+    push_system_gameplay_option_lines(content, options.system);
     push_gameplay_bg_color_option_line(content, options.gameplay_bg_color);
     push_system_banner_cache_option_lines(content, options.system);
     push_runtime_cache_option_lines(content, options.runtime);
@@ -473,6 +473,7 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         frame_stats_overlay_style: cfg.frame_stats_overlay_style,
         translated_titles: cfg.translated_titles,
         bg_brightness: cfg.bg_brightness,
+        song_lua_mode: cfg.song_lua_mode,
         center_1player_notefield: cfg.center_1player_notefield,
         center_image_translate_x: cfg.center_image_translate_x,
         center_image_translate_y: cfg.center_image_translate_y,
@@ -794,6 +795,40 @@ mod tests {
         assert!(loaded.smx_underglow_grb);
         assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");
         assert_eq!(loaded.smx_judge_gifs_pack.as_str(), "none");
+    }
+
+    #[test]
+    fn song_lua_mode_defaults_and_round_trips_through_app_config() {
+        use crate::options::SongLuaMode;
+
+        assert_eq!(Config::default().song_lua_mode, SongLuaMode::Baked);
+        assert!(build_default_app_config_file().contains("SongLuaMode=Baked\n"));
+        for (value, expected) in [
+            ("", SongLuaMode::Baked),
+            ("SongLuaMode=invalid", SongLuaMode::Baked),
+            ("SongLuaMode=Baked", SongLuaMode::Baked),
+            ("SongLuaMode=Runtime", SongLuaMode::Runtime),
+            ("SongLuaMode= runtime ", SongLuaMode::Runtime),
+        ] {
+            let mut ini = SimpleIni::new();
+            ini.load_str(&format!("[Options]\n{value}\n"));
+            let mut cfg = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(cfg.song_lua_mode, expected, "{value}");
+            assert!(!crate::app_update::set_song_lua_mode(&mut cfg, expected));
+            let other = match expected {
+                SongLuaMode::Baked => SongLuaMode::Runtime,
+                SongLuaMode::Runtime => SongLuaMode::Baked,
+            };
+            assert!(crate::app_update::set_song_lua_mode(&mut cfg, other));
+            let content =
+                build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+            assert!(content.contains(&format!("SongLuaMode={}\n", other.as_str())));
+            ini.load_str(&content);
+            assert_eq!(
+                crate::load::load_app_config(&ini, Config::default()).song_lua_mode,
+                other
+            );
+        }
     }
 
     #[test]

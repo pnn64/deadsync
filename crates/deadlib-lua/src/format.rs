@@ -1,5 +1,9 @@
 //! Pure Rust formatting for Lua 5.1's supported C-style conversion specifiers.
-use crate::{Error, ErrorKind};
+use crate::{
+    Error,
+    memory::{Buffer, Memory},
+};
+use std::fmt::Write as _;
 
 #[derive(Default, Debug)]
 pub(crate) struct Spec {
@@ -71,28 +75,35 @@ impl Spec {
         }
         Ok(s)
     }
-    fn literal(&self, integer: bool) -> Vec<u8> {
+    fn literal(&self, integer: bool, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         let bytes = &self.literal[..usize::from(self.literal_len)];
         if integer {
-            let mut value = Vec::with_capacity(bytes.len() + 1);
+            let mut value = buffer(memory, bytes.len() + 1)?;
             value.extend_from_slice(&bytes[..bytes.len() - 1]);
             value.push(b'l');
             value.push(self.conversion);
-            value
+            Ok(value)
         } else {
-            bytes.to_vec()
+            copy(memory, bytes)
         }
     }
-    fn pad(&self, mut bytes: Vec<u8>, prefix: usize, zero: bool) -> Vec<u8> {
+    fn pad(
+        &self,
+        mut bytes: Buffer<u8>,
+        prefix: usize,
+        zero: bool,
+        memory: &mut Scratch,
+    ) -> Result<Buffer<u8>, Error> {
         let extra = self.width.saturating_sub(bytes.len());
         if extra == 0 {
-            return bytes;
+            return Ok(bytes);
         }
         if self.left {
+            memory.reserve(&mut bytes, extra)?;
             bytes.resize(bytes.len() + extra, b' ');
-            return bytes;
+            return Ok(bytes);
         }
-        let mut out = Vec::with_capacity(bytes.len() + extra);
+        let mut out = buffer(memory, bytes.len() + extra)?;
         if zero {
             out.extend_from_slice(&bytes[..prefix]);
             out.resize(prefix + extra, b'0');
@@ -101,33 +112,57 @@ impl Spec {
             out.resize(extra, b' ');
             out.extend_from_slice(&bytes);
         }
-        out
+        Ok(out)
     }
-    pub fn string(&self, bytes: &[u8]) -> Vec<u8> {
+    /// The bytes Lua 5.1's unmodified `%s` would copy, without a temporary buffer.
+    /// Short inputs use C-string termination; inputs of 100 bytes or more are
+    /// copied in full when no precision is specified, including embedded NULs.
+    pub fn plain_string_bytes<'a>(&self, bytes: &'a [u8]) -> Option<&'a [u8]> {
+        if self.conversion != b's'
+            || self.width != 0
+            || self.precision.is_some()
+            || self.left
+            || self.plus
+            || self.space
+            || self.alternate
+            || self.zero
+            || self.literal_len != 0
+        {
+            return None;
+        }
+        if bytes.len() >= 100 {
+            return Some(bytes);
+        }
+        let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+        Some(&bytes[..len])
+    }
+    pub fn string(&self, bytes: &[u8], memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.precision.is_none() && bytes.len() >= 100 {
-            return bytes.to_vec();
+            return copy(memory, bytes);
         }
         if self.literal_len != 0 {
-            return self.literal(false);
+            return self.literal(false, memory);
         }
         let len = bytes
             .iter()
             .position(|&b| b == 0)
             .unwrap_or(bytes.len())
             .min(self.precision.unwrap_or(usize::MAX));
-        self.pad(bytes[..len].to_vec(), 0, false)
+        self.pad(copy(memory, &bytes[..len])?, 0, false, memory)
     }
-    pub fn character(&self, n: f64) -> Vec<u8> {
+    pub fn character(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.literal_len != 0 {
-            return self.literal(false);
+            return self.literal(false, memory);
         }
-        let bytes = self.pad(vec![cast_i32(n) as u8], 0, false);
+        let bytes = self.pad(copy(memory, &[cast_i32(n) as u8])?, 0, false, memory)?;
         let len = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
-        bytes[..len].to_vec()
+        let mut bytes = bytes;
+        bytes.truncate(len);
+        Ok(bytes)
     }
-    pub fn integer(&self, n: f64) -> Vec<u8> {
+    pub fn integer(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.literal_len != 0 {
-            return self.literal(true);
+            return self.literal(true, memory);
         }
         // Stock 5.1 uses C long here, including 32-bit long on i686.
         let signed = matches!(self.conversion, b'd' | b'i');
@@ -149,17 +184,16 @@ impl Spec {
             (value, false)
         };
         let mut digits = match self.conversion {
-            b'o' => format!("{magnitude:o}"),
-            b'x' => format!("{magnitude:x}"),
-            b'X' => format!("{magnitude:X}"),
-            _ => magnitude.to_string(),
-        }
-        .into_bytes();
+            b'o' => Text::format(format_args!("{magnitude:o}")),
+            b'x' => Text::format(format_args!("{magnitude:x}")),
+            b'X' => Text::format(format_args!("{magnitude:X}")),
+            _ => Text::format(format_args!("{magnitude}")),
+        };
         if magnitude == 0 && self.precision == Some(0) {
             digits.clear();
         }
         let leading = self.precision.unwrap_or(0).saturating_sub(digits.len());
-        let mut bytes = Vec::with_capacity(leading + digits.len() + 3);
+        let mut bytes = buffer(memory, leading + digits.len() + 3)?;
         if negative {
             bytes.push(b'-');
         } else if signed && self.plus {
@@ -175,29 +209,29 @@ impl Spec {
                     b"0X"
                 });
             }
-            if self.conversion == b'o' && leading == 0 && digits.first() != Some(&b'0') {
+            if self.conversion == b'o' && leading == 0 && digits.as_bytes().first() != Some(&b'0') {
                 bytes.push(b'0');
             }
         }
         let prefix = bytes.len();
         bytes.resize(prefix + leading, b'0');
-        bytes.extend_from_slice(&digits);
-        self.pad(bytes, prefix, self.zero && self.precision.is_none())
+        bytes.extend_from_slice(digits.as_bytes());
+        self.pad(bytes, prefix, self.zero && self.precision.is_none(), memory)
     }
-    pub fn float(&self, n: f64) -> Vec<u8> {
+    pub fn float(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
         if self.literal_len != 0 {
-            return self.literal(false);
+            return self.literal(false, memory);
         }
         let negative = n.is_sign_negative();
         let value = n.abs();
         let precision = self.precision.unwrap_or(6);
         let upper = matches!(self.conversion, b'E' | b'G');
         let mut body = if value.is_nan() {
-            nan_body(n).to_string()
+            Text::copy(nan_body(n))
         } else if value.is_infinite() {
-            "inf".to_string()
+            Text::copy("inf")
         } else if self.conversion == b'f' {
-            let mut text = format!("{value:.precision$}");
+            let mut text = Text::format(format_args!("{value:.precision$}"));
             if precision == 0 && self.alternate {
                 text.push('.');
             }
@@ -209,38 +243,34 @@ impl Spec {
             } else {
                 precision + 1
             };
-            let scientific = format!("{value:.p$e}", p = digits - 1);
+            let scientific = Text::format(format_args!("{value:.p$e}", p = digits - 1));
             let (mantissa, exponent) = scientific
                 .split_once('e')
                 .expect("scientific format includes exponent");
             let exponent: i32 = exponent.parse().expect("formatted exponent is an integer");
             if !general || exponent < -4 || exponent >= digits as i32 {
                 let mut mantissa = if general && !self.alternate {
-                    mantissa
-                        .trim_end_matches('0')
-                        .trim_end_matches('.')
-                        .to_string()
+                    Text::copy(mantissa.trim_end_matches('0').trim_end_matches('.'))
                 } else {
-                    mantissa.to_string()
+                    Text::copy(mantissa)
                 };
                 if self.alternate && !mantissa.contains('.') {
                     mantissa.push('.');
                 }
-                format!(
+                Text::format(format_args!(
                     "{mantissa}e{}{e:02}",
                     if exponent < 0 { '-' } else { '+' },
                     e = exponent.unsigned_abs()
-                )
+                ))
             } else {
                 let p = (digits as i32 - 1 - exponent).max(0) as usize;
-                let fixed = format!("{value:.p$}");
+                let fixed = Text::format(format_args!("{value:.p$}"));
                 if !self.alternate && fixed.contains('.') {
-                    fixed
-                        .trim_end_matches('0')
-                        .trim_end_matches('.')
-                        .to_string()
+                    Text::copy(fixed.trim_end_matches('0').trim_end_matches('.'))
                 } else if self.alternate && !fixed.contains('.') {
-                    fixed + "."
+                    let mut fixed = fixed;
+                    fixed.push('.');
+                    fixed
                 } else {
                     fixed
                 }
@@ -249,7 +279,7 @@ impl Spec {
         if upper {
             body.make_ascii_uppercase();
         }
-        let mut bytes = Vec::with_capacity(body.len() + 1);
+        let mut bytes = buffer(memory, body.len() + 1)?;
         if negative {
             bytes.push(b'-');
         } else if self.plus {
@@ -259,8 +289,11 @@ impl Spec {
         }
         let prefix = bytes.len();
         bytes.extend_from_slice(body.as_bytes());
-        crate::locale::localize(&mut bytes);
-        self.pad(bytes, prefix, self.zero && value.is_finite())
+        let capacity = bytes.capacity();
+        let result = crate::locale::try_localize_owned(&mut bytes);
+        memory.allocated = memory.allocated.saturating_add(bytes.capacity() - capacity);
+        result?;
+        self.pad(bytes, prefix, self.zero && value.is_finite(), memory)
     }
 }
 pub(crate) fn nan_body(n: f64) -> &'static str {
@@ -286,11 +319,20 @@ fn cast_i64(n: f64) -> i64 {
         n as i64
     }
 }
-fn fail(message: &str) -> Error {
-    Error::new(ErrorKind::Runtime, 0, message)
+fn fail(message: &'static str) -> Error {
+    Error::runtime_static(message)
 }
 
-pub(crate) fn quote(bytes: &[u8], out: &mut Vec<u8>) {
+pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) -> Result<(), Error> {
+    let size = bytes.iter().try_fold(2usize, |size, byte| {
+        size.checked_add(match byte {
+            0 => 4,
+            b'"' | b'\\' | b'\n' | b'\r' => 2,
+            _ => 1,
+        })
+        .ok_or_else(Error::memory)
+    })?;
+    memory.reserve(out, size)?;
     out.push(b'"');
     for &c in bytes {
         match c {
@@ -304,4 +346,92 @@ pub(crate) fn quote(bytes: &[u8], out: &mut Vec<u8>) {
         }
     }
     out.push(b'"');
+    Ok(())
+}
+
+pub(crate) fn buffer(memory: &mut Scratch, capacity: usize) -> Result<Buffer<u8>, Error> {
+    let mut bytes = Buffer::new_in(memory.memory.clone());
+    bytes.try_reserve_exact(capacity)?;
+    memory.allocated = memory.allocated.saturating_add(bytes.capacity());
+    Ok(bytes)
+}
+fn copy(memory: &mut Scratch, source: &[u8]) -> Result<Buffer<u8>, Error> {
+    let mut bytes = buffer(memory, source.len())?;
+    bytes.extend_from_slice(source);
+    Ok(bytes)
+}
+
+// Two ASCII precision digits bound every numeric conversion to at most 410
+// bytes (309 integer digits, decimal point and 99 fractional digits, plus sign).
+// The non-ASCII locale-digit path is emitted literally before formatting.
+struct Text {
+    bytes: [u8; 512],
+    len: usize,
+}
+impl Text {
+    fn copy(text: &str) -> Self {
+        let mut value = Self {
+            bytes: [0; 512],
+            len: 0,
+        };
+        value.write_str(text).expect("bounded numeric text");
+        value
+    }
+    fn format(args: std::fmt::Arguments<'_>) -> Self {
+        let mut value = Self::copy("");
+        value.write_fmt(args).expect("bounded numeric format");
+        value
+    }
+    fn clear(&mut self) {
+        self.len = 0;
+    }
+    fn push(&mut self, byte: char) {
+        self.write_char(byte).expect("bounded numeric suffix");
+    }
+    fn make_ascii_uppercase(&mut self) {
+        self.bytes[..self.len].make_ascii_uppercase();
+    }
+}
+impl std::fmt::Write for Text {
+    fn write_str(&mut self, text: &str) -> std::fmt::Result {
+        let end = self.len.checked_add(text.len()).ok_or(std::fmt::Error)?;
+        let target = self.bytes.get_mut(self.len..end).ok_or(std::fmt::Error)?;
+        target.copy_from_slice(text.as_bytes());
+        self.len = end;
+        Ok(())
+    }
+}
+impl std::ops::Deref for Text {
+    type Target = str;
+    fn deref(&self) -> &str {
+        std::str::from_utf8(&self.bytes[..self.len]).expect("formatted UTF-8")
+    }
+}
+impl std::fmt::Display for Text {
+    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        output.write_str(self)
+    }
+}
+
+pub(crate) struct Scratch {
+    memory: Memory,
+    pub(crate) allocated: usize,
+}
+impl Scratch {
+    pub(crate) fn new(memory: Memory) -> Self {
+        Self {
+            memory,
+            allocated: 0,
+        }
+    }
+    pub(crate) fn reserve(
+        &mut self,
+        bytes: &mut Buffer<u8>,
+        additional: usize,
+    ) -> Result<(), Error> {
+        let capacity = bytes.capacity();
+        let result = bytes.try_reserve(additional);
+        self.allocated = self.allocated.saturating_add(bytes.capacity() - capacity);
+        result
+    }
 }

@@ -1,17 +1,12 @@
 use deadlib_lua::{Value, Vm, compile_named};
-use lua_reference::Lua;
 
-struct Oracle {
+struct Harness {
     vm: Vm,
-    lua: Lua,
 }
-impl Oracle {
+impl Harness {
     fn new() -> Self {
         // SAFETY: fixed developer inputs use only standard runtime operations.
-        Self {
-            vm: Vm::new(),
-            lua: unsafe { Lua::unsafe_new() },
-        }
+        Self { vm: Vm::new() }
     }
     fn check(&mut self, body: &str) {
         let source = format!("return pcall(function() {body} end)");
@@ -23,20 +18,7 @@ impl Oracle {
             }
             value => panic!("expected a string failure for {body}: {value:?}"),
         };
-        let (ok, expected): (bool, lua_reference::LuaString) = self
-            .lua
-            .load(source.as_bytes())
-            .set_name("=runtime-errors")
-            .eval()
-            .unwrap();
-        assert!(!ok, "reference succeeded: {body}");
-        assert_eq!(
-            error,
-            expected.as_bytes().as_ref(),
-            "{body}\nRust: {}\nC: {}",
-            String::from_utf8_lossy(&error),
-            String::from_utf8_lossy(expected.as_bytes().as_ref())
-        );
+        reference_test::assert_debug("tests/runtime_errors.rs::check::expected", &error);
     }
     fn cases(&mut self, bodies: &[&str]) {
         for body in bodies {
@@ -47,7 +29,7 @@ impl Oracle {
 
 #[test]
 fn destination_reuse_preserves_error_names_and_operand_types() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local a=1;local function f()return false end;a=-f()",
         "local a=1;local function f()return false end;a=(f()+1)+2",
         "local t={a=false};return t.a+1",
@@ -63,7 +45,7 @@ fn destination_reuse_preserves_error_names_and_operand_types() {
 
 #[test]
 fn call_target_and_constructor_reuse_preserve_chained_failure_context() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local function f()return false end;return f()()",
         "local obj={};function obj:m()return false end;return obj:m():m()",
         "local obj={};function obj:m()return 42 end;return obj:m()(false)",
@@ -75,7 +57,7 @@ fn call_target_and_constructor_reuse_preserve_chained_failure_context() {
 
 #[test]
 fn call_failures_identify_globals_locals_fields_methods_and_upvalues() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "a=1; bbbb=2; a=math.sin(3)+bbbb(3)",
         "a=1; local a,bbbb=2,3; a=math.sin(1) and bbbb(3)",
         "a={}; do local a=1 end a:bbbb(3)",
@@ -93,7 +75,7 @@ fn call_failures_identify_globals_locals_fields_methods_and_upvalues() {
 
 #[test]
 fn indexing_failures_keep_original_operands_and_discard_redirected_names() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "aaa=nil;return aaa.bbb:ddd(9)",
         "local aaa={bbb=1}; return aaa.bbb:ddd(9)",
         "local aaa={bbb={}};return aaa.bbb:ddd(9)",
@@ -116,7 +98,7 @@ fn indexing_failures_keep_original_operands_and_discard_redirected_names() {
 
 #[test]
 fn arithmetic_length_and_concatenation_select_the_failing_operand() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local a,b,c;(function() a=b+1 end)()",
         "b=1;local aaa='a';return aaa+b",
         "aaa={};return 3/aaa",
@@ -142,7 +124,7 @@ fn arithmetic_length_and_concatenation_select_the_failing_operand() {
 
 #[test]
 fn generated_operand_types_and_origin_combinations_match_reference() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for value in [
         "nil",
         "false",
@@ -191,7 +173,7 @@ fn generated_operand_types_and_origin_combinations_match_reference() {
 
 #[test]
 fn comparisons_keep_the_reference_type_pair_wording() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for left in [
         "nil",
         "false",
@@ -222,7 +204,7 @@ fn comparisons_keep_the_reference_type_pair_wording() {
 
 #[test]
 fn short_circuit_results_and_temporary_calls_keep_reference_provenance() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for value in ["nil", "false", "{}", "'wrong'"] {
         for expression in [
             "target or target",
@@ -258,7 +240,7 @@ fn short_circuit_results_and_temporary_calls_keep_reference_provenance() {
 
 #[test]
 fn nested_callbacks_loops_tail_calls_and_scopes_preserve_error_frames() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local missing;local t=setmetatable({},{__index=function()return missing.x end});return t.x",
         "local missing;local t=setmetatable({},{__newindex=function()return missing.x end});t.x=1",
         "local target=false;local function f() return target+1 end;local function g()return f() end;return g()",
@@ -272,7 +254,7 @@ fn nested_callbacks_loops_tail_calls_and_scopes_preserve_error_frames() {
 
 #[test]
 fn generated_logical_trees_preserve_symbolic_names_across_distinct_operands() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for (a, b, c) in [
         ("nil", "false", "{}"),
         ("false", "{}", "nil"),
@@ -312,7 +294,7 @@ fn generated_logical_trees_preserve_symbolic_names_across_distinct_operands() {
 
 #[test]
 fn protected_handlers_coroutines_and_nonfunction_metamethods_keep_messages() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         "local ok,e=xpcall(function()local target=false;return target+1 end,function(e)collectgarbage();return e end);error(e,0)",
         "local co=coroutine.create(function()local target=false;return target+1 end);local ok,e=coroutine.resume(co);error(e,0)",
         "return coroutine.wrap(function()local target=false;return target+1 end)()",
@@ -340,3 +322,7 @@ fn host_runtime_diagnostics_keep_raw_names_with_readable_display() {
     assert!(error.message().contains('\u{fffd}'));
     assert_eq!(error.line(), 1);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

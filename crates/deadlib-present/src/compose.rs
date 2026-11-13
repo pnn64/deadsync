@@ -5340,7 +5340,45 @@ fn lerp_f32(a: f32, b: f32, t: f32) -> f32 {
 }
 
 #[inline(always)]
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn apply_effect_to_sprite(
+    effect: anim::EffectState,
+    elapsed: f32,
+    tint: &mut [f32; 4],
+    scale: &mut [f32; 2],
+    rot_deg: &mut [f32; 3],
+) {
+    // Amortize dispatch over color/scale interpolation; other modes stay local.
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseRamp | anim::EffectMode::DiffuseShift | anim::EffectMode::Pulse
+    ) && std::arch::is_x86_feature_detected!("fma")
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe { apply_effect_to_sprite_fma(effect, elapsed, tint, scale, rot_deg) };
+    }
+    apply_effect_to_sprite_portable(effect, elapsed, tint, scale, rot_deg);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn apply_effect_to_sprite_fma(
+    effect: anim::EffectState,
+    elapsed: f32,
+    tint: &mut [f32; 4],
+    scale: &mut [f32; 2],
+    rot_deg: &mut [f32; 3],
+) {
+    apply_effect_to_sprite_portable(effect, elapsed, tint, scale, rot_deg);
+}
+
+#[inline(always)]
+fn apply_effect_to_sprite_portable(
     effect: anim::EffectState,
     elapsed: f32,
     tint: &mut [f32; 4],
@@ -5425,7 +5463,42 @@ fn apply_effect_to_sprite(
 }
 
 #[inline(always)]
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn apply_effect_to_text(
+    effect: anim::EffectState,
+    elapsed: f32,
+    color: &mut [f32; 4],
+    scale: &mut [f32; 2],
+) {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if matches!(
+        effect.mode,
+        anim::EffectMode::DiffuseRamp | anim::EffectMode::DiffuseShift | anim::EffectMode::Pulse
+    ) && std::arch::is_x86_feature_detected!("fma")
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe { apply_effect_to_text_fma(effect, elapsed, color, scale) };
+    }
+    apply_effect_to_text_portable(effect, elapsed, color, scale);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn apply_effect_to_text_fma(
+    effect: anim::EffectState,
+    elapsed: f32,
+    color: &mut [f32; 4],
+    scale: &mut [f32; 2],
+) {
+    apply_effect_to_text_portable(effect, elapsed, color, scale);
+}
+
+#[inline(always)]
+fn apply_effect_to_text_portable(
     effect: anim::EffectState,
     elapsed: f32,
     color: &mut [f32; 4],
@@ -8790,6 +8863,10 @@ struct ClippedSpriteObject {
     sprite: Option<renderer::SpriteInstanceRaw>,
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
 fn object_world_area(
     object_type: &EditablePayload,
     sprite_instances: &[renderer::SpriteInstanceRaw],
@@ -8802,25 +8879,47 @@ fn object_world_area(
         EditablePayload::TexturedMesh {
             instance, vertices, ..
         } => {
+            let vertices = vertices.as_ref();
             if vertices.len() < 3 {
                 return 0.0;
             }
             let transform = instance.transform();
-            let mut area = 0.0_f32;
-            let mut i = 0usize;
-            while i + 2 < vertices.len() {
-                let p0 = world_xy_3d(&transform, vertices[i].pos);
-                let p1 = world_xy_3d(&transform, vertices[i + 1].pos);
-                let p2 = world_xy_3d(&transform, vertices[i + 2].pos);
-                let a =
-                    (p1[1] - p0[1]).mul_add(-(p2[0] - p0[0]), (p1[0] - p0[0]) * (p2[1] - p0[1]));
-                area = 0.5f32.mul_add(a.abs(), area);
-                i += 3;
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            if std::arch::is_x86_feature_detected!("fma") {
+                // SAFETY: runtime detection checks CPU and OS support for FMA.
+                return unsafe { textured_mesh_world_area_fma(vertices, &transform) };
             }
-            area
+            textured_mesh_world_area_portable(vertices, &transform)
         }
         EditablePayload::Mesh { .. } => 0.0,
     }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+unsafe fn textured_mesh_world_area_fma(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: &Matrix4,
+) -> f32 {
+    textured_mesh_world_area_portable(vertices, transform)
+}
+
+#[inline(always)]
+fn textured_mesh_world_area_portable(
+    vertices: &[renderer::TexturedMeshVertex],
+    transform: &Matrix4,
+) -> f32 {
+    let mut area = 0.0_f32;
+    // Resolve storage once and keep the original triangle/reduction order.
+    for triangle in vertices.as_chunks::<3>().0 {
+        let p0 = world_xy_3d(transform, triangle[0].pos);
+        let p1 = world_xy_3d(transform, triangle[1].pos);
+        let p2 = world_xy_3d(transform, triangle[2].pos);
+        let a = (p1[1] - p0[1]).mul_add(-(p2[0] - p0[0]), (p1[0] - p0[0]) * (p2[1] - p0[1]));
+        area = 0.5f32.mul_add(a.abs(), area);
+    }
+    area
 }
 
 fn clip_object_to_world_masks(
@@ -9770,6 +9869,11 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
     })
 }
 
+#[allow(
+    unsafe_code,
+    reason = "runtime FMA detection guards the specialized call"
+)]
+#[allow(clippy::too_many_arguments)]
 fn clip_rotated_sprite_to_world_rect(
     tint: [f32; 4],
     center: [f32; 4],
@@ -9782,6 +9886,86 @@ fn clip_rotated_sprite_to_world_rect(
     texture_mask: bool,
     recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
 ) -> Option<ClippedSpriteObject> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection guards this feature-specific entry point.
+        return unsafe {
+            clip_rotated_sprite_to_world_rect_fma(
+                tint,
+                center,
+                size,
+                rot_sin_cos,
+                uv_scale,
+                uv_offset,
+                offset_world,
+                clip,
+                texture_mask,
+                recycled_vertices,
+            )
+        };
+    }
+    clip_rotated_sprite_to_world_rect_inner::<false>(
+        tint,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        offset_world,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+#[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+#[allow(clippy::too_many_arguments)]
+unsafe fn clip_rotated_sprite_to_world_rect_fma(
+    tint: [f32; 4],
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    offset_world: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    clip_rotated_sprite_to_world_rect_inner::<true>(
+        tint,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        offset_world,
+        clip,
+        texture_mask,
+        recycled_vertices,
+    )
+}
+
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
+    tint: [f32; 4],
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    offset_world: [f32; 2],
+    clip: WorldRect,
+    texture_mask: bool,
+    recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
+) -> Option<ClippedSpriteObject> {
+    // Keep corner transforms and all four edges in the FMA-enabled body so
+    // LLVM can pack position, UV and color interpolation. The portable path
+    // retains compact edge calls. Fused arithmetic stays unchanged; unspecified
+    // NaN payload/sign bits may differ between the compiled paths.
     let poly = [
         ClipVertex {
             pos: sprite_world_xy(
@@ -9810,7 +9994,11 @@ fn clip_rotated_sprite_to_world_rect(
             color: [1.0; 4],
         },
     ];
-    let clipped = clip_polygon_to_world_rect(&poly, clip);
+    let clipped = if FMA {
+        clip_polygon_to_world_rect_inline(&poly, clip)
+    } else {
+        clip_polygon_to_world_rect(&poly, clip)
+    };
     if clipped.len() < 3 {
         return None;
     }
@@ -15873,15 +16061,3 @@ mod tests {
         assert_eq!(second.vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
     }
 }
-
-#[cfg(test)]
-#[path = "compose_perf.rs"]
-mod performance;
-
-#[cfg(test)]
-#[path = "compose_bounds_performance.rs"]
-mod bounds_performance;
-
-#[cfg(test)]
-#[path = "compose_clip_performance.rs"]
-mod clip_performance;

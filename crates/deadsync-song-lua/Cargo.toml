@@ -6,9 +6,8 @@ license = "GPL-3.0"
 
 [features]
 test-support = []
-performance = []
-
 [dependencies]
+deadlib-lua = { path = "../deadlib-lua", default-features = false }
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadsync-chart = { path = "../deadsync-chart" }
@@ -27,7 +26,6 @@ image = "0.25.10"
 itoa = "1.0.18"
 log = "0.4.34"
 memchr = "2.8.3"
-mlua = { workspace = true, features = ["lua51", "vendored", "send"] }
 rustc-hash = "2.1.3"
 serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 smallvec = "1.16.4"
@@ -48,3 +46,378 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 winit = "0.30.13"
+
+[[test]]
+name = "performance"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_gameplay"
+required-features = ["test-support"]
+
+[[test]]
+name = "arrows"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_visuals"
+required-features = ["test-support"]
+
+[[test]]
+name = "clock"
+
+[[test]]
+name = "random"
+
+[[test]]
+name = "loader"
+required-features = ["test-support"]
+
+[[test]]
+name = "definitions"
+required-features = ["test-support"]
+
+[[test]]
+name = "actors"
+required-features = ["test-support"]
+
+[[test]]
+name = "messages"
+required-features = ["test-support"]
+
+[[test]]
+name = "render"
+required-features = ["test-support"]
+
+[[test]]
+name = "effects"
+required-features = ["test-support"]
+
+[[test]]
+name = "wrappers"
+required-features = ["test-support"]
+
+[[test]]
+name = "sound"
+required-features = ["test-support"]
+
+[[test]]
+name = "sprites"
+required-features = ["test-support"]
+
+[[test]]
+name = "meshes"
+required-features = ["test-support"]
+
+[[test]]
+name = "proxies"
+required-features = ["test-support"]
+
+[[test]]
+name = "framebuffers"
+required-features = ["test-support"]
+
+[[test]]
+name = "draw"
+required-features = ["test-support"]
+
+[[test]]
+name = "bitmap_text"
+required-features = ["test-support"]
+
+[[test]]
+name = "text_displays"
+required-features = ["test-support"]
+
+[[test]]
+name = "banners"
+required-features = ["test-support"]
+
+[[test]]
+name = "graphs"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_meters"
+required-features = ["test-support"]
+
+[[test]]
+name = "courses"
+required-features = ["test-support"]
+
+[[test]]
+name = "models"
+required-features = ["test-support"]
+
+[[test]]
+name = "preferences_display"
+required-features = ["test-support"]
+
+[[test]]
+name = "theme"
+required-features = ["test-support"]
+
+[[test]]
+name = "sl"
+required-features = ["test-support"]
+
+[[test]]
+name = "catalog"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_options"
+required-features = ["test-support"]
+
+[[test]]
+name = "utility_managers"
+required-features = ["test-support"]
+
+[[test]]
+name = "player_options"
+required-features = ["test-support"]
+
+[[test]]
+name = "player_state"
+required-features = ["test-support"]
+
+[[test]]
+name = "game_state"
+required-features = ["test-support"]
+
+[[test]]
+name = "noteskin"
+required-features = ["test-support"]
+
+[[test]]
+name = "profiles"
+required-features = ["test-support"]
+
+[[test]]
+name = "statistics"
+required-features = ["test-support"]
+
+[[test]]
+name = "screen_ui"
+required-features = ["test-support"]
+
+[[test]]
+name = "input"
+required-features = ["test-support"]
+
+[[test]]
+name = "baked_program"
+required-features = []
+
+[[test]]
+name = "baked_program_tables"
+required-features = []
+
+[[test]]
+name = "screen_manager"
+required-features = ["test-support"]
+
+[[test]]
+name = "generated_players"
+required-features = ["test-support"]
+
+[[test]]
+name = "notefields"
+required-features = ["test-support"]
+
+[[test]]
+name = "player_parts"
+required-features = ["test-support"]
+
+[[test]]
+name = "screen_parts"
+required-features = ["test-support"]
+
+[[test]]
+name = "steps_displays"
+required-features = ["test-support"]
+
+[[test]]
+name = "transitions"
+required-features = ["test-support"]
+
+[[test]]
+name = "preparation"
+required-features = ["test-support"]
+
+[[test]]
+name = "top_screen"
+required-features = ["test-support"]
+
+[[test]]
+name = "files"
+required-features = ["test-support"]
+
+[[test]]
+name = "screen_assembly"
+required-features = ["test-support"]
+
+[[test]]
+name = "gameplay_theme"
+required-features = ["test-support"]
+
+[[test]]
+name = "gameplay_underlay"
+required-features = ["test-support"]
+
+[[test]]
+name = "gameplay_overlay"
+required-features = ["test-support"]
+
+[[test]]
+name = "gameplay_reload"
+path = "tests/gameplay_reload.rs"
+required-features = ["test-support"]
+
+[[test]]
+name = "scene_retirement"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_layers"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_activation"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_column_output"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_update_output"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_frame_capture"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_updates"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_multitap"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_compiler"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_diagnostics"
+required-features = ["test-support"]
+
+[[test]]
+name = "song_observations"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_frames"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_actors"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_layers"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_scene"
+required-features = ["test-support"]
+
+[[test]]
+name = "live_compiler"
+required-features = ["test-support"]
+
+[[test]]
+name = "actor_setters"
+required-features = ["test-support"]
+
+[[test]]
+name = "actor_inputs"
+required-features = ["test-support"]
+
+[[test]]
+name = "actor_input_contract"
+required-features = ["test-support"]
+
+[[test]]
+name = "compiled_input"
+required-features = []
+
+[[test]]
+name = "actor_methods"
+required-features = ["test-support"]
+
+[[test]]
+name = "actor_method_name"
+required-features = ["test-support"]
+
+[[test]]
+name = "compat_globals"
+required-features = ["test-support"]
+
+[[test]]
+name = "actor_copy"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_host"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_input"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_live"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_option_bindings"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_tables"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_environment"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_text_publication"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_multitap"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_vector_readers"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_state_readers"
+required-features = ["test-support"]
+
+[[test]]
+name = "unit_actor_runtime"
+required-features = ["test-support"]
+
+[[test]]
+name="unit_host_state"
+required-features=["test-support"]
+
+[[test]]
+name="unit_native_storage"
+required-features=["test-support"]

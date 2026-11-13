@@ -52,7 +52,7 @@ def fetch(root, entry):
 def main():
     decode = Path(__file__).resolve().parent.parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=decode / "vorbis/validation/corpus.json")
+    parser.add_argument("--manifest", type=Path, default=decode / "vorbis/tests/fixtures/external-corpus.json")
     parser.add_argument("--destination", type=Path, default=decode.parents[2] / "target/deadlib-audio-reference/corpus")
     parser.add_argument("--group", action="append", default=[])
     args = parser.parse_args()

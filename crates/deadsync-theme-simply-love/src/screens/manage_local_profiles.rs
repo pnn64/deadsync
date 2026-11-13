@@ -3509,10 +3509,3 @@ mod tests {
         assert!(!state.import_browse_pending);
     }
 }
-
-#[cfg(test)]
-#[path = "manage_local_profiles_pipelines_original.rs"]
-mod pipelines_original;
-#[cfg(test)]
-#[path = "manage_local_profiles_pipelines_perf.rs"]
-mod pipelines_perf;

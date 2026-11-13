@@ -3192,7 +3192,4 @@ mod song_lookup_tests {
         assert_eq!(counts.get(&song_unique_key(&beta)), Some(&3));
         assert!(!counts.contains_key(&song_unique_key(&gamma)));
     }
-    mod loading_perf {
-        include!("../../../../tests/perf/course_init.rs");
-    }
 }

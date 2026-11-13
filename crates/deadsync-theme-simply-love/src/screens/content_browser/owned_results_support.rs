@@ -1,13 +1,10 @@
 use super::state::{self, State};
-use deadlib_present::actors::{Actor, TextContent};
 use deadsync_online::pack_page::{PackPage, PagePhase, PageSnapshot, SongRow};
 use deadsync_online::smo_details::{DetailsPhase, DetailsSnapshot, PackDetails};
 use deadsync_online::stepmaniaonline::{CatalogPhase, PackInfo, Snapshot};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[path = "../../../../../tests/support/paired_bench.rs"]
-pub mod paired_bench;
 
 pub fn fixture(count: usize, banners: bool) -> State {
     let mut state = state::init();
@@ -93,56 +90,4 @@ pub fn page(state: &mut State, phase: PagePhase, long_authors: bool) {
         message: None,
         revision: 1,
     });
-}
-
-/// Compare all actor fields. Text storage is the intentional representation
-/// change, so compare its bytes after normalizing only that storage variant.
-pub fn assert_actors(before: &[Actor], after: &[Actor]) {
-    fn canonical(actors: &[Actor]) -> String {
-        let mut actors = actors.to_vec();
-        for actor in &mut actors {
-            match actor {
-                Actor::Text { content, .. } => {
-                    *content = TextContent::Owned(content.as_str().to_owned());
-                }
-                Actor::Sprite { .. } => {}
-                other => panic!("extend comparison for unexpected actor: {other:?}"),
-            }
-        }
-        format!("{actors:?}")
-    }
-    assert_eq!(canonical(after), canonical(before));
-}
-
-/// Both renderers read the real spinner clock. Capture within one clock cell;
-/// retry only when the clock crossed a boundary, never for a mismatched output.
-pub fn compare_draws(mut draw: impl FnMut(bool) -> Vec<Actor>) -> (Vec<Actor>, Vec<Actor>) {
-    for _ in 0..10 {
-        let frame = super::spinner::frame();
-        let before = draw(false);
-        let after = draw(true);
-        if frame == super::spinner::frame() {
-            assert_actors(&before, &after);
-            return (before, after);
-        }
-    }
-    panic!("could not capture the two renderers within one spinner frame");
-}
-
-pub fn retained_text_bytes(actors: &[Actor]) -> usize {
-    actors
-        .iter()
-        .map(|actor| match actor {
-            Actor::Text {
-                content: TextContent::Owned(text),
-                ..
-            } => text.capacity(),
-            Actor::Text {
-                content: TextContent::Static(_),
-                ..
-            }
-            | Actor::Sprite { .. } => 0,
-            other => panic!("unexpected actor storage: {other:?}"),
-        })
-        .sum()
 }

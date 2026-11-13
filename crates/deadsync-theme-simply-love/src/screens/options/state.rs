@@ -1229,6 +1229,12 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::SongLuaMode,
+        cfg.song_lua_mode.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::AnimatedBanners,
         match cfg.gameplay_banner_mode {
             config::theme::GameplayBannerMode::Static => 0,

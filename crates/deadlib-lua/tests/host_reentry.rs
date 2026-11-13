@@ -168,24 +168,8 @@ enum Scalar {
     Bytes(Vec<u8>),
 }
 
-// SAFETY: the fixed oracle supplies at most four arguments. Copying them and
-// pushing the status fits a C function's reserved stack. lua_pcall contains Lua
-// errors; the remaining operations do not allocate or cross Rust drop state.
-unsafe extern "C-unwind" fn reference_probe(
-    state: *mut lua_reference::ffi::lua_State,
-) -> std::ffi::c_int {
-    use lua_reference::ffi;
-    unsafe {
-        let original = ffi::lua_gettop(state);
-        for index in 1..=original {
-            ffi::lua_pushvalue(state, index);
-        }
-        let status = ffi::lua_pcall(state, original - 1, ffi::LUA_MULTRET, 0);
-        ffi::lua_pushboolean(state, i32::from(status == ffi::LUA_OK));
-        ffi::lua_insert(state, original + 1);
-        ffi::lua_gettop(state) - original
-    }
-}
+// These probes pass at most three arguments. Preserve every protected result,
+// including nil slots and the original error value, across host reentry.
 fn probe(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut args = [Value::Nil; 3];
     let count = call.arguments().len() - 1;
@@ -224,27 +208,7 @@ fn compare(source: &str) {
             _ => panic!("observe object identity in Lua"),
         })
         .collect();
-    // SAFETY: fixed developer programs use debug inspection and this protected
-    // C-stack probe; they do not load arbitrary native modules.
-    let lua = unsafe { lua_reference::Lua::unsafe_new() };
-    let function = unsafe { lua.create_c_function(reference_probe) }.unwrap();
-    lua.globals().set("probe", function).unwrap();
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=host-reentry")
-        .eval::<lua_reference::MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            lua_reference::Value::Nil => Scalar::Nil,
-            lua_reference::Value::Boolean(v) => Scalar::Boolean(v),
-            lua_reference::Value::Number(v) => Scalar::Number(v.to_bits()),
-            lua_reference::Value::Integer(v) => Scalar::Number((v as f64).to_bits()),
-            lua_reference::Value::String(v) => Scalar::Bytes(v.as_bytes().to_vec()),
-            _ => panic!("observe reference identity in Lua"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{source}");
+    reference_test::assert_debug("tests/host_reentry.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -313,3 +277,7 @@ fn a_nested_rust_panic_bypasses_both_boundaries_and_skips_drop_finalizers() {
     std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(vm))).unwrap();
     assert_eq!(FINALIZED.load(Relaxed), 0);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -7,22 +7,27 @@ impl<'a> Compiler<'a> {
         self.line = *line;
         let saved = self.function.next;
         if !matches!(stmt, Stmt::Local(..) | Stmt::LocalFunction(..)) {
-            self.tasks.push(Task::Reset(saved));
+            self.tasks.try_push(Task::Reset(saved))?;
         }
         match stmt {
             Stmt::Local(names, values) => {
-                self.tasks.push(Task::BindLocal(id));
-                self.tasks.push(Task::Values(values, names.len()));
-            }
-            Stmt::Assign(targets, _) | Stmt::FunctionDefinition(targets, _) => {
+                self.tasks.try_push(Task::BindLocal(id))?;
                 self.tasks
-                    .push(Task::AssignNext(id, 0, Vec::with_capacity(targets.len())));
+                    .try_push(Task::Values(self.ast.ids(*values), names.len()))?;
+            }
+            Stmt::Assign(..) | Stmt::FunctionDefinition(..) => {
+                self.tasks.try_push(Task::AssignNext(
+                    id,
+                    0,
+                    tasks::AssignmentTargets::default(),
+                ))?;
             }
             Stmt::Call(value) => {
                 let dst = self.alloc(1)?;
-                self.tasks.push(Task::Results(*value, dst, 0));
+                self.tasks.try_push(Task::Results(*value, dst, 0))?;
             }
             Stmt::Return(values, end_line) => {
+                let values = self.ast.ids(*values);
                 if values.is_empty() {
                     self.line = *end_line;
                     self.emit(Op::Return, 0, 0, 0)?;
@@ -45,37 +50,41 @@ impl<'a> Compiler<'a> {
                         Expr::Call(..) | Expr::Method(..)
                     ) {
                         let dst = self.alloc(1)?;
-                        self.tasks.push(Task::TailEnd(*end_line));
-                        self.tasks.push(Task::Call(values[0], dst, TAIL));
+                        self.tasks.try_push(Task::TailEnd(*end_line))?;
+                        self.tasks.try_push(Task::Call(values[0], dst, TAIL))?;
                         return Ok(());
                     }
                 }
                 let base = self.alloc(1)?;
                 self.tasks
-                    .push(Task::ReturnNext(id, base, 0, values.len() as u32));
+                    .try_push(Task::ReturnNext(id, base, 0, values.len() as u32))?;
             }
-            Stmt::Do(body) => self.tasks.push(Task::Scope(body)),
+            Stmt::Do(body) => self.tasks.try_push(Task::Scope(self.ast.ids(*body)))?,
             Stmt::While(cond, _) => {
                 let start = self.function.code.len() as u32;
                 let reg = self.alloc(1)?;
-                self.tasks.push(Task::WhileCond(id, saved, start, reg));
-                self.tasks.push(Task::BooleanNode(*cond, reg));
+                self.tasks
+                    .try_push(Task::WhileCond(id, saved, start, reg))?;
+                self.tasks.try_push(Task::BooleanNode(*cond, reg))?;
             }
             Stmt::Repeat(body, _) => {
                 let start = self.function.code.len() as u32;
                 let locals = self.function.locals.len();
-                self.function.loops.push((saved, Vec::new()));
-                self.tasks.push(Task::RepeatCond(id, saved, start, locals));
-                self.tasks.push(Task::Block(body));
-            }
-            Stmt::If(arms, _) => {
+                self.function.loops.try_push((saved, Vec::new()))?;
                 self.tasks
-                    .push(Task::IfNext(id, 0, saved, Vec::with_capacity(arms.len())))
+                    .try_push(Task::RepeatCond(id, saved, start, locals))?;
+                self.tasks.try_push(Task::Block(self.ast.ids(*body)))?;
             }
+            Stmt::If(arms, _) => self.tasks.try_push(Task::IfNext(
+                id,
+                0,
+                saved,
+                fallible::with_capacity(arms.len())?,
+            ))?,
             Stmt::For { start, .. } => {
                 let base = self.alloc(4)?;
-                self.tasks.push(Task::ForLimit(id, saved, base));
-                self.tasks.push(Task::Expr(*start, base));
+                self.tasks.try_push(Task::ForLimit(id, saved, base))?;
+                self.tasks.try_push(Task::Expr(*start, base))?;
             }
             Stmt::Break => {
                 let Some((next, _)) = self.function.loops.last() else {
@@ -92,26 +101,28 @@ impl<'a> Compiler<'a> {
                     self.debug_line(self.line);
                 }
                 let pc = self.emit(Op::Jump, 0, 0, 0)?;
-                self.function.loops.last_mut().unwrap().1.push(pc);
+                self.function.loops.last_mut().unwrap().1.try_push(pc)?;
             }
             Stmt::LocalFunction(name, value) => {
                 let reg = self.alloc(1)?;
                 self.bind(name, reg)?;
-                self.tasks.push(Task::LocalFunctionEnd);
-                self.tasks.push(Task::Expr(*value, reg));
+                self.tasks.try_push(Task::LocalFunctionEnd)?;
+                self.tasks.try_push(Task::Expr(*value, reg))?;
             }
             Stmt::ForIn(_, values, _, _) => {
-                self.tasks.push(Task::ForInInit(id, saved));
-                self.tasks.push(Task::Values(values, 3));
+                self.tasks.try_push(Task::ForInInit(id, saved))?;
+                self.tasks
+                    .try_push(Task::Values(self.ast.ids(*values), 3))?;
             }
         }
         Ok(())
     }
 
     pub(super) fn assignment(&self, id: StmtId) -> (&'a [ExprId], &'a [ExprId]) {
-        match &self.ast.stmts[id].0 {
+        let ast = self.ast;
+        match &ast.stmts[id].0 {
             Stmt::Assign(targets, values) | Stmt::FunctionDefinition(targets, values) => {
-                (targets, values)
+                (ast.ids(*targets), ast.ids(*values))
             }
             _ => unreachable!("assignment continuation"),
         }
@@ -120,7 +131,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         id: StmtId,
         mut index: usize,
-        mut locations: Vec<Target>,
+        mut locations: tasks::AssignmentTargets,
     ) -> Result<(), Error> {
         let (targets, values) = self.assignment(id);
         while let Some(&target) = targets.get(index) {
@@ -139,8 +150,8 @@ impl<'a> Compiler<'a> {
                         self.assign_key(id, index, locations, table)?;
                     } else {
                         let reg = self.alloc(1)?;
-                        self.tasks.push(Task::AssignKey(id, index, locations));
-                        self.tasks.push(Task::Operand(*table, reg));
+                        self.tasks.try_push(Task::AssignKey(id, index, locations))?;
+                        self.tasks.try_push(Task::Operand(*table, reg))?;
                     }
                     return Ok(());
                 }
@@ -153,7 +164,7 @@ impl<'a> Compiler<'a> {
             {
                 let saved = self.alloc(1)?;
                 self.emit(Op::Move, saved, u16::from(reg), 0)?;
-                for target in &mut locations {
+                for target in locations.iter_mut() {
                     if let Target::Index(table, key) = target {
                         if *table == reg {
                             *table = saved;
@@ -164,10 +175,10 @@ impl<'a> Compiler<'a> {
                     }
                 }
             }
-            locations.push(target);
+            locations.try_push(target, targets.len())?;
             index += 1;
         }
-        if let ([Target::Local(dst)], [value]) = (locations.as_slice(), values) {
+        if let ([Target::Local(dst)], [value]) = (&locations[..], values) {
             let mut expression = *value;
             while let Expr::Paren(inner) = self.ast.exprs[expression].0 {
                 expression = inner;
@@ -176,7 +187,7 @@ impl<'a> Compiler<'a> {
                 self.ast.exprs[expression].0,
                 Expr::Table(..) | Expr::Binary(Kind::And | Kind::Or, ..) | Expr::Vararg
             ) {
-                self.tasks.push(Task::Results(*value, *dst, 1));
+                self.tasks.try_push(Task::Results(*value, *dst, 1))?;
                 return Ok(());
             }
         }
@@ -186,11 +197,11 @@ impl<'a> Compiler<'a> {
             && let Some(register) = self.local_operand(*value)
         {
             self.result = register;
-            self.tasks.push(Task::AssignEnd(id, locations));
+            self.tasks.try_push(Task::AssignEnd(id, locations))?;
             return Ok(());
         }
-        self.tasks.push(Task::AssignEnd(id, locations));
-        self.tasks.push(Task::Values(values, targets.len()));
+        self.tasks.try_push(Task::AssignEnd(id, locations))?;
+        self.tasks.try_push(Task::Values(values, targets.len()))?;
         Ok(())
     }
 
@@ -198,7 +209,7 @@ impl<'a> Compiler<'a> {
         &mut self,
         id: StmtId,
         index: usize,
-        mut locations: Vec<Target>,
+        mut locations: tasks::AssignmentTargets,
         table: u8,
     ) -> Result<(), Error> {
         let (targets, _) = self.assignment(id);
@@ -212,19 +223,22 @@ impl<'a> Compiler<'a> {
         } else {
             let reg = self.alloc(1)?;
             self.tasks
-                .push(Task::AssignIndex(id, index, locations, table));
-            self.tasks.push(Task::Operand(key, reg));
+                .try_push(Task::AssignIndex(id, index, locations, table))?;
+            self.tasks.try_push(Task::Operand(key, reg))?;
             return Ok(());
         };
-        locations.push(Target::Index(table, key));
-        self.tasks.push(Task::AssignNext(id, index + 1, locations));
+        locations.try_push(Target::Index(table, key), targets.len())?;
+        self.tasks
+            .try_push(Task::AssignNext(id, index + 1, locations))?;
         Ok(())
     }
 
     pub(super) fn for_in(&mut self, id: StmtId, saved: u16) -> Result<(), Error> {
-        let Stmt::ForIn(names, _, body, lines) = &self.ast.stmts[id].0 else {
+        let ast = self.ast;
+        let Stmt::ForIn(names, _, body, lines) = &ast.stmts[id].0 else {
             unreachable!()
         };
+        let names = ast.names(*names);
         let base = self.result;
         self.reset(u16::from(base) + 3);
         let controls = self.function.debug_locals.len();
@@ -236,22 +250,22 @@ impl<'a> Compiler<'a> {
         .into_iter()
         .enumerate()
         {
-            self.debug_local(name, base + i as u8);
+            self.debug_local(name, base + i as u8)?;
         }
         let results = self.alloc(names.len().max(3) as u16)?;
         let test = self.alloc(1)?;
-        self.function.debug_lines.push(lines[0]);
+        self.function.debug_lines.try_push(lines[0])?;
         self.line = lines[1];
         let head = self.function.code.len() as u32;
         for i in 0..3 {
             self.emit(Op::Move, results + i, u16::from(base + i), 0)?;
         }
-        self.function.debug_calls.push(DebugCall {
+        self.function.debug_calls.try_push(DebugCall {
             pc: self.function.code.len() as u32,
-            name: b"(for generator)".as_slice().into(),
+            name: b"(for generator)".try_boxed()?,
             kind: NameKind::Local,
             temporaries: 0..0,
-        });
+        })?;
         self.emit(Op::CallIter, results, 2, names.len() as u32)?;
         self.load(test, Constant::Nil)?;
         self.emit(Op::Eq, test, u16::from(results), u32::from(test))?;
@@ -262,10 +276,10 @@ impl<'a> Compiler<'a> {
         for (i, name) in names.iter().enumerate() {
             self.bind(name, results + i as u8)?;
         }
-        self.function.loops.push((saved, Vec::new()));
+        self.function.loops.try_push((saved, Vec::new()))?;
         self.tasks
-            .push(Task::ForInEnd(results, controls, locals, head, done));
-        self.tasks.push(Task::Scope(body));
+            .try_push(Task::ForInEnd(results, controls, locals, head, done))?;
+        self.tasks.try_push(Task::Scope(ast.ids(*body)))?;
         Ok(())
     }
     pub(super) fn end_controls(&mut self, controls: usize) {

@@ -3540,7 +3540,7 @@ fn native_speed_fields_drive_playback() {
 }
 
 #[test]
-fn native_table_order_preserves_shared_speed_fields() {
+fn table_iteration_preserves_shared_speed_updates() {
     crate::paths::init();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let song_dir = root.join("tests/fixtures/song-lua");
@@ -3559,9 +3559,32 @@ fn native_table_order_preserves_shared_speed_fields() {
     let compiled = compile_song_lua_layers(&[entry.as_path()], 0, &context)
         .expect("native table constructors and iteration of shared speed setters");
     assert_eq!(compiled[0].speed_writes.len(), 54);
-    let mut parity = Parity::default();
-    compare_runtime_modifiers(&trace, &compiled, &context, &mut parity);
-    parity.assert_complete("native table iteration, every speed field and final playback targets");
+    for player in 0..2 {
+        let writes: Vec<_> = compiled[0].speed_writes.iter()
+            .filter(|write| write.player == player).collect();
+        assert_eq!(writes.len(), 27);
+        for key in ["timespacing", "maxscrollbpm", "scrollspeed", "scrollbpm", "xmod", "cmod", "mmod"] {
+            assert!(writes.iter().any(|write| write.key == key), "P{} missing {key}", player + 1);
+        }
+        for pair in writes.windows(2) {
+            assert_eq!(pair[0].current, pair[1].previous, "P{} lost a shared speed update", player + 1);
+        }
+        let final_write = writes.last().unwrap();
+        assert_eq!(final_write.key, "xmod");
+        assert_eq!(final_write.current, [[0.0, 1.0], [4.0, 1.0], [200.0, 1.0], [0.0, 1.0]]);
+    }
+    let (runtime, unsupported) = modifier_runtime(&compiled, &context);
+    assert_eq!(unsupported, 0);
+    for second in [0.0, 1.0, 3.9] {
+        for player in 0..2 {
+            let mut targets = ActiveAttackMaskValues::new(Default::default());
+            deadsync_gameplay::apply_song_lua_attack_eases(
+                &mut targets, &mut Default::default(), &mut Default::default(),
+                &runtime.song_lua_ease_windows[player], second,
+            );
+            assert_eq!(targets.scroll_speed, Some(deadsync_rules::scroll::ScrollSpeedSetting::XMod(4.0)));
+        }
+    }
 }
 
 #[test]

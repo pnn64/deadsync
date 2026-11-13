@@ -4,8 +4,6 @@ mod calls;
 mod execution;
 mod loader;
 mod objects;
-#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-mod panic;
 mod tables;
 
 /// A borrowed native stack on an inactive thread in the same VM.
@@ -20,82 +18,21 @@ pub struct NativeThreadStack<'vm> {
     frame: Option<usize>,
 }
 impl NativeStack<'_, '_> {
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn move_thread_values_signed(
-        &mut self,
-        from: ThreadId,
-        to: ThreadId,
-        count: isize,
-    ) -> Result<(), Error> {
-        if count >= 0 {
-            return self.move_thread_values(from, to, count as usize);
-        }
-        self.check_error()?;
-        self.call.vm.validate_value(Value::Thread(from))?;
-        self.call.vm.validate_value(Value::Thread(to))?;
-        if from == to {
-            return Ok(());
-        }
-        let extra = count.unsigned_abs();
-        if from == self.thread_id() {
-            if !self.check_stack(extra) {
-                return Err(self.error(b"native stack overflow"));
-            }
-            let start = self.end();
-            let end = start + extra;
-            let old = self.call.vm.registers.len();
-            self.call.vm.resize_registers(old.max(end));
-            let hooks = &self.call.vm.hooks;
-            let first = old.max(hooks.popped_start);
-            let last = end.min(hooks.popped_start + hooks.popped.len());
-            if first < last {
-                self.call.vm.registers[first..last].copy_from_slice(
-                    &hooks.popped[first - hooks.popped_start..last - hooks.popped_start],
-                );
-            }
-            self.set_window_end(end);
-            for position in start..end {
-                self.call.vm.gc_new_value(self.call.vm.registers[position]);
-            }
-        } else {
-            let mut stack = self.thread_stack(from)?;
-            if !stack.check_stack(extra) {
-                return Err(stack.error(b"native stack overflow"));
-            }
-            let start = stack.end;
-            let end = start + extra;
-            let state = &mut stack.vm.threads[slot_index(from.0)];
-            state
-                .registers
-                .resize(state.registers.len().max(end), Value::Nil);
-            state.top = end;
-            state.api_stack = stack.base..end;
-            stack.top = end.saturating_sub(stack.base);
-            stack.end = end;
-            if let Some(frame) = stack.frame {
-                state.frames[frame].vararg_count = stack.top as u32;
-            }
-            for position in start..end {
-                let value = stack.vm.threads[slot_index(from.0)].registers[position];
-                stack.vm.gc_barrier(Value::Thread(from), value);
-            }
-        }
-        Ok(())
-    }
-
     /// Create an empty thread sharing this VM's heap, registry and current globals.
     /// Inherited hooks follow the ordinary coroutine creation rules. The new
     /// thread is pushed on this stack and has native status Ok and no values.
     ///
     /// # Errors
-    /// Propagates pending errors, collector finalizer errors or stack overflow.
+    /// Propagates pending errors, collector finalizer errors, allocation failure
+    /// or stack overflow.
     pub fn new_thread(&mut self) -> Result<ThreadId, Error> {
         self.check_error()?;
-        if !self.check_stack(1) {
+        if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
+        self.call.vm.reserve_registers(self.end() + 1)?;
         self.check_gc()?;
-        let thread = self.call.vm.allocate_thread();
+        let thread = self.call.vm.allocate_thread()?;
         self.push(Value::Thread(thread))?;
         Ok(thread)
     }
@@ -326,15 +263,16 @@ impl NativeThreadStack<'_> {
             };
             match index {
                 -10000 => {
+                    self.vm.reserve_gc_value(value)?;
                     self.vm.registry = table;
                     self.vm.gc_new_value(value);
                 }
-                -10002 => self.vm.set_thread_environment(self.thread, table),
+                -10002 => self.vm.set_thread_environment(self.thread, table)?,
                 _ => {
                     let function = self
                         .function()
                         .ok_or_else(|| self.error(b"no calling environment"))?;
-                    self.vm.set_closure_environment(function, table);
+                    self.vm.set_closure_environment(function, table)?;
                 }
             }
             return Ok(());
@@ -350,6 +288,8 @@ impl NativeThreadStack<'_> {
         let p = self
             .position(index)
             .ok_or_else(|| self.error(b"invalid native stack index"))?;
+        self.vm
+            .reserve_gc_barrier(Value::Thread(self.thread), value)?;
         self.vm.threads[slot_index(self.thread.0)].registers[p] = value;
         self.vm.gc_barrier(Value::Thread(self.thread), value);
         Ok(())
@@ -397,7 +337,7 @@ impl NativeThreadStack<'_> {
     pub fn to_bytes(&mut self, index: isize) -> Result<Option<&[u8]>, Error> {
         let mut value = self.value(index);
         if let Some(Value::Number(n)) = value {
-            let string = self.vm.intern(&format_number(n));
+            let string = self.vm.intern_number(n)?;
             self.set(index, string)?;
             value = Some(string);
         }
@@ -450,6 +390,25 @@ impl NativeThreadStack<'_> {
     /// Intern arbitrary bytes without pushing a slot.
     pub fn intern(&mut self, bytes: &[u8]) -> Value {
         self.vm.intern(bytes)
+    }
+    /// Intern bytes, returning the fixed memory error on allocation failure.
+    ///
+    /// # Errors
+    /// Returns a memory error without publishing a partial string.
+    pub fn try_intern(&mut self, bytes: &[u8]) -> Result<Value, Error> {
+        self.vm.try_intern(bytes)
+    }
+    /// Intern and push bytes, reserving stack space before publishing a string.
+    ///
+    /// # Errors
+    /// Rejects stack overflow and allocation failure.
+    pub fn push_bytes(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        if self.top == limits::MAX_CSTACK {
+            return Err(self.error(b"native stack overflow"));
+        }
+        self.reserve_end(self.end + 1)?;
+        let value = self.try_intern(bytes)?;
+        self.push(value)
     }
     /// Build an error for a rejected non-executing stack operation.
     pub fn error(&self, bytes: &[u8]) -> Error {

@@ -1348,42 +1348,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
-    /// A write is read back as the scan reads it and can be put back exactly;
-    /// a file it cannot edit as text is left alone rather than replaced.
-    #[test]
-    fn a_pack_ini_write_reads_back_and_puts_back_exactly() {
-        let pack = test_dir("pack-ini-write");
-        std::fs::create_dir_all(&pack).expect("create pack dir");
-
-        // none there: one is made, and putting it back removes it
-        let before = write_pack_sync(&pack, "Pack", false).expect("write");
-        let made = pack.join("Pack.ini");
-        assert_eq!(
-            pack_ini_sync(&std::fs::read_to_string(&made).unwrap()),
-            deadsync_chart::SyncPref::Null
-        );
-        restore_pack_ini(before).expect("restore");
-        assert!(!made.exists());
-
-        // found whatever its case, edited, and put back byte for byte
-        let odd = pack.join("PACK.INI");
-        let original = b"[Group]\r\nVersion=1\r\nDisplayTitle=Kept\r\nSyncOffset=NULL\r\n";
-        std::fs::write(&odd, original).expect("seed");
-        let before = write_pack_sync(&pack, "Pack", true).expect("write");
-        assert_eq!(
-            pack_ini_sync(&std::fs::read_to_string(&odd).unwrap()),
-            deadsync_chart::SyncPref::Itg
-        );
-        restore_pack_ini(before).expect("restore");
-        assert_eq!(std::fs::read(&odd).unwrap(), original);
-
-        // not UTF-8: refused, untouched
-        let latin = b"[Group]\nVersion=1\nDisplayTitle=Caf\xe9\n";
-        std::fs::write(&odd, latin).expect("seed");
-        assert!(write_pack_sync(&pack, "Pack", true).is_err());
-        assert_eq!(std::fs::read(&odd).unwrap(), latin);
-        let _ = std::fs::remove_dir_all(pack);
-    }
 
     #[test]
     fn completed_event_releases_worker_slot() {
@@ -1527,12 +1491,41 @@ mod tests {
             ("Cache".to_owned(), "banner".to_owned())
         );
     }
-}
 
-#[cfg(test)]
-mod perf_traversal {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/pack_ini.rs"
-    ));
+    /// A write is read back as the scan reads it and can be put back exactly;
+    /// a file it cannot edit as text is left alone rather than replaced.
+    #[test]
+    fn a_pack_ini_write_reads_back_and_puts_back_exactly() {
+        let pack = test_dir("pack-ini-write");
+        std::fs::create_dir_all(&pack).expect("create pack dir");
+
+        // none there: one is made, and putting it back removes it
+        let before = write_pack_sync(&pack, "Pack", false).expect("write");
+        let made = pack.join("Pack.ini");
+        assert_eq!(
+            pack_ini_sync(&std::fs::read_to_string(&made).unwrap()),
+            deadsync_chart::SyncPref::Null
+        );
+        restore_pack_ini(before).expect("restore");
+        assert!(!made.exists());
+
+        // found whatever its case, edited, and put back byte for byte
+        let odd = pack.join("PACK.INI");
+        let original = b"[Group]\r\nVersion=1\r\nDisplayTitle=Kept\r\nSyncOffset=NULL\r\n";
+        std::fs::write(&odd, original).expect("seed");
+        let before = write_pack_sync(&pack, "Pack", true).expect("write");
+        assert_eq!(
+            pack_ini_sync(&std::fs::read_to_string(&odd).unwrap()),
+            deadsync_chart::SyncPref::Itg
+        );
+        restore_pack_ini(before).expect("restore");
+        assert_eq!(std::fs::read(&odd).unwrap(), original);
+
+        // not UTF-8: refused, untouched
+        let latin = b"[Group]\nVersion=1\nDisplayTitle=Caf\xe9\n";
+        std::fs::write(&odd, latin).expect("seed");
+        assert!(write_pack_sync(&pack, "Pack", true).is_err());
+        assert_eq!(std::fs::read(&odd).unwrap(), latin);
+        let _ = std::fs::remove_dir_all(pack);
+    }
 }

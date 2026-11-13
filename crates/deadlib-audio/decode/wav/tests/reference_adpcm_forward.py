@@ -1,4 +1,4 @@
-"""Read-only real-file decoding against the retained four-reference fixture truth."""
+"""Read-only real-file decoding against a supplied reference fixture manifest."""
 import argparse
 import hashlib
 import json
@@ -12,10 +12,10 @@ def sha(data):return hashlib.sha256(data).hexdigest()
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--reference',type=Path,required=True,help='current reference_adpcm_encode.py manifest');ap.add_argument('--corpus',type=Path,required=True,help='encoded fixture directory');args=ap.parse_args()
     if args.output.exists() or Path(str(args.output)+'-bin').exists():ap.error('preserve prior evidence; choose a new output')
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3]
-    reference=root/'validation/adpcm-encoding-references.json';truth=json.loads(reference.read_text())
+    reference=args.reference.resolve();truth=json.loads(reference.read_text(encoding='utf-8'))
     sources=sorted((root/'src').rglob('*.rs'))+[root/'examples/adpcm_forward.rs',Path(__file__)]
     before={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in sources}
     build=subprocess.run(['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_forward','--target-dir','target/wav'],cwd=workspace,capture_output=True)
@@ -26,7 +26,7 @@ def main():
     binary=binaries/name;shutil.copyfile(workspace/('target/wav/debug/examples/'+name),binary)
     cases=[]
     for case in truth['cases']:
-        path=workspace/'target/wav/encoded-adpcm'/f"{case['name']}.wav"
+        path=args.corpus/f"{case['name']}.wav"
         if sha(path.read_bytes())!=case['fixture_sha256']:raise RuntimeError('retained corpus hash mismatch: '+str(path))
         for frames,width in ((1,1),(127,17),(4097,4096)):
             result=subprocess.run([str(binary),str(path),str(frames),str(width)],capture_output=True)

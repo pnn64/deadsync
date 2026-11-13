@@ -62,19 +62,26 @@ pub struct NativeDebugInfo {
 }
 
 impl Vm {
-    fn native_debug_string(&mut self, program: usize, bytes: &[u8]) -> NativeDebugString {
-        let Value::String(id) = self.intern(bytes) else {
+    fn native_debug_string(
+        &mut self,
+        program: usize,
+        bytes: &[u8],
+    ) -> Result<NativeDebugString, Error> {
+        let Value::String(id) = self.try_intern(bytes)? else {
             unreachable!("intern returns a string")
         };
         let names = &mut self.programs[program].debug_strings;
         if !names.contains(&id) {
             let before = names.capacity();
+            names
+                .try_reserve(1)
+                .map_err(|_| Error::memory().with_value(Value::String(self.memory_error)))?;
             names.push(id);
             let growth = (names.capacity() - before) * size_of::<StringId>();
             self.programs.note_alloc(growth);
         }
         self.gc_new_value(Value::String(id));
-        NativeDebugString::Interned(id)
+        Ok(NativeDebugString::Interned(id))
     }
 }
 
@@ -198,11 +205,11 @@ impl NativeStack<'_, '_> {
             }
         })
     }
-    fn native_local_name(&mut self, name: LocalName) -> NativeDebugString {
+    fn native_local_name(&mut self, name: LocalName) -> Result<NativeDebugString, Error> {
         match name {
-            LocalName::Temporary => NativeDebugString::Static(b"(*temporary)\0"),
+            LocalName::Temporary => Ok(NativeDebugString::Static(b"(*temporary)\0")),
             LocalName::Named(p, proto, local) => {
-                let data = Arc::clone(&self.call.vm.programs[p].data);
+                let data = self.call.vm.programs[p].data.clone();
                 self.call
                     .vm
                     .native_debug_string(p, &data.prototypes[proto].debug.locals[local].name)
@@ -232,8 +239,9 @@ impl NativeStack<'_, '_> {
         } else {
             Value::Nil
         };
+        let name = self.native_local_name(name)?;
         self.debug_push(record.thread, value)?;
-        Ok(Some(self.native_local_name(name)))
+        Ok(Some(name))
     }
     /// Pop the inspected thread's top into a local. The value is popped even
     /// when the local number is invalid; name lookup includes that top value.
@@ -255,11 +263,15 @@ impl NativeStack<'_, '_> {
         } else {
             self.thread_stack(record.thread)?.value(-1).unwrap()
         };
+        let name = slot
+            .as_ref()
+            .map(|(name, _)| self.native_local_name(*name))
+            .transpose()?;
         if let Some((_, slot)) = &slot {
-            self.call.vm.debug_write_local(record.thread, slot, value);
+            self.call.vm.debug_write_local(record.thread, slot, value)?;
         }
         self.debug_pop(record.thread)?;
-        Ok(slot.map(|(name, _)| self.native_local_name(name)))
+        Ok(name)
     }
     /// Inspect selected fields with Lua 5.1 options `SlnufL`. A leading `>`
     /// pops a function from the selected thread and ignores the record index.
@@ -314,7 +326,7 @@ impl NativeStack<'_, '_> {
             Some((
                 c.program,
                 c.prototype,
-                Arc::clone(&self.call.vm.programs[c.program].data),
+                self.call.vm.programs[c.program].data.clone(),
             ))
         } else {
             None
@@ -323,7 +335,7 @@ impl NativeStack<'_, '_> {
             let (source, what, defined) = if let Some((p, proto, data)) = &code {
                 let proto = &data.prototypes[*proto];
                 (
-                    self.call.vm.native_debug_string(*p, data.source(proto)),
+                    self.call.vm.native_debug_string(*p, data.source(proto))?,
                     if proto.debug.defined[0] == 0 {
                         b"main\0".as_slice()
                     } else {
@@ -387,7 +399,7 @@ impl NativeStack<'_, '_> {
                         unreachable!("debug name has Lua caller")
                     };
                     let c = &vm.functions[slot_index(id.0)];
-                    let data = Arc::clone(&vm.programs[c.program].data);
+                    let data = vm.programs[c.program].data.clone();
                     (
                         c.program,
                         c.prototype,
@@ -400,7 +412,7 @@ impl NativeStack<'_, '_> {
             if let Some((p, proto, pc, data, kind)) = name {
                 let calls = &data.prototypes[proto].debug.calls;
                 let call = &calls[calls.binary_search_by_key(&pc, |c| c.pc).unwrap()];
-                info.name = Some(Some(self.call.vm.native_debug_string(p, &call.name)));
+                info.name = Some(Some(self.call.vm.native_debug_string(p, &call.name)?));
                 info.name_what = Some(match kind {
                     b"global" => b"global\0",
                     b"local" => b"local\0",
