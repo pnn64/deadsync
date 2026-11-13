@@ -223,7 +223,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         } else if let Some(child) = transitions::child(call, actor)?
                             && lifecycle::time_left(call, child)? == 0.
                         {
-                            let key = call.try_intern(b"__songlua_transition_state")?;
+                            let key = call.intern_static(b"__songlua_transition_state")?;
                             call.raw_table_set(actor, key, Value::Number(2.))?;
                         }
                     }
@@ -305,7 +305,7 @@ fn hibernate(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<Opti
         return Ok(Some(f64::from(delta as f32)));
     }
     let left = left - delta as f32;
-    let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+    let key = call.intern_static(b"__songlua_hibernate_seconds")?;
     call.raw_table_set(actor, key, Value::Number(f64::from(left.max(0.))))?;
     if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.hibernate = left.max(0.);
@@ -427,9 +427,8 @@ impl Actors {
     }
 }
 
-fn raw(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
-    let key = call.try_intern(key.as_bytes())?;
-    call.raw_table_get(actor, key)
+fn raw(call: &mut HostCall<'_>, actor: TableId, key: &'static str) -> Result<Value, Error> {
+    get_static(call, actor, key.as_bytes())
 }
 fn function(call: &HostCall<'_>, value: Value) -> Result<bool, Error> {
     match value {

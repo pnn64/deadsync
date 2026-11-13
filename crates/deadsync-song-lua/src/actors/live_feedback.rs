@@ -15,9 +15,8 @@ pub(super) fn update(
     note_field_zoom(call, catalog, actor)
 }
 
-fn raw(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
-    let key = call.try_intern(name.as_bytes())?;
-    call.raw_table_get(actor, key)
+fn raw(call: &mut HostCall<'_>, actor: TableId, name: &'static str) -> Result<Value, Error> {
+    get_static(call, actor, name.as_bytes())
 }
 fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, Error> {
     if value == Value::Nil {
@@ -45,7 +44,7 @@ fn player(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<usize>, Erro
 fn optional_float(
     call: &mut HostCall<'_>,
     owner: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<f32>, Error> {
     let value = raw(call, owner, key)?;
     if value == Value::Nil {

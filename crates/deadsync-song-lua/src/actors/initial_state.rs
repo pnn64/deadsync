@@ -25,7 +25,12 @@ pub(super) fn read_live(
     Ok(state)
 }
 
-fn get(call: &mut HostCall<'_>, actor: TableId, key: &[u8], live: bool) -> Result<Value, Error> {
+fn get(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static [u8],
+    live: bool,
+) -> Result<Value, Error> {
     if live
         && let Some(key) = key.strip_prefix(b"__songlua_state_")
         && matches!(
@@ -73,7 +78,7 @@ fn get(call: &mut HostCall<'_>, actor: TableId, key: &[u8], live: bool) -> Resul
     {
         return Ok(Value::Nil);
     }
-    super::get(call, actor, key)
+    get_static(call, actor, key)
 }
 
 pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<SongLuaOverlayState, Error> {
@@ -529,7 +534,7 @@ fn read_with_metadata(
 fn number(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     live: bool,
 ) -> Result<Option<f32>, Error> {
     let value = get(call, actor, key.as_bytes(), live)?;
@@ -541,7 +546,7 @@ fn number(
 fn integer(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     min: f64,
     max: f64,
     live: bool,
@@ -559,7 +564,7 @@ fn integer(
 fn flag(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     live: bool,
 ) -> Result<Option<bool>, Error> {
     let value = get(call, actor, key.as_bytes(), live)?;
@@ -579,7 +584,7 @@ pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option
 fn text(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     live: bool,
 ) -> Result<Option<StateText>, Error> {
     let value = get(call, actor, key.as_bytes(), live)?;
@@ -605,7 +610,7 @@ impl std::ops::Deref for StateText {
 fn optional_table(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     live: bool,
 ) -> Result<Option<TableId>, Error> {
     let value = get(call, actor, key.as_bytes(), live)?;
@@ -617,7 +622,7 @@ fn optional_table(
 fn vector<const N: usize>(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
     live: bool,
 ) -> Result<Option<[f32; N]>, Error> {
     match optional_table(call, actor, key, live)? {

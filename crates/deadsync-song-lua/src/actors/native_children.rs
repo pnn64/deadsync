@@ -61,14 +61,15 @@ fn is_group(call: &mut HostCall<'_>, value: TableId) -> Result<Option<bool>, Err
     let Some(metatable) = call.raw_metatable(value)? else {
         return Ok(Some(false));
     };
-    if get(call, metatable, b"__metatable")? != Value::Nil {
+    if get_static(call, metatable, b"__metatable")? != Value::Nil {
         return Ok(None);
     }
-    Ok(match get(call, metatable, b"__songlua_child_group")? {
+    let group = match get_static(call, metatable, b"__songlua_child_group")? {
         Value::Nil if call.raw_metatable(metatable)?.is_some() => None,
         Value::Nil | Value::Boolean(false) => Some(false),
         _ => Some(true),
-    })
+    };
+    Ok(group)
 }
 
 // The helper's result for one name, where it is a value the registry or the
@@ -83,18 +84,18 @@ pub(super) fn find_named(
     let wanted = call.try_intern(name)?;
     let mut found = Value::Nil;
     if matches!(
-        get(call, actor, b"__songlua_owned_child_lookup")?,
+        get_static(call, actor, b"__songlua_owned_child_lookup")?,
         Value::Nil | Value::Boolean(false)
     ) {
-        let Value::Table(registry) = get(call, actor, b"__songlua_children")? else {
+        let Value::Table(registry) = get_static(call, actor, b"__songlua_children")? else {
             return Ok(None);
         };
         if let Some(metatable) = call.raw_metatable(registry)? {
-            if get(call, metatable, b"__metatable")? != Value::Nil {
+            if get_static(call, metatable, b"__metatable")? != Value::Nil {
                 return Ok(None);
             }
             // The creation order only orders the snapshot; it must be a table.
-            match get(call, metatable, b"__songlua_child_names")? {
+            match get_static(call, metatable, b"__songlua_child_names")? {
                 Value::Table(_) => {}
                 Value::Nil if call.raw_metatable(metatable)?.is_none() => {}
                 _ => return Ok(None),

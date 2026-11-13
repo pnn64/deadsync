@@ -1371,6 +1371,12 @@ fn get(call: &mut HostCall<'_>, t: TableId, key: &[u8]) -> Result<Value, Error> 
     let key = call.try_intern(key)?;
     call.raw_table_get(t, key)
 }
+// `get` for a name spelled as a literal: the VM finds its string by address,
+// without hashing the name. Use it where a field is read every frame.
+fn get_static(call: &mut HostCall<'_>, t: TableId, key: &'static [u8]) -> Result<Value, Error> {
+    let key = call.intern_static(key)?;
+    call.raw_table_get(t, key)
+}
 fn bytes(call: &mut HostCall<'_>, value: Value) -> Result<Vec<u8>, Error> {
     let id = call
         .coerce_string(value)?
