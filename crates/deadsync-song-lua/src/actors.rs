@@ -308,6 +308,7 @@ struct Store {
     song_broadcasts: Option<song_capture::Broadcasts>,
     live_sources: Option<Vec<crate::SongLuaLiveBroadcast>>,
     trace: live_trace::State,
+    theme_callbacks: rustc_hash::FxHashMap<CallbackId, bool>,
     present_paths: rustc_hash::FxHashSet<std::path::PathBuf>,
     entry_actors: Option<live_layers::EntryActors>,
     song_callback_depth: usize,
@@ -1516,11 +1517,34 @@ fn run_actor_function(
     command_locals::capture(call, function)?;
     run_scoped(call, actor, function, params)
 }
+// A function's identity. It carries the function's generation, so a later
+// function never has the identity of a collected one.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum CallbackId {
+    Lua(deadlib_lua::FunctionId),
+    Native(u64),
+}
 fn theme_callback(call: &mut HostCall<'_>, function: Value) -> Result<bool, Error> {
+    // The inspector reads the chunk name the function was compiled with,
+    // which never changes: one inspection answers for the function's life.
+    let id = match function {
+        Value::Function(id) => Some(CallbackId::Lua(id)),
+        Value::Native(id) => Some(CallbackId::Native(id)),
+        _ => None,
+    };
+    if let Some(id) = id
+        && let Some(&theme) = call.store_ref().theme_callbacks.get(&id)
+    {
+        return Ok(theme);
+    }
     // The enclosing host callback can already own results or a stack window.
     // Use the existing inspector in its own call frame rather than opening a
     // second native stack on that callback.
-    Ok(call.call(helper(call, 4)?, &[function])?[0] == Value::Boolean(true))
+    let theme = call.call(helper(call, 4)?, &[function])?[0] == Value::Boolean(true);
+    if let Some(id) = id {
+        call.store().theme_callbacks.insert(id, theme);
+    }
+    Ok(theme)
 }
 fn command_observed(
     call: &mut HostCall<'_>,
