@@ -113,6 +113,14 @@ struct Entry {
     value: Value,
 }
 
+// A slot word holds a one-based entry index. While the slot array is small
+// enough for that index to fit in `INDEX_BITS`, the bits above it hold part of
+// the key's hash, so a probe passes most other keys without loading their
+// entries. Larger tables use the whole word for the index.
+const INDEX_BITS: u32 = if cfg!(test) { 10 } else { 24 };
+const INDEX_MASK: u32 = (1 << INDEX_BITS) - 1;
+const TAGGED_SLOTS: usize = 1 << INDEX_BITS;
+
 #[derive(Debug)]
 pub(crate) struct InvalidNextKey;
 
@@ -260,18 +268,35 @@ impl Table {
             self.trace = TableTrace::Restart;
         }
     }
+    // The tag an entry of this hash carries in its slot word, and the mask
+    // that selects the entry index from a word.
+    #[inline]
+    fn slot_tag(slots: usize, hash: usize) -> (u32, u32) {
+        if slots <= TAGGED_SLOTS {
+            // Slot selection uses fewer than `INDEX_BITS` low hash bits here,
+            // so the bits from `INDEX_BITS` up are independent of the slot.
+            (((hash >> INDEX_BITS) as u32) << INDEX_BITS, INDEX_MASK)
+        } else {
+            (0, u32::MAX)
+        }
+    }
     fn slot(&self, key: Key) -> Option<(usize, Option<usize>)> {
         if self.slots.is_empty() {
             return None;
         }
-        let mut slot = key.hash() & (self.slots.len() - 1);
+        let hash = key.hash();
+        let (tag, index) = Self::slot_tag(self.slots.len(), hash);
+        let mut slot = hash & (self.slots.len() - 1);
         loop {
-            let index = self.slots[slot];
-            if index == 0 {
+            let word = self.slots[slot];
+            if word == 0 {
                 return Some((slot, None));
             }
-            if self.entries[index as usize - 1].key == key {
-                return Some((slot, Some(index as usize - 1)));
+            if word & !index == tag {
+                let entry = (word & index) as usize - 1;
+                if self.entries[entry].key == key {
+                    return Some((slot, Some(entry)));
+                }
             }
             slot = (slot + 1) & (self.slots.len() - 1);
         }
@@ -286,12 +311,13 @@ impl Table {
         self.slots.resize(slots, 0);
         self.slots.fill(0);
         for (i, entry) in self.entries.iter().enumerate() {
-            let mut slot = entry.key.hash() & (self.slots.len() - 1);
+            let hash = entry.key.hash();
+            let mut slot = hash & (self.slots.len() - 1);
             while self.slots[slot] != 0 {
                 slot = (slot + 1) & (self.slots.len() - 1);
             }
-            self.slots[slot] =
-                u32::try_from(i + 1).expect("Lua table exhausted addressable entries");
+            let index = u32::try_from(i + 1).expect("Lua table exhausted addressable entries");
+            self.slots[slot] = index | Self::slot_tag(slots, hash).0;
         }
     }
     fn take_hash(&mut self, key: Key) -> Option<Value> {
@@ -361,15 +387,19 @@ impl Table {
             return Value::Nil;
         }
         let mask = self.slots.len() - 1;
-        let mut slot = key.hash() & mask;
+        let hash = key.hash();
+        let (tag, index) = Self::slot_tag(self.slots.len(), hash);
+        let mut slot = hash & mask;
         loop {
-            let index = self.slots[slot] as usize;
-            if index == 0 {
+            let word = self.slots[slot];
+            if word == 0 {
                 return Value::Nil;
             }
-            let entry = &self.entries[index - 1];
-            if entry.key == key {
-                return entry.value;
+            if word & !index == tag {
+                let entry = &self.entries[(word & index) as usize - 1];
+                if entry.key == key {
+                    return entry.value;
+                }
             }
             slot = (slot + 1) & mask;
         }
@@ -527,7 +557,7 @@ impl Table {
         } else {
             vacant.expect("nonempty table has a vacant hash slot")
         };
-        self.slots[slot] = index;
+        self.slots[slot] = index | Self::slot_tag(self.slots.len(), k.hash()).0;
         self.entries.push(Entry { key: k, value });
         if matches!(k, Key::String(_)) {
             self.remember_hash_entry(index);
@@ -906,6 +936,35 @@ mod allocation_tests {
             current = pair.0;
         }
         assert_eq!(table.next(current).unwrap(), None);
+    }
+    #[test]
+    fn lookups_agree_with_a_model_across_the_tagged_slot_boundary() {
+        fn key(n: u32) -> Value {
+            if n % 3 == 0 {
+                Value::String(StringId(u64::from(n) | 1 << 32))
+            } else {
+                hash_key(n as i32)
+            }
+        }
+        let mut table = Table::with_capacity(0, 0).unwrap();
+        let mut model = std::collections::HashMap::new();
+        // Grow through the largest tagged slot array into untagged words, with
+        // deletions so that tombstone compaction rewrites the words as well.
+        for n in 0..3000_u32 {
+            table.set(key(n), Value::Number(f64::from(n))).unwrap();
+            model.insert(n, f64::from(n));
+            if n % 7 == 3 {
+                table.set(key(n / 2), Value::Nil).unwrap();
+                model.remove(&(n / 2));
+            }
+            if n % 97 == 0 || (700..800).contains(&n) {
+                for probe in 0..n + 50 {
+                    let expected = model.get(&probe).map_or(Value::Nil, |v| Value::Number(*v));
+                    assert_eq!(table.get(key(probe)), expected, "key {probe} after {n}");
+                }
+            }
+        }
+        assert!(table.slots.len() > TAGGED_SLOTS);
     }
     fn check_hash(table: &Table, count: i32) {
         for n in 1..=count {
