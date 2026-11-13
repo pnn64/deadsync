@@ -470,3 +470,90 @@ fn static_name_reads_are_raw_and_agree_with_ordinary_raw_reads() {
     .unwrap();
     vm.execute(&program).unwrap();
 }
+
+fn fields_version(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let version = call.raw_fields_version(target)?;
+    call.push(Value::Number(f64::from(version)))
+}
+
+#[test]
+fn the_fields_version_changes_with_every_string_keyed_write_and_never_on_reads() {
+    let mut vm = vm();
+    let function = vm.new_host_function(fields_version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let program = compile(
+        br#"
+        local t = {name = 'a', count = 1}
+        local seen = version(t)
+        local function changed(label)
+            local now = version(t)
+            assert(now ~= seen, label)
+            seen = now
+        end
+        local function same(label)
+            assert(version(t) == seen, label)
+        end
+
+        -- Reads of every kind leave it alone.
+        local _ = t.name, t.missing, rawget(t, 'count'), #t, next(t)
+        for _ in pairs(t) do end
+        same('reads')
+        setmetatable(t, {__index = function() return 1 end})
+        local _ = t.inherited
+        same('metatable and inherited reads')
+        setmetatable(t, nil)
+
+        t.added = true;            changed('new field')
+        t.count = 2;               changed('number over number')
+        t.count = 2;               changed('same value again')
+        t.name = 'b';              changed('string over string')
+        t.name = {};               changed('table over string')
+        rawset(t, 'name', 'c');    changed('rawset')
+        t.added = nil;             changed('removed field')
+        t.added = 1;               changed('field added again')
+        t.never = nil;             same('removing a field that never existed')
+
+        -- A write through __newindex that stores nothing changes nothing.
+        setmetatable(t, {__newindex = function() end})
+        t.swallowed = 1
+        same('swallowed write')
+        setmetatable(t, nil)
+
+        -- Growth and compaction keep counting.
+        for i = 1, 300 do t['k' .. i] = i; changed('growth ' .. i) end
+        for i = 1, 300 do t['k' .. i] = nil; changed('removal ' .. i) end
+
+        -- Another table is counted separately.
+        local other = {}
+        local before = version(other)
+        t.elsewhere = 1; changed('write to t')
+        assert(version(other) == before)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+#[test]
+fn clearing_a_weak_entry_changes_the_fields_version() {
+    let mut vm = vm();
+    let function = vm.new_host_function(fields_version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let program = compile(
+        br#"
+        local weak = setmetatable({}, {__mode = 'v'})
+        weak.kept = 'string'
+        weak.dropped = {}
+        local before = version(weak)
+        collectgarbage('collect')
+        collectgarbage('collect')
+        assert(weak.dropped == nil and weak.kept == 'string')
+        assert(version(weak) ~= before)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}

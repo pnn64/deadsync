@@ -1242,6 +1242,20 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].get(key))
     }
 
+    /// A counter that changes whenever a string-keyed entry of the table is
+    /// added, replaced or removed, and possibly at other times. While it is
+    /// unchanged, raw reads of string keys return what they returned before,
+    /// so an embedding can remember such reads per table and repeat them only
+    /// after a change. The counter wraps after 2^32 changes.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].fields_version())
+    }
+
     /// Read a field named by a literal without invoking metamethods. The
     /// name is found as [`Vm::intern_static`] finds it.
     ///

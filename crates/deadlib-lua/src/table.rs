@@ -137,6 +137,8 @@ pub(crate) struct Table {
     metatable: u64,
     // Private embedding state, traced independently of Lua weak-table modes.
     host_state: u64,
+    // Counts changes to keyed entries; see `fields_version`.
+    fields_version: u32,
     pub trace: TableTrace,
 }
 
@@ -157,6 +159,7 @@ impl Table {
             next_hash_hint: AtomicU64::new(0),
             metatable: 0,
             host_state: 0,
+            fields_version: 0,
             trace: TableTrace::Idle,
         }
     }
@@ -199,6 +202,17 @@ impl Table {
     }
     pub fn set_host_state(&mut self, table: Option<TableId>) {
         self.host_state = table.map_or(0, |id| id.0);
+    }
+    /// A counter that changes whenever an entry outside the array part is
+    /// added, replaced or removed. While it is unchanged, a raw read of any
+    /// string key returns what it returned before.
+    #[inline]
+    pub fn fields_version(&self) -> u32 {
+        self.fields_version
+    }
+    #[inline]
+    fn touch_fields(&mut self) {
+        self.fields_version = self.fields_version.wrapping_add(1);
     }
     pub fn heap_bytes(&self) -> usize {
         self.array.capacity() * std::mem::size_of::<Value>()
@@ -327,6 +341,7 @@ impl Table {
         let old = std::mem::replace(&mut self.entries[i].value, Value::Nil);
         if old != Value::Nil {
             self.invalidate_trace();
+            self.touch_fields();
         }
         (old != Value::Nil).then_some(old)
     }
@@ -458,6 +473,7 @@ impl Table {
                 && entry.value != Value::Nil
             {
                 entry.value = value;
+                self.touch_fields();
                 return true;
             }
         }
@@ -465,6 +481,7 @@ impl Table {
             && self.entries[index].value != Value::Nil
         {
             self.entries[index].value = value;
+            self.touch_fields();
             self.remember_hash_entry((index + 1) as u32);
             return true;
         }
@@ -512,6 +529,7 @@ impl Table {
         let vacant = match self.slot(k) {
             Some((_, Some(i))) => {
                 self.entries[i].value = value;
+                self.touch_fields();
                 if matches!(k, Key::String(_)) {
                     self.remember_hash_entry((i + 1) as u32);
                 }
@@ -559,6 +577,7 @@ impl Table {
         };
         self.slots[slot] = index | Self::slot_tag(self.slots.len(), k.hash()).0;
         self.entries.push(Entry { key: k, value });
+        self.touch_fields();
         if matches!(k, Key::String(_)) {
             self.remember_hash_entry(index);
         }
