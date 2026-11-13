@@ -3,6 +3,7 @@ use crate::tween_pose::TweenPose;
 mod assets;
 mod banners;
 mod capture;
+mod fields;
 mod initial_state;
 mod input_snapshot;
 pub use input_snapshot::{CompiledActorInputs, CompiledActorInteractions};
@@ -165,6 +166,7 @@ struct Actor {
     native_children: bool,
     raw_instance: bool,
     model_materials: Vec<Option<crate::model_texture::Clock>>,
+    known: fields::Known,
 }
 struct TemplateState {
     state: ActorSnapshot,
@@ -248,6 +250,7 @@ impl Actor {
             native_children: false,
             raw_instance: false,
             model_materials: Vec::new(),
+            known: fields::Known::default(),
         }
     }
     fn sync_rotation_getters(&mut self) {

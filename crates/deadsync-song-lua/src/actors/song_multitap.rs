@@ -1,5 +1,6 @@
 //! Compiler observations for the existing multitap preparation branch.
 use super::*;
+use fields::Field;
 
 #[derive(Clone, Copy)]
 enum Job {
@@ -184,11 +185,11 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                             DeltaSource::Wrappers => deltas[p].wrappers,
                             DeltaSource::Columns => deltas[p].input,
                         });
-                    if truthy(raw(call, actor, "__songlua_live_inactive")?) {
+                    if truthy(fields::get(call, actor, Field::LIVE_INACTIVE)?) {
                         incoming = None;
                         span = None;
                     } else {
-                        let own = raw(call, actor, "__songlua_live_delta")?;
+                        let own = fields::get(call, actor, Field::LIVE_DELTA)?;
                         if own != Value::Nil {
                             let own = sprites::number(call, own)?;
                             incoming = Some(own);
@@ -235,7 +236,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                     }
                 }
                 Job::Advance(_, order, recurring) => {
-                    let rate = raw(call, actor, "__songlua_update_rate")?;
+                    let rate = fields::get(call, actor, Field::UPDATE_RATE)?;
                     let rate = if rate == Value::Nil {
                         call.store()
                             .actors
@@ -298,10 +299,10 @@ fn phase(store: &mut Store, order: usize, delta: f32) {
     }
 }
 fn hibernate(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<Option<f64>, Error> {
-    if truthy(raw(call, actor, "__songlua_theme_hibernating")?) {
+    if truthy(fields::get(call, actor, Field::THEME_HIBERNATING)?) {
         return Ok(None);
     }
-    let left = raw(call, actor, "__songlua_hibernate_seconds")?;
+    let left = fields::get(call, actor, Field::HIBERNATE_SECONDS)?;
     let left = if left == Value::Nil {
         call.store().actors.get(&actor).map_or(0., |a| a.hibernate)
     } else {
@@ -338,14 +339,14 @@ fn recurring_update(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Resu
     Ok(())
 }
 fn callback(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<(), Error> {
-    let pending = truthy(raw(call, actor, "__songlua_update_pending")?);
-    let function = raw(
+    let pending = truthy(fields::get(call, actor, Field::UPDATE_PENDING)?);
+    let function = fields::get(
         call,
         actor,
         if pending {
-            "__songlua_update_previous"
+            Field::UPDATE_PREVIOUS
         } else {
-            "__songlua_update_function"
+            Field::UPDATE_FUNCTION
         },
     )?;
     if function == Value::Nil {
