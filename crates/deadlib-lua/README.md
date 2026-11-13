@@ -67,6 +67,10 @@ when it declines, so ordinary member reads need no call. A resolver reads
 tables through `IndexView` and cannot allocate, fail or run Lua. The handler
 still answers whenever a debug hook or an instruction limit is active.
 
+`HostCall::raw_metatable` and `raw_table_next` read a table's actual metatable
+and walk its entries without metamethods, so a callback can inspect a table
+without entering Lua.
+
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
 Root or publish the returned value before calling Lua or collecting garbage.

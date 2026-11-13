@@ -355,3 +355,81 @@ fn inherited_fields_resolve_through_table_handlers_like_lua_indexing() {
         &[Value::Boolean(true)]
     );
 }
+
+// Walks a table with `raw_table_next`, returning how many entries it holds and
+// the sum of its numeric values, plus whether the actual metatable is the
+// second argument.
+fn walk(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let (mut count, mut sum, mut key) = (0.0, 0.0, Value::Nil);
+    while let Some((next, value)) = call.raw_table_next(target, key)? {
+        count += 1.0;
+        if let Value::Number(n) = value {
+            sum += n;
+        }
+        key = next;
+    }
+    let metatable = call.raw_metatable(target)?.map(Value::Table);
+    call.push(Value::Number(count))?;
+    call.push(Value::Number(sum))?;
+    call.push(Value::Boolean(
+        metatable.unwrap_or(Value::Nil) == call.arguments()[1],
+    ))
+}
+
+#[test]
+fn raw_traversal_and_metatable_reads_bypass_metamethods() {
+    let mut vm = vm();
+    let function = vm.new_host_function(walk, &[]).unwrap();
+    vm.set_global(b"host_walk", function).unwrap();
+    let program = compile(
+        br#"
+        local count, sum, same = host_walk({}, nil)
+        assert(count == 0 and sum == 0 and same)
+
+        -- Array and hash parts are both visited, each entry once.
+        local mixed = {10, 20, 30, name = 'x', [2.5] = 4, [true] = 5}
+        local expected = 0
+        for _ in next, mixed do expected = expected + 1 end
+        count, sum, same = host_walk(mixed, nil)
+        assert(count == expected and sum == 69 and same)
+
+        -- Neither `__pairs`-like handlers nor `__index` contribute entries, and
+        -- a `__metatable` field does not hide the actual metatable.
+        local mt = {__index = {inherited = 1}, __metatable = 'locked'}
+        local guarded = setmetatable({own = 7}, mt)
+        assert(getmetatable(guarded) == 'locked')
+        count, sum, same = host_walk(guarded, mt)
+        assert(count == 1 and sum == 7 and same)
+        count, sum, same = host_walk(guarded, nil)
+        assert(not same)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+fn stale_next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let absent = call.intern(b"absent");
+    let error = call.raw_table_next(target, absent).unwrap_err();
+    let message = call.intern(error.to_string().as_bytes());
+    call.push(message)
+}
+
+#[test]
+fn raw_traversal_rejects_a_key_the_table_does_not_hold() {
+    let mut vm = vm();
+    let function = vm.new_host_function(stale_next, &[]).unwrap();
+    vm.set_global(b"host_stale_next", function).unwrap();
+    let program = compile(b"return host_stale_next({present = 1})").unwrap();
+    let Value::String(id) = vm.execute(&program).unwrap()[0] else {
+        panic!("error message")
+    };
+    let message = String::from_utf8(vm.string_bytes(id).unwrap().to_vec()).unwrap();
+    assert!(message.contains("invalid key to 'next'"), "{message}");
+}

@@ -1241,6 +1241,33 @@ impl HostCall<'_> {
         self.vm.raw_table_set(table, key, value)
     }
 
+    /// Return a table's actual metatable, ignoring any `__metatable` field.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    pub fn raw_metatable(&self, table: TableId) -> Result<Option<TableId>, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].metatable())
+    }
+
+    /// Return the entry after `key` in a table's traversal order, as Lua's
+    /// `next` does. `Value::Nil` starts a traversal and `None` ends it.
+    ///
+    /// Like `next`, the order is unspecified and a traversal is only valid
+    /// while no new key is added to the table.
+    ///
+    /// # Errors
+    /// Returns an error for invalid handles or a key the table does not hold.
+    pub fn raw_table_next(
+        &self,
+        table: TableId,
+        key: Value,
+    ) -> Result<Option<(Value, Value)>, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        self.vm.validate_value(key)?;
+        self.vm.tables[slot_index(table.0)].next(key)
+    }
+
     /// Read private embedding state attached to a table. See `Vm::table_host_state`.
     pub fn table_host_state(&self, table: TableId) -> Result<Option<TableId>, Error> {
         self.vm.table_host_state(table)
