@@ -29,9 +29,8 @@ fn ordinary(call: &mut HostCall<'_>, owner: Value, key: &str) -> Result<Value, E
     let key = call.try_intern(key.as_bytes())?;
     call.table_get(owner, key)
 }
-fn raw_field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<Value, Error> {
-    let key = call.try_intern(key.as_bytes())?;
-    call.raw_table_get(owner, key)
+fn raw_field(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<Value, Error> {
+    get_static(call, owner, key.as_bytes())
 }
 fn invoke(
     call: &mut HostCall<'_>,
@@ -84,7 +83,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         let children = table(call, children)?;
         call.with_roots(&[Value::Table(screen), Value::Table(children)], |call| {
             for i in 0..LUA_PLAYERS {
-                let meter = raw_field(call, children, &format!("LifeP{}", i + 1))?;
+                let meter = get(call, children, format!("LifeP{}", i + 1).as_bytes())?;
                 if meter != Value::Nil {
                     table(call, meter)?;
                     let stats = call.raw_table_get(batch, Value::Number((i + 2) as f64))?;

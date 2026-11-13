@@ -95,7 +95,12 @@ fn raw(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Erro
     let key = call.try_intern(key.as_bytes())?;
     call.raw_table_get(actor, key)
 }
-fn set(call: &mut HostCall<'_>, actor: TableId, key: &str, value: Value) -> Result<(), Error> {
+fn set(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<(), Error> {
     song_replay::raw_set(call, actor, key, value)
 }
 fn optional_number(

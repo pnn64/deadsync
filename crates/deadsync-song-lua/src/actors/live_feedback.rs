@@ -314,7 +314,7 @@ fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) ->
                 }
                 capture::write(call, field, delta, false);
             } else {
-                song_replay::raw_set(
+                song_replay::raw_set_named(
                     call,
                     field,
                     &format!("__songlua_state_{name}"),

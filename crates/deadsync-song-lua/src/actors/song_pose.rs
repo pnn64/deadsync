@@ -233,7 +233,7 @@ pub(super) fn set_getter(
                 Target::Aux => "__songlua_aux".to_owned(),
                 _ => format!("__songlua_state_{}", scalar.unwrap()),
             };
-            song_replay::raw_set(call, id, &key, Value::Number(f64::from(*value)))?;
+            song_replay::raw_set_named(call, id, &key, Value::Number(f64::from(*value)))?;
         }
         Update::Vec4(value) => {
             let value = sprites::vector_value(call, value)?;

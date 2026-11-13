@@ -374,6 +374,18 @@ fn restore_getters(
 pub(super) fn raw_set(
     call: &mut HostCall<'_>,
     actor: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<(), Error> {
+    call.with_roots(&[value], |call| {
+        let key = call.intern_static(key.as_bytes())?;
+        call.raw_table_set(actor, key, value)
+    })
+}
+// `raw_set` for a field name built at run time.
+pub(super) fn raw_set_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
     key: &str,
     value: Value,
 ) -> Result<(), Error> {
@@ -431,7 +443,7 @@ pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), E
         ("fadetop", dest.fadetop),
         ("fadebottom", dest.fadebottom),
     ] {
-        raw_set(
+        raw_set_named(
             call,
             id,
             &format!("__songlua_state_{key}"),
@@ -530,7 +542,7 @@ pub(super) fn publish_scalar(
         _ => &[],
     };
     for &(key, value) in keys {
-        raw_set(
+        raw_set_named(
             call,
             id,
             &format!("__songlua_state_{key}"),

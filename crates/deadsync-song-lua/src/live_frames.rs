@@ -604,8 +604,14 @@ fn require_table(stack: &NativeStack<'_, '_>, index: usize) -> Result<(), Error>
         Err(stack.error(b"live frame table expected"))
     }
 }
-fn read(stack: &mut NativeStack<'_, '_>, owner: usize, key: &str, raw: bool) -> Result<(), Error> {
-    stack.push_bytes(key.as_bytes())?;
+fn read(
+    stack: &mut NativeStack<'_, '_>,
+    owner: usize,
+    key: &'static str,
+    raw: bool,
+) -> Result<(), Error> {
+    let key = stack.intern_static(key.as_bytes())?;
+    stack.push(key)?;
     stack.get_table(owner as isize, raw)
 }
 fn index(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<(), Error> {
@@ -615,11 +621,12 @@ fn index(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<
 fn write(
     stack: &mut NativeStack<'_, '_>,
     owner: usize,
-    key: &str,
+    key: &'static str,
     value: Value,
     raw: bool,
 ) -> Result<(), Error> {
-    stack.push_bytes(key.as_bytes())?;
+    let key = stack.intern_static(key.as_bytes())?;
+    stack.push(key)?;
     stack.push(value)?;
     stack.set_table(owner as isize, raw)
 }
