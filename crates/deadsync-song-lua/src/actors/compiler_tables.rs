@@ -18,7 +18,6 @@ pub(crate) enum Query {
 #[derive(Clone)]
 struct Binding {
     query: Query,
-    store: Shared,
 }
 impl Actors {
     pub(crate) fn read_compiler_tables(
@@ -49,10 +48,7 @@ impl Actors {
                     root,
                     Value::Table(output),
                 ],
-                Binding {
-                    query,
-                    store: self.store.clone(),
-                },
+                Binding { query },
             )?;
             Ok(vm.call(read, &[])?[0] == Value::Boolean(true))
         })();
@@ -105,7 +101,6 @@ fn upvalue_count(call: &mut HostCall<'_>, function: Value) -> Result<usize, Erro
     Ok(n as usize)
 }
 struct Reader {
-    store: Shared,
     output: TableId,
     getupvalue: Value,
     names: Vec<String>,
@@ -157,7 +152,7 @@ impl Reader {
         if let Some(function) = optional_function(call, value)? {
             call.with_roots(&[function], |call| self.function(call, function))?;
         }
-        if let Some(command) = recurring_command(call, &self.store, actor)? {
+        if let Some(command) = recurring_command(call, actor)? {
             let value = field(call, actor, &command)?;
             if let Some(function) = optional_function(call, value)? {
                 call.with_roots(&[function], |call| self.function(call, function))?;
@@ -195,7 +190,6 @@ impl Actors {
         let pin = vm.pin(Value::Table(output))?;
         let result = (|| {
             let reader = Reader {
-                store: self.store.clone(),
                 output,
                 getupvalue,
                 names: names.iter().map(|name| (*name).to_owned()).collect(),
@@ -263,18 +257,13 @@ fn contains(call: &mut HostCall<'_>, function: Value, name: &str) -> Result<bool
     )?;
     Ok(call.call(inspect, &[])?[0] == Value::Boolean(true))
 }
-fn recurring_command(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Option<String>, Error> {
+fn recurring_command(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<String>, Error> {
     let value = field(call, actor, "__songlua_recurring_update_command")?;
     if value != Value::Nil {
         return initial_state::value_text(call, value);
     }
-    let command = store
-        .lock()
-        .unwrap()
+    let command = call
+        .store()
         .actors
         .get(&actor)
         .and_then(|actor| actor.capture.as_ref())
@@ -287,19 +276,14 @@ fn recurring_command(
         .transpose()
 }
 
-fn reads_global(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<bool, Error> {
+fn reads_global(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<bool, Error> {
     let value = field(call, actor, "__songlua_update_function")?;
     if let Some(function) = optional_function(call, value)?
         && contains(call, function, name)?
     {
         return Ok(true);
     }
-    if let Some(command) = recurring_command(call, store, actor)? {
+    if let Some(command) = recurring_command(call, actor)? {
         // Only this branch of the native global-name predicate suppresses a
         // malformed/missing recurring handler. Table discovery propagates it.
         let function = field(call, actor, &command)
@@ -318,7 +302,7 @@ fn reads_global(
             break;
         }
         if let Value::Table(child) = value
-            && call.with_roots(&[value], |call| reads_global(call, store, child, name))?
+            && call.with_roots(&[value], |call| reads_global(call, child, name))?
         {
             return Ok(true);
         }
@@ -336,20 +320,20 @@ fn reads_global(
             let id = table(call, stream)?;
             call.with_roots(&[stream], |call| {
                 super::super::set(call, stream, "__songlua_parent", Value::Table(actor))?;
-                reads_global(call, store, id, name)
+                reads_global(call, id, name)
             })
         });
     }
     Ok(false)
 }
 fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let Binding { query, store } = call.function_data::<Binding>().unwrap().clone();
+    let Binding { query } = call.function_data::<Binding>().unwrap().clone();
     let root = call.captures()[2];
     let output = table(call, call.captures()[3])?;
     let (source, names, nested, functions) = match query {
         Query::ReadsGlobal(name) => {
             let found = if let Value::Table(actor) = root {
-                reads_global(call, &store, actor, &name)?
+                reads_global(call, actor, &name)?
             } else {
                 false
             };
@@ -380,7 +364,6 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         };
         call.with_roots(&[getupvalue], |call| {
             let mut reader = Reader {
-                store: store.clone(),
                 output,
                 getupvalue,
                 names,

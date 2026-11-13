@@ -169,7 +169,7 @@ impl SongRuntime {
         arg: Option<f32>,
         song_beat: Option<f32>,
     ) -> Result<SongActorFunctionBlocks, String> {
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("actor function capture requires preparation before frame replay".into());
         }
         let mut pins = Vec::new();
@@ -213,7 +213,7 @@ impl SongRuntime {
         probe: impl FnOnce(&mut Self) -> Result<T, Error>,
     ) -> Result<T, Error> {
         let random = self.preserve_random();
-        let previous = self.actors.begin_command_locals();
+        let previous = self.actors.begin_command_locals(&mut self.vm);
         let result = probe(self);
         let restored = self.actors.restore_command_locals(&mut self.vm, previous);
         drop(random);
@@ -232,7 +232,7 @@ impl SongRuntime {
         arg: Option<f32>,
         song_beat: Option<f32>,
     ) -> Result<SongActorFunctionBlocks, String> {
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("actor function capture requires preparation before frame replay".into());
         }
         let mut pins = Vec::new();

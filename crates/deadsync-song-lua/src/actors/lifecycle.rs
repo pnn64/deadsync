@@ -78,10 +78,10 @@ pub(super) const FRAME_METHODS: &[(&str, Lifecycle)] = &[
     ("GetUpdateRate", Lifecycle::GetRate),
 ];
 
-pub(super) fn finish(call: &mut HostCall<'_>, store: &Shared, id: TableId) -> Result<(), Error> {
-    action_capture::prepare(call, store, id)?;
+pub(super) fn finish(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
+    action_capture::prepare(call, id)?;
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         if let Some(clock) = &mut store.replay_clock {
             clock.reset(id);
         }
@@ -94,13 +94,13 @@ pub(super) fn finish(call: &mut HostCall<'_>, store: &Shared, id: TableId) -> Re
             actor.sync_rotation_getters();
         }
     }
-    song_immediate::cancel(call, store, id, true)?;
-    song_messages::reset_timing(call, store, id)?;
-    song_replay::sync_getters(call, store, id)?;
+    song_immediate::cancel(call, id, true)?;
+    song_messages::reset_timing(call, id)?;
+    song_replay::sync_getters(call, id)?;
     // Finish also visits native named children. Hurry, TimeLeft and ordinary
     // frame updates retain the production traversal of authored children only.
-    for child in children(call, store, id)? {
-        finish(call, store, child)?;
+    for child in children(call, id)? {
+        finish(call, child)?;
     }
     Ok(())
 }
@@ -122,16 +122,12 @@ fn hurry(store: &mut Store, id: TableId, factor: f32) {
     }
 }
 
-pub(super) fn time_left(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-) -> Result<f32, Error> {
+pub(super) fn time_left(call: &mut HostCall<'_>, id: TableId) -> Result<f32, Error> {
     call.with_roots(&[Value::Table(id)], |call| {
         if let Some(state) = transitions::state(call, id)? {
             return if state == 1 {
                 match transitions::child(call, id)? {
-                    Some(child) => time_left(call, store, child),
+                    Some(child) => time_left(call, child),
                     None => Ok(0.),
                 }
             } else {
@@ -143,7 +139,7 @@ pub(super) fn time_left(
             Value::Nil | Value::Boolean(false)
         );
         let native = {
-            let store = store.lock().unwrap();
+            let store = call.store();
             store.actors.get(&id).map(|actor| {
                 let hibernate = if theme_hibernating {
                     f32::INFINITY
@@ -190,7 +186,7 @@ pub(super) fn time_left(
                 break;
             }
             if let Value::Table(child) = value {
-                let child = hibernate + time_left(call, store, child)?;
+                let child = hibernate + time_left(call, child)?;
                 if left < child {
                     left = child;
                 }
@@ -203,19 +199,17 @@ pub(super) fn time_left(
 
 fn queue(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     exact_duration: f64,
     easing: &str,
     command: Option<Vec<u8>>,
 ) -> Result<(), Error> {
     let duration = exact_duration as f32;
-    let shared = store;
-    action_capture::prepare(call, store, id)?;
-    capture::enter_replay_queue(store, id);
+    action_capture::prepare(call, id)?;
+    capture::enter_replay_queue(call.store(), id);
     // BeginTweening finishes the actor subtree before adding its 52nd state.
     let count = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let actor = &guard.actors[&id];
         guard
             .replay_clock
@@ -229,9 +223,9 @@ fn queue(
             })
     };
     if count > 50 {
-        finish(call, store, id)?;
+        finish(call, id)?;
     }
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     if let Some(clock) = &mut store.replay_clock {
         clock.tween(
             id,
@@ -272,7 +266,6 @@ fn queue(
         opt1: None,
         command,
     });
-    drop(store);
     if replaying {
         song_messages::timing(
             call,
@@ -283,7 +276,7 @@ fn queue(
     }
     if !command_step {
         // Native BeginTweening owns an empty destination capture block too.
-        super::ease_probe::actor(call, shared, id)?;
+        super::ease_probe::actor(call, id)?;
     }
     Ok(())
 }
@@ -304,7 +297,7 @@ fn duration(call: &HostCall<'_>, value: Value, sleep: bool) -> f64 {
     value.unwrap_or(0.0).max(0.0)
 }
 
-fn native_tween(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn native_tween(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let duration = call.number(1)? as f32;
     if duration < 0.0 {
         return Ok(());
@@ -355,48 +348,36 @@ fn native_tween(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Resu
     } else {
         ["linear", "inQuad", "outQuad", "spring"][kind].to_owned()
     };
-    queue(call, store, actor, f64::from(duration), &easing, None)
+    queue(call, actor, f64::from(duration), &easing, None)
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    op: Lifecycle,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, op: Lifecycle) -> Result<(), Error> {
     if matches!(op, Lifecycle::Update | Lifecycle::Rate | Lifecycle::GetRate)
-        && !is_frame(store, actor)
+        && !is_frame(call.store(), actor)
     {
         return Err(call.error(b"ActorFrame expected"));
     }
     match op {
         Lifecycle::Ease(easing) => {
             let duration = duration(call, arg(call, 1), false);
-            queue(call, store, actor, duration, easing, None)?;
+            queue(call, actor, duration, easing, None)?;
         }
-        Lifecycle::Tween => native_tween(call, store, actor)?,
+        Lifecycle::Tween => native_tween(call, actor)?,
         Lifecycle::Sleep => {
             let duration = duration(call, arg(call, 1), true);
-            queue(call, store, actor, duration, "linear", None)?;
-            queue(call, store, actor, 0.0, "linear", None)?;
+            queue(call, actor, duration, "linear", None)?;
+            queue(call, actor, 0.0, "linear", None)?;
         }
         Lifecycle::Hibernate => {
             let key = call.try_intern(b"__songlua_theme_hibernating")?;
             call.raw_table_set(actor, key, Value::Boolean(false))?;
             let duration = float_scalar(call, arg(call, 1), true).unwrap_or(0.0);
-            store
-                .lock()
-                .unwrap()
-                .actors
-                .get_mut(&actor)
-                .unwrap()
-                .hibernate = duration;
+            call.store().actors.get_mut(&actor).unwrap().hibernate = duration;
             let key = call.try_intern(b"__songlua_hibernate_seconds")?;
             call.raw_table_set(actor, key, Value::Number(duration as f64))?;
-            action_capture::prepare_write(call, store, actor)?;
+            action_capture::prepare_write(call, actor)?;
             capture::write(
                 call,
-                store,
                 actor,
                 crate::SongLuaOverlayStateDelta {
                     hibernating: Some(duration > 0.),
@@ -406,9 +387,9 @@ pub(super) fn method(
             );
         }
         Lifecycle::Stop => {
-            action_capture::prepare(call, store, actor)?;
+            action_capture::prepare(call, actor)?;
             {
-                let mut store = store.lock().unwrap();
+                let store = call.store();
                 let fallback = song_pose::mode(&store, actor);
                 let prior = song_pose::prior_position(&store, actor);
                 if let Some(clock) = &mut store.replay_clock {
@@ -441,22 +422,22 @@ pub(super) fn method(
                         [actor.current.x, actor.current.y, actor.current.z];
                 }
             }
-            song_immediate::cancel(call, store, actor, false)?;
-            song_messages::reset_timing(call, store, actor)?;
-            song_replay::sync_getters(call, store, actor)?;
+            song_immediate::cancel(call, actor, false)?;
+            song_messages::reset_timing(call, actor)?;
+            song_replay::sync_getters(call, actor)?;
         }
-        Lifecycle::Finish => finish(call, store, actor)?,
+        Lifecycle::Finish => finish(call, actor)?,
         Lifecycle::Hurry => {
             let factor = call.number(1)? as f32;
             if factor < 0.0 {
                 return Err(call.error(b"hurrytweening factor must not be negative"));
             }
-            action_capture::prepare(call, store, actor)?;
-            hurry(&mut store.lock().unwrap(), actor, factor);
-            song_messages::hurry_timing(call, store, actor, factor)?;
+            action_capture::prepare(call, actor)?;
+            hurry(&mut call.store(), actor, factor);
+            song_messages::hurry_timing(call, actor, factor)?;
         }
         Lifecycle::TimeLeft => {
-            let left = time_left(call, store, actor)?;
+            let left = time_left(call, actor)?;
             return call.push(Value::Number(left as f64));
         }
         Lifecycle::Queue | Lifecycle::QueueMessage => {
@@ -464,8 +445,8 @@ pub(super) fn method(
                 if matches!(op, Lifecycle::QueueMessage) {
                     name.insert(0, b'!');
                 }
-                if !capture::queue(call, store, actor, name.clone())? {
-                    queue(call, store, actor, 0.0, "linear", Some(name))?;
+                if !capture::queue(call, actor, name.clone())? {
+                    queue(call, actor, 0.0, "linear", Some(name))?;
                 }
             }
         }
@@ -476,7 +457,7 @@ pub(super) fn method(
             }
             let key = call.try_intern(b"__songlua_update_function")?;
             call.table_set(Value::Table(actor), key, function)?;
-            invalidate_plans(call, store)?;
+            invalidate_plans(call)?;
         }
         Lifecycle::Rate => {
             let rate = call.number(1)? as f32;
@@ -484,80 +465,63 @@ pub(super) fn method(
                 return Err(call.error(b"Update rate must be greater than 0"));
             }
             if rate > 0.0 {
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&actor)
-                    .unwrap()
-                    .update_rate = rate;
-                invalidate_plans(call, store)?;
+                call.store().actors.get_mut(&actor).unwrap().update_rate = rate;
+                invalidate_plans(call)?;
             }
         }
         Lifecycle::GetRate => {
             return call.push(Value::Number(
-                store.lock().unwrap().actors[&actor].update_rate as f64,
+                call.store_ref().actors[&actor].update_rate as f64,
             ));
         }
     }
     call.push(Value::Table(actor))
 }
 
-pub(super) fn start(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if store.lock().unwrap().actors[&actor].started {
+pub(super) fn start(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if call.store().actors[&actor].started {
         return Ok(());
     }
-    play(call, store, actor, b"Begin", None, true)?;
-    startup(call, store, actor)
+    play(call, actor, b"Begin", None, true)?;
+    startup(call, actor)
 }
 
-pub(super) fn end(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Error> {
+pub(super) fn end(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
     let key = call.try_intern(b"__songlua_top_screen")?;
     call.raw_table_set(globals, key, Value::Nil)?;
     // The production live scene owns a synthetic root. End walks its ordinary
     // descendants in their current order, excluding that root and wrappers.
     // Commands may append tweens/queues, but End never advances them.
-    for child in children(call, store, root)? {
-        play(call, store, child, b"End", None, true)?;
+    for child in children(call, root)? {
+        play(call, child, b"End", None, true)?;
     }
     Ok(())
 }
 
-pub(super) fn startup(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
-        return native_children::group_lifecycle(call, store, actor, true);
+pub(super) fn startup(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if !call.store().actors.contains_key(&actor) {
+        return native_children::group_lifecycle(call, actor, true);
     }
-    if store.lock().unwrap().actors[&actor].started {
+    if call.store().actors[&actor].started {
         return Ok(());
     }
-    run_named(call, store, actor, b"On", None)?;
-    courses::publish_raw_flag(call, store, actor, "__songlua_startup_children_walked")?;
-    for child in declared_children(store, actor) {
-        native_children::adopt_declared(call, store, child, actor)?;
-        startup(call, store, child)?;
+    run_named(call, actor, b"On", None)?;
+    courses::publish_raw_flag(call, actor, "__songlua_startup_children_walked")?;
+    for child in declared_children(call.store(), actor) {
+        native_children::adopt_declared(call, child, actor)?;
+        startup(call, child)?;
     }
-    if let Some(stream) = song_meters::stream(call, store, actor)? {
-        startup(call, store, stream)?;
+    if let Some(stream) = song_meters::stream(call, actor)? {
+        startup(call, stream)?;
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .started = true;
-    courses::publish_raw_flag(call, store, actor, "__songlua_startup_commands_ran")?;
+    call.store().actors.get_mut(&actor).unwrap().started = true;
+    courses::publish_raw_flag(call, actor, "__songlua_startup_commands_ran")?;
     Ok(())
 }
 
 pub(super) fn advance_queue(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     delta: f32,
     span: f32,
@@ -566,18 +530,18 @@ pub(super) fn advance_queue(
     // A meter stream hidden by an already initialized duplicate-name group
     // has never subscribed. Its stored queue/getters remain observable, but
     // production does not advance that queue without native registration.
-    if !store.lock().unwrap().actors[&actor].registered {
+    if !call.store().actors[&actor].registered {
         return Ok(());
     }
-    if song_pose::mode(&store.lock().unwrap(), actor) {
-        return song_pose::advance_position(call, store, actor);
+    if song_pose::mode(&call.store(), actor) {
+        return song_pose::advance_position(call, actor);
     }
     let mut dispatched = 0;
     // Commands can replace the queue. Release metadata before entering Lua and
     // consume the original frame's remaining native float time afterwards.
     while remaining > 0.0 {
         let command = {
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             let sync = !store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
             let time = store.replay_frame.map_or(0., |(_, time)| time as f32);
             let actor = store.actors.get_mut(&actor).unwrap();
@@ -619,15 +583,15 @@ pub(super) fn advance_queue(
             }
             command
         };
-        song_replay::sync_getters(call, store, actor)?;
+        song_replay::sync_getters(call, actor)?;
         if let Some(command) = command {
             dispatched += 1;
             if dispatched > 10000 {
                 return Err(call.error(b"nonterminating zero-time actor command queue"));
             }
-            song_messages::reset_timing(call, store, actor)?;
+            song_messages::reset_timing(call, actor)?;
             let previous = {
-                let mut guard = store.lock().unwrap();
+                let guard = call.store();
                 let time = guard
                     .replay_frame
                     .map(|(_, time)| song_immediate::Dispatch {
@@ -636,27 +600,26 @@ pub(super) fn advance_queue(
                     });
                 std::mem::replace(&mut guard.replay_dispatch, time)
             };
-            let previous_clock = store
-                .lock()
-                .unwrap()
+            let previous_clock = call
+                .store()
                 .replay_clock
                 .as_mut()
                 .and_then(|clock| clock.dispatched(actor, remaining));
             #[cfg(feature = "test-support")]
             {
-                store.lock().unwrap().audit_queued_depth += 1;
+                call.store().audit_queued_depth += 1;
             }
             let result = if let Some(message) = command.strip_prefix(b"!") {
-                messages::queued(call, store, message)
+                messages::queued(call, message)
             } else {
-                play(call, store, actor, &command, None, true)
+                play(call, actor, &command, None, true)
             };
             #[cfg(feature = "test-support")]
             {
-                store.lock().unwrap().audit_queued_depth -= 1;
+                call.store().audit_queued_depth -= 1;
             }
-            store.lock().unwrap().replay_dispatch = previous;
-            if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+            call.store().replay_dispatch = previous;
+            if let Some(clock) = &mut call.store().replay_clock {
                 clock.dispatch = previous_clock;
             }
             result?;
@@ -682,10 +645,10 @@ pub(super) struct Plan {
     node: FrameNode,
     orders: Arc<HashMap<TableId, usize>>,
 }
-pub(super) fn invalidate_plans(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Error> {
-    let plans = std::mem::take(&mut store.lock().unwrap().update_plans);
+pub(super) fn invalidate_plans(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let plans = std::mem::take(&mut call.store().update_plans);
     let registry = table(call, call.captures()[0])?;
-    let multitap = store.lock().unwrap().multitap_plan.take();
+    let multitap = call.store().multitap_plan.take();
     if let Some(plan) = multitap {
         call.raw_table_set(registry, Value::Table(plan.roots), Value::Nil)?;
     }
@@ -696,15 +659,14 @@ pub(super) fn invalidate_plans(call: &mut HostCall<'_>, store: &Shared) -> Resul
 }
 fn plan(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     roots: TableId,
     synthetic_root: bool,
 ) -> Result<FrameNode, Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        let owned = store.lock().unwrap().actors.contains_key(&actor);
+        let owned = call.store().actors.contains_key(&actor);
         let (wrappers, children) = if owned {
-            let store = store.lock().unwrap();
+            let store = call.store();
             let node = &store.actors[&actor];
             (node.wrappers.clone(), node.children.clone())
         } else {
@@ -730,7 +692,7 @@ fn plan(
         };
         let wrappers = wrappers
             .into_iter()
-            .map(|id| plan(call, store, id, roots, false))
+            .map(|id| plan(call, id, roots, false))
             .collect::<Result<_, _>>()?;
         let recurring = match sprites::field(call, actor, "__songlua_recurring_update_command")? {
             Value::Nil => false,
@@ -743,21 +705,20 @@ fn plan(
         let transition = transitions::state(call, actor)?.is_some();
         let mut nodes = Vec::new();
         for child in children {
-            native_children::adopt_declared(call, store, child, actor)?;
-            nodes.push(plan(call, store, child, roots, false)?);
+            native_children::adopt_declared(call, child, actor)?;
+            nodes.push(plan(call, child, roots, false)?);
         }
-        if owned && let Some(stream) = song_meters::stream(call, store, actor)? {
-            nodes.push(plan(call, store, stream, roots, false)?);
+        if owned && let Some(stream) = song_meters::stream(call, actor)? {
+            nodes.push(plan(call, stream, roots, false)?);
         }
-        let texture = store
-            .lock()
-            .unwrap()
+        let texture = call
+            .store()
             .actors
             .get(&actor)
             .is_some_and(|actor| actor.model_materials.iter().any(Option::is_some));
         let mut columns = Vec::new();
         for column in notefields::update_columns(call, actor)? {
-            columns.push(plan(call, store, column, roots, false)?);
+            columns.push(plan(call, column, roots, false)?);
         }
         Ok(FrameNode {
             actor,
@@ -774,30 +735,25 @@ fn plan(
     })
 }
 
-pub(super) fn advance(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f32,
-) -> Result<(), Error> {
+pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
     // Production retains its traversal until an invalidating operation such as
     // SetUpdateFunction/SetUpdateRate. SortByDrawOrder alone does not invalidate
     // it. The current frame keeps its original plan even across invalidation;
     // callback values themselves are still resolved at the time of invocation.
-    let plan = retained_plan(call, store, actor)?;
+    let plan = retained_plan(call, actor)?;
     // An authored callback may invalidate the cache and collect while this
     // frame still uses the original plan's proxy groups.
     let prior_phase = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         guard.replay_clock.as_mut().and_then(|clock| {
             clock.orders = plan.orders.clone();
             clock.phase.take()
         })
     };
     let result = call.with_roots(&[Value::Table(plan.roots)], |call| {
-        advance_node(call, store, &plan.node, delta, delta)
+        advance_node(call, &plan.node, delta, delta)
     });
-    if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+    if let Some(clock) = &mut call.store().replay_clock {
         clock.phase = prior_phase;
     }
     result
@@ -819,15 +775,14 @@ fn assign_orders(node: &mut FrameNode, counter: &mut usize, orders: &mut HashMap
     }
 }
 
-fn enter_phase(store: &Shared, order: usize, delta: f32) {
-    if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+fn enter_phase(store: &mut Store, order: usize, delta: f32) {
+    if let Some(clock) = &mut store.replay_clock {
         clock.enter(order, delta);
     }
 }
 
 fn advance_node(
     call: &mut HostCall<'_>,
-    store: &Shared,
     node: &FrameNode,
     delta: f32,
     span: f32,
@@ -838,27 +793,25 @@ fn advance_node(
     let delta = if !node.owned {
         delta
     } else {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let actor = guard.actors.get_mut(&actor).unwrap();
         if actor.hibernate > 0.0 {
             let left = actor.hibernate - delta;
             actor.hibernate = left.max(0.0);
-            drop(guard);
             let key = call.try_intern(b"__songlua_hibernate_seconds")?;
             call.raw_table_set(node.actor, key, Value::Number(left.max(0.0) as f64))?;
             if left <= 0.0 {
                 song_immediate::record(
                     call,
-                    store,
                     node.actor,
                     crate::SongLuaOverlayUpdateTarget::Hibernating,
                     crate::SongLuaOverlayUpdateValue::Bool(false),
                 );
                 -left
             } else {
-                models::advance_materials(store, node.actor, material_delta);
+                models::advance_materials(call.store(), node.actor, material_delta);
                 for column in &node.columns {
-                    advance_node(call, store, column, material_delta, material_span)?;
+                    advance_node(call, column, material_delta, material_span)?;
                 }
                 return Ok(());
             }
@@ -874,23 +827,22 @@ fn advance_node(
     // Wrappers receive the owner's post-hibernation delta before its update
     // rate. Their callbacks can change that rate for this same frame.
     for wrapper in &node.wrappers {
-        advance_node(call, store, wrapper, delta, span)?;
+        advance_node(call, wrapper, delta, span)?;
     }
     let delta = if node.owned {
-        let delta = delta * store.lock().unwrap().actors[&actor].update_rate;
-        enter_phase(store, node.order, delta);
-        effects::advance(call, store, actor, delta)?;
-        advance_queue(call, store, actor, delta, span)?;
-        capture::advance_ready(call, store, actor)?;
-        enter_phase(store, node.order, delta);
-        let consumed = store
-            .lock()
-            .unwrap()
+        let delta = delta * call.store().actors[&actor].update_rate;
+        enter_phase(call.store(), node.order, delta);
+        effects::advance(call, actor, delta)?;
+        advance_queue(call, actor, delta, span)?;
+        capture::advance_ready(call, actor)?;
+        enter_phase(call.store(), node.order, delta);
+        let consumed = call
+            .store()
             .replay_clock
             .as_ref()
             .is_some_and(|clock| clock.consumed_recurring(actor));
         if !consumed {
-            recurring::advance(call, store, actor, delta)?;
+            recurring::advance(call, actor, delta)?;
         }
         delta
     } else {
@@ -906,7 +858,7 @@ fn advance_node(
             false
         } else {
             if let Some(child) = transitions::child(call, actor)?
-                && time_left(call, store, child)? == 0.
+                && time_left(call, child)? == 0.
             {
                 sprites::set(call, actor, "__songlua_transition_state", Value::Number(2.))?;
             }
@@ -917,11 +869,11 @@ fn advance_node(
     };
     if children_active {
         for child in &node.children {
-            advance_node(call, store, child, delta, span)?;
+            advance_node(call, child, delta, span)?;
         }
     }
-    models::advance_materials(store, actor, material_delta);
-    enter_phase(store, node.callback_order, delta);
+    models::advance_materials(call.store(), actor, material_delta);
+    enter_phase(call.store(), node.callback_order, delta);
     let function = get(call, actor, b"__songlua_update_function")?;
     if children_active && function != Value::Nil {
         if !matches!(function, Value::Function(_) | Value::Native(_)) {
@@ -930,7 +882,6 @@ fn advance_node(
         let result = call.with_roots(&[function], |call| {
             run_callback(
                 call,
-                store,
                 actor,
                 function,
                 Some(Value::Number(delta as f64)),
@@ -938,18 +889,18 @@ fn advance_node(
                 None,
             )
         });
-        let drain = capture::drain_commands(call, store, actor);
+        let drain = capture::drain_commands(call, actor);
         if let Err(error) = result {
-            diagnostics::report(call, store, actor, diagnostics::Callback::Update, error)?;
+            diagnostics::report(call, actor, diagnostics::Callback::Update, error)?;
         }
         if let Err(error) = drain {
-            diagnostics::report(call, store, actor, diagnostics::Callback::Queue, error)?;
+            diagnostics::report(call, actor, diagnostics::Callback::Queue, error)?;
         }
     }
     // NoteField advances its column vector after its frame callback, using the
     // incoming delta outside the frame's hibernation and update-rate gates.
     for column in &node.columns {
-        advance_node(call, store, column, material_delta, material_span)?;
+        advance_node(call, column, material_delta, material_span)?;
     }
     Ok(())
 }
@@ -982,18 +933,14 @@ pub(super) fn message_delay(actor: &Actor, duration: f32) -> f32 {
     }
 }
 
-pub(super) fn retained_plan(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Arc<Plan>, Error> {
-    let cached = store.lock().unwrap().update_plans.get(&actor).cloned();
+pub(super) fn retained_plan(call: &mut HostCall<'_>, actor: TableId) -> Result<Arc<Plan>, Error> {
+    let cached = call.store().update_plans.get(&actor).cloned();
     let plan = if let Some(plan) = cached {
         plan
     } else {
         let roots = call.try_new_table()?;
         let plan = call.with_roots(&[Value::Table(roots)], |call| {
-            let mut node = plan(call, store, actor, roots, true)?;
+            let mut node = plan(call, actor, roots, true)?;
             let mut orders = HashMap::new();
             assign_orders(&mut node, &mut 0, &mut orders);
             let registry = table(call, call.captures()[0])?;
@@ -1004,11 +951,7 @@ pub(super) fn retained_plan(
                 orders: Arc::new(orders),
             }))
         })?;
-        store
-            .lock()
-            .unwrap()
-            .update_plans
-            .insert(actor, plan.clone());
+        call.store().update_plans.insert(actor, plan.clone());
         plan
     };
     Ok(plan)

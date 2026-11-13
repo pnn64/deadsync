@@ -41,7 +41,6 @@ fn order(call: &mut HostCall<'_>, actor: TableId) -> Result<i32, Error> {
 
 fn replace(
     call: &mut HostCall<'_>,
-    data: &Load,
     screen: TableId,
     previous: TableId,
     actor: TableId,
@@ -57,15 +56,7 @@ fn replace(
     call.with_roots(&[children], |call| {
         set(call, table(call, children)?, name, Value::Table(actor))
     })?;
-    for child in &mut data
-        .store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&screen)
-        .unwrap()
-        .children
-    {
+    for child in &mut call.store().actors.get_mut(&screen).unwrap().children {
         if *child == previous {
             *child = actor;
         }
@@ -88,12 +79,12 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
         let screen = table(call, screen)?;
         let overlay = named(call, screen, "Overlay")?;
         if capture_probe {
-            parent(call, &data.store, actor, overlay)?;
-            screen_parts::append(call, &data.store, overlay, actor)?;
+            parent(call, actor, overlay)?;
+            screen_parts::append(call, overlay, actor)?;
             let children = registry(call, overlay)?;
             set(call, table(call, children)?, "", Value::Table(actor))?;
         } else {
-            parent(call, &data.store, actor, screen)?;
+            parent(call, actor, screen)?;
             let name = call.try_intern(b"Overlay")?;
             call.with_roots(&[name], |call| {
                 if get(call, actor, b"__songlua_load_name")? != Value::Nil {
@@ -111,26 +102,24 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
                 Value::Number(order as f64),
             )?;
             {
-                let mut guard = data.store.lock().unwrap();
+                let guard = call.store();
                 let state = &mut guard.actors.get_mut(&actor).unwrap().state;
                 state.name = b"Overlay".to_vec();
                 state.draw_order = order;
                 state.render.draw_order = order;
             }
-            replace(call, data, screen, overlay, actor, "Overlay")?;
+            replace(call, screen, overlay, actor, "Overlay")?;
         }
         owned_lookup(call, actor)?;
-        initialize(call, &data.store, actor)?;
+        initialize(call, actor)?;
         command(call, actor, b"BeginCommand")?;
         command(call, actor, b"OnCommand")?;
         if capture_probe {
             // The diagnostic probe uses ActorDefinitionHost, which the native
             // host installs only in live mode. Its error occurs after On and
             // leaves the loaded theme attached to the original wrapper.
-            let live = data
-                .store
-                .lock()
-                .unwrap()
+            let live = call
+                .store()
                 .clock
                 .live
                 .load(std::sync::atomic::Ordering::Relaxed);
@@ -139,13 +128,12 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
             }
             let probe = generated_players::dummy(
                 call,
-                &data.store,
                 data.scene,
                 "ActorFrame",
                 "ITGmaniaHarnessTraceProbe",
                 Some(overlay),
             )?;
-            screen_parts::append(call, &data.store, overlay, probe)?;
+            screen_parts::append(call, overlay, probe)?;
             let children = registry(call, overlay)?;
             set(
                 call,
@@ -170,7 +158,7 @@ pub(super) fn decorations(call: &mut HostCall<'_>, data: &Load) -> Result<(), Er
     let globals = table(call, helper(call, 5)?)?;
     let screen = get(call, globals, b"__songlua_top_screen")?;
     let screen = table(call, screen)?;
-    let name = actor_name(call, &data.store, screen)?;
+    let name = actor_name(call, screen)?;
     let name =
         String::from_utf8(name).map_err(|_| call.error(b"screen name must be valid UTF-8"))?;
     let environment = source::environment(call, Value::Table(globals), false)?;
@@ -181,12 +169,12 @@ pub(super) fn decorations(call: &mut HostCall<'_>, data: &Load) -> Result<(), Er
             let definition = source::evaluate(call, source, environment, &[])?;
             let actor = own(call, data, definition)?;
             let previous = named(call, screen, name)?;
-            parent(call, &data.store, actor, screen)?;
+            parent(call, actor, screen)?;
             owned_lookup(call, actor)?;
-            initialize(call, &data.store, actor)?;
+            initialize(call, actor)?;
             let on = source::evaluate(call, source::DECORATION_ON, Value::Table(globals), &[])?;
             set(call, actor, "OnCommand", on)?;
-            replace(call, data, screen, previous, actor, name)?;
+            replace(call, screen, previous, actor, name)?;
             command(call, actor, b"BeginCommand")?;
             command(call, actor, b"OnCommand")?;
         }
@@ -207,13 +195,8 @@ pub(super) fn decorations(call: &mut HostCall<'_>, data: &Load) -> Result<(), Er
                 Value::Table(child),
             )?;
         }
-        data.store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&screen)
-            .unwrap()
-            .children = children.into_iter().map(|(_, child)| child).collect();
+        call.store().actors.get_mut(&screen).unwrap().children =
+            children.into_iter().map(|(_, child)| child).collect();
         Ok(())
     })
 }

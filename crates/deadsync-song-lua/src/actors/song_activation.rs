@@ -15,17 +15,14 @@ pub(super) struct Session {
 }
 #[derive(Clone)]
 struct Activate {
-    store: Shared,
     scene: u64,
     context: SongLuaCompileContext,
     requests: Arc<Mutex<Requests>>,
     output: Arc<Mutex<Option<SongActivation>>>,
 }
 impl Actors {
-    pub(crate) fn complete_song_activation(&self, screen: ActorScene) {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn complete_song_activation(&self, vm: &mut Vm, screen: ActorScene) {
+        vm.store()
             .scenes
             .get_mut(&screen.id)
             .unwrap()
@@ -42,7 +39,7 @@ impl Actors {
         live: bool,
     ) -> Result<(), Error> {
         let invalid = {
-            let guard = self.store.lock().unwrap();
+            let guard = vm.store();
             match &guard.scenes[&screen.id].song_session {
                 None => Some(b"song layers have not been initialized".as_slice()),
                 Some(session) if !session.activated || session.discovery_started => {
@@ -55,7 +52,7 @@ impl Actors {
             return vm.with_native_stack(|stack| Err(stack.error(message)));
         }
         let (root, actors, queued) = {
-            let mut guard = self.store.lock().unwrap();
+            let guard = vm.store();
             let scene = guard.scenes.get_mut(&screen.id).unwrap();
             let session = scene.song_session.as_mut().unwrap();
             session.discovery_started = true;
@@ -85,7 +82,7 @@ impl Actors {
         };
         // Keep the attachment reachable even if a probe removes actors from
         // the authored array or replaces the global bindings that owned them.
-        let first = self.store.lock().unwrap().next;
+        let first = vm.store().next;
         let result = (|| {
             if !has_queued {
                 return Ok(HashMap::new());
@@ -94,10 +91,10 @@ impl Actors {
             self.discover_queued(vm, queued)?;
             self.after_song_discovery(vm, screen, before)
         })();
-        adopt_created(&self.store, screen.id, first);
+        adopt_created(vm.store(), screen.id, first);
         match result {
             Ok(queued) => {
-                let mut guard = self.store.lock().unwrap();
+                let guard = vm.store();
                 let session = guard
                     .scenes
                     .get_mut(&screen.id)
@@ -120,9 +117,10 @@ impl Actors {
 
     pub(crate) fn song_startup_queued_states(
         &self,
+        vm: &Vm,
         screen: ActorScene,
     ) -> Option<HashMap<TableId, super::super::SongStartupState>> {
-        let guard = self.store.lock().unwrap();
+        let guard = vm.store_ref();
         Some(
             guard
                 .scenes
@@ -139,10 +137,8 @@ impl Actors {
         vm: &mut Vm,
         screen: ActorScene,
     ) -> Result<(), Error> {
-        let locals = self
-            .store
-            .lock()
-            .unwrap()
+        let locals = vm
+            .store()
             .scenes
             .get_mut(&screen.id)
             .unwrap()
@@ -156,10 +152,8 @@ impl Actors {
     }
 
     #[cfg(feature = "test-support")]
-    pub(crate) fn song_startup_queue(&self) -> Vec<Value> {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn song_startup_queue(&self, vm: &Vm) -> Vec<Value> {
+        vm.store_ref()
             .startup_queues
             .as_deref()
             .unwrap_or_default()
@@ -181,16 +175,15 @@ impl Actors {
             activate,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Activate {
-                store: self.store.clone(),
                 scene: screen.id,
                 context: context.clone(),
                 requests,
                 output: output.clone(),
             },
         )?;
-        let first = self.store.lock().unwrap().next;
+        let first = vm.store().next;
         let result = vm.call(function, &[]).map(|_| ());
-        adopt_created(&self.store, screen.id, first);
+        adopt_created(vm.store(), screen.id, first);
         result?;
         Ok(output.lock().unwrap().take().unwrap())
     }
@@ -198,37 +191,44 @@ impl Actors {
         let function = vm.new_host_function_with_data(
             zero_update,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            (self.store.clone(), screen.id),
+            screen.id,
         )?;
-        let first = self.store.lock().unwrap().next;
+        let first = vm.store().next;
         let result = vm.call(function, &[]).map(|_| ());
-        adopt_created(&self.store, screen.id, first);
+        adopt_created(vm.store(), screen.id, first);
         result
     }
 }
 fn zero_update(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, id) = call.function_data::<(Shared, u64)>().unwrap().clone();
-    let roots = store.lock().unwrap().scenes[&id]
+    let id = call.function_data::<u64>().unwrap().clone();
+    let roots = call.store().scenes[&id]
         .song_session
         .as_ref()
         .unwrap()
         .roots;
-    zero_node(call, &store, roots)
+    zero_node(call, roots)
 }
 fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Activate>().unwrap().clone();
     let roots = {
-        let mut guard = data.store.lock().unwrap();
-        if data.context.live != guard.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
+        let live = call
+            .store_ref()
+            .clock
+            .live
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if data.context.live != live {
             return Err(call.error(b"song activation context and runtime modes differ"));
         }
-        let session = guard
+        let Some(session) = call
+            .store()
             .scenes
             .get_mut(&data.scene)
             .unwrap()
             .song_session
             .as_mut()
-            .ok_or_else(|| call.error(b"song layers have not been initialized"))?;
+        else {
+            return Err(call.error(b"song layers have not been initialized"));
+        };
         if !session.ready {
             return Err(call.error(b"song initialization failed or activation already began"));
         }
@@ -266,15 +266,11 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                 "__songlua_screen_loading",
                 Value::Boolean(false),
             )?;
-            data.store
-                .lock()
-                .unwrap()
-                .startup_queues
-                .get_or_insert_with(Vec::new);
+            call.store().startup_queues.get_or_insert_with(Vec::new);
             {
                 // The compiler starts its capture after the initialized-global
                 // reads. Constructor/Init/previous-End events precede it.
-                let mut store = data.store.lock().unwrap();
+                let store = call.store();
                 store.prepared_sounds.clear();
                 store.sprite_textures.clear();
                 store.judgment_textures.clear();
@@ -291,15 +287,17 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
             // Loader children have no native parent of their own. Begin walks
             // direct unique roots; On below follows the raw sequence including aliases.
             {
-                let _capture = song_capture::capture_startup_commands(&data.store);
-                native_children::with_children(call, roots, |call, actor| {
+                let previous = song_capture::capture_startup_commands(call.store());
+                let result = native_children::with_children(call, roots, |call, actor| {
                     let beat = get(call, actor, b"__songlua_background_start_beat")?;
                     if beat != Value::Nil {
                         sprites::number(call, beat)?;
                         return Ok(());
                     }
-                    named_tree(call, &data.store, actor, b"Begin")
-                })?;
+                    named_tree(call, actor, b"Begin")
+                });
+                song_capture::restore_startup_commands(call.store(), previous);
+                result?;
             }
             let top = get(call, globals, b"__songlua_top_screen")?;
             if top != Value::Nil {
@@ -309,7 +307,7 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                         let actor = get(call, table(call, children)?, b"In")?;
                         if actor != Value::Nil {
                             call.with_roots(&[actor], |call| {
-                                transitions::start(call, &data.store, table(call, actor)?)
+                                transitions::start(call, table(call, actor)?)
                             })?;
                         }
                         Ok(())
@@ -345,12 +343,14 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                 })?;
             }
             messages::record(call, b"ScreenChanged", false)?;
-            messages::dispatch(call, &data.store, b"ScreenChanged", None, true)?;
+            messages::dispatch(call, b"ScreenChanged", None, true)?;
             {
-                let _capture = song_capture::capture_startup_commands(&data.store);
-                startup(call, &data.store, roots)?;
+                let previous = song_capture::capture_startup_commands(call.store());
+                let result = startup(call, roots);
+                song_capture::restore_startup_commands(call.store(), previous);
+                result?;
             }
-            let wrapper_initials = song_capture::wrapper_initials(call, &data.store, roots)?;
+            let wrapper_initials = song_capture::wrapper_initials(call, roots)?;
             let options = read_options(call, globals, &data.context)?;
             *data.output.lock().unwrap() = Some(SongActivation {
                 initialized_globals: initialized,
@@ -365,25 +365,14 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
         })
     })
 }
-fn named_tree(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &[u8],
-) -> Result<(), Error> {
+fn named_tree(call: &mut HostCall<'_>, actor: TableId, name: &[u8]) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        native_children::run_command(call, store, actor, name, None)?;
-        native_children::with_children(call, actor, |call, child| {
-            named_tree(call, store, child, name)
-        })?;
+        native_children::run_command(call, actor, name, None)?;
+        native_children::with_children(call, actor, |call, child| named_tree(call, child, name))?;
         Ok(())
     })
 }
-pub(super) fn startup(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn startup(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
         if truthy(get(call, actor, b"__songlua_defer_on")?) {
             return Ok(());
@@ -407,7 +396,7 @@ pub(super) fn startup(
             "__songlua_startup_children_walked",
             Value::Boolean(false),
         )?;
-        native_children::run_command_with_drain(call, store, actor, b"On", None, false)?;
+        native_children::run_command_with_drain(call, actor, b"On", None, false)?;
         // Fetch each slot after the preceding child's On: callbacks may append
         // or remove children during this walk.
         let mut i = 1;
@@ -418,16 +407,16 @@ pub(super) fn startup(
             }
             if let Value::Table(child) = child {
                 call.with_roots(&[Value::Table(child)], |call| {
-                    native_children::adopt_declared(call, store, child, actor)?;
-                    startup(call, store, child)
+                    native_children::adopt_declared(call, child, actor)?;
+                    startup(call, child)
                 })?;
             }
             i += 1;
         }
-        if store.lock().unwrap().actors.contains_key(&actor)
-            && let Some(stream) = song_meters::stream(call, store, actor)?
+        if call.store().actors.contains_key(&actor)
+            && let Some(stream) = song_meters::stream(call, actor)?
         {
-            startup(call, store, stream)?;
+            startup(call, stream)?;
         }
         sprites::set(
             call,
@@ -435,8 +424,8 @@ pub(super) fn startup(
             "__songlua_startup_children_walked",
             Value::Boolean(true),
         )?;
-        if store.lock().unwrap().actors.contains_key(&actor) {
-            capture::drain_commands(call, store, actor)?;
+        if call.store().actors.contains_key(&actor) {
+            capture::drain_commands(call, actor)?;
         }
         sprites::set(
             call,
@@ -444,7 +433,7 @@ pub(super) fn startup(
             "__songlua_startup_commands_ran",
             Value::Boolean(true),
         )?;
-        if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+        if let Some(actor) = call.store().actors.get_mut(&actor) {
             actor.started = true;
         }
         Ok(())
@@ -501,10 +490,8 @@ fn truthy(value: Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 
-pub(super) fn adopt_created(store: &Shared, owner: u64, first: u64) {
+pub(super) fn adopt_created(store: &mut Store, owner: u64, first: u64) {
     let scenes = store
-        .lock()
-        .unwrap()
         .scenes
         .keys()
         .copied()
@@ -517,7 +504,7 @@ pub(super) fn adopt_created(store: &Shared, owner: u64, first: u64) {
 
 // The real startup Update(0) uses dynamic raw-array traversal, not the cached
 // chronological plan. It does not dispatch future queues or transition jobs.
-fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn zero_node(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
         if truthy(get(call, actor, b"__songlua_live_inactive")?)
             || truthy(get(call, actor, b"__songlua_theme_hibernating")?)
@@ -528,7 +515,7 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
         if hibernate != Value::Nil && sprites::number(call, hibernate)? > 0. {
             return Ok(());
         }
-        let owned = store.lock().unwrap().actors.contains_key(&actor);
+        let owned = call.store().actors.contains_key(&actor);
         let wrappers = sprites::field(call, actor, "__songlua_wrappers")?;
         if wrappers == Value::Nil && owned {
             // Rust actor bindings own their default wrapper list in metadata.
@@ -536,14 +523,11 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
             // sequence walker does, so appended wrappers run in this update.
             let mut index = 0;
             loop {
-                let wrapper = store.lock().unwrap().actors[&actor]
-                    .wrappers
-                    .get(index)
-                    .copied();
+                let wrapper = call.store().actors[&actor].wrappers.get(index).copied();
                 let Some(wrapper) = wrapper else {
                     break;
                 };
-                zero_node(call, store, wrapper)?;
+                zero_node(call, wrapper)?;
                 index += 1;
             }
         }
@@ -556,7 +540,7 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
                     if wrapper == Value::Nil {
                         break;
                     }
-                    zero_node(call, store, table(call, wrapper)?)?;
+                    zero_node(call, table(call, wrapper)?)?;
                     i += 1;
                 }
                 Ok(())
@@ -564,7 +548,7 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
         }
         if owned {
             let active = {
-                let guard = store.lock().unwrap();
+                let guard = call.store();
                 let render = guard.actors[&actor].state.render;
                 (!render.effect_timer
                     && render.effect_clock == deadlib_present::anim::EffectClock::Time)
@@ -572,7 +556,7 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
                     || render.rainbow
             };
             if active {
-                effects::advance(call, store, actor, 0.)?;
+                effects::advance(call, actor, 0.)?;
             }
         }
         let mut i = 1;
@@ -583,14 +567,14 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
             }
             if let Value::Table(child) = child {
                 call.with_roots(&[Value::Table(child)], |call| {
-                    native_children::adopt_declared(call, store, child, actor)?;
-                    zero_node(call, store, child)
+                    native_children::adopt_declared(call, child, actor)?;
+                    zero_node(call, child)
                 })?;
             }
             i += 1;
         }
-        if owned && let Some(stream) = song_meters::stream(call, store, actor)? {
-            zero_node(call, store, stream)?;
+        if owned && let Some(stream) = song_meters::stream(call, actor)? {
+            zero_node(call, stream)?;
         }
         let key = if truthy(get(call, actor, b"__songlua_update_pending")?) {
             b"__songlua_update_previous".as_slice()
@@ -603,22 +587,14 @@ fn zero_node(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
                 return Err(call.error(b"actor update function must be a function"));
             }
             let result = call.with_roots(&[function], |call| {
-                run_callback(
-                    call,
-                    store,
-                    actor,
-                    function,
-                    Some(Value::Number(0.)),
-                    true,
-                    None,
-                )
+                run_callback(call, actor, function, Some(Value::Number(0.)), true, None)
             });
-            let drain = capture::drain_commands(call, store, actor);
+            let drain = capture::drain_commands(call, actor);
             if let Err(error) = result {
-                diagnostics::report(call, store, actor, diagnostics::Callback::Update, error)?;
+                diagnostics::report(call, actor, diagnostics::Callback::Update, error)?;
             }
             if let Err(error) = drain {
-                diagnostics::report(call, store, actor, diagnostics::Callback::Queue, error)?;
+                diagnostics::report(call, actor, diagnostics::Callback::Queue, error)?;
             }
         }
         Ok(())

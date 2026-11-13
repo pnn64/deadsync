@@ -16,62 +16,47 @@ pub(super) struct Broadcasts {
     pub events: Vec<(f32, String, bool)>,
 }
 
-pub(super) struct BroadcastScope {
-    store: Shared,
-    previous: Option<Broadcasts>,
-}
-impl Drop for BroadcastScope {
-    fn drop(&mut self) {
-        if let Some(previous) = self.previous.take() {
-            self.store.lock().unwrap().song_broadcasts = Some(previous);
-        }
-    }
-}
+/// Broadcast capture set aside by [`pause_preparation_broadcasts`].
+#[must_use = "pass the paused capture to resume_preparation_broadcasts"]
+pub(super) struct PausedBroadcasts(Option<Broadcasts>);
+
+/// Startup-command flag replaced by [`capture_startup_commands`].
+#[must_use = "pass the previous flag to restore_startup_commands"]
+pub(super) struct StartupCommands(Option<bool>);
 
 /// Retain authored Begin/On broadcasts while keeping the surrounding screen
-/// transition messages outside the captured song timeline.
-pub(super) struct StartupBroadcastScope {
-    store: Shared,
-    previous: Option<bool>,
+/// transition messages outside the captured song timeline. Pair every call
+/// with [`restore_startup_commands`], on error paths too.
+pub(super) fn capture_startup_commands(store: &mut Store) -> StartupCommands {
+    StartupCommands(
+        store
+            .song_broadcasts
+            .as_mut()
+            .map(|capture| std::mem::replace(&mut capture.startup_commands, true)),
+    )
 }
-impl Drop for StartupBroadcastScope {
-    fn drop(&mut self) {
-        if let Some(previous) = self.previous {
-            let mut guard = self.store.lock().unwrap();
-            if let Some(capture) = guard.song_broadcasts.as_mut() {
-                capture.startup_commands = previous;
-            }
-        }
-    }
-}
-pub(super) fn capture_startup_commands(store: &Shared) -> StartupBroadcastScope {
-    let previous = store
-        .lock()
-        .unwrap()
-        .song_broadcasts
-        .as_mut()
-        .map(|capture| std::mem::replace(&mut capture.startup_commands, true));
-    StartupBroadcastScope {
-        store: store.clone(),
-        previous,
+pub(super) fn restore_startup_commands(store: &mut Store, previous: StartupCommands) {
+    if let (Some(previous), Some(capture)) = (previous.0, store.song_broadcasts.as_mut()) {
+        capture.startup_commands = previous;
     }
 }
 
 // Command probes have their own Lua broadcast history. Their speculative
 // delivery must not enter the chronological playback stream, whose native
 // recorder starts after these probes. Live delivery keeps its existing sink.
-pub(super) fn pause_preparation_broadcasts(store: &Shared) -> BroadcastScope {
-    let previous = {
-        let mut guard = store.lock().unwrap();
-        if guard.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
+// Pair every call with resume_preparation_broadcasts, on error paths too.
+pub(super) fn pause_preparation_broadcasts(store: &mut Store) -> PausedBroadcasts {
+    PausedBroadcasts(
+        if store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
             None
         } else {
-            guard.song_broadcasts.take()
-        }
-    };
-    BroadcastScope {
-        store: store.clone(),
-        previous,
+            store.song_broadcasts.take()
+        },
+    )
+}
+pub(super) fn resume_preparation_broadcasts(store: &mut Store, paused: PausedBroadcasts) {
+    if let Some(previous) = paused.0 {
+        store.song_broadcasts = Some(previous);
     }
 }
 #[derive(Clone)]
@@ -118,18 +103,16 @@ impl Actors {
         self.capture_song(vm, scene, Phase::Text(wrappers))?;
         Ok(())
     }
-    pub(crate) fn begin_song_capture(&self) {
-        self.store.lock().unwrap().song_broadcasts = Some(Broadcasts::default());
+    pub(crate) fn begin_song_capture(&self, vm: &mut Vm) {
+        vm.store().song_broadcasts = Some(Broadcasts::default());
     }
-    pub(crate) fn song_zero_update(&self, active: bool) {
-        if let Some(capture) = &mut self.store.lock().unwrap().song_broadcasts {
+    pub(crate) fn song_zero_update(&self, vm: &mut Vm, active: bool) {
+        if let Some(capture) = &mut vm.store().song_broadcasts {
             capture.zero_update = active;
         }
     }
-    pub(crate) fn take_song_broadcasts(&self) -> Vec<(f32, String, bool)> {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn take_song_broadcasts(&self, vm: &mut Vm) -> Vec<(f32, String, bool)> {
+        vm.store()
             .song_broadcasts
             .as_mut()
             .map(|capture| std::mem::take(&mut capture.events))
@@ -140,11 +123,11 @@ impl Actors {
         let function = vm.new_host_function_with_data(
             capture,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            (self.store.clone(), scene.id, phase, output.clone()),
+            (scene.id, phase, output.clone()),
         )?;
-        let first = self.store.lock().unwrap().next;
+        let first = vm.store().next;
         let result = vm.call(function, &[]).map(|_| ());
-        song_activation::adopt_created(&self.store, scene.id, first);
+        song_activation::adopt_created(vm.store(), scene.id, first);
         result?;
         Ok(std::mem::take(&mut *output.lock().unwrap()))
     }
@@ -189,11 +172,11 @@ impl Actors {
     }
 }
 fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, scene, phase, output) = call
-        .function_data::<(Shared, u64, Phase, Arc<Mutex<Output>>)>()
+    let (scene, phase, output) = call
+        .function_data::<(u64, Phase, Arc<Mutex<Output>>)>()
         .unwrap()
         .clone();
-    let root = store.lock().unwrap().scenes[&scene]
+    let root = call.store().scenes[&scene]
         .song_session
         .as_ref()
         .unwrap()
@@ -203,18 +186,18 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
         match phase {
             Phase::Before => {
                 let retained = retain_table(call, root)?;
-                collect_initial(call, &store, root, retained, &mut result.before.states)?;
+                collect_initial(call, root, retained, &mut result.before.states)?;
                 for &actor in result.before.states.keys() {
                     result
                         .before
                         .prefixes
-                        .insert(actor, command_capture(&store, actor).blocks);
+                        .insert(actor, command_capture(call.store(), actor).blocks);
                 }
             }
-            Phase::After(before) => result.updates = capture_states(call, &store, before)?,
+            Phase::After(before) => result.updates = capture_states(call, before)?,
             Phase::QueuedBefore => {
                 let retained = retain_table(call, root)?;
-                collect_queued_initial(call, &store, root, retained, &mut result.before.states)?;
+                collect_queued_initial(call, root, retained, &mut result.before.states)?;
             }
             Phase::QueuedAfter(before) => {
                 for (actor, initial) in before.states {
@@ -222,17 +205,17 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                         actor,
                         SongStartupState {
                             initial,
-                            blocks: command_capture(&store, actor).blocks,
+                            blocks: command_capture(call.store(), actor).blocks,
                             steps: Vec::new(),
                             commands: Vec::new(),
                             block_steps: Vec::new(),
-                            clock_path: clock_path(call, &store, actor)?,
+                            clock_path: clock_path(call, actor)?,
                         },
                     );
                 }
             }
             Phase::Text(wrappers) => {
-                let mut actors: Vec<_> = store.lock().unwrap().scenes[&scene]
+                let mut actors: Vec<_> = call.store().scenes[&scene]
                     .initial_states
                     .as_ref()
                     .unwrap()
@@ -253,7 +236,7 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
             }
             Phase::Tweens(wrappers) => {
-                let mut states = store.lock().unwrap().scenes[&scene]
+                let mut states = call.store().scenes[&scene]
                     .initial_states
                     .as_ref()
                     .unwrap()
@@ -264,7 +247,6 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 result.updates = capture_states(
                     call,
-                    &store,
                     InitialUpdate {
                         states,
                         prefixes: HashMap::new(),
@@ -272,7 +254,7 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                 )?;
             }
             Phase::ScreenLayers => {
-                let states = store.lock().unwrap().scenes[&scene]
+                let states = call.store().scenes[&scene]
                     .initial_states
                     .as_ref()
                     .unwrap()
@@ -280,21 +262,20 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                     .clone();
                 result.updates = capture_states(
                     call,
-                    &store,
                     InitialUpdate {
                         states,
                         prefixes: HashMap::new(),
                     },
                 )?;
             }
-            Phase::Wrappers => result.wrappers = wrapper_initials(call, &store, root)?,
+            Phase::Wrappers => result.wrappers = wrapper_initials(call, root)?,
         }
         *output.lock().unwrap() = result;
         Ok(())
     })
 }
-fn command_capture(store: &Shared, actor: TableId) -> ActorCommandCapture {
-    let mut guard = store.lock().unwrap();
+fn command_capture(store: &mut Store, actor: TableId) -> ActorCommandCapture {
+    let guard = &mut *store;
     guard
         .actors
         .get_mut(&actor)
@@ -319,7 +300,6 @@ fn retain_table(call: &mut HostCall<'_>, root: TableId) -> Result<TableId, Error
 }
 fn collect_initial(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     retained: TableId,
     states: &mut HashMap<TableId, SongLuaOverlayState>,
@@ -327,19 +307,18 @@ fn collect_initial(
     call.with_roots(&[Value::Table(actor)], |call| {
         let kind = sprites::field(call, actor, "__songlua_actor_type")?;
         if initial_state::value_text(call, kind)?.is_some() {
-            let state = initial_state::read(call, store, actor)?;
+            let state = initial_state::read(call, actor)?;
             call.raw_table_set(retained, Value::Table(actor), Value::Boolean(true))?;
             states.insert(actor, state);
         }
         raw_children(call, actor, |call, child| {
-            collect_initial(call, store, child, retained, states)
+            collect_initial(call, child, retained, states)
         })
     })
 }
 
 fn collect_queued_initial(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     retained: TableId,
     states: &mut HashMap<TableId, SongLuaOverlayState>,
@@ -347,11 +326,10 @@ fn collect_queued_initial(
     call.with_roots(&[Value::Table(actor)], |call| {
         let kind = sprites::field(call, actor, "__songlua_actor_type")?;
         if let Some(kind) = initial_state::value_text(call, kind)? {
-            states.insert(actor, initial_state::read(call, store, actor)?);
+            states.insert(actor, initial_state::read(call, actor)?);
             call.raw_table_set(retained, Value::Table(actor), Value::Boolean(true))?;
-            if let Some(capture) = store
-                .lock()
-                .unwrap()
+            if let Some(capture) = call
+                .store()
                 .actors
                 .get_mut(&actor)
                 .and_then(|actor| actor.capture.as_mut())
@@ -371,24 +349,23 @@ fn collect_queued_initial(
                     if value == Value::Nil {
                         break;
                     }
-                    collect_queued_initial(call, store, table(call, value)?, retained, states)?;
+                    collect_queued_initial(call, table(call, value)?, retained, states)?;
                 }
                 Ok(())
             })?;
         } else {
-            let wrappers = store
-                .lock()
-                .unwrap()
+            let wrappers = call
+                .store()
                 .actors
                 .get(&actor)
                 .map(|actor| actor.wrappers.clone())
                 .unwrap_or_default();
             for wrapper in wrappers {
-                collect_queued_initial(call, store, wrapper, retained, states)?;
+                collect_queued_initial(call, wrapper, retained, states)?;
             }
         }
         raw_children(call, actor, |call, child| {
-            collect_queued_initial(call, store, child, retained, states)
+            collect_queued_initial(call, child, retained, states)
         })
     })
 }
@@ -455,17 +432,15 @@ fn raw_children(
 }
 pub(super) fn wrapper_initials(
     call: &mut HostCall<'_>,
-    store: &Shared,
     root: TableId,
 ) -> Result<HashMap<TableId, SongLuaOverlayState>, Error> {
     let retained = retain_table(call, root)?;
     let mut states = HashMap::new();
-    collect_wrappers(call, store, root, retained, &mut states)?;
+    collect_wrappers(call, root, retained, &mut states)?;
     Ok(states)
 }
 fn collect_wrappers(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     retained: TableId,
     states: &mut HashMap<TableId, SongLuaOverlayState>,
@@ -475,16 +450,15 @@ fn collect_wrappers(
         let mut visit = |call: &mut HostCall<'_>, wrapper| {
             call.raw_table_set(retained, Value::Table(wrapper), Value::Boolean(true))?;
             states.entry(wrapper).or_default();
-            collect_wrappers(call, store, wrapper, retained, states)
+            collect_wrappers(call, wrapper, retained, states)
         };
         if wrappers != Value::Nil {
             call.with_roots(&[wrappers], |call| {
                 raw_children(call, table(call, wrappers)?, &mut visit)
             })?;
         } else {
-            let native = store
-                .lock()
-                .unwrap()
+            let native = call
+                .store()
                 .actors
                 .get(&actor)
                 .map(|a| a.wrappers.clone())
@@ -494,15 +468,11 @@ fn collect_wrappers(
             }
         }
         raw_children(call, actor, |call, child| {
-            collect_wrappers(call, store, child, retained, states)
+            collect_wrappers(call, child, retained, states)
         })
     })
 }
-fn clock_path(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Vec<[f32; 2]>, Error> {
+fn clock_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<[f32; 2]>, Error> {
     let retained = call.try_new_table()?;
     call.with_roots(&[Value::Table(retained), Value::Table(actor)], |call| {
         let mut path = Vec::new();
@@ -528,9 +498,7 @@ fn clock_path(
             } else {
                 let value = get(call, actor, b"__songlua_update_rate")?;
                 if value == Value::Nil {
-                    store
-                        .lock()
-                        .unwrap()
+                    call.store()
                         .actors
                         .get(&actor)
                         .map_or(1., |actor| actor.update_rate)
@@ -544,9 +512,7 @@ fn clock_path(
                 .is_some_and(|kind| kind.eq_ignore_ascii_case("WrapperState"));
             let parent = get(call, actor, b"__songlua_parent")?;
             next = if parent == Value::Nil {
-                store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get(&actor)
                     .and_then(|actor| actor.parent)
@@ -560,12 +526,11 @@ fn clock_path(
 }
 pub(super) fn broadcast(
     call: &mut HostCall<'_>,
-    store: &Shared,
     message: &[u8],
     has_params: bool,
 ) -> Result<(), Error> {
     let active = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.song_broadcasts.as_ref().is_some_and(|capture| {
             // Begin/On broadcasts occur while startup queues are still owned;
             // they are native events, unlike the screen transition dispatch
@@ -577,7 +542,7 @@ pub(super) fn broadcast(
                         || guard.startup_queues.is_none()))
         })
     };
-    if store.lock().unwrap().song_broadcasts.is_none() {
+    if call.store().song_broadcasts.is_none() {
         return Ok(());
     }
     let beat = effects::values(call, false).map_or(0., |values| values[0]);
@@ -586,7 +551,7 @@ pub(super) fn broadcast(
     }
     let message =
         String::from_utf8(message.to_vec()).map_err(|e| call.error(e.to_string().as_bytes()))?;
-    if let Some(capture) = &mut store.lock().unwrap().song_broadcasts {
+    if let Some(capture) = &mut call.store().song_broadcasts {
         capture.events.push((beat, message, has_params));
     }
     Ok(())
@@ -596,12 +561,11 @@ pub(super) fn broadcast(
 // events from the live song stream, matching the two native construction scopes.
 pub(super) fn without_live_broadcasts<T>(
     call: &mut HostCall<'_>,
-    store: &Shared,
     action: impl FnOnce(&mut HostCall<'_>) -> Result<T, Error>,
 ) -> Result<T, Error> {
-    let sources = store.lock().unwrap().live_sources.take();
+    let sources = call.store().live_sources.take();
     let previous = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
             guard.song_broadcasts.take()
         } else {
@@ -610,22 +574,21 @@ pub(super) fn without_live_broadcasts<T>(
     };
     let result = action(call);
     if let Some(sources) = sources {
-        store.lock().unwrap().live_sources = Some(sources);
+        call.store().live_sources = Some(sources);
     }
     if let Some(previous) = previous {
-        store.lock().unwrap().song_broadcasts = Some(previous);
+        call.store().song_broadcasts = Some(previous);
     }
     result
 }
 
 fn capture_states(
     call: &mut HostCall<'_>,
-    store: &Shared,
     before: InitialUpdate,
 ) -> Result<HashMap<TableId, SongStartupState>, Error> {
     let mut updates = HashMap::new();
     for (actor, initial) in before.states {
-        let captured = command_capture(store, actor);
+        let captured = command_capture(call.store(), actor);
         let mut commands = Vec::new();
         let mut pending = captured.queued_commands.iter();
         for step in &captured.steps {
@@ -662,7 +625,7 @@ fn capture_states(
                 .map(|step| step.unwrap_or(0.))
                 .collect(),
             commands,
-            clock_path: clock_path(call, store, actor)?,
+            clock_path: clock_path(call, actor)?,
         };
         updates.insert(actor, state);
     }

@@ -13,16 +13,11 @@ fn parameter(call: &HostCall<'_>) -> Value {
 }
 #[derive(Clone)]
 struct SoundBinding {
-    store: Shared,
     name: &'static str,
     length: LengthCache,
 }
 
-pub(super) fn install(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let sound = call.try_new_table()?;
     let methods = match get(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => call.try_new_table()?,
@@ -31,8 +26,8 @@ pub(super) fn install(
     let registry = table(call, call.captures()[0])?;
     // The actor's registry value traces the handle even if authored fields are
     // replaced. Its methods in turn retain the actor after scene retirement.
-    let scene = store.lock().unwrap().actors[&actor].scene;
-    let retired = store.lock().unwrap().retired_scenes.get(&scene).copied();
+    let scene = call.store().actors[&actor].scene;
+    let retired = call.store().retired_scenes.get(&scene).copied();
     if let Some(owner) = retired {
         call.raw_table_set(owner, Value::Table(sound), Value::Boolean(true))?;
     } else {
@@ -60,7 +55,6 @@ pub(super) fn install(
                 bound,
                 &captures,
                 SoundBinding {
-                    store: store.clone(),
                     name,
                     length: length.clone(),
                 },
@@ -79,7 +73,7 @@ pub(super) fn install(
         call.new_host_function(|call| call.push(call.captures()[0]), &[Value::Table(actor)])?;
     let key = call.try_intern(b"volume")?;
     call.raw_table_set(methods, key, volume)?;
-    store.lock().unwrap().actors.get_mut(&actor).unwrap().sound = Some(sound);
+    call.store().actors.get_mut(&actor).unwrap().sound = Some(sound);
     Ok(())
 }
 
@@ -99,14 +93,9 @@ fn owner(call: &mut HostCall<'_>, actor: TableId) -> u64 {
         .expect("captured actor") as u64
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let (is_sound, live) = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         (
             store.actors[&actor].state.class == "Sound",
             store.clock.live.load(Ordering::Relaxed),
@@ -116,10 +105,8 @@ pub(super) fn method(
         if !matches!(name, "play" | "pause") {
             return call.push(Value::Table(actor));
         }
-        action_capture::prepare_write(call, store, actor)?;
-        store
-            .lock()
-            .unwrap()
+        action_capture::prepare_write(call, actor)?;
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -132,7 +119,7 @@ pub(super) fn method(
             "__songlua_state_sprite_animate",
             Value::Boolean(name == "play"),
         )?;
-        song_media::record(call, store, actor, "sprite_animate");
+        song_media::record(call, actor, "sprite_animate");
         return call.push(Value::Table(actor));
     }
     match name {
@@ -142,9 +129,7 @@ pub(super) fn method(
             {
                 if live {
                     let owner = owner(call, actor);
-                    store
-                        .lock()
-                        .unwrap()
+                    call.store()
                         .sounds
                         .push(SongLuaActorSound::Play { owner, path });
                 } else {
@@ -154,7 +139,7 @@ pub(super) fn method(
                         Err(error) => return Err(error),
                     };
                     {
-                        let mut store = store.lock().unwrap();
+                        let store = call.store();
                         if let Some(queued_startup) = store.sound_capture {
                             let queued_startup = queued_startup || store.startup_discovery;
                             let source_message = store.active_message.clone();
@@ -187,7 +172,7 @@ pub(super) fn method(
             } else {
                 SongLuaActorSound::Stop { owner }
             };
-            store.lock().unwrap().sounds.push(event);
+            call.store().sounds.push(event);
         }
         _ => {}
     }
@@ -195,11 +180,7 @@ pub(super) fn method(
 }
 
 fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let SoundBinding {
-        store,
-        name,
-        length,
-    } = call.function_data::<SoundBinding>().unwrap().clone();
+    let SoundBinding { name, length } = call.function_data::<SoundBinding>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
     let sound = table(call, call.captures()[3])?;
     match name {
@@ -217,7 +198,7 @@ fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
         "SetProperty" => call.push(Value::Boolean(false)),
         "get_length" => {
             // Read authored File before consulting the cache. Neither metadata
-            // lookup nor decoder I/O holds a lock across reentrant Lua calls.
+            // lookup nor decoder I/O borrows the store across reentrant Lua calls.
             let file = assets::field(call, actor, b"File")?;
             let cached = length
                 .lock()
@@ -244,7 +225,7 @@ fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
             call.push(Value::Number(value as f64))
         }
         _ => {
-            if !store.lock().unwrap().actors.contains_key(&actor) {
+            if !call.store().actors.contains_key(&actor) {
                 return Err(call.error(b"sound actor has been released"));
             }
             match name {
@@ -260,17 +241,16 @@ fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
                     }
                     call.push(Value::Table(actor))
                 }
-                _ => method(call, &store, actor, name),
+                _ => method(call, actor, name),
             }
         }
     }
 }
 
-pub(super) fn retire(call: &mut HostCall<'_>, store: &Shared, actor: TableId) {
-    let mut store = store.lock().unwrap();
+pub(super) fn retire(call: &mut HostCall<'_>, actor: TableId) {
+    let store = call.store_ref();
     if store.actors[&actor].sound.is_some() && store.clock.live.load(Ordering::Relaxed) {
-        store.sounds.push(SongLuaActorSound::Stop {
-            owner: owner(call, actor),
-        });
+        let owner = owner(call, actor);
+        call.store().sounds.push(SongLuaActorSound::Stop { owner });
     }
 }

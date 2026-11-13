@@ -208,8 +208,10 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 stack.set_table(top as isize, false)?;
                 // SCREENMAN changes the native name too. Ordinary authored
                 // Name assignments keep their existing instance-field policy.
-                let names = state.lock().unwrap().actor_names.clone();
-                if names.and_then(|names| names.rename(actor, name.as_bytes())) == Some(true) {
+                let names = state.lock().unwrap().actor_names;
+                if names.and_then(|names| names.rename(&mut stack, actor, name.as_bytes()))
+                    == Some(true)
+                {
                     for key in [b"__songlua_load_name".as_slice(), b"__songlua_native_name"] {
                         if key == b"__songlua_load_name" {
                             stack.push_bytes(key)?;

@@ -31,7 +31,6 @@ pub(crate) struct Output {
 }
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     query: Query,
     output: Arc<Mutex<Option<Output>>>,
 }
@@ -51,7 +50,6 @@ impl Actors {
                 actor,
             ],
             Read {
-                store: self.store.clone(),
                 query,
                 output: output.clone(),
             },
@@ -65,16 +63,8 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     let value = call.captures()[2];
     let mut out = Output::default();
     match read.query {
-        Query::State => {
-            out.state = Some(initial_state::read(call, &read.store, table(call, value)?)?)
-        }
-        Query::LiveState => {
-            out.state = Some(initial_state::read_live(
-                call,
-                &read.store,
-                table(call, value)?,
-            )?)
-        }
+        Query::State => out.state = Some(initial_state::read(call, table(call, value)?)?),
+        Query::LiveState => out.state = Some(initial_state::read_live(call, table(call, value)?)?),
         Query::Layer(default) => {
             let layer = super::super::field(call, value, "__songlua_compile_layer")?;
             out.layer = if layer == Value::Nil {
@@ -108,7 +98,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
                     if actor == Value::Nil {
                         break;
                     }
-                    mark(call, &read.store, actor, i - 1)?;
+                    mark(call, actor, i - 1)?;
                 }
             }
         }
@@ -136,9 +126,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
                 })?;
             }
         }
-        Query::Spin => {
-            out.spin = chronological::render_spin(call, &read.store, table(call, value)?)?.is_some()
-        }
+        Query::Spin => out.spin = chronological::render_spin(call, table(call, value)?)?.is_some(),
         Query::Late(tag) => {
             let actor = table(call, value)?;
             if tag == 0
@@ -186,19 +174,19 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Query::Draw => {
             if let Value::Table(root) = value
-                && let Err(error) = draw::scene(call, &read.store, root)
+                && let Err(error) = draw::scene(call, root)
             {
-                diagnostics::report(call, &read.store, root, diagnostics::Callback::Draw, error)?;
+                diagnostics::report(call, root, diagnostics::Callback::Draw, error)?;
             }
         }
         Query::End => {
             if let Value::Table(root) = value {
-                read.store.lock().unwrap().startup_queues = Some(Vec::new());
+                call.store().startup_queues = Some(Vec::new());
                 let globals = table(call, helper(call, 5)?)?;
                 let key = call.try_intern(b"__songlua_top_screen")?;
                 call.raw_table_set(globals, key, Value::Nil)?;
-                let result = end_children(call, &read.store, root);
-                read.store.lock().unwrap().startup_queues = None;
+                let result = end_children(call, root);
+                call.store().startup_queues = None;
                 result?;
             }
         }
@@ -206,7 +194,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     *read.output.lock().unwrap() = Some(out);
     Ok(())
 }
-fn mark(call: &mut HostCall<'_>, store: &Shared, actor: Value, index: usize) -> Result<(), Error> {
+fn mark(call: &mut HostCall<'_>, actor: Value, index: usize) -> Result<(), Error> {
     let Value::Table(id) = actor else {
         return Ok(());
     };
@@ -226,20 +214,19 @@ fn mark(call: &mut HostCall<'_>, store: &Shared, actor: Value, index: usize) -> 
                     if wrapper == Value::Nil {
                         break;
                     }
-                    mark(call, store, wrapper, index)?;
+                    mark(call, wrapper, index)?;
                 }
                 Ok(())
             })?;
         } else {
-            let wrappers = store
-                .lock()
-                .unwrap()
+            let wrappers = call
+                .store()
                 .actors
                 .get(&id)
                 .map(|a| a.wrappers.clone())
                 .unwrap_or_default();
             for wrapper in wrappers {
-                mark(call, store, Value::Table(wrapper), index)?;
+                mark(call, Value::Table(wrapper), index)?;
             }
         }
         for i in 1usize.. {
@@ -247,15 +234,15 @@ fn mark(call: &mut HostCall<'_>, store: &Shared, actor: Value, index: usize) -> 
             if child == Value::Nil {
                 break;
             }
-            mark(call, store, child, index)?;
+            mark(call, child, index)?;
         }
         Ok(())
     })
 }
 
-fn end_children(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Error> {
+fn end_children(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     native_children::with_children(call, root, |call, child| {
-        native_children::run_command_with_drain(call, store, child, b"End", None, true)?;
-        end_children(call, store, child)
+        native_children::run_command_with_drain(call, child, b"End", None, true)?;
+        end_children(call, child)
     })
 }

@@ -6,7 +6,6 @@ use sprites::set;
 
 #[derive(Clone)]
 struct Build {
-    store: Shared,
     context: crate::SongLuaCompileContext,
     statistics: Arc<Mutex<super::super::statistics::State>>,
 }
@@ -22,7 +21,7 @@ impl Actors {
     ) -> Result<(ActorScene, [Value; crate::LUA_PLAYERS]), Error> {
         #[cfg(feature = "test-support")]
         {
-            self.store.lock().unwrap().trace_dynamic_commands = context.trace_dynamic_commands;
+            vm.store().trace_dynamic_commands = context.trace_dynamic_commands;
         }
         underlay::ensure_helpers(vm, self.helpers)?;
         screen_parts::ensure_helpers(vm, self.helpers)?;
@@ -34,7 +33,6 @@ impl Actors {
                 catalog,
             ],
             Build {
-                store: self.store.clone(),
                 context: context.clone(),
                 statistics,
             },
@@ -64,18 +62,18 @@ impl Actors {
 
 fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Build>().unwrap().clone();
-    let scene = new_scene(call, &data.store)?;
+    let scene = new_scene(call)?;
     let previous = {
-        let mut store = data.store.lock().unwrap();
+        let store = call.store();
         let capture = !store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
         std::mem::replace(&mut store.constructing_capture, capture)
     };
     let result = assemble(call, &data, scene);
-    data.store.lock().unwrap().constructing_capture = previous;
+    call.store().constructing_capture = previous;
     let actors = match result {
         Ok(actors) => actors,
         Err(error) => {
-            release(call, &data.store, scene)?;
+            release(call, scene)?;
             return Err(error);
         }
     };
@@ -87,13 +85,11 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 
 fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableId; 5], Error> {
-    let store = &data.store;
     let context = &data.context;
-    let top = top_screen::create(call, store, scene, context)?;
-    store.lock().unwrap().scenes.get_mut(&scene).unwrap().root = Some(top);
-    let builds = [0, 1].map(|index| {
-        generated_players::Build::new(store.clone(), data.statistics.clone(), context, index)
-    });
+    let top = top_screen::create(call, scene, context)?;
+    call.store().scenes.get_mut(&scene).unwrap().root = Some(top);
+    let builds =
+        [0, 1].map(|index| generated_players::Build::new(data.statistics.clone(), context, index));
     // The native screen constructs both meters, then both players, even when
     // only one player is enabled. Parts are attached after screen parenting.
     let meters = [
@@ -105,17 +101,17 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         builds[1].create_player(call, scene)?,
     ];
     for (index, &player) in players.iter().enumerate() {
-        native_children::adopt(call, store, player, top)?;
+        native_children::adopt(call, player, top)?;
         set(
             call,
             player,
             "__songlua_life_meter",
             Value::Table(meters[index]),
         )?;
-        player_parts::install(call, store, scene, player, index, &context.style_name)?;
+        player_parts::install(call, scene, player, index, &context.style_name)?;
     }
     for (index, &meter) in meters.iter().enumerate() {
-        native_children::adopt(call, store, meter, top)?;
+        native_children::adopt(call, meter, top)?;
         set(
             call,
             meter,
@@ -162,13 +158,13 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
             continue;
         }
         let child = if name == "Underlay" {
-            underlay::create(call, store, scene, top)?
+            underlay::create(call, scene, top)?
         } else {
-            screen_parts::create(call, store, scene, name)?
+            screen_parts::create(call, scene, name)?
         };
-        underlay::set_name(call, store, child, name)?;
+        underlay::set_name(call, child, name)?;
         underlay::copy_tags(call, top, child)?;
-        native_children::adopt(call, store, child, top)?;
+        native_children::adopt(call, child, top)?;
         tag(call, child, name)?;
         if crate::top_screen_score_index(name).is_some()
             || crate::top_screen_steps_display_index(name).is_some()
@@ -222,10 +218,10 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         }
         Ok(ordered)
     })?;
-    write_order(call, store, top, &ordered)?;
+    write_order(call, top, &ordered)?;
     // These native messages reach the already-constructed theme. They bypass
     // authored broadcast recording and never enter a song's startup output.
-    song_capture::without_live_broadcasts(call, store, |call| {
+    song_capture::without_live_broadcasts(call, |call| {
         for (index, &meter) in meters.iter().enumerate() {
             if !context.players[index].enabled {
                 continue;
@@ -235,20 +231,14 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
                 let player = call.try_intern(crate::player_number_name(index).as_bytes())?;
                 set(call, params, "Player", player)?;
                 set(call, params, "LifeMeter", Value::Table(meter))?;
-                messages::dispatch(
-                    call,
-                    store,
-                    b"LifeChanged",
-                    Some(Value::Table(params)),
-                    false,
-                )
+                messages::dispatch(call, b"LifeChanged", Some(Value::Table(params)), false)
             })?;
         }
         Ok(())
     })?;
     let mut unnamed = Vec::new();
     for role in ["Toasty", "NextSong", "Ready", "Go", "Failed"] {
-        let actor = dummy(call, store, scene, "ActorFrame", "", Some(top))?;
+        let actor = dummy(call, scene, "ActorFrame", "", Some(top))?;
         set(call, actor, "__songlua_transition_state", Value::Number(0.))?;
         let value = call.try_intern(role.as_bytes())?;
         set(call, actor, "__songlua_screen_actor_role", value)?;
@@ -305,7 +295,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
     ];
     let mut keys = Vec::new();
     for &actor in &ordered {
-        let name = actor_name(call, store, actor)?;
+        let name = actor_name(call, actor)?;
         let name =
             String::from_utf8(name).map_err(|error| call.error(error.to_string().as_bytes()))?;
         let role = get(call, actor, b"__songlua_screen_actor_role")?;
@@ -330,9 +320,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         };
         let key = call.try_intern(b"__songlua_state_draw_order")?;
         call.raw_table_set(actor, key, Value::Number(order as f64))?;
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -343,8 +331,8 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
     keys.sort_by_key(|&(_, rank, _)| rank);
     keys.sort_by_key(|&(_, _, order)| order);
     ordered = keys.into_iter().map(|(actor, _, _)| actor).collect();
-    write_order(call, store, top, &ordered)?;
-    lifecycle::invalidate_plans(call, store)?;
+    write_order(call, top, &ordered)?;
+    lifecycle::invalidate_plans(call)?;
     Ok([top, players[0], players[1], meters[0], meters[1]])
 }
 
@@ -353,12 +341,7 @@ fn tag(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error>
     set(call, actor, "__songlua_top_screen_child_name", value)
 }
 
-fn write_order(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    ordered: &[TableId],
-) -> Result<(), Error> {
+fn write_order(call: &mut HostCall<'_>, actor: TableId, ordered: &[TableId]) -> Result<(), Error> {
     for (index, &child) in ordered.iter().enumerate() {
         call.raw_table_set(
             actor,
@@ -366,12 +349,6 @@ fn write_order(
             Value::Table(child),
         )?;
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .children = ordered.to_vec();
+    call.store().actors.get_mut(&actor).unwrap().children = ordered.to_vec();
     Ok(())
 }

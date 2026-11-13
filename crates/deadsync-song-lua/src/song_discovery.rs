@@ -58,12 +58,14 @@ impl SongRuntime {
     /// Supply the compiler's previous-frame positions for cross-actor reads.
     /// Actors whose update has not run yet retain these prior positions.
     pub fn set_song_replay_prior_positions(
-        &self,
+        &mut self,
         screen: ActorScene,
         states: &[crate::SongLuaOverlayState],
     ) -> bool {
         self.actor_scene_root(screen).is_some()
-            && self.actors.set_song_replay_prior_positions(screen, states)
+            && self
+                .actors
+                .set_song_replay_prior_positions(&mut self.vm, screen, states)
     }
 
     /// Apply sampled pose getters with the existing compiler setter rules.
@@ -86,7 +88,7 @@ impl SongRuntime {
 
     /// Replace pending destinations for all captured overlay property families.
     pub fn set_song_pending_overlay_updates(
-        &self,
+        &mut self,
         screen: ActorScene,
         values: &[(
             usize,
@@ -95,7 +97,9 @@ impl SongRuntime {
         )],
     ) -> bool {
         self.actor_scene_root(screen).is_some()
-            && self.actors.set_song_pending_overlay_updates(screen, values)
+            && self
+                .actors
+                .set_song_pending_overlay_updates(&mut self.vm, screen, values)
     }
 
     /// Drain all captured pose, renderer, text and sprite publications.
@@ -105,14 +109,14 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<Vec<SongReplayPropertyUpdates>> {
         self.actor_scene_root(screen)?;
-        self.actors.drain_song_overlay_updates(screen)
+        self.actors.drain_song_overlay_updates(&mut self.vm, screen)
     }
 
     /// Install the complete preparation frame timeline after begin_song_replay,
     /// before chronological callbacks. Rows are [beat, delta seconds]. Optional
     /// actor frames are [native actor delta, active global-frame span].
     pub fn set_song_replay_frames(
-        &self,
+        &mut self,
         screen: ActorScene,
         frames: &[(f64, f64)],
         actor_frames: Option<&[[f32; 2]]>,
@@ -120,7 +124,7 @@ impl SongRuntime {
         self.actor_scene_root(screen).is_some()
             && self
                 .actors
-                .set_song_replay_frames(screen, frames, actor_frames)
+                .set_song_replay_frames(&mut self.vm, screen, frames, actor_frames)
     }
 
     /// Advance one installed canonical frame. Script music/beat clocks remain
@@ -135,7 +139,10 @@ impl SongRuntime {
         if self.actor_scene_root(screen).is_none() {
             return Ok(false);
         }
-        let Some(seconds) = self.actors.set_song_replay_frame(screen, frame) else {
+        let Some(seconds) = self
+            .actors
+            .set_song_replay_frame(&mut self.vm, screen, frame)
+        else {
             return Ok(false);
         };
         self.advance_song_replay(screen, seconds, delta)
@@ -146,7 +153,7 @@ impl SongRuntime {
     /// publishes them and Stop discards them. Invalid indices/targets leave the
     /// previous pending set intact. This accepts the scheduled render family.
     pub fn set_song_pending_render_updates(
-        &self,
+        &mut self,
         screen: ActorScene,
         values: &[(
             usize,
@@ -155,7 +162,9 @@ impl SongRuntime {
         )],
     ) -> bool {
         self.actor_scene_root(screen).is_some()
-            && self.actors.set_song_pending_render_updates(screen, values)
+            && self
+                .actors
+                .set_song_pending_render_updates(&mut self.vm, screen, values)
     }
 
     /// Consume immediate and scheduled renderer-property output. This shares
@@ -166,7 +175,8 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<Vec<SongReplayPropertyUpdates>> {
         self.actor_scene_root(screen)?;
-        self.actors.drain_song_property_updates(screen)
+        self.actors
+            .drain_song_property_updates(&mut self.vm, screen)
     }
 
     /// Consume immediate-property output since the last drain. Queued setters
@@ -178,7 +188,8 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<Vec<SongReplayImmediateUpdates>> {
         self.actor_scene_root(screen)?;
-        self.actors.drain_song_immediate_updates(screen)
+        self.actors
+            .drain_song_immediate_updates(&mut self.vm, screen)
     }
 
     /// Message provenance for the tween and immediate setters captured so far.
@@ -188,7 +199,7 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<Vec<crate::SongLuaStatefulMessageCapture>> {
         self.actor_scene_root(screen)?;
-        self.actors.song_replay_messages(screen)
+        self.actors.song_replay_messages(&self.vm, screen)
     }
 
     /// Advance preparation at an explicit song time, separate from actor delta
@@ -210,11 +221,11 @@ impl SongRuntime {
     /// at the same song time do not introduce duplicate hold samples. Identities
     /// remain owned by the active scene; output itself contains no Lua values.
     pub fn capture_song_tween_replay(
-        &self,
+        &mut self,
         screen: ActorScene,
     ) -> Option<std::collections::HashMap<deadlib_lua::TableId, SongTweenReplay>> {
         self.actor_scene_root(screen)?;
-        self.actors.capture_song_tween_replay(screen)
+        self.actors.capture_song_tween_replay(&mut self.vm, screen)
     }
 
     /// Ordered message writes to the replay's overlay tween properties. Indices
@@ -227,7 +238,7 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<Vec<crate::SongLuaStatefulMessageCapture>> {
         self.actor_scene_root(screen)?;
-        self.actors.song_replay_tween_messages(screen)
+        self.actors.song_replay_tween_messages(&self.vm, screen)
     }
 
     /// Enter chronological preparation after the compiler has read discovery
@@ -263,7 +274,7 @@ impl SongRuntime {
         screen: ActorScene,
     ) -> Option<std::collections::HashMap<deadlib_lua::TableId, super::SongStartupState>> {
         self.actor_scene_root(screen)?;
-        self.actors.song_startup_queued_states(screen)
+        self.actors.song_startup_queued_states(&self.vm, screen)
     }
 
     /// Probe startup queues once, retaining shared script state until the

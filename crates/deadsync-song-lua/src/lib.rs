@@ -262,8 +262,8 @@ impl SongRuntime {
     }
 
     /// Copy the actor's captured writes and unconsumed command/tween metadata.
-    pub fn actor_command_capture(&self, actor: Value) -> Option<ActorCommandCapture> {
-        self.actors.command_capture(actor)
+    pub fn actor_command_capture(&mut self, actor: Value) -> Option<ActorCommandCapture> {
+        self.actors.command_capture(&mut self.vm, actor)
     }
 
     pub fn new(context: &SongLuaCompileContext) -> Result<Self, Error> {
@@ -521,11 +521,11 @@ impl SongRuntime {
     }
 
     pub fn actor_scene_root(&self, scene: ActorScene) -> Option<Value> {
-        self.actors.root(scene)
+        self.actors.root(&self.vm, scene)
     }
 
     pub fn actor_scene_snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
-        self.actors.snapshot(scene)
+        self.actors.snapshot(&self.vm, scene)
     }
 
     /// Local render states with the retained effect phase and native spin flag.
@@ -535,7 +535,7 @@ impl SongRuntime {
         scene: ActorScene,
         frame_clock: [f32; 2],
     ) -> Option<Vec<crate::SongLuaOverlayState>> {
-        self.actors.render_states(scene, frame_clock)
+        self.actors.render_states(&self.vm, scene, frame_clock)
     }
 
     /// Deliver Begin and On to this actor subtree once. Screen activation and
@@ -546,8 +546,8 @@ impl SongRuntime {
 
     /// Enter retained playback after preparation/startup. This preserves the
     /// production boundary for publishing cached rotation getters on writes.
-    pub fn begin_actor_playback(&self) {
-        self.actors.begin_playback();
+    pub fn begin_actor_playback(&mut self) {
+        self.actors.begin_playback(&mut self.vm);
     }
 
     /// Advance the subtree's existing queues and callbacks in native order.
@@ -593,8 +593,8 @@ impl SongRuntime {
         self.actors.retire(&mut self.vm, scene)
     }
 
-    pub fn take_actor_diagnostics(&self) -> Vec<String> {
-        self.actors.take_diagnostics()
+    pub fn take_actor_diagnostics(&mut self) -> Vec<String> {
+        self.actors.take_diagnostics(&mut self.vm)
     }
 
     /// Read copied mesh vertices and their texture using the actor's current
@@ -649,13 +649,14 @@ impl SongRuntime {
         actor: Value,
         layers: &[crate::SongLuaOverlayModelLayer<V>],
     ) -> Result<(), String> {
-        self.actors.install_model_materials(actor, layers)
+        self.actors
+            .install_model_materials(&mut self.vm, actor, layers)
     }
 
     /// Record a preparation frame after advancing the scene. The compiler owns
     /// the finite frame schedule and transfers these samples to immutable output.
     pub fn sample_model_materials(&mut self, second: f32) {
-        self.actors.sample_model_materials(second);
+        self.actors.sample_model_materials(&mut self.vm, second);
     }
 
     /// Finish and detach material capture for this actor, retaining layer order.
@@ -663,7 +664,7 @@ impl SongRuntime {
         &mut self,
         actor: Value,
     ) -> Result<Vec<Arc<[crate::SongLuaTextureSample]>>, String> {
-        self.actors.take_model_material_samples(actor)
+        self.actors.take_model_material_samples(&mut self.vm, actor)
     }
 
     /// Read the existing meter stream width and owned render state, if drawable.
@@ -689,26 +690,27 @@ impl SongRuntime {
     }
 
     /// Drain immediate sound commands, retaining each native actor identity.
-    pub fn take_actor_sounds(&self) -> Vec<crate::SongLuaActorSound> {
-        self.actors.take_sounds()
+    pub fn take_actor_sounds(&mut self) -> Vec<crate::SongLuaActorSound> {
+        self.actors.take_sounds(&mut self.vm)
     }
 
     /// Begin the compiler's media-capture phase. This does not advance time or
     /// execute queued commands. A new phase clears its previous captured events.
-    pub fn begin_actor_capture(&self, queued_startup: bool) {
-        self.actors.begin_sound_capture(queued_startup);
+    pub fn begin_actor_capture(&mut self, queued_startup: bool) {
+        self.actors
+            .begin_sound_capture(&mut self.vm, queued_startup);
     }
-    pub fn take_prepared_sounds(&self) -> Vec<crate::SongLuaSoundEvent> {
-        self.actors.take_prepared_sounds()
+    pub fn take_prepared_sounds(&mut self) -> Vec<crate::SongLuaSoundEvent> {
+        self.actors.take_prepared_sounds(&mut self.vm)
     }
-    pub fn take_sprite_textures(&self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
-        self.actors.take_sprite_textures()
+    pub fn take_sprite_textures(&mut self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
+        self.actors.take_sprite_textures(&mut self.vm)
     }
-    pub fn take_judgment_textures(&self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
-        self.actors.take_judgment_textures()
+    pub fn take_judgment_textures(&mut self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
+        self.actors.take_judgment_textures(&mut self.vm)
     }
-    pub fn end_actor_capture(&self) {
-        self.actors.end_sound_capture();
+    pub fn end_actor_capture(&mut self) {
+        self.actors.end_sound_capture(&mut self.vm);
     }
 
     /// Deliver a host message with the existing authored-message normalization.
@@ -729,13 +731,13 @@ impl SongRuntime {
 
     /// Imported subscriber identity ranks for differential controls only.
     #[cfg(feature = "test-support")]
-    pub fn set_actor_message_ranks(&self, scene: ActorScene, ranks: &[usize]) -> bool {
-        self.actors.set_message_ranks(scene, ranks)
+    pub fn set_actor_message_ranks(&mut self, scene: ActorScene, ranks: &[usize]) -> bool {
+        self.actors.set_message_ranks(&mut self.vm, scene, ranks)
     }
 
     #[cfg(feature = "test-support")]
-    pub fn set_actor_message_identity(&self, actor: Value, rank: usize) -> bool {
-        self.actors.set_message_identity(actor, rank)
+    pub fn set_actor_message_identity(&mut self, actor: Value, rank: usize) -> bool {
+        self.actors.set_message_identity(&mut self.vm, actor, rank)
     }
 
     /// Load a song script with cmd preprocessing and its file environment.
@@ -820,7 +822,7 @@ impl SongRuntime {
     pub fn set_live(&mut self, live: bool) {
         self.clock.live.store(live, Ordering::Relaxed);
         if live {
-            self.actors.discard_song_replay_clock();
+            self.actors.discard_song_replay_clock(&mut self.vm);
         }
     }
 
@@ -2559,7 +2561,9 @@ pub struct SongLuaCompileContext {
 
 impl SongLuaCompileContext {
     pub(crate) fn report_bake_progress(&self, fraction: f32) {
-        if !self.live && let Some(progress) = &self.bake_progress {
+        if !self.live
+            && let Some(progress) = &self.bake_progress
+        {
             progress.report(fraction);
         }
     }

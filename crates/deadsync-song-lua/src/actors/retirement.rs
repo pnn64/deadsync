@@ -43,7 +43,7 @@ struct CollectedScene {
 }
 impl Drop for CollectedScene {
     fn drop(&mut self) {
-        // GC/shutdown only notifies. Never acquire Store or reenter the VM from
+        // GC/shutdown only notifies. Never touch the store or reenter the VM from
         // a closure destructor, including collection inside an actor callback.
         self.queue.enqueue(self.id, self.owner);
     }
@@ -52,13 +52,13 @@ fn lifetime(_: &mut HostCall<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub(super) fn sweep(store: &Shared) {
-    let queue = store.lock().unwrap().collected_scenes.clone();
+pub(super) fn sweep(store: &mut Store) {
+    let queue = store.collected_scenes.clone();
     let collected = queue.take();
     if collected.is_empty() {
         return;
     }
-    let mut guard = store.lock().unwrap();
+    let guard = &mut *store;
     for (id, owner) in collected {
         // An attachment may have failed before publication, then been retried.
         if guard.retired_scenes.get(&id) != Some(&owner) {
@@ -97,12 +97,11 @@ pub(super) fn sweep(store: &Shared) {
 /// native registry. Its next replacement relinquishes those additional roots.
 pub(super) fn retain(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     actor: TableId,
     registry: TableId,
 ) -> Result<(), Error> {
-    let owner = store.lock().unwrap().retired_scenes.get(&scene).copied();
+    let owner = call.store().retired_scenes.get(&scene).copied();
     if let Some(owner) = owner {
         call.raw_table_set(owner, Value::Table(actor), Value::Boolean(true))?;
         if let Some(previous) = call.table_host_state(actor)?
@@ -112,19 +111,19 @@ pub(super) fn retain(
         }
         call.set_table_host_state(actor, Some(owner))?;
         call.raw_table_set(registry, Value::Table(actor), Value::Boolean(true))?;
-        store.lock().unwrap().retired_subscriptions.insert(actor);
+        call.store().retired_subscriptions.insert(actor);
     } else {
         call.raw_table_set(registry, Value::Table(actor), Value::Boolean(true))?;
     }
-    if !store.lock().unwrap().actors.contains_key(&actor) {
-        scalar_methods::bind(call, store, actor)?;
+    if !call.store().actors.contains_key(&actor) {
+        scalar_methods::bind(call, actor)?;
     }
     Ok(())
 }
 
-pub(super) fn retire(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result<bool, Error> {
+pub(super) fn retire(call: &mut HostCall<'_>, id: u64) -> Result<bool, Error> {
     let (members, sounds_retired, queue) = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.retired_scenes.contains_key(&id) {
             return Ok(false);
         }
@@ -137,14 +136,14 @@ pub(super) fn retire(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result
             guard.collected_scenes.clone(),
         )
     };
-    lifecycle::invalidate_plans(call, store)?;
+    lifecycle::invalidate_plans(call)?;
     let owner = call.try_new_table()?;
     call.with_roots(&[Value::Table(owner)], |call| {
         let token =
             call.new_host_function_with_data(lifetime, &[], CollectedScene { queue, id, owner })?;
         call.raw_table_set(owner, Value::Number(1.), token)?;
         let (exclusive, references) = {
-            let guard = store.lock().unwrap();
+            let guard = call.store();
             let exclusive: Vec<_> = members
                 .iter()
                 .copied()
@@ -185,7 +184,7 @@ pub(super) fn retire(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result
         // Publish only after every graph edge is traced. Registry removal below
         // cannot collect a partially transferred graph at a callback boundary.
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             guard.retired_scenes.insert(id, owner);
             guard.constructor_scenes.remove(&id);
             guard.actor_order.retain(|actor| !exclusive.contains(actor));
@@ -209,10 +208,10 @@ pub(super) fn retire(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result
         let registry = table(call, call.captures()[0])?;
         for actor in exclusive {
             if !sounds_retired {
-                sound::retire(call, store, actor);
+                sound::retire(call, actor);
             }
             call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
-            store.lock().unwrap().retired_subscriptions.remove(&actor);
+            call.store().retired_subscriptions.remove(&actor);
         }
         Ok(true)
     })

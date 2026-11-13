@@ -5,16 +5,14 @@ use crate::{SongLuaOverlayState as State, SongLuaPerframePlayerState as Player};
 pub(crate) struct Access {
     registry: TableId,
     helpers: TableId,
-    store: Shared,
 }
 type Output<T> = Arc<Mutex<Option<T>>>;
-type Reader<T> = fn(&mut HostCall<'_>, &Shared, TableId) -> Result<T, Error>;
+type Reader<T> = fn(&mut HostCall<'_>, TableId) -> Result<T, Error>;
 impl Actors {
     pub(crate) fn perframe_access(&self) -> Access {
         Access {
             registry: self.registry,
             helpers: self.helpers,
-            store: self.store.clone(),
         }
     }
 }
@@ -28,12 +26,12 @@ impl Access {
         let output = Arc::new(Mutex::new(None));
         let callback = vm.new_host_function_with_data(
             |call| {
-                let (store, reader, output) = call
-                    .function_data::<(Shared, Reader<T>, Output<T>)>()
+                let (reader, output) = call
+                    .function_data::<(Reader<T>, Output<T>)>()
                     .unwrap()
                     .clone();
                 let actor = table(call, call.captures()[2])?;
-                let value = reader(call, &store, actor)?;
+                let value = reader(call, actor)?;
                 *output.lock().unwrap() = Some(value);
                 Ok(())
             },
@@ -42,7 +40,7 @@ impl Access {
                 Value::Table(self.helpers),
                 actor,
             ],
-            (self.store.clone(), reader, output.clone()),
+            (reader, output.clone()),
         )?;
         vm.call(callback, &[])?;
         Ok(output.lock().unwrap().take().unwrap())
@@ -51,10 +49,10 @@ impl Access {
         self.read(vm, actor, initial_state::read)
     }
     pub fn player(&self, vm: &mut Vm, actor: Value) -> Result<Player, Error> {
-        self.read(vm, actor, |call, store, actor| {
+        self.read(vm, actor, |call, actor| {
             let number = |call: &mut HostCall<'_>, key: &str, index: usize| {
                 let raw = number(call, actor, key)?;
-                let native = store.lock().unwrap().actors.get(&actor).and_then(|a| {
+                let native = call.store().actors.get(&actor).and_then(|a| {
                     let mask = a.capture.as_ref().map_or(0, |c| c.transform_fields);
                     let pose = a.destination();
                     (mask & (1 << index) != 0).then_some(
@@ -115,7 +113,7 @@ impl Access {
                 Value::Table(self.helpers),
                 actor,
             ],
-            (self.store.clone(), target, value.clone()),
+            (target, value.clone()),
         )?;
         vm.call(callback, &[])?;
         Ok(())
@@ -140,24 +138,20 @@ impl Access {
                 Value::Table(self.helpers),
                 actor,
             ],
-            (self.store.clone(), state, frame),
+            (state, frame),
         )?;
         vm.call(callback, &[])?;
         Ok(())
     }
-    pub fn motion(&self, actor: Value, epoch: f32, seconds: f32) {
+    pub fn motion(&self, vm: &mut Vm, actor: Value, epoch: f32, seconds: f32) {
         if let Value::Table(id) = actor
-            && let Some(actor) = self.store.lock().unwrap().actors.get_mut(&id)
+            && let Some(actor) = vm.store().actors.get_mut(&id)
         {
             effects::sync_preparation_motion(actor, epoch, seconds);
         }
     }
 }
-pub(super) fn is_player(
-    call: &mut HostCall<'_>,
-    _: &Shared,
-    actor: TableId,
-) -> Result<bool, Error> {
+pub(super) fn is_player(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
     let key = call.try_intern(b"__songlua_player_index")?;
     let value = call.raw_table_get(actor, key)?;
     if value == Value::Nil {
@@ -177,15 +171,14 @@ fn number(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<f
 }
 fn assign(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     key: &str,
     value: Value,
     state: &State,
 ) -> Result<(), Error> {
     sprites::set(call, actor, key, value)?;
-    let frame = call.function_data::<(Shared, State, bool)>().unwrap().2;
-    let mut guard = store.lock().unwrap();
+    let frame = call.function_data::<(State, bool)>().unwrap().1;
+    let guard = call.store();
     let Some(actor) = guard.actors.get_mut(&actor) else {
         return Ok(());
     };
@@ -267,14 +260,11 @@ fn assign(
     Ok(())
 }
 fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, s, _) = call
-        .function_data::<(Shared, State, bool)>()
-        .unwrap()
-        .clone();
+    let (s, _) = call.function_data::<(State, bool)>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
     macro_rules! set {
         ($key:literal, $value:expr) => {
-            assign(call, &store, actor, $key, $value, &s)?
+            assign(call, actor, $key, $value, &s)?
         };
     }
     macro_rules! scalar {
@@ -333,8 +323,8 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
     scalar!("__songlua_state_effect_period", s.effect_period);
     let value = sprites::vector_value(call, &s.diffuse)?;
     call.with_roots(&[value], |call| {
-        assign(call, &store, actor, "__songlua_state_diffuse", value, &s)?;
-        assign(call, &store, actor, "__songlua_diffuse", value, &s)
+        assign(call, actor, "__songlua_state_diffuse", value, &s)?;
+        assign(call, actor, "__songlua_diffuse", value, &s)
     })?;
     let value = sprites::vector_value(call, &s.glow)?;
     set!("__songlua_state_glow", value);
@@ -348,9 +338,9 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
         let value = sprites::vector_value(call, &rect)?;
         set!("__songlua_state_stretch_rect", value);
     }
-    let known = store.lock().unwrap().actors.contains_key(&actor);
+    let known = call.store().actors.contains_key(&actor);
     if known {
-        song_replay::sync_getters(call, &store, actor)?;
+        song_replay::sync_getters(call, actor)?;
     }
     Ok(())
 }
@@ -358,8 +348,8 @@ fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
 #[cfg(feature = "test-support")]
 impl Access {
     pub fn fixture_children(&self, vm: &mut Vm, actor: Value) -> Result<Vec<Value>, Error> {
-        self.read(vm, actor, |call, store, actor| {
-            native_children::children(call, store, actor)
+        self.read(vm, actor, |call, actor| {
+            native_children::children(call, actor)
                 .map(|children| children.into_iter().map(Value::Table).collect())
         })
     }
@@ -368,7 +358,7 @@ impl Access {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<Vec<crate::SongLuaSpriteState>, Error> {
-        self.read(vm, actor, |call, _, actor| sprites::states(call, actor))
+        self.read(vm, actor, |call, actor| sprites::states(call, actor))
     }
     pub fn fixture_init_state(&self, vm: &mut Vm, actor: Value) -> Result<(), Error> {
         self.read(vm, actor, live_layers::reset_actor)

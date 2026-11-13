@@ -173,7 +173,7 @@ where
             && initial == crate::SongLuaOverlayState::default()
             && commands.commands.is_empty()
             && commands.sounds.is_empty()
-            && !self.tree.deferred(actor)
+            && !self.tree.deferred(&runtime.vm, actor)
             && !draw
             && !matches!(actor,Value::Table(id)if self.referenced.contains(&id))
         {

@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 pub(super) fn initialize(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     template: bool,
 ) -> Result<(), Error> {
@@ -27,7 +26,7 @@ pub(super) fn initialize(
         sprites::set(call, bound, name, function)?;
     }
     if !template {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
         state.depth_test = true;
         state.depth_write = true;
@@ -87,8 +86,8 @@ pub(super) fn tap_model(
     }))
 }
 
-pub(super) fn advance_materials(store: &Shared, actor: TableId, delta: f32) {
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+pub(super) fn advance_materials(store: &mut Store, actor: TableId, delta: f32) {
+    if let Some(actor) = store.actors.get_mut(&actor) {
         for clock in actor.model_materials.iter_mut().flatten() {
             clock.update(delta);
         }
@@ -101,23 +100,24 @@ impl Actors {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<Option<[PathBuf; 3]>, Error> {
-        self.store.lock().unwrap().model_paths_output = None;
+        vm.store().model_paths_output = None;
         let function = vm.rooted(self.read_model_paths)?;
-        let result = vm.call(function, &[actor]);
-        let paths = self.store.lock().unwrap().model_paths_output.take();
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let paths = vm.store().model_paths_output.take();
         result?;
         Ok(paths)
     }
 
     pub(crate) fn install_model_materials<V>(
         &self,
+        vm: &mut Vm,
         actor: Value,
         layers: &[crate::SongLuaOverlayModelLayer<V>],
     ) -> Result<(), String> {
         let Value::Table(actor) = actor else {
             return Err("model material owner must be an actor table".into());
         };
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let actor = store
             .actors
             .get_mut(&actor)
@@ -130,8 +130,8 @@ impl Actors {
         Ok(())
     }
 
-    pub(crate) fn sample_model_materials(&self, second: f32) {
-        for actor in self.store.lock().unwrap().actors.values_mut() {
+    pub(crate) fn sample_model_materials(&self, vm: &mut Vm, second: f32) {
+        for actor in vm.store().actors.values_mut() {
             for clock in actor.model_materials.iter_mut().flatten() {
                 clock.sample(second);
             }
@@ -140,12 +140,13 @@ impl Actors {
 
     pub(crate) fn take_model_material_samples(
         &self,
+        vm: &mut Vm,
         actor: Value,
     ) -> Result<Vec<Arc<[crate::SongLuaTextureSample]>>, String> {
         let Value::Table(actor) = actor else {
             return Err("model material owner must be an actor table".into());
         };
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let actor = store
             .actors
             .get_mut(&actor)

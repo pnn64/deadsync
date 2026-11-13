@@ -32,7 +32,6 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Err
 
 fn child(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     parent: TableId,
     kind: &str,
@@ -53,19 +52,10 @@ fn child(
         }
         let node = call.call(helper(call, 2)?, &[Value::Table(attrs)])?[0];
         let child = call.with_roots(&[node], |call| {
-            Ok(build(
-                call,
-                store,
-                scene,
-                table(call, node)?,
-                Some(parent),
-                false,
-                true,
-            )?
-            .unwrap())
+            Ok(build(call, scene, table(call, node)?, Some(parent), false, true)?.unwrap())
         })?;
         {
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             // Native dummy graph children register during materialization,
             // before Init registers the ordinary nodes of this new scene.
             store.actor_order.retain(|id| *id != child);
@@ -82,34 +72,22 @@ fn child(
         }
         let value = call.try_intern(name.as_bytes())?;
         set(call, child, "Name", value)?;
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&child)
-            .unwrap()
-            .state
-            .name = name.as_bytes().to_vec();
+        call.store().actors.get_mut(&child).unwrap().state.name = name.as_bytes().to_vec();
         Ok(child)
     })
 }
 
-pub(super) fn initialize(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let size = store.graph_size;
         let actor = store.actors.get_mut(&actor).unwrap();
         actor.state.size = size;
         actor.state.render.size = Some(size);
     }
-    let first = child(call, store, scene, actor, "GraphDisplayBody", "")?;
-    let second = child(call, store, scene, actor, "GraphDisplayBody", "")?;
-    let line = child(call, store, scene, actor, "GraphDisplayLine", "Line")?;
+    let first = child(call, scene, actor, "GraphDisplayBody", "")?;
+    let second = child(call, scene, actor, "GraphDisplayBody", "")?;
+    let line = child(call, scene, actor, "GraphDisplayLine", "Line")?;
     let bodies = group(call, &[first, second])?;
     native_children::insert(call, actor, "", bodies)?;
     native_children::insert(call, actor, "Line", Value::Table(line))?;
@@ -186,17 +164,12 @@ fn capture(
     })
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let graph = assets::field(call, actor, b"__songlua_actor_type")?
         .is_some_and(|kind| kind.eq_ignore_ascii_case("GraphDisplay"));
     if name == "Load" {
         if !graph {
-            return sprites::method(call, store, actor, name);
+            return sprites::method(call, actor, name);
         }
         if let Some(metric) = render::text(call, arg(call, 1)).map(str::to_owned) {
             let metric = call.try_intern(metric.as_bytes())?;
@@ -224,7 +197,6 @@ pub(super) fn method(
 
 fn child_state(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     body: bool,
 ) -> Result<crate::SongLuaOverlayState, Error> {
@@ -252,20 +224,16 @@ fn child_state(
                 Some(child)
             };
             child.map_or(Ok(crate::SongLuaOverlayState::default()), |child| {
-                native_children::state(call, store, child)
+                native_children::state(call, child)
             })
         })
     })
 }
 
-pub(super) fn read(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<GraphDisplay, Error> {
-    let size = native_children::state(call, store, actor)?
+pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<GraphDisplay, Error> {
+    let size = native_children::state(call, actor)?
         .size
-        .unwrap_or(store.lock().unwrap().graph_size)
+        .unwrap_or(call.store().graph_size)
         .map(|n| n.abs().max(1.0));
     let values = field(call, actor, "__songlua_graph_display_values")?;
     let body_values = call.with_roots(&[values], |call| {
@@ -284,7 +252,7 @@ pub(super) fn read(
     Ok(GraphDisplay {
         size,
         body_values,
-        body_state: child_state(call, store, actor, true)?,
-        line_state: child_state(call, store, actor, false)?,
+        body_state: child_state(call, actor, true)?,
+        line_state: child_state(call, actor, false)?,
     })
 }

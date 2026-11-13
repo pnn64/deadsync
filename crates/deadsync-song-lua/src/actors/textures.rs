@@ -12,22 +12,17 @@ pub(super) struct Info {
 }
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     info: Arc<Info>,
     name: &'static str,
 }
 
-pub(super) fn install_getter(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn install_getter(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let methods = super::get(call, actor, b"__songlua_bound_methods")?;
     let methods = table(call, methods)?;
     let captures = [call.captures()[0], call.captures()[1], Value::Table(actor)];
     // Native instances own this getter even when their public class hides it.
     // Internal screen kinds expose it through the existing bound-method fallback.
-    let getter = call.new_host_function_with_data(bound_getter, &captures, store.clone())?;
+    let getter = call.new_host_function(bound_getter, &captures)?;
     let key = call.try_intern(b"GetTexture")?;
     call.raw_table_set(methods, key, getter)
 }
@@ -36,16 +31,15 @@ fn bound_getter(call: &mut HostCall<'_>) -> Result<(), Error> {
     // The callback requires a table receiver but reads its captured owner.
     table(call, arg(call, 0))?;
     let actor = table(call, call.captures()[2])?;
-    let store = call.function_data::<Shared>().unwrap().clone();
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
     }
     if assets::field(call, actor, b"__songlua_actor_type")?
         .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorFrameTexture"))
     {
-        framebuffers::method(call, &store, actor, "GetTexture")
+        framebuffers::method(call, actor, "GetTexture")
     } else {
-        get(call, &store, actor)
+        get(call, actor)
     }
 }
 
@@ -68,7 +62,7 @@ pub(super) fn collapse(name: &str) -> String {
     }
     out
 }
-pub(super) fn get(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+pub(super) fn get(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let key = call.try_intern(b"__songlua_amv_texture_handle")?;
     let retained = call.raw_table_get(actor, key)?;
     if retained != Value::Nil {
@@ -135,11 +129,8 @@ pub(super) fn get(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Re
                     size
                 }
             } else {
-                sprites::refresh_size(call, store, actor)?;
-                store.lock().unwrap().actors[&actor]
-                    .state
-                    .size
-                    .map(f32::abs)
+                sprites::refresh_size(call, actor)?;
+                call.store().actors[&actor].state.size.map(f32::abs)
             };
             let upload = sprites::actor_upload_size(call, actor)?;
             let (image, allocation) = upload.map_or((source, source), |image| {
@@ -163,13 +154,12 @@ pub(super) fn get(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Re
                 sheet,
             )
         };
-        install(call, store, actor, texture, info, sheet)?;
+        install(call, actor, texture, info, sheet)?;
         call.push(Value::Table(texture))
     })
 }
 pub(super) fn install(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     texture: TableId,
     info: Info,
@@ -206,7 +196,6 @@ pub(super) fn install(
             callback,
             &captures,
             Binding {
-                store: store.clone(),
                 info: info.clone(),
                 name,
             },
@@ -216,7 +205,7 @@ pub(super) fn install(
     Ok(())
 }
 fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let Binding { store, info, name } = call.function_data::<Binding>().unwrap().clone();
+    let Binding { info, name } = call.function_data::<Binding>().unwrap().clone();
     let value = match name {
         "GetPath" => {
             return call
@@ -233,7 +222,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         "loop" | "rate" => {
             let actor = table(call, call.captures()[2])?;
             let offset = usize::from(matches!(arg(call, 0), Value::Table(_)));
-            sprites::texture_parameter(call, &store, actor, name, arg(call, offset))?;
+            sprites::texture_parameter(call, actor, name, arg(call, offset))?;
             return call.push(call.captures()[3]);
         }
         _ => unreachable!(),

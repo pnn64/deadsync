@@ -22,7 +22,7 @@ const CLASSES: &[&str] = &[
     "ActorFrameTexture",
 ];
 
-pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Error> {
+pub(super) fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let def = Value::Table(call.try_new_table()?);
     call.with_roots(&[def], |call| {
         let captures = call.captures().to_vec();
@@ -30,7 +30,7 @@ pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Err
             let function = call.new_host_function_with_data(
                 callback,
                 &captures,
-                Binding::new(store, Op::OfflineConstructor(class)),
+                Op::OfflineConstructor(class),
             )?;
             let key = call.try_intern(class.as_bytes())?;
             call.raw_table_set(table(call, def)?, key, function)?;
@@ -43,16 +43,13 @@ pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Err
             Value::Boolean(true),
         )?;
         sprites::set(call, globals, "Def", def)?;
-        let loader = call.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding::new(store, Op::LoadPreparationActor),
-        )?;
+        let loader =
+            call.new_host_function_with_data(callback, &captures, Op::LoadPreparationActor)?;
         sprites::set(call, globals, "LoadActor", loader)?;
         let null = get(call, globals, b"NullActor")?;
         let null = table(call, null)?;
         sprites::set(call, null, "__songlua_def_owned", Value::Boolean(true))?;
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         guard.offline_definitions = true;
         let null = guard.actors.get_mut(&null).expect("owned NullActor");
         null.offline_instance = true;
@@ -61,30 +58,21 @@ pub(super) fn install(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Err
     })
 }
 
-pub(super) fn construct(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    class: &'static str,
-) -> Result<(), Error> {
+pub(super) fn construct(call: &mut HostCall<'_>, class: &'static str) -> Result<(), Error> {
     let supplied = match arg(call, 0) {
         Value::Table(actor) => Some(actor),
         _ => None,
     };
-    let actor = create(call, store, class, supplied, false)?;
+    let actor = create(call, class, supplied, false)?;
     call.push(Value::Table(actor))
 }
 
-pub(super) fn dummy(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    class: &'static str,
-) -> Result<TableId, Error> {
-    create(call, store, class, None, true)
+pub(super) fn dummy(call: &mut HostCall<'_>, class: &'static str) -> Result<TableId, Error> {
+    create(call, class, None, true)
 }
 
 fn create(
     call: &mut HostCall<'_>,
-    store: &Shared,
     class: &'static str,
     supplied: Option<TableId>,
     dummy: bool,
@@ -94,7 +82,7 @@ fn create(
         None => call.try_new_table()?,
     };
     call.with_roots(&[Value::Table(actor)], |call| {
-        let existing = store.lock().unwrap().actors.get(&actor).map(|a| {
+        let existing = call.store().actors.get(&actor).map(|a| {
             (
                 a.scene,
                 TemplateState::from(a),
@@ -106,10 +94,10 @@ fn create(
         let scene = if let Some((scene, ..)) = &existing {
             *scene
         } else {
-            new_scene(call, store)?
+            new_scene(call)?
         };
         if existing.is_none() {
-            store.lock().unwrap().constructor_scenes.insert(scene);
+            call.store().constructor_scenes.insert(scene);
         }
         let kind = call.try_intern(class.as_bytes())?;
         call.call(
@@ -144,9 +132,8 @@ fn create(
         instance.offline_instance = true;
         instance.pending_init = true;
         instance.registered = dummy;
-        instance.capture = store
-            .lock()
-            .unwrap()
+        instance.capture = call
+            .store()
             .constructing_capture
             .then(capture::Capture::default);
         if let Some((_, previous, initialized, registered, parent)) = existing {
@@ -158,9 +145,9 @@ fn create(
             instance.parent = parent;
         }
         let registry = table(call, call.captures()[0])?;
-        retirement::retain(call, store, scene, actor, registry)?;
+        retirement::retain(call, scene, actor, registry)?;
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             let members = &mut guard.scenes.get_mut(&scene).unwrap().actors;
             if !members.contains(&actor) {
                 members.push(actor);
@@ -186,7 +173,6 @@ fn create(
         }
         initialize_resources(
             call,
-            store,
             scene,
             actor,
             class,
@@ -197,7 +183,7 @@ fn create(
             },
         )?;
         call.call(helper(call, 13)?, &[Value::Table(actor)])?;
-        own_children(call, store, actor)?;
+        own_children(call, actor)?;
         Ok(actor)
     })
 }
@@ -230,15 +216,14 @@ fn already_owned(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error>
 // resource constructor. Concatenation additionally leaves child identities shared.
 pub(super) fn clone_actor(
     call: &mut HostCall<'_>,
-    store: &Shared,
     source: TableId,
     own: bool,
 ) -> Result<TableId, Error> {
-    let previous = TemplateState::from(&store.lock().unwrap().actors[&source]);
+    let previous = TemplateState::from(&call.store().actors[&source]);
     let value = call.call(helper(call, 12)?, &[Value::Table(source)])?[0];
     call.with_roots(&[value], |call| {
         let actor = table(call, value)?;
-        let scene = new_scene(call, store)?;
+        let scene = new_scene(call)?;
         let class = previous.state.class;
         let kind = call.try_intern(class.as_bytes())?;
         call.call(
@@ -264,48 +249,42 @@ pub(super) fn clone_actor(
         instance.registered = false;
         instance.capture = previous.capture;
         let registry = table(call, call.captures()[0])?;
-        retirement::retain(call, store, scene, actor, registry)?;
+        retirement::retain(call, scene, actor, registry)?;
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             guard.constructor_scenes.insert(scene);
             let owner = guard.scenes.get_mut(&scene).unwrap();
             owner.root = Some(actor);
             owner.actors.push(actor);
             guard.actors.insert(actor, instance);
         }
-        initialize_resources(call, store, scene, actor, class, ResourceMode::OfflineClone)?;
+        initialize_resources(call, scene, actor, class, ResourceMode::OfflineClone)?;
         call.call(helper(call, 13)?, &[value])?;
         if own {
-            own_children(call, store, actor)?;
+            own_children(call, actor)?;
         } else {
-            share_children(call, store, actor)?;
+            share_children(call, actor)?;
         }
         Ok(actor)
     })
 }
 
-fn share_children(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    let scene = store.lock().unwrap().actors[&actor].scene;
+fn share_children(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let scene = call.store().actors[&actor].scene;
     let mut declared = Vec::new();
     for i in 1.. {
         match call.raw_table_get(actor, Value::Number(i as f64))? {
             Value::Nil => break,
             Value::Table(child) => {
-                courses::attach(call, store, scene, child)?;
+                courses::attach(call, scene, child)?;
                 declared.push(child);
             }
             _ => {}
         }
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .children = declared;
-    for child in children(call, store, actor)? {
-        courses::attach(call, store, scene, child)?;
+    call.store().actors.get_mut(&actor).unwrap().children = declared;
+    for child in children(call, actor)? {
+        courses::attach(call, scene, child)?;
     }
     Ok(())
 }
@@ -313,15 +292,10 @@ fn share_children(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Re
 // Transfer the implicit constructor owner after claiming its root. The native
 // host keeps abandoned constructor objects until VM teardown; an explicitly
 // owned scene instead supplies the existing release boundary for its subtree.
-fn transfer(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
-    courses::attach(call, store, scene, actor)?;
+fn transfer(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
+    courses::attach(call, scene, actor)?;
     let old = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard
             .constructor_scenes
             .iter()
@@ -329,7 +303,7 @@ fn transfer(
             .filter(|id| *id != scene && guard.scenes[id].root == Some(actor))
             .collect::<Vec<_>>()
     };
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     for id in old {
         guard.constructor_scenes.remove(&id);
         let previous = guard.scenes.remove(&id).unwrap();
@@ -345,8 +319,8 @@ fn transfer(
     Ok(())
 }
 
-fn own_children(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    let scene = store.lock().unwrap().actors[&actor].scene;
+fn own_children(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let scene = call.store().actors[&actor].scene;
     let values = call
         .call(helper(call, 11)?, &[Value::Table(actor)])?
         .to_vec();
@@ -359,7 +333,7 @@ fn own_children(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Resu
             let child = table(call, call.raw_table_get(entry, Value::Number(2.))?)?;
             let typed = get(call, child, b"__songlua_actor_type")? != Value::Nil;
             let child = if typed && already_owned(call, child)? {
-                clone_actor(call, store, child, true)?
+                clone_actor(call, child, true)?
             } else {
                 child
             };
@@ -367,100 +341,73 @@ fn own_children(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Resu
                 sprites::set(call, child, "__songlua_def_owned", Value::Boolean(true))?;
                 call.raw_table_set(source, key, Value::Table(child))?;
             }
-            transfer(call, store, scene, child)?;
+            transfer(call, scene, child)?;
         }
         let mut children = Vec::new();
         for i in 1.. {
             match call.raw_table_get(actor, Value::Number(i as f64))? {
                 Value::Nil => break,
                 Value::Table(child) => {
-                    transfer(call, store, scene, child)?;
+                    transfer(call, scene, child)?;
                     children.push(child);
                 }
                 _ => {}
             }
         }
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .children = children;
+        call.store().actors.get_mut(&actor).unwrap().children = children;
         // Native children (for example a supplied SongMeter Stream) also
         // leave their temporary constructor owner when this instance claims them.
-        for child in super::children(call, store, actor)? {
-            transfer(call, store, scene, child)?;
+        for child in super::children(call, actor)? {
+            transfer(call, scene, child)?;
         }
         Ok(())
     })
 }
 
-pub(super) fn own_root(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    init: bool,
-) -> Result<u64, Error> {
+pub(super) fn own_root(call: &mut HostCall<'_>, actor: TableId, init: bool) -> Result<u64, Error> {
     let actor = if already_owned(call, actor)? {
-        clone_actor(call, store, actor, true)?
+        clone_actor(call, actor, true)?
     } else {
         actor
     };
-    let existing = store.lock().unwrap().actors[&actor].scene;
-    let scene = if store.lock().unwrap().scenes[&existing].root == Some(actor) {
+    let existing = call.store().actors[&actor].scene;
+    let scene = if call.store().scenes[&existing].root == Some(actor) {
         existing
     } else {
-        let scene = new_scene(call, store)?;
-        transfer(call, store, scene, actor)?;
-        store.lock().unwrap().scenes.get_mut(&scene).unwrap().root = Some(actor);
+        let scene = new_scene(call)?;
+        transfer(call, scene, actor)?;
+        call.store().scenes.get_mut(&scene).unwrap().root = Some(actor);
         scene
     };
-    store.lock().unwrap().constructor_scenes.remove(&scene);
+    call.store().constructor_scenes.remove(&scene);
     sprites::set(call, actor, "__songlua_def_owned", Value::Boolean(true))?;
     if init {
-        super::prepare_init(store);
-        if let Err(error) = initialize(call, store, actor) {
-            release(call, store, scene)?;
+        super::prepare_init(call.store());
+        if let Err(error) = initialize(call, actor) {
+            release(call, scene)?;
             return Err(error);
         }
     }
     Ok(scene)
 }
 
-pub(super) fn prepare_init(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn prepare_init(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let initialized = !matches!(
         get(call, actor, b"__songlua_init_commands_ran")?,
         Value::Nil | Value::Boolean(false)
     );
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .initialized = initialized;
+    call.store().actors.get_mut(&actor).unwrap().initialized = initialized;
     if initialized {
         return Ok(());
     }
-    courses::refresh_raw_children(call, store, actor, true)?;
+    courses::refresh_raw_children(call, actor, true)?;
     let name = get(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {
         None
     };
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .load_name = name;
+    call.store().actors.get_mut(&actor).unwrap().load_name = name;
     let empty = call.try_intern(b"")?;
     for key in ["__songlua_native_name", "__songlua_load_name"] {
         sprites::set(call, actor, key, empty)?;

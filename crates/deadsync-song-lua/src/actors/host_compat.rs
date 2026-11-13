@@ -5,34 +5,29 @@ impl Actors {
     pub(crate) fn install_host_compat(&self, vm: &mut Vm) -> Result<(), Error> {
         install(
             vm,
-            &self.store,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
         )
     }
 }
 
-pub(super) fn install(vm: &mut Vm, store: &Shared, captures: &[Value]) -> Result<(), Error> {
+pub(super) fn install(vm: &mut Vm, captures: &[Value]) -> Result<(), Error> {
     let Value::Table(lua) = vm.get_global(b"lua")? else {
         unreachable!("song lua service table")
     };
-    let function = vm.new_host_function_with_data(report, captures, store.clone())?;
+    let function = vm.new_host_function(report, captures)?;
     let root = vm.pin(function)?;
     let result = super::super::put(vm, lua, "ReportScriptError", function);
     vm.unpin(root)?;
     result?;
-    let copy = vm.new_host_function_with_data(copy, captures, store.clone())?;
+    let copy = vm.new_host_function(copy, captures)?;
     let root = vm.pin(copy)?;
     let result = vm.set_global(b"DeepCopy", copy);
     vm.unpin(root)?;
     result
 }
 
-pub(super) fn initialize_base(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
-    let mut base = store.lock().unwrap().actors[&actor].base_transform;
+pub(super) fn initialize_base(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let mut base = call.store().actors[&actor].base_transform;
     for field in crate::base_transform::BaseField::ALL {
         let value = get(call, actor, field.state_key().as_bytes())?;
         if value != Value::Nil {
@@ -43,25 +38,15 @@ pub(super) fn initialize_base(
             }
         }
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .base_transform = base;
+    call.store().actors.get_mut(&actor).unwrap().base_transform = base;
     Ok(())
 }
 
 /// A copied live definition exports ordinary raw pose fields. A new native
 /// actor starts at those destinations with its own empty tween queue.
-pub(super) fn initialize_pose(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize_pose(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let (mut pose, mut render, base) = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let actor = &guard.actors[&actor];
         (actor.current, actor.state.render, actor.base_transform)
     };
@@ -133,7 +118,7 @@ pub(super) fn initialize_pose(
         )*};
     }
     flags! {draw_by_z_position,mask_source,mask_dest,depth_test,depth_write,depth_test_on_fail,texture_filtering,texture_wrapping}
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let actor = guard.actors.get_mut(&actor).unwrap();
     actor.current = pose;
     actor.state.rotation = [pose.rot_x_deg, pose.rot_y_deg, pose.rot_z_deg];
@@ -191,13 +176,12 @@ pub(super) fn update_base(
 
 pub(super) fn raw_flag(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     key: &str,
     value: bool,
 ) -> Result<(), Error> {
     let owned = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.playback
             && guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
             && guard.actors.get(&actor).is_some_and(|a| !a.raw_live_epoch)
@@ -209,24 +193,18 @@ pub(super) fn raw_flag(
 }
 
 fn copy(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let value = arg(call, 0);
     let value = super::super::managers::compat::clone_value(call, value, &|call, source, into| {
-        copy_pose(call, &store, source, into)
+        copy_pose(call, source, into)
     })?;
     call.push(value)
 }
 
-fn copy_pose(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    source: TableId,
-    into: TableId,
-) -> Result<(), Error> {
+fn copy_pose(call: &mut HostCall<'_>, source: TableId, into: TableId) -> Result<(), Error> {
     // Clone native values and release Store before any allocation or VM entry.
     // Outgoing actors no longer have a native replay owner in the new epoch.
     let state = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let owned = guard.playback && guard.clock.live.load(std::sync::atomic::Ordering::Relaxed);
         guard
             .actors
@@ -360,7 +338,6 @@ fn put(call: &mut HostCall<'_>, into: TableId, key: &str, value: Value) -> Resul
 }
 
 fn report(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let index = usize::from(matches!(call.arguments().first(), Some(Value::Table(_))));
     let message = match call.arguments().get(index) {
         Some(Value::String(id)) => std::str::from_utf8(call.string_bytes(*id).unwrap())
@@ -369,14 +346,18 @@ fn report(call: &mut HostCall<'_>) -> Result<(), Error> {
         _ => None,
     }
     .ok_or_else(|| call.error(b"ReportScriptError: string expected"))?;
-    framebuffers::report(call, &store, &message)
+    framebuffers::report(call, &message)
 }
 
 #[cfg(feature = "test-support")]
 impl Actors {
-    pub(crate) fn fixture_destination_vertices(&self, value: Value) -> Option<[[f32; 4]; 4]> {
+    pub(crate) fn fixture_destination_vertices(
+        &self,
+        vm: &Vm,
+        value: Value,
+    ) -> Option<[[f32; 4]; 4]> {
         let Value::Table(id) = value else { return None };
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         store
             .actors
             .get(&id)
@@ -384,10 +365,11 @@ impl Actors {
     }
     pub(crate) fn fixture_live_color_storage(
         &self,
+        vm: &Vm,
         value: Value,
     ) -> Option<(usize, [f32; 4], [f32; 4])> {
         let Value::Table(id) = value else { return None };
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         let actor = store.actors.get(&id)?;
         Some((
             &actor.current.diffuse as *const [f32; 4] as usize,
@@ -401,12 +383,11 @@ impl Actors {
         source: Value,
         into: Value,
     ) -> Result<(), Error> {
-        let callback = vm.new_host_function_with_data(
+        let callback = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let source = table(call, call.captures()[2])?;
                 let into = table(call, call.captures()[3])?;
-                copy_pose(call, &store, source, into)
+                copy_pose(call, source, into)
             },
             &[
                 Value::Table(self.registry),
@@ -414,7 +395,6 @@ impl Actors {
                 source,
                 into,
             ],
-            self.store.clone(),
         )?;
         vm.call(callback, &[]).map(|_| ())
     }
@@ -426,7 +406,7 @@ impl Actors {
     ) -> Result<deadlib_lua::Root, Error> {
         let callback = vm.new_host_function_with_data(
             |call| {
-                let (store, mutable) = call.function_data::<(Shared, bool)>().unwrap().clone();
+                let mutable = call.function_data::<bool>().unwrap().clone();
                 let source = table(call, call.captures()[2])?;
                 let saved = if mutable {
                     state_snapshot::raw_copy_mutable(call, source)?
@@ -434,7 +414,7 @@ impl Actors {
                     state_snapshot::raw_copy(call, source)?
                 };
                 call.with_roots(&[Value::Table(saved)], |call| {
-                    copy_pose(call, &store, source, saved)?;
+                    copy_pose(call, source, saved)?;
                     call.push(Value::Table(saved))
                 })
             },
@@ -443,7 +423,7 @@ impl Actors {
                 Value::Table(self.helpers),
                 source,
             ],
-            (self.store.clone(), mutable),
+            mutable,
         )?;
         let value = vm
             .call(callback, &[])?

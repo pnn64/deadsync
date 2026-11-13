@@ -22,16 +22,15 @@ pub(crate) enum Answer {
 }
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     query: Query,
     output: Arc<Mutex<Option<Answer>>>,
 }
 impl Actors {
-    pub(crate) fn apply_song_replay_pose(&self, value: Value, state: &mut State) -> bool {
+    pub(crate) fn apply_song_replay_pose(&self, vm: &Vm, value: Value, state: &mut State) -> bool {
         let Value::Table(id) = value else {
             return false;
         };
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         let Some(actor) = store
             .actors
             .get(&id)
@@ -42,16 +41,16 @@ impl Actors {
         actor.current.write_to(state);
         true
     }
-    pub(crate) fn wrapper_parent(&self, actor: TableId) -> Option<TableId> {
-        self.store
-            .lock()
-            .unwrap()
-            .actors
-            .get(&actor)
-            .and_then(|a| a.parent)
+    pub(crate) fn wrapper_parent(&self, vm: &mut Vm, actor: TableId) -> Option<TableId> {
+        vm.store().actors.get(&actor).and_then(|a| a.parent)
     }
-    pub(crate) fn replace_song_capture_indices(&self, screen: ActorScene, values: &[Value]) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn replace_song_capture_indices(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        values: &[Value],
+    ) {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -74,8 +73,12 @@ impl Actors {
             })
             .collect();
     }
-    pub(crate) fn song_message_advances(&self, screen: ActorScene) -> Vec<((usize, String), f32)> {
-        self.store.lock().unwrap().scenes[&screen.id]
+    pub(crate) fn song_message_advances(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+    ) -> Vec<((usize, String), f32)> {
+        vm.store().scenes[&screen.id]
             .song_session
             .as_ref()
             .unwrap()
@@ -102,7 +105,6 @@ impl Actors {
                 actor,
             ],
             Read {
-                store: self.store.clone(),
                 query,
                 output: output.clone(),
             },
@@ -110,16 +112,14 @@ impl Actors {
         vm.call(function, &[])?;
         Ok(output.lock().unwrap().take().unwrap())
     }
-    pub(crate) fn models_active(&self) -> bool {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn models_active(&self, vm: &mut Vm) -> bool {
+        vm.store()
             .actors
             .values()
             .any(|a| a.model_materials.iter().any(Option::is_some))
     }
-    pub(crate) fn begin_song_wrapper_capture(&self, screen: ActorScene, start: usize) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn begin_song_wrapper_capture(&self, vm: &mut Vm, screen: ActorScene, start: usize) {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -136,8 +136,12 @@ impl Actors {
             rows: Vec::new(),
         });
     }
-    pub(crate) fn new_song_wrappers(&self, screen: ActorScene) -> Vec<(TableId, TableId, State)> {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn new_song_wrappers(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+    ) -> Vec<(TableId, TableId, State)> {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -157,11 +161,10 @@ impl Actors {
     }
     pub(crate) fn finish_song_wrapper_capture(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Vec<(TableId, TableId, State)> {
-        self.store
-            .lock()
-            .unwrap()
+        vm.store()
             .scenes
             .get_mut(&screen.id)
             .unwrap()
@@ -175,8 +178,8 @@ impl Actors {
             .take()
             .map_or_else(Vec::new, |wrappers| wrappers.rows)
     }
-    pub(crate) fn end_song_update_capture(&self, screen: ActorScene) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn end_song_update_capture(&self, vm: &mut Vm, screen: ActorScene) {
+        let store = vm.store();
         if store
             .replay_frame
             .is_some_and(|(owner, _)| owner == screen.id)
@@ -197,18 +200,18 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Read>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
     let answer = match data.query {
-        Query::Active => Answer::Active(active(call, &data.store, actor)?),
+        Query::Active => Answer::Active(active(call, actor)?),
         Query::Motion(clock, include_spin) => {
-            let time = effect_time(call, &data.store, actor, clock)?;
+            let time = effect_time(call, actor, clock)?;
             let spin = if include_spin {
-                render_spin(call, &data.store, actor)?
+                render_spin(call, actor)?
             } else {
                 None
             };
             Answer::Motion(time, spin)
         }
-        Query::Mask => Answer::Mask(mask(call, &data.store, actor)?),
-        Query::Field(clock) => Answer::Field(field_wrappers(call, &data.store, actor, clock)?),
+        Query::Mask => Answer::Mask(mask(call, actor)?),
+        Query::Field(clock) => Answer::Field(field_wrappers(call, actor, clock)?),
     };
     *data.output.lock().unwrap() = Some(answer);
     Ok(())
@@ -227,8 +230,8 @@ fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, 
         table(call, value).map(Some)
     }
 }
-fn replay_pose(store: &Shared, actor: TableId, state: &mut State) {
-    let store = store.lock().unwrap();
+fn replay_pose(store: &mut Store, actor: TableId, state: &mut State) {
+    let store = &mut *store;
     if let Some(actor) = store
         .actors
         .get(&actor)
@@ -237,18 +240,17 @@ fn replay_pose(store: &Shared, actor: TableId, state: &mut State) {
         actor.current.write_to(state);
     }
 }
-pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if store
-        .lock()
-        .unwrap()
+pub(super) fn ensure(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if call
+        .store()
         .actors
         .get(&actor)
         .is_some_and(|a| a.capture.is_none() && a.replay.is_some())
     {
         return Ok(());
     }
-    let state = initial_state::read(call, store, actor)?;
-    let mut store = store.lock().unwrap();
+    let state = initial_state::read(call, actor)?;
+    let store = call.store();
     if !store.playback {
         return Ok(());
     }
@@ -265,7 +267,6 @@ pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) ->
     if let Some(clock) = store.replay_clock.as_mut() {
         clock.promote(actor);
     }
-    drop(store);
     if live {
         // A copied loading definition exports raw metadata. Once the native
         // replay owns those values, remove the mirrors just as initial live
@@ -287,13 +288,12 @@ pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) ->
 }
 pub(super) fn created(
     call: &mut HostCall<'_>,
-    store: &Shared,
     owner: TableId,
     wrapper: TableId,
 ) -> Result<(), Error> {
-    ensure(call, store, wrapper)?;
+    ensure(call, wrapper)?;
     let context = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         store.replay_frame.and_then(|(scene, _)| {
             let capture = store
                 .scenes
@@ -306,8 +306,8 @@ pub(super) fn created(
         })
     };
     let Some(scene) = context else { return Ok(()) };
-    let initial = initial_state::read(call, store, wrapper)?;
-    let mut store = store.lock().unwrap();
+    let initial = initial_state::read(call, wrapper)?;
+    let store = call.store();
     let capture = store
         .scenes
         .get_mut(&scene)
@@ -327,7 +327,6 @@ pub(super) fn created(
 }
 fn visit_wrappers(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     ordinary: bool,
     reverse: bool,
@@ -343,9 +342,7 @@ fn visit_wrappers(
         let len = if let Some(array) = array {
             call.raw_table_len(array)?
         } else {
-            store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get(&actor)
                 .map_or(0, |a| a.wrappers.len())
@@ -358,9 +355,7 @@ fn visit_wrappers(
             let value = if let Some(array) = array {
                 call.raw_table_get(array, Value::Number(index as f64))?
             } else {
-                store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get(&actor)
                     .and_then(|a| a.wrappers.get(index - 1))
@@ -379,12 +374,10 @@ fn visit_wrappers(
     })
 }
 
-fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<bool, Error> {
+fn active(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
     let sleep = get(call, actor, b"__songlua_hibernate_seconds")?;
     let sleeping = if sleep == Value::Nil {
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get(&actor)
             .is_some_and(|a| a.hibernate > 0.)
@@ -405,7 +398,7 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
     }
     let recurring = sprites::field(call, actor, "__songlua_recurring_update_command")?;
     if if recurring == Value::Nil {
-        capture::has_recurring(store, actor)
+        capture::has_recurring(call.store(), actor)
     } else {
         initial_state::value_text(call, recurring)?.is_some()
     } {
@@ -413,9 +406,8 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
     }
     let clock = get(call, actor, b"__songlua_state_motion_clock")?;
     if optional_table(call, clock)?.is_some()
-        || store
-            .lock()
-            .unwrap()
+        || call
+            .store()
             .actors
             .get(&actor)
             .is_some_and(effects::has_motion)
@@ -424,15 +416,13 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
     }
     let deferred = get(call, actor, b"__songlua_command_queue_deferred")?;
     if if deferred == Value::Nil {
-        capture::deferred(store, actor)
+        capture::deferred(call.store(), actor)
     } else {
         !matches!(deferred, Value::Boolean(false))
     } {
         return Ok(true);
     }
-    if visit_wrappers(call, store, actor, true, false, |call, row| {
-        active(call, store, row)
-    })? {
+    if visit_wrappers(call, actor, true, false, |call, row| active(call, row))? {
         return Ok(true);
     }
     let mut index = 1;
@@ -442,26 +432,25 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
             break;
         }
         if let Value::Table(child) = value
-            && call.with_roots(&[value], |call| active(call, store, child))?
+            && call.with_roots(&[value], |call| active(call, child))?
         {
             return Ok(true);
         }
         index += 1;
     }
-    let stream = store
-        .lock()
-        .unwrap()
+    let stream = call
+        .store()
         .actors
         .get(&actor)
         .filter(|a| a.state.class == "SongMeterDisplay")
         .and_then(|a| a.children.first())
         .copied();
     if let Some(stream) = stream {
-        return active(call, store, stream);
+        return active(call, stream);
     }
     Ok(false)
 }
-fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, Error> {
+fn mask(call: &mut HostCall<'_>, actor: TableId) -> Result<u16, Error> {
     let mut mask = 0;
     let mut block = |call: &mut HostCall<'_>, block: TableId| -> Result<(), Error> {
         for (i, key) in crate::perframe::PLAYER_TRANSFORM_CAPTURE_KEYS
@@ -494,7 +483,7 @@ fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, 
             Ok(())
         })?;
     }
-    let guard = store.lock().unwrap();
+    let guard = call.store();
     if let Some(a) = guard.actors.get(&actor) {
         let fields = a.capture.as_ref().map_or(0, |c| c.transform_fields);
         // Capture uses one extra slot for uniform zoom; the renderer has one
@@ -521,11 +510,10 @@ fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, 
 }
 pub(super) fn render_spin(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<Option<[f32; 3]>, Error> {
     let fallback = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard
             .actors
             .get(&actor)
@@ -566,12 +554,11 @@ pub(super) fn render_spin(
 }
 fn effect_time(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     clock: [f32; 2],
 ) -> Result<Option<[f32; 2]>, Error> {
     let fallback = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.actors.get(&actor).map(|a| {
             let mut state = a.state.render;
             effects::render_time(a, clock, &mut state);
@@ -631,7 +618,6 @@ fn effect_time(
 
 fn field_wrappers(
     call: &mut HostCall<'_>,
-    store: &Shared,
     player: TableId,
     clock: [f32; 2],
 ) -> Result<Option<Vec<State>>, Error> {
@@ -644,15 +630,15 @@ fn field_wrappers(
         };
         call.with_roots(&[value], |call| {
             let mut states = Vec::new();
-            visit_wrappers(call, store, field, false, true, |call, id| {
-                ensure(call, store, id)?;
-                let mut state = initial_state::read(call, store, id)?;
-                replay_pose(store, id, &mut state);
-                if let Some(spin) = render_spin(call, store, id)? {
+            visit_wrappers(call, field, false, true, |call, id| {
+                ensure(call, id)?;
+                let mut state = initial_state::read(call, id)?;
+                replay_pose(call.store(), id, &mut state);
+                if let Some(spin) = render_spin(call, id)? {
                     [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
                     state.spin_baked = true;
                 }
-                if let Some(time) = effect_time(call, store, id, clock)? {
+                if let Some(time) = effect_time(call, id, clock)? {
                     state.effect_time = Some(time);
                 }
                 states.push(state);

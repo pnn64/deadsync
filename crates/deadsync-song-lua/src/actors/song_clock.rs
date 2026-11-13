@@ -439,17 +439,18 @@ fn advance(
 }
 
 impl Actors {
-    pub(crate) fn discard_song_replay_clock(&self) {
-        self.store.lock().unwrap().replay_clock = None;
+    pub(crate) fn discard_song_replay_clock(&self, vm: &mut Vm) {
+        vm.store().replay_clock = None;
     }
 
     pub(crate) fn set_song_replay_frames(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         frames: &[(f64, f64)],
         actor_frames: Option<&[[f32; 2]]>,
     ) -> bool {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         if store.replay_frame.map(|f| f.0) != Some(screen.id)
             || store.replay_advancing
             || store.clock.live.load(std::sync::atomic::Ordering::Relaxed)
@@ -465,8 +466,13 @@ impl Actors {
         store.replay_clock = Some(State::new(frames, actor_frames, native));
         true
     }
-    pub(crate) fn set_song_replay_frame(&self, screen: ActorScene, frame: usize) -> Option<f64> {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn set_song_replay_frame(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        frame: usize,
+    ) -> Option<f64> {
+        let store = vm.store();
         if store.replay_frame?.0 != screen.id {
             return None;
         }

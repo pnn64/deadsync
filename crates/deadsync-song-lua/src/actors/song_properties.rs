@@ -15,25 +15,18 @@ pub(crate) const TARGETS: &[Target] = &[
     Target::TextureFiltering,
 ];
 
-pub(super) fn record(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    target: Target,
-    value: Update,
-) {
-    capture::retain_render_update(store, id, target, &value, false);
-    let _ = record_inner(call, store, id, target, value);
+pub(super) fn record(call: &mut HostCall<'_>, id: TableId, target: Target, value: Update) {
+    capture::retain_render_update(call.store(), id, target, &value, false);
+    let _ = record_inner(call, id, target, value);
 }
 
 pub(super) fn record_inner(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     target: Target,
     value: Update,
 ) -> Option<bool> {
-    song_immediate::context(&store.lock().unwrap(), id)?;
+    song_immediate::context(&call.store(), id)?;
     let beat = effects::values(call, false).map_or(0., |values| values[0]);
     let duration = get(call, id, b"__songlua_capture_duration")
         .ok()
@@ -46,7 +39,7 @@ pub(super) fn record_inner(
     let opt1 = get(call, id, b"__songlua_capture_opt1")
         .ok()
         .and_then(|v| float_scalar(call, v, true));
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let (owner, index) = song_immediate::context(&guard, id)?;
     let actor = &guard.actors[&id];
     let mut delay = actor.capture.as_ref().map_or_else(

@@ -1,5 +1,5 @@
 //! Native actor effect selection, phase and spin, before tween advancement.
-use super::{Actor, Shared, arg, float_scalar, helper, render, table};
+use super::{Actor, Host, arg, float_scalar, helper, render, table};
 use crate::{Clock, SongLuaOverlayState, SongLuaOverlayUpdateTarget as Target};
 use deadlib_lua::{Error, HostCall, TableId, Value};
 use deadlib_present::anim::{EffectClock, EffectMode};
@@ -242,18 +242,13 @@ fn music(call: &mut HostCall<'_>, clock: &Clock) -> Result<f32, Error> {
     })
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     let mut fields = smallvec::SmallVec::<[Target; 8]>::new();
     match name {
         "GetSecsIntoEffect" | "GetEffectDelta" => {
             let (state, clock) = {
-                let store = store.lock().unwrap();
+                let store = call.store();
                 let actor = &store.actors[&actor];
                 (actor.effects, actor.state.render.effect_clock)
             };
@@ -268,10 +263,7 @@ pub(super) fn method(
             return call.push(Value::Number(value as f64));
         }
         "geteffectmagnitude" => {
-            let values = store.lock().unwrap().actors[&actor]
-                .state
-                .render
-                .effect_magnitude;
+            let values = call.store().actors[&actor].state.render.effect_magnitude;
             for value in values {
                 call.push(Value::Number(value as f64))?;
             }
@@ -279,8 +271,8 @@ pub(super) fn method(
         }
         "effectcolor1" | "effectcolor2" => {
             let color = render::color(call)?.unwrap_or([1.0; 4]);
-            super::action_capture::prepare_write(call, store, actor)?;
-            let mut store = store.lock().unwrap();
+            super::action_capture::prepare_write(call, actor)?;
+            let store = call.store();
             let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
             if name == "effectcolor1" {
                 render.effect_color1 = color;
@@ -292,8 +284,8 @@ pub(super) fn method(
         }
         "effectperiod" | "effectoffset" => {
             if let Some(value) = float_scalar(call, value, false) {
-                super::action_capture::prepare_write(call, store, actor)?;
-                let mut store = store.lock().unwrap();
+                super::action_capture::prepare_write(call, actor)?;
+                let store = call.store();
                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
                 if name == "effectperiod" {
                     set_period(render, value);
@@ -310,10 +302,8 @@ pub(super) fn method(
         "effectmagnitude" => {
             let magnitude =
                 [1, 2, 3].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
-            super::action_capture::prepare_write(call, store, actor)?;
-            store
-                .lock()
-                .unwrap()
+            super::action_capture::prepare_write(call, actor)?;
+            call.store()
                 .actors
                 .get_mut(&actor)
                 .unwrap()
@@ -335,8 +325,8 @@ pub(super) fn method(
                 .max(0.0);
             let total = timing.iter().sum::<f32>();
             if total > 0.0 {
-                super::action_capture::prepare_write(call, store, actor)?;
-                let mut store = store.lock().unwrap();
+                super::action_capture::prepare_write(call, actor)?;
+                let store = call.store();
                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
                 render.effect_timing = Some(timing);
                 render.effect_period = total;
@@ -345,7 +335,7 @@ pub(super) fn method(
         }
         "effect_hold_at_full" => {
             let hold = number(call, value)? as f32;
-            let render = store.lock().unwrap().actors[&actor].state.render;
+            let render = call.store().actors[&actor].state.render;
             let period = render.effect_period;
             let mut timing =
                 render
@@ -356,8 +346,8 @@ pub(super) fn method(
             if hold < 0.0 || total <= 0.0 {
                 return Err(call.error(b"effect timings must be nonnegative and not all zero"));
             }
-            super::action_capture::prepare_write(call, store, actor)?;
-            let mut guard = store.lock().unwrap();
+            super::action_capture::prepare_write(call, actor)?;
+            let guard = call.store();
             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
             render.effect_timing = Some(timing);
             render.effect_period = total;
@@ -369,8 +359,8 @@ pub(super) fn method(
             {
                 let no_offset = raw.eq_ignore_ascii_case("beatnooffset");
                 let timer = raw.eq_ignore_ascii_case("timer");
-                super::action_capture::prepare_write(call, store, actor)?;
-                let mut store = store.lock().unwrap();
+                super::action_capture::prepare_write(call, actor)?;
+                let store = call.store();
                 let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
                 render.effect_clock = clock;
                 render.effect_no_offset = no_offset;
@@ -383,12 +373,12 @@ pub(super) fn method(
             }
         }
         _ => {
-            super::action_capture::prepare_write(call, store, actor)?;
-            fields = select(store.lock().unwrap().actors.get_mut(&actor).unwrap(), name);
+            super::action_capture::prepare_write(call, actor)?;
+            fields = select(call.store().actors.get_mut(&actor).unwrap(), name);
         }
     }
     if !fields.is_empty() {
-        let state = store.lock().unwrap().actors[&actor].state.render;
+        let state = call.store().actors[&actor].state.render;
         for target in fields {
             let mut delta = crate::SongLuaOverlayStateDelta::default();
             match target {
@@ -406,7 +396,7 @@ pub(super) fn method(
                 Target::EffectTiming => delta.effect_timing = state.effect_timing,
                 _ => unreachable!("effect setter published a non-effect target"),
             }
-            super::capture::write(call, store, actor, delta, true);
+            super::capture::write(call, actor, delta, true);
             if target == Target::EffectClock {
                 super::sprites::set(call, actor, "__songlua_state_effect_clock", value)?;
             } else {
@@ -418,14 +408,9 @@ pub(super) fn method(
     call.push(Value::Table(actor))
 }
 
-pub(super) fn advance(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f32,
-) -> Result<(), Error> {
+pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
     let (previous, render, clock) = {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let clock = store.clock.clone();
         let actor = store.actors.get_mut(&actor).unwrap();
         let previous = actor
@@ -461,7 +446,7 @@ pub(super) fn advance(
         };
         (units, units - previous)
     };
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     let fallback = super::song_pose::mode(&store, actor);
     let actor = store.actors.get_mut(&actor).unwrap();
     actor.effects.motion = Some(Motion {

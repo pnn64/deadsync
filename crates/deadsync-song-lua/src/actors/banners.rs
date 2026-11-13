@@ -53,12 +53,7 @@ fn query(call: &mut HostCall<'_>, object: TableId, name: &str) -> Result<Value, 
         .unwrap_or(Value::Nil))
 }
 
-fn set_path(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    path: &str,
-) -> Result<bool, Error> {
+fn set_path(call: &mut HostCall<'_>, actor: TableId, path: &str) -> Result<bool, Error> {
     let path = path.trim();
     if path.is_empty() {
         return Ok(false);
@@ -72,13 +67,12 @@ fn set_path(
     call.raw_table_set(actor, key, Value::Boolean(false))?;
     set(call, actor, "__songlua_aft_capture_name", Value::Nil)?;
     let video = sprites::is_video(call, actor)?;
-    sprites::decode(call, store, actor, video)?;
+    sprites::decode(call, actor, video)?;
     Ok(true)
 }
 
 fn from_methods(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     source: Value,
     names: &[&str],
@@ -90,7 +84,7 @@ fn from_methods(
         let value = query(call, source, name)?;
         if let Value::String(_) = value {
             let path = assets::text(call, value)?;
-            if set_path(call, store, actor, &path)? {
+            if set_path(call, actor, &path)? {
                 return Ok(true);
             }
         }
@@ -113,18 +107,13 @@ fn reset_scrolling(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error>
     )
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     match name {
         "scaletoclipped" | "ScaleToClipped" => {
-            return sprites::method(call, store, actor, "scaletoclipped");
+            return sprites::method(call, actor, "scaletoclipped");
         }
-        "LoadFromCachedBanner" => sprites::set_texture(call, store, actor, value, true)?,
+        "LoadFromCachedBanner" => sprites::set_texture(call, actor, value, true)?,
         "LoadFromSong" => {
             let mut path = None;
             if let Value::Table(song) = value
@@ -140,9 +129,7 @@ pub(super) fn method(
                     .to_owned(),
             };
             let value = call.try_intern(path.as_bytes())?;
-            call.with_roots(&[value], |call| {
-                sprites::load(call, store, actor, value, false)
-            })?;
+            call.with_roots(&[value], |call| sprites::load(call, actor, value, false))?;
             reset_scrolling(call, actor)?;
         }
         "LoadFromCourse" | "LoadFromSongBackground" => {
@@ -151,7 +138,7 @@ pub(super) fn method(
             } else {
                 &["GetBackgroundPath"][..]
             };
-            from_methods(call, store, actor, value, methods)?;
+            from_methods(call, actor, value, methods)?;
         }
         "LoadFromSongGroup" => {
             let group = render::text(call, value).unwrap_or("").to_owned();
@@ -179,14 +166,13 @@ pub(super) fn method(
                 })?;
                 let loaded = if matches!(result, Value::String(_)) {
                     let path = assets::text(call, result)?;
-                    set_path(call, store, actor, &path)?
+                    set_path(call, actor, &path)?
                 } else {
                     false
                 };
                 if !loaded {
                     set_path(
                         call,
-                        store,
                         actor,
                         &crate::theme_path("G", "Banner", "group fallback"),
                     )?;
@@ -197,7 +183,7 @@ pub(super) fn method(
         "LoadFromSortOrder" => {
             let sort = render::text(call, value).unwrap_or("SortOrder_Invalid");
             if let Some(path) = crate::banner_sort_order_path(sort) {
-                set_path(call, store, actor, &path)?;
+                set_path(call, actor, &path)?;
             }
             reset_scrolling(call, actor)?;
         }
@@ -211,10 +197,9 @@ pub(super) fn method(
                 "LoadBannerFromUnlockEntry" => "GetBannerFile",
                 _ => "GetBackgroundFile",
             };
-            if !from_methods(call, store, actor, value, &[method])? {
+            if !from_methods(call, actor, value, &[method])? {
                 set_path(
                     call,
-                    store,
                     actor,
                     &crate::theme_path("G", "Common", "fallback banner"),
                 )?;
@@ -249,8 +234,8 @@ pub(super) fn method(
             };
             return call.push(Value::Number(percent as f64));
         }
-        "position" => return sprites::method(call, store, actor, "SetSecondsIntoAnimation"),
-        "loop" | "rate" => sprites::texture_parameter(call, store, actor, name, value)?,
+        "position" => return sprites::method(call, actor, "SetSecondsIntoAnimation"),
+        "loop" | "rate" => sprites::texture_parameter(call, actor, name, value)?,
         _ => unreachable!(),
     }
     call.push(Value::Table(actor))

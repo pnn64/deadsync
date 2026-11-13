@@ -432,18 +432,18 @@ fn live_vertex_color_observer_preserves_owned_samples_and_queue_rules() {
             *first, [[0.25; 4]; 4],
             "later writes cannot mutate an owned sample"
         );
-        test_support::set_pose_observation_scope(&host, 1, false, None);
+        test_support::set_pose_observation_scope(&mut host, 1, false, None);
         write_vertices(&mut host, 0.75);
         assert_eq!(
             *observed_vertices(&host),
             *second,
             "ordinary queued commands are not update samples"
         );
-        test_support::set_pose_observation_scope(&host, 1, true, None);
+        test_support::set_pose_observation_scope(&mut host, 1, true, None);
         write_vertices(&mut host, 1.);
         let third = observed_vertices(&host);
         assert_eq!(*third, [[1.; 4]; 4]);
-        test_support::set_pose_observation_scope(&host, 1, true, Some("Tint"));
+        test_support::set_pose_observation_scope(&mut host, 1, true, Some("Tint"));
         write_vertices(&mut host, 0.);
         assert_eq!(
             *observed_vertices(&host),

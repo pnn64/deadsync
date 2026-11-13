@@ -27,12 +27,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Err
     Ok(())
 }
 
-pub(super) fn initialize(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
     let width = field(call, actor, "StreamWidth")?;
     let width = float_scalar(call, width, false).unwrap_or(0.0);
     set(
@@ -46,29 +41,21 @@ pub(super) fn initialize(
         return Ok(());
     }
     let stream = table(call, stream)?;
-    if store.lock().unwrap().actors[&actor].offline_instance {
-        courses::attach(call, store, scene, stream)?;
+    if call.store().actors[&actor].offline_instance {
+        courses::attach(call, scene, stream)?;
         let name = call.try_intern(b"Stream")?;
         set(call, stream, "Name", name)?;
-        native_children::adopt(call, store, stream, actor)?;
+        native_children::adopt(call, stream, actor)?;
         return native_children::insert(call, actor, "Stream", Value::Table(stream));
     }
     let node = call.call(helper(call, 2)?, &[Value::Table(stream)])?[0];
-    let first = store.lock().unwrap().scenes[&scene].actors.len();
+    let first = call.store().scenes[&scene].actors.len();
     let stream = call.with_roots(&[node], |call| {
-        build(
-            call,
-            store,
-            scene,
-            table(call, node)?,
-            Some(actor),
-            false,
-            false,
-        )?
-        .ok_or_else(|| call.error(b"SongMeterDisplay Stream must load an actor"))
+        build(call, scene, table(call, node)?, Some(actor), false, false)?
+            .ok_or_else(|| call.error(b"SongMeterDisplay Stream must load an actor"))
     })?;
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         // Unlike GraphDisplay's dummy children, this declaration subscribes
         // when its own Init traversal begins, after its meter's Init command.
         let deferred: HashSet<_> = store.scenes[&scene].actors[first..]
@@ -91,17 +78,13 @@ pub(super) fn initialize(
     }
     let name = call.try_intern(b"Stream")?;
     set(call, stream, "Name", name)?;
-    native_children::adopt(call, store, stream, actor)?;
+    native_children::adopt(call, stream, actor)?;
     set(call, actor, "Stream", Value::Table(stream))?;
     native_children::insert(call, actor, "Stream", Value::Table(stream))
 }
 
-pub(super) fn stream(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Option<TableId>, Error> {
-    if store.lock().unwrap().actors[&actor].state.class != "SongMeterDisplay" {
+pub(super) fn stream(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
+    if call.store().actors[&actor].state.class != "SongMeterDisplay" {
         return Ok(None);
     }
     if !assets::field(call, actor, b"__songlua_actor_type")?
@@ -116,22 +99,17 @@ pub(super) fn stream(
             return Ok(None);
         }
         let stream = table(call, stream)?;
-        if !store.lock().unwrap().actors.contains_key(&stream) {
+        if !call.store().actors.contains_key(&stream) {
             native_children::group_members(call, stream)?;
         }
-        native_children::adopt(call, store, stream, actor)?;
+        native_children::adopt(call, stream, actor)?;
         Ok(Some(stream))
     })
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
-        "Load" => return sprites::method(call, store, actor, name),
+        "Load" => return sprites::method(call, actor, name),
         "GetStreamWidth" => {
             let value = field(call, actor, "__songlua_stream_width")?;
             let width = if value == Value::Nil {
@@ -161,7 +139,6 @@ pub(super) fn method(
 
 pub(super) fn read(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<Option<SongMeterDisplay>, Error> {
     let width = field(call, actor, "__songlua_stream_width")?;
@@ -185,7 +162,7 @@ pub(super) fn read(
             return Ok(None);
         }
         let stream = table(call, stream)?;
-        let stream_state = native_children::state(call, store, stream)?;
+        let stream_state = native_children::state(call, stream)?;
         Ok(Some(SongMeterDisplay {
             stream_width: width,
             stream_state,

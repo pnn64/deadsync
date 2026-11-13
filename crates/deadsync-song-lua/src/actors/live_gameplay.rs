@@ -35,10 +35,9 @@ pub(crate) enum Event {
 }
 impl Actors {
     pub(crate) fn gameplay_fields(&self, vm: &mut Vm) -> Result<Value, Error> {
-        let f = vm.new_host_function_with_data(
+        let f = vm.new_host_function(
             fields,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            self.store.clone(),
         )?;
         Ok(vm.call(f, &[])?.first().copied().unwrap_or(Value::Nil))
     }
@@ -46,12 +45,12 @@ impl Actors {
         let f = vm.new_host_function_with_data(
             deliver,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            (self.store.clone(), event),
+            event,
         )?;
         let (scene, first) = self.gameplay_scope(vm)?;
         let result = vm.call(f, &[]).map(|_| ());
         if let Some(scene) = scene {
-            song_activation::adopt_created(&self.store, scene, first);
+            song_activation::adopt_created(vm.store(), scene, first);
         }
         result
     }
@@ -72,12 +71,12 @@ impl Actors {
                 field,
                 callback,
             ],
-            (self.store.clone(), tap, columns, output.clone()),
+            (tap, columns, output.clone()),
         )?;
         let (scene, first) = self.gameplay_scope(vm)?;
         let result = vm.call(f, &[]).map(|_| ());
         if let Some(scene) = scene {
-            song_activation::adopt_created(&self.store, scene, first);
+            song_activation::adopt_created(vm.store(), scene, first);
         }
         result?;
         let result = *output.lock().unwrap();
@@ -94,7 +93,7 @@ impl Actors {
             s.set_top(base)?;
             Ok(screen)
         })?;
-        let store = self.store.lock().unwrap();
+        let store = vm.store();
         let scene = if let Value::Table(t) = screen {
             store.actors.get(&t).map(|a| a.scene)
         } else {
@@ -113,8 +112,8 @@ impl Actors {
         let e = error.value().unwrap_or(Value::Nil);
         let f = vm.new_host_function_with_data(
             |call| {
-                let (store, owner, flag, label, error) = call
-                    .function_data::<(Shared, Option<Value>, &'static str, &'static str, Error)>()
+                let (owner, flag, label, error) = call
+                    .function_data::<(Option<Value>, &'static str, &'static str, Error)>()
                     .unwrap()
                     .clone();
                 let owner = match owner {
@@ -130,7 +129,6 @@ impl Actors {
                 };
                 diagnostics::report(
                     call,
-                    &store,
                     owner,
                     diagnostics::Callback::Gameplay(flag, label),
                     error,
@@ -142,7 +140,7 @@ impl Actors {
                 owner.unwrap_or(Value::Nil),
                 e,
             ],
-            (self.store.clone(), owner, flag, label, error),
+            (owner, flag, label, error),
         );
         if let Ok(f) = f {
             let _ = vm.call(f, &[]);
@@ -259,7 +257,7 @@ fn note(call: &mut HostCall<'_>, params: TableId, n: &Note) -> Result<Value, Err
     })
 }
 fn deliver(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, event) = call.function_data::<(Shared, Event)>().unwrap().clone();
+    let event = call.function_data::<Event>().unwrap().clone();
     let params = call.try_new_table()?;
     call.with_roots(&[Value::Table(params)], |call| {
         let (player, message) = match &event {
@@ -365,19 +363,12 @@ fn deliver(call: &mut HostCall<'_>) -> Result<(), Error> {
                 (*player, "Judgment")
             }
         };
-        messages::dispatch(
-            call,
-            &store,
-            message.as_bytes(),
-            Some(Value::Table(params)),
-            false,
-        )?;
+        messages::dispatch(call, message.as_bytes(), Some(Value::Table(params)), false)?;
         if matches!(event, Event::Step { .. }) {
             let empty = Value::Table(call.try_new_table()?);
             call.with_roots(&[empty], |call| {
                 messages::dispatch(
                     call,
-                    &store,
                     format!("StepP{}", player + 1).as_bytes(),
                     Some(empty),
                     false,
@@ -388,9 +379,8 @@ fn deliver(call: &mut HostCall<'_>) -> Result<(), Error> {
     })
 }
 fn tap_note(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, mut tap, columns, output) = call
+    let (mut tap, columns, output) = call
         .function_data::<(
-            Shared,
             GameplayNoteFieldTap,
             usize,
             Arc<Mutex<GameplayNoteFieldTap>>,
@@ -422,7 +412,6 @@ fn tap_note(call: &mut HostCall<'_>) -> Result<(), Error> {
                 } else {
                     report_return(
                         call,
-                        &store,
                         field,
                         "__songlua_did_tap_note_column_error_reported",
                         &format!("Column returned by callback must be between 1 and {columns}"),
@@ -450,7 +439,6 @@ fn tap_note(call: &mut HostCall<'_>) -> Result<(), Error> {
             } else {
                 report_return(
                     call,
-                    &store,
                     field,
                     "__songlua_did_tap_note_score_error_reported",
                     "Expected TapNoteScore",
@@ -466,7 +454,6 @@ fn tap_note(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 fn report_return(
     call: &mut HostCall<'_>,
-    store: &Shared,
     field: TableId,
     flag: &'static str,
     message: &str,
@@ -474,7 +461,6 @@ fn report_return(
     let error = call.error(message.as_bytes());
     diagnostics::report(
         call,
-        store,
         field,
         diagnostics::Callback::Gameplay(flag, "DidTapNote callback return"),
         error,

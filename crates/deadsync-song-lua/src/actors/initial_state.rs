@@ -6,13 +6,11 @@ use crate::SongLuaOverlayState;
 
 pub(super) fn read_live(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<SongLuaOverlayState, Error> {
-    let mut state = read_with_metadata(call, store, actor, true, true)?;
-    let pose = store
-        .lock()
-        .unwrap()
+    let mut state = read_with_metadata(call, actor, true, true)?;
+    let pose = call
+        .store()
         .actors
         .get(&actor)
         .map(|a| (a.current, *a.destination()));
@@ -23,7 +21,7 @@ pub(super) fn read_live(
         state.y = dest.y;
         crate::move_overlay(&mut state, current.x, current.y);
     }
-    state.spin_baked = chronological::render_spin(call, store, actor)?.is_some();
+    state.spin_baked = chronological::render_spin(call, actor)?.is_some();
     Ok(state)
 }
 
@@ -78,31 +76,25 @@ fn get(call: &mut HostCall<'_>, actor: TableId, key: &[u8], live: bool) -> Resul
     super::get(call, actor, key)
 }
 
-pub(super) fn read(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<SongLuaOverlayState, Error> {
-    read_with_metadata(call, store, actor, true, false)
+pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<SongLuaOverlayState, Error> {
+    read_with_metadata(call, actor, true, false)
 }
 
 pub(super) fn read_reset(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<SongLuaOverlayState, Error> {
-    read_with_metadata(call, store, actor, false, false)
+    read_with_metadata(call, actor, false, false)
 }
 
 fn read_with_metadata(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     metadata: bool,
     live: bool,
 ) -> Result<SongLuaOverlayState, Error> {
     let mut state = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard
             .actors
             .get(&actor)
@@ -171,7 +163,7 @@ fn read_with_metadata(
         );
     }
     let class = text(call, actor, "__songlua_actor_type", live)?;
-    if !metadata || !store.lock().unwrap().actors.contains_key(&actor) {
+    if !metadata || !call.store().actors.contains_key(&actor) {
         let model = class
             .as_deref()
             .is_some_and(|class| class.eq_ignore_ascii_case("Model"));
@@ -403,7 +395,7 @@ fn read_with_metadata(
     let declaration = number(call, actor, "FOV", live)?;
     // Materialized frames already consumed FOV. A later fov(-1) leaves None;
     // falling back to the declaration here would accidentally enable it again.
-    let fallback = if store.lock().unwrap().actors.contains_key(&actor) {
+    let fallback = if call.store().actors.contains_key(&actor) {
         state.fov
     } else {
         declaration

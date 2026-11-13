@@ -1,7 +1,7 @@
 //! BitmapText bindings and immutable renderer payloads over the Rust host API.
 use super::action_capture;
 use super::{
-    Shared, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, song_media,
+    Host, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, song_media,
     sprites, table,
 };
 use deadlib_lua::{Error, ErrorKind, HostCall, TableId, Value};
@@ -354,16 +354,10 @@ pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<BitmapText
     })
 }
 
-fn flag(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    key: &str,
-    value: bool,
-) -> Result<(), Error> {
-    action_capture::prepare_write(call, store, actor)?;
+fn flag(call: &mut HostCall<'_>, actor: TableId, key: &str, value: bool) -> Result<(), Error> {
+    action_capture::prepare_write(call, actor)?;
     {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
         match key {
             "rainbow_scroll" => state.rainbow_scroll = value,
@@ -382,17 +376,16 @@ fn flag(
         &format!("__songlua_state_{key}"),
         Value::Boolean(value),
     )?;
-    song_media::record(call, store, actor, key);
+    song_media::record(call, actor, key);
     Ok(())
 }
 pub(super) fn pre_zoom(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     width: bool,
     height: bool,
 ) -> Result<(), Error> {
-    if !super::text_displays::is_text(store.lock().unwrap().actors[&actor].state.class) {
+    if !super::text_displays::is_text(call.store().actors[&actor].state.class) {
         return Ok(());
     }
     for (enabled, saw, key) in [
@@ -400,18 +393,13 @@ pub(super) fn pre_zoom(
         (height, "__songlua_text_saw_max_height", "max_h_pre_zoom"),
     ] {
         if enabled && !matches!(field(call, actor, saw)?, Value::Nil | Value::Boolean(false)) {
-            flag(call, store, actor, key, true)?;
+            flag(call, actor, key, true)?;
         }
     }
     Ok(())
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
         "settext" => {
             let text = text_value(call, arg(call, 1))?;
@@ -449,7 +437,6 @@ pub(super) fn method(
             };
             flag(
                 call,
-                store,
                 actor,
                 match name {
                     "rainbowscroll" => "rainbow_scroll",
@@ -461,7 +448,6 @@ pub(super) fn method(
         }
         "set_mult_attrs_with_diffuse" => flag(
             call,
-            store,
             actor,
             "mult_attrs_with_diffuse",
             !matches!(arg(call, 1), Value::Nil | Value::Boolean(false)),
@@ -475,7 +461,6 @@ pub(super) fn method(
         }
         "max_dimension_use_zoom" => flag(
             call,
-            store,
             actor,
             "max_dimension_uses_zoom",
             boolish(call, arg(call, 1)).unwrap_or(true),
@@ -488,10 +473,8 @@ pub(super) fn method(
                     .unwrap_or(0.)
                     .max(0.)
             };
-            action_capture::prepare_write(call, store, actor)?;
-            store
-                .lock()
-                .unwrap()
+            action_capture::prepare_write(call, actor)?;
+            call.store()
                 .actors
                 .get_mut(&actor)
                 .unwrap()
@@ -504,7 +487,7 @@ pub(super) fn method(
                 "__songlua_state_text_distortion",
                 Value::Number(n as f64),
             )?;
-            song_media::record(call, store, actor, "text_distortion");
+            song_media::record(call, actor, "text_distortion");
         }
         "wrapwidthpixels" | "vertspacing" => {
             if let Some(n) = float_scalar(call, arg(call, 1), false) {
@@ -514,14 +497,14 @@ pub(super) fn method(
                     n as i32
                 };
                 if name == "vertspacing" || n >= 0 {
-                    action_capture::prepare_write(call, store, actor)?;
+                    action_capture::prepare_write(call, actor)?;
                     let key = if name == "vertspacing" {
                         "vert_spacing"
                     } else {
                         "wrap_width_pixels"
                     };
                     {
-                        let mut guard = store.lock().unwrap();
+                        let guard = call.store();
                         let s = &mut guard.actors.get_mut(&actor).unwrap().state.render;
                         if name == "vertspacing" {
                             s.vert_spacing = Some(n)
@@ -535,16 +518,16 @@ pub(super) fn method(
                         &format!("__songlua_state_{key}"),
                         Value::Number(n as f64),
                     )?;
-                    song_media::record(call, store, actor, key);
+                    song_media::record(call, actor, key);
                 }
             }
         }
         "maxwidth" | "maxheight" => {
             if let Some(n) = float_scalar(call, arg(call, 1), false) {
                 let width = name == "maxwidth";
-                action_capture::prepare_write(call, store, actor)?;
+                action_capture::prepare_write(call, actor)?;
                 {
-                    let mut guard = store.lock().unwrap();
+                    let guard = call.store();
                     let s = &mut guard.actors.get_mut(&actor).unwrap().state.render;
                     if width {
                         s.max_width = Some(n)
@@ -562,15 +545,9 @@ pub(super) fn method(
                     },
                     Value::Number(n as f64),
                 )?;
-                song_media::record(
-                    call,
-                    store,
-                    actor,
-                    if width { "max_width" } else { "max_height" },
-                );
+                song_media::record(call, actor, if width { "max_width" } else { "max_height" });
                 flag(
                     call,
-                    store,
                     actor,
                     if width {
                         "max_w_pre_zoom"
@@ -595,10 +572,8 @@ pub(super) fn method(
             if let Some(mode) =
                 render::text(call, arg(call, 1)).and_then(crate::parse_overlay_text_glow_mode)
             {
-                action_capture::prepare_write(call, store, actor)?;
-                store
-                    .lock()
-                    .unwrap()
+                action_capture::prepare_write(call, actor)?;
+                call.store()
                     .actors
                     .get_mut(&actor)
                     .unwrap()
@@ -607,7 +582,7 @@ pub(super) fn method(
                     .text_glow_mode = mode;
                 let value = call.try_intern(crate::text_glow_mode_label(mode).as_bytes())?;
                 set(call, actor, "__songlua_state_text_glow_mode", value)?;
-                song_media::record(call, store, actor, "text_glow_mode");
+                song_media::record(call, actor, "text_glow_mode");
             }
         }
         _ => unreachable!(),
@@ -617,12 +592,12 @@ pub(super) fn method(
 
 // LoadFont creates a live, reusable template, including the current directory;
 // declaration concatenation clones its native state without running Init.
-pub(super) fn load_font(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Error> {
+pub(super) fn load_font(call: &mut HostCall<'_>) -> Result<(), Error> {
     let font = render::text(call, arg(call, 0))
         .unwrap_or_default()
         .to_owned();
-    if store.lock().unwrap().offline_definitions {
-        let actor = super::offline::dummy(call, store, "BitmapText")?;
+    if call.store().offline_definitions {
+        let actor = super::offline::dummy(call, "BitmapText")?;
         let font = call.try_intern(font.as_bytes())?;
         set(call, actor, "Font", font)?;
         return call.push(Value::Table(actor));
@@ -638,10 +613,8 @@ pub(super) fn load_font(call: &mut HostCall<'_>, store: &Shared) -> Result<(), E
                 set(call, declaration, key, value)?;
             }
         }
-        let id = super::materialize(call, store, declaration, super::Materialization::Template)?;
-        let actor = store.lock().unwrap().scenes[&id]
-            .root
-            .expect("font template");
+        let id = super::materialize(call, declaration, super::Materialization::Template)?;
+        let actor = call.store().scenes[&id].root.expect("font template");
         let key = call.try_intern(b"Class")?;
         call.raw_table_set(actor, key, Value::Nil)?;
         let value = call.try_intern(font.as_bytes())?;

@@ -23,12 +23,7 @@ fn zoom(call: &mut HostCall<'_>, actor: TableId, axis: &str, base: bool) -> Resu
             .unwrap_or(1.),
     )
 }
-pub(super) fn getter(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<bool, Error> {
+pub(super) fn getter(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<bool, Error> {
     let value = match name {
         "GetX" | "GetY" | "GetZ" => {
             let axis = name[3..].to_ascii_lowercase();
@@ -47,9 +42,9 @@ pub(super) fn getter(
         "GetHAlign" => field(call, actor, "__songlua_state_halign")?.unwrap_or(0.5),
         "GetVAlign" => field(call, actor, "__songlua_state_valign")?.unwrap_or(0.5),
         "GetZoomedWidth" | "GetZoomedHeight" => {
-            sprites::refresh_size(call, store, actor)?;
+            sprites::refresh_size(call, actor)?;
             let axis = if name == "GetZoomedWidth" { 0 } else { 1 };
-            let size = store.lock().unwrap().actors[&actor].state.size[axis].abs();
+            let size = call.store().actors[&actor].state.size[axis].abs();
             let axis = if axis == 0 { "x" } else { "y" };
             size * (zoom(call, actor, axis, true)? * zoom(call, actor, axis, false)?)
         }

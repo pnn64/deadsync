@@ -7,7 +7,6 @@ use sprites::set;
 
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     requests: Arc<Mutex<Requests>>,
     enabled: [bool; crate::LUA_PLAYERS],
     method: &'static str,
@@ -24,7 +23,7 @@ impl Actors {
         let function = vm.new_host_function_with_data(
             create_base,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            (self.store.clone(), context.clone()),
+            context.clone(),
         )?;
         let Value::Number(id) = vm.call(function, &[])?[0] else {
             unreachable!()
@@ -53,7 +52,6 @@ impl Actors {
             install,
             &captures,
             Binding {
-                store: self.store.clone(),
                 requests,
                 enabled,
                 method: "",
@@ -65,24 +63,24 @@ impl Actors {
 
 #[cfg(feature = "test-support")]
 fn create_base(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, context) = call
-        .function_data::<(Shared, crate::SongLuaCompileContext)>()
+    let context = call
+        .function_data::<crate::SongLuaCompileContext>()
         .unwrap()
         .clone();
-    let scene = new_scene(call, &store)?;
+    let scene = new_scene(call)?;
     let previous = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let capture = !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed);
         std::mem::replace(&mut guard.constructing_capture, capture)
     };
     let result = (|| {
-        let actor = create(call, &store, scene, &context)?;
-        store.lock().unwrap().scenes.get_mut(&scene).unwrap().root = Some(actor);
+        let actor = create(call, scene, &context)?;
+        call.store().scenes.get_mut(&scene).unwrap().root = Some(actor);
         Ok(())
     })();
-    store.lock().unwrap().constructing_capture = previous;
+    call.store().constructing_capture = previous;
     if let Err(error) = result {
-        release(call, &store, scene)?;
+        release(call, scene)?;
         return Err(error);
     }
     call.push(Value::Number(scene as f64))
@@ -90,11 +88,10 @@ fn create_base(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn create(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     context: &crate::SongLuaCompileContext,
 ) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "TopScreen", "ScreenGameplay", None)?;
+    let actor = dummy(call, scene, "TopScreen", "ScreenGameplay", None)?;
     for (key, value) in [
         ("__songlua_player1_enabled", context.players[0].enabled),
         ("__songlua_player2_enabled", context.players[1].enabled),
@@ -113,7 +110,7 @@ pub(super) fn create(
 // Replacing the published screen or GAMESTATE does not retarget saved methods.
 fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Binding>().unwrap().clone();
-    data.requests.lock().unwrap().actor_names = Some(ActorNames(Arc::downgrade(&data.store)));
+    data.requests.lock().unwrap().actor_names = Some(ActorNames);
     let catalog = table(call, call.captures()[2])?;
     let slots = get(call, catalog, b"game_state_slots")?;
     let screen = table(call, call.captures()[3])?;
@@ -243,29 +240,23 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                     .unwrap_or(crate::SONG_LUA_TOP_SCREEN_OPTION_ROWS[0])
                     .to_owned()
             };
-            let scene = new_scene(call, &data.store)?;
-            data.store.lock().unwrap().constructor_scenes.insert(scene);
+            let scene = new_scene(call)?;
+            call.store().constructor_scenes.insert(scene);
             let previous = {
-                let mut guard = data.store.lock().unwrap();
+                let guard = call.store();
                 let capture = !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed);
                 std::mem::replace(&mut guard.constructing_capture, capture)
             };
-            let row = option_row(call, &data.store, scene, &name);
-            data.store.lock().unwrap().constructing_capture = previous;
+            let row = option_row(call, scene, &name);
+            call.store().constructing_capture = previous;
             let row = match row {
                 Ok(row) => row,
                 Err(error) => {
-                    release(call, &data.store, scene)?;
+                    release(call, scene)?;
                     return Err(error);
                 }
             };
-            data.store
-                .lock()
-                .unwrap()
-                .scenes
-                .get_mut(&scene)
-                .unwrap()
-                .root = Some(row);
+            call.store().scenes.get_mut(&scene).unwrap().root = Some(row);
             return call.push(Value::Table(row));
         }
         "GetChild" => {
@@ -320,10 +311,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         "StartTransitioningScreen" => {
             let screen = table(call, screen_value)?;
             let globals = call.captures()[9];
-            let live = data
-                .store
-                .lock()
-                .unwrap()
+            let live = call
+                .store()
                 .clock
                 .live
                 .load(std::sync::atomic::Ordering::Relaxed);
@@ -346,14 +335,14 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
             }
             if live {
-                for child in children(call, &data.store, screen)? {
-                    play(call, &data.store, child, b"Off", None, true)?;
+                for child in children(call, screen)? {
+                    play(call, child, b"Off", None, true)?;
                 }
                 let named = registry(call, screen)?;
                 let out =
                     call.with_roots(&[named], |call| get(call, table(call, named)?, b"Out"))?;
                 if out != Value::Nil {
-                    transitions::start(call, &data.store, table(call, out)?)?;
+                    transitions::start(call, table(call, out)?)?;
                 }
                 data.requests.lock().unwrap().transition = message;
             }
@@ -506,13 +495,8 @@ fn side_effect(stack: &mut NativeStack<'_, '_>, globals: usize) -> Result<(), Er
     stack.set_table(globals as isize, false)
 }
 
-fn option_row(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    name: &str,
-) -> Result<TableId, Error> {
-    let row = dummy(call, store, scene, "OptionRow", name, None)?;
+fn option_row(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
+    let row = dummy(call, scene, "OptionRow", name, None)?;
     let name_value = call.try_intern(name.as_bytes())?;
     let get_name = call.new_host_function(|call| call.push(call.captures()[0]), &[name_value])?;
     let bound = get(call, row, b"__songlua_bound_methods")?;
@@ -520,11 +504,11 @@ fn option_row(
     bind_queries(call, row)?;
     let focus = call.new_host_function(|call| call.push(Value::Number(1.)), &[])?;
     set(call, table(call, bound)?, "GetChoiceInRowWithFocus", focus)?;
-    let frame = dummy(call, store, scene, "OptionRowFrame", "", Some(row))?;
+    let frame = dummy(call, scene, "OptionRowFrame", "", Some(row))?;
     bind_queries(call, frame)?;
     native_children::insert(call, row, "", Value::Table(frame))?;
-    let title = screen_parts::text(call, store, scene, "Title", name)?;
-    screen_parts::named(call, store, frame, "Title", title)?;
+    let title = screen_parts::text(call, scene, "Title", name)?;
+    screen_parts::named(call, frame, "Title", title)?;
     let members = call.try_new_table()?;
     let group = call.with_roots(&[Value::Table(members)], |call| {
         Ok(call.call(helper(call, 3)?, &[Value::Table(members)])?[0])
@@ -532,8 +516,8 @@ fn option_row(
     call.with_roots(&[group], |call| {
         let text = crate::option_row_default_text(name);
         for index in 1..=crate::LUA_PLAYERS {
-            let item = screen_parts::text(call, store, scene, "Item", &text)?;
-            native_children::adopt(call, store, item, frame)?;
+            let item = screen_parts::text(call, scene, "Item", &text)?;
+            native_children::adopt(call, item, frame)?;
             call.raw_table_set(
                 table(call, group)?,
                 Value::Number(index as f64),

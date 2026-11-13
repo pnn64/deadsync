@@ -5,7 +5,6 @@ use sprites::{field, set};
 
 #[cfg(feature = "test-support")]
 struct Build {
-    store: Shared,
     name: String,
 }
 
@@ -36,7 +35,6 @@ impl Actors {
             construct,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Build {
-                store: self.store.clone(),
                 name: name.to_owned(),
             },
         )?;
@@ -78,10 +76,9 @@ pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error>
 #[cfg(feature = "test-support")]
 fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Build>().unwrap();
-    let store = data.store.clone();
     let name = data.name.clone();
     let id = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.next >= (1u64 << 53) - 1 {
             return Err(call.error(b"actor scene identity exhausted"));
         }
@@ -101,55 +98,50 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
         id
     };
     let previous = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let capture = !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed);
         std::mem::replace(&mut guard.constructing_capture, capture)
     };
-    let result = create(call, &store, id, &name);
-    store.lock().unwrap().constructing_capture = previous;
+    let result = create(call, id, &name);
+    call.store().constructing_capture = previous;
     match result {
-        Ok(actor) => store.lock().unwrap().scenes.get_mut(&id).unwrap().root = Some(actor),
+        Ok(actor) => call.store().scenes.get_mut(&id).unwrap().root = Some(actor),
         Err(error) => {
-            release(call, &store, id)?;
+            release(call, id)?;
             return Err(error);
         }
     }
     call.push(Value::Number(id as f64))
 }
 
-pub(super) fn create(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    name: &str,
-) -> Result<TableId, Error> {
+pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
     if ["In", "Out", "Cancel"]
         .iter()
         .any(|known| name.eq_ignore_ascii_case(known))
     {
-        return transitions::create(call, store, scene, name);
+        return transitions::create(call, scene, name);
     }
     if name.eq_ignore_ascii_case("Timer") {
-        let actor = dummy(call, store, scene, "Timer", name, None)?;
+        let actor = dummy(call, scene, "Timer", name, None)?;
         let function = call.new_host_function(timer_seconds, &[])?;
         let bound = get(call, actor, b"__songlua_bound_methods")?;
         set(call, table(call, bound)?, "GetSeconds", function)?;
         return Ok(actor);
     }
     if let Some(index) = crate::top_screen_score_index(name) {
-        return score(call, store, scene, index);
+        return score(call, scene, index);
     }
     if crate::top_screen_steps_display_index(name).is_some() {
-        return steps_displays::create(call, store, scene, name);
+        return steps_displays::create(call, scene, name);
     }
     if name.eq_ignore_ascii_case("LyricDisplay") {
-        return lyrics(call, store, scene, name);
+        return lyrics(call, scene, name);
     }
     if name.eq_ignore_ascii_case("SongBackground") {
-        return background(call, store, scene);
+        return background(call, scene);
     }
     if name.eq_ignore_ascii_case("Debug") {
-        let actor = text(call, store, scene, name, "")?;
+        let actor = text(call, scene, name, "")?;
         let globals = table(call, helper(call, 5)?)?;
         let center = field(call, globals, "SCREEN_CENTER_X")?;
         let center = number(call, center)?;
@@ -164,20 +156,20 @@ pub(super) fn create(
         .iter()
         .any(|part| name.eq_ignore_ascii_case(part))
     {
-        return dummy(call, store, scene, "ActorFrame", name, None);
+        return dummy(call, scene, "ActorFrame", name, None);
     }
     if ["StepsDescription", "PlayerOptions", "ActiveAttackList"]
         .iter()
         .any(|prefix| name.starts_with(prefix))
         || name == "SongOptions"
     {
-        let actor = text(call, store, scene, name, "")?;
+        let actor = text(call, scene, name, "")?;
         invoke(call, actor, "visible", &[Value::Boolean(false)])?;
         return Ok(actor);
     }
     if name.starts_with("OniGameOver") {
-        let actor = dummy(call, store, scene, "Sprite", name, None)?;
-        blank_texture(call, store, actor)?;
+        let actor = dummy(call, scene, "Sprite", name, None)?;
+        blank_texture(call, actor)?;
         return Ok(actor);
     }
     Err(call.error(b"screen part is not implemented"))
@@ -189,43 +181,35 @@ fn timer_seconds(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn text(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     name: &str,
     value: &str,
 ) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "BitmapText", name, None)?;
+    let actor = dummy(call, scene, "BitmapText", name, None)?;
     let value = call.try_intern(value.as_bytes())?;
     set(call, actor, "Text", value)?;
     Ok(actor)
 }
 
-pub(super) fn blank_texture(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn blank_texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let path =
         crate::blank_texture::load_native_blank_texture().map_err(|e| call.error(e.as_bytes()))?;
     let path = call.try_intern(path.as_bytes())?;
-    sprites::set_texture(call, store, actor, path, false)
+    sprites::set_texture(call, actor, path, false)
 }
 
 pub(super) fn append(
     call: &mut HostCall<'_>,
-    store: &Shared,
     parent: TableId,
     child: TableId,
 ) -> Result<(), Error> {
-    native_children::adopt(call, store, child, parent)?;
+    native_children::adopt(call, child, parent)?;
     call.raw_table_set(
         parent,
         Value::Number((call.raw_table_len(parent)? + 1) as f64),
         Value::Table(child),
     )?;
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&parent)
         .unwrap()
@@ -236,50 +220,36 @@ pub(super) fn append(
 
 pub(super) fn named(
     call: &mut HostCall<'_>,
-    store: &Shared,
     parent: TableId,
     name: &str,
     child: TableId,
 ) -> Result<(), Error> {
-    native_children::adopt(call, store, child, parent)?;
+    native_children::adopt(call, child, parent)?;
     native_children::insert(call, parent, name, Value::Table(child))
 }
 
-fn score(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    index: usize,
-) -> Result<TableId, Error> {
+fn score(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, Error> {
     let actor = dummy(
         call,
-        store,
         scene,
         "ActorFrame",
         crate::top_screen_score_name(index),
         None,
     )?;
-    let frame = dummy(call, store, scene, "Sprite", "", None)?;
-    blank_texture(call, store, frame)?;
-    named(call, store, actor, "", frame)?;
+    let frame = dummy(call, scene, "Sprite", "", None)?;
+    blank_texture(call, frame)?;
+    named(call, actor, "", frame)?;
     let percent = dummy(
         call,
-        store,
         scene,
         "PercentageDisplay",
         "ScoreDisplayPercentage Percent",
         None,
     )?;
     let name = crate::top_screen_score_percent_name(index);
-    let text = text(call, store, scene, name, "0.00%")?;
-    named(call, store, percent, name, text)?;
-    named(
-        call,
-        store,
-        actor,
-        "ScoreDisplayPercentage Percent",
-        percent,
-    )?;
+    let text = text(call, scene, name, "0.00%")?;
+    named(call, percent, name, text)?;
+    named(call, actor, "ScoreDisplayPercentage Percent", percent)?;
     Ok(actor)
 }
 
@@ -304,25 +274,20 @@ fn number(call: &mut HostCall<'_>, value: Value) -> Result<f32, Error> {
     sprites::number(call, value).map(|v| v as f32)
 }
 
-fn lyrics(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    name: &str,
-) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "ActorFrame", name, None)?;
+fn lyrics(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
+    let actor = dummy(call, scene, "ActorFrame", name, None)?;
     let factory = native_children::helper_function(call, b"lyric_commands")?;
     let commands = call.call(factory, &[])?[0];
     call.with_roots(&[commands], |call| {
         let commands = table(call, commands)?;
         for (name, side) in [("LyricBack", "Back"), ("LyricFront", "Front")] {
-            let child = text(call, store, scene, name, "")?;
+            let child = text(call, scene, name, "")?;
             let font = call.try_intern(b"Common Normal")?;
             set(call, child, "Font", font)?;
             let changed = get(call, commands, side.as_bytes())?;
             set(call, child, "ChangedCommand", changed)?;
-            append(call, store, actor, child)?;
-            named(call, store, actor, name, child)?;
+            append(call, actor, child)?;
+            named(call, actor, name, child)?;
         }
         for name in [
             "SetNoReverseCommand",
@@ -341,10 +306,10 @@ fn lyrics(
     })
 }
 
-fn background(call: &mut HostCall<'_>, store: &Shared, scene: u64) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "ActorFrame", "SongBackground", None)?;
-    let implementation = dummy(call, store, scene, "ActorFrame", "", None)?;
-    append(call, store, actor, implementation)?;
+fn background(call: &mut HostCall<'_>, scene: u64) -> Result<TableId, Error> {
+    let actor = dummy(call, scene, "ActorFrame", "SongBackground", None)?;
+    let implementation = dummy(call, scene, "ActorFrame", "", None)?;
+    append(call, actor, implementation)?;
     let globals = table(call, helper(call, 5)?)?;
     let width = field(call, globals, "SCREEN_WIDTH")?;
     let width = number(call, width)?;
@@ -356,7 +321,7 @@ fn background(call: &mut HostCall<'_>, store: &Shared, scene: u64) -> Result<Tab
         (width, 0., width, height),
         (0., height, width, height),
     ] {
-        let quad = dummy(call, store, scene, "Quad", "", Some(implementation))?;
+        let quad = dummy(call, scene, "Quad", "", Some(implementation))?;
         invoke(
             call,
             quad,
@@ -364,10 +329,10 @@ fn background(call: &mut HostCall<'_>, store: &Shared, scene: u64) -> Result<Tab
             &[left, top, right, bottom].map(|n| Value::Number(n as f64)),
         )?;
         invoke(call, quad, "diffuse", &[0., 0., 0., 1.].map(Value::Number))?;
-        append(call, store, implementation, quad)?;
+        append(call, implementation, quad)?;
     }
-    let brightness = dummy(call, store, scene, "ActorFrame", "", Some(implementation))?;
-    append(call, store, implementation, brightness)?;
+    let brightness = dummy(call, scene, "ActorFrame", "", Some(implementation))?;
+    append(call, implementation, brightness)?;
     let side = width / 2. - 20.;
     let prefs = get(call, globals, b"PREFSMAN")?;
     let level = call.with_roots(&[prefs], |call| {
@@ -386,14 +351,7 @@ fn background(call: &mut HostCall<'_>, store: &Shared, scene: u64) -> Result<Tab
         })
     })?;
     for (left, right) in [(0., side), (width - side, width), (side, width - side)] {
-        let quad = dummy(
-            call,
-            store,
-            scene,
-            "Quad",
-            "BrightnessOverlay",
-            Some(brightness),
-        )?;
+        let quad = dummy(call, scene, "Quad", "BrightnessOverlay", Some(brightness))?;
         invoke(
             call,
             quad,
@@ -406,7 +364,7 @@ fn background(call: &mut HostCall<'_>, store: &Shared, scene: u64) -> Result<Tab
             "diffuse",
             &[0., 0., 0., (1. - level) as f64].map(Value::Number),
         )?;
-        append(call, store, brightness, quad)?;
+        append(call, brightness, quad)?;
     }
     // BackgroundImpl enables owned lookups recursively on its frame nodes.
     for frame in [actor, implementation, brightness] {

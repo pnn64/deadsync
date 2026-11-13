@@ -347,7 +347,7 @@ impl Pair {
         "#,
         );
     }
-    fn capture(&self, queued: bool) {
+    fn capture(&mut self, queued: bool) {
         self.rust.begin_actor_capture(queued);
     }
 }

@@ -280,7 +280,7 @@ fn failed_init_preserves_partial_state_and_all_constructor_owners_retire() {
         p.script(
             "log('saved-after-retirement',saved[1]:GetX(),saved[1]:GetWrapperState(1):GetX())",
         );
-        assert_eq!(test_support::actor_ownership_counts(&p.rust)[2], 1);
+        assert_eq!(test_support::actor_ownership_counts(&mut p.rust)[2], 1);
         p.rust
             .vm_mut()
             .execute(
@@ -291,7 +291,7 @@ fn failed_init_preserves_partial_state_and_all_constructor_owners_retire() {
                 .unwrap(),
             )
             .unwrap();
-        assert_eq!(test_support::actor_ownership_counts(&p.rust)[2], 0);
+        assert_eq!(test_support::actor_ownership_counts(&mut p.rust)[2], 0);
     }
 }
 

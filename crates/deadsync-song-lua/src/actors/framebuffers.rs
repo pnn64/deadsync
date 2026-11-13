@@ -97,7 +97,7 @@ pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<FrameTextu
     })
 }
 
-pub(super) fn report(call: &mut HostCall<'_>, store: &Shared, message: &str) -> Result<(), Error> {
+pub(super) fn report(call: &mut HostCall<'_>, message: &str) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
     let key = call.try_intern(b"__songlua_reporting_script_error")?;
     if !matches!(
@@ -114,15 +114,9 @@ pub(super) fn report(call: &mut HostCall<'_>, store: &Shared, message: &str) -> 
             call.with_roots(&[Value::Table(params)], |call| {
                 let text = call.try_intern(message.as_bytes())?;
                 set(call, params, "message", text)?;
-                messages::dispatch(
-                    call,
-                    store,
-                    b"ScriptError",
-                    Some(Value::Table(params)),
-                    true,
-                )
+                messages::dispatch(call, b"ScriptError", Some(Value::Table(params)), true)
             })?;
-            store.lock().unwrap().diagnostics.push(message.to_owned());
+            call.store().diagnostics.push(message.to_owned());
             Ok(())
         })();
         call.raw_table_set(globals, key, Value::Boolean(false))?;
@@ -132,29 +126,26 @@ pub(super) fn report(call: &mut HostCall<'_>, store: &Shared, message: &str) -> 
 
 fn immediate(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     created: bool,
     value: bool,
 ) -> Result<(), Error> {
-    action_capture::prepare_write(call, store, actor)?;
+    action_capture::prepare_write(call, actor)?;
     let key = if created {
         "__songlua_state_aft_created"
     } else {
         "__songlua_state_aft_preserve"
     };
     set(call, actor, key, Value::Boolean(value))?;
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let state = &mut guard.actors.get_mut(&actor).unwrap().state.render;
     if created {
         state.aft_created = value;
     } else {
         state.aft_preserve = value;
     }
-    drop(guard);
     song_immediate::record(
         call,
-        store,
         actor,
         if created {
             crate::SongLuaOverlayUpdateTarget::AftCreated
@@ -166,36 +157,24 @@ fn immediate(
     Ok(())
 }
 
-fn create(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn create(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     if allocation(call, actor)?.is_some() {
-        return report(
-            call,
-            store,
-            "Can't Create an already created ActorFrameTexture",
-        );
+        return report(call, "Can't Create an already created ActorFrameTexture");
     }
     let value = field(call, actor, "__songlua_aft_capture_name")?;
     let name = textures::collapse(&assets::text(call, value)?);
-    let actors = store.lock().unwrap().actor_order.clone();
+    let actors = call.store().actor_order.clone();
     for other in actors {
         if let Some(allocation) = allocation(call, other)? {
             let value = field(call, allocation, "name")?;
             if assets::text(call, value)? == name {
-                return report(
-                    call,
-                    store,
-                    "ActorFrameTexture: Texture Name already in use.",
-                );
+                return report(call, "ActorFrameTexture: Texture Name already in use.");
             }
         }
         if let Some(path) = assets::texture_path(call, other)?
             && textures::collapse(&crate::file_path_string(&path)) == name
         {
-            return report(
-                call,
-                store,
-                "ActorFrameTexture: Texture Name already in use.",
-            );
+            return report(call, "ActorFrameTexture: Texture Name already in use.");
         }
     }
     let value = get(call, actor, b"__songlua_state_size")?;
@@ -203,7 +182,7 @@ fn create(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(),
     {
         // Authored request vectors are also the native actor's render size.
         // The allocation takes a separate, truncated copy below.
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let actor = store.actors.get_mut(&actor).unwrap();
         actor.state.size = requested.unwrap_or([1.0; 2]);
         actor.state.render.size = requested;
@@ -212,7 +191,6 @@ fn create(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(),
     if size.iter().any(|v| !v.is_finite() || *v < 1.0) {
         return report(
             call,
-            store,
             "ActorFrameTexture: Cannot have width or height less than 1",
         );
     }
@@ -233,7 +211,7 @@ fn create(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(),
         let key = call.try_intern(b"__songlua_aft_allocation")?;
         call.raw_table_set(actor, key, Value::Table(allocation))?;
         messages::side_effect(call)?;
-        immediate(call, store, actor, true, true)
+        immediate(call, actor, true, true)
     })
 }
 
@@ -250,7 +228,7 @@ fn equal(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.push(Value::Boolean(result))
 }
 
-fn texture(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     if allocation(call, actor)?.is_none() {
         return call.push(Value::Nil);
     }
@@ -296,7 +274,6 @@ fn texture(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<()
             let path = textures::collapse(&assets::text(call, value)?);
             textures::install(
                 call,
-                store,
                 actor,
                 texture,
                 textures::Info {
@@ -319,10 +296,7 @@ fn texture(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<()
                 let function = call.new_host_function_with_data(
                     render_target,
                     &captures,
-                    TargetBinding {
-                        store: store.clone(),
-                        begin,
-                    },
+                    TargetBinding { begin },
                 )?;
                 set(call, texture, name, function)?;
             }
@@ -333,32 +307,26 @@ fn texture(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<()
 
 #[derive(Clone)]
 struct TargetBinding {
-    store: Shared,
     begin: bool,
 }
 
 fn render_target(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let TargetBinding { store, begin } = call.function_data::<TargetBinding>().unwrap().clone();
+    let TargetBinding { begin } = call.function_data::<TargetBinding>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
     if begin {
         let offset = usize::from(matches!(arg(call, 0), Value::Table(_)));
         let preserve = !matches!(arg(call, offset), Value::Nil | Value::Boolean(false));
-        draw::begin(call, &store, actor, preserve)?;
+        draw::begin(call, actor, preserve)?;
     } else {
-        draw::finish(call, &store, actor)?;
+        draw::finish(call, actor)?;
     }
     call.push(call.captures()[3])
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
-        "Create" => create(call, store, actor)?,
-        "GetTexture" => return texture(call, store, actor),
+        "Create" => create(call, actor)?,
+        "GetTexture" => return texture(call, actor),
         "SetTextureName" => {
             let id = call
                 .coerce_string(arg(call, 1))?
@@ -374,7 +342,7 @@ pub(super) fn method(
                 "EnableDepthBuffer" => "__songlua_aft_depth_buffer",
                 "EnableFloat" => "__songlua_aft_float_buffer",
                 "EnablePreserveTexture" => {
-                    immediate(call, store, actor, false, value)?;
+                    immediate(call, actor, false, value)?;
                     return call.push(Value::Table(actor));
                 }
                 _ => unreachable!(),

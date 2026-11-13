@@ -51,7 +51,6 @@ impl Job {
 
 #[derive(Clone)]
 struct Advance {
-    store: Shared,
     delta: f64,
     statistics: Option<live_feedback::Statistics>,
 }
@@ -65,15 +64,15 @@ impl Actors {
         frame: usize,
         delta: f64,
     ) -> Result<bool, Error> {
-        let Some(seconds) = self.set_song_replay_frame(screen, frame) else {
+        let Some(seconds) = self.set_song_replay_frame(vm, screen, frame) else {
             return Ok(false);
         };
         let first = {
-            let mut store = self.store.lock().unwrap();
+            let store = vm.store();
             store.replay_frame = Some((screen.id, seconds));
             store.next
         };
-        let previous = std::mem::replace(&mut self.store.lock().unwrap().replay_advancing, true);
+        let previous = std::mem::replace(&mut vm.store().replay_advancing, true);
         let result = (|| {
             let function = vm.new_host_function_with_data(
                 advance,
@@ -83,15 +82,14 @@ impl Actors {
                     root,
                 ],
                 Advance {
-                    store: self.store.clone(),
                     delta,
                     statistics: None,
                 },
             )?;
             vm.call(function, &[]).map(|_| true)
         })();
-        self.store.lock().unwrap().replay_advancing = previous;
-        song_activation::adopt_created(&self.store, screen.id, first);
+        vm.store().replay_advancing = previous;
+        song_activation::adopt_created(vm.store(), screen.id, first);
         result
     }
 
@@ -105,9 +103,8 @@ impl Actors {
         catalog: Root,
     ) -> Result<bool, Error> {
         let (root, first) = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             if !store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
-                drop(store);
                 return vm.with_native_stack(|stack| {
                     Err(stack.error(b"live actor updates require a live song runtime"))
                 });
@@ -118,7 +115,6 @@ impl Actors {
                 .and_then(|s| s.song_session.as_ref())
                 .filter(|s| s.activated)
             else {
-                drop(store);
                 return vm.with_native_stack(|stack| {
                     Err(stack.error(b"live actor updates require activated song layers"))
                 });
@@ -143,31 +139,26 @@ impl Actors {
                     catalog,
                 ],
                 Advance {
-                    store: self.store.clone(),
                     delta,
                     statistics: Some(statistics),
                 },
             )?;
             vm.call(callback, &[]).map(|_| true)
         })();
-        song_activation::adopt_created(&self.store, screen.id, first);
+        song_activation::adopt_created(vm.store(), screen.id, first);
         result
     }
 }
 
 fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let Advance {
-        store,
-        delta,
-        statistics,
-    } = call.function_data::<Advance>().unwrap().clone();
+    let Advance { delta, statistics } = call.function_data::<Advance>().unwrap().clone();
     let root = table(call, call.captures()[2])?;
-    let plan = build(call, &store, root, statistics.is_some())?;
+    let plan = build(call, root, statistics.is_some())?;
     let mut deltas = std::mem::take(&mut *plan.scratch.lock().unwrap());
     deltas.resize(plan.actor_count, Deltas::default());
     deltas.fill(Deltas::default());
     let prior = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         guard.replay_clock.as_mut().and_then(|clock| {
             clock.orders = plan.orders.clone();
             clock.phase.take()
@@ -200,7 +191,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                     }
                     let input = (incoming, span);
                     let awake = incoming
-                        .map(|d| hibernate(call, &store, actor, d))
+                        .map(|d| hibernate(call, actor, d))
                         .transpose()?
                         .flatten();
                     let span = match (incoming, awake, span) {
@@ -216,18 +207,12 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 Job::Texture(_) => {
                     if let Some(d) = deltas[slot].input.0 {
-                        models::advance_materials(&store, actor, d as f32);
+                        models::advance_materials(call.store(), actor, d as f32);
                     }
                 }
                 Job::PlayerFeedback(_) => {
                     let catalog = table(call, call.captures()[4])?;
-                    live_feedback::update(
-                        call,
-                        &store,
-                        statistics.as_ref().unwrap(),
-                        catalog,
-                        actor,
-                    )?;
+                    live_feedback::update(call, statistics.as_ref().unwrap(), catalog, actor)?;
                 }
                 Job::Transition(_) => {
                     if deltas[slot].children.0.is_some() {
@@ -236,7 +221,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         if state != 1 {
                             deltas[slot].children.0 = None;
                         } else if let Some(child) = transitions::child(call, actor)?
-                            && lifecycle::time_left(call, &store, child)? == 0.
+                            && lifecycle::time_left(call, child)? == 0.
                         {
                             let key = call.try_intern(b"__songlua_transition_state")?;
                             call.raw_table_set(actor, key, Value::Number(2.))?;
@@ -246,9 +231,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 Job::Advance(_, order, recurring) => {
                     let rate = raw(call, actor, "__songlua_update_rate")?;
                     let rate = if rate == Value::Nil {
-                        store
-                            .lock()
-                            .unwrap()
+                        call.store()
                             .actors
                             .get(&actor)
                             .map_or(1., |a| a.update_rate)
@@ -260,33 +243,32 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         deltas[slot].wrappers.1,
                     );
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(&store, order, d as f32);
-                        if store.lock().unwrap().actors.contains_key(&actor) {
-                            effects::advance(call, &store, actor, d as f32)?;
+                        phase(call.store(), order, d as f32);
+                        if call.store().actors.contains_key(&actor) {
+                            effects::advance(call, actor, d as f32)?;
                             lifecycle::advance_queue(
                                 call,
-                                &store,
                                 actor,
                                 d as f32,
                                 deltas[slot].children.1.unwrap_or(d as f32),
                             )?;
-                            capture::advance_ready(call, &store, actor)?;
+                            capture::advance_ready(call, actor)?;
                             if !recurring {
-                                recurring_update(call, &store, actor, d as f32)?;
+                                recurring_update(call, actor, d as f32)?;
                             }
                         }
                     }
                 }
                 Job::Recurring(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(&store, order, d as f32);
-                        recurring_update(call, &store, actor, d as f32)?;
+                        phase(call.store(), order, d as f32);
+                        recurring_update(call, actor, d as f32)?;
                     }
                 }
                 Job::Callback(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(&store, order, d as f32);
-                        callback(call, &store, actor, d)?;
+                        phase(call.store(), order, d as f32);
+                        callback(call, actor, d)?;
                         #[cfg(feature = "test-support")]
                         live_observation::observe(call, actor)?;
                     }
@@ -295,7 +277,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Ok(())
     });
-    if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+    if let Some(clock) = &mut call.store().replay_clock {
         clock.phase = prior;
     }
     *plan.scratch.lock().unwrap() = deltas;
@@ -304,28 +286,18 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
 fn truthy(value: Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
-fn phase(store: &Shared, order: usize, delta: f32) {
-    if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+fn phase(store: &mut Store, order: usize, delta: f32) {
+    if let Some(clock) = &mut store.replay_clock {
         clock.enter(order, delta);
     }
 }
-fn hibernate(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f64,
-) -> Result<Option<f64>, Error> {
+fn hibernate(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<Option<f64>, Error> {
     if truthy(raw(call, actor, "__songlua_theme_hibernating")?) {
         return Ok(None);
     }
     let left = raw(call, actor, "__songlua_hibernate_seconds")?;
     let left = if left == Value::Nil {
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get(&actor)
-            .map_or(0., |a| a.hibernate)
+        call.store().actors.get(&actor).map_or(0., |a| a.hibernate)
     } else {
         sprites::number(call, left)? as f32
     };
@@ -335,13 +307,12 @@ fn hibernate(
     let left = left - delta as f32;
     let key = call.try_intern(b"__songlua_hibernate_seconds")?;
     call.raw_table_set(actor, key, Value::Number(f64::from(left.max(0.))))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.hibernate = left.max(0.);
     }
     if left <= 0. {
         song_immediate::record(
             call,
-            store,
             actor,
             crate::SongLuaOverlayUpdateTarget::Hibernating,
             crate::SongLuaOverlayUpdateValue::Bool(false),
@@ -349,29 +320,18 @@ fn hibernate(
     }
     Ok((left <= 0.).then(|| f64::from(-left)))
 }
-fn recurring_update(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f32,
-) -> Result<(), Error> {
-    let consumed = store
-        .lock()
-        .unwrap()
+fn recurring_update(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
+    let consumed = call
+        .store()
         .replay_clock
         .as_ref()
         .is_some_and(|c| c.consumed_recurring(actor));
     if !consumed {
-        recurring::advance(call, store, actor, delta)?;
+        recurring::advance(call, actor, delta)?;
     }
     Ok(())
 }
-fn callback(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f64,
-) -> Result<(), Error> {
+fn callback(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<(), Error> {
     let pending = truthy(raw(call, actor, "__songlua_update_pending")?);
     let function = raw(
         call,
@@ -391,7 +351,6 @@ fn callback(
     let result = call.with_roots(&[function], |call| {
         run_callback(
             call,
-            store,
             actor,
             function,
             Some(Value::Number(delta)),
@@ -399,12 +358,12 @@ fn callback(
             None,
         )
     });
-    let drain = capture::drain_commands(call, store, actor);
+    let drain = capture::drain_commands(call, actor);
     if let Err(error) = result {
-        diagnostics::report(call, store, actor, diagnostics::Callback::Update, error)?;
+        diagnostics::report(call, actor, diagnostics::Callback::Update, error)?;
     }
     if let Err(error) = drain {
-        diagnostics::report(call, store, actor, diagnostics::Callback::Queue, error)?;
+        diagnostics::report(call, actor, diagnostics::Callback::Queue, error)?;
     }
     Ok(())
 }
@@ -417,7 +376,7 @@ impl Actors {
     ) -> Result<bool, String> {
         let active = !materials.is_empty();
         {
-            let mut store = self.store.lock().unwrap();
+            let store = vm.store();
             if materials
                 .iter()
                 .any(|(id, _)| !store.actors.contains_key(id))
@@ -434,13 +393,9 @@ impl Actors {
             }
         }
         let function = vm
-            .new_host_function_with_data(
-                |call| {
-                    let store = call.function_data::<Shared>().unwrap().clone();
-                    lifecycle::invalidate_plans(call, &store)
-                },
+            .new_host_function(
+                |call| lifecycle::invalidate_plans(call),
                 &[Value::Table(self.registry), Value::Table(self.helpers)],
-                self.store.clone(),
             )
             .map_err(|e| e.to_string())?;
         vm.call(function, &[]).map_err(|e| e.to_string())?;
@@ -448,27 +403,24 @@ impl Actors {
     }
 
     pub(crate) fn multitap_update_only(&self, vm: &mut Vm, root: Value) -> Result<bool, Error> {
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             update_only,
             &[
                 Value::Table(self.registry),
                 Value::Table(self.helpers),
                 root,
             ],
-            self.store.clone(),
         )?;
         Ok(vm.call(function, &[])?[0] == Value::Boolean(true))
     }
 
     pub(crate) fn multitap_dummy(&self, vm: &mut Vm) -> Result<Root, Error> {
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
-                let actor = offline::dummy(call, &store, "Model")?;
+                let actor = offline::dummy(call, "Model")?;
                 call.push(Value::Table(actor))
             },
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            self.store.clone(),
         )?;
         let value = vm.call(function, &[])?[0];
         vm.pin(value)
@@ -509,7 +461,6 @@ fn sequence(
 }
 fn collect_self(
     call: &mut HostCall<'_>,
-    store: &Shared,
     plan: &mut Plan,
     actor: TableId,
     parent: Option<TableId>,
@@ -520,38 +471,23 @@ fn collect_self(
     let wrappers = sprites::field(call, actor, "__songlua_wrappers")?;
     if wrappers != Value::Nil {
         sequence(call, wrappers, |call, wrapper| {
-            collect(
-                call,
-                store,
-                plan,
-                wrapper,
-                Some(actor),
-                DeltaSource::Wrappers,
-            )
+            collect(call, plan, wrapper, Some(actor), DeltaSource::Wrappers)
         })?;
     } else {
         // Owned wrappers need no exported Lua array unless the author replaces it.
-        let wrappers = store
-            .lock()
-            .unwrap()
+        let wrappers = call
+            .store()
             .actors
             .get(&actor)
             .map(|a| a.wrappers.clone())
             .unwrap_or_default();
         for wrapper in wrappers {
-            collect(
-                call,
-                store,
-                plan,
-                wrapper,
-                Some(actor),
-                DeltaSource::Wrappers,
-            )?;
+            collect(call, plan, wrapper, Some(actor), DeltaSource::Wrappers)?;
         }
     }
     let recurring = sprites::field(call, actor, "__songlua_recurring_update_command")?;
     let recurring = if recurring == Value::Nil {
-        capture::has_recurring(store, actor)
+        capture::has_recurring(call.store(), actor)
     } else {
         initial_state::value_text(call, recurring)?.is_some()
     };
@@ -585,13 +521,12 @@ fn collect_self(
 }
 fn collect(
     call: &mut HostCall<'_>,
-    store: &Shared,
     plan: &mut Plan,
     actor: TableId,
     parent: Option<TableId>,
     source: DeltaSource,
 ) -> Result<(), Error> {
-    collect_self(call, store, plan, actor, parent, source)?;
+    collect_self(call, plan, actor, parent, source)?;
     for i in 1usize.. {
         let child = call.raw_table_get(actor, Value::Number(i as f64))?;
         if child == Value::Nil {
@@ -599,26 +534,18 @@ fn collect(
         }
         if let Value::Table(child) = child {
             call.with_roots(&[Value::Table(child)], |call| {
-                native_children::adopt_declared(call, store, child, actor)?;
-                collect(call, store, plan, child, Some(actor), DeltaSource::Children)
+                native_children::adopt_declared(call, child, actor)?;
+                collect(call, plan, child, Some(actor), DeltaSource::Children)
             })?;
         }
     }
-    if store.lock().unwrap().actors.contains_key(&actor)
-        && let Some(stream) = song_meters::stream(call, store, actor)?
+    if call.store().actors.contains_key(&actor)
+        && let Some(stream) = song_meters::stream(call, actor)?
     {
-        collect(
-            call,
-            store,
-            plan,
-            stream,
-            Some(actor),
-            DeltaSource::Children,
-        )?;
+        collect(call, plan, stream, Some(actor), DeltaSource::Children)?;
     }
-    if store
-        .lock()
-        .unwrap()
+    if call
+        .store()
         .actors
         .get(&actor)
         .is_some_and(|a| a.model_materials.iter().any(Option::is_some))
@@ -629,23 +556,18 @@ fn collect(
     let columns = raw(call, actor, "__songlua_note_columns")?;
     if columns != Value::Nil {
         sequence(call, columns, |call, child| {
-            collect(call, store, plan, child, Some(actor), DeltaSource::Columns)
+            collect(call, plan, child, Some(actor), DeltaSource::Columns)
         })?;
     }
     Ok(())
 }
-fn build(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    root: TableId,
-    live: bool,
-) -> Result<Arc<Plan>, Error> {
-    let cached = store.lock().unwrap().multitap_plan.clone();
+fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>, Error> {
+    let cached = call.store().multitap_plan.clone();
     if let Some(plan) = cached.as_ref().filter(|p| p.live == live) {
         return Ok(plan.clone());
     }
     if cached.is_some() {
-        lifecycle::invalidate_plans(call, store)?;
+        lifecycle::invalidate_plans(call)?;
     }
     let roots = call.try_new_table()?;
     call.with_roots(&[Value::Table(roots)], |call| {
@@ -664,7 +586,7 @@ fn build(
         let mut after = Vec::new();
         if top != Value::Nil {
             let screen = table(call, top)?;
-            collect_self(call, store, &mut plan, screen, None, DeltaSource::Children)?;
+            collect_self(call, &mut plan, screen, None, DeltaSource::Children)?;
             let children = native_children::named_children(call, screen)?;
             call.with_roots(&[children], |call| {
                 let children = table(call, children)?;
@@ -673,7 +595,7 @@ fn build(
                     if actor != Value::Nil {
                         let actor = table(call, actor)?;
                         retain(call, &plan, actor)?;
-                        collect(call, store, &mut plan, actor, None, DeltaSource::Children)?;
+                        collect(call, &mut plan, actor, None, DeltaSource::Children)?;
                     }
                 }
                 for name in ["In", "Out", "Cancel"] {
@@ -689,7 +611,7 @@ fn build(
             sequence(call, top, |call, actor| {
                 let role = raw(call, actor, "__songlua_screen_actor_role")?;
                 if initial_state::value_text(call, role)?.is_some() {
-                    collect(call, store, &mut plan, actor, None, DeltaSource::Children)?;
+                    collect(call, &mut plan, actor, None, DeltaSource::Children)?;
                 }
                 Ok(())
             })?;
@@ -702,15 +624,15 @@ fn build(
             if player != Value::Nil {
                 let player = table(call, player)?;
                 retain(call, &plan, player)?;
-                collect(call, store, &mut plan, player, None, DeltaSource::Children)?;
+                collect(call, &mut plan, player, None, DeltaSource::Children)?;
                 if live {
                     plan.jobs.push(Job::PlayerFeedback(player));
                 }
             }
         }
-        collect(call, store, &mut plan, root, None, DeltaSource::Children)?;
+        collect(call, &mut plan, root, None, DeltaSource::Children)?;
         for actor in after {
-            collect(call, store, &mut plan, actor, None, DeltaSource::Children)?;
+            collect(call, &mut plan, actor, None, DeltaSource::Children)?;
         }
         if top != Value::Nil {
             plan.jobs
@@ -731,16 +653,15 @@ fn build(
         let registry = table(call, call.captures()[0])?;
         call.raw_table_set(registry, Value::Table(roots), Value::Boolean(true))?;
         let plan = Arc::new(plan);
-        store.lock().unwrap().multitap_plan = Some(plan.clone());
+        call.store().multitap_plan = Some(plan.clone());
         Ok(plan)
     })
 }
 fn update_only(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let Value::Table(root) = call.captures()[2] else {
         return call.push(Value::Boolean(false));
     };
-    let plan = build(call, &store, root, false)?;
+    let plan = build(call, root, false)?;
     let eligible = call.with_roots(&[Value::Table(plan.roots)], |call| {
         // Preserve the native two passes, including errors after extra callbacks.
         for job in &plan.jobs {
@@ -751,7 +672,7 @@ fn update_only(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 let deferred = raw(call, actor, "__songlua_command_queue_deferred")?;
                 if if deferred == Value::Nil {
-                    capture::deferred(&store, actor)
+                    capture::deferred(call.store(), actor)
                 } else {
                     !matches!(deferred, Value::Boolean(false))
                 } {

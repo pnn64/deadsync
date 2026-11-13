@@ -37,21 +37,18 @@ impl Observation {
 type Output = Arc<Mutex<Option<Answer>>>;
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     query: Query,
     output: Output,
 }
 pub(crate) struct Tree {
     registry: TableId,
     helpers: TableId,
-    store: Shared,
 }
 impl Actors {
     pub(crate) fn overlay_tree(&self) -> Tree {
         Tree {
             registry: self.registry,
             helpers: self.helpers,
-            store: self.store.clone(),
         }
     }
 }
@@ -66,7 +63,6 @@ impl Tree {
                 actor,
             ],
             Read {
-                store: self.store.clone(),
                 query,
                 output: output.clone(),
             },
@@ -82,10 +78,8 @@ impl Tree {
         };
         Ok(Observation { answer, pin })
     }
-    pub fn deferred(&self, actor: Value) -> bool {
-        self.store
-            .lock()
-            .unwrap()
+    pub fn deferred(&self, vm: &Vm, actor: Value) -> bool {
+        vm.store_ref()
             .deferred_messages
             .iter()
             .any(|r| Value::Table(r.actor) == actor)
@@ -124,13 +118,11 @@ fn aft_names(
     }
     Ok(())
 }
-fn references(call: &mut HostCall<'_>, data: &Read) -> Result<HashSet<TableId>, Error> {
+fn references(call: &mut HostCall<'_>) -> Result<HashSet<TableId>, Error> {
     let globals = helper(call, 5)?;
     let public_registry = sprites::field(call, table(call, globals)?, "__songlua_actor_registry")?;
     let known = if public_registry == Value::Nil {
-        data.store
-            .lock()
-            .unwrap()
+        call.store()
             .actor_order
             .iter()
             .copied()
@@ -186,13 +178,11 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
             aft_names(call, actor, &mut names)?;
             Answer::Names(names)
         }
-        Query::References => Answer::References(references(call, &data)?),
+        Query::References => Answer::References(references(call)?),
         Query::Wrappers => {
             let raw = get(call, actor, b"__songlua_wrappers")?;
             let owned = if raw == Value::Nil {
-                data.store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get(&actor)
                     .map(|a| a.wrappers.clone())
@@ -236,7 +226,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         Query::Header => {
             let class = text(call, actor, "__songlua_actor_type")?;
             Answer::Header(if let Some(class) = class {
-                let initial = initial_state::read(call, &data.store, actor)?;
+                let initial = initial_state::read(call, actor)?;
                 let initial = crate::overlay_state_after_blocks(initial, &[], 0.);
                 let identity = call.object_pointer(Value::Table(actor)).unwrap();
                 Some(Box::new((class, initial, identity)))

@@ -30,7 +30,6 @@ struct State {
 }
 #[derive(Clone)]
 struct Run {
-    store: Shared,
     scene: u64,
     context: Arc<SongLuaCompileContext>,
     state: Arc<Mutex<Option<State>>>,
@@ -43,9 +42,8 @@ impl Actors {
         context: &SongLuaCompileContext,
     ) -> Result<Root, Error> {
         let root = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             if !context.live || !store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
-                drop(store);
                 return vm.with_native_stack(|s| {
                     Err(s.error(b"live layer scheduling requires a live runtime and context"))
                 });
@@ -56,7 +54,6 @@ impl Actors {
                 .and_then(|s| s.song_session.as_ref())
                 .filter(|s| s.activated)
             else {
-                drop(store);
                 return vm.with_native_stack(|s| {
                     Err(s.error(b"live layer scheduling requires activated song layers"))
                 });
@@ -71,7 +68,6 @@ impl Actors {
                 Value::Table(root),
             ],
             Run {
-                store: self.store.clone(),
                 scene: screen.id,
                 context: Arc::new(context.clone()),
                 state: Arc::new(Mutex::new(None)),
@@ -221,10 +217,10 @@ fn with_state(
         .unwrap()
         .take()
         .ok_or_else(|| call.error(b"live layer phase is already active"))?;
-    let first = data.store.lock().unwrap().next;
+    let first = call.store().next;
     let result = f(call, &data, &mut state);
     *data.state.lock().unwrap() = Some(state);
-    song_activation::adopt_created(&data.store, data.scene, first);
+    song_activation::adopt_created(call.store(), data.scene, first);
     result
 }
 fn read_clock(call: &mut HostCall<'_>) -> Result<[f32; 3], Error> {
@@ -300,9 +296,9 @@ fn backgrounds(call: &mut HostCall<'_>) -> Result<(), Error> {
                 layer.current = Some(*owner);
                 layer.change_index = Some(next);
                 let actor = state.backgrounds[*owner];
-                reset_actor(call, &data.store, actor)?;
+                reset_actor(call, actor)?;
                 set(call, actor, "__songlua_defer_on", Value::Boolean(false))?;
-                song_activation::startup(call, &data.store, actor)?;
+                song_activation::startup(call, actor)?;
                 command(call, actor, "GainFocus")?;
                 let start = data.context.song_timing.as_ref().map_or_else(
                     || {
@@ -314,7 +310,7 @@ fn backgrounds(call: &mut HostCall<'_>) -> Result<(), Error> {
                 delta = music - start;
             }
             if let Some(fading) = layer.fading
-                && lifecycle::time_left(call, &data.store, state.backgrounds[fading])? == 0.
+                && lifecycle::time_left(call, state.backgrounds[fading])? == 0.
             {
                 layer.fading = None;
             }
@@ -367,7 +363,7 @@ fn backgrounds(call: &mut HostCall<'_>) -> Result<(), Error> {
                 )?;
             }
             state.order = order;
-            lifecycle::invalidate_plans(call, &data.store)?;
+            lifecycle::invalidate_plans(call)?;
         }
         Ok(())
     })
@@ -401,7 +397,7 @@ fn entry(call: &mut HostCall<'_>) -> Result<(), Error> {
                 if fg.started {
                     command(call, actor, "On")?;
                 } else {
-                    song_activation::startup(call, &data.store, actor)?;
+                    song_activation::startup(call, actor)?;
                 }
                 let start_rate = self::music_rate(call, options)?;
                 let start = data.context.song_timing.as_ref().map_or_else(
@@ -411,7 +407,7 @@ fn entry(call: &mut HostCall<'_>) -> Result<(), Error> {
                     },
                     |t| t.get_song_time_for_beat(fg.start, start_rate),
                 );
-                let stop = start + lifecycle::time_left(call, &data.store, actor)?;
+                let stop = start + lifecycle::time_left(call, actor)?;
                 fg.stop = data.context.song_timing.as_ref().map_or_else(
                     || {
                         crate::song_beat_at_elapsed_seconds(
@@ -477,24 +473,15 @@ fn transition(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(),
     }
     leaves(call, actor, duration)
 }
-pub(super) fn reset_actor(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn reset_actor(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        let previous = store
-            .lock()
-            .unwrap()
-            .actors
-            .get(&actor)
-            .map(|a| a.state.render);
+        let previous = call.store().actors.get(&actor).map(|a| a.state.render);
         for i in 1usize.. {
             let v = call.raw_table_get(actor, Value::Number(i as f64))?;
             if v == Value::Nil {
                 break;
             }
-            reset_actor(call, store, table(call, v)?)?;
+            reset_actor(call, table(call, v)?)?;
         }
         let clear = call.new_host_function(clear_fields, &[Value::Table(actor)])?;
         call.call(clear, &[])?;
@@ -514,14 +501,14 @@ pub(super) fn reset_actor(
                 Value::Boolean(true),
             )?;
         }
-        let mut render = initial_state::read_reset(call, store, actor)?;
+        let mut render = initial_state::read_reset(call, actor)?;
         if let Some(p) = previous {
             render.draw_by_z_position = p.draw_by_z_position;
             render.mask_source = p.mask_source;
             render.mask_dest = p.mask_dest;
         }
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             if let Some(a) = guard.actors.get_mut(&actor) {
                 a.current = render.into();
                 a.queue.clear();
@@ -540,8 +527,8 @@ pub(super) fn reset_actor(
                 a.state.rotation = [render.rot_x_deg, render.rot_y_deg, render.rot_z_deg];
             }
         }
-        if store.lock().unwrap().actors.contains_key(&actor) {
-            song_replay::sync_getters(call, store, actor)?;
+        if call.store().actors.contains_key(&actor) {
+            song_replay::sync_getters(call, actor)?;
         }
         Ok(())
     })

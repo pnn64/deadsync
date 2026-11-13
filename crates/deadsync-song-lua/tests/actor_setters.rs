@@ -205,7 +205,9 @@ fn custom_assignment_hooks_observe_writes_to_the_captured_target() {
         let scene = runtime.instantiate_actor(declaration).unwrap();
         let root = runtime.actor_scene_root(scene).unwrap();
         runtime.vm_mut().set_global(b"root", root).unwrap();
-        run(&mut runtime, r#"
+        run(
+            &mut runtime,
+            r#"
             local a,b=root[1],root[2]
             local writes=0
             local mt=getmetatable(b)
@@ -223,7 +225,8 @@ fn custom_assignment_hooks_observe_writes_to_the_captured_target() {
             rawset(a,'visible',b.__songlua_bound_methods.visible)
             assert(a:visible(false)==b and not b:GetVisible() and a:GetVisible())
             assert(writes==1, 'the visibility assignment must invoke the hook once')
-        "#);
+        "#,
+        );
         assert!(runtime.take_actor_diagnostics().is_empty());
     }
 }
@@ -233,7 +236,7 @@ fn saved_bound_setter_roots_retired_target_then_releases_the_scene() {
     let mut context = SongLuaCompileContext::new(std::path::Path::new("."), "Saved setter");
     context.live = true;
     let mut rust = SongRuntime::new(&context).unwrap();
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let definition = run(&mut rust, "return Def.ActorFrame{Def.Quad{}}")[0];
     let scene = rust.instantiate_actor(definition).unwrap();
     let root = rust.actor_scene_root(scene).unwrap();
@@ -252,7 +255,7 @@ fn saved_bound_setter_roots_retired_target_then_releases_the_scene() {
         &mut rust,
         "saved=nil;collectgarbage('collect');collectgarbage('collect');assert(weak[1]==nil and weak[2]==nil)",
     );
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
 }
 
 #[allow(dead_code)]

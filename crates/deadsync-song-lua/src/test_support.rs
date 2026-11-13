@@ -75,7 +75,7 @@ pub fn actor_method_identity(
     runtime: &super::SongRuntime,
     function: deadlib_lua::Value,
 ) -> Option<ActorMethodIdentity> {
-    runtime.actors.method_identity(function)
+    runtime.actors.method_identity(&runtime.vm, function)
 }
 
 /// Invoke the production key classifier with a rooted VM string.
@@ -305,10 +305,10 @@ pub fn initialize_steps_displays(
 }
 
 pub fn captured_blocks(
-    runtime: &super::SongRuntime,
+    runtime: &mut super::SongRuntime,
     actor: deadlib_lua::Value,
 ) -> Option<Vec<crate::SongLuaOverlayCommandBlock>> {
-    runtime.actors.captured_blocks(actor)
+    runtime.actors.captured_blocks(&mut runtime.vm, actor)
 }
 
 pub fn gameplay_overlay(
@@ -334,8 +334,8 @@ pub fn gameplay_decorations(
 }
 
 /// Actor metadata, owned scenes and retired graphs after consuming GC notices.
-pub fn actor_ownership_counts(runtime: &super::SongRuntime) -> [usize; 3] {
-    runtime.actors.ownership_counts()
+pub fn actor_ownership_counts(runtime: &mut super::SongRuntime) -> [usize; 3] {
+    runtime.actors.ownership_counts(&mut runtime.vm)
 }
 
 /// Exercise the same subscription boundary used by gameplay reconstruction.
@@ -347,7 +347,7 @@ pub fn reset_actor_subscriptions(
 
 /// Pending discovery order after real startup, before any future command runs.
 pub fn song_startup_queue(runtime: &super::SongRuntime) -> Vec<deadlib_lua::Value> {
-    runtime.actors.song_startup_queue()
+    runtime.actors.song_startup_queue(&runtime.vm)
 }
 
 pub fn static_schedule_startup_output(
@@ -355,7 +355,7 @@ pub fn static_schedule_startup_output(
     activation: &super::SongActivation,
     context: &crate::SongLuaCompileContext,
 ) -> super::SongStaticSchedule {
-    let queued = runtime.actors.take_song_broadcasts();
+    let queued = runtime.actors.take_song_broadcasts(&mut runtime.vm);
     let mut sounds = runtime.take_prepared_sounds();
     let mut output = super::SongStaticSchedule::default();
     crate::compiled_layers::merge_runtime_messages(&mut output.messages, 0, &activation.broadcasts);
@@ -464,15 +464,17 @@ pub fn rust_preserving_command_locals<T>(
 pub fn rust_deferred_actor_messages(
     runtime: &super::SongRuntime,
 ) -> Vec<(deadlib_lua::TableId, String, String, bool)> {
-    runtime.actors.deferred_message_states()
+    runtime.actors.deferred_message_states(&runtime.vm)
 }
 
 pub fn rust_seed_message_sound_block(
-    runtime: &super::SongRuntime,
+    runtime: &mut super::SongRuntime,
     actor: deadlib_lua::Value,
     played: bool,
 ) -> bool {
-    runtime.actors.seed_message_sound_block(actor, played)
+    runtime
+        .actors
+        .seed_message_sound_block(&mut runtime.vm, actor, played)
 }
 
 pub fn rust_clear_deferred_actor_messages(
@@ -621,10 +623,12 @@ pub fn live_query_value(
         .fixture_query_value(&mut runtime.vm, value, depth)
 }
 pub fn seed_live_query_objects(
-    runtime: &super::SongRuntime,
+    runtime: &mut super::SongRuntime,
     objects: &[(deadlib_lua::Value, serde_json::Value)],
 ) {
-    runtime.actors.fixture_query_objects(objects)
+    runtime
+        .actors
+        .fixture_query_objects(&mut runtime.vm, objects)
 }
 pub fn hook_live_query(
     runtime: &mut super::SongRuntime,
@@ -637,7 +641,7 @@ pub fn hook_live_query(
         .fixture_query_hook(&mut runtime.vm, owner, class, name)
 }
 pub fn live_query_hooks(runtime: &super::SongRuntime) -> Vec<(deadlib_lua::Value, String)> {
-    runtime.actors.fixture_query_hooks()
+    runtime.actors.fixture_query_hooks(&runtime.vm)
 }
 
 /// Inspect construction inputs separately from the live GAMESTATE selection.
@@ -657,21 +661,25 @@ pub fn read_live_tween_pose(
     value: deadlib_lua::Value,
     state: &mut crate::SongLuaOverlayState,
 ) -> bool {
-    runtime.actors.apply_song_replay_pose(value, state)
+    runtime
+        .actors
+        .apply_song_replay_pose(&runtime.vm, value, state)
 }
 
 /// Existing native registry and retained draw storage, without consuming output.
 pub fn live_actor_registry(runtime: &super::SongRuntime) -> Vec<deadlib_lua::Value> {
-    runtime.actors.fixture_live_registry()
+    runtime.actors.fixture_live_registry(&runtime.vm)
 }
 pub fn live_draw_storage(runtime: &super::SongRuntime) -> (usize, usize, usize) {
-    runtime.actors.fixture_draw_storage()
+    runtime.actors.fixture_draw_storage(&runtime.vm)
 }
 pub fn live_command_depth(runtime: &super::SongRuntime) -> usize {
-    runtime.actors.fixture_command_depth()
+    runtime.actors.fixture_command_depth(&runtime.vm)
 }
-pub fn set_live_command_depth(runtime: &super::SongRuntime, depth: usize) {
-    runtime.actors.fixture_set_command_depth(depth)
+pub fn set_live_command_depth(runtime: &mut super::SongRuntime, depth: usize) {
+    runtime
+        .actors
+        .fixture_set_command_depth(&mut runtime.vm, depth)
 }
 pub fn install_live_command_depth_probe(
     runtime: &mut super::SongRuntime,
@@ -706,7 +714,9 @@ pub fn live_destination_vertices(
     runtime: &super::SongRuntime,
     value: deadlib_lua::Value,
 ) -> Option<[[f32; 4]; 4]> {
-    runtime.actors.fixture_destination_vertices(value)
+    runtime
+        .actors
+        .fixture_destination_vertices(&runtime.vm, value)
 }
 pub fn copy_live_actor_pose(
     runtime: &mut super::SongRuntime,
@@ -721,7 +731,9 @@ pub fn live_color_storage(
     runtime: &super::SongRuntime,
     value: deadlib_lua::Value,
 ) -> Option<(usize, [f32; 4], [f32; 4])> {
-    runtime.actors.fixture_live_color_storage(value)
+    runtime
+        .actors
+        .fixture_live_color_storage(&runtime.vm, value)
 }
 pub fn export_live_actor_state(
     runtime: &mut super::SongRuntime,
@@ -747,7 +759,7 @@ pub fn end_live_update_capture(scene: &super::SongLiveScene) {
 
 /// Observe native effect-clock ownership rather than a retired Lua mirror table.
 pub fn live_actor_has_motion(runtime: &super::SongRuntime, value: deadlib_lua::Value) -> bool {
-    runtime.actors.fixture_has_motion(value)
+    runtime.actors.fixture_has_motion(&runtime.vm, value)
 }
 pub fn base_transform_state_keys() -> impl Iterator<Item = &'static str> {
     crate::base_transform::BaseField::ALL
@@ -888,7 +900,7 @@ pub fn native_shadow_storage(
     runtime: &super::SongRuntime,
     actor: deadlib_lua::Value,
 ) -> (usize, [f32; 2]) {
-    runtime.actors.fixture_shadow_storage(actor)
+    runtime.actors.fixture_shadow_storage(&runtime.vm, actor)
 }
 
 /// Attach the existing optional sample recorder directly to a native actor.
@@ -903,15 +915,17 @@ pub fn begin_pose_observation(
 pub fn observed_vertex_sample(
     runtime: &super::SongRuntime,
 ) -> (usize, Option<std::sync::Arc<[[f32; 4]; 4]>>) {
-    runtime.actors.fixture_pose_sample()
+    runtime.actors.fixture_pose_sample(&runtime.vm)
 }
 pub fn set_pose_observation_scope(
-    runtime: &super::SongRuntime,
+    runtime: &mut super::SongRuntime,
     queued: usize,
     update: bool,
     message: Option<&str>,
 ) {
-    runtime.actors.fixture_pose_scope(queued, update, message)
+    runtime
+        .actors
+        .fixture_pose_scope(&mut runtime.vm, queued, update, message)
 }
 
 pub fn ensure_native_replay(

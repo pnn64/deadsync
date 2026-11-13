@@ -4,19 +4,17 @@ use super::*;
 
 #[derive(Clone)]
 struct Load {
-    store: Shared,
     scene: u64,
     plan: SongLayerPlan,
 }
 impl Actors {
     pub(crate) fn song_initial_states(
         &self,
+        vm: &Vm,
         screen: ActorScene,
     ) -> Option<super::super::song_layers::SongInitialStates> {
-        self.root(screen)?;
-        self.store
-            .lock()
-            .unwrap()
+        self.root(vm, screen)?;
+        vm.store_ref()
             .scenes
             .get(&screen.id)?
             .initial_states
@@ -29,7 +27,7 @@ impl Actors {
         screen: ActorScene,
         plan: &SongLayerPlan,
     ) -> Result<Option<Value>, Error> {
-        if self.root(screen).is_none() {
+        if self.root(vm, screen).is_none() {
             return Ok(None);
         }
         for (key, source, name) in [
@@ -60,7 +58,6 @@ impl Actors {
             load,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Load {
-                store: self.store.clone(),
                 scene: screen.id,
                 plan: plan.clone(),
             },
@@ -71,39 +68,35 @@ impl Actors {
 fn load(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Load>().unwrap().clone();
     if data.plan.live
-        != data
-            .store
-            .lock()
-            .unwrap()
+        != call
+            .store()
             .clock
             .live
             .load(std::sync::atomic::Ordering::Relaxed)
     {
         return Err(call.error(b"song layer plan and runtime modes differ"));
     }
-    let top = data.store.lock().unwrap().scenes[&data.scene].root.unwrap();
-    let first = data.store.lock().unwrap().next;
+    let top = call.store().scenes[&data.scene].root.unwrap();
+    let first = call.store().next;
     let result = load_layers(call, &data, top);
     // Constructors can leave implicit templates or throw after publishing an
     // actor. Transfer every new owner even when execution/Init failed.
-    let created = data
-        .store
-        .lock()
-        .unwrap()
+    let created = call
+        .store()
         .scenes
         .keys()
         .copied()
         .filter(|id| *id > first)
         .collect::<Vec<_>>();
     for scene in created {
-        gameplay_theme::adopt_owned_scene(&data.store, data.scene, scene);
+        gameplay_theme::adopt_owned_scene(call.store(), data.scene, scene);
     }
     let roots: Vec<_> = match &result {
         Ok(value) => vec![*value],
         Err(error) => error.value().into_iter().collect(),
     };
     call.with_roots(&roots, |call| {
-        lifecycle::invalidate_plans(call, &data.store)?;
+        lifecycle::invalidate_plans(call)?;
         call.push(result?)
     })
 }
@@ -127,8 +120,8 @@ fn load_layers(call: &mut HostCall<'_>, data: &Load, top: TableId) -> Result<Val
         call.set_table_host_state(top, Some(state))?;
         let retained = call.try_new_table()?;
         call.raw_table_set(state, Value::Number(3.), Value::Table(retained))?;
-        data.store.lock().unwrap().scenes.get_mut(&data.scene).unwrap().initial_states = Some(Default::default());
-        data.store.lock().unwrap().scenes.get_mut(&data.scene).unwrap().song_session = Some(song_activation::Session { roots, ready: false, activated: false, discovery_started: false, locals: None, queued: HashMap::new(), messages: None });
+        call.store().scenes.get_mut(&data.scene).unwrap().initial_states = Some(Default::default());
+        call.store().scenes.get_mut(&data.scene).unwrap().song_session = Some(song_activation::Session { roots, ready: false, activated: false, discovery_started: false, locals: None, queued: HashMap::new(), messages: None });
         capture_screen(call, data, retained, globals)?;
         for (index, entry) in data.plan.entries.iter().enumerate() {
             let result = execute(call, entry);
@@ -136,18 +129,18 @@ fn load_layers(call: &mut HostCall<'_>, data: &Load, top: TableId) -> Result<Val
                 Ok(value) if !data.plan.live || matches!(value, Value::Table(_)) => value,
                 Ok(_) => {
                     log::warn!("Failed to load song actor '{}': must return a table; using native dummy Actor", entry.path.display());
-                    Value::Table(offline::dummy(call, &data.store, "Actor")?)
+                    Value::Table(offline::dummy(call, "Actor")?)
                 }
                 Err(error) if data.plan.live => {
                     log::warn!("Failed to load song actor '{}': {error}; using native dummy Actor", entry.path.display());
-                    Value::Table(offline::dummy(call, &data.store, "Actor")?)
+                    Value::Table(offline::dummy(call, "Actor")?)
                 }
                 Err(error) => return Err(call.error(format!("failed to execute '{}': {error}", entry.path.display()).as_bytes())),
             };
             let value = call.with_roots(&[definition], |call| initialize_layer(call, data, entry, index, definition, retained))?;
             call.raw_table_set(roots, Value::Number((index+1) as f64), value)?;
         }
-        data.store.lock().unwrap().scenes.get_mut(&data.scene).unwrap().song_session.as_mut().unwrap().ready = true;
+        call.store().scenes.get_mut(&data.scene).unwrap().song_session.as_mut().unwrap().ready = true;
         Ok(Value::Table(roots))
     })
 }
@@ -181,9 +174,9 @@ fn initialize_layer(
         actor
     };
     call.with_roots(&[Value::Table(actor)], |call| {
-        let scene = materialize(call, &data.store, actor, Materialization::Construct)?;
-        let actor = data.store.lock().unwrap().scenes[&scene].root.unwrap();
-        gameplay_theme::adopt_owned_scene(&data.store, data.scene, scene);
+        let scene = materialize(call, actor, Materialization::Construct)?;
+        let actor = call.store().scenes[&scene].root.unwrap();
+        gameplay_theme::adopt_owned_scene(call.store(), data.scene, scene);
         #[cfg(feature = "test-support")]
         {
             let path = call.try_intern((index + 1).to_string().as_bytes())?;
@@ -215,11 +208,11 @@ fn initialize_layer(
             raw_set(call, actor, "__songlua_live_inactive", Value::Boolean(true))?;
         }
         if let Some(parent) = parent {
-            parent_scene(call, &data.store, actor, Value::Table(parent), false)?;
+            parent_scene(call, actor, Value::Table(parent), false)?;
         }
         collect_initial(call, data, retained, Value::Table(actor))?;
-        prepare_init(&data.store);
-        initialize(call, &data.store, actor).map_err(|error| {
+        prepare_init(call.store());
+        initialize(call, actor).map_err(|error| {
             call.error(
                 format!(
                     "failed to run actor init commands for '{}': {error}",
@@ -240,19 +233,13 @@ fn initialize_layer(
                     }
                     raw_set(call, actor, "__songlua_native_name", value)?;
                     raw_set(call, actor, "Name", value)?;
-                    data.store
-                        .lock()
-                        .unwrap()
-                        .actors
-                        .get_mut(&actor)
-                        .unwrap()
-                        .state
-                        .name = name.as_bytes().to_vec();
+                    call.store().actors.get_mut(&actor).unwrap().state.name =
+                        name.as_bytes().to_vec();
                 }
                 let visible = sprites::field(call, actor, "visible")?;
                 call.call(visible, &[Value::Table(actor), Value::Boolean(false)])?;
             }
-            parent_scene(call, &data.store, actor, Value::Table(parent), true)?;
+            parent_scene(call, actor, Value::Table(parent), true)?;
         }
         Ok(Value::Table(actor))
     })
@@ -316,9 +303,9 @@ fn save_initial(
     screen_layer: bool,
 ) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        let state = initial_state::read(call, &data.store, actor)?;
+        let state = initial_state::read(call, actor)?;
         call.raw_table_set(retained, Value::Table(actor), Value::Boolean(true))?;
-        let mut guard = data.store.lock().unwrap();
+        let guard = call.store();
         let initial = guard
             .scenes
             .get_mut(&data.scene)

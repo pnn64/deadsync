@@ -177,11 +177,10 @@ pub(super) fn copy_tags(
 
 pub(super) fn create(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     parent: TableId,
 ) -> Result<TableId, Error> {
-    let underlay = dummy(call, store, scene, "ActorFrame", "Underlay", None)?;
+    let underlay = dummy(call, scene, "ActorFrame", "Underlay", None)?;
     copy_tags(call, parent, underlay)?;
     let name = call.try_intern(b"Underlay")?;
     set(call, underlay, "__songlua_top_screen_child_name", name)?;
@@ -202,9 +201,9 @@ pub(super) fn create(
             }
         }
         if let Some(player) = crate::top_screen_step_stats_pane_index(name) {
-            if let Some(actor) = filter(call, store, scene, underlay, player)? {
+            if let Some(actor) = filter(call, scene, underlay, player)? {
                 role(call, actor, &format!("filter{player}"))?;
-                append(call, store, underlay, actor)?;
+                append(call, underlay, actor)?;
                 unnamed_parts.push(actor);
             }
             continue;
@@ -218,7 +217,7 @@ pub(super) fn create(
             continue;
         }
         let actor = if name == "Header" {
-            let actor = dummy(call, store, scene, "Quad", name, Some(underlay))?;
+            let actor = dummy(call, scene, "Quad", name, Some(underlay))?;
             let definition = source(call, "underlay_header", &[])?;
             call.with_roots(&[definition], |call| {
                 commands(
@@ -232,31 +231,31 @@ pub(super) fn create(
             })?;
             actor
         } else {
-            screen_parts::text(call, store, scene, name, "0.00%")?
+            screen_parts::text(call, scene, name, "0.00%")?
         };
-        set_name(call, store, actor, name)?;
+        set_name(call, actor, name)?;
         copy_tags(call, underlay, actor)?;
         let tag = call.try_intern(name.as_bytes())?;
         set(call, actor, "__songlua_top_screen_child_name", tag)?;
-        named(call, store, underlay, name, actor)?;
+        named(call, underlay, name, actor)?;
         if let Some(player) = crate::underlay_score_index(name) {
-            let actor = difficulty(call, store, scene, underlay, player)?;
+            let actor = difficulty(call, scene, underlay, player)?;
             role(call, actor, &format!("difficulty{player}"))?;
-            append(call, store, underlay, actor)?;
+            append(call, underlay, actor)?;
             unnamed_parts.push(actor);
-            if let Some(actor) = life(call, store, scene, underlay, player)? {
+            if let Some(actor) = life(call, scene, underlay, player)? {
                 role(call, actor, &format!("life{player}"))?;
-                append(call, store, underlay, actor)?;
+                append(call, underlay, actor)?;
                 unnamed_parts.push(actor);
             }
         }
     }
     let definition = source(call, "underlay_bpm", &[])?;
     let bpm = call.with_roots(&[definition], |call| {
-        bpm_node(call, store, scene, underlay, table(call, definition)?)
+        bpm_node(call, scene, underlay, table(call, definition)?)
     })?;
     role(call, bpm, "bpm")?;
-    append(call, store, underlay, bpm)?;
+    append(call, underlay, bpm)?;
     unnamed_parts.push(bpm);
     unnamed(call, underlay, &unnamed_parts, false)?;
     Ok(underlay)
@@ -269,7 +268,6 @@ fn role(call: &mut HostCall<'_>, actor: TableId, role: &str) -> Result<(), Error
 
 fn filter(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     underlay: TableId,
     player: usize,
@@ -293,7 +291,7 @@ fn filter(
             })?,
             _ => return Err(call.error(b"invalid initial BackgroundFilter")),
         };
-        let actor = dummy(call, store, scene, "Quad", "", Some(underlay))?;
+        let actor = dummy(call, scene, "Quad", "", Some(underlay))?;
         commands(
             call,
             actor,
@@ -341,7 +339,6 @@ fn filter(
 
 fn difficulty(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     underlay: TableId,
     player: usize,
@@ -350,11 +347,11 @@ fn difficulty(
     let definition = source(call, "underlay_difficulty", &[pn])?;
     call.with_roots(&[definition, pn], |call| {
         let definition = table(call, definition)?;
-        let frame = dummy(call, store, scene, "ActorFrame", "", Some(underlay))?;
+        let frame = dummy(call, scene, "ActorFrame", "", Some(underlay))?;
         commands(call, frame, definition, &["InitCommand"], true)?;
         run(call, frame, "InitCommand")?;
-        let quad = dummy(call, store, scene, "Quad", "", None)?;
-        let text = screen_parts::text(call, store, scene, "", "")?;
+        let quad = dummy(call, scene, "Quad", "", None)?;
+        let text = screen_parts::text(call, scene, "", "")?;
         let font = call.try_intern(b"Common Bold")?;
         set(call, text, "Font", font)?;
         for (i, actor) in [quad, text].into_iter().enumerate() {
@@ -370,9 +367,9 @@ fn difficulty(
                 ],
                 true,
             )?;
-            native_children::adopt(call, store, actor, frame)?;
+            native_children::adopt(call, actor, frame)?;
             run(call, actor, "InitCommand")?;
-            append(call, store, frame, actor)?;
+            append(call, frame, actor)?;
         }
         unnamed(call, frame, &[quad, text], true)?;
         let game = global(call, "GAMESTATE")?;
@@ -420,20 +417,18 @@ fn swoosh() -> Result<String, String> {
 
 fn life(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     underlay: TableId,
     player: usize,
 ) -> Result<Option<TableId>, Error> {
     let mods = mods(call, player)?;
     call.with_roots(&[Value::Table(mods)], |call| {
-        life_inner(call, store, scene, underlay, player, mods)
+        life_inner(call, scene, underlay, player, mods)
     })
 }
 
 fn life_inner(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     underlay: TableId,
     player: usize,
@@ -468,7 +463,7 @@ fn life_inner(
     })?;
     call.with_roots(&[definition], |call| {
         let definition = table(call, definition)?;
-        let meter = dummy(call, store, scene, "ActorFrame", "", Some(underlay))?;
+        let meter = dummy(call, scene, "ActorFrame", "", Some(underlay))?;
         commands(call, meter, definition, &["InitCommand", "OnCommand"], true)?;
         run(call, meter, "InitCommand")?;
         let mut unnamed_parts = Vec::new();
@@ -478,11 +473,11 @@ fn life_inner(
             (3, "Quad", "MeterFill"),
             (4, "Sprite", "MeterSwoosh"),
         ] {
-            let actor = dummy(call, store, scene, kind, name, Some(meter))?;
+            let actor = dummy(call, scene, kind, name, Some(meter))?;
             if kind == "Sprite" {
                 let path = swoosh().map_err(|error| call.error(error.as_bytes()))?;
                 let path = call.try_intern(path.as_bytes())?;
-                sprites::set_texture(call, store, actor, path, false)?;
+                sprites::set_texture(call, actor, path, false)?;
             }
             let part = call.raw_table_get(definition, Value::Number(i as f64))?;
             commands(
@@ -499,11 +494,11 @@ fn life_inner(
             )?;
             run(call, actor, "InitCommand")?;
             run(call, actor, "OnCommand")?;
-            append(call, store, meter, actor)?;
+            append(call, meter, actor)?;
             if name.is_empty() {
                 unnamed_parts.push(actor);
             } else {
-                named(call, store, meter, name, actor)?;
+                named(call, meter, name, actor)?;
             }
         }
         unnamed(call, meter, &unnamed_parts, true)?;
@@ -520,7 +515,6 @@ fn life_inner(
 
 fn bpm_node(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     parent: TableId,
     definition: TableId,
@@ -540,16 +534,16 @@ fn bpm_node(
         } else {
             assets::text(call, text)?
         };
-        let actor = screen_parts::text(call, store, scene, &name, &text)?;
+        let actor = screen_parts::text(call, scene, &name, &text)?;
         let font = get(call, definition, b"Font")?;
         let font = assets::text(call, font)?;
         let font = call.try_intern(font.as_bytes())?;
         set(call, actor, "Font", font)?;
         actor
     } else {
-        dummy(call, store, scene, "ActorFrame", &name, None)?
+        dummy(call, scene, "ActorFrame", &name, None)?
     };
-    native_children::adopt(call, store, actor, parent)?;
+    native_children::adopt(call, actor, parent)?;
     // These unchanged definitions contain only Init commands. Their update
     // closures are installed by those commands and retain their own displays.
     commands(call, actor, definition, &["InitCommand"], false)?;
@@ -558,16 +552,16 @@ fn bpm_node(
     for index in 1..=call.raw_table_len(definition)? {
         let part = call.raw_table_get(definition, Value::Number(index as f64))?;
         let child = call.with_roots(&[part], |call| {
-            bpm_node(call, store, scene, actor, table(call, part)?)
+            bpm_node(call, scene, actor, table(call, part)?)
         })?;
-        let name = actor_name(call, store, child)?;
+        let name = actor_name(call, child)?;
         let name =
             String::from_utf8(name).map_err(|error| call.error(error.to_string().as_bytes()))?;
-        append(call, store, actor, child)?;
+        append(call, actor, child)?;
         if name.is_empty() {
             unnamed_parts.push(child);
         } else {
-            named(call, store, actor, &name, child)?;
+            named(call, actor, &name, child)?;
         }
     }
     unnamed(call, actor, &unnamed_parts, false)?;
@@ -582,12 +576,7 @@ fn bpm_node(
     Ok(actor)
 }
 
-pub(super) fn set_name(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn set_name(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = call.try_intern(name.as_bytes())?;
     let key = call.try_intern(b"__songlua_load_name")?;
     if call.raw_table_get(actor, key)? != Value::Nil {
@@ -596,13 +585,6 @@ pub(super) fn set_name(
     let key = call.try_intern(b"__songlua_native_name")?;
     call.raw_table_set(actor, key, value)?;
     set(call, actor, "Name", value)?;
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .state
-        .name = name.as_bytes().to_vec();
+    call.store().actors.get_mut(&actor).unwrap().state.name = name.as_bytes().to_vec();
     Ok(())
 }

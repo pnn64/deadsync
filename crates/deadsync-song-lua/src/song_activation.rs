@@ -41,14 +41,14 @@ impl SongRuntime {
         if !(context.live && context.defer_initial_live_update) {
             let before = self.actors.before_song_update(&mut self.vm, screen)?;
             self.set_values(crate::song_beat_at_elapsed_seconds(0., context), 0.)?;
-            self.actors.song_zero_update(true);
+            self.actors.song_zero_update(&mut self.vm, true);
             let result = (|| {
                 #[cfg(feature = "test-support")]
                 self.reference_start_clock(context)?;
                 self.advance_options(0., None)?;
                 self.actors.zero_song_update(&mut self.vm, screen)
             })();
-            self.actors.song_zero_update(false);
+            self.actors.song_zero_update(&mut self.vm, false);
             result?;
             activation.updates = self
                 .actors
@@ -62,7 +62,7 @@ impl SongRuntime {
             screen,
             activation.wrapper_initials.keys().copied().collect(),
         )?;
-        activation.broadcasts = self.actors.take_song_broadcasts();
+        activation.broadcasts = self.actors.take_song_broadcasts(&mut self.vm);
         for (actor, state) in self.actors.song_wrapper_initials(&mut self.vm, screen)? {
             activation.wrapper_initials.entry(actor).or_insert(state);
         }
@@ -73,7 +73,7 @@ impl SongRuntime {
                 activation.wrapper_initials.clone(),
             )?;
         }
-        self.actors.complete_song_activation(screen);
+        self.actors.complete_song_activation(&mut self.vm, screen);
         Ok(Some(activation))
     }
 

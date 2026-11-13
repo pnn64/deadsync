@@ -11,7 +11,6 @@ enum Operation {
 }
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     song_dir: PathBuf,
     operation: Operation,
 }
@@ -41,7 +40,6 @@ impl Actors {
                     dispatch,
                     &[globals, tonumber, Value::Table(sound)],
                     Binding {
-                        store: self.store.clone(),
                         song_dir: song_dir.to_owned(),
                         operation,
                     },
@@ -83,7 +81,7 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
             let raw = text(call, value);
             if let Ok(raw) = raw {
                 match resolve(call, &data.song_dir, &raw) {
-                    Ok(Some(path)) => record(call, &data.store, path, capture)?,
+                    Ok(Some(path)) => record(call, path, capture)?,
                     Ok(None) => {}
                     Err(error) if error.kind() == ErrorKind::Runtime => {}
                     Err(error) => return Err(error),
@@ -143,12 +141,7 @@ fn beat(call: &mut HostCall<'_>) -> Result<f32, Error> {
         Ok(result)
     })
 }
-fn record(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    path: PathBuf,
-    capture: bool,
-) -> Result<(), Error> {
+fn record(call: &mut HostCall<'_>, path: PathBuf, capture: bool) -> Result<(), Error> {
     let globals = call.captures()[0];
     if capture {
         let beat = match beat(call) {
@@ -157,7 +150,7 @@ fn record(
             Err(e) => return Err(e),
         };
         {
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             if let Some(queued_startup) = store.sound_capture {
                 let queued_startup = queued_startup || store.startup_discovery;
                 let source_message = store.active_message.clone();

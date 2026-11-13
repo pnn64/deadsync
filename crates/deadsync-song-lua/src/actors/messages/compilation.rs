@@ -95,7 +95,7 @@ impl Actors {
             vm.unpin(pin)?;
             return Err(error);
         }
-        let rows = std::mem::take(&mut self.store.lock().unwrap().deferred_messages);
+        let rows = std::mem::take(&mut vm.store().deferred_messages);
         Ok(DeferredBatch { rows, pin })
     }
 }

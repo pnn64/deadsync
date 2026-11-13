@@ -23,7 +23,6 @@ struct Output {
 }
 #[derive(Clone)]
 struct Run {
-    store: Shared,
     name: String,
     output: Arc<Mutex<Output>>,
 }
@@ -118,7 +117,6 @@ impl Actors {
         let retained = vm.try_new_table()?;
         let pin = vm.pin(Value::Table(retained))?;
         let data = Run {
-            store: self.store.clone(),
             name: name.to_owned(),
             output: Arc::new(Mutex::new(Output::default())),
         };
@@ -134,7 +132,7 @@ impl Actors {
                     let data = call.function_data::<Run>().unwrap().clone();
                     let actor = table(call, call.captures()[2])?;
                     let retained = table(call, call.captures()[3])?;
-                    let saved = state::Snapshot::capture(call, &data.store, actor, retained)?;
+                    let saved = state::Snapshot::capture(call, actor, retained)?;
                     data.output.lock().unwrap().state = Some(saved);
                     Ok(())
                 },
@@ -148,7 +146,7 @@ impl Actors {
                 |call| {
                     let data = call.function_data::<Run>().unwrap().clone();
                     let saved = data.output.lock().unwrap().state.take().unwrap();
-                    saved.restore(call, &data.store, arg(call, 0) == Value::Boolean(true))
+                    saved.restore(call, arg(call, 0) == Value::Boolean(true))
                 },
                 &captures,
                 data.clone(),
@@ -300,14 +298,12 @@ impl Actors {
         let output = Arc::new(Mutex::new(None));
         let record = vm.new_host_function_with_data(
             |call| {
-                let (store, name, failure, output) = call
-                    .function_data::<(Shared, String, Failure, Arc<Mutex<Option<String>>>)>()
+                let ( name, failure, output) = call
+                    .function_data::<( String, Failure, Arc<Mutex<Option<String>>>)>()
                     .unwrap()
                     .clone();
                 let actor = table(call, call.captures()[2])?;
-                let prior = store
-                    .lock()
-                    .unwrap()
+                let prior = call.store()
                     .deferred_messages
                     .iter()
                     .find(|m| m.actor == actor && m.command == name)
@@ -356,7 +352,7 @@ impl Actors {
                         value => table(call, value)?,
                     };
                     call.raw_table_set(roots, Value::Table(actor), Value::Boolean(true))?;
-                    store.lock().unwrap().deferred_messages.push(Deferred {
+                    call.store().deferred_messages.push(Deferred {
                         actor,
                         command: name,
                         detail: detail.clone(),
@@ -373,7 +369,6 @@ impl Actors {
                 actor,
             ],
             (
-                self.store.clone(),
                 name.to_owned(),
                 failure,
                 output.clone(),
@@ -383,21 +378,19 @@ impl Actors {
         Ok(output.lock().unwrap().take().unwrap())
     }
     #[cfg(feature = "test-support")]
-    pub(crate) fn deferred_message_states(&self) -> Vec<(TableId, String, String, bool)> {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn deferred_message_states(&self, vm: &Vm) -> Vec<(TableId, String, String, bool)> {
+        vm.store_ref()
             .deferred_messages
             .iter()
             .map(|m| (m.actor, m.command.clone(), m.detail.clone(), m.observed))
             .collect()
     }
     #[cfg(feature = "test-support")]
-    pub(crate) fn seed_message_sound_block(&self, actor: Value, played: bool) -> bool {
+    pub(crate) fn seed_message_sound_block(&self, vm: &mut Vm, actor: Value, played: bool) -> bool {
         let Value::Table(actor) = actor else {
             return false;
         };
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let Some(actor) = store.actors.get_mut(&actor) else {
             return false;
         };
@@ -416,7 +409,7 @@ impl Actors {
     }
     #[cfg(feature = "test-support")]
     pub(crate) fn clear_deferred_message_states(&self, vm: &mut Vm) -> Result<(), Error> {
-        self.store.lock().unwrap().deferred_messages.clear();
+        vm.store().deferred_messages.clear();
         let key = vm.try_intern(b"deferred_message_actors")?;
         vm.raw_table_set(self.helpers, key, Value::Nil)
     }
@@ -428,12 +421,11 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
         return Ok(());
     };
     call.with_roots(&[command], |call| {
-        function_capture::reset(call, &data.store, actor)?;
+        function_capture::reset(call, actor)?;
         let params = super::probe::defaults(call, &data.name)?;
         call.with_roots(&[params.unwrap_or(Value::Nil)], |call| {
             run_guarded_command(
                 call,
-                &data.store,
                 actor,
                 data.name.as_bytes().to_vec(),
                 command,
@@ -441,10 +433,8 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
                 true,
             )
         })?;
-        let blocks = data
-            .store
-            .lock()
-            .unwrap()
+        let blocks = call
+            .store()
             .actors
             .get_mut(&actor)
             .and_then(|a| a.capture.as_mut())

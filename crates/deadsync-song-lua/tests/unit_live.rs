@@ -9572,7 +9572,7 @@ fn scene_seed_queries(scene: &SongLuaLiveScene, objects: &[(Root, serde_json::Va
         .iter()
         .map(|(root, label)| (runtime.vm_mut().rooted(*root).unwrap(), label.clone()))
         .collect::<Vec<_>>();
-    song::test_support::seed_live_query_objects(&runtime, &values)
+    song::test_support::seed_live_query_objects(&mut runtime, &values)
 }
 fn scene_hook_query(
     scene: &SongLuaLiveScene,
@@ -11698,7 +11698,7 @@ fn scene_command_depth(scene: &SongLuaLiveScene) -> usize {
     song::test_support::live_command_depth(&scene.runtime())
 }
 fn scene_set_command_depth(scene: &SongLuaLiveScene, depth: usize) {
-    song::test_support::set_live_command_depth(&scene.runtime(), depth)
+    song::test_support::set_live_command_depth(&mut scene.runtime(), depth)
 }
 fn scene_install_command_depth(scene: &SongLuaLiveScene) -> Result<(), Error> {
     song::test_support::install_live_command_depth_probe(&mut scene.runtime())

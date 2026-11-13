@@ -132,7 +132,7 @@ impl Pair {
         self.rust.advance_actor_scene(self.scene, delta).unwrap();
         self.compare("advance");
     }
-    fn capture(&self, queued: bool) {
+    fn capture(&mut self, queued: bool) {
         self.rust.begin_actor_capture(queued);
     }
 }

@@ -3,10 +3,7 @@ use super::*;
 use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
 
 pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, target, value) = call
-        .function_data::<(Shared, Target, Update)>()
-        .unwrap()
-        .clone();
+    let (target, value) = call.function_data::<(Target, Update)>().unwrap().clone();
     let actor = table(call, call.captures()[2])?;
     if matches!(
         target,
@@ -19,7 +16,7 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
             | Target::RotationZ
             | Target::SkewX
             | Target::SkewY
-    ) && perframes::is_player(call, &store, actor)?
+    ) && perframes::is_player(call, actor)?
     {
         return Ok(());
     }
@@ -38,7 +35,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
                 .unwrap_or_else(|| format!("__songlua_state_{key}"));
             assign(
                 call,
-                &store,
                 actor,
                 &key,
                 Value::Number(f64::from(value)),
@@ -48,7 +44,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Update::Bool(value) if target == Target::Hibernating => assign(
             call,
-            &store,
             actor,
             "__songlua_state_hibernating",
             Value::Boolean(value),
@@ -58,7 +53,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
         Update::Bool(value) if target == Target::Visible => {
             assign(
                 call,
-                &store,
                 actor,
                 "__songlua_visible",
                 Value::Boolean(value),
@@ -67,7 +61,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
             )?;
             assign(
                 call,
-                &store,
                 actor,
                 "__songlua_state_visible",
                 Value::Boolean(value),
@@ -79,7 +72,7 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
             let vector = sprites::vector_value(call, &value)?;
             song_replay::raw_set(call, actor, "__songlua_state_quaternion", vector)?;
             sync(
-                &store,
+                call.store(),
                 actor,
                 Target::Quaternion,
                 &Update::Quaternion(value),
@@ -91,7 +84,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
             call.with_roots(&[vector], |call| {
                 assign(
                     call,
-                    &store,
                     actor,
                     "__songlua_state_diffuse",
                     vector,
@@ -100,7 +92,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
                 )?;
                 assign(
                     call,
-                    &store,
                     actor,
                     "__songlua_diffuse",
                     vector,
@@ -114,7 +105,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
             call.with_roots(&[vector], |call| {
                 assign(
                     call,
-                    &store,
                     actor,
                     "__songlua_state_effect_magnitude",
                     vector,
@@ -128,7 +118,6 @@ pub(super) fn write(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 fn assign(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     key: &str,
     value: Value,
@@ -140,7 +129,7 @@ fn assign(
     )
     .is_some()
         && {
-            let guard = store.lock().unwrap();
+            let guard = call.store();
             guard.playback
                 && guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
                 && guard.actors.get(&actor).is_some_and(|a| !a.raw_live_epoch)
@@ -148,14 +137,14 @@ fn assign(
     if !native_base {
         call.with_roots(&[value], |call| sprites::set(call, actor, key, value))?;
     }
-    sync(store, actor, target, update);
+    sync(call.store(), actor, target, update);
     Ok(())
 }
-fn sync(store: &Shared, id: TableId, target: Target, update: &Update) {
+fn sync(store: &mut Store, id: TableId, target: Target, update: &Update) {
     if crate::tween_pose::TARGETS.contains(&target) {
         song_pose::update_getter_state(store, id, target, update);
     }
-    let mut store = store.lock().unwrap();
+    let store = &mut *store;
     let Some(actor) = store.actors.get_mut(&id) else {
         return;
     };

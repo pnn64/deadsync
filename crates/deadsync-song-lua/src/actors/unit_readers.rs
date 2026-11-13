@@ -16,25 +16,22 @@ impl Actors {
             vm,
             actor,
             |call| {
-                let (store, name) = call
-                    .function_data::<(Shared, &'static str)>()
-                    .unwrap()
-                    .clone();
+                let name = *call.function_data::<&'static str>().unwrap();
                 let actor = table(call, call.captures()[2])?;
-                let state = initial_state::read(call, &store, actor)?;
+                let state = initial_state::read(call, actor)?;
                 {
-                    let mut store = store.lock().unwrap();
+                    let store = call.store();
                     let actor = store.actors.get_mut(&actor).unwrap();
                     actor.state.render = state;
                     actor.current = state.into();
                 }
                 if name == "GetNumStates" {
-                    sprites::method(call, &store, actor, name)
+                    sprites::method(call, actor, name)
                 } else {
-                    get_scalar(call, &store, actor, name)
+                    get_scalar(call, actor, name)
                 }
             },
-            (self.store.clone(), name),
+            name,
         )
     }
     pub(crate) fn fixture_reader<T: std::any::Any + Send + Sync>(
@@ -98,7 +95,6 @@ pub fn fixture_vertex_colors(
 
 pub type FixtureStateOutput = Arc<Mutex<Option<Result<crate::SongLuaOverlayState, String>>>>;
 struct FixtureStateRead {
-    store: Shared,
     output: FixtureStateOutput,
     live: bool,
 }
@@ -113,14 +109,13 @@ impl Actors {
         let function = vm.new_host_function_with_data(
             |call| {
                 let data = call.function_data::<FixtureStateRead>().unwrap();
-                let store = data.store.clone();
                 let output = data.output.clone();
                 let live = data.live;
                 let actor = table(call, call.captures()[2])?;
                 let result = if live {
-                    initial_state::read_live(call, &store, actor)
+                    initial_state::read_live(call, actor)
                 } else {
-                    initial_state::read(call, &store, actor)
+                    initial_state::read(call, actor)
                 };
                 let result = match result {
                     Err(error)
@@ -142,7 +137,6 @@ impl Actors {
                 actor,
             ],
             FixtureStateRead {
-                store: self.store.clone(),
                 output: output.clone(),
                 live,
             },
@@ -160,21 +154,19 @@ impl Actors {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<deadlib_lua::Root, Error> {
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let actor = table(call, call.captures()[2])?;
                 let Value::Number(delta) = call.arguments()[0] else {
                     return Err(call.error(b"number expected"));
                 };
-                effects::advance(call, &store, actor, delta as f32)
+                effects::advance(call, actor, delta as f32)
             },
             &[
                 Value::Table(self.registry),
                 Value::Table(self.helpers),
                 actor,
             ],
-            self.store.clone(),
         )?;
         vm.pin(function)
     }
@@ -197,14 +189,14 @@ impl Actors {
         let output: Arc<Mutex<Option<[Option<f32>; 6]>>> = Arc::new(Mutex::new(None));
         let function = vm.new_host_function_with_data(
             |call| {
-                let (store, output) = call
-                    .function_data::<(Shared, Arc<Mutex<Option<[Option<f32>; 6]>>>)>()
+                let output = call
+                    .function_data::<Arc<Mutex<Option<[Option<f32>; 6]>>>>()
                     .unwrap()
                     .clone();
                 let actor = table(call, call.captures()[2])?;
-                host_compat::initialize_base(call, &store, actor)?;
-                host_compat::initialize_pose(call, &store, actor)?;
-                let base = store.lock().unwrap().actors[&actor].base_transform;
+                host_compat::initialize_base(call, actor)?;
+                host_compat::initialize_pose(call, actor)?;
+                let base = call.store().actors[&actor].base_transform;
                 *output.lock().unwrap() =
                     Some(crate::base_transform::BaseField::ALL.map(|field| base.get(field)));
                 Ok(())
@@ -214,7 +206,7 @@ impl Actors {
                 Value::Table(self.helpers),
                 actor,
             ],
-            (self.store.clone(), output.clone()),
+            output.clone(),
         )?;
         vm.call(function, &[])?;
         let values = output.lock().unwrap().take().unwrap();
@@ -228,29 +220,23 @@ impl Actors {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<deadlib_lua::Root, Error> {
-        let f = vm.new_host_function_with_data(
+        let f = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let actor = table(call, call.captures()[2])?;
-                function_capture::reset(call, &store, actor)
+                function_capture::reset(call, actor)
             },
             &[
                 Value::Table(self.registry),
                 Value::Table(self.helpers),
                 actor,
             ],
-            self.store.clone(),
         )?;
         vm.pin(f)
     }
     pub(crate) fn fixture_invalidate_plans(&self, vm: &mut Vm) -> Result<(), Error> {
-        let f = vm.new_host_function_with_data(
-            |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
-                lifecycle::invalidate_plans(call, &store)
-            },
+        let f = vm.new_host_function(
+            |call| lifecycle::invalidate_plans(call),
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            self.store.clone(),
         )?;
         vm.call(f, &[]).map(|_| ())
     }
@@ -291,18 +277,16 @@ impl Actors {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<(), Error> {
-        let f = vm.new_host_function_with_data(
+        let f = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let actor = table(call, call.captures()[2])?;
-                chronological::ensure(call, &store, actor)
+                chronological::ensure(call, actor)
             },
             &[
                 Value::Table(self.registry),
                 Value::Table(self.helpers),
                 actor,
             ],
-            self.store.clone(),
         )?;
         vm.call(f, &[]).map(|_| ())
     }
@@ -311,12 +295,11 @@ impl Actors {
         vm: &mut Vm,
         actor: Value,
     ) -> Result<(), Error> {
-        let f = vm.new_host_function_with_data(
+        let f = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let actor = table(call, call.captures()[2])?;
-                chronological::ensure(call, &store, actor)?;
-                store.lock().unwrap().fixture_pose_observer =
+                chronological::ensure(call, actor)?;
+                call.store().fixture_pose_observer =
                     Some(song_messages::Capture::new([(actor, 0)]));
                 Ok(())
             },
@@ -325,21 +308,24 @@ impl Actors {
                 Value::Table(self.helpers),
                 actor,
             ],
-            self.store.clone(),
         )?;
         vm.call(f, &[]).map(|_| ())
     }
-    pub(crate) fn fixture_pose_sample(&self) -> (usize, Option<Arc<[[f32; 4]; 4]>>) {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn fixture_pose_sample(&self, vm: &Vm) -> (usize, Option<Arc<[[f32; 4]; 4]>>) {
+        vm.store_ref()
             .fixture_pose_observer
             .as_ref()
             .unwrap()
             .fixture_vertex_sample()
     }
-    pub(crate) fn fixture_pose_scope(&self, queued: usize, update: bool, message: Option<&str>) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn fixture_pose_scope(
+        &self,
+        vm: &mut Vm,
+        queued: usize,
+        update: bool,
+        message: Option<&str>,
+    ) {
+        let store = vm.store();
         store.audit_queued_depth = queued;
         store.audit_update_command = update;
         store.active_message = message.map(str::to_owned);
@@ -358,8 +344,8 @@ impl Actors {
         let Value::Table(id) = actor else {
             unreachable!()
         };
-        let saved =
-            function_capture::Saved::read(&self.store, id, raw_id).expect("owned native fixture");
+        let saved = function_capture::Saved::read(vm.store_ref(), id, raw_id)
+            .expect("owned native fixture");
         Ok(FixtureNativeSnapshot {
             saved: Some(saved),
             raw,
@@ -373,15 +359,15 @@ impl Actors {
     ) -> Result<(), Error> {
         let raw = vm.rooted(snapshot.raw)?;
         let result = self.fixture_restore_live_state(vm, snapshot.actor, raw);
-        snapshot.saved.take().unwrap().restore_mutable(&self.store);
+        snapshot.saved.take().unwrap().restore_mutable(vm.store());
         vm.unpin(snapshot.raw)?;
         result
     }
-    pub(crate) fn fixture_shadow_storage(&self, actor: Value) -> (usize, [f32; 2]) {
+    pub(crate) fn fixture_shadow_storage(&self, vm: &Vm, actor: Value) -> (usize, [f32; 2]) {
         let Value::Table(id) = actor else {
             panic!("actor table")
         };
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         let field = &store.actors[&id].state.render.shadow_len;
         (field.as_ptr() as usize, *field)
     }

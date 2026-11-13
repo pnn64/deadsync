@@ -7,8 +7,8 @@ mod initial_state;
 mod input_snapshot;
 pub use input_snapshot::{CompiledActorInputs, CompiledActorInteractions};
 pub(super) mod perframes;
-mod scalar_methods;
 mod registry;
+mod scalar_methods;
 #[cfg(feature = "test-support")]
 pub(super) fn method_flags_probe(vm: &mut Vm) -> Result<Value, Error> {
     scalar_methods::method_flags_probe(vm)
@@ -354,16 +354,61 @@ struct Store {
     #[cfg(feature = "test-support")]
     message_coverage_seen: HashSet<String>,
 }
-type Shared = Arc<Mutex<Store>>;
+/// Access to the actor store owned by the VM behind a callback context.
+///
+/// The song's VM owns the one [`Store`]. Host callbacks, native stacks and
+/// runtime entry points borrow it through whichever context they hold, so a
+/// borrow cannot outlive the next use of that context. Nothing can therefore
+/// observe the store while a nested callback is changing it.
+trait Host {
+    /// Mutably borrow the actor store.
+    fn store(&mut self) -> &mut Store;
+    /// Borrow the actor store for reading.
+    fn store_ref(&self) -> &Store;
+}
+impl Host for Vm {
+    #[inline]
+    fn store(&mut self) -> &mut Store {
+        self.host_state_mut().expect("actor store is installed")
+    }
+    #[inline]
+    fn store_ref(&self) -> &Store {
+        self.host_state().expect("actor store is installed")
+    }
+}
+impl Host for HostCall<'_> {
+    #[inline]
+    fn store(&mut self) -> &mut Store {
+        self.host_state_mut().expect("actor store is installed")
+    }
+    #[inline]
+    fn store_ref(&self) -> &Store {
+        self.host_state().expect("actor store is installed")
+    }
+}
+impl Host for deadlib_lua::NativeStack<'_, '_> {
+    #[inline]
+    fn store(&mut self) -> &mut Store {
+        self.host_state_mut().expect("actor store is installed")
+    }
+    #[inline]
+    fn store_ref(&self) -> &Store {
+        self.host_state().expect("actor store is installed")
+    }
+}
 
-#[derive(Clone)]
-pub(crate) struct ActorNames(std::sync::Weak<Mutex<Store>>);
+/// Lets other managers rename an actor owned by this runtime's store.
+#[derive(Clone, Copy)]
+pub(crate) struct ActorNames;
 
 impl ActorNames {
-    pub(crate) fn rename(&self, actor: TableId, name: &[u8]) -> Option<bool> {
-        let store = self.0.upgrade()?;
-        let mut store = store.lock().unwrap();
-        let actor = store.actors.get_mut(&actor)?;
+    pub(crate) fn rename(
+        self,
+        stack: &mut deadlib_lua::NativeStack<'_, '_>,
+        actor: TableId,
+        name: &[u8],
+    ) -> Option<bool> {
+        let actor = stack.host_state_mut::<Store>()?.actors.get_mut(&actor)?;
         actor.state.name = name.to_vec();
         Some(actor.raw_instance || actor.pending_init || actor.offline_instance)
     }
@@ -436,26 +481,9 @@ enum Op {
     Set(&'static str),
     Get(&'static str),
 }
-struct Binding {
-    store: Shared,
-    op: Op,
-    collected: retirement::Collected,
-}
-impl Binding {
-    fn new(store: &Shared, op: Op) -> Self {
-        let collected = store.lock().unwrap().collected_scenes.clone();
-        Self {
-            store: store.clone(),
-            op,
-            collected,
-        }
-    }
-}
-
 pub(super) struct Actors {
     registry: TableId,
     helpers: TableId,
-    store: Shared,
     prepare_definitions: Root,
     instantiate: Root,
     construct: Root,
@@ -483,24 +511,17 @@ impl Actors {
     #[cfg(feature = "test-support")]
     pub(super) fn method_identity(
         &self,
+        vm: &Vm,
         function: Value,
     ) -> Option<super::test_support::ActorMethodIdentity> {
         use super::test_support::ActorMethodIdentity as Identity;
         use scalar_methods::Method;
-        Some(
-            match self
-                .store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .identity(function)?
-            {
-                Method::Lookup => Identity::Lookup,
-                Method::Assign => Identity::Assign,
-                Method::Forward(setter) => Identity::Forward(setter.name()),
-                Method::Bound(setter, target) => Identity::Bound(setter.name(), target),
-            },
-        )
+        Some(match vm.store_ref().scalar_methods.identity(function)? {
+            Method::Lookup => Identity::Lookup,
+            Method::Assign => Identity::Assign,
+            Method::Forward(setter) => Identity::Forward(setter.name()),
+            Method::Bound(setter, target) => Identity::Bound(setter.name(), target),
+        })
     }
 
     pub(super) fn install(
@@ -509,7 +530,7 @@ impl Actors {
         players: usize,
         #[cfg(feature = "test-support")] observations: super::observations::Observations,
     ) -> Result<Self, Error> {
-        let store = Arc::new(Mutex::new(Store {
+        vm.set_host_state(Box::new(Store {
             clock,
             graph_size: crate::graph_display_body_size(players),
             #[cfg(feature = "test-support")]
@@ -540,7 +561,7 @@ impl Actors {
         super::put(vm, methods, "BitmapText", Value::Table(bitmap))?;
         let framebuffer = vm.try_new_table()?;
         super::put(vm, methods, "ActorFrameTexture", Value::Table(framebuffer))?;
-        scalar_methods::install_metatable(vm, methods, &store)?;
+        scalar_methods::install_metatable(vm, methods)?;
         for (name, op) in [
             ("name", Op::Name),
             ("GetName", Op::GetName),
@@ -550,7 +571,7 @@ impl Actors {
             ("playcommand", Op::PlayCommand),
             ("RunCommandsRecursively", Op::Recursive),
         ] {
-            install_method(vm, actor, name, op, &store, &captures)?;
+            install_method(vm, actor, name, op, &captures)?;
         }
         for name in [
             "x",
@@ -578,9 +599,9 @@ impl Actors {
             "draworder",
         ] {
             if let Some(setter) = scalar_methods::Setter::from_name(name) {
-                scalar_methods::install(vm, actor, setter, &store, &captures)?;
+                scalar_methods::install(vm, actor, setter, &captures)?;
             } else {
-                install_method(vm, actor, name, Op::Set(name), &store, &captures)?;
+                install_method(vm, actor, name, Op::Set(name), &captures)?;
             }
         }
         for name in [
@@ -604,9 +625,9 @@ impl Actors {
             "getaux",
             "GetVisible",
         ] {
-            install_method(vm, actor, name, Op::Get(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Get(name), &captures)?;
         }
-        install_method(vm, actor, "SetSize", Op::Set("setsize"), &store, &captures)?;
+        install_method(vm, actor, "SetSize", Op::Set("setsize"), &captures)?;
         // Keep the native class declarations even where the host has no
         // semantic implementation, as the original forwarding table did.
         for name in [
@@ -618,7 +639,7 @@ impl Actors {
             "get_tween_uses_effect_delta",
             "set_tween_uses_effect_delta",
         ] {
-            install_method(vm, actor, name, Op::Unimplemented(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Unimplemented(name), &captures)?;
         }
         for (name, op) in [
             ("GetChild", Op::GetChild),
@@ -632,7 +653,7 @@ impl Actors {
             ("propagate", Op::Propagate),
             ("propagatecommand", Op::PropagateCommand),
         ] {
-            install_method(vm, frame, name, op, &store, &captures)?;
+            install_method(vm, frame, name, op, &captures)?;
         }
         for name in [
             "SetAmbientLightColor",
@@ -640,135 +661,102 @@ impl Actors {
             "SetSpecularLightColor",
             "SetLightDirection",
         ] {
-            install_method(vm, frame, name, Op::Ignore, &store, &captures)?;
+            install_method(vm, frame, name, Op::Ignore, &captures)?;
         }
         install_method(
             vm,
             frame,
             "AddChildFromPath",
             Op::AddChildFromPath,
-            &store,
             &captures,
         )?;
         for (name, all) in [("RemoveChild", false), ("RemoveAllChildren", true)] {
-            install_method(vm, frame, name, Op::RemoveChildren(all), &store, &captures)?;
+            install_method(vm, frame, name, Op::RemoveChildren(all), &captures)?;
         }
         for &(name, operation) in lifecycle::ACTOR_METHODS {
-            install_method(vm, actor, name, Op::Lifecycle(operation), &store, &captures)?;
+            install_method(vm, actor, name, Op::Lifecycle(operation), &captures)?;
         }
         for &(name, operation) in lifecycle::FRAME_METHODS {
-            install_method(vm, frame, name, Op::Lifecycle(operation), &store, &captures)?;
+            install_method(vm, frame, name, Op::Lifecycle(operation), &captures)?;
         }
-        install_method(vm, actor, "Draw", Op::Draw("Draw"), &store, &captures)?;
+        install_method(vm, actor, "Draw", Op::Draw("Draw"), &captures)?;
         for name in ["SetDrawFunction", "GetDrawFunction"] {
-            install_method(vm, frame, name, Op::Draw(name), &store, &captures)?;
+            install_method(vm, frame, name, Op::Draw(name), &captures)?;
         }
         for &name in render::ACTOR_METHODS {
-            install_method(vm, actor, name, Op::Render(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Render(name), &captures)?;
         }
         for &name in render::FRAME_METHODS {
-            install_method(vm, frame, name, Op::Render(name), &store, &captures)?;
+            install_method(vm, frame, name, Op::Render(name), &captures)?;
         }
-        install_method(vm, frame, "SetFOV", Op::Render("fov"), &store, &captures)?;
+        install_method(vm, frame, "SetFOV", Op::Render("fov"), &captures)?;
         for &name in effects::METHODS {
-            install_method(vm, actor, name, Op::Effect(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Effect(name), &captures)?;
         }
         for name in ["AddWrapperState", "GetWrapperState", "GetNumWrapperStates"] {
-            install_method(vm, actor, name, Op::Wrapper(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Wrapper(name), &captures)?;
         }
         for name in ["play", "pause"] {
-            install_method(vm, actor, name, Op::Sound(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Sound(name), &captures)?;
         }
         for &name in sprites::ACTOR_METHODS {
-            install_method(vm, actor, name, Op::Sprite(name), &store, &captures)?;
+            install_method(vm, actor, name, Op::Sprite(name), &captures)?;
         }
         for &name in sprites::SPRITE_METHODS {
-            install_method(vm, sprite, name, Op::Sprite(name), &store, &captures)?;
+            install_method(vm, sprite, name, Op::Sprite(name), &captures)?;
         }
         for &name in banners::METHODS {
-            install_method(vm, banner, name, Op::Banner(name), &store, &captures)?;
+            install_method(vm, banner, name, Op::Banner(name), &captures)?;
         }
         for &name in banners::SPRITE_METHODS {
-            install_method(vm, sprite, name, Op::Banner(name), &store, &captures)?;
+            install_method(vm, sprite, name, Op::Banner(name), &captures)?;
         }
         for &name in meshes::METHODS {
-            install_method(vm, mesh, name, Op::Mesh(name), &store, &captures)?;
+            install_method(vm, mesh, name, Op::Mesh(name), &captures)?;
         }
         for &name in framebuffers::METHODS {
-            install_method(
-                vm,
-                framebuffer,
-                name,
-                Op::Framebuffer(name),
-                &store,
-                &captures,
-            )?;
+            install_method(vm, framebuffer, name, Op::Framebuffer(name), &captures)?;
         }
         for &name in text::METHODS {
-            install_method(vm, bitmap, name, Op::Text(name), &store, &captures)?;
+            install_method(vm, bitmap, name, Op::Text(name), &captures)?;
         }
         let displays = vm.try_new_table()?;
         super::put(vm, helpers, "text_display_methods", Value::Table(displays))?;
         for &name in text::METHODS {
-            install_method(vm, displays, name, Op::Text(name), &store, &captures)?;
+            install_method(vm, displays, name, Op::Text(name), &captures)?;
         }
         for &name in text_displays::METHODS {
-            install_method(vm, displays, name, Op::TextDisplay(name), &store, &captures)?;
+            install_method(vm, displays, name, Op::TextDisplay(name), &captures)?;
         }
         let graph_methods = vm.try_new_table()?;
         super::put(vm, helpers, "graph_methods", Value::Table(graph_methods))?;
         for name in ["Load", "Set"] {
-            install_method(vm, graph_methods, name, Op::Graph(name), &store, &captures)?;
+            install_method(vm, graph_methods, name, Op::Graph(name), &captures)?;
         }
         let meter_methods = vm.try_new_table()?;
         super::put(vm, helpers, "meter_methods", Value::Table(meter_methods))?;
         for name in ["Load", "SetStreamWidth", "GetStreamWidth"] {
-            install_method(
-                vm,
-                meter_methods,
-                name,
-                Op::SongMeter(name),
-                &store,
-                &captures,
-            )?;
+            install_method(vm, meter_methods, name, Op::SongMeter(name), &captures)?;
         }
         let course_methods = vm.try_new_table()?;
         super::put(vm, helpers, "course_methods", Value::Table(course_methods))?;
         for &name in courses::METHODS {
-            install_method(
-                vm,
-                course_methods,
-                name,
-                Op::Course(name),
-                &store,
-                &captures,
-            )?;
+            install_method(vm, course_methods, name, Op::Course(name), &captures)?;
         }
         let model_methods = vm.try_new_table()?;
         super::put(vm, helpers, "model_methods", Value::Table(model_methods))?;
         for &name in sprites::SPRITE_METHODS {
-            install_method(vm, model_methods, name, Op::Sprite(name), &store, &captures)?;
+            install_method(vm, model_methods, name, Op::Sprite(name), &captures)?;
         }
         for (name, op) in [
             ("GetChild", Op::GetChild),
             ("GetChildren", Op::GetChildren),
             ("GetNumChildren", Op::GetNumChildren),
         ] {
-            install_method(vm, model_methods, name, op, &store, &captures)?;
+            install_method(vm, model_methods, name, op, &captures)?;
         }
-        install_method(
-            vm,
-            methods,
-            "CloneTemplate",
-            Op::CloneTemplate,
-            &store,
-            &captures,
-        )?;
-        let load_font = vm.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding::new(&store, Op::LoadFont),
-        )?;
+        install_method(vm, methods, "CloneTemplate", Op::CloneTemplate, &captures)?;
+        let load_font = vm.new_host_function_with_data(callback, &captures, Op::LoadFont)?;
         vm.set_global(b"LoadFont", load_font)?;
         let color = vm.new_host_function(text::global_color, &captures)?;
         vm.set_global(b"color", color)?;
@@ -809,24 +797,14 @@ impl Actors {
         state_snapshot::install(vm, helpers)?;
         function_action::install(vm, helpers)?;
         song_columns::install(vm, helpers)?;
-        let broadcast = messages::install(vm, &store, &captures)?;
-        let instantiate = vm.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding::new(&store, Op::Instantiate),
-        )?;
+        let broadcast = messages::install(vm, &captures)?;
+        let instantiate = vm.new_host_function_with_data(callback, &captures, Op::Instantiate)?;
         let instantiate = vm.pin(instantiate)?;
-        let template = vm.new_host_function_with_data(
-            callback,
-            &captures,
-            Binding::new(&store, Op::Template),
-        )?;
+        let template = vm.new_host_function_with_data(callback, &captures, Op::Template)?;
         let template = vm.pin(template)?;
-        let release =
-            vm.new_host_function_with_data(callback, &captures, Binding::new(&store, Op::Release))?;
+        let release = vm.new_host_function_with_data(callback, &captures, Op::Release)?;
         let release = vm.pin(release)?;
-        let retire =
-            vm.new_host_function_with_data(callback, &captures, Binding::new(&store, Op::Retire))?;
+        let retire = vm.new_host_function_with_data(callback, &captures, Op::Retire)?;
         let retire = vm.pin(retire)?;
         let mut phases = Vec::new();
         for op in [
@@ -848,8 +826,7 @@ impl Actors {
             Op::Append,
             Op::PrepareDefinitions,
         ] {
-            let function =
-                vm.new_host_function_with_data(callback, &captures, Binding::new(&store, op))?;
+            let function = vm.new_host_function_with_data(callback, &captures, op)?;
             phases.push(vm.pin(function)?);
         }
         vm.unpin(methods_root)?;
@@ -858,7 +835,6 @@ impl Actors {
         let actors = Self {
             registry,
             helpers,
-            store,
             instantiate,
             template,
             release,
@@ -887,26 +863,22 @@ impl Actors {
         // separately, while the template itself remains a message subscriber.
         let declaration = vm.get_global(b"NullActor")?;
         let null = actors.instantiate(vm, declaration)?;
-        vm.set_global(b"NullActor", actors.root(null).expect("owned null actor"))?;
+        vm.set_global(
+            b"NullActor",
+            actors.root(vm, null).expect("owned null actor"),
+        )?;
         Ok(actors)
     }
     /// Match the native registry replacement at a screen reconstruction boundary.
     /// Existing scene owners remain valid until the session releases them.
     pub(crate) fn clear_message_subscriptions(&self, vm: &mut Vm) -> Result<(), Error> {
-        retirement::sweep(&self.store);
+        retirement::sweep(vm.store());
         // A wrapper created through a retained old actor joins the current
         // native registry. Keep that root until this replacement boundary.
-        let late: Vec<_> = self
-            .store
-            .lock()
-            .unwrap()
-            .retired_subscriptions
-            .iter()
-            .copied()
-            .collect();
+        let late: Vec<_> = vm.store().retired_subscriptions.iter().copied().collect();
         for actor in late {
             let active_owner = {
-                let guard = self.store.lock().unwrap();
+                let guard = vm.store();
                 guard.scenes.iter().any(|(id, scene)| {
                     !guard.retired_scenes.contains_key(id) && scene.actors.contains(&actor)
                 })
@@ -914,13 +886,9 @@ impl Actors {
             if !active_owner {
                 vm.raw_table_set(self.registry, Value::Table(actor), Value::Nil)?;
             }
-            self.store
-                .lock()
-                .unwrap()
-                .retired_subscriptions
-                .remove(&actor);
+            vm.store().retired_subscriptions.remove(&actor);
         }
-        self.store.lock().unwrap().actor_order.clear();
+        vm.store().actor_order.clear();
         Ok(())
     }
 
@@ -931,7 +899,7 @@ impl Actors {
         song_dir: &std::path::Path,
     ) -> Result<(), Error> {
         super::put(vm, self.helpers, "source_loader", function)?;
-        self.store.lock().unwrap().song_dir = song_dir.to_owned();
+        vm.store().song_dir = song_dir.to_owned();
         Ok(())
     }
     pub(super) fn instantiate(&self, vm: &mut Vm, declaration: Value) -> Result<ActorScene, Error> {
@@ -955,12 +923,11 @@ impl Actors {
             id: id as u64,
         })
     }
-    pub(super) fn root(&self, scene: ActorScene) -> Option<Value> {
+    pub(super) fn root(&self, vm: &Vm, scene: ActorScene) -> Option<Value> {
         if scene.owner != self.instantiate {
             return None;
         }
-        retirement::sweep(&self.store);
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         if store.retired_scenes.contains_key(&scene.id) {
             return None;
         }
@@ -977,7 +944,7 @@ impl Actors {
         let released =
             vm.call(function, &[Value::Number(scene.id as f64)])?[0] == Value::Boolean(true);
         if released {
-            self.clear_replay_clock(scene);
+            self.clear_replay_clock(vm, scene);
         }
         Ok(released)
     }
@@ -989,13 +956,13 @@ impl Actors {
         let retired =
             vm.call(function, &[Value::Number(scene.id as f64)])?[0] == Value::Boolean(true);
         if retired {
-            self.clear_replay_clock(scene);
+            self.clear_replay_clock(vm, scene);
         }
         Ok(retired)
     }
 
-    fn clear_replay_clock(&self, scene: ActorScene) {
-        let mut store = self.store.lock().unwrap();
+    fn clear_replay_clock(&self, vm: &mut Vm, scene: ActorScene) {
+        let store = vm.store();
         if store
             .replay_frame
             .is_some_and(|(owner, _)| owner == scene.id)
@@ -1047,7 +1014,7 @@ impl Actors {
         sources: &[(Value, crate::SongLuaDrawSource)],
     ) -> Result<Vec<(usize, crate::SongLuaDrawFrame)>, String> {
         let bindings = self.draw_sources(vm, sources)?;
-        let Some(capture) = self.store.lock().unwrap().draw_capture.take() else {
+        let Some(capture) = vm.store().draw_capture.take() else {
             return Ok(Vec::new());
         };
         crate::draw_commands::convert(capture.frames, &capture.labels, &bindings)
@@ -1057,20 +1024,13 @@ impl Actors {
         vm: &mut Vm,
         sources: &[(Value, crate::SongLuaDrawSource)],
     ) -> Result<Vec<crate::SongLuaDrawFrame>, String> {
-        if self
-            .store
-            .lock()
-            .unwrap()
-            .draw_capture
-            .as_ref()
-            .is_none_or(|capture| {
-                !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()
-            })
-        {
+        if vm.store().draw_capture.as_ref().is_none_or(|capture| {
+            !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()
+        }) {
             return Ok(Vec::new());
         }
         let bindings = self.draw_sources(vm, sources)?;
-        let mut capture = self.store.lock().unwrap().draw_capture.take().unwrap();
+        let mut capture = vm.store().draw_capture.take().unwrap();
         let immediate = capture
             .frames
             .extract_if(.., |frame| frame.immediate)
@@ -1081,7 +1041,7 @@ impl Actors {
             capture.frame_ops = 0;
             capture.labels.clear();
         }
-        self.store.lock().unwrap().draw_capture = Some(capture);
+        vm.store().draw_capture = Some(capture);
         result.map(|frames| frames.into_iter().map(|(_, frame)| frame).collect())
     }
     fn draw_sources(
@@ -1094,7 +1054,7 @@ impl Actors {
             let Value::Table(actor) = value else {
                 return Err("draw source must be an owned actor".into());
             };
-            if !self.store.lock().unwrap().actors.contains_key(&actor) {
+            if !vm.store().actors.contains_key(&actor) {
                 return Err("draw source is foreign or released".into());
             }
             let pointer = vm
@@ -1121,12 +1081,11 @@ impl Actors {
         )?[0]
             == Value::Boolean(true))
     }
-    pub(super) fn snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
+    pub(super) fn snapshot(&self, vm: &Vm, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
         if scene.owner != self.instantiate {
             return None;
         }
-        retirement::sweep(&self.store);
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         if store.retired_scenes.contains_key(&scene.id) {
             return None;
         }
@@ -1170,14 +1129,14 @@ impl Actors {
     }
     pub(super) fn mesh(&self, vm: &mut Vm, actor: Value) -> Result<Option<ActorMesh>, Error> {
         let function = vm.rooted(self.read_mesh)?;
-        self.store.lock().unwrap().mesh_output = None;
-        let result = vm.call(function, &[actor]);
-        let mesh = self.store.lock().unwrap().mesh_output.take();
+        vm.store().mesh_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let mesh = vm.store().mesh_output.take();
         result?;
         Ok(mesh)
     }
-    pub(super) fn take_diagnostics(&self) -> Vec<String> {
-        std::mem::take(&mut self.store.lock().unwrap().diagnostics)
+    pub(super) fn take_diagnostics(&self, vm: &mut Vm) -> Vec<String> {
+        std::mem::take(&mut vm.store().diagnostics)
     }
 
     pub(super) fn proxy(
@@ -1186,29 +1145,29 @@ impl Actors {
         actor: Value,
     ) -> Result<Option<crate::SongLuaProxyTarget>, Error> {
         let function = vm.rooted(self.read_proxy)?;
-        self.store.lock().unwrap().proxy_output = None;
-        let result = vm.call(function, &[actor]);
-        let target = self.store.lock().unwrap().proxy_output.take();
+        vm.store().proxy_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let target = vm.store().proxy_output.take();
         result?;
         Ok(target)
     }
 
-    pub(super) fn take_sounds(&self) -> Vec<crate::SongLuaActorSound> {
-        std::mem::take(&mut self.store.lock().unwrap().sounds)
+    pub(super) fn take_sounds(&self, vm: &mut Vm) -> Vec<crate::SongLuaActorSound> {
+        std::mem::take(&mut vm.store().sounds)
     }
     pub(super) fn bitmap_text(&self, vm: &mut Vm, actor: Value) -> Result<BitmapText, Error> {
         let function = vm.rooted(self.read_text)?;
-        self.store.lock().unwrap().text_output = None;
-        let result = vm.call(function, &[actor]);
-        let output = self.store.lock().unwrap().text_output.take();
+        vm.store().text_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let output = vm.store().text_output.take();
         result?;
         Ok(output.expect("successful text read"))
     }
     pub(super) fn graph(&self, vm: &mut Vm, actor: Value) -> Result<GraphDisplay, Error> {
         let function = vm.rooted(self.read_graph)?;
-        self.store.lock().unwrap().graph_output = None;
-        let result = vm.call(function, &[actor]);
-        let output = self.store.lock().unwrap().graph_output.take();
+        vm.store().graph_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let output = vm.store().graph_output.take();
         result?;
         Ok(output.expect("successful graph read"))
     }
@@ -1218,42 +1177,48 @@ impl Actors {
         actor: Value,
     ) -> Result<Option<SongMeterDisplay>, Error> {
         let function = vm.rooted(self.read_meter)?;
-        self.store.lock().unwrap().meter_output = None;
-        let result = vm.call(function, &[actor]);
-        let output = self.store.lock().unwrap().meter_output.take();
+        vm.store().meter_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let output = vm.store().meter_output.take();
         result?;
         Ok(output)
     }
     pub(super) fn framebuffer(&self, vm: &mut Vm, actor: Value) -> Result<FrameTexture, Error> {
         let function = vm.rooted(self.read_framebuffer)?;
-        self.store.lock().unwrap().framebuffer_output = None;
-        let result = vm.call(function, &[actor]);
-        let output = self.store.lock().unwrap().framebuffer_output.take();
+        vm.store().framebuffer_output = None;
+        let result = vm.call(function, &[actor]).map(|_| ());
+        let output = vm.store().framebuffer_output.take();
         result?;
         Ok(output.expect("successful framebuffer read"))
     }
-    pub(super) fn begin_sound_capture(&self, queued_startup: bool) {
-        let mut store = self.store.lock().unwrap();
+    pub(super) fn begin_sound_capture(&self, vm: &mut Vm, queued_startup: bool) {
+        let store = vm.store();
         store.prepared_sounds.clear();
         store.sprite_textures.clear();
         store.judgment_textures.clear();
         store.sound_capture = Some(queued_startup);
     }
-    pub(super) fn take_prepared_sounds(&self) -> Vec<crate::SongLuaSoundEvent> {
-        std::mem::take(&mut self.store.lock().unwrap().prepared_sounds)
+    pub(super) fn take_prepared_sounds(&self, vm: &mut Vm) -> Vec<crate::SongLuaSoundEvent> {
+        std::mem::take(&mut vm.store().prepared_sounds)
     }
-    pub(super) fn end_sound_capture(&self) {
-        self.store.lock().unwrap().sound_capture = None;
+    pub(super) fn end_sound_capture(&self, vm: &mut Vm) {
+        vm.store().sound_capture = None;
     }
-    pub(super) fn take_sprite_textures(&self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
-        std::mem::take(&mut self.store.lock().unwrap().sprite_textures)
+    pub(super) fn take_sprite_textures(
+        &self,
+        vm: &mut Vm,
+    ) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
+        std::mem::take(&mut vm.store().sprite_textures)
     }
-    pub(super) fn take_judgment_textures(&self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
-        std::mem::take(&mut self.store.lock().unwrap().judgment_textures)
+    pub(super) fn take_judgment_textures(
+        &self,
+        vm: &mut Vm,
+    ) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
+        std::mem::take(&mut vm.store().judgment_textures)
     }
 
-    pub(super) fn begin_playback(&self) {
-        let mut store = self.store.lock().unwrap();
+    pub(super) fn begin_playback(&self, vm: &mut Vm) {
+        let store = vm.store();
         store.preparing = false;
         store.constructing_capture = false;
         store.startup_queues = None;
@@ -1283,12 +1248,12 @@ impl Actors {
 
     pub(super) fn render_states(
         &self,
+        vm: &Vm,
         scene: ActorScene,
         frame_clock: [f32; 2],
     ) -> Option<Vec<crate::SongLuaOverlayState>> {
-        let snapshots = self.snapshot(scene)?;
-        retirement::sweep(&self.store);
-        let store = self.store.lock().unwrap();
+        let snapshots = self.snapshot(vm, scene)?;
+        let store = vm.store_ref();
         if store.retired_scenes.contains_key(&scene.id) {
             return None;
         }
@@ -1335,9 +1300,9 @@ impl Actors {
     }
 
     #[cfg(feature = "test-support")]
-    pub(super) fn ownership_counts(&self) -> [usize; 3] {
-        retirement::sweep(&self.store);
-        let guard = self.store.lock().unwrap();
+    pub(super) fn ownership_counts(&self, vm: &mut Vm) -> [usize; 3] {
+        retirement::sweep(vm.store());
+        let guard = vm.store();
         [
             guard.actors.len(),
             guard.scenes.len(),
@@ -1346,11 +1311,16 @@ impl Actors {
     }
 
     #[cfg(feature = "test-support")]
-    pub(super) fn set_message_ranks(&self, scene: ActorScene, ranks: &[usize]) -> bool {
+    pub(super) fn set_message_ranks(
+        &self,
+        vm: &mut Vm,
+        scene: ActorScene,
+        ranks: &[usize],
+    ) -> bool {
         if scene.owner != self.instantiate {
             return false;
         }
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let Some(scene) = store.scenes.get(&scene.id) else {
             return false;
         };
@@ -1368,11 +1338,11 @@ impl Actors {
     }
 
     #[cfg(feature = "test-support")]
-    pub(super) fn set_message_identity(&self, actor: Value, rank: usize) -> bool {
+    pub(super) fn set_message_identity(&self, vm: &mut Vm, actor: Value, rank: usize) -> bool {
         let Value::Table(actor) = actor else {
             return false;
         };
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         if rank == 0 || !store.actors.contains_key(&actor) {
             return false;
         }
@@ -1385,10 +1355,9 @@ fn install_method(
     table: TableId,
     name: &str,
     op: Op,
-    store: &Shared,
     captures: &[Value],
 ) -> Result<(), Error> {
-    let function = vm.new_host_function_with_data(callback, captures, Binding::new(store, op))?;
+    let function = vm.new_host_function_with_data(callback, captures, op)?;
     super::put(vm, table, name, function)
 }
 fn table(call: &HostCall<'_>, value: Value) -> Result<TableId, Error> {
@@ -1417,22 +1386,18 @@ fn helper(call: &HostCall<'_>, index: usize) -> Result<Value, Error> {
     };
     call.raw_table_get(helpers, Value::Number(index as f64))
 }
-fn declared_children(store: &Shared, actor: TableId) -> Vec<TableId> {
-    store.lock().unwrap().actors[&actor].children.clone()
+fn declared_children(store: &mut Store, actor: TableId) -> Vec<TableId> {
+    store.actors[&actor].children.clone()
 }
-fn children(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Vec<TableId>, Error> {
-    if has_native_children(store, actor) {
-        native_children::children(call, store, actor)
+fn children(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<TableId>, Error> {
+    if has_native_children(call.store(), actor) {
+        native_children::children(call, actor)
     } else {
-        Ok(declared_children(store, actor))
+        Ok(declared_children(call.store(), actor))
     }
 }
-fn has_native_children(store: &Shared, actor: TableId) -> bool {
-    let store = store.lock().unwrap();
+fn has_native_children(store: &mut Store, actor: TableId) -> bool {
+    let store = &mut *store;
     let actor = &store.actors[&actor];
     actor.native_children
         || matches!(
@@ -1446,9 +1411,9 @@ fn has_native_children(store: &Shared, actor: TableId) -> bool {
                 | "NoteField"
         )
 }
-fn is_frame(store: &Shared, actor: TableId) -> bool {
+fn is_frame(store: &mut Store, actor: TableId) -> bool {
     matches!(
-        store.lock().unwrap().actors[&actor].state.class,
+        store.actors[&actor].state.class,
         "ActorFrame"
             | "PlayerActor"
             | "HoldJudgment"
@@ -1463,9 +1428,9 @@ fn is_frame(store: &Shared, actor: TableId) -> bool {
             | "CourseContentsList"
     )
 }
-fn sort(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    for child in declared_children(store, actor) {
-        if store.lock().unwrap().actors[&child].raw_instance {
+fn sort(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    for child in declared_children(call.store(), actor) {
+        if call.store().actors[&child].raw_instance {
             let value = get(call, child, b"__songlua_state_draw_order")?;
             let n = sprites::number(call, value).unwrap_or(0.);
             let order = if n > -2147483649. && n < 2147483648. {
@@ -1473,9 +1438,7 @@ fn sort(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), E
             } else {
                 0
             };
-            store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get_mut(&child)
                 .unwrap()
@@ -1484,7 +1447,7 @@ fn sort(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), E
         }
     }
     let list = {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let mut list = store.actors[&actor].children.clone();
         list.sort_by_key(|id| store.actors[id].state.draw_order);
         store.actors.get_mut(&actor).unwrap().children = list.clone();
@@ -1536,12 +1499,11 @@ fn run(
 }
 fn run_actor_function(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     function: Value,
     params: Option<Value>,
 ) -> Result<(), Error> {
-    command_locals::capture(call, store, function)?;
+    command_locals::capture(call, function)?;
     run_scoped(call, actor, function, params)
 }
 fn theme_callback(call: &mut HostCall<'_>, function: Value) -> Result<bool, Error> {
@@ -1552,7 +1514,6 @@ fn theme_callback(call: &mut HostCall<'_>, function: Value) -> Result<bool, Erro
 }
 fn command_observed(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     field: &[u8],
     function: Value,
@@ -1564,30 +1525,29 @@ fn command_observed(
             get(call, commands, field)?
         }
     };
-    Ok(store.lock().unwrap().trace_dynamic_commands || dynamic != function)
+    Ok(call.store().trace_dynamic_commands || dynamic != function)
 }
 fn run_callback(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     function: Value,
     params: Option<Value>,
     observed: bool,
     command: Option<&[u8]>,
 ) -> Result<(), Error> {
-    let capture_sources = store.lock().unwrap().live_sources.is_some();
+    let capture_sources = call.store().live_sources.is_some();
     let song_callback = observed && capture_sources && !theme_callback(call, function)?;
     if song_callback {
-        store.lock().unwrap().song_callback_depth += 1;
+        call.store().song_callback_depth += 1;
         if let Some(name) = command {
-            live_trace::command(call, store, function, name, true);
+            live_trace::command(call, function, name, true);
         }
     }
-    let result = run_actor_function(call, store, actor, function, params);
+    let result = run_actor_function(call, actor, function, params);
     if song_callback {
-        store.lock().unwrap().song_callback_depth -= 1;
+        call.store().song_callback_depth -= 1;
         if let Some(name) = command {
-            live_trace::command(call, store, function, name, false);
+            live_trace::command(call, function, name, false);
         }
     }
     result
@@ -1632,16 +1592,14 @@ fn run_scoped(
 }
 fn run_named(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
 ) -> Result<(), Error> {
-    run_named_with_drain(call, store, actor, name, params, true)
+    run_named_with_drain(call, actor, name, params, true)
 }
 fn run_named_with_drain(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
@@ -1650,20 +1608,18 @@ fn run_named_with_drain(
     let Some((function, field)) = command(call, actor, name)? else {
         return Ok(());
     };
-    run_guarded_command(call, store, actor, field, function, params, drain)
+    run_guarded_command(call, actor, field, function, params, drain)
 }
 fn run_guarded_command(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     field: Vec<u8>,
     function: Value,
     params: Option<Value>,
     drain: bool,
 ) -> Result<(), Error> {
-    let inserted = store
-        .lock()
-        .unwrap()
+    let inserted = call
+        .store()
         .actors
         .get_mut(&actor)
         .unwrap()
@@ -1672,87 +1628,83 @@ fn run_guarded_command(
     if !inserted {
         return Ok(());
     }
-    let previous_capture_start = capture::command_start(store, actor);
+    let previous_capture_start = capture::command_start(call.store(), actor);
     #[cfg(feature = "test-support")]
-    let observed_command = song_messages::update_command(store, &field);
+    let observed_command = song_messages::update_command(call.store(), &field);
     // Keep the selected function alive if a callback replaces its own field or
-    // forces GC. Never retain the store lock while entering authored Lua.
+    // forces GC. Never hold a store borrow while entering authored Lua.
     let result = call.with_roots(&[function, params.unwrap_or(Value::Nil)], |call| {
         let theme = theme_callback(call, function)?;
-        let observed = command_observed(call, store, actor, &field, function)?;
-        match run_callback(call, store, actor, function, params, observed, Some(&field)) {
+        let observed = command_observed(call, actor, &field, function)?;
+        match run_callback(call, actor, function, params, observed, Some(&field)) {
             Err(error) if theme && error.kind() == ErrorKind::Runtime => {
-                store.lock().unwrap().diagnostics.push(error.to_string());
+                call.store().diagnostics.push(error.to_string());
                 Ok(())
             }
             result => result,
         }
     });
     #[cfg(feature = "test-support")]
-    song_messages::restore_command(store, observed_command);
+    song_messages::restore_command(call.store(), observed_command);
     let result = result.and_then(|()| {
         if drain && previous_capture_start.is_some() {
-            capture::drain_commands(call, store, actor)?;
+            capture::drain_commands(call, actor)?;
         }
         Ok(())
     });
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&actor)
         .unwrap()
         .active_commands
         .remove(&field);
-    capture::command_end(store, actor, previous_capture_start);
+    capture::command_end(call.store(), actor, previous_capture_start);
     result
 }
 fn play(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
     recurse: bool,
 ) -> Result<(), Error> {
-    run_named(call, store, actor, name, params)?;
+    run_named(call, actor, name, params)?;
     if recurse {
-        for child in children(call, store, actor)? {
-            play(call, store, child, name, params, true)?;
+        for child in children(call, actor)? {
+            play(call, child, name, params, true)?;
         }
     }
     Ok(())
 }
 fn leaves(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     action: &mut impl FnMut(&mut HostCall<'_>, TableId) -> Result<(), Error>,
 ) -> Result<(), Error> {
-    let children = children(call, store, actor)?;
+    let children = children(call, actor)?;
     if children.is_empty() {
         action(call, actor)?;
     } else {
         for child in children {
-            leaves(call, store, child, action)?;
+            leaves(call, child, action)?;
         }
     }
     Ok(())
 }
-fn release(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result<bool, Error> {
-    if store.lock().unwrap().retired_scenes.contains_key(&id) {
+fn release(call: &mut HostCall<'_>, id: u64) -> Result<bool, Error> {
+    if call.store().retired_scenes.contains_key(&id) {
         return Ok(false);
     }
-    store.lock().unwrap().constructor_scenes.remove(&id);
-    let scene = store.lock().unwrap().scenes.remove(&id);
+    call.store().constructor_scenes.remove(&id);
+    let scene = call.store().scenes.remove(&id);
     let Some(scene) = scene else { return Ok(false) };
-    lifecycle::invalidate_plans(call, store)?;
+    lifecycle::invalidate_plans(call)?;
     // Course displays can be shared tables. A scene retires only its last
     // ownership of those actors, including their callbacks and registry roots.
     let mut retired = HashSet::new();
     let mut transferred = Vec::new();
     {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         for &actor in &scene.actors {
             let other = guard
                 .scenes
@@ -1774,34 +1726,28 @@ fn release(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result<bool, Err
             }
         }
     }
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actor_order
         .retain(|actor| !retired.contains(actor));
-    if let Some(queued) = &mut store.lock().unwrap().startup_queues {
+    if let Some(queued) = &mut call.store().startup_queues {
         queued.retain(|actor| !retired.contains(actor));
     }
     let registry = table(call, call.captures()[0])?;
     for (actor, other) in transferred {
-        retirement::retain(call, store, other, actor, registry)?;
+        retirement::retain(call, other, actor, registry)?;
         call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
-        store.lock().unwrap().retired_subscriptions.remove(&actor);
-        store
-            .lock()
-            .unwrap()
-            .actor_order
-            .retain(|value| *value != actor);
+        call.store().retired_subscriptions.remove(&actor);
+        call.store().actor_order.retain(|value| *value != actor);
     }
     for actor in scene.actors {
         if !retired.contains(&actor) {
             continue;
         }
         if !scene.sounds_retired {
-            sound::retire(call, store, actor);
+            sound::retire(call, actor);
         }
         call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         store.actors.remove(&actor);
         store.retired_subscriptions.remove(&actor);
         #[cfg(feature = "test-support")]
@@ -1811,7 +1757,6 @@ fn release(call: &mut HostCall<'_>, store: &Shared, id: u64) -> Result<bool, Err
 }
 fn build(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     node: TableId,
     parent: Option<TableId>,
@@ -1823,12 +1768,7 @@ fn build(
         return Ok(None);
     }
     let template = match call.raw_table_get(node, Value::Number(3.0))? {
-        Value::Table(source) => store
-            .lock()
-            .unwrap()
-            .actors
-            .get(&source)
-            .map(TemplateState::from),
+        Value::Table(source) => call.store().actors.get(&source).map(TemplateState::from),
         _ => None,
     };
     let class = if let Some(template) = &template {
@@ -1927,9 +1867,9 @@ fn build(
         Some(bytes(call, name)?)
     };
     let registry = table(call, call.captures()[0])?;
-    retirement::retain(call, store, scene, actor, registry)?;
+    retirement::retain(call, scene, actor, registry)?;
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         store.scenes.get_mut(&scene).unwrap().actors.push(actor);
         let deferred = store.defer_registration && !internal && !dummy;
         let mut instance = Actor::new(
@@ -1976,7 +1916,6 @@ fn build(
     }
     initialize_resources(
         call,
-        store,
         scene,
         actor,
         class,
@@ -2025,16 +1964,14 @@ fn build(
                 continue;
             }
             let child = table(call, call.raw_table_get(entry, Value::Number(2.))?)?;
-            if let Some(child) = build(call, store, scene, child, Some(actor), true, false)? {
-                store
-                    .lock()
-                    .unwrap()
+            if let Some(child) = build(call, scene, child, Some(actor), true, false)? {
+                call.store()
                     .actors
                     .get_mut(&actor)
                     .unwrap()
                     .children
                     .push(child);
-                let index = store.lock().unwrap().actors[&actor].children.len();
+                let index = call.store().actors[&actor].children.len();
                 call.raw_table_set(actor, Value::Number(index as f64), Value::Table(child))?;
             }
         }
@@ -2052,7 +1989,6 @@ enum ResourceMode {
 
 fn initialize_resources(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     actor: TableId,
     class: &'static str,
@@ -2061,18 +1997,18 @@ fn initialize_resources(
     let template = mode != ResourceMode::Constructor;
     let bind_only = matches!(mode, ResourceMode::OfflineClone | ResourceMode::Dummy);
     if mode == ResourceMode::Constructor {
-        host_compat::initialize_base(call, store, actor)?;
+        host_compat::initialize_base(call, actor)?;
     }
     if class == "Sound" {
-        sound::install(call, store, actor)?;
+        sound::install(call, actor)?;
     }
     proxies::install(call, actor, class == "ActorProxy")?;
-    textures::install_getter(call, store, actor)?;
+    textures::install_getter(call, actor)?;
     if !template {
-        render::initialize(call, store, actor)?;
+        render::initialize(call, actor)?;
     }
     if class == "Model" {
-        models::initialize(call, store, actor, template)?;
+        models::initialize(call, actor, template)?;
     }
     if text_displays::is_display(class) {
         text_displays::install(call, actor)?;
@@ -2088,37 +2024,37 @@ fn initialize_resources(
         graphs::install(call, actor)?;
     }
     if class == "GraphDisplay" && !bind_only {
-        graphs::initialize(call, store, scene, actor)?;
+        graphs::initialize(call, scene, actor)?;
     }
     if class == "CourseContentsList" {
         courses::install(call, actor)?;
         if !bind_only {
-            courses::initialize(call, store, scene, actor)?;
+            courses::initialize(call, scene, actor)?;
         }
     }
     if class == "SongMeterDisplay" {
         song_meters::install(call, actor)?;
         if !bind_only {
-            song_meters::initialize(call, store, scene, actor)?;
+            song_meters::initialize(call, scene, actor)?;
         }
     }
     if class == "ActorFrameTexture" && !bind_only {
         framebuffers::initialize(call, actor)?;
     }
     if matches!(class, "Sprite" | "Banner") && !bind_only {
-        sprites::initialize(call, store, actor, template)?;
+        sprites::initialize(call, actor, template)?;
     }
     if mode == ResourceMode::Constructor {
-        host_compat::initialize_pose(call, store, actor)?;
+        host_compat::initialize_pose(call, actor)?;
     }
     Ok(())
 }
 
-fn new_scene(call: &HostCall<'_>, store: &Shared) -> Result<u64, Error> {
-    let mut guard = store.lock().unwrap();
-    if guard.next >= (1u64 << 53) - 1 {
+fn new_scene(call: &mut HostCall<'_>) -> Result<u64, Error> {
+    if call.store_ref().next >= (1u64 << 53) - 1 {
         return Err(call.error(b"actor scene identity exhausted"));
     }
+    let guard = call.store();
     guard.next += 1;
     let id = guard.next;
     guard.scenes.insert(
@@ -2147,12 +2083,11 @@ enum Materialization {
 // compiler can retain the constructed graph across initial-state capture/Init.
 fn materialize(
     call: &mut HostCall<'_>,
-    store: &Shared,
     declaration: TableId,
     mode: Materialization,
 ) -> Result<u64, Error> {
     let offline = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         matches!(
             mode,
             Materialization::Construct | Materialization::Initialize
@@ -2160,38 +2095,33 @@ fn materialize(
             && guard.actors.contains_key(&declaration)
     };
     if offline {
-        return offline::own_root(
-            call,
-            store,
-            declaration,
-            mode == Materialization::Initialize,
-        );
+        return offline::own_root(call, declaration, mode == Materialization::Initialize);
     }
     let node = call.call(helper(call, 2)?, &[Value::Table(declaration)])?[0];
     call.with_roots(&[node], |call| {
-        let id = new_scene(call, store)?;
+        let id = new_scene(call)?;
         let previous = {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             std::mem::replace(
                 &mut guard.defer_registration,
                 mode != Materialization::Template,
             )
         };
         // MakeActor ignores Condition on the root. Only the child loader tests it.
-        let result = build(call, store, id, table(call, node)?, None, false, false);
-        store.lock().unwrap().defer_registration = previous;
+        let result = build(call, id, table(call, node)?, None, false, false);
+        call.store().defer_registration = previous;
         let result = result.and_then(|root| {
             if mode == Materialization::Initialize
                 && let Some(actor) = root
             {
-                prepare_init(store);
-                initialize(call, store, actor)?;
+                prepare_init(call.store());
+                initialize(call, actor)?;
             }
             Ok(root)
         });
         match result {
             Ok(root) => {
-                let mut guard = store.lock().unwrap();
+                let guard = call.store();
                 guard.scenes.get_mut(&id).unwrap().root = root;
                 if mode == Materialization::Template
                     && let Some(actor) = root
@@ -2203,58 +2133,51 @@ fn materialize(
                 Ok(id)
             }
             Err(error) => {
-                release(call, store, id)?;
+                release(call, id)?;
                 Err(error)
             }
         }
     })
 }
 
-fn prepare_init(store: &Shared) {
-    let mut guard = store.lock().unwrap();
+fn prepare_init(store: &mut Store) {
+    let guard = &mut *store;
     if guard.preparing {
         guard.startup_queues.get_or_insert_with(Vec::new);
     }
 }
 
-fn initialize(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
-        return native_children::group_lifecycle(call, store, actor, false);
+fn initialize(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if !call.store().actors.contains_key(&actor) {
+        return native_children::group_lifecycle(call, actor, false);
     }
-    if store.lock().unwrap().actors[&actor].offline_instance {
-        offline::prepare_init(call, store, actor)?;
+    if call.store().actors[&actor].offline_instance {
+        offline::prepare_init(call, actor)?;
     }
-    courses::prepare_raw_init(call, store, actor)?;
-    if store.lock().unwrap().actors[&actor].initialized {
+    courses::prepare_raw_init(call, actor)?;
+    if call.store().actors[&actor].initialized {
         return Ok(());
     }
     let original = get(call, actor, b"Name")?;
-    call.with_roots(&[original], |call| {
-        initialize_body(call, store, actor, original)
-    })
+    call.with_roots(&[original], |call| initialize_body(call, actor, original))
 }
-fn initialize_body(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    original: Value,
-) -> Result<(), Error> {
+fn initialize_body(call: &mut HostCall<'_>, actor: TableId, original: Value) -> Result<(), Error> {
     let raw = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let a = &guard.actors[&actor];
         a.raw_instance || a.offline_instance
     };
     let name = if raw {
         // Raw CourseContentsList displays preserve malformed attributes until
         // a typed getter reads them. prepare_raw_init already applies that rule.
-        store.lock().unwrap().actors[&actor].load_name.clone()
+        call.store().actors[&actor].load_name.clone()
     } else if original == Value::Nil {
         None
     } else {
         Some(bytes(call, original)?)
     };
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         if !store.actor_order.contains(&actor) {
             store.actor_order.push(actor);
         }
@@ -2266,7 +2189,10 @@ fn initialize_body(
     }
     // The production host materializes the complete tree before Init. Every
     // child is observable while child-first Init applies names and draw order.
-    for (index, child) in declared_children(store, actor).into_iter().enumerate() {
+    for (index, child) in declared_children(call.store(), actor)
+        .into_iter()
+        .enumerate()
+    {
         #[cfg(feature = "test-support")]
         {
             // The native subscriber identity is tied to this definition's
@@ -2277,12 +2203,12 @@ fn initialize_body(
         }
         #[cfg(not(feature = "test-support"))]
         let _ = index;
-        native_children::adopt_declared(call, store, child, actor)?;
-        initialize(call, store, child)?;
+        native_children::adopt_declared(call, child, actor)?;
+        initialize(call, child)?;
     }
-    sort(call, store, actor)?;
+    sort(call, actor)?;
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let actor = store.actors.get_mut(&actor).unwrap();
         if let Some(name) = actor.load_name.take() {
             actor.state.name = name;
@@ -2292,12 +2218,11 @@ fn initialize_body(
         let key = call.try_intern(b"Name")?;
         call.raw_table_set(actor, key, original)?;
     }
-    courses::publish_raw_name(call, store, actor, original)?;
-    play(call, store, actor, b"Init", None, false)?;
-    if let Some(stream) = song_meters::stream(call, store, actor)? {
-        if store
-            .lock()
-            .unwrap()
+    courses::publish_raw_name(call, actor, original)?;
+    play(call, actor, b"Init", None, false)?;
+    if let Some(stream) = song_meters::stream(call, actor)? {
+        if call
+            .store()
             .actors
             .get(&stream)
             .is_some_and(|a| !a.initialized)
@@ -2305,25 +2230,13 @@ fn initialize_body(
             let name = get(call, stream, b"Name")?;
             if name != Value::Nil {
                 let name = bytes(call, name)?;
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&stream)
-                    .unwrap()
-                    .load_name = Some(name);
+                call.store().actors.get_mut(&stream).unwrap().load_name = Some(name);
             }
         }
-        initialize(call, store, stream)?;
+        initialize(call, stream)?;
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .initialized = true;
-    courses::publish_raw_flag(call, store, actor, "__songlua_init_commands_ran")?;
+    call.store().actors.get_mut(&actor).unwrap().initialized = true;
+    courses::publish_raw_flag(call, actor, "__songlua_init_commands_ran")?;
     Ok(())
 }
 fn group(call: &mut HostCall<'_>, ids: &[TableId]) -> Result<Value, Error> {
@@ -2355,9 +2268,9 @@ fn invoke_bound(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.call_and_return(call.captures()[3], &args)
 }
 
-fn actor_name(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<Vec<u8>, Error> {
+fn actor_name(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<u8>, Error> {
     let (raw, name) = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let actor = &guard.actors[&actor];
         (
             actor.raw_instance || actor.pending_init || actor.offline_instance,
@@ -2382,19 +2295,18 @@ fn actor_name(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result
 
 fn parent_scene(
     call: &mut HostCall<'_>,
-    store: &Shared,
     root: TableId,
     parent: Value,
     append: bool,
 ) -> Result<(), Error> {
     let parent = match parent {
         Value::Nil if !append => None,
-        Value::Table(parent) if store.lock().unwrap().actors.contains_key(&parent) => Some(parent),
+        Value::Table(parent) if call.store().actors.contains_key(&parent) => Some(parent),
         _ => return Err(call.error(b"parent must be an actor owned by this runtime")),
     };
     if let Some(parent) = parent {
         {
-            let guard = store.lock().unwrap();
+            let guard = call.store();
             let mut ancestor = Some(parent);
             let mut visited = HashSet::new();
             while let Some(id) = ancestor {
@@ -2418,67 +2330,57 @@ fn parent_scene(
             }
         }
         if append {
-            if !is_frame(store, parent) {
+            if !is_frame(call.store(), parent) {
                 return Err(call.error(b"ActorFrame parent expected"));
             }
-            courses::share_child(call, store, parent, root)?;
-            if !store.lock().unwrap().actors[&parent]
-                .children
-                .contains(&root)
-            {
-                screen_parts::append(call, store, parent, root)?;
-                lifecycle::invalidate_plans(call, store)?;
+            courses::share_child(call, parent, root)?;
+            if !call.store().actors[&parent].children.contains(&root) {
+                screen_parts::append(call, parent, root)?;
+                lifecycle::invalidate_plans(call)?;
                 return Ok(());
             }
         }
-        native_children::adopt(call, store, root, parent)?;
+        native_children::adopt(call, root, parent)?;
     } else {
         sprites::set(call, root, "__songlua_parent", Value::Nil)?;
-        store.lock().unwrap().actors.get_mut(&root).unwrap().parent = None;
+        call.store().actors.get_mut(&root).unwrap().parent = None;
     }
     Ok(())
 }
 
 fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, op, collected) = {
-        let binding = call.function_data::<Binding>().unwrap();
-        (
-            binding.store.clone(),
-            binding.op,
-            binding.collected.pending(),
-        )
-    };
-    if collected {
-        retirement::sweep(&store);
+    let op = *call.function_data::<Op>().unwrap();
+    if call.store_ref().collected_scenes.pending() {
+        retirement::sweep(call.store());
     }
     if matches!(op, Op::Retire) {
         let id = call.number(0)? as u64;
-        let retired = retirement::retire(call, &store, id)?;
+        let retired = retirement::retire(call, id)?;
         return call.push(Value::Boolean(retired));
     }
     if matches!(op, Op::PrepareDefinitions) {
-        return offline::install(call, &store);
+        return offline::install(call);
     }
     if matches!(op, Op::LoadPreparationActor) {
-        return loading::load_actor(call, &store);
+        return loading::load_actor(call);
     }
     if let Op::OfflineConstructor(class) = op {
-        return offline::construct(call, &store, class);
+        return offline::construct(call, class);
     }
 
     if matches!(op, Op::DiscoverStartup) {
-        return capture::discover_startup(call, &store);
+        return capture::discover_startup(call);
     }
     if let Op::Message(op) = op {
-        return messages::callback(call, &store, op);
+        return messages::callback(call, op);
     }
     if matches!(op, Op::End) {
         let id = call.number(0)? as u64;
-        if store.lock().unwrap().retired_scenes.contains_key(&id) {
+        if call.store().retired_scenes.contains_key(&id) {
             return call.push(Value::Boolean(false));
         }
         let root = {
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             let Some(scene) = store.scenes.get_mut(&id) else {
                 return call.push(Value::Boolean(false));
             };
@@ -2491,19 +2393,13 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             scene.root
         };
         if let Some(root) = root {
-            lifecycle::end(call, &store, root)?;
+            lifecycle::end(call, root)?;
         }
-        let actors = store.lock().unwrap().scenes[&id].actors.clone();
+        let actors = call.store().scenes[&id].actors.clone();
         for actor in actors {
-            sound::retire(call, &store, actor);
+            sound::retire(call, actor);
         }
-        store
-            .lock()
-            .unwrap()
-            .scenes
-            .get_mut(&id)
-            .unwrap()
-            .sounds_retired = true;
+        call.store().scenes.get_mut(&id).unwrap().sounds_retired = true;
         return call.push(Value::Boolean(true));
     }
     if matches!(
@@ -2511,12 +2407,11 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         Op::Start | Op::Advance | Op::DrawScene | Op::Initialize | Op::SetParent | Op::Append
     ) {
         let id = call.number(0)? as u64;
-        if store.lock().unwrap().retired_scenes.contains_key(&id) {
+        if call.store().retired_scenes.contains_key(&id) {
             return call.push(Value::Boolean(false));
         }
-        let root = store
-            .lock()
-            .unwrap()
+        let root = call
+            .store()
             .scenes
             .get(&id)
             .map(|scene| (scene.root, scene.ended));
@@ -2528,23 +2423,23 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         if let Some(root) = root {
             if matches!(op, Op::Initialize) {
-                prepare_init(&store);
-                initialize(call, &store, root)?;
+                prepare_init(call.store());
+                initialize(call, root)?;
             } else if matches!(op, Op::SetParent | Op::Append) {
-                parent_scene(call, &store, root, arg(call, 1), matches!(op, Op::Append))?;
+                parent_scene(call, root, arg(call, 1), matches!(op, Op::Append))?;
             } else if matches!(op, Op::Start) {
-                lifecycle::start(call, &store, root)?;
+                lifecycle::start(call, root)?;
             } else if matches!(op, Op::DrawScene) {
-                draw::scene(call, &store, root)?;
+                draw::scene(call, root)?;
             } else {
                 let delta = call.number(1)? as f32;
-                lifecycle::advance(call, &store, root, delta)?;
+                lifecycle::advance(call, root, delta)?;
             }
         }
         return call.push(Value::Boolean(true));
     }
     if matches!(op, Op::LoadFont) {
-        return text::load_font(call, &store);
+        return text::load_font(call);
     }
     if matches!(op, Op::Template) {
         let declaration = table(call, arg(call, 0))?;
@@ -2555,10 +2450,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 sprites::set(call, declaration, key, value)?;
             }
         }
-        let id = materialize(call, &store, declaration, Materialization::Template)?;
-        let actor = store.lock().unwrap().scenes[&id]
-            .root
-            .expect("actor template");
+        let id = materialize(call, declaration, Materialization::Template)?;
+        let actor = call.store().scenes[&id].root.expect("actor template");
         let key = call.try_intern(b"Class")?;
         call.raw_table_set(actor, key, Value::Nil)?;
         return call.push(Value::Table(actor));
@@ -2570,25 +2463,27 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         } else {
             Materialization::Construct
         };
-        let id = materialize(call, &store, declaration, mode)?;
+        let id = materialize(call, declaration, mode)?;
         return call.push(Value::Number(id as f64));
     }
     if matches!(op, Op::Release) {
         let id = call.number(0)? as u64;
-        let removed = release(call, &store, id)?;
+        let removed = release(call, id)?;
         return call.push(Value::Boolean(removed));
     }
     let actor = table(call, arg(call, 0))?;
     let (raw_epoch, actor_class) = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let Some(owned) = guard.actors.get(&actor) else {
-            return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
+            return Err(
+                call.error(b"actor instance is not owned by this runtime or has been released")
+            );
         };
         (owned.raw_live_epoch, owned.state.class)
     };
     if let Op::Get(name) | Op::Render(name) = op
         && raw_epoch
-        && live_epoch::getter(call, &store, actor, name)?
+        && live_epoch::getter(call, actor, name)?
     {
         return Ok(());
     }
@@ -2609,7 +2504,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     // A saved actor's live-epoch getter may refresh metadata. Preserve the
     // post-getter class observation when that path was entered.
     let actor_class = if raw_epoch && matches!(op, Op::Get(_) | Op::Render(_)) {
-        store.lock().unwrap().actors[&actor].state.class
+        call.store().actors[&actor].state.class
     } else {
         actor_class
     };
@@ -2618,11 +2513,11 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             actor_class,
             "Model" | "OptionRow" | "OptionRowFrame" | "LifeMeter"
         );
-    if frame_method && !is_frame(&store, actor) && !private_child_query {
+    if frame_method && !is_frame(call.store(), actor) && !private_child_query {
         return Err(call.error(b"ActorFrame expected"));
     }
     if let Op::Set(name) | Op::Render(name) = op {
-        ease_probe::method(call, &store, actor, name)?;
+        ease_probe::method(call, actor, name)?;
     }
     match op {
         Op::Unimplemented(name) => {
@@ -2630,71 +2525,71 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 format!("native actor method {name} has no semantic implementation").as_bytes(),
             ));
         }
-        Op::Lifecycle(operation) => return lifecycle::method(call, &store, actor, operation),
-        Op::Render(name) => return render::method(call, &store, actor, name),
-        Op::Effect(name) => return effects::method(call, &store, actor, name),
-        Op::Wrapper(name) => return wrappers::method(call, &store, actor, name),
-        Op::Sound(name) => return sound::method(call, &store, actor, name),
-        Op::Sprite(name) => return sprites::method(call, &store, actor, name),
-        Op::Banner(name) => return banners::method(call, &store, actor, name),
-        Op::Mesh(name) => return meshes::method(call, &store, actor, name),
+        Op::Lifecycle(operation) => return lifecycle::method(call, actor, operation),
+        Op::Render(name) => return render::method(call, actor, name),
+        Op::Effect(name) => return effects::method(call, actor, name),
+        Op::Wrapper(name) => return wrappers::method(call, actor, name),
+        Op::Sound(name) => return sound::method(call, actor, name),
+        Op::Sprite(name) => return sprites::method(call, actor, name),
+        Op::Banner(name) => return banners::method(call, actor, name),
+        Op::Mesh(name) => return meshes::method(call, actor, name),
         Op::CloneTemplate => {
-            if store.lock().unwrap().actors[&actor].offline_instance {
-                let clone = offline::clone_actor(call, &store, actor, false)?;
+            if call.store().actors[&actor].offline_instance {
+                let clone = offline::clone_actor(call, actor, false)?;
                 return call.push(Value::Table(clone));
             }
             // Concatenation returns a declaration. Its callbacks subscribe when
             // the loaded tree runs Init, after this copy receives its attributes.
-            let id = materialize(call, &store, actor, Materialization::Definition)?;
-            let root = store.lock().unwrap().scenes[&id].root;
+            let id = materialize(call, actor, Materialization::Definition)?;
+            let root = call.store().scenes[&id].root;
             return call.push(root.map_or(Value::Nil, Value::Table));
         }
-        Op::Text(name) => return text::method(call, &store, actor, name),
-        Op::Graph(name) => return graphs::method(call, &store, actor, name),
-        Op::SongMeter(name) => return song_meters::method(call, &store, actor, name),
-        Op::Course(name) => return courses::method(call, &store, actor, name),
+        Op::Text(name) => return text::method(call, actor, name),
+        Op::Graph(name) => return graphs::method(call, actor, name),
+        Op::SongMeter(name) => return song_meters::method(call, actor, name),
+        Op::Course(name) => return courses::method(call, actor, name),
         Op::ReadModelPaths => {
             let paths = models::paths(call, actor)?;
-            store.lock().unwrap().model_paths_output = paths;
+            call.store().model_paths_output = paths;
             return Ok(());
         }
         Op::ReadSongMeter => {
-            let meter = song_meters::read(call, &store, actor)?;
-            store.lock().unwrap().meter_output = meter;
+            let meter = song_meters::read(call, actor)?;
+            call.store().meter_output = meter;
             return Ok(());
         }
         Op::ReadGraph => {
-            let graph = graphs::read(call, &store, actor)?;
-            store.lock().unwrap().graph_output = Some(graph);
+            let graph = graphs::read(call, actor)?;
+            call.store().graph_output = Some(graph);
             return Ok(());
         }
-        Op::TextDisplay(name) => return text_displays::method(call, &store, actor, name),
+        Op::TextDisplay(name) => return text_displays::method(call, actor, name),
         Op::ReadText => {
             let output = text::read(call, actor)?;
-            store.lock().unwrap().text_output = Some(output);
+            call.store().text_output = Some(output);
             return Ok(());
         }
-        Op::Framebuffer(name) => return framebuffers::method(call, &store, actor, name),
+        Op::Framebuffer(name) => return framebuffers::method(call, actor, name),
         Op::ReadFramebuffer => {
             let framebuffer = framebuffers::read(call, actor)?;
-            store.lock().unwrap().framebuffer_output = Some(framebuffer);
+            call.store().framebuffer_output = Some(framebuffer);
             return Ok(());
         }
-        Op::Draw(name) => return draw::method(call, &store, actor, name),
+        Op::Draw(name) => return draw::method(call, actor, name),
         Op::ReadMesh => {
             let mesh = meshes::read(call, actor)?;
-            store.lock().unwrap().mesh_output = mesh;
+            call.store().mesh_output = mesh;
             return Ok(());
         }
         Op::ReadProxy => {
             let target = proxies::read(call, actor)?;
-            store.lock().unwrap().proxy_output = target;
+            call.store().proxy_output = target;
             return Ok(());
         }
         Op::Ignore => return call.push(Value::Table(actor)),
-        Op::AddChildFromPath => return loading::add_child_from_path(call, &store, actor),
+        Op::AddChildFromPath => return loading::add_child_from_path(call, actor),
         Op::RemoveChildren(all) => {
-            native_children::remove(call, &store, actor, all)?;
+            native_children::remove(call, actor, all)?;
             return call.push(Value::Table(actor));
         }
         Op::GetName if actor_class == "OptionRow" => {
@@ -2704,14 +2599,14 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             return call.call_and_return(function, &args);
         }
         Op::GetName => {
-            let name = actor_name(call, &store, actor)?;
+            let name = actor_name(call, actor)?;
             let name = call.try_intern(&name)?;
             return call.push(name);
         }
         Op::Name => {
             let name = bytes(call, arg(call, 1))?;
             let publish = {
-                let guard = store.lock().unwrap();
+                let guard = call.store();
                 let actor = &guard.actors[&actor];
                 actor.raw_instance || actor.pending_init || actor.offline_instance
             };
@@ -2724,21 +2619,14 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 let key = call.try_intern(b"__songlua_native_name")?;
                 call.raw_table_set(actor, key, value)?;
             }
-            store
-                .lock()
-                .unwrap()
-                .actors
-                .get_mut(&actor)
-                .unwrap()
-                .state
-                .name = name;
+            call.store().actors.get_mut(&actor).unwrap().state.name = name;
         }
         Op::GetParent => {
-            let parent = store.lock().unwrap().actors[&actor].parent;
+            let parent = call.store().actors[&actor].parent;
             return call.push(parent.map_or(Value::Nil, Value::Table));
         }
         Op::GetNumChildren => {
-            let count = children(call, &store, actor)?.len();
+            let count = children(call, actor)?.len();
             return call.push(Value::Number(count as f64));
         }
         Op::GetChild if actor_class == "TopScreen" => {
@@ -2756,7 +2644,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             })?;
             return call.push(value);
         }
-        Op::GetChild if has_native_children(&store, actor) => {
+        Op::GetChild if has_native_children(call.store(), actor) => {
             let key = arg(call, 1);
             let key = bytes(call, key)?;
             let map = native_children::named_children(call, actor)?;
@@ -2766,15 +2654,15 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             })?;
             return call.push(value);
         }
-        Op::GetChildren if has_native_children(&store, actor) => {
+        Op::GetChildren if has_native_children(call.store(), actor) => {
             let result = native_children::named_children(call, actor)?;
             return call.push(result);
         }
         Op::GetChild => {
             let name = bytes(call, arg(call, 1))?;
             let mut ids = Vec::new();
-            for id in children(call, &store, actor)? {
-                if actor_name(call, &store, id)? == name {
+            for id in children(call, actor)? {
+                if actor_name(call, id)? == name {
                     ids.push(id);
                 }
             }
@@ -2785,8 +2673,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             let result = Value::Table(call.try_new_table()?);
             return call.with_roots(&[result], |call| {
                 let mut names: Vec<(Vec<u8>, Vec<TableId>)> = Vec::new();
-                for id in children(call, &store, actor)? {
-                    let name = actor_name(call, &store, id)?;
+                for id in children(call, actor)? {
+                    let name = actor_name(call, id)?;
                     if let Some((_, ids)) = names.iter_mut().find(|(n, _)| *n == name) {
                         ids.push(id)
                     } else {
@@ -2801,15 +2689,10 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 call.push(result)
             });
         }
-        Op::Sort => sort(call, &store, actor)?,
+        Op::Sort => sort(call, actor)?,
         Op::Propagate => {
-            store
-                .lock()
-                .unwrap()
-                .actors
-                .get_mut(&actor)
-                .unwrap()
-                .propagate = !matches!(arg(call, 1), Value::Nil | Value::Boolean(false));
+            call.store().actors.get_mut(&actor).unwrap().propagate =
+                !matches!(arg(call, 1), Value::Nil | Value::Boolean(false));
         }
         Op::AddCommand | Op::GetCommand => {
             let name = arg(call, 1);
@@ -2827,9 +2710,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 return Err(call.error(b"function expected"));
             }
             let key = call.try_intern(&[name.as_slice(), b"Command"].concat())?;
-            if store
-                .lock()
-                .unwrap()
+            if call
+                .store()
                 .clock
                 .live
                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -2853,14 +2735,13 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             };
             let params = call.arguments().get(2).copied();
             match op {
-                Op::NamedLeaves => leaves(call, &store, actor, &mut |call, actor| {
-                    run_named(call, &store, actor, &name, params)
+                Op::NamedLeaves => leaves(call, actor, &mut |call, actor| {
+                    run_named(call, actor, &name, params)
                 })?,
                 Op::NamedChildren | Op::PropagateCommand => {
-                    for child in children(call, &store, actor)? {
+                    for child in children(call, actor)? {
                         play(
                             call,
-                            &store,
                             child,
                             &name,
                             params,
@@ -2869,12 +2750,12 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                     }
                 }
                 _ => {
-                    let propagate = store.lock().unwrap().actors[&actor].propagate;
+                    let propagate = call.store().actors[&actor].propagate;
                     if !propagate {
-                        run_named(call, &store, actor, &name, params)?;
+                        run_named(call, actor, &name, params)?;
                     }
-                    for child in children(call, &store, actor)? {
-                        play(call, &store, child, &name, params, true)?;
+                    for child in children(call, actor)? {
+                        play(call, child, &name, params, true)?;
                     }
                 }
             }
@@ -2891,19 +2772,19 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             if matches!(function, Value::Function(_) | Value::Native(_)) {
                 let params = call.arguments().get(2).copied();
                 match op {
-                    Op::OnLeaves => leaves(call, &store, actor, &mut |call, actor| {
+                    Op::OnLeaves => leaves(call, actor, &mut |call, actor| {
                         run(call, actor, function, None)
                     })?,
                     _ => {
-                        for child in children(call, &store, actor)? {
+                        for child in children(call, actor)? {
                             run(call, child, function, params)?;
                         }
                     }
                 }
             }
         }
-        Op::Set(name) => set_scalar(call, &store, actor, name)?,
-        Op::Get(name) => return get_scalar(call, &store, actor, name),
+        Op::Set(name) => set_scalar(call, actor, name)?,
+        Op::Get(name) => return get_scalar(call, actor, name),
         Op::PrepareDefinitions
         | Op::LoadPreparationActor
         | Op::OfflineConstructor(_)
@@ -2935,18 +2816,11 @@ fn command_name(call: &HostCall<'_>, value: Value) -> Option<Vec<u8>> {
         .ok()
         .map(|name| name.as_bytes().to_vec())
 }
-fn set_scalar(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+fn set_scalar(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     if name == "draworder" {
         if let Some(value) = integer_scalar(call, arg(call, 1)) {
-            action_capture::prepare_write(call, store, actor)?;
-            store
-                .lock()
-                .unwrap()
+            action_capture::prepare_write(call, actor)?;
+            call.store()
                 .actors
                 .get_mut(&actor)
                 .unwrap()
@@ -2954,10 +2828,9 @@ fn set_scalar(
                 .draw_order = value;
             let key = call.try_intern(b"__songlua_state_draw_order")?;
             call.raw_table_set(actor, key, Value::Number(value as f64))?;
-            capture::property(call, store, actor, name);
+            capture::property(call, actor, name);
             song_properties::record(
                 call,
-                store,
                 actor,
                 crate::SongLuaOverlayUpdateTarget::DrawOrder,
                 crate::SongLuaOverlayUpdateValue::I32(value),
@@ -2970,13 +2843,12 @@ fn set_scalar(
         "x" | "y" | "zoom" | "zoomx" | "zoomy" | "zoomz" | "rotationx" | "rotationy" | "rotationz"
     );
     if name == "xy" {
-        let store_ref = store;
         let x = float_scalar(call, arg(call, 1), false);
         let y = float_scalar(call, arg(call, 2), false);
         if x.is_some() || y.is_some() {
-            action_capture::prepare_write(call, store, actor)?;
+            action_capture::prepare_write(call, actor)?;
         }
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let position = store.actors.get_mut(&actor).unwrap().destination_mut();
         if let Some(x) = x {
             position.x = x;
@@ -2984,10 +2856,8 @@ fn set_scalar(
         if let Some(y) = y {
             position.y = y;
         }
-        drop(store);
         capture::write(
             call,
-            store_ref,
             actor,
             crate::SongLuaOverlayStateDelta {
                 x,
@@ -2996,7 +2866,7 @@ fn set_scalar(
             },
             false,
         );
-        song_replay::publish_scalar(call, store_ref, actor, name)?;
+        song_replay::publish_scalar(call, actor, name)?;
         return Ok(());
     }
     let first = if name == "visible" {
@@ -3019,14 +2889,14 @@ fn set_scalar(
         0.
     };
     if matches!(name, "SetWidth" | "SetHeight") {
-        sprites::refresh_size(call, store, actor)?;
+        sprites::refresh_size(call, actor)?;
     }
     if matches!(name, "SetWidth" | "SetHeight" | "setsize" | "visible") {
-        action_capture::prepare_write(call, store, actor)?;
+        action_capture::prepare_write(call, actor)?;
     }
     if matches!(name, "SetWidth" | "SetHeight" | "setsize") {
         let size = {
-            let store = store.lock().unwrap();
+            let store = call.store();
             let actor = &store.actors[&actor];
             (actor.state.class == "ActorFrameTexture").then(|| match name {
                 "SetWidth" => [first, actor.state.size[1].abs()],
@@ -3049,7 +2919,7 @@ fn set_scalar(
         )?;
     }
     let (preparation, raw_epoch) = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         let instance = &store.actors[&actor];
         (
             !store.playback || instance.replay.is_some(),
@@ -3063,9 +2933,9 @@ fn set_scalar(
     } else {
         None
     };
-    action_capture::prepare_write(call, store, actor)?;
+    action_capture::prepare_write(call, actor)?;
     let id = actor;
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let actor = guard.actors.get_mut(&id).unwrap();
     let captured_position = captured_position.or_else(|| {
         actor.replay.as_ref().and_then(|_| {
@@ -3132,15 +3002,14 @@ fn set_scalar(
     } else {
         None
     };
-    drop(guard);
-    capture::property(call, store, id, name);
+    capture::property(call, id, name);
     if let Some((axis, value)) = template_position {
         text::capture_template_position(call, id, axis, value)?;
     }
     if matches!(name, "zoom" | "zoomx" | "zoomy") {
-        text::pre_zoom(call, store, id, name != "zoomy", name != "zoomx")?;
+        text::pre_zoom(call, id, name != "zoomy", name != "zoomx")?;
     }
-    song_replay::publish_scalar(call, store, id, name)
+    song_replay::publish_scalar(call, id, name)
 }
 fn float_scalar(call: &HostCall<'_>, value: Value, allows_nonfinite: bool) -> Option<f32> {
     match value {
@@ -3191,20 +3060,15 @@ fn boolish(call: &HostCall<'_>, value: Value) -> Option<bool> {
         _ => None,
     }
 }
-fn get_scalar(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+fn get_scalar(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     if matches!(
         name,
         "GetWidth" | "GetHeight" | "GetZoomedWidth" | "GetZoomedHeight"
     ) {
-        sprites::refresh_size(call, store, actor)?;
+        sprites::refresh_size(call, actor)?;
     }
-    let store = store.lock().unwrap();
-    let prior = song_pose::prior_position(&store, actor);
+    let store = call.store_ref();
+    let prior = song_pose::prior_position(store, actor);
     let actor = &store.actors[&actor];
     let s = &actor.state;
     let current = &actor.current;

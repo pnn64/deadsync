@@ -50,15 +50,10 @@ fn copy_tags(call: &mut HostCall<'_>, owner: TableId, wrapper: TableId) -> Resul
     Ok(())
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
         "GetNumWrapperStates" => call.push(Value::Number(
-            store.lock().unwrap().actors[&actor].wrappers.len() as f64,
+            call.store_ref().actors[&actor].wrappers.len() as f64,
         )),
         "GetWrapperState" => {
             // Production accepts numeric values, truncating fractions; numeric
@@ -68,12 +63,7 @@ pub(super) fn method(
                 usize::try_from(index)
                     .ok()
                     .and_then(|index| index.checked_sub(1))
-                    .and_then(|index| {
-                        store.lock().unwrap().actors[&actor]
-                            .wrappers
-                            .get(index)
-                            .copied()
-                    })
+                    .and_then(|index| call.store().actors[&actor].wrappers.get(index).copied())
                     .map_or(Value::Nil, Value::Table)
             } else {
                 Value::Nil
@@ -81,8 +71,8 @@ pub(super) fn method(
             call.push(value)
         }
         "AddWrapperState" => {
-            action_capture::prepare(call, store, actor)?;
-            let scene = store.lock().unwrap().actors[&actor].scene;
+            action_capture::prepare(call, actor)?;
+            let scene = call.store().actors[&actor].scene;
             let attrs = call.try_new_table()?;
             let key = call.try_intern(b"Class")?;
             let kind = call.try_intern(b"WrapperState")?;
@@ -104,23 +94,22 @@ pub(super) fn method(
                 let empty = call.try_new_table()?;
                 call.raw_table_set(node, Value::Number(2.0), Value::Table(empty))?;
                 call.with_roots(&[Value::Table(node)], |call| {
-                    Ok(build(call, store, scene, node, None, true, false)?
-                        .expect("wrapper class exists"))
+                    Ok(build(call, scene, node, None, true, false)?.expect("wrapper class exists"))
                 })
             })?;
-            courses::share_child(call, store, actor, wrapper)?;
+            courses::share_child(call, actor, wrapper)?;
             // The registry already roots the new actor before tag lookups can
-            // reenter Lua, detach fields or collect. No metadata lock crosses Lua.
+            // reenter Lua, detach fields or collect. No store borrow crosses Lua.
             copy_tags(call, actor, wrapper)?;
             {
-                let mut store = store.lock().unwrap();
+                let store = call.store();
                 // A tag failure leaves the registered actor unattached, matching
                 // the production constructor's partial state and cleanup lifetime.
                 store.actors.get_mut(&wrapper).unwrap().parent = Some(actor);
                 store.actors.get_mut(&actor).unwrap().wrappers.push(wrapper);
             }
-            chronological::created(call, store, actor, wrapper)?;
-            lifecycle::invalidate_plans(call, store)?;
+            chronological::created(call, actor, wrapper)?;
+            lifecycle::invalidate_plans(call)?;
             call.push(Value::Table(wrapper))
         }
         _ => unreachable!(),

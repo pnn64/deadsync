@@ -48,6 +48,9 @@ A retained song session owns one `SongRuntime` through `SongLiveRuntime`.
 Gameplay callers release its mutex guard before applying writes that may invoke
 another callback. Host callbacks use `HostCall` for nested Lua execution.
 
+The runtime's VM owns the actor store. Host callbacks and runtime entry points
+borrow it through their VM context, so a borrow ends before Lua can run again.
+
 Retained Lua objects use VM roots, traced captures or private table attachments.
 Copying a `Value` alone does not root it. Actor retirement removes active scene
 ownership while allowing authored references and bound callbacks to retain their

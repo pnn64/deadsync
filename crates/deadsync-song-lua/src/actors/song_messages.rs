@@ -116,8 +116,8 @@ pub(super) fn observed_eligible(store: &Store) -> bool {
     store.active_message.is_none() && (store.audit_queued_depth == 0 || store.audit_update_command)
 }
 #[cfg(feature = "test-support")]
-pub(super) fn update_command(store: &Shared, field: &[u8]) -> bool {
-    let mut store = store.lock().unwrap();
+pub(super) fn update_command(store: &mut Store, field: &[u8]) -> bool {
+    let store = &mut *store;
     let prior = store.audit_update_command;
     if field == b"UpdateCommand" {
         store.audit_update_command = true;
@@ -125,18 +125,17 @@ pub(super) fn update_command(store: &Shared, field: &[u8]) -> bool {
     prior
 }
 #[cfg(feature = "test-support")]
-pub(super) fn restore_command(store: &Shared, prior: bool) {
-    store.lock().unwrap().audit_update_command = prior;
+pub(super) fn restore_command(store: &mut Store, prior: bool) {
+    store.audit_update_command = prior;
 }
 #[cfg(feature = "test-support")]
 pub(super) fn pose_write(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
 ) {
     {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.fixture_pose_observer.is_none()
             && (song_pose::mode(&guard, id) || song_immediate::context(&guard, id).is_none())
         {
@@ -151,7 +150,7 @@ pub(super) fn pose_write(
         }
         let beat = effects::values(call, false).map_or(0., |values| values[0]);
         let value = crate::perframe::overlay_state_update_value(&state, target);
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let eligible = observed_eligible(&guard);
         let scheduled = !guard.actors[&id].queue.is_empty();
         if let Some(capture) = &mut guard.fixture_pose_observer {
@@ -181,9 +180,10 @@ impl Actors {
     #[cfg(feature = "test-support")]
     pub(crate) fn take_song_observed_writes(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Vec<crate::SongLuaOverlayUpdateTrack> {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let Some(capture) = store
             .scenes
             .get_mut(&screen.id)
@@ -205,9 +205,10 @@ impl Actors {
     }
     pub(crate) fn song_replay_messages(
         &self,
+        vm: &Vm,
         screen: ActorScene,
     ) -> Option<Vec<SongLuaStatefulMessageCapture>> {
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         if store.replay_frame?.0 != screen.id {
             return None;
         }
@@ -225,9 +226,10 @@ impl Actors {
 
     pub(crate) fn song_replay_tween_messages(
         &self,
+        vm: &Vm,
         screen: ActorScene,
     ) -> Option<Vec<SongLuaStatefulMessageCapture>> {
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         if store.replay_frame?.0 != screen.id {
             return None;
         }
@@ -276,13 +278,9 @@ pub(super) fn timing(
     raw_set(call, actor, "__songlua_capture_opt1", Value::Nil)
 }
 
-pub(super) fn reset_timing(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn reset_timing(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let replaying = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let replay = guard.actors.get_mut(&actor).unwrap().replay.as_mut();
         if let Some(replay) = replay {
             replay.capture_open = false;
@@ -299,12 +297,11 @@ pub(super) fn reset_timing(
 
 pub(super) fn hurry_timing(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     factor: f32,
 ) -> Result<(), Error> {
     let (replaying, flush, children) = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.replay_frame.is_none() {
             return Ok(());
         }
@@ -332,14 +329,13 @@ pub(super) fn hurry_timing(
         }
     }
     for child in children {
-        hurry_timing(call, store, child, factor)?;
+        hurry_timing(call, child, factor)?;
     }
     Ok(())
 }
 
 pub(super) fn record(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
 ) {
@@ -350,7 +346,7 @@ pub(super) fn record(
         return;
     }
     let context = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
@@ -389,7 +385,7 @@ pub(super) fn record(
     let opt1 = get(call, id, b"__songlua_capture_opt1")
         .ok()
         .and_then(|v| float_scalar(call, v, true));
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let Some(actor) = guard.actors.get(&id) else {
         return;
     };

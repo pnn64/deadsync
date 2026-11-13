@@ -135,14 +135,14 @@ fn attach(
     name: Option<&str>,
 ) -> Result<TableId, Error> {
     let actor = own(call, data, definition)?;
-    parent(call, &data.store, actor, underlay)?;
-    initialize(call, &data.store, actor)?;
+    parent(call, actor, underlay)?;
+    initialize(call, actor)?;
     if lookup {
         owned_lookup(call, actor)?;
     }
     let name = match name {
         Some(name) => name.as_bytes().to_vec(),
-        None => actor_name(call, &data.store, actor)?,
+        None => actor_name(call, actor)?,
     };
     let children = registry(call, underlay)?;
     call.with_roots(&[children], |call| {
@@ -160,9 +160,7 @@ fn attach(
             Value::Number((count + 1) as f64),
             Value::Table(actor),
         )?;
-        data.store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&underlay)
             .unwrap()
@@ -196,14 +194,10 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
         let players = invoke(call, game, "GetHumanPlayers", &[])?;
         table(call, players)?;
         call.with_roots(&[players], |call| {
-            data.store
-                .lock()
-                .unwrap()
-                .startup_queues
-                .get_or_insert_with(Vec::new);
+            call.store().startup_queues.get_or_insert_with(Vec::new);
             source::evaluate(call, source::UTF8, Value::Table(globals), &[])?;
             source::evaluate(call, source::TEXT_HELPERS, Value::Table(globals), &[])?;
-            steps_displays::initialize(call, &data.store, screen)?;
+            steps_displays::initialize(call, screen)?;
             for index in 1.. {
                 let value =
                     call.raw_table_get(table(call, players)?, Value::Number(index as f64))?;
@@ -257,7 +251,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                 true,
                 Some("SongMeter"),
             )?);
-            reorder(call, data, underlay)?;
+            reorder(call, underlay)?;
             set(
                 call,
                 underlay,
@@ -272,12 +266,12 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
             }
             // Keep normal listener delivery; this internal song-change event
             // does not record an authored Broadcast or increment its counter.
-            messages::dispatch(call, &data.store, b"CurrentSongChanged", None, false)
+            messages::dispatch(call, b"CurrentSongChanged", None, false)
         })
     })
 }
 
-fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<(), Error> {
+fn reorder(call: &mut HostCall<'_>, underlay: TableId) -> Result<(), Error> {
     const ORDER: &[&[u8]] = &[
         b"DangerP1",
         b"StepStatsPaneP1",
@@ -299,7 +293,7 @@ fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<()
     ];
     let mut children = Vec::new();
     native_children::with_children(call, underlay, |call, child| {
-        let name = actor_name(call, &data.store, child).unwrap_or_default();
+        let name = actor_name(call, child).unwrap_or_default();
         let role = get(call, child, b"__songlua_underlay_role")
             .ok()
             .and_then(|value| {
@@ -324,12 +318,7 @@ fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<()
             Value::Table(child),
         )?;
     }
-    data.store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&underlay)
-        .unwrap()
-        .children = children.into_iter().map(|(_, child)| child).collect();
+    call.store().actors.get_mut(&underlay).unwrap().children =
+        children.into_iter().map(|(_, child)| child).collect();
     Ok(())
 }

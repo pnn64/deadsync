@@ -138,7 +138,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .compiler_read(&mut runtime.vm, root, Query::Draw)
         .map_err(|e| e.to_string())?;
     timer.push_stage("draw_functions");
-    let mut discovered = runtime.actors.take_song_broadcasts();
+    let mut discovered = runtime.actors.take_song_broadcasts(&mut runtime.vm);
     let mut sounds = runtime.take_prepared_sounds();
     let mut judgments = runtime.take_judgment_textures();
     let mut sprites = runtime
@@ -369,7 +369,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .song_timing
         .as_ref()
         .map(|t| t.get_time_for_beat_exact(0.));
-    for detail in runtime.actors.take_callback_errors() {
+    for detail in runtime.actors.take_callback_errors(&mut runtime.vm) {
         out.info.unsupported_perframes += 1;
         crate::push_unique_compile_detail(&mut out.info.unsupported_perframe_captures, detail);
     }

@@ -32,11 +32,10 @@ pub(super) fn prior_position(store: &Store, id: TableId) -> Option<[f32; 3]> {
 }
 pub(super) fn record(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
 ) -> bool {
-    if !mode(&store.lock().unwrap(), id) {
+    if !mode(&call.store(), id) {
         return false;
     }
     let mut state = crate::SongLuaOverlayState::default();
@@ -46,7 +45,7 @@ pub(super) fn record(
             continue;
         }
         let value = crate::perframe::overlay_state_update_value(&state, target);
-        let scheduled = song_properties::record_inner(call, store, id, target, value.clone());
+        let scheduled = song_properties::record_inner(call, id, target, value.clone());
         if scheduled == Some(false)
             && let Update::F32(value) = value
         {
@@ -58,7 +57,7 @@ pub(super) fn record(
                 _ => None,
             };
             if let Some(axis) = axis {
-                let mut guard = store.lock().unwrap();
+                let guard = call.store();
                 let actor = guard.actors.get_mut(&id).unwrap();
                 actor.current.set(target, &Update::F32(value));
                 let current = actor.current;
@@ -86,13 +85,9 @@ pub(super) fn record(
     true
 }
 
-pub(super) fn advance_position(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-) -> Result<(), Error> {
+pub(super) fn advance_position(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
     let position = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if !mode(&guard, id) {
             return Ok(());
         }
@@ -195,7 +190,6 @@ fn scalar_key(target: Target) -> Option<&'static str> {
 
 pub(super) fn set_getter(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     target: Target,
     value: &Update,
@@ -229,7 +223,7 @@ pub(super) fn set_getter(
     {
         return Ok(());
     }
-    update_getter_state(store, id, target, value);
+    update_getter_state(call.store(), id, target, value);
     match value {
         Update::F32(value) => {
             let key = match target {
@@ -256,9 +250,9 @@ pub(super) fn set_getter(
 }
 
 /// Metadata half of the getter handoff. Lua assignments stay in their
-/// caller's order, and no actor-store lock survives those assignments.
-pub(super) fn update_getter_state(store: &Shared, id: TableId, target: Target, value: &Update) {
-    let mut guard = store.lock().unwrap();
+/// caller's order, and no store borrow survives those assignments.
+pub(super) fn update_getter_state(store: &mut Store, id: TableId, target: Target, value: &Update) {
+    let guard = &mut *store;
     let fallback = mode(&guard, id);
     let Some(actor) = guard.actors.get_mut(&id) else {
         return;
@@ -301,12 +295,12 @@ pub(super) fn update_getter_state(store: &Shared, id: TableId, target: Target, v
 }
 
 fn apply_getters(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (store, values) = call
-        .function_data::<(Shared, Vec<(TableId, Target, Update)>)>()
+    let values = call
+        .function_data::<Vec<(TableId, Target, Update)>>()
         .unwrap()
         .clone();
     for (id, target, value) in values {
-        set_getter(call, &store, id, target, &value)?;
+        set_getter(call, id, target, &value)?;
     }
     Ok(())
 }
@@ -314,10 +308,11 @@ fn apply_getters(call: &mut HostCall<'_>) -> Result<(), Error> {
 impl Actors {
     pub(crate) fn set_song_replay_prior_positions(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         states: &[crate::SongLuaOverlayState],
     ) -> bool {
-        let mut guard = self.store.lock().unwrap();
+        let guard = vm.store();
         if guard.replay_frame.map(|f| f.0) != Some(screen.id) {
             return false;
         }
@@ -345,7 +340,7 @@ impl Actors {
         values: &[(usize, Target, Update)],
     ) -> Result<bool, Error> {
         let Some(values) = (|| {
-            let guard = self.store.lock().unwrap();
+            let guard = vm.store();
             if guard.replay_frame?.0 != screen.id {
                 return None;
             }
@@ -380,7 +375,7 @@ impl Actors {
                 Value::Table(self.helpers),
                 Value::Table(roots),
             ],
-            (self.store.clone(), values),
+            values,
         );
         vm.unpin(pin)?;
         let function = function?;

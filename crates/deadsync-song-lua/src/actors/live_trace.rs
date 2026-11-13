@@ -16,9 +16,9 @@ pub(super) struct State {
     hooks: HashSet<(TableId, String)>,
 }
 
-fn enabled(store: &Shared) -> bool {
+fn enabled(store: &mut Store) -> bool {
     log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace)
-        && store.lock().unwrap().trace.scene.is_some()
+        && store.trace.scene.is_some()
 }
 fn emit(event: Json) {
     #[cfg(feature = "test-support")]
@@ -29,10 +29,8 @@ fn emit(event: Json) {
 
 impl Actors {
     pub(crate) fn install_live_trace(&self, vm: &mut Vm) -> Result<(), Error> {
-        if !self
-            .store
-            .lock()
-            .unwrap()
+        if !vm
+            .store()
             .clock
             .live
             .load(std::sync::atomic::Ordering::Relaxed)
@@ -40,27 +38,27 @@ impl Actors {
             return Ok(());
         }
         if !log::log_enabled!(target: "deadsync_song_lua::trace", log::Level::Trace) {
-            let mut store = self.store.lock().unwrap();
+            let store = vm.store();
             store.trace.scene = Some(store.trace.generation);
             return Ok(());
         }
         let captures = [Value::Table(self.registry), Value::Table(self.helpers)];
-        let remember = vm.new_host_function_with_data(remember, &captures, self.store.clone())?;
+        let remember = vm.new_host_function(remember, &captures)?;
         let pin = vm.pin(remember)?;
         let result = (|| {
-            let hook = vm.new_host_function_with_data(hook, &captures, self.store.clone())?;
+            let hook = vm.new_host_function(hook, &captures)?;
             let pin = vm.pin(hook)?;
             let result = (|| {
                 let code =
                     compile_named(include_bytes!("live_trace.lua"), b"=DeadSync live observer")?;
                 let install = vm.execute(&code)?[0];
                 {
-                    let mut store = self.store.lock().unwrap();
+                    let store = vm.store();
                     store.trace.objects.clear();
                     store.trace.depth += 1;
                 }
                 let result = vm.call(install, &[remember, hook]).map(|_| ());
-                self.store.lock().unwrap().trace.depth -= 1;
+                vm.store().trace.depth -= 1;
                 result
             })();
             vm.unpin(pin)?;
@@ -68,7 +66,7 @@ impl Actors {
         })();
         vm.unpin(pin)?;
         result?;
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         store.trace.scene = Some(store.trace.generation);
         Ok(())
     }
@@ -92,7 +90,6 @@ fn text(call: &mut HostCall<'_>, value: Value) -> Result<String, Error> {
     String::from_utf8(value).map_err(|e| call.error(e.to_string().as_bytes()))
 }
 fn remember(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let owner = table(call, arg(call, 0))?;
     retain(call, owner)?;
     let kind = text(call, arg(call, 1))?;
@@ -108,18 +105,16 @@ fn remember(call: &mut HostCall<'_>) -> Result<(), Error> {
             "meter":call.number(7)? as i64}),
         _ => json!({"type":kind}),
     };
-    store.lock().unwrap().trace.objects.insert(owner, label);
+    call.store().trace.objects.insert(owner, label);
     Ok(())
 }
 
 #[derive(Clone)]
 struct Query {
-    store: Shared,
     class: String,
     name: String,
 }
 fn hook(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let mut owner = table(call, arg(call, 0))?;
     let class = text(call, arg(call, 1))?;
     let name = text(call, arg(call, 2))?;
@@ -130,13 +125,7 @@ fn hook(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
     }
     retain(call, owner)?;
-    if store
-        .lock()
-        .unwrap()
-        .trace
-        .hooks
-        .contains(&(owner, name.clone()))
-    {
+    if call.store().trace.hooks.contains(&(owner, name.clone())) {
         return Ok(());
     }
     let key = call.try_intern(name.as_bytes())?;
@@ -147,40 +136,33 @@ fn hook(call: &mut HostCall<'_>) -> Result<(), Error> {
         );
     }
     call.with_roots(&[original, key], |call| {
-        let function = wrap(call, &store, class, name.clone(), original)?;
+        let function = wrap(call, class, name.clone(), original)?;
         call.raw_table_set(owner, key, function)
     })?;
-    store.lock().unwrap().trace.hooks.insert((owner, name));
+    call.store().trace.hooks.insert((owner, name));
     Ok(())
 }
 
 fn wrap(
     call: &mut HostCall<'_>,
-    store: &Shared,
     class: String,
     name: String,
     original: Value,
 ) -> Result<Value, Error> {
     let captures = [call.captures()[0], call.captures()[1]];
-    let left = call.new_host_function_with_data(
+    let left = call.new_host_function(
         |call| {
-            let store = call.function_data::<Shared>().unwrap().clone();
             let actor = table(call, arg(call, 0))?;
-            let left = lifecycle::time_left(call, &store, actor)?;
+            let left = lifecycle::time_left(call, actor)?;
             call.push(Value::Number(f64::from(left)))
         },
         &captures,
-        store.clone(),
     )?;
     call.with_roots(&[left], |call| {
         call.new_host_function_with_data(
             query,
             &[captures[0], captures[1], original, left],
-            Query {
-                store: store.clone(),
-                class,
-                name,
-            },
+            Query { class, name },
         )
     })
 }
@@ -189,34 +171,26 @@ fn wrap(
 // existing call to the captured bound setter goes through this observer.
 pub(super) fn scalar_forward(
     call: &mut HostCall<'_>,
-    store: &Shared,
     name: &str,
     original: Value,
     args: &[Value],
 ) -> Result<(), Error> {
-    if !enabled(store) {
+    if !enabled(call.store()) {
         return call.call_and_return(original, args);
     }
     let wrapped = call.with_roots(&[original], |call| {
-        wrap(call, store, "Actor".into(), name.into(), original)
+        wrap(call, "Actor".into(), name.into(), original)
     })?;
     call.call_and_return(wrapped, args)
 }
 
 #[derive(Clone)]
 struct Command {
-    store: Shared,
     name: String,
     entering: bool,
 }
-pub(super) fn command(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    function: Value,
-    name: &[u8],
-    entering: bool,
-) {
-    if !enabled(store) {
+pub(super) fn command(call: &mut HostCall<'_>, function: Value, name: &[u8], entering: bool) {
+    if !enabled(call.store()) {
         return;
     }
     let _ = (|| -> Result<(), Error> {
@@ -224,7 +198,6 @@ pub(super) fn command(
             command_event,
             &[call.captures()[0], call.captures()[1], function],
             Command {
-                store: store.clone(),
                 name: String::from_utf8_lossy(name).into_owned(),
                 entering,
             },
@@ -248,7 +221,7 @@ fn command_event(call: &mut HostCall<'_>) -> Result<(), Error> {
     }
     let source = String::from_utf8_lossy(source).into_owned();
     let [beat, seconds] = clock(&mut s, globals)?;
-    let Some(scene) = data.store.lock().unwrap().trace.scene else {
+    let Some(scene) = s.store_ref().trace.scene else {
         return Ok(());
     };
     let line = if info.what == Some(b"C\0".as_slice()) {
@@ -267,7 +240,7 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Query>().unwrap().clone();
     let original = call.captures()[2];
     let left = call.captures()[3];
-    if !enabled(&data.store) {
+    if !enabled(call.store()) {
         let args = call.arguments().to_vec();
         let result = call.call(original, &args)?.to_vec();
         for value in result {
@@ -283,17 +256,17 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
         s.push(s.value(index as isize).unwrap())?;
     }
     let special = data.class == "Actor" && matches!(data.name.as_str(), "sleep" | "queuecommand");
-    let observed = data.store.lock().unwrap().trace.depth == 0;
+    let observed = s.store_ref().trace.depth == 0;
     if !special {
-        data.store.lock().unwrap().trace.depth += 1;
+        s.store().trace.depth += 1;
     }
     let result = s.call(count, None);
     let result_top = s.top();
     if !special {
-        data.store.lock().unwrap().trace.depth -= 1;
+        s.store().trace.depth -= 1;
     }
     if data.class == "PlayerState" && data.name == "GetPlayerOptions" {
-        let _ = option_path(&mut s, &data.store, count, result.as_ref().ok().copied());
+        let _ = option_path(&mut s, count, result.as_ref().ok().copied());
     }
     if observed && (!special || result.is_ok()) {
         let modifier = matches!(data.class.as_str(), "PlayerOptions" | "SongOptions");
@@ -313,7 +286,7 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
             if special {
                 let argument = s.value(2).unwrap_or(Value::Nil);
                 let argument = match argument {
-                    Value::String(_) | Value::Number(_) => encode(s, &data.store, argument, 0)?,
+                    Value::String(_) | Value::Number(_) => encode(s, argument, 0)?,
                     _ => Json::Null,
                 };
                 let actor = s.value(1);
@@ -322,12 +295,12 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
                 let mut args = Vec::new();
                 for index in 2..=count {
                     let value = s.value(index as isize).unwrap();
-                    args.push(encode(s, &data.store, value, 0)?);
+                    args.push(encode(s, value, 0)?);
                 }
                 let mut values = Vec::new();
                 for index in count + 1..=count + results {
                     let value = s.value(index as isize).unwrap();
-                    values.push(encode(s, &data.store, value, 0)?);
+                    values.push(encode(s, value, 0)?);
                 }
                 let mut detail = json!({"args":args,"results":values});
                 if kind == "call"
@@ -344,7 +317,7 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
                 Ok(json!({"kind":"trace-error","error":result.as_ref().unwrap_err().to_string()}))
             }
         };
-        let _ = method(&mut s, &data.store, globals, kind, &operation, details);
+        let _ = method(&mut s, globals, kind, &operation, details);
     }
     let restored = s.set_top(result_top);
     match result {
@@ -358,7 +331,6 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn option_path(
     s: &mut NativeStack<'_, '_>,
-    store: &Shared,
     count: usize,
     results: Option<usize>,
 ) -> Result<(), Error> {
@@ -377,7 +349,7 @@ fn option_path(
         .map(|b| String::from_utf8_lossy(b).into_owned())
         .unwrap_or_else(|| "nil".into());
     s.set_top(s.top() - 1)?;
-    let mut store = store.lock().unwrap();
+    let store = s.store();
     let path = store
         .trace
         .objects
@@ -410,14 +382,13 @@ fn tween_left(
 
 fn method(
     s: &mut NativeStack<'_, '_>,
-    store: &Shared,
     globals: Value,
     kind: &str,
     operation: &str,
     details: impl FnOnce(&mut NativeStack<'_, '_>) -> Result<Json, Error>,
 ) -> Result<(), Error> {
     let (scene, depth, callback) = {
-        let g = store.lock().unwrap();
+        let g = s.store();
         (g.trace.scene, g.trace.depth, g.song_callback_depth != 0)
     };
     let Some(scene) = scene else {
@@ -517,9 +488,9 @@ fn string(s: &mut NativeStack<'_, '_>, value: Value) -> Result<String, Error> {
     s.set_top(s.top() - 1)?;
     Ok(result)
 }
-fn actor_name(s: &mut NativeStack<'_, '_>, store: &Shared, index: isize) -> Result<String, Error> {
+fn actor_name(s: &mut NativeStack<'_, '_>, index: isize) -> Result<String, Error> {
     let native = match s.value(index) {
-        Some(Value::Table(id)) => store.lock().unwrap().actors.get(&id).and_then(|actor| {
+        Some(Value::Table(id)) => s.store().actors.get(&id).and_then(|actor| {
             (!actor.raw_instance && !actor.pending_init && !actor.offline_instance)
                 .then(|| actor.state.name.clone())
         }),
@@ -540,12 +511,7 @@ fn actor_name(s: &mut NativeStack<'_, '_>, store: &Shared, index: isize) -> Resu
     }
     Ok(String::new())
 }
-fn encode(
-    s: &mut NativeStack<'_, '_>,
-    store: &Shared,
-    value: Value,
-    depth: usize,
-) -> Result<Json, Error> {
+fn encode(s: &mut NativeStack<'_, '_>, value: Value, depth: usize) -> Result<Json, Error> {
     Ok(match value {
         Value::Nil => json!({"type":"nil"}),
         Value::Boolean(value) => json!(value),
@@ -567,9 +533,9 @@ fn encode(
             s.push(value)?;
             let index = s.top_offset();
             let kind = field(s, index, b"__songlua_actor_type")?;
-            let label = { store.lock().unwrap().trace.objects.get(&id).cloned() };
+            let label = { s.store().trace.objects.get(&id).cloned() };
             let result = if kind != Value::Nil {
-                let name = actor_name(s, store, index)?;
+                let name = actor_name(s, index)?;
                 let identity = s.to_pointer(index).unwrap();
                 let mut path = Vec::new();
                 let mut seen = HashSet::new();
@@ -586,13 +552,12 @@ fn encode(
                     }
                     s.push(actor)?;
                     let actor = s.top_offset();
-                    let name = actor_name(s, store, actor)?;
+                    let name = actor_name(s, actor)?;
                     if !name.is_empty() {
                         path.push(name);
                     }
-                    let native_parent = store
-                        .lock()
-                        .unwrap()
+                    let native_parent = s
+                        .store()
                         .actors
                         .get(&actor_id)
                         .map(|actor| actor.parent.map_or(Value::Nil, Value::Table));
@@ -623,7 +588,7 @@ fn encode(
                     for i in 1..=s.object_len(index)? {
                         s.raw_get_integer(index, i as i32)?;
                         let value = s.value(-1).unwrap();
-                        values.push(encode(s, store, value, depth + 1)?);
+                        values.push(encode(s, value, depth + 1)?);
                         s.set_top(s.top() - 1)?;
                     }
                     Json::Array(values)
@@ -644,10 +609,10 @@ impl Actors {
         value: Value,
         depth: usize,
     ) -> Result<Json, Error> {
-        vm.with_native_stack(|stack| encode(stack, &self.store, value, depth))
+        vm.with_native_stack(|stack| encode(stack, value, depth))
     }
-    pub(crate) fn fixture_query_objects(&self, objects: &[(Value, Json)]) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn fixture_query_objects(&self, vm: &mut Vm, objects: &[(Value, Json)]) {
+        let store = vm.store();
         store.trace.objects.clear();
         store.trace.hooks.clear();
         store.trace.depth = 0;
@@ -669,7 +634,7 @@ impl Actors {
         let class_pin = vm.pin(class)?;
         let result = (|| {
             let name = vm.try_intern(name.as_bytes())?;
-            let callback = vm.new_host_function_with_data(
+            let callback = vm.new_host_function(
                 hook,
                 &[
                     Value::Table(self.registry),
@@ -678,17 +643,14 @@ impl Actors {
                     class,
                     name,
                 ],
-                self.store.clone(),
             )?;
             vm.call(callback, &[owner, class, name]).map(|_| ())
         })();
         vm.unpin(class_pin)?;
         result
     }
-    pub(crate) fn fixture_query_hooks(&self) -> Vec<(Value, String)> {
-        self.store
-            .lock()
-            .unwrap()
+    pub(crate) fn fixture_query_hooks(&self, vm: &Vm) -> Vec<(Value, String)> {
+        vm.store_ref()
             .trace
             .hooks
             .iter()

@@ -20,9 +20,8 @@ pub(super) struct Saved {
     wrappers: Vec<TableId>,
 }
 impl Saved {
-    pub(super) fn read(store: &Shared, actor: TableId, raw: TableId) -> Option<Self> {
-        let guard = store.lock().unwrap();
-        let a = guard.actors.get(&actor)?;
+    pub(super) fn read(store: &Store, actor: TableId, raw: TableId) -> Option<Self> {
+        let a = store.actors.get(&actor)?;
         Some(Self {
             actor,
             raw,
@@ -40,15 +39,14 @@ impl Saved {
             wrappers: a.wrappers.clone(),
         })
     }
-    pub(super) fn restore(self, store: &Shared) {
+    pub(super) fn restore(self, store: &mut Store) {
         self.restore_inner(store, false);
     }
-    pub(super) fn restore_mutable(self, store: &Shared) {
+    pub(super) fn restore_mutable(self, store: &mut Store) {
         self.restore_inner(store, true);
     }
-    fn restore_inner(self, store: &Shared, retain_capture: bool) {
-        let mut guard = store.lock().unwrap();
-        let Some(a) = guard.actors.get_mut(&self.actor) else {
+    fn restore_inner(self, store: &mut Store, retain_capture: bool) {
+        let Some(a) = store.actors.get_mut(&self.actor) else {
             return;
         };
         // Child attachment and parent changes are structural native mutations;
@@ -84,37 +82,29 @@ struct Output {
 }
 #[derive(Clone)]
 struct Run {
-    store: Shared,
     actors: Vec<(usize, TableId)>,
     raw: bool,
     output: Arc<Mutex<Output>>,
 }
 
+/// Preparation flags replaced by [`Actors::deferred_message_capture`].
+#[must_use = "pass the saved flags to end_deferred_message_capture"]
 pub(crate) struct DeferredCapture {
-    store: Shared,
     preparing: bool,
     playback: bool,
-}
-impl Drop for DeferredCapture {
-    fn drop(&mut self) {
-        let mut store = self.store.lock().unwrap();
-        store.preparing = self.preparing;
-        store.playback = self.playback;
-    }
 }
 impl Actors {
     // The compiler retries deferred commands after chronological capture has
     // ended, using the shared locals reached by real updates. This is a bounded
     // preparation probe, not another frame or live callback.
-    pub(crate) fn deferred_message_capture(&self) -> Result<DeferredCapture, String> {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn deferred_message_capture(&self, vm: &mut Vm) -> Result<DeferredCapture, String> {
+        let store = vm.store();
         if store.clock.live.load(std::sync::atomic::Ordering::Relaxed)
             || store.replay_frame.is_some()
         {
             return Err("deferred message capture requires inactive preparation replay".into());
         }
         let scope = DeferredCapture {
-            store: self.store.clone(),
             preparing: store.preparing,
             playback: store.playback,
         };
@@ -123,8 +113,15 @@ impl Actors {
         Ok(scope)
     }
 
-    pub(crate) fn actor_function_capture_ready(&self) -> bool {
-        let guard = self.store.lock().unwrap();
+    /// Restore the flags saved by [`Self::deferred_message_capture`].
+    pub(crate) fn end_deferred_message_capture(&self, vm: &mut Vm, scope: DeferredCapture) {
+        let store = vm.store();
+        store.preparing = scope.preparing;
+        store.playback = scope.playback;
+    }
+
+    pub(crate) fn actor_function_capture_ready(&self, vm: &mut Vm) -> bool {
+        let guard = vm.store();
         guard.preparing
             && !guard.playback
             && !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
@@ -136,7 +133,7 @@ impl Actors {
         function: Value,
         arg: Option<f32>,
     ) -> (Result<SongActorFunctionBlocks, Error>, bool, Option<Root>) {
-        let _broadcasts = song_capture::pause_preparation_broadcasts(&self.store);
+        let broadcasts = song_capture::pause_preparation_broadcasts(vm.store());
         let output = Arc::new(Mutex::new(Output::default()));
         let mut returned = None;
         let result = (|| {
@@ -155,7 +152,6 @@ impl Actors {
                     Value::Table(retained),
                 ];
                 let mut data = Run {
-                    store: self.store.clone(),
                     actors,
                     raw: false,
                     output: output.clone(),
@@ -192,35 +188,31 @@ impl Actors {
         if result.is_err() {
             output.blocks.clear();
         }
+        song_capture::resume_preparation_broadcasts(vm.store(), broadcasts);
         (result, restored, returned)
     }
 }
 
-pub(super) fn reset(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if let Some(a) = store.lock().unwrap().actors.get_mut(&actor) {
+pub(super) fn reset(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if let Some(a) = call.store().actors.get_mut(&actor) {
         a.capture
             .get_or_insert_with(capture::Capture::default)
             .reset_blocks();
     }
-    reset_fields(call, store, actor)
+    reset_fields(call, actor)
 }
-pub(super) fn reset_frame(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
-    if let Some(capture) = store
-        .lock()
-        .unwrap()
+pub(super) fn reset_frame(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if let Some(capture) = call
+        .store()
         .actors
         .get_mut(&actor)
         .and_then(|a| a.capture.as_mut())
     {
         capture.reset_blocks();
     }
-    reset_fields(call, store, actor)
+    reset_fields(call, actor)
 }
-fn reset_fields(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     for key in [
         "__songlua_capture_cursor",
         "__songlua_capture_duration",
@@ -238,9 +230,8 @@ fn reset_fields(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Resu
     ] {
         song_replay::raw_set(call, actor, key, Value::Nil)?;
     }
-    if store
-        .lock()
-        .unwrap()
+    if call
+        .store()
         .clock
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
@@ -283,12 +274,12 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
         let raw = state_snapshot::raw_copy(call, *actor)?;
         call.raw_table_set(retained, Value::Number((i + 1) as f64), Value::Table(raw))?;
         saved.push(
-            Saved::read(&data.store, *actor, raw)
+            Saved::read(call.store_ref(), *actor, raw)
                 .ok_or_else(|| call.error(b"capture actor is not owned by this runtime"))?,
         );
     }
     for (_, actor) in &data.actors {
-        reset(call, &data.store, *actor)?;
+        reset(call, *actor)?;
     }
     data.output.lock().unwrap().saved = saved;
     Ok(())
@@ -297,10 +288,8 @@ fn finish(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Run>().unwrap().clone();
     let mut blocks = Vec::new();
     for (index, id) in &data.actors {
-        if let Some(capture) = data
-            .store
-            .lock()
-            .unwrap()
+        if let Some(capture) = call
+            .store()
             .actors
             .get_mut(id)
             .and_then(|a| a.capture.as_mut())
@@ -312,14 +301,14 @@ fn finish(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
     }
     for (_, actor) in &data.actors {
-        reset(call, &data.store, *actor)?;
+        reset(call, *actor)?;
     }
     let saved = std::mem::take(&mut data.output.lock().unwrap().saved);
     for state in saved {
         state_snapshot::restore_raw(call, state.actor, state.raw, data.raw)?;
-        state.restore(&data.store);
+        state.restore(call.store());
     }
-    lifecycle::invalidate_plans(call, &data.store)?;
+    lifecycle::invalidate_plans(call)?;
     let mut output = data.output.lock().unwrap();
     output.blocks = blocks;
     output.restored = true;

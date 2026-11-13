@@ -57,7 +57,7 @@ impl SongRuntime {
             runner = Some(root);
             let function = self.vm.rooted(root).map_err(|e| e.to_string())?;
             let random = self.preserve_random();
-            let previous = self.actors.begin_command_locals();
+            let previous = self.actors.begin_command_locals(&mut self.vm);
             let first =
                 self.capture_song_function_action_inner(overlays, tracked, function, beat, false);
             let second = first.as_ref().ok().map(|_| {
@@ -89,7 +89,7 @@ impl SongRuntime {
         overlays: &mut [SongMessageTarget<'_>],
         mut on_dynamic: impl FnMut(String),
     ) -> Result<(), String> {
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("stable message capture requires preparation".into());
         }
         let mut pins = Vec::new();
@@ -205,22 +205,28 @@ impl SongRuntime {
                     skipped.retain(|d| d != &row.detail);
                     continue;
                 }
-                let _capture = self.actors.deferred_message_capture()?;
-                let root = self
-                    .actors
-                    .lookup_capture_command(&mut self.vm, Value::Table(row.actor), &row.command)
-                    .map_err(|e| e.to_string())?
-                    .ok_or_else(|| "deferred message command must be a function".to_owned())?;
-                let function = self.vm.rooted(root).map_err(|e| e.to_string())?;
-                let attempts = self.song_message_attempts(
-                    &selected,
-                    &tracked_values,
-                    Value::Table(row.actor),
-                    &row.command,
-                    function,
-                    beat,
-                );
-                self.vm.unpin(root).map_err(|e| e.to_string())?;
+                let capture = self.actors.deferred_message_capture(&mut self.vm)?;
+                // Restore the preparation flags on every path out of the retry.
+                let attempts = (|| {
+                    let root = self
+                        .actors
+                        .lookup_capture_command(&mut self.vm, Value::Table(row.actor), &row.command)
+                        .map_err(|e| e.to_string())?
+                        .ok_or_else(|| "deferred message command must be a function".to_owned())?;
+                    let function = self.vm.rooted(root).map_err(|e| e.to_string())?;
+                    let attempts = self.song_message_attempts(
+                        &selected,
+                        &tracked_values,
+                        Value::Table(row.actor),
+                        &row.command,
+                        function,
+                        beat,
+                    );
+                    self.vm.unpin(root).map_err(|e| e.to_string())?;
+                    attempts
+                })();
+                self.actors
+                    .end_deferred_message_capture(&mut self.vm, capture);
                 let (Ok(first), Some(Ok(second))) = attempts? else {
                     continue;
                 };

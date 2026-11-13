@@ -16,7 +16,6 @@ end"#;
 
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     method: &'static str,
 }
 
@@ -28,10 +27,9 @@ impl Actors {
         screen: Value,
     ) -> Result<(), Error> {
         ensure_helpers(vm, self.helpers)?;
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             initialize_callback,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            self.store.clone(),
         )?;
         vm.call(function, &[screen]).map(|_| ())
     }
@@ -52,13 +50,8 @@ fn raw(call: &mut HostCall<'_>, actor: TableId, name: &str, value: Value) -> Res
     call.raw_table_set(actor, key, value)
 }
 
-pub(super) fn create(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    name: &str,
-) -> Result<TableId, Error> {
-    let actor = generated_players::dummy(call, store, scene, "StepsDisplay", name, None)?;
+pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
+    let actor = generated_players::dummy(call, scene, "StepsDisplay", name, None)?;
     raw(
         call,
         actor,
@@ -71,17 +64,17 @@ pub(super) fn create(
         ("Description", "BitmapText"),
         ("Autogen", "Sprite"),
     ] {
-        let child = generated_players::dummy(call, store, scene, kind, name, Some(actor))?;
+        let child = generated_players::dummy(call, scene, kind, name, Some(actor))?;
         if kind == "Sprite" {
-            screen_parts::blank_texture(call, store, child)?;
+            screen_parts::blank_texture(call, child)?;
         } else {
             let font = call.try_intern(b"Common Normal")?;
             raw(call, child, "Font", font)?;
             let empty = call.try_intern(b"")?;
             raw(call, child, "Text", empty)?;
         }
-        screen_parts::append(call, store, actor, child)?;
-        screen_parts::named(call, store, actor, name, child)?;
+        screen_parts::append(call, actor, child)?;
+        screen_parts::named(call, actor, name, child)?;
     }
     let bound = get(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
@@ -89,10 +82,7 @@ pub(super) fn create(
         let function = call.new_host_function_with_data(
             invoke,
             &[call.captures()[0], call.captures()[1]],
-            Binding {
-                store: store.clone(),
-                method,
-            },
+            Binding { method },
         )?;
         raw(call, bound, method, function)?;
     }
@@ -131,14 +121,9 @@ fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, 
     }
 }
 
-fn visibility(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    visible: bool,
-) -> Result<(), Error> {
+fn visibility(call: &mut HostCall<'_>, actor: TableId, visible: bool) -> Result<(), Error> {
     raw(call, actor, "__songlua_visible", Value::Boolean(visible))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.state.visible = visible;
     }
     Ok(())
@@ -156,20 +141,19 @@ fn child(call: &mut HostCall<'_>, registry: TableId, name: &str) -> Result<Table
 
 fn direct_message(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Value,
 ) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor), params], |call| {
-        run_command(call, store, actor, name, Some(params))?;
+        run_command(call, actor, name, Some(params))?;
         let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
         if ["ActorFrame", "ActorFrameTexture", "TopScreen"]
             .iter()
             .any(|k| kind.eq_ignore_ascii_case(k))
         {
             with_children(call, actor, |call, child| {
-                direct_message(call, store, child, name, params)
+                direct_message(call, child, name, params)
             })?;
         }
         Ok(())
@@ -178,7 +162,6 @@ fn direct_message(
 
 fn set_value(
     call: &mut HostCall<'_>,
-    store: &Shared,
     display: TableId,
     value: Option<TableId>,
     trail: bool,
@@ -248,7 +231,7 @@ fn set_value(
                 )?;
             }
             let params = Value::Table(params);
-            visibility(call, store, display, true)?;
+            visibility(call, display, true)?;
             let children = registry(call, display)?;
             call.with_roots(&[children], |call| {
                 let children = table(call, children)?;
@@ -258,7 +241,7 @@ fn set_value(
                 call.with_roots(&[Value::Table(held)], |call| {
                     let frame = child(call, children, "Frame")?;
                     call.raw_table_set(held, Value::Number(1.), Value::Table(frame))?;
-                    direct_message(call, store, frame, b"Set", params)?;
+                    direct_message(call, frame, b"Set", params)?;
                     let text = child(call, children, "Meter")?;
                     call.raw_table_set(held, Value::Number(2.), Value::Table(text))?;
                     let meter_text = if meter == 0 {
@@ -269,27 +252,27 @@ fn set_value(
                     let meter_text = call.try_intern(meter_text.as_bytes())?;
                     raw(call, text, "Text", meter_text)?;
                     if meter != 0 {
-                        direct_message(call, store, text, b"Set", params)?;
+                        direct_message(call, text, b"Set", params)?;
                     }
                     let text = child(call, children, "Description")?;
                     call.raw_table_set(held, Value::Number(3.), Value::Table(text))?;
                     let description = call.try_intern(description.as_bytes())?;
                     raw(call, text, "Text", description)?;
-                    direct_message(call, store, text, b"Set", params)?;
+                    direct_message(call, text, b"Set", params)?;
                     let autogen = child(call, children, "Autogen")?;
                     call.raw_table_set(held, Value::Number(4.), Value::Table(autogen))?;
                     call.with_roots(&[Value::Table(autogen)], |call| {
-                        direct_message(call, store, autogen, b"Set", params)?;
+                        direct_message(call, autogen, b"Set", params)?;
                         let autogen_value = if !trail && let Some(value) = value {
                             truthy(value_call(call, value, "IsAutogen", &[])?)
                         } else {
                             false
                         };
-                        visibility(call, store, autogen, autogen_value)
+                        visibility(call, autogen, autogen_value)
                     })?;
-                    run_command(call, store, display, b"Set", Some(params))?;
+                    run_command(call, display, b"Set", Some(params))?;
                     with_children(call, display, |call, child| {
-                        direct_message(call, store, child, b"Set", params)
+                        direct_message(call, child, b"Set", params)
                     })
                 })
             })
@@ -298,7 +281,7 @@ fn set_value(
 }
 
 fn invoke(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let Binding { store, method } = call.function_data::<Binding>().unwrap().clone();
+    let Binding { method } = call.function_data::<Binding>().unwrap().clone();
     let display = table(call, arg(call, 0))?;
     let value = arg(call, 1);
     if method == "SetFromGameState" {
@@ -317,12 +300,12 @@ fn invoke(call: &mut HostCall<'_>) -> Result<(), Error> {
                 },
                 &[value],
             )?;
-            set_value(call, &store, display, optional_table(call, value)?, trail)
+            set_value(call, display, optional_table(call, value)?, trail)
         })?;
     } else if let Some(value) = optional_table(call, value)? {
-        set_value(call, &store, display, Some(value), method == "SetFromTrail")?;
+        set_value(call, display, Some(value), method == "SetFromTrail")?;
     } else {
-        visibility(call, &store, display, false)?;
+        visibility(call, display, false)?;
     }
     // The typed counter conversion and increment happen only after all callbacks.
     let globals = table(call, helper(call, 5)?)?;
@@ -347,16 +330,11 @@ fn invoke(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 #[cfg(feature = "test-support")]
 fn initialize_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
     let screen = table(call, arg(call, 0))?;
-    initialize(call, &store, screen)
+    initialize(call, screen)
 }
 
-pub(super) fn initialize(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    screen: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize(call: &mut HostCall<'_>, screen: TableId) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
     let game = field(call, globals, "GAMESTATE")?;
     call.with_roots(&[game], |call| {
@@ -387,10 +365,11 @@ pub(super) fn initialize(
                         child(call, table(call, children)?, name)
                     })?;
                     {
-                        let mut guard = store.lock().unwrap();
-                        let actor = guard.actors.get_mut(&actor).ok_or_else(|| {
-                            call.error(b"steps display child is not owned by this runtime")
-                        })?;
+                        let Some(actor) = call.store().actors.get_mut(&actor) else {
+                            return Err(
+                                call.error(b"steps display child is not owned by this runtime")
+                            );
+                        };
                         let pose = actor.destination_mut();
                         pose.x = x;
                         pose.y = 0.;
@@ -402,7 +381,7 @@ pub(super) fn initialize(
                             raw(call, actor, &format!("{command}Command"), callback)?;
                         }
                     }
-                    run_named(call, store, actor, b"On", None)?;
+                    run_named(call, actor, b"On", None)?;
                 }
                 let player = call.try_intern(crate::player_number_name(index).as_bytes())?;
                 let params = Value::Table(call.try_new_table()?);
@@ -411,12 +390,12 @@ pub(super) fn initialize(
                     table(call, state)?;
                     raw(call, table(call, params)?, "PlayerState", state)?;
                     with_children(call, display, |call, child| {
-                        direct_message(call, store, child, b"Load", params)
+                        direct_message(call, child, b"Load", params)
                     })?;
-                    visibility(call, store, display, false)?;
+                    visibility(call, display, false)?;
                     let steps = value_call(call, game, "GetCurrentSteps", &[player])?;
                     if let Some(steps) = optional_table(call, steps)? {
-                        set_value(call, store, display, Some(steps), false)?;
+                        set_value(call, display, Some(steps), false)?;
                     }
                     Ok(())
                 })?;

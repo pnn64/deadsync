@@ -127,7 +127,7 @@ impl SongRuntime {
             self.actor_loader.install_live(&mut self.vm)?;
         }
         self.compiler_globals_installed = true;
-        self.actors.begin_song_capture();
+        self.actors.begin_song_capture(&mut self.vm);
         Ok(true)
     }
 
@@ -164,6 +164,6 @@ pub struct SongInitialStates {
 impl SongRuntime {
     /// Latest authored initialization's pre-Init captures for this active screen.
     pub fn song_initial_states(&self, screen: ActorScene) -> Option<SongInitialStates> {
-        self.actors.song_initial_states(screen)
+        self.actors.song_initial_states(&self.vm, screen)
     }
 }

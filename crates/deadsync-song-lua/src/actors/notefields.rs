@@ -5,13 +5,11 @@ use sprites::{field, set};
 
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     scene: u64,
     name: &'static str,
 }
 #[cfg(feature = "test-support")]
 struct Build {
-    store: Shared,
     player: usize,
     style: String,
 }
@@ -27,7 +25,6 @@ impl Actors {
             construct,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Build {
-                store: self.store.clone(),
                 player,
                 style: style.to_owned(),
             },
@@ -44,11 +41,10 @@ impl Actors {
 #[cfg(feature = "test-support")]
 fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
     let build = call.function_data::<Build>().unwrap();
-    let store = build.store.clone();
     let player = build.player;
     let style = build.style.clone();
     let id = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.next >= (1u64 << 53) - 1 {
             return Err(call.error(b"actor scene identity exhausted"));
         }
@@ -67,11 +63,11 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
         );
         id
     };
-    let result = create(call, &store, id, player, &style);
+    let result = create(call, id, player, &style);
     match result {
-        Ok(actor) => store.lock().unwrap().scenes.get_mut(&id).unwrap().root = Some(actor),
+        Ok(actor) => call.store().scenes.get_mut(&id).unwrap().root = Some(actor),
         Err(error) => {
-            release(call, &store, id)?;
+            release(call, id)?;
             return Err(error);
         }
     }
@@ -80,21 +76,18 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn create(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     player: usize,
     style: &str,
 ) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "NoteField", "", None)?;
-    let board = dummy(call, store, scene, "Sprite", "Board", Some(actor))?;
+    let actor = dummy(call, scene, "NoteField", "", None)?;
+    let board = dummy(call, scene, "Sprite", "Board", Some(actor))?;
     let path =
         crate::blank_texture::load_native_blank_texture().map_err(|e| call.error(e.as_bytes()))?;
     let path = call.try_intern(path.as_bytes())?;
-    sprites::set_texture(call, store, board, path, false)?;
+    sprites::set_texture(call, board, path, false)?;
     call.raw_table_set(actor, Value::Number(1.), Value::Table(board))?;
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&actor)
         .unwrap()
@@ -130,11 +123,7 @@ pub(super) fn create(
         let function = call.new_host_function_with_data(
             method,
             &[call.captures()[0], call.captures()[1], Value::Table(actor)],
-            Binding {
-                store: store.clone(),
-                scene,
-                name,
-            },
+            Binding { scene, name },
         )?;
         call.with_roots(&[function], |call| {
             let value = get(call, actor, b"__songlua_bound_methods")?;
@@ -146,15 +135,9 @@ pub(super) fn create(
             Ok(())
         })?;
     }
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .current
-        .y = f32::midpoint(crate::THEME_RECEPTOR_Y_STD, crate::THEME_RECEPTOR_Y_REV);
-    columns(call, store, scene, actor)?;
+    call.store().actors.get_mut(&actor).unwrap().current.y =
+        f32::midpoint(crate::THEME_RECEPTOR_Y_STD, crate::THEME_RECEPTOR_Y_REV);
+    columns(call, scene, actor)?;
     Ok(actor)
 }
 
@@ -230,18 +213,13 @@ fn current_style(call: &mut HostCall<'_>) -> Result<String, Error> {
     })
 }
 
-fn columns(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<Value, Error> {
+fn columns(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<Value, Error> {
     let cached = field(call, actor, "__songlua_note_columns")?;
     if cached != Value::Nil {
         table(call, cached)?;
         return Ok(cached);
     }
-    if !store.lock().unwrap().scenes.contains_key(&scene) {
+    if !call.store().scenes.contains_key(&scene) {
         return Err(call.error(b"NoteField scene has been released"));
     }
     let columns = call.try_new_table()?;
@@ -263,7 +241,7 @@ fn columns(
             text(call, value)?
         };
         for index in 0..crate::song_lua_style_info(&style).columns {
-            let column = dummy(call, store, scene, "NoteColumnRenderer", "", Some(actor))?;
+            let column = dummy(call, scene, "NoteColumnRenderer", "", Some(actor))?;
             set(
                 call,
                 column,
@@ -277,21 +255,13 @@ fn columns(
                 Value::Number(index as f64),
             )?;
             let x = crate::song_lua_style_column_x(&style, index);
-            if !store
-                .lock()
-                .unwrap()
+            if !call
+                .store()
                 .clock
                 .live
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&column)
-                    .unwrap()
-                    .current
-                    .x = x;
+                call.store().actors.get_mut(&column).unwrap().current.x = x;
             }
             for (key, value) in [
                 ("__songlua_state_x", x),
@@ -327,7 +297,7 @@ fn columns(
             )?;
         }
         set(call, actor, "__songlua_note_columns", Value::Table(columns))?;
-        lifecycle::invalidate_plans(call, store)?;
+        lifecycle::invalidate_plans(call)?;
         Ok(Value::Table(columns))
     })
 }
@@ -346,7 +316,7 @@ fn method(call: &mut HostCall<'_>) -> Result<(), Error> {
                 valid = kind != Value::Nil && text(call, kind)?.eq_ignore_ascii_case("NoteField");
             }
             let value = if valid {
-                columns(call, &data.store, data.scene, actor)?
+                columns(call, data.scene, actor)?
             } else {
                 Value::Nil
             };

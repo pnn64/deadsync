@@ -16,7 +16,6 @@ pub(crate) enum Phase {
 
 #[derive(Clone)]
 struct Load {
-    store: Shared,
     scene: u64,
     phase: Phase,
 }
@@ -28,14 +27,13 @@ impl Actors {
         scene: ActorScene,
         phase: Phase,
     ) -> Result<bool, Error> {
-        if self.root(scene).is_none() {
+        if self.root(vm, scene).is_none() {
             return Ok(false);
         }
         let function = vm.new_host_function_with_data(
             load,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Load {
-                store: self.store.clone(),
                 scene: scene.id,
                 phase,
             },
@@ -47,12 +45,12 @@ impl Actors {
 
 fn load(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Load>().unwrap().clone();
-    let first = data.store.lock().unwrap().next;
+    let first = call.store().next;
     let result = match data.phase {
         Phase::Combo => combo(call, &data),
-        Phase::Underlay => song_capture::without_live_broadcasts(call, &data.store, |call| {
-            underlay::load(call, &data)
-        }),
+        Phase::Underlay => {
+            song_capture::without_live_broadcasts(call, |call| underlay::load(call, &data))
+        }
         Phase::Overlay { capture_probe } => overlay::load(call, &data, capture_probe),
         Phase::Decorations => overlay::decorations(call, &data),
         Phase::Transitions => transitions(call, &data),
@@ -62,20 +60,18 @@ fn load(call: &mut HostCall<'_>) -> Result<(), Error> {
     // retain the screen after Init stores an actor in one of those upvalues.
     // All objects constructed in this theme phase belong to its screen, even
     // when a file or callback fails before the returned root can be attached.
-    let created = data
-        .store
-        .lock()
-        .unwrap()
+    let created = call
+        .store()
         .scenes
         .keys()
         .copied()
         .filter(|id| *id > first)
         .collect::<Vec<_>>();
     for scene in created {
-        adopt_scene(&data, scene);
+        adopt_scene(call, &data, scene);
     }
     result?;
-    lifecycle::invalidate_plans(call, &data.store)
+    lifecycle::invalidate_plans(call)
 }
 
 fn field(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
@@ -91,14 +87,9 @@ fn set(call: &mut HostCall<'_>, actor: TableId, name: &str, value: Value) -> Res
     })
 }
 
-fn parent(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    owner: TableId,
-) -> Result<(), Error> {
+fn parent(call: &mut HostCall<'_>, actor: TableId, owner: TableId) -> Result<(), Error> {
     set(call, actor, "__songlua_parent", Value::Table(owner))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(owner);
     }
     Ok(())
@@ -114,29 +105,24 @@ fn member(call: &mut HostCall<'_>, owner: TableId, name: &str) -> Result<TableId
 // the screen must still release every actor registered by this load.
 fn own(call: &mut HostCall<'_>, data: &Load, definition: Value) -> Result<TableId, Error> {
     call.with_roots(&[definition], |call| {
-        let scene = materialize(
-            call,
-            &data.store,
-            table(call, definition)?,
-            Materialization::Construct,
-        )?;
-        let actor = data.store.lock().unwrap().scenes[&scene]
+        let scene = materialize(call, table(call, definition)?, Materialization::Construct)?;
+        let actor = call.store().scenes[&scene]
             .root
             .expect("constructed actor root");
-        adopt_scene(data, scene);
+        adopt_scene(call, data, scene);
         Ok(actor)
     })
 }
 
-fn adopt_scene(data: &Load, scene: u64) {
-    adopt_owned_scene(&data.store, data.scene, scene);
+fn adopt_scene(call: &mut HostCall<'_>, data: &Load, scene: u64) {
+    adopt_owned_scene(call.store(), data.scene, scene);
 }
 
-pub(super) fn adopt_owned_scene(store: &Shared, owner: u64, scene: u64) {
+pub(super) fn adopt_owned_scene(store: &mut Store, owner: u64, scene: u64) {
     if scene == owner {
         return;
     }
-    let mut guard = store.lock().unwrap();
+    let guard = &mut *store;
     guard.constructor_scenes.remove(&scene);
     let loaded = guard
         .scenes
@@ -206,9 +192,9 @@ fn combo(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                                 let name_value = call.try_intern(name.as_bytes())?;
                                 set(call, child, "Name", name_value)?;
                                 owned_lookup(call, child)?;
-                                initialize(call, &data.store, child)?;
+                                initialize(call, child)?;
                                 // Init runs while the milestone has no Combo parent.
-                                parent(call, &data.store, child, combo)?;
+                                parent(call, child, combo)?;
                                 call.raw_table_set(
                                     combo,
                                     Value::Number(ordinal as f64),
@@ -225,13 +211,7 @@ fn combo(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                                     _ => {}
                                 }
                             }
-                            data.store
-                                .lock()
-                                .unwrap()
-                                .actors
-                                .get_mut(&combo)
-                                .unwrap()
-                                .children = declared;
+                            call.store().actors.get_mut(&combo).unwrap().children = declared;
                             Ok(())
                         })
                     })
@@ -309,7 +289,7 @@ fn transitions(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
             "__songlua_transition_child",
             Value::Table(child),
         )?;
-        parent(call, &data.store, child, wrapper)?;
+        parent(call, child, wrapper)?;
         let mut found = false;
         for i in 1..=call.raw_table_len(wrapper)? {
             found |= call.raw_table_get(wrapper, Value::Number(i as f64))? == Value::Table(child);
@@ -320,9 +300,7 @@ fn transitions(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                 Value::Number((call.raw_table_len(wrapper)? + 1) as f64),
                 Value::Table(child),
             )?;
-            data.store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get_mut(&wrapper)
                 .unwrap()
@@ -337,6 +315,6 @@ fn transitions(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
         let visible = field(call, wrapper, "visible")?;
         call.call(visible, &[Value::Table(wrapper), Value::Boolean(true)])?;
         owned_lookup(call, wrapper)?;
-        initialize(call, &data.store, child)
+        initialize(call, child)
     })
 }

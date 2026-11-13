@@ -39,12 +39,7 @@ pub(super) fn named_children(call: &mut HostCall<'_>, actor: TableId) -> Result<
     Ok(call.call(function, &[Value::Table(actor)])?[0])
 }
 
-pub(super) fn remove(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    all: bool,
-) -> Result<(), Error> {
+pub(super) fn remove(call: &mut HostCall<'_>, actor: TableId, all: bool) -> Result<(), Error> {
     let name = if all {
         Value::Nil
     } else {
@@ -78,30 +73,20 @@ pub(super) fn remove(
                 for index in 1..=call.raw_table_len(actor)? {
                     if let Value::Table(child) =
                         call.raw_table_get(actor, Value::Number(index as f64))?
-                        && store.lock().unwrap().actors.contains_key(&child)
+                        && call.store().actors.contains_key(&child)
                     {
                         children.push(child);
                     }
                 }
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&actor)
-                    .unwrap()
-                    .children = children;
-                lifecycle::invalidate_plans(call, store)
+                call.store().actors.get_mut(&actor).unwrap().children = children;
+                lifecycle::invalidate_plans(call)
             })();
             result.and(synced)
         })
     })
 }
 
-pub(super) fn children(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Vec<TableId>, Error> {
+pub(super) fn children(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<TableId>, Error> {
     let function = helper_function(call, b"native_children")?;
     let values = call.call(function, &[Value::Table(actor)])?[0];
     call.with_roots(&[values], |call| {
@@ -110,7 +95,7 @@ pub(super) fn children(
         for i in 1..=call.raw_table_len(values)? {
             let value = call.raw_table_get(values, Value::Number(i as f64))?;
             let id = table(call, value)?;
-            if !store.lock().unwrap().actors.contains_key(&id) {
+            if !call.store().actors.contains_key(&id) {
                 return Err(call.error(b"native child is not owned by this runtime"));
             }
             result.push(id);
@@ -121,16 +106,15 @@ pub(super) fn children(
 
 pub(super) fn state(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<crate::SongLuaOverlayState, Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         let is_group = helper_function(call, b"native_is_group")?;
         if call.call(is_group, &[Value::Table(actor)])?[0] == Value::Boolean(true) {
             return Ok(crate::SongLuaOverlayState::default());
         }
     }
-    let store = store.lock().unwrap();
+    let store = call.store_ref();
     let actor = store
         .actors
         .get(&actor)
@@ -177,14 +161,9 @@ pub(super) fn group_members(
     Ok(members)
 }
 
-pub(super) fn adopt(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    parent: TableId,
-) -> Result<(), Error> {
+pub(super) fn adopt(call: &mut HostCall<'_>, actor: TableId, parent: TableId) -> Result<(), Error> {
     set(call, actor, "__songlua_parent", Value::Table(parent))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(parent);
     }
     Ok(())
@@ -192,7 +171,6 @@ pub(super) fn adopt(
 
 pub(super) fn adopt_declared(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     parent: TableId,
 ) -> Result<(), Error> {
@@ -204,7 +182,7 @@ pub(super) fn adopt_declared(
     assets::text(call, value)?;
     let key = call.try_intern(b"__songlua_parent")?;
     call.raw_table_set(actor, key, Value::Table(parent))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(parent);
     }
     Ok(())
@@ -212,7 +190,6 @@ pub(super) fn adopt_declared(
 
 pub(super) fn group_lifecycle(
     call: &mut HostCall<'_>,
-    store: &Shared,
     group: TableId,
     startup: bool,
 ) -> Result<(), Error> {
@@ -221,9 +198,7 @@ pub(super) fn group_lifecycle(
         // A fresh group forwards the lifecycle guard to its last child, just
         // like any other instance field. Authored children have already run.
         if children.last().is_some_and(|child| {
-            store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get(child)
                 .is_some_and(|a| if startup { a.started } else { a.initialized })
@@ -231,18 +206,18 @@ pub(super) fn group_lifecycle(
             return Ok(());
         }
         if startup && let Some((function, _)) = command(call, group, b"On")? {
-            run_actor_function(call, store, group, function, None)?;
+            run_actor_function(call, group, function, None)?;
         }
         for child in children {
-            adopt_declared(call, store, child, group)?;
+            adopt_declared(call, child, group)?;
             if startup {
-                lifecycle::startup(call, store, child)?;
+                lifecycle::startup(call, child)?;
             } else {
-                initialize(call, store, child)?;
+                initialize(call, child)?;
             }
         }
         if !startup && let Some((function, _)) = command(call, group, b"Init")? {
-            run_actor_function(call, store, group, function, None)?;
+            run_actor_function(call, group, function, None)?;
         }
         Ok(())
     })
@@ -269,23 +244,21 @@ pub(super) fn with_children(
 
 pub(super) fn run_command(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
 ) -> Result<(), Error> {
-    run_command_with_drain(call, store, actor, name, params, true)
+    run_command_with_drain(call, actor, name, params, true)
 }
 pub(super) fn run_command_with_drain(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
     drain: bool,
 ) -> Result<(), Error> {
-    if store.lock().unwrap().actors.contains_key(&actor) {
-        return run_named_with_drain(call, store, actor, name, params, drain);
+    if call.store().actors.contains_key(&actor) {
+        return run_named_with_drain(call, actor, name, params, drain);
     }
     // These setters accept a table receiver, and native named registries can
     // contain plain callback tables. Preserve their guard without treating an
@@ -316,14 +289,13 @@ pub(super) fn run_command_with_drain(
                     }
                     call.table_set(active, key, Value::Boolean(true))?;
                     #[cfg(feature = "test-support")]
-                    let observed_command = song_messages::update_command(store, &command_field);
+                    let observed_command =
+                        song_messages::update_command(call.store(), &command_field);
                     let result = (|| {
                         let theme = theme_callback(call, function)?;
-                        let observed =
-                            command_observed(call, store, actor, &command_field, function)?;
+                        let observed = command_observed(call, actor, &command_field, function)?;
                         match run_callback(
                             call,
-                            store,
                             actor,
                             function,
                             params,
@@ -331,14 +303,14 @@ pub(super) fn run_command_with_drain(
                             Some(&command_field),
                         ) {
                             Err(error) if theme && error.kind() == ErrorKind::Runtime => {
-                                store.lock().unwrap().diagnostics.push(error.to_string());
+                                call.store().diagnostics.push(error.to_string());
                                 Ok(())
                             }
                             result => result,
                         }
                     })();
                     #[cfg(feature = "test-support")]
-                    song_messages::restore_command(store, observed_command);
+                    song_messages::restore_command(call.store(), observed_command);
                     call.table_set(active, key, Value::Nil)?;
                     result
                 })

@@ -55,7 +55,6 @@ impl Methods {
 }
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     identity: Arc<Method>,
 }
 struct LookupKeys {
@@ -63,8 +62,7 @@ struct LookupKeys {
     classes: [Value; 10],
 }
 struct LookupBinding {
-    // Keep the same native method and Store lifetimes as other bindings.
-    _store: Shared,
+    // Keeps the method identity alive for as long as the closure exists.
     _identity: Arc<Method>,
     keys: LookupKeys,
 }
@@ -265,11 +263,7 @@ fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.raw_table_set(actor, key, value)
 }
 
-pub(super) fn install_metatable(
-    vm: &mut Vm,
-    methods: TableId,
-    store: &Shared,
-) -> Result<(), Error> {
+pub(super) fn install_metatable(vm: &mut Vm, methods: TableId) -> Result<(), Error> {
     let stringify = vm.new_host_function(stringify, &[])?;
     super::super::put(vm, methods, "Stringify", stringify)?;
     let globals = vm.get_global(b"_G")?;
@@ -293,7 +287,6 @@ pub(super) fn install_metatable(
                     lookup,
                     &[globals, Value::Table(symbols)],
                     LookupBinding {
-                        _store: store.clone(),
                         _identity: identity.clone(),
                         keys: LookupKeys {
                             actor_type,
@@ -305,17 +298,12 @@ pub(super) fn install_metatable(
                     assign,
                     &[globals, Value::Table(methods)],
                     Binding {
-                        store: store.clone(),
                         identity: identity.clone(),
                     },
                 )?,
                 _ => unreachable!("only metatable callbacks are registered here"),
             };
-            store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .insert(function, &identity);
+            vm.store().scalar_methods.insert(function, &identity);
             super::super::put(
                 vm,
                 methods,
@@ -366,7 +354,6 @@ pub(super) fn install(
     vm: &mut Vm,
     class: TableId,
     setter: Setter,
-    store: &Shared,
     captures: &[Value],
 ) -> Result<(), Error> {
     let identity = Arc::new(Method::Forward(setter));
@@ -374,19 +361,14 @@ pub(super) fn install(
         forward,
         captures,
         Binding {
-            store: store.clone(),
             identity: identity.clone(),
         },
     )?;
-    store
-        .lock()
-        .unwrap()
-        .scalar_methods
-        .insert(function, &identity);
+    vm.store().scalar_methods.insert(function, &identity);
     super::super::put(vm, class, setter.name(), function)
 }
 
-pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+pub(super) fn bind(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let bound = match get(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => {
             let bound = call.try_new_table()?;
@@ -404,9 +386,7 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
         let key = call.try_intern(setter.name().as_bytes())?;
         call.raw_table_set(actor, key, Value::Nil)?;
         let previous = get(call, bound, setter.name().as_bytes())?;
-        if store.lock().unwrap().scalar_methods.identity(previous)
-            == Some(Method::Bound(setter, actor))
-        {
+        if call.store().scalar_methods.identity(previous) == Some(Method::Bound(setter, actor)) {
             // An interrupted construction can leave some original bindings
             // installed before the actor joins Store. Reuse only bindings
             // authenticated for this exact actor and operation on retry.
@@ -417,15 +397,10 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
             bound_setter,
             &captures,
             Binding {
-                store: store.clone(),
                 identity: identity.clone(),
             },
         )?;
-        store
-            .lock()
-            .unwrap()
-            .scalar_methods
-            .insert(function, &identity);
+        call.store().scalar_methods.insert(function, &identity);
         call.with_roots(&[function], |call| {
             let key = call.try_intern(setter.name().as_bytes())?;
             call.raw_table_set(bound, key, function)
@@ -435,12 +410,8 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
 }
 
 fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (setter, store) = {
-        let data = call.function_data::<Binding>().unwrap();
-        let Method::Forward(setter) = *data.identity else {
-            unreachable!()
-        };
-        (setter, data.store.clone())
+    let Method::Forward(setter) = *call.function_data::<Binding>().unwrap().identity else {
+        unreachable!()
     };
     let Value::Table(actor) = arg(call, 0) else {
         return Err(
@@ -463,27 +434,23 @@ fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
         ));
     }
     let args = SmallVec::<[Value; 4]>::from_slice(call.arguments());
-    live_trace::scalar_forward(call, &store, setter.name(), function, &args)
+    live_trace::scalar_forward(call, setter.name(), function, &args)
 }
 fn bound_setter(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (setter, identity, store) = {
-        let data = call.function_data::<Binding>().unwrap();
-        let Method::Bound(setter, identity) = *data.identity else {
-            unreachable!()
-        };
-        (setter, identity, data.store.clone())
+    let Method::Bound(setter, identity) = *call.function_data::<Binding>().unwrap().identity else {
+        unreachable!()
     };
     let actor = table(call, call.captures()[2])?;
     debug_assert_eq!(actor, identity);
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
     }
-    ease_probe::method(call, &store, actor, setter.name())?;
-    set_scalar(call, &store, actor, setter.name())?;
+    ease_probe::method(call, actor, setter.name())?;
+    set_scalar(call, actor, setter.name())?;
     if setter == Setter::Visible
         && let Some(value) = boolish(call, arg(call, 1))
     {
-        publish_plain_visibility(call, &store, actor, value)?;
+        publish_plain_visibility(call, actor, value)?;
     }
     call.push(Value::Table(actor))
 }
@@ -494,12 +461,11 @@ fn bound_setter(call: &mut HostCall<'_>) -> Result<(), Error> {
 // capture owner to those sessions.
 fn publish_plain_visibility(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     value: bool,
 ) -> Result<(), Error> {
     let plain = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
             && !guard.playback
             && !guard.preparing
@@ -602,7 +568,7 @@ mod tests {
             .raw_table_get(table_id(root), Value::Number(1.))
             .unwrap();
         {
-            let guard = runtime.actors.store.lock().unwrap();
+            let guard = runtime.vm.store_ref();
             let methods = &guard.scalar_methods;
             assert_eq!(
                 methods.identity(values[0]),
@@ -621,23 +587,11 @@ mod tests {
             "root[1].__songlua_bound_methods.x=function()end; collectgarbage('collect');collectgarbage('collect')",
         );
         assert_eq!(
-            runtime
-                .actors
-                .store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .identity(values[0]),
+            runtime.vm.store_ref().scalar_methods.identity(values[0]),
             None
         );
         assert_eq!(
-            runtime
-                .actors
-                .store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .identity(values[1]),
+            runtime.vm.store_ref().scalar_methods.identity(values[1]),
             Some(Method::Forward(Setter::X))
         );
     }

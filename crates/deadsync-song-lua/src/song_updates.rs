@@ -11,9 +11,7 @@ use actors::{
     chronological::{Answer, Query},
     perframes::Access,
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-};
+use std::collections::{BTreeMap, HashMap};
 type MotionSample = (Option<[f32; 2]>, Option<[f32; 3]>);
 
 #[derive(Default)]
@@ -277,7 +275,7 @@ impl SongRuntime {
         else {
             unreachable!()
         };
-        if (!active && !self.actors.models_active()) || end <= start {
+        if (!active && !self.actors.models_active(&mut self.vm)) || end <= start {
             let static_output = self.compile_song_static_update_output(context, splines)?;
             return Ok(SongUpdateOutput {
                 eases: static_output.eases,
@@ -349,9 +347,11 @@ impl SongRuntime {
                     );
                 }
             }
-            self.actors.replace_song_capture_indices(screen, &values);
+            self.actors
+                .replace_song_capture_indices(&mut self.vm, screen, &values);
             self.begin_actor_capture(false);
-            self.actors.begin_song_wrapper_capture(screen, values.len());
+            self.actors
+                .begin_song_wrapper_capture(&mut self.vm, screen, values.len());
             #[cfg(feature = "test-support")]
             self.observations.start();
             let wrapper_start = values.len();
@@ -534,7 +534,8 @@ impl SongRuntime {
                     next_beat - beat,
                     delta,
                 )?;
-                self.actors.sample_model_materials(seconds as f32);
+                self.actors
+                    .sample_model_materials(&mut self.vm, seconds as f32);
                 self.append_update_wrappers(
                     screen,
                     roots,
@@ -779,7 +780,9 @@ impl SongRuntime {
                 &baseline_players,
                 &baseline_mods,
             );
-            let wrappers = self.actors.finish_song_wrapper_capture(screen);
+            let wrappers = self
+                .actors
+                .finish_song_wrapper_capture(&mut self.vm, screen);
             self.append_update_wrapper_rows(overlays, &values, &wrappers)?;
             let mut tracks = capture.finish();
             tracks.retain_mut(|t| {
@@ -834,12 +837,12 @@ impl SongRuntime {
                 });
             }
             stateful.retain(|c| !c.overlay_targets.is_empty() || !c.writes.is_empty());
-            let mut runtime_broadcasts = self.actors.take_song_broadcasts();
+            let mut runtime_broadcasts = self.actors.take_song_broadcasts(&mut self.vm);
             runtime_broadcasts.extend(broadcasts);
             let replay = self
                 .capture_song_tween_replay(screen)
                 .ok_or("missing song tween progress")?;
-            let advances = self.actors.song_message_advances(screen);
+            let advances = self.actors.song_message_advances(&mut self.vm, screen);
             for (i, row) in overlays.actors.iter_mut().enumerate() {
                 for command in &mut row.actor.message_commands {
                     for ((index, name), advance) in &advances {
@@ -872,8 +875,8 @@ impl SongRuntime {
             );
             self.end_actor_capture();
             #[cfg(feature = "test-support")]
-            let overlay_writes = self.actors.take_song_observed_writes(screen);
-            self.actors.end_song_update_capture(screen);
+            let overlay_writes = self.actors.take_song_observed_writes(&mut self.vm, screen);
+            self.actors.end_song_update_capture(&mut self.vm, screen);
             Ok(SongUpdateOutput {
                 eases,
                 overlay_tracks: tracks,
@@ -890,7 +893,8 @@ impl SongRuntime {
         result
     }
     fn update_pose(&mut self, value: Value, mut state: State) -> Result<State, String> {
-        self.actors.apply_song_replay_pose(value, &mut state);
+        self.actors
+            .apply_song_replay_pose(&self.vm, value, &mut state);
         Ok(state)
     }
     fn update_motion(
@@ -937,7 +941,7 @@ impl SongRuntime {
             if let Some(v) = v {
                 out[i] = access.player(&mut self.vm, *v).map_err(|e| e.to_string())?;
                 let mut state = State::default();
-                if self.actors.apply_song_replay_pose(*v, &mut state) {
+                if self.actors.apply_song_replay_pose(&self.vm, *v, &mut state) {
                     crate::perframe::sample_player_pose(&mut out[i], &state, None);
                 }
             }
@@ -967,7 +971,7 @@ impl SongRuntime {
         values: &mut Vec<Value>,
         states: &mut [&mut Vec<State>],
     ) -> Result<(), String> {
-        for (_, id, state) in self.actors.new_song_wrappers(screen) {
+        for (_, id, state) in self.actors.new_song_wrappers(&mut self.vm, screen) {
             roots.keep(&mut self.vm, Value::Table(id))?;
             values.push(Value::Table(id));
             for rows in states.iter_mut() {
@@ -1067,7 +1071,7 @@ impl SongRuntime {
                 if raw == Value::Nil {
                     raw = self
                         .actors
-                        .wrapper_parent(value)
+                        .wrapper_parent(&mut self.vm, value)
                         .map_or(Value::Nil, Value::Table);
                 }
                 if raw != Value::Nil && !matches!(raw, Value::Table(_)) {

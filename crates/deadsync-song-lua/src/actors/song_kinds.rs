@@ -18,7 +18,6 @@ impl Output {
 }
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     class: String,
     initial: SongLuaOverlayState,
     context: SongLuaCompileContext,
@@ -41,7 +40,6 @@ impl Actors {
                 actor,
             ],
             Read {
-                store: self.store.clone(),
                 class: inputs.actor_type.to_owned(),
                 initial: inputs.initial_state,
                 context: inputs.context.clone(),
@@ -199,7 +197,7 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
     } else if class.eq_ignore_ascii_case("Model") {
         return Ok(Output::Model(models::tap_model(call, actor)?));
     } else if class.eq_ignore_ascii_case("SongMeterDisplay") {
-        let Some(meter) = song_meters::read(call, &data.store, actor)? else {
+        let Some(meter) = song_meters::read(call, actor)? else {
             return Ok(Output::ready(None));
         };
         Kind::SongMeterDisplay {
@@ -208,7 +206,7 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
             music_length_seconds: data.context.music_length_seconds.max(0.),
         }
     } else if class.eq_ignore_ascii_case("GraphDisplay") {
-        let graph = graphs::read(call, &data.store, actor)?;
+        let graph = graphs::read(call, actor)?;
         Kind::GraphDisplay {
             size: crate::lua_util::read_graph_display_size(data.initial, &data.context),
             body_values: graph.body_values,

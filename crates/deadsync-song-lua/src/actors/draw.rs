@@ -9,13 +9,8 @@ use sprites::{field, set};
 const ACTIVE: &str = "__songlua_draw_callback_active";
 const FUNCTION: &[u8] = b"__songlua_draw_function";
 
-fn live(store: &Shared) -> bool {
-    store
-        .lock()
-        .unwrap()
-        .clock
-        .live
-        .load(std::sync::atomic::Ordering::Relaxed)
+fn live(store: &mut Store) -> bool {
+    store.clock.live.load(std::sync::atomic::Ordering::Relaxed)
 }
 fn pointer(call: &mut HostCall<'_>, actor: TableId) -> usize {
     call.object_pointer(Value::Table(actor))
@@ -55,9 +50,9 @@ fn function(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
 fn budget(call: &HostCall<'_>) -> Error {
     call.error(b"custom draw capture exceeds its song budget")
 }
-fn push(call: &HostCall<'_>, store: &Shared, op: RawOp) -> Result<(), Error> {
-    let live = live(store);
-    let mut store = store.lock().unwrap();
+fn push(call: &mut HostCall<'_>, op: RawOp) -> Result<(), Error> {
+    let live = live(call.store());
+    let store = call.store();
     let Some(capture) = &mut store.draw_capture else {
         return Ok(());
     };
@@ -83,15 +78,10 @@ fn push(call: &HostCall<'_>, store: &Shared, op: RawOp) -> Result<(), Error> {
     capture.calls.push(RawCall { owner, op });
     Ok(())
 }
-pub(super) fn begin(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    preserve: bool,
-) -> Result<(), Error> {
+pub(super) fn begin(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> Result<(), Error> {
     let pointer = pointer(call, actor);
-    push(call, store, RawOp::Begin(pointer, preserve))?;
-    if let Some(capture) = &mut store.lock().unwrap().draw_capture
+    push(call, RawOp::Begin(pointer, preserve))?;
+    if let Some(capture) = &mut call.store().draw_capture
         && let Some(prior) = capture.context.take()
     {
         let owner = prior.owner;
@@ -103,9 +93,9 @@ pub(super) fn begin(
     }
     Ok(())
 }
-pub(super) fn finish(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let pointer = pointer(call, actor);
-    if let Some(capture) = &store.lock().unwrap().draw_capture
+    if let Some(capture) = &call.store().draw_capture
         && capture.context.is_some()
         && capture
             .targets
@@ -114,30 +104,26 @@ pub(super) fn finish(call: &mut HostCall<'_>, store: &Shared, actor: TableId) ->
     {
         return Err(call.error(b"FinishRenderingTo does not match the active target"));
     }
-    push(call, store, RawOp::Finish(pointer))?;
-    if let Some(capture) = &mut store.lock().unwrap().draw_capture
+    push(call, RawOp::Finish(pointer))?;
+    if let Some(capture) = &mut call.store().draw_capture
         && let Some((_, prior)) = capture.targets.pop()
     {
         capture.context = Some(prior);
     }
     Ok(())
 }
-fn state(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<crate::SongLuaOverlayState, Error> {
+fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverlayState, Error> {
     // The native preparation reader resolves an uninitialized Sprite's
     // Texture/AFT getter before reading later scalar fields. Keep this read
     // at draw time; snapshotting raw semantic state must not invoke it early.
-    if !live(store) {
+    if !live(call.store()) {
         let kind = get(call, actor, b"__songlua_actor_type")?;
         let sprite = matches!(kind,Value::String(id)if call.string_bytes(id).is_some_and(|s|s.eq_ignore_ascii_case(b"Sprite")));
         if sprite && get(call, actor, b"__songlua_state_sprite_texture")? == Value::Nil {
-            return initial_state::read(call, store, actor);
+            return initial_state::read(call, actor);
         }
     }
-    let store = store.lock().unwrap();
+    let store = call.store_ref();
     let live = store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
     let actor = store
         .actors
@@ -163,7 +149,6 @@ fn state(
 }
 fn scoped_context(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     prior: &Context,
 ) -> Result<Option<Context>, Error> {
@@ -189,7 +174,7 @@ fn scoped_context(
         table(call, allocation)?;
     }
     let (wrappers, live) = {
-        let store = store.lock().unwrap();
+        let store = call.store_ref();
         let native = store
             .actors
             .get(&actor)
@@ -202,13 +187,13 @@ fn scoped_context(
     let mut parents = Vec::with_capacity(prior.parents.len() + wrappers.len() + 1);
     parents.extend_from_slice(&prior.parents);
     for wrapper in wrappers.into_iter().rev() {
-        let wrapper = state(call, store, wrapper)?;
+        let wrapper = state(call, wrapper)?;
         if !wrapper.draw_visible() || (live && !partially_opaque(wrapper, &parents)) {
             return Ok(None);
         }
         parents.push(wrapper);
     }
-    let state = state(call, store, actor)?;
+    let state = state(call, actor)?;
     if !state.draw_visible() || (live && !partially_opaque(state, &parents)) {
         return Ok(None);
     }
@@ -225,9 +210,8 @@ fn scoped_context(
 }
 fn children_each(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
-    mut action: impl FnMut(&mut HostCall<'_>, &Shared, TableId) -> Result<(), Error>,
+    mut action: impl FnMut(&mut HostCall<'_>, TableId) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let mut index = 1;
     loop {
@@ -236,56 +220,50 @@ fn children_each(
             return Ok(());
         }
         let child = table(call, value)?;
-        call.with_roots(&[value], |call| action(call, store, child))?;
+        call.with_roots(&[value], |call| action(call, child))?;
         index += 1;
     }
 }
-fn report(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    error: Error,
-) -> Result<(), Error> {
-    diagnostics::report(call, store, actor, diagnostics::Callback::Draw, error)
+fn report(call: &mut HostCall<'_>, actor: TableId, error: Error) -> Result<(), Error> {
+    diagnostics::report(call, actor, diagnostics::Callback::Draw, error)
 }
-fn draw(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    let prior = store
-        .lock()
-        .unwrap()
+fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let prior = call
+        .store()
         .draw_capture
         .as_ref()
         .and_then(|capture| capture.context.clone());
     let Some(prior) = prior else {
-        return immediate(call, store, actor);
+        return immediate(call, actor);
     };
-    let Some(context) = scoped_context(call, store, actor, &prior)? else {
+    let Some(context) = scoped_context(call, actor, &prior)? else {
         return Ok(());
     };
-    store.lock().unwrap().draw_capture.as_mut().unwrap().context = Some(context.clone());
+    call.store().draw_capture.as_mut().unwrap().context = Some(context.clone());
     let result = (|| {
         let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
         let target = kind.eq_ignore_ascii_case("ActorFrameTexture");
         if target {
             let preserve = truthy(field(call, actor, "__songlua_state_aft_preserve")?);
-            begin(call, store, actor, preserve)?;
+            begin(call, actor, preserve)?;
         }
         let result = (|| {
             let callback = function(call, actor)?;
             if callback != Value::Nil {
                 let result = call.with_roots(&[callback], |call| {
-                    let sources = store.lock().unwrap().live_sources.is_some();
+                    let sources = call.store().live_sources.is_some();
                     let observed = sources && !theme_callback(call, callback)?;
                     if observed {
-                        store.lock().unwrap().song_callback_depth += 1;
+                        call.store().song_callback_depth += 1;
                     }
                     let result = run_scoped(call, actor, callback, None);
                     if observed {
-                        store.lock().unwrap().song_callback_depth -= 1;
+                        call.store().song_callback_depth -= 1;
                     }
                     result
                 });
-                return if live(store) {
-                    result.or_else(|error| report(call, store, actor, error))
+                return if live(call.store()) {
+                    result.or_else(|error| report(call, actor, error))
                 } else {
                     // Owned actors already use tween replay in preparation as
                     // well as live playback. Like the native replay path, Draw
@@ -332,12 +310,11 @@ fn draw(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), E
                 && (kind.eq_ignore_ascii_case("ActorFrame")
                     || kind.eq_ignore_ascii_case("ActorFrameTexture"))
             {
-                return children_each(call, store, actor, draw);
+                return children_each(call, actor, draw);
             }
             let pointer = pointer(call, actor);
-            let missing = !store
-                .lock()
-                .unwrap()
+            let missing = !call
+                .store()
                 .draw_capture
                 .as_ref()
                 .unwrap()
@@ -350,7 +327,7 @@ fn draw(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), E
                     screen.unwrap_or_default()
                 );
                 let bytes = label.len() + size_of::<(usize, String)>();
-                let mut store = store.lock().unwrap();
+                let store = call.store();
                 let capture = store.draw_capture.as_mut().unwrap();
                 if capture.bytes.saturating_add(bytes) > MAX_BYTES {
                     return Err(budget(call));
@@ -362,19 +339,18 @@ fn draw(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), E
             let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
             push(
                 call,
-                store,
                 RawOp::Draw(pointer, local, Context { parents, ..context }, vertices),
             )
         })();
         if target {
-            finish(call, store, actor)?;
+            finish(call, actor)?;
         }
         result
     })();
-    store.lock().unwrap().draw_capture.as_mut().unwrap().context = Some(prior);
+    call.store().draw_capture.as_mut().unwrap().context = Some(prior);
     result
 }
-fn second(call: &mut HostCall<'_>, store: &Shared) -> Result<f32, Error> {
+fn second(call: &mut HostCall<'_>) -> Result<f32, Error> {
     let globals = table(call, helper(call, 5)?)?;
     let runtime = field(call, globals, crate::SONG_LUA_RUNTIME_KEY)?;
     let table = table(call, runtime)?;
@@ -383,9 +359,8 @@ fn second(call: &mut HostCall<'_>, store: &Shared) -> Result<f32, Error> {
         let elapsed = sprites::number(call, value)? as f32;
         let value = field(call, table, crate::SONG_LUA_RUNTIME_RATE_KEY)?;
         let rate = sprites::number(call, value)? as f32;
-        let origin = store
-            .lock()
-            .unwrap()
+        let origin = call
+            .store()
             .clock
             .timing
             .as_ref()
@@ -393,11 +368,11 @@ fn second(call: &mut HostCall<'_>, store: &Shared) -> Result<f32, Error> {
         Ok(elapsed * rate + origin)
     })
 }
-fn immediate(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    let second = second(call, store)?;
+fn immediate(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let second = second(call)?;
     let owner = pointer(call, actor);
     let start = {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let capture = store.draw_capture.get_or_insert_with(Capture::default);
         capture.context = Some(Context {
             owner,
@@ -405,8 +380,8 @@ fn immediate(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
         });
         capture.calls.len()
     };
-    let result = draw(call, store, actor);
-    let mut store = store.lock().unwrap();
+    let result = draw(call, actor);
+    let store = call.store();
     let capture = store.draw_capture.as_mut().unwrap();
     capture.context = None;
     let calls = capture.calls.split_off(start);
@@ -425,19 +400,14 @@ fn immediate(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<
     }
     result
 }
-fn visit(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    prior: &Context,
-) -> Result<(), Error> {
-    if live(store) && truthy(get(call, actor, b"__songlua_live_inactive")?) {
+fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(), Error> {
+    if live(call.store()) && truthy(get(call, actor, b"__songlua_live_inactive")?) {
         return Ok(());
     }
     if function(call, actor)? != Value::Nil {
         let owner = pointer(call, actor);
         {
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             let capture = store.draw_capture.get_or_insert_with(Capture::default);
             capture.owners.push(owner);
             capture.context = Some(Context {
@@ -445,8 +415,8 @@ fn visit(
                 ..prior.clone()
             });
         }
-        let result = draw(call, store, actor);
-        let mut store = store.lock().unwrap();
+        let result = draw(call, actor);
+        let store = call.store();
         let capture = store.draw_capture.as_mut().unwrap();
         capture.context = None;
         if !capture.targets.is_empty() {
@@ -455,10 +425,10 @@ fn visit(
         }
         return result;
     }
-    if !store.lock().unwrap().actors.contains_key(&actor)
+    if !call.store().actors.contains_key(&actor)
         && get(call, actor, b"__songlua_actor_type")? == Value::Nil
     {
-        let state = initial_state::read(call, store, actor)?;
+        let state = initial_state::read(call, actor)?;
         let mut parents = prior.parents.to_vec();
         parents.push(state);
         let context = Context {
@@ -470,20 +440,16 @@ fn visit(
                 prior.camera
             },
         };
-        return children_each(call, store, actor, |call, store, child| {
-            visit(call, store, child, &context)
-        });
+        return children_each(call, actor, |call, child| visit(call, child, &context));
     }
-    let Some(context) = scoped_context(call, store, actor, prior)? else {
+    let Some(context) = scoped_context(call, actor, prior)? else {
         return Ok(());
     };
-    children_each(call, store, actor, |call, store, child| {
-        visit(call, store, child, &context)
-    })
+    children_each(call, actor, |call, child| visit(call, child, &context))
 }
-fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Error> {
-    if live(store)
-        && let Some(capture) = &mut store.lock().unwrap().draw_capture
+fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
+    if live(call.store())
+        && let Some(capture) = &mut call.store().draw_capture
     {
         capture.context = None;
         capture.targets.clear();
@@ -498,7 +464,7 @@ fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Err
     }
     let globals = table(call, helper(call, 5)?)?;
     if !truthy(get(call, globals, DRAW_INSTALLED_KEY.as_bytes())?) {
-        if let Some(capture) = &mut store.lock().unwrap().draw_capture {
+        if let Some(capture) = &mut call.store().draw_capture {
             capture.frame_ops = 0;
         }
         return Ok(());
@@ -507,7 +473,7 @@ fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Err
     let screen = if screen == Value::Nil {
         None
     } else {
-        Some(state(call, store, table(call, screen)?)?)
+        Some(state(call, table(call, screen)?)?)
     };
     let parents = screen.as_ref().map_or_else(
         || Arc::from([]),
@@ -515,7 +481,6 @@ fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Err
     );
     let result = visit(
         call,
-        store,
         root,
         &Context {
             parents,
@@ -523,8 +488,8 @@ fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Err
             ..Context::default()
         },
     );
-    let second = second(call, store)?;
-    if let Some(capture) = &mut store.lock().unwrap().draw_capture {
+    let second = second(call)?;
+    if let Some(capture) = &mut call.store().draw_capture {
         let bytes = size_of::<RawFrame>() + capture.owners.len() * size_of::<usize>();
         if capture.bytes.saturating_add(bytes) > MAX_BYTES {
             capture.calls.clear();
@@ -544,23 +509,18 @@ fn run(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Err
     }
     result
 }
-pub(super) fn scene(call: &mut HostCall<'_>, store: &Shared, root: TableId) -> Result<(), Error> {
+pub(super) fn scene(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
     let key = call.try_intern(ACTIVE.as_bytes())?;
     let prior = call.raw_table_get(globals, key)?;
     call.with_roots(&[key, prior], |call| {
         call.raw_table_set(globals, key, Value::Boolean(true))?;
-        let result = run(call, store, root);
+        let result = run(call, root);
         call.raw_table_set(globals, key, prior)?;
         result
     })
 }
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
         "SetDrawFunction" => {
             let function = arg(call, 1);
@@ -591,8 +551,8 @@ pub(super) fn method(
                     .as_deref()
                     .is_some_and(|name| matches!(name, "PlayerP1" | "PlayerP2"));
                 if truthy(active) && !player {
-                    let state = native_children::state(call, store, actor)?;
-                    let snapshot = state_snapshot::write(call, store, actor, &state)?;
+                    let state = native_children::state(call, actor)?;
+                    let snapshot = state_snapshot::write(call, actor, &state)?;
                     song_replay::raw_set(
                         call,
                         actor,
@@ -600,7 +560,7 @@ pub(super) fn method(
                         Value::Table(snapshot),
                     )?;
                 }
-                draw(call, store, actor)?;
+                draw(call, actor)?;
             }
         }
         _ => unreachable!(),

@@ -3,7 +3,6 @@ use super::*;
 
 #[derive(Clone)]
 struct Run {
-    store: Shared,
     name: Vec<u8>,
 }
 impl Actors {
@@ -40,8 +39,7 @@ impl Actors {
         let result = (|| {
             inputs.push(vm.pin(actor)?);
             inputs.push(vm.pin(command)?);
-            if !matches!(actor, Value::Table(id) if self.store.lock().unwrap().actors.contains_key(&id))
-            {
+            if !matches!(actor, Value::Table(id) if vm.store().actors.contains_key(&id)) {
                 return vm.with_native_stack(|s| Err(s.error(b"owned actor table expected")));
             }
             if !matches!(command, Value::Function(_) | Value::Native(_)) {
@@ -67,7 +65,6 @@ impl Actors {
                     command,
                 ],
                 Run {
-                    store: self.store.clone(),
                     name: name.as_bytes().to_vec(),
                 },
             )?;
@@ -90,7 +87,6 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
     // command path drains its receiver and work queued by it, not other actors.
     run_guarded_command(
         call,
-        &data.store,
         actor,
         data.name,
         command,

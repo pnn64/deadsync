@@ -30,7 +30,7 @@ fn saved_actor_state_and_late_wrappers_match_native_after_retirement() {
     let source = "return Def.ActorFrame{Name='parent',Def.Quad{Name='child',InitCommand=function(self)self:x(17)end}}";
 
     let mut rust = runtime(true);
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let scene = scene(&mut rust, source);
     let save = "saved=root[1];weak=setmetatable({root,saved},{__mode='v'});root=nil";
 
@@ -44,7 +44,7 @@ fn saved_actor_state_and_late_wrappers_match_native_after_retirement() {
     let probe = "collectgarbage('collect');assert(saved:GetX()==17);assert(saved:GetParent():GetName()=='parent');saved:addx(5);local w=saved:AddWrapperState();w:x(9);collectgarbage('collect');assert(saved:GetWrapperState(1):GetX()==9);assert(saved:GetX()==22)";
 
     run(&mut rust, probe);
-    assert_eq!(test_support::actor_ownership_counts(&rust)[2], 1);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust)[2], 1);
     run(
         &mut rust,
         "saved=nil;collectgarbage('collect');collectgarbage('collect');assert(weak[1] and weak[2])",
@@ -54,7 +54,7 @@ fn saved_actor_state_and_late_wrappers_match_native_after_retirement() {
         &mut rust,
         "collectgarbage('collect');collectgarbage('collect');assert(weak[1]==nil and weak[2]==nil)",
     );
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
     run(&mut rust, "MESSAGEMAN:Broadcast('AfterCollection')");
 }
 
@@ -62,7 +62,7 @@ fn saved_actor_state_and_late_wrappers_match_native_after_retirement() {
 fn unused_retired_scenes_release_rust_metadata_in_repeated_cycles() {
     for live in [false, true] {
         let mut rust = runtime(live);
-        let baseline = test_support::actor_ownership_counts(&rust);
+        let baseline = test_support::actor_ownership_counts(&mut rust);
         for _ in 0..8 {
             let scene = scene(
                 &mut rust,
@@ -72,7 +72,7 @@ fn unused_retired_scenes_release_rust_metadata_in_repeated_cycles() {
             assert!(rust.retire_actor_scene(scene).unwrap());
             run(&mut rust, "root=nil");
             collect(&mut rust);
-            assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+            assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
         }
     }
 }
@@ -80,7 +80,7 @@ fn unused_retired_scenes_release_rust_metadata_in_repeated_cycles() {
 #[test]
 fn detached_fields_metatables_and_collecting_callbacks_keep_native_state() {
     let mut rust = runtime(true);
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let scene = scene(
         &mut rust,
         "return Def.ActorFrame{Name='parent',Def.Quad{Name='child'}}",
@@ -95,7 +95,7 @@ fn detached_fields_metatables_and_collecting_callbacks_keep_native_state() {
         "root=nil;collectgarbage('collect');Actor.playcommand(saved,'Probe');assert(Actor.GetX(saved)==31,'collected command state');assert(Actor.GetName(Actor.GetParent(saved))=='parent','retained parent');saved=nil;PROBE=nil",
     );
     collect(&mut rust);
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn retirement_unsubscribes_old_messages_but_keeps_direct_commands_callable() {
 #[test]
 fn failed_end_still_allows_retained_state_and_eventual_cleanup() {
     let mut rust = runtime(true);
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let scene = scene(
         &mut rust,
         "return Def.ActorFrame{Def.Quad{EndCommand=function(self)self:x(23);error('End failure')end}}",
@@ -133,14 +133,14 @@ fn failed_end_still_allows_retained_state_and_eventual_cleanup() {
         "collectgarbage('collect');assert(root[1]:GetX()==23);root=nil",
     );
     collect(&mut rust);
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
 }
 
 #[test]
 fn shared_actors_transfer_after_the_last_active_owner_retires_or_releases() {
     for hard_release in [false, true] {
         let mut rust = runtime(true);
-        let baseline = test_support::actor_ownership_counts(&rust);
+        let baseline = test_support::actor_ownership_counts(&mut rust);
         let parent = scene(&mut rust, "return Def.ActorFrame{}");
         let parent_value = rust.actor_scene_root(parent).unwrap();
         let child = scene(
@@ -159,14 +159,14 @@ fn shared_actors_transfer_after_the_last_active_owner_retires_or_releases() {
             "collectgarbage('collect');assert(root:GetX()==13);root:addx(2);assert(root:GetX()==15);root=nil",
         );
         collect(&mut rust);
-        assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+        assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
     }
 }
 
 #[test]
 fn retained_sound_handle_keeps_its_actor_and_native_parameters() {
     let mut rust = runtime(true);
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let scene = scene(&mut rust, "return Def.Sound{}");
     run(
         &mut rust,
@@ -179,7 +179,7 @@ fn retained_sound_handle_keeps_its_actor_and_native_parameters() {
     );
     collect(&mut rust);
     run(&mut rust, "assert(weak[1]==nil)");
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
 }
 
 #[test]
@@ -216,7 +216,7 @@ fn screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them() {
         let probe = "root=nil;collectgarbage('collect');assert(SAVED_TOP~=SCREENMAN:GetTopScreen());SAVED:x(33);assert(SAVED:GetX()==33);assert(SAVED_GET(PLAYER_1)~=GetPlayerAF(PLAYER_1));SAVED:AddWrapperState():x(6);collectgarbage('collect');assert(SAVED:GetWrapperState(1):GetX()==6)";
 
         run(&mut rust, probe);
-        assert_eq!(test_support::actor_ownership_counts(&rust)[2], 1);
+        assert_eq!(test_support::actor_ownership_counts(&mut rust)[2], 1);
         let drop_refs = "SAVED=nil;SAVED_TOP=nil;SAVED_GET=nil;collectgarbage('collect');collectgarbage('collect');assert(weak[1]);root=SCREENMAN:GetTopScreen()";
 
         run(&mut rust, drop_refs);
@@ -232,7 +232,7 @@ fn screen_reconstruction_keeps_saved_native_actors_until_lua_drops_them() {
             &mut rust,
             "collectgarbage('collect');collectgarbage('collect');assert(weak[1]==nil)",
         );
-        assert_eq!(test_support::actor_ownership_counts(&rust)[2], 0);
+        assert_eq!(test_support::actor_ownership_counts(&mut rust)[2], 0);
         assert!(rust.actor_scene_root(new).is_none());
         assert!(rust.actor_scene_root(replacement).is_some());
     }
@@ -260,7 +260,7 @@ fn late_wrapper_subscriptions_remain_rooted_until_the_next_registry_replacement(
     let source = "return Def.ActorFrame{}";
 
     let mut rust = runtime(true);
-    let baseline = test_support::actor_ownership_counts(&rust);
+    let baseline = test_support::actor_ownership_counts(&mut rust);
     let scene = scene(&mut rust, source);
 
     assert!(rust.retire_actor_scene(scene).unwrap());
@@ -273,5 +273,5 @@ fn late_wrapper_subscriptions_remain_rooted_until_the_next_registry_replacement(
 
     run(&mut rust, stopped);
     run(&mut rust, "assert(weak[1]==nil and weak[2]==nil)");
-    assert_eq!(test_support::actor_ownership_counts(&rust), baseline);
+    assert_eq!(test_support::actor_ownership_counts(&mut rust), baseline);
 }

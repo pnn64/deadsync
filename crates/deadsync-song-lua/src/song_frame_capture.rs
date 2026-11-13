@@ -110,7 +110,10 @@ impl SongRuntime {
             for actor in actors {
                 roots.keep(&mut self.vm, *actor)?;
             }
-            if self.actors.publish_song_tween_frame(screen, actors) {
+            if self
+                .actors
+                .publish_song_tween_frame(&mut self.vm, screen, actors)
+            {
                 Ok(())
             } else {
                 Err("song replay capture is not active".into())
@@ -224,13 +227,15 @@ impl CaptureSource for Source<'_> {
         self.actors.len()
     }
     fn chronological(&self) -> bool {
-        self.runtime.actors.chronological_song_capture()
+        self.runtime
+            .actors
+            .chronological_song_capture(&self.runtime.vm)
     }
     fn drain(&mut self, visit: &mut CaptureVisitor<'_>) -> Result<(), String> {
         let frames = self
             .runtime
             .actors
-            .take_song_overlay_frame_updates(self.screen, true)
+            .take_song_overlay_frame_updates(&mut self.runtime.vm, self.screen, true)
             .ok_or("song replay capture is not active")?;
         let result = (|| {
             for frame in &frames {
@@ -255,9 +260,11 @@ impl CaptureSource for Source<'_> {
             Ok(())
         })();
         if result.is_err() {
-            self.runtime
-                .actors
-                .restore_song_overlay_updates(self.screen, frames);
+            self.runtime.actors.restore_song_overlay_updates(
+                &mut self.runtime.vm,
+                self.screen,
+                frames,
+            );
         }
         result
     }

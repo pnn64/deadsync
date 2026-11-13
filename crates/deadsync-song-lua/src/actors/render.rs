@@ -2,7 +2,7 @@
 //! stay separate so queued commands cannot delay native immediate properties.
 use super::action_capture;
 use super::{
-    Shared, arg, capture, children, float_scalar, helper, song_immediate, song_media,
+    Host, arg, capture, children, float_scalar, helper, song_immediate, song_media,
     song_properties, song_replay,
 };
 use crate::base_transform::BaseField;
@@ -89,17 +89,13 @@ pub(super) const ACTOR_METHODS: &[&str] = &[
 ];
 pub(super) const FRAME_METHODS: &[&str] = &["fov", "vanishpoint", "SetDrawByZPosition"];
 
-pub(super) fn initialize(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let key = call.try_intern(b"FOV")?;
     let value = call.raw_table_get(actor, key)?;
     if value != Value::Nil {
         let number = super::sprites::number(call, value)? as f32;
-        action_capture::prepare_write(call, store, actor)?;
-        scalar(call, store, actor, "fov", number);
+        action_capture::prepare_write(call, actor)?;
+        scalar(call, actor, "fov", number);
     }
     Ok(())
 }
@@ -212,31 +208,29 @@ fn cull_mode(call: &HostCall<'_>) -> Result<CullMode, Error> {
 
 fn depth(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     test: Option<(bool, bool)>,
     write: Option<bool>,
 ) -> Result<(), Error> {
     if let Some((enabled, on_fail)) = test {
-        depth_flag(call, store, actor, Target::DepthTest, enabled)?;
-        depth_flag(call, store, actor, Target::DepthTestOnFail, on_fail)?;
+        depth_flag(call, actor, Target::DepthTest, enabled)?;
+        depth_flag(call, actor, Target::DepthTestOnFail, on_fail)?;
     }
     if let Some(enabled) = write {
-        depth_flag(call, store, actor, Target::DepthWrite, enabled)?;
+        depth_flag(call, actor, Target::DepthWrite, enabled)?;
     }
     Ok(())
 }
 
 fn depth_flag(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     target: Target,
     enabled: bool,
 ) -> Result<(), Error> {
-    action_capture::prepare_write(call, store, actor)?;
+    action_capture::prepare_write(call, actor)?;
     {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
         match target {
             Target::DepthTest => render.depth_test = enabled,
@@ -247,7 +241,6 @@ fn depth_flag(
     }
     super::host_compat::raw_flag(
         call,
-        store,
         actor,
         match target {
             Target::DepthTest => "__songlua_state_depth_test",
@@ -257,27 +250,22 @@ fn depth_flag(
         },
         enabled,
     )?;
-    song_properties::record(call, store, actor, target, Update::Bool(enabled));
-    for child in children(call, store, actor)? {
-        depth_flag(call, store, child, target, enabled)?;
+    song_properties::record(call, actor, target, Update::Bool(enabled));
+    for child in children(call, actor)? {
+        depth_flag(call, child, target, enabled)?;
     }
     Ok(())
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     if name == "align" {
         for (index, vertical) in [(1, false), (2, true)] {
             if let Some(value) = alignment(call, arg(call, index), vertical) {
-                action_capture::prepare_write(call, store, actor)?;
+                action_capture::prepare_write(call, actor)?;
                 let mut delta = crate::SongLuaOverlayStateDelta::default();
                 {
-                    let mut guard = store.lock().unwrap();
+                    let guard = call.store();
                     let actor = guard.actors.get_mut(&actor).unwrap();
                     actor.base_transform.set(
                         if vertical {
@@ -296,20 +284,20 @@ pub(super) fn method(
                         delta.halign = Some(value);
                     }
                 }
-                capture::write(call, store, actor, delta, true);
+                capture::write(call, actor, delta, true);
             }
         }
         return call.push(Value::Table(actor));
     }
     if matches!(name, "FullScreen" | "Center" | "CenterX" | "CenterY") {
-        screen_geometry(call, store, actor, name)?;
+        screen_geometry(call, actor, name)?;
         return call.push(Value::Table(actor));
     }
-    // Parse values before taking the metadata lock. Lua numeric conversion and
+    // Parse values before borrowing the store. Lua numeric conversion and
     // return-table allocation may reenter the VM or collect traced captures.
     if matches!(name, "GetDiffuse" | "GetGlow") {
         let color = {
-            let store = store.lock().unwrap();
+            let store = call.store();
             let pose = store.actors[&actor].getter_destination();
             if name == "GetDiffuse" {
                 pose.diffuse
@@ -320,7 +308,7 @@ pub(super) fn method(
         return push_color(call, color);
     }
     if name == "getrotation" {
-        let rotation = store.lock().unwrap().actors[&actor].state.rotation;
+        let rotation = call.store().actors[&actor].state.rotation;
         for value in rotation {
             call.push(Value::Number(value as f64))?;
         }
@@ -328,7 +316,7 @@ pub(super) fn method(
     }
     if name.starts_with("Get") {
         let value = {
-            let store = store.lock().unwrap();
+            let store = call.store();
             let actor = &store.actors[&actor];
             let render = &actor.state.render;
             match name {
@@ -347,10 +335,9 @@ pub(super) fn method(
         || corner_mask(name).is_some()
     {
         if let Some(mut color) = color(call)? {
-            action_capture::prepare_write(call, store, actor)?;
-            let shared = store;
+            action_capture::prepare_write(call, actor)?;
             let id = actor;
-            let mut store = store.lock().unwrap();
+            let store = call.store();
             let sync = !store.playback && matches!(name, "diffuse" | "diffusecolor");
             let actor = store.actors.get_mut(&actor).unwrap();
             let alpha = actor.getter_destination().diffuse[3];
@@ -381,10 +368,8 @@ pub(super) fn method(
             if sync {
                 actor.sync_rotation_getters();
             }
-            drop(store);
             capture::property(
                 call,
-                shared,
                 id,
                 if corner_mask(name).is_some() {
                     "vertex_colors"
@@ -393,7 +378,7 @@ pub(super) fn method(
                 },
             );
             if matches!(name, "diffuse" | "diffusecolor") {
-                song_replay::sync_getters(call, shared, id)?;
+                song_replay::sync_getters(call, id)?;
             }
         }
     } else if matches!(name, "halign" | "valign" | "horizalign" | "vertalign") {
@@ -402,10 +387,9 @@ pub(super) fn method(
             .then(|| text(call, value).and_then(crate::parse_overlay_text_align))
             .flatten();
         if align.is_some() || text_align.is_some() {
-            action_capture::prepare_write(call, store, actor)?;
+            action_capture::prepare_write(call, actor)?;
         }
-        let shared = store;
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let actor_state = guard.actors.get_mut(&actor).unwrap();
         if let Some(value) = align {
             actor_state.base_transform.set(
@@ -428,11 +412,9 @@ pub(super) fn method(
         if let Some(value) = text_align {
             render.text_align = value;
         }
-        drop(guard);
         if let Some(value) = align {
             song_immediate::record(
                 call,
-                shared,
                 actor,
                 if matches!(name, "valign" | "vertalign") {
                     crate::SongLuaOverlayUpdateTarget::VAlign
@@ -445,7 +427,6 @@ pub(super) fn method(
         if let Some(value) = text_align {
             song_immediate::record(
                 call,
-                shared,
                 actor,
                 crate::SongLuaOverlayUpdateTarget::TextAlign,
                 crate::SongLuaOverlayUpdateValue::TextAlign(value),
@@ -461,10 +442,8 @@ pub(super) fn method(
         } else {
             cull_mode(call)?
         };
-        action_capture::prepare_write(call, store, actor)?;
-        store
-            .lock()
-            .unwrap()
+        action_capture::prepare_write(call, actor)?;
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -473,20 +452,19 @@ pub(super) fn method(
             .cull_mode = mode;
         song_immediate::record(
             call,
-            store,
             actor,
             crate::SongLuaOverlayUpdateTarget::CullMode,
             crate::SongLuaOverlayUpdateValue::CullMode(mode),
         );
     } else if matches!(name, "MaskSource" | "MaskDest") {
-        action_capture::prepare_write(call, store, actor)?;
+        action_capture::prepare_write(call, actor)?;
         let key = if name == "MaskSource" {
             "mask_source"
         } else {
             "mask_dest"
         };
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
             if name == "MaskSource" {
                 render.mask_source = true;
@@ -496,7 +474,6 @@ pub(super) fn method(
         }
         super::host_compat::raw_flag(
             call,
-            store,
             actor,
             if name == "MaskSource" {
                 "__songlua_state_mask_source"
@@ -505,12 +482,11 @@ pub(super) fn method(
             },
             true,
         )?;
-        song_media::record(call, store, actor, key);
+        song_media::record(call, actor, key);
     } else if matches!(name, "zbuffer" | "ztest" | "zwrite") {
         let enabled = strict_boolean(call, name)?;
         depth(
             call,
-            store,
             actor,
             (name != "zwrite").then_some((enabled, false)),
             (name != "ztest").then_some(enabled),
@@ -528,24 +504,22 @@ pub(super) fn method(
             "writeonfail" => (true, true),
             _ => return Err(call.error(format!("invalid ZTestMode: {mode}").as_bytes())),
         };
-        depth(call, store, actor, Some(flags), None)?;
+        depth(call, actor, Some(flags), None)?;
     } else if matches!(name, "SetTextureFiltering" | "SetDrawByZPosition") {
         let enabled = call
             .arguments()
             .get(1)
             .is_none_or(|v| !matches!(v, Value::Nil | Value::Boolean(false)));
-        action_capture::prepare_write(call, store, actor)?;
-        let mut guard = store.lock().unwrap();
+        action_capture::prepare_write(call, actor)?;
+        let guard = call.store();
         let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
         if name == "SetTextureFiltering" {
             render.texture_filtering = enabled;
         } else {
             render.draw_by_z_position = enabled;
         }
-        drop(guard);
         super::host_compat::raw_flag(
             call,
-            store,
             actor,
             if name == "SetTextureFiltering" {
                 "__songlua_state_texture_filtering"
@@ -556,7 +530,6 @@ pub(super) fn method(
         )?;
         song_properties::record(
             call,
-            store,
             actor,
             if name == "SetTextureFiltering" {
                 Target::TextureFiltering
@@ -569,20 +542,18 @@ pub(super) fn method(
         name,
         "scale_or_crop_background" | "scale_or_crop_background_no_move"
     ) {
-        scale_background(call, store, actor, name == "scale_or_crop_background")?;
+        scale_background(call, actor, name == "scale_or_crop_background")?;
     } else if name == "blend" {
         if let Some(blend) = text(call, value).and_then(crate::parse_overlay_blend_mode) {
-            action_capture::prepare_write(call, store, actor)?;
-            store
-                .lock()
-                .unwrap()
+            action_capture::prepare_write(call, actor)?;
+            call.store()
                 .actors
                 .get_mut(&actor)
                 .unwrap()
                 .state
                 .render
                 .blend = blend;
-            song_properties::record(call, store, actor, Target::Blend, Update::Blend(blend));
+            song_properties::record(call, actor, Target::Blend, Update::Blend(blend));
         }
     } else if matches!(
         name,
@@ -594,7 +565,7 @@ pub(super) fn method(
             | "zoomtoheight"
             | "vanishpoint"
     ) {
-        geometry(call, store, actor, name)?;
+        geometry(call, actor, name)?;
     } else if name != "clearzbuffer" {
         let nonfinite = matches!(
             name,
@@ -611,10 +582,10 @@ pub(super) fn method(
         ) || (name == "diffusealpha"
             && matches!(value, Value::Number(v) if v.is_infinite()));
         if let Some(number) = float_scalar(call, value, nonfinite) {
-            action_capture::prepare_write(call, store, actor)?;
-            scalar(call, store, actor, name, number);
+            action_capture::prepare_write(call, actor)?;
+            scalar(call, actor, name, number);
             if name == "diffusealpha" {
-                song_replay::sync_getters(call, store, actor)?;
+                song_replay::sync_getters(call, actor)?;
             }
         }
     }
@@ -635,10 +606,9 @@ fn corner_mask(name: &str) -> Option<u8> {
     })
 }
 
-fn scalar(call: &mut HostCall<'_>, store: &Shared, actor: TableId, name: &str, value: f32) {
-    let shared = store;
+fn scalar(call: &mut HostCall<'_>, actor: TableId, name: &str, value: f32) {
     let id = actor;
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     let sync = name == "diffusealpha" && !store.playback;
     let actor = store.actors.get_mut(&actor).unwrap();
     let diffuse = actor.getter_destination().diffuse;
@@ -710,12 +680,10 @@ fn scalar(call: &mut HostCall<'_>, store: &Shared, actor: TableId, name: &str, v
     if sync {
         actor.sync_rotation_getters();
     }
-    drop(store);
-    capture::property(call, shared, id, name);
+    capture::property(call, id, name);
     if matches!(name, "zbias" | "fov") {
         song_properties::record(
             call,
-            shared,
             id,
             if name == "zbias" {
                 Target::ZBias
@@ -727,12 +695,7 @@ fn scalar(call: &mut HostCall<'_>, store: &Shared, actor: TableId, name: &str, v
     }
 }
 
-fn geometry(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+fn geometry(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let count = match name {
         "zoomtowidth" | "zoomtoheight" => 1,
         "zoomto" | "vanishpoint" => 2,
@@ -746,7 +709,7 @@ fn geometry(
             None => return Ok(()),
         }
     }
-    geometry_values(call, store, actor, name, values)
+    geometry_values(call, actor, name, values)
 }
 
 fn screen_size(call: &mut HostCall<'_>) -> Result<[f32; 2], Error> {
@@ -765,15 +728,10 @@ fn screen_size(call: &mut HostCall<'_>) -> Result<[f32; 2], Error> {
     Ok(size)
 }
 
-fn screen_geometry(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+fn screen_geometry(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     if name == "FullScreen" {
         let [width, height] = screen_size(call)?;
-        return geometry_values(call, store, actor, "stretchto", [0., 0., width, height]);
+        return geometry_values(call, actor, "stretchto", [0., 0., width, height]);
     }
     let globals = super::table(call, helper(call, 5)?)?;
     let mut center = [0.; 2];
@@ -791,8 +749,8 @@ fn screen_geometry(
         // an explicit center; invalid dimensions must still report an error.
         center[index] = value.unwrap_or(screen_size(call)?[index] * 0.5);
     }
-    action_capture::prepare_write(call, store, actor)?;
-    let mut guard = store.lock().unwrap();
+    action_capture::prepare_write(call, actor)?;
+    let guard = call.store();
     let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
     if name != "CenterY" {
         pose.x = center[0];
@@ -800,17 +758,11 @@ fn screen_geometry(
     if name != "CenterX" {
         pose.y = center[1];
     }
-    drop(guard);
-    capture::property(call, store, actor, name);
+    capture::property(call, actor, name);
     Ok(())
 }
 
-fn scale_background(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    center: bool,
-) -> Result<(), Error> {
+fn scale_background(call: &mut HostCall<'_>, actor: TableId, center: bool) -> Result<(), Error> {
     let globals = super::table(call, helper(call, 5)?)?;
     let mut screen = [0.; 2];
     for (i, key) in ["SCREEN_WIDTH", "SCREEN_HEIGHT"].into_iter().enumerate() {
@@ -829,11 +781,8 @@ fn scale_background(
     } else {
         super::assets::text(call, mode)?
     };
-    super::sprites::refresh_size(call, store, actor)?;
-    let [width, height] = store.lock().unwrap().actors[&actor]
-        .state
-        .size
-        .map(f32::abs);
+    super::sprites::refresh_size(call, actor)?;
+    let [width, height] = call.store().actors[&actor].state.size.map(f32::abs);
     if width > 0. && height > 0. {
         let x = screen[0] / width;
         let y = screen[1] / height;
@@ -844,64 +793,54 @@ fn scale_background(
             "BackgroundFitMode_FitInsideAvoidLetter" => Some(y),
             "BackgroundFitMode_FitInsideAvoidPillar" => Some(x),
             _ => {
-                geometry_values(
-                    call,
-                    store,
-                    actor,
-                    "scaletocover",
-                    [0., 0., screen[0], screen[1]],
-                )?;
+                geometry_values(call, actor, "scaletocover", [0., 0., screen[0], screen[1]])?;
                 None
             }
         };
         if let Some(zoom) = zoom {
-            action_capture::prepare_write(call, store, actor)?;
-            let mut guard = store.lock().unwrap();
+            action_capture::prepare_write(call, actor)?;
+            let guard = call.store();
             let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
             pose.zoom = zoom;
             pose.zoom_x = zoom;
             pose.zoom_y = zoom;
             pose.zoom_z = zoom;
-            drop(guard);
-            capture::property(call, store, actor, "zoom");
+            capture::property(call, actor, "zoom");
         } else if mode == "BackgroundFitMode_CoverDistort" {
-            action_capture::prepare_write(call, store, actor)?;
-            let mut guard = store.lock().unwrap();
+            action_capture::prepare_write(call, actor)?;
+            let guard = call.store();
             let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
             pose.zoom_x = x;
             pose.zoom_y = y;
-            drop(guard);
-            capture::property(call, store, actor, "zoomto");
+            capture::property(call, actor, "zoomto");
         }
-        super::text::pre_zoom(call, store, actor, true, true)?;
+        super::text::pre_zoom(call, actor, true, true)?;
     }
     if center {
-        action_capture::prepare_write(call, store, actor)?;
-        let mut guard = store.lock().unwrap();
+        action_capture::prepare_write(call, actor)?;
+        let guard = call.store();
         let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
         pose.x = screen[0] * 0.5;
         pose.y = screen[1] * 0.5;
-        drop(guard);
-        capture::property(call, store, actor, "Center");
+        capture::property(call, actor, "Center");
     }
     Ok(())
 }
 
 fn geometry_values(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &str,
     values: [f32; 4],
 ) -> Result<(), Error> {
     if name != "vanishpoint" {
-        super::sprites::refresh_size(call, store, actor)?;
+        super::sprites::refresh_size(call, actor)?;
     }
-    let bitmap = store.lock().unwrap().actors[&actor].state.class == "BitmapText";
+    let bitmap = call.store().actors[&actor].state.class == "BitmapText";
     let text_height =
         bitmap && name == "zoomtoheight" && !super::text::content(call, actor)?.is_empty();
     let scale_plan = if matches!(name, "scaletofit" | "scaletocover") {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let instance = &guard.actors[&actor];
         let plan = crate::scale_to_rect_plan(
             values,
@@ -914,9 +853,9 @@ fn geometry_values(
     } else {
         None
     };
-    action_capture::prepare_write(call, store, actor)?;
+    action_capture::prepare_write(call, actor)?;
     let id = actor;
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let actor = guard.actors.get_mut(&id).unwrap();
     if bitmap && (matches!(name, "zoomto" | "zoomtowidth") || text_height) {
         let [width, height] = actor.state.size.map(f32::abs);
@@ -927,8 +866,7 @@ fn geometry_values(
         };
         actor.state.size = size;
         actor.state.render.size = Some(size);
-        drop(guard);
-        capture::property(call, store, id, "size");
+        capture::property(call, id, "size");
         return Ok(());
     }
     let mut scaled = false;
@@ -936,10 +874,8 @@ fn geometry_values(
     let render = &mut actor.state.render;
     if name == "vanishpoint" {
         render.vanishpoint = Some([values[0], values[1]]);
-        drop(guard);
         song_properties::record(
             call,
-            store,
             id,
             Target::Vanishpoint,
             Update::Vec2([values[0], values[1]]),
@@ -986,18 +922,17 @@ fn geometry_values(
         }
         _ => unreachable!(),
     }
-    drop(guard);
-    capture::property(call, store, id, name);
+    capture::property(call, id, name);
     if let Some(plan) = scale_plan {
         if plan.flip_x {
-            capture::property(call, store, id, "rotationy");
+            capture::property(call, id, "rotationy");
         }
         if plan.flip_y {
-            capture::property(call, store, id, "rotationx");
+            capture::property(call, id, "rotationx");
         }
     }
     if scaled {
-        super::text::pre_zoom(call, store, id, true, true)?;
+        super::text::pre_zoom(call, id, true, true)?;
     }
     Ok(())
 }

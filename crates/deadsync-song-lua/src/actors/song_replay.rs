@@ -14,7 +14,6 @@ pub(super) struct State {
 
 #[derive(Clone)]
 struct Setup {
-    store: Shared,
     scene: u64,
     overlays: Vec<(TableId, SongLuaOverlayState)>,
     startup: HashMap<TableId, SongStartupState>,
@@ -30,7 +29,7 @@ impl Actors {
         startup: &HashMap<TableId, SongStartupState>,
     ) -> Result<(), Error> {
         let invalid = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             if store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
                 Some(b"song preparation replay is unavailable in live mode".as_slice())
             } else if store.playback {
@@ -61,7 +60,7 @@ impl Actors {
             return vm.with_native_stack(|stack| Err(stack.error(message)));
         }
         let spin = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             overlays
                 .iter()
                 .filter_map(|(id, _)| {
@@ -93,7 +92,6 @@ impl Actors {
                 Value::Table(roots),
             ],
             Setup {
-                store: self.store.clone(),
                 scene: screen.id,
                 overlays: overlays.to_vec(),
                 startup: startup.clone(),
@@ -104,9 +102,9 @@ impl Actors {
         let function = function?;
         // General playback removes discovery queues. The saved Init/On queues
         // below are the only queues which may enter chronological preparation.
-        self.begin_playback();
+        self.begin_playback(vm);
         vm.call(function, &[])?;
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         store.replay_frame = Some((screen.id, 0.));
         store
             .scenes
@@ -161,9 +159,9 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
                 Ok(())
             })?;
         }
-        restore_getters(call, &setup.store, id, state)?;
+        restore_getters(call, id, state)?;
     }
-    let mut store = setup.store.lock().unwrap();
+    let store = call.store();
     store.replay_clock = None;
     // Native chronological queues are installed only for actors with startup
     // steps. Other actors retain command capture until frame-driven queueing.
@@ -236,7 +234,6 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
 // discovery also writes non-tween properties which the compiler keeps.
 fn restore_getters(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     state: SongLuaOverlayState,
 ) -> Result<(), Error> {
@@ -323,7 +320,7 @@ fn restore_getters(
         let value = call.try_intern(label.as_bytes())?;
         call.with_roots(&[value], |call| sprites::set(call, id, key, value))?;
     }
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     let actor = store.actors.get_mut(&id).unwrap();
     actor.current.x = state.x;
     actor.current.y = state.y;
@@ -387,14 +384,10 @@ pub(super) fn raw_set(
 }
 
 /// Preparation exports the sampled current pose and queued destination to
-/// Lua. No metadata lock survives allocation or a host API operation.
-pub(super) fn sync_getters(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-) -> Result<(), Error> {
+/// Lua. No store borrow survives allocation or a host API operation.
+pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
     let poses = {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let fallback = song_pose::mode(&store, id);
         let actor = store.actors.get_mut(&id).unwrap();
         if actor.replay.is_some() {
@@ -490,12 +483,11 @@ pub(super) fn sync_getters(
 // destinations. Current XYZ/aux still come from the replay's current pose.
 pub(super) fn publish_scalar(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     name: &str,
 ) -> Result<(), Error> {
     let (poses, initial_live) = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         let actor = &store.actors[&id];
         let initial_live = store.live_sources.is_some() && !store.playback && !actor.raw_live_epoch;
         let live_rotation = store.live_sources.is_some()
@@ -573,12 +565,11 @@ impl Actors {
         delta: f64,
     ) -> Result<bool, Error> {
         let first = {
-            let mut store = self.store.lock().unwrap();
+            let store = vm.store();
             if store
                 .replay_frame
                 .is_none_or(|(owner, _)| owner != screen.id)
             {
-                drop(store);
                 return vm.with_native_stack(|stack| {
                     Err(stack.error(b"song preparation replay has not started"))
                 });
@@ -586,18 +577,19 @@ impl Actors {
             store.replay_frame = Some((screen.id, seconds));
             store.next
         };
-        let previous = std::mem::replace(&mut self.store.lock().unwrap().replay_advancing, true);
+        let previous = std::mem::replace(&mut vm.store().replay_advancing, true);
         let result = self.advance(vm, screen, delta);
-        self.store.lock().unwrap().replay_advancing = previous;
-        song_activation::adopt_created(&self.store, screen.id, first);
+        vm.store().replay_advancing = previous;
+        song_activation::adopt_created(vm.store(), screen.id, first);
         result
     }
 
     pub(crate) fn capture_song_tween_replay(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Option<HashMap<TableId, super::super::SongTweenReplay>> {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let (owner, time) = store.replay_frame?;
         if owner != screen.id {
             return None;
@@ -626,8 +618,13 @@ impl Actors {
         Some(result)
     }
 
-    pub(crate) fn publish_song_tween_frame(&self, screen: ActorScene, actors: &[Value]) -> bool {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn publish_song_tween_frame(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        actors: &[Value],
+    ) -> bool {
+        let store = vm.store();
         let Some((owner, second)) = store.replay_frame else {
             return false;
         };

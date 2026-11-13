@@ -5,9 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(super) fn load_actor(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Error> {
+pub(super) fn load_actor(call: &mut HostCall<'_>) -> Result<(), Error> {
     let Value::String(path) = arg(call, 0) else {
-        let actor = offline::dummy(call, store, "LoadActor")?;
+        let actor = offline::dummy(call, "LoadActor")?;
         return call.push(Value::Table(actor));
     };
     let path = std::str::from_utf8(call.string_bytes(path).expect("live loader path"))
@@ -35,16 +35,12 @@ pub(super) fn load_actor(call: &mut HostCall<'_>, store: &Shared) -> Result<(), 
         None
     };
     let value = with_directory(call, directory.as_deref(), |call| {
-        load_path(call, store, &path, &arguments)
+        load_path(call, &path, &arguments)
     })?;
     call.push(value)
 }
 
-pub(super) fn add_child_from_path(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    parent: TableId,
-) -> Result<(), Error> {
+pub(super) fn add_child_from_path(call: &mut HostCall<'_>, parent: TableId) -> Result<(), Error> {
     let Some(path) = call.coerce_string(arg(call, 1))? else {
         return call.push(Value::Table(parent));
     };
@@ -53,7 +49,7 @@ pub(super) fn add_child_from_path(
         .to_owned();
     let directory = assets::field(call, parent, b"__songlua_script_dir")?.map(PathBuf::from);
     let loaded = with_directory(call, directory.as_deref(), |call| {
-        load_path(call, store, &path, &[])
+        load_path(call, &path, &[])
     });
     let child = match loaded {
         Ok(Value::Table(child)) => child,
@@ -64,22 +60,20 @@ pub(super) fn add_child_from_path(
         _ => return call.push(Value::Table(parent)),
     };
     call.with_roots(&[Value::Table(child)], |call| {
-        if !store.lock().unwrap().actors.contains_key(&child) {
+        if !call.store().actors.contains_key(&child) {
             return call.push(Value::Table(parent));
         }
-        let already_present = store.lock().unwrap().actors[&parent]
-            .children
-            .contains(&child);
+        let already_present = call.store().actors[&parent].children.contains(&child);
         if !already_present {
-            parent_scene(call, store, child, Value::Table(parent), true)?;
-            initialize(call, store, child)?;
+            parent_scene(call, child, Value::Table(parent), true)?;
+            initialize(call, child)?;
             let walked = sprites::field(call, parent, "__songlua_startup_children_walked")?;
-            if store.lock().unwrap().actors[&parent].started
+            if call.store().actors[&parent].started
                 || !matches!(walked, Value::Nil | Value::Boolean(false))
             {
-                lifecycle::startup(call, store, child)?;
+                lifecycle::startup(call, child)?;
             }
-            lifecycle::invalidate_plans(call, store)?;
+            lifecycle::invalidate_plans(call)?;
         }
         call.push(Value::Table(parent))
     })
@@ -120,14 +114,9 @@ fn with_directory(
     })
 }
 
-fn load_path(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    path: &str,
-    arguments: &[Value],
-) -> Result<Value, Error> {
+fn load_path(call: &mut HostCall<'_>, path: &str, arguments: &[Value]) -> Result<Value, Error> {
     if deadlib_assets::generated_texture_shared_key(path).is_some() {
-        return media(call, store, "Sprite", path, false);
+        return media(call, "Sprite", path, false);
     }
     let theme = path.trim_start_matches('/');
     if theme.starts_with(crate::SONG_LUA_THEME_PATH_PREFIX) {
@@ -140,9 +129,9 @@ fn load_path(
         } else {
             "Actor"
         };
-        return media(call, store, class, path, true);
+        return media(call, class, path, true);
     }
-    let song_dir = store.lock().unwrap().song_dir.clone();
+    let song_dir = call.store().song_dir.clone();
     let globals = table(call, helper(call, 5)?)?;
     let current = assets::field(call, globals, b"__songlua_script_dir")?
         .filter(|s| !s.trim().is_empty())
@@ -155,13 +144,7 @@ fn load_path(
         } else {
             "Sprite"
         };
-        return media(
-            call,
-            store,
-            class,
-            &crate::file_path_string(&resolved),
-            false,
-        );
+        return media(call, class, &crate::file_path_string(&resolved), false);
     }
     let path = call.try_intern(resolved.to_string_lossy().as_bytes())?;
     let source_loader = native_children::helper_function(call, b"source_loader")?;
@@ -177,7 +160,6 @@ fn load_path(
 
 fn media(
     call: &mut HostCall<'_>,
-    store: &Shared,
     class: &'static str,
     path: &str,
     theme: bool,
@@ -189,7 +171,7 @@ fn media(
             std::path::absolute(path).map_err(|error| call.error(error.to_string().as_bytes()))?;
         crate::file_path_string(&absolute)
     };
-    let actor = offline::dummy(call, store, class)?;
+    let actor = offline::dummy(call, class)?;
     if matches!(class, "Sprite" | "Sound") {
         let value = call.try_intern(path.as_bytes())?;
         sprites::set(
@@ -200,9 +182,7 @@ fn media(
         )?;
     }
     if class == "Sprite" {
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -210,15 +190,10 @@ fn media(
             .render
             .sprite_texture = true;
         if !theme {
-            sprites::decode(
-                call,
-                store,
-                actor,
-                crate::is_song_lua_video_path(Path::new(&path)),
-            )?;
+            sprites::decode(call, actor, crate::is_song_lua_video_path(Path::new(&path)))?;
             sprites::movie_size(call, actor)?;
         }
-        sprites::refresh_size(call, store, actor)?;
+        sprites::refresh_size(call, actor)?;
     }
     Ok(Value::Table(actor))
 }

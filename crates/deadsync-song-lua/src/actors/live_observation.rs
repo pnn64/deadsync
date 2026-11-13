@@ -14,8 +14,8 @@ struct Observer {
 }
 
 impl Actors {
-    pub(crate) fn take_message_coverage(&self) -> Vec<String> {
-        std::mem::take(&mut self.store.lock().unwrap().message_coverage)
+    pub(crate) fn take_message_coverage(&self, vm: &mut Vm) -> Vec<String> {
+        std::mem::take(&mut vm.store().message_coverage)
     }
 
     pub(crate) fn enable_overlay_observer(
@@ -63,7 +63,7 @@ impl Actors {
                 });
             }
         }
-        self.store.lock().unwrap().message_paths = order;
+        vm.store().message_paths = order;
         Ok(())
     }
 }

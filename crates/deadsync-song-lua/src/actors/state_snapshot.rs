@@ -163,16 +163,14 @@ pub(super) fn install(vm: &mut Vm, helpers: TableId) -> Result<(), Error> {
 }
 pub(super) fn write(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     state: &SongLuaOverlayState,
 ) -> Result<TableId, Error> {
     validate_keys(call, actor)?;
     let snapshot = copy_validated(call, actor)?;
     let value = Value::Table(snapshot);
-    let live = store
-        .lock()
-        .unwrap()
+    let live = call
+        .store()
         .clock
         .live
         .load(std::sync::atomic::Ordering::Relaxed);
