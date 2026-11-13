@@ -1952,6 +1952,10 @@ impl State {
             .get_or_init(|| SongSelectLayout::current(self.policy.presentation, self.session))
     }
 
+    pub fn density_graph_dimensions(&self) -> [f32; 2] {
+        self.layout().density_panel_size()
+    }
+
     pub fn reset_layout(&mut self) {
         self.layout.take();
     }

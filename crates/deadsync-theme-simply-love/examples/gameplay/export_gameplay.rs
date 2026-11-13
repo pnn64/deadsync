@@ -447,7 +447,6 @@ fn sample_state(
         true,
         false,
         true,
-        true,
         String::new(),
         String::new(),
         false,
