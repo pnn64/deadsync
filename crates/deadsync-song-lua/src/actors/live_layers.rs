@@ -34,6 +34,20 @@ struct Run {
     context: Arc<SongLuaCompileContext>,
     state: Arc<Mutex<Option<State>>>,
 }
+/// The actors the foreground entry callback acts on. It returns at once for
+/// every other actor, so the update traversal calls it for these alone.
+pub(super) struct EntryActors {
+    function: Value,
+    actors: Vec<TableId>,
+}
+/// Whether the update traversal must call `entry` for `actor`: always for a
+/// caller's own callback, and only for a scheduled foreground otherwise.
+pub(super) fn enters(store: &Store, entry: Value, actor: TableId) -> bool {
+    match &store.entry_actors {
+        Some(known) if known.function == entry => known.actors.contains(&actor),
+        _ => true,
+    }
+}
 impl Actors {
     pub(crate) fn live_layers(
         &self,
@@ -184,6 +198,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                 .sort_by(|a, b| a.1.start_beat.total_cmp(&b.1.start_beat));
         }
         state.order = (0..state.backgrounds.len()).collect();
+        let foregrounds = state.foregrounds.iter().map(|f| f.actor).collect();
         *data.state.lock().unwrap() = Some(state);
         for (slot, callback) in [
             (ENTRY, entry as fn(&mut HostCall<'_>) -> Result<(), Error>),
@@ -203,6 +218,11 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             )?;
             call.raw_table_set(batch, Value::Number(slot as f64), f)?;
         }
+        let function = call.raw_table_get(batch, Value::Number(ENTRY as f64))?;
+        call.store().entry_actors = Some(EntryActors {
+            function,
+            actors: foregrounds,
+        });
         call.push(Value::Table(batch))
     })
 }

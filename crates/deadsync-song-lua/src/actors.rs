@@ -305,6 +305,7 @@ struct Store {
     song_broadcasts: Option<song_capture::Broadcasts>,
     live_sources: Option<Vec<crate::SongLuaLiveBroadcast>>,
     trace: live_trace::State,
+    entry_actors: Option<live_layers::EntryActors>,
     song_callback_depth: usize,
     trace_dynamic_commands: bool,
     next: u64,

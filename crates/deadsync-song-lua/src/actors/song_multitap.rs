@@ -169,8 +169,14 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
             let actor = job.actor();
             match job {
                 Job::Enter(_, _, source) => {
-                    if statistics.is_some() && call.captures()[3] != Value::Nil {
-                        call.call(call.captures()[3], &[Value::Table(actor)])?;
+                    // Only the live traversal captures an entry callback.
+                    if statistics.is_some() {
+                        let entry = call.captures()[3];
+                        if entry != Value::Nil
+                            && live_layers::enters(call.store_ref(), entry, actor)
+                        {
+                            call.call(entry, &[Value::Table(actor)])?;
+                        }
                     }
                     let (mut incoming, mut span) =
                         parent.map_or((Some(delta), Some(delta as f32)), |p| match source {
