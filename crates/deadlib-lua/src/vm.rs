@@ -38,9 +38,9 @@ use crate::arena::{Arena, index as slot_index};
 use crate::memory::{Buffer, Memory};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
-    HostCall, HostFunction, HostThreadState, NativeBuiltinBody, NativeCallStatus, NativeDebugFrame,
-    NativeDebugInfo, NativeDebugString, NativeHook, NativeHookEvent, NativeHookInfo,
-    NativeLoadStatus, NativeStack, NativeThreadStack,
+    HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
+    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
+    NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
 };
 pub use memory_limit::MemoryUsage;
 use native::format_number;
@@ -1761,6 +1761,11 @@ impl Vm {
                         gc_pending: self.gc.pending,
                         closed: self.open_upvalues.is_empty(),
                         index_name: self.meta_names[Meta::Index as usize],
+                        // A hook would observe the handler call a resolver skips.
+                        resolvers: (self.hooks.mask == 0).then_some(simple::Resolvers {
+                            natives: &self.native_closures,
+                            strings: &self.strings.bytes,
+                        }),
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {
                         pc = next;

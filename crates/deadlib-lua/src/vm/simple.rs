@@ -27,6 +27,44 @@ pub(super) struct Context<'a> {
     pub closed: bool,
     /// The interned `__index` name, for inherited field reads.
     pub index_name: StringId,
+    /// Host `__index` resolvers, when no hook could observe a skipped call.
+    pub resolvers: Option<Resolvers<'a>>,
+}
+
+/// The closures and strings a host [`IndexResolver`](super::IndexResolver) reads.
+#[derive(Clone, Copy)]
+pub(super) struct Resolvers<'a> {
+    pub natives: &'a Arena<threads::NativeClosure>,
+    pub strings: &'a Arena<ByteString>,
+}
+impl Resolvers<'_> {
+    /// Ask the handler's resolver, if it has one, for `owner[key]`.
+    #[inline]
+    fn resolve(
+        &self,
+        tables: &Arena<Table>,
+        index_name: StringId,
+        handler: u64,
+        owner: TableId,
+        key: Value,
+    ) -> Option<Value> {
+        let closure = self.natives.get(handler)?;
+        let threads::NativeKind::Host(function) = &closure.kind else {
+            return None;
+        };
+        let resolver = function.resolver()?;
+        resolver(
+            &super::IndexView::new(
+                tables,
+                self.strings,
+                index_name,
+                &closure.captures,
+                function.data(),
+            ),
+            owner,
+            key,
+        )
+    }
 }
 
 /// Table-valued `__index` handlers followed before deferring to the general
@@ -50,21 +88,29 @@ impl Context<'_> {
 
 /// Read `key` through table-valued `__index` handlers after a raw miss.
 ///
-/// Such handlers neither call out nor fail. `None` defers a function handler,
+/// `owner` is the table whose `metatable` is consulted first. Table handlers
+/// neither call out nor fail, and a host handler's resolver answers without a
+/// call when `resolvers` permits it. `None` defers any other function handler,
 /// a non-table handler or a long chain to the general interpreter.
 #[inline]
 pub(super) fn inherited(
     tables: &Arena<Table>,
     index_name: StringId,
+    resolvers: Option<&Resolvers<'_>>,
+    mut owner: TableId,
     mut metatable: TableId,
     key: Value,
 ) -> Option<Value> {
     for _ in 0..INDEX_CHAIN {
-        let parent = match tables[slot_index(metatable.0)].get_string(index_name) {
+        let parent_id = match tables[slot_index(metatable.0)].get_string(index_name) {
             Value::Nil => return Some(Value::Nil),
-            Value::Table(parent) => &tables[slot_index(parent.0)],
+            Value::Table(parent) => parent,
+            Value::Native(handler) => {
+                return resolvers?.resolve(tables, index_name, handler, owner, key);
+            }
             _ => return None,
         };
+        let parent = &tables[slot_index(parent_id.0)];
         let value = match key {
             Value::String(id) => parent.get_string(id),
             key => parent.get(key),
@@ -73,7 +119,10 @@ pub(super) fn inherited(
             return Some(value);
         }
         match parent.metatable() {
-            Some(next) => metatable = next,
+            Some(next) => {
+                owner = parent_id;
+                metatable = next;
+            }
             None => return Some(Value::Nil),
         }
     }
@@ -105,7 +154,14 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             if value == Value::Nil
                 && let Some(metatable) = table.metatable()
             {
-                value = inherited(cx.tables, cx.index_name, metatable, key)?;
+                value = inherited(
+                    cx.tables,
+                    cx.index_name,
+                    cx.resolvers.as_ref(),
+                    cx.env,
+                    metatable,
+                    key,
+                )?;
             }
             cx.registers[a] = value;
         }
@@ -132,7 +188,14 @@ pub(super) fn step(cx: &mut Context<'_>, pc: usize) -> Option<usize> {
             if value == Value::Nil
                 && let Some(metatable) = table.metatable()
             {
-                value = inherited(cx.tables, cx.index_name, metatable, key)?;
+                value = inherited(
+                    cx.tables,
+                    cx.index_name,
+                    cx.resolvers.as_ref(),
+                    id,
+                    metatable,
+                    key,
+                )?;
             }
             cx.registers[a] = value;
         }

@@ -61,6 +61,12 @@ so every callback shares it without reference counting or locking. A borrow
 ends before the callback can reenter Lua. The state is not scanned by the
 collector, stays available to closing finalizers and is dropped with the VM.
 
+`set_index_resolver` gives a host function used as an `__index` handler a pure
+fast path. The interpreter asks the resolver first and calls the handler only
+when it declines, so ordinary member reads need no call. A resolver reads
+tables through `IndexView` and cannot allocate, fail or run Lua. The handler
+still answers whenever a debug hook or an instruction limit is active.
+
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
 Root or publish the returned value before calling Lua or collecting garbage.

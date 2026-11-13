@@ -49,10 +49,10 @@ pub use error::{Error, ErrorKind};
 pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{
-    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, MemoryUsage,
-    NativeBuiltinBody, NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString,
-    NativeHook, NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
-    NativeThreadStatus, Root, Vm,
+    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, IndexResolver, IndexView,
+    MemoryUsage, NativeBuiltinBody, NativeCallStatus, NativeDebugFrame, NativeDebugInfo,
+    NativeDebugString, NativeHook, NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack,
+    NativeThreadStack, NativeThreadStatus, Root, Vm,
 };
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.

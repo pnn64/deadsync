@@ -53,10 +53,86 @@ impl Action<'_> {
 /// VM; its Lua finalizers are skipped because execution was interrupted.
 pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 
+/// A pure fast path for a host function installed as an `__index` handler.
+///
+/// The interpreter calls the resolver with the table whose metatable holds the
+/// handler and the key that table lacks. `Some(value)` is the result of the
+/// index operation and the handler is not called; `None` calls the handler.
+/// A resolver must return `Some` only where the handler would return the same
+/// value with no other effect, because the two are used interchangeably: the
+/// handler still answers whenever a debug hook or instruction limit is active.
+///
+/// A resolver reads through [`IndexView`], so it cannot allocate, raise an
+/// error, run Lua or change any table.
+pub type IndexResolver = fn(&IndexView<'_>, TableId, Value) -> Option<Value>;
+
+/// Read-only access to VM tables for an [`IndexResolver`].
+pub struct IndexView<'a> {
+    tables: &'a Arena<Table>,
+    strings: &'a Arena<ByteString>,
+    index_name: StringId,
+    captures: &'a [Value],
+    data: Option<&'a (dyn Any + Send + Sync)>,
+}
+impl<'a> IndexView<'a> {
+    pub(super) fn new(
+        tables: &'a Arena<Table>,
+        strings: &'a Arena<ByteString>,
+        index_name: StringId,
+        captures: &'a [Value],
+        data: Option<&'a (dyn Any + Send + Sync)>,
+    ) -> Self {
+        Self {
+            tables,
+            strings,
+            index_name,
+            captures,
+            data,
+        }
+    }
+
+    /// The handler's captured values, which the collector keeps alive.
+    pub fn captures(&self) -> &'a [Value] {
+        self.captures
+    }
+
+    /// The handler's private binding data, if it has data of type `T`.
+    pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&'a T> {
+        self.data?.downcast_ref()
+    }
+
+    /// The bytes of a live string.
+    pub fn string_bytes(&self, id: StringId) -> Option<&'a [u8]> {
+        self.strings.get(id.0).map(AsRef::as_ref)
+    }
+
+    /// Read a table without consulting metatables. A collected table reads as empty.
+    pub fn raw_get(&self, table: TableId, key: Value) -> Value {
+        self.tables
+            .get(table.0)
+            .map_or(Value::Nil, |table| table.get(key))
+    }
+
+    /// Read `table[key]` through table-valued `__index` handlers only.
+    ///
+    /// Returns `None` where Lua would call a function handler, including
+    /// another resolver's handler, or for a collected table.
+    pub fn get(&self, table: TableId, key: Value) -> Option<Value> {
+        let entries = self.tables.get(table.0)?;
+        match (entries.get(key), entries.metatable()) {
+            (Value::Nil, Some(metatable)) => {
+                simple::inherited(self.tables, self.index_name, None, table, metatable, key)
+            }
+            (value, _) => Some(value),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct Function {
     callback: HostFunction,
     data: Option<Shared<dyn Any + Send + Sync>>,
+    resolver: Option<IndexResolver>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,6 +144,12 @@ impl std::fmt::Debug for Function {
 impl Function {
     pub(super) fn heap_bytes(&self) -> usize {
         self.data.as_ref().map_or(0, Shared::heap_bytes)
+    }
+    pub(super) fn resolver(&self) -> Option<IndexResolver> {
+        self.resolver
+    }
+    pub(super) fn data(&self) -> Option<&(dyn Any + Send + Sync)> {
+        self.data.as_deref()
     }
 }
 
@@ -224,11 +306,75 @@ impl Vm {
         data: Option<Shared<dyn Any + Send + Sync>>,
     ) -> Result<Value, Error> {
         self.validate_host_captures(captures)?;
-        let function = Function { callback, data };
+        let function = Function {
+            callback,
+            data,
+            resolver: None,
+        };
         let bytes = function.heap_bytes();
         let value = self.new_native(threads::NativeKind::Host(function), captures)?;
         self.native_closures.note_alloc(bytes);
         Ok(value)
+    }
+
+    /// Attach a pure fast path to a host function used as an `__index` handler.
+    ///
+    /// With no debug hook and no instruction limit active, an index operation
+    /// that reaches `function` as its handler asks `resolver` first and calls
+    /// the handler only when the resolver returns `None`. See
+    /// [`IndexResolver`] for the contract between the two. The resolver reads
+    /// the function's captures and binding data, so keep every value it uses
+    /// there.
+    ///
+    /// ```
+    /// use deadlib_lua::{Error, HostCall, IndexView, TableId, Value, Vm, compile};
+    /// // The handler reads fields from its captured class table.
+    /// fn index(call: &mut HostCall<'_>) -> Result<(), Error> {
+    ///     let value = call.table_get(call.captures()[0], call.arguments()[1])?;
+    ///     call.push(value)
+    /// }
+    /// // Plain fields of that class need no call at all.
+    /// fn resolve(view: &IndexView<'_>, _: TableId, key: Value) -> Option<Value> {
+    ///     let Value::Table(class) = view.captures()[0] else { return None };
+    ///     view.get(class, key)
+    /// }
+    /// let mut vm = Vm::new();
+    /// let class = vm.execute(&compile(b"return {answer = 42}")?)?[0];
+    /// let handler = vm.new_host_function(index, &[class])?;
+    /// vm.set_index_resolver(handler, resolve)?;
+    /// vm.set_global(b"handler", handler)?;
+    /// let program = compile(b"return setmetatable({}, {__index = handler}).answer")?;
+    /// assert_eq!(vm.execute(&program)?, &[Value::Number(42.0)]);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function of this VM.
+    pub fn set_index_resolver(
+        &mut self,
+        function: Value,
+        resolver: IndexResolver,
+    ) -> Result<(), Error> {
+        self.validate_value(function)?;
+        let Value::Native(id) = function else {
+            return Err(Error::new(ErrorKind::Runtime, 0, "host function expected"));
+        };
+        match self.native_closures.get_mut(id).map(|f| &mut f.kind) {
+            Some(threads::NativeKind::Host(function)) => {
+                function.resolver = Some(resolver);
+                Ok(())
+            }
+            _ => Err(Error::new(ErrorKind::Runtime, 0, "host function expected")),
+        }
+    }
+
+    // Host-initiated reads may use resolvers under the interpreter's condition:
+    // nothing is installed that could observe or count the skipped handler call.
+    fn index_resolvers(&self) -> Option<simple::Resolvers<'_>> {
+        (self.hooks.mask == 0 && self.budget.is_none()).then_some(simple::Resolvers {
+            natives: &self.native_closures,
+            strings: &self.strings.bytes,
+        })
     }
 
     fn validate_host_captures(&self, captures: &[Value]) -> Result<(), Error> {
@@ -608,6 +754,8 @@ impl HostCall<'_> {
                 (Value::Nil, Some(metatable)) => simple::inherited(
                     &self.vm.tables,
                     self.vm.meta_names[Meta::Index as usize],
+                    self.vm.index_resolvers().as_ref(),
+                    id,
                     metatable,
                     key,
                 ),
@@ -1054,6 +1202,8 @@ impl HostCall<'_> {
             Some(metatable) => simple::inherited(
                 &self.vm.tables,
                 self.vm.meta_names[Meta::Index as usize],
+                self.vm.index_resolvers().as_ref(),
+                id,
                 metatable,
                 key,
             ),
