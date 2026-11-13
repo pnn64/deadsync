@@ -1,5 +1,6 @@
 //! Original setter identities and captured targets for existing input snapshots.
 use super::*;
+use deadlib_lua::IndexView;
 use smallvec::SmallVec;
 use std::sync::Weak;
 
@@ -245,6 +246,39 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     }
     call.push(result)
 }
+/// Answers [`lookup`] inline for members found on the actor's class.
+///
+/// This repeats the handler's steps that only read tables, in the same order.
+/// Everything else returns `None` and runs the handler itself: its errors, a
+/// coerced actor type, a class global that is missing, replaced by a non-table
+/// or reached through a function metamethod, and the bound-method fallbacks of
+/// classes outside the core set.
+fn resolve_lookup(view: &IndexView<'_>, actor: TableId, key: Value) -> Option<Value> {
+    let Value::String(name) = key else {
+        return Some(Value::Nil);
+    };
+    let keys = &view.function_data::<LookupBinding>()?.keys;
+    // The handler rejects member names that are not UTF-8.
+    std::str::from_utf8(view.string_bytes(name)?).ok()?;
+    let (public, core) = match view.raw_get(actor, keys.actor_type) {
+        Value::Nil => ("Actor", true),
+        Value::String(kind) => {
+            let kind = std::str::from_utf8(view.string_bytes(kind)?).ok()?;
+            (class_name(kind), is_core(kind))
+        }
+        _ => return None,
+    };
+    let Value::Table(globals) = view.captures()[0] else {
+        return None;
+    };
+    let Value::Table(class) = view.get(globals, class_key(keys, public))? else {
+        return None;
+    };
+    match view.get(class, key)? {
+        Value::Nil if !core => None,
+        member => Some(member),
+    }
+}
 fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, arg(call, 0))?;
     let key = arg(call, 1);
@@ -303,6 +337,9 @@ pub(super) fn install_metatable(vm: &mut Vm, methods: TableId) -> Result<(), Err
                 )?,
                 _ => unreachable!("only metatable callbacks are registered here"),
             };
+            if matches!(method, Method::Lookup) {
+                vm.set_index_resolver(function, resolve_lookup)?;
+            }
             vm.store().scalar_methods.insert(function, &identity);
             super::super::put(
                 vm,
