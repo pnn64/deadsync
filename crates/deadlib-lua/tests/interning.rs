@@ -132,3 +132,112 @@ fn lua_binary_string_keys_and_generated_middle_changes_match_the_reference() {
         (0..=255).collect::<Vec<u8>>()
     );
 }
+
+static NAMES: &[u8] = b"positionx";
+
+#[test]
+fn static_slices_are_found_by_address_and_agree_with_ordinary_interning() {
+    let mut vm = Vm::new();
+    let whole = vm.intern_static(NAMES).unwrap();
+    // Slices of one literal differ in address or length; each is its own name.
+    let prefix = vm.intern_static(&NAMES[..8]).unwrap();
+    let suffix = vm.intern_static(&NAMES[8..]).unwrap();
+    let empty = vm.intern_static(&NAMES[..0]).unwrap();
+    assert_eq!(vm.intern(b"positionx"), whole);
+    assert_eq!(vm.intern(b"position"), prefix);
+    assert_eq!(vm.intern(b"x"), suffix);
+    assert_eq!(vm.intern(b""), empty);
+    assert_eq!(vm.intern_static(b"").unwrap(), empty);
+    for _ in 0..3 {
+        assert_eq!(vm.intern_static(NAMES).unwrap(), whole);
+        assert_eq!(vm.intern_static(&NAMES[..8]).unwrap(), prefix);
+        assert_eq!(vm.intern_static(&NAMES[8..]).unwrap(), suffix);
+    }
+    // Equal bytes at another address name the same string.
+    let copy: &'static [u8] = Vec::from(NAMES).leak();
+    assert_ne!(copy.as_ptr(), NAMES.as_ptr());
+    assert_eq!(vm.intern_static(copy).unwrap(), whole);
+}
+
+#[test]
+fn static_strings_survive_collection_without_a_root_and_index_growth() {
+    let mut vm = Vm::new();
+    let names: Vec<&'static [u8]> = (0..700)
+        .map(|index| &*format!("static name {index}").into_bytes().leak())
+        .collect();
+    let mut values = Vec::new();
+    for (index, name) in names.iter().enumerate() {
+        values.push(vm.intern_static(name).unwrap());
+        if index % 97 == 0 {
+            // Nothing else refers to these strings.
+            vm.collect_garbage().unwrap();
+        }
+    }
+    vm.collect_garbage().unwrap();
+    vm.execute(&compile(b"local t = {} for i = 1, 2000 do t[i] = 'churn ' .. i end").unwrap())
+        .unwrap();
+    vm.collect_garbage().unwrap();
+    for (name, value) in names.iter().zip(&values) {
+        let Value::String(id) = *value else {
+            panic!("interned value is a string")
+        };
+        assert_eq!(vm.string_bytes(id), Some(*name));
+        assert_eq!(vm.intern_static(name).unwrap(), *value);
+        assert_eq!(vm.intern(name), *value);
+    }
+}
+
+#[test]
+fn a_static_string_first_interned_during_a_collection_cycle_is_kept() {
+    let mut vm = Vm::new();
+    let mut values = Vec::new();
+    let names: Vec<&'static [u8]> = (0..64)
+        .map(|index| &*format!("cycle name {index}").into_bytes().leak())
+        .collect();
+    // Step the incremental collector between interning calls, so some strings
+    // are first seen while a cycle is marking or sweeping.
+    let churn =
+        compile(b"local t = {} for i = 1, 200 do t[i] = {} end collectgarbage('step', 1)").unwrap();
+    for name in &names {
+        vm.execute(&churn).unwrap();
+        values.push(vm.intern_static(name).unwrap());
+    }
+    for _ in 0..3 {
+        vm.collect_garbage().unwrap();
+    }
+    for (name, value) in names.iter().zip(&values) {
+        assert_eq!(vm.intern_static(name).unwrap(), *value);
+        assert_eq!(vm.intern(name), *value);
+    }
+}
+
+#[test]
+fn host_callbacks_read_fields_named_by_static_strings() {
+    use deadlib_lua::{Error, HostCall};
+    fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let Value::Table(target) = call.arguments()[0] else {
+            return Err(call.error(b"table expected"));
+        };
+        let key = call.intern_static(b"static field")?;
+        let value = call.raw_table_get(target, key)?;
+        call.push(value)
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(read, &[]).unwrap();
+    vm.set_global(b"read", function).unwrap();
+    let program = compile(
+        br#"
+        local total = 0
+        for i = 1, 100 do
+            total = total + read({['static field'] = i})
+            if i % 10 == 0 then collectgarbage() end
+        end
+        return total, read({})
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap(),
+        &[Value::Number(5050.0), Value::Nil]
+    );
+}

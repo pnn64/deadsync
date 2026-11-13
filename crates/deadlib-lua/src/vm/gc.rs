@@ -663,7 +663,8 @@ impl Vm {
                 .sum::<usize>()
             + self.patterns.storage_bytes();
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
-            + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
+            + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>()
+            + self.static_strings.heap_bytes();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<ByteString>()
             + self.tables.live_len() * std::mem::size_of::<Table>()
             + self.functions.live_len() * std::mem::size_of::<Closure>()
@@ -1332,6 +1333,10 @@ impl Vm {
         self.gc.closed.clear();
         self.protect_new_allocations(false);
         self.strings.bytes.clear_marks();
+        // Strings have no references to trace; marking them here keeps them.
+        for id in self.static_strings.strings() {
+            self.strings.bytes.mark(id.0);
+        }
         self.tables.clear_marks();
         self.functions.clear_marks();
         self.upvalues.clear_marks();

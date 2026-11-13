@@ -1087,6 +1087,15 @@ impl HostCall<'_> {
         self.vm.try_intern(bytes)
     }
 
+    /// Intern a literal, finding it again by its address. See [`Vm::intern_static`].
+    ///
+    /// # Errors
+    /// Returns the fixed Lua memory error if the string cannot be stored.
+    #[inline]
+    pub fn intern_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        self.vm.intern_static(bytes)
+    }
+
     /// Borrow the bytes of a live string in this VM.
     pub fn string_bytes(&self, id: StringId) -> Option<&[u8]> {
         self.vm.string_bytes(id)

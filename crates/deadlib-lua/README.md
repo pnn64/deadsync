@@ -71,6 +71,11 @@ still answers whenever a debug hook or an instruction limit is active.
 and walk its entries without metamethods, so a callback can inspect a table
 without entering Lua.
 
+`intern_static` interns a byte string that lives for the whole program, such
+as a literal, and afterwards finds it by the slice's address instead of its
+contents. The string stays alive with the VM, so the value needs no rooting.
+Use it for the field names a callback reads on every call.
+
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
 Root or publish the returned value before calling Lua or collecting garbage.

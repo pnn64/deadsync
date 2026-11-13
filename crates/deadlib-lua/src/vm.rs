@@ -252,6 +252,93 @@ impl Strings {
     }
 }
 
+/// Strings interned from `&'static` slices, found again by the slice's address.
+///
+/// A `&'static` slice names memory that never changes, so one address and
+/// length always hold the same bytes and identify the string without reading
+/// them. The collector marks every entry at the start of a cycle.
+#[derive(Debug)]
+struct StaticStrings {
+    // Open addressing over (address, length, string). No slice starts at
+    // address zero, which marks a vacant slot.
+    slots: Buffer<(usize, usize, StringId)>,
+    len: usize,
+}
+impl StaticStrings {
+    fn new_in(memory: Memory) -> Self {
+        Self {
+            slots: Buffer::new_in(memory),
+            len: 0,
+        }
+    }
+    #[inline]
+    fn start(&self, address: usize, len: usize) -> usize {
+        // Literals lie close together; multiply so that the slot comes from
+        // high bits which every address bit reaches.
+        let mixed =
+            (address ^ len.rotate_left(20)).wrapping_mul(0x9e37_79b9_7f4a_7c15_u64 as usize);
+        mixed >> (usize::BITS - self.slots.len().trailing_zeros())
+    }
+    #[inline]
+    fn find(&self, bytes: &'static [u8]) -> Option<StringId> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        let (address, len) = (bytes.as_ptr() as usize, bytes.len());
+        let mut slot = self.start(address, len);
+        loop {
+            let (other, other_len, id) = self.slots[slot];
+            if other == address && other_len == len {
+                return Some(id);
+            }
+            if other == 0 {
+                return None;
+            }
+            slot = (slot + 1) & (self.slots.len() - 1);
+        }
+    }
+    // Make room for one more entry, so that `insert` cannot fail.
+    fn try_reserve(&mut self) -> Result<(), Error> {
+        if (self.len + 1) * 2 <= self.slots.len() {
+            return Ok(());
+        }
+        let size = self
+            .slots
+            .len()
+            .checked_mul(2)
+            .ok_or_else(Error::memory)?
+            .max(64);
+        let mut slots = Buffer::new_in(self.slots.memory().clone());
+        slots.try_reserve_exact(size)?;
+        slots.resize(size, (0, 0, StringId(0)));
+        let old = std::mem::replace(&mut self.slots, slots);
+        for &(address, len, id) in old.iter().filter(|slot| slot.0 != 0) {
+            self.place(address, len, id);
+        }
+        Ok(())
+    }
+    fn place(&mut self, address: usize, len: usize, id: StringId) {
+        let mut slot = self.start(address, len);
+        while self.slots[slot].0 != 0 {
+            slot = (slot + 1) & (self.slots.len() - 1);
+        }
+        self.slots[slot] = (address, len, id);
+    }
+    fn insert(&mut self, bytes: &'static [u8], id: StringId) {
+        self.place(bytes.as_ptr() as usize, bytes.len(), id);
+        self.len += 1;
+    }
+    fn strings(&self) -> impl Iterator<Item = StringId> + '_ {
+        self.slots
+            .iter()
+            .filter(|slot| slot.0 != 0)
+            .map(|slot| slot.2)
+    }
+    fn heap_bytes(&self) -> usize {
+        self.slots.capacity() * size_of::<(usize, usize, StringId)>()
+    }
+}
+
 #[derive(Debug)]
 struct LoadedProgram {
     data: crate::memory::Shared<ProgramData>,
@@ -473,6 +560,7 @@ pub struct Vm {
     sort_line: Option<u32>,
     // Embedding-owned state borrowed by host callbacks; never traced.
     host_state: Option<Box<dyn std::any::Any + Send + Sync>>,
+    static_strings: StaticStrings,
 }
 
 impl Default for Vm {
@@ -582,13 +670,14 @@ impl Vm {
             userdata: Arena::new_in(memory.clone()),
             initializing: true,
             io: io::Io {
-                files: Arena::new_in(memory),
+                files: Arena::new_in(memory.clone()),
                 ..io::Io::default()
             },
             userdata_order: 0,
             standalone: 0,
             sort_line: None,
             host_state: None,
+            static_strings: StaticStrings::new_in(memory),
         };
         vm.memory_error = vm.strings.try_intern(b"not enough memory")?;
         for (slot, name) in vm.meta_names.iter_mut().zip(META_NAMES) {
@@ -745,6 +834,52 @@ impl Vm {
             .try_intern(bytes)
             .map(Value::String)
             .map_err(|_| self.memory_failure())
+    }
+
+    /// Intern a byte string that lives for the whole program, such as a literal.
+    ///
+    /// The first call with a slice interns it and keeps the string alive for
+    /// as long as this VM exists. Every later call with the same slice finds
+    /// the string by the slice's address and length, without hashing or
+    /// comparing its bytes, so a field name spelled as a literal costs a few
+    /// instructions to resolve. The returned value needs no rooting.
+    ///
+    /// Equal bytes at different addresses yield the same string; each address
+    /// is remembered separately. Keep this for a bounded set of names: every
+    /// string interned here stays allocated until the VM is dropped.
+    ///
+    /// ```
+    /// use deadlib_lua::{Value, Vm};
+    /// let mut vm = Vm::new();
+    /// let name = vm.intern_static(b"position")?;
+    /// assert_eq!(vm.intern_static(b"position")?, name);
+    /// assert_eq!(vm.intern(b"position"), name);
+    /// # Ok::<(), deadlib_lua::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns the fixed Lua memory error if the string or its index entry
+    /// cannot be allocated.
+    #[inline]
+    pub fn intern_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        match self.static_strings.find(bytes) {
+            Some(id) => Ok(Value::String(id)),
+            None => self.remember_static(bytes),
+        }
+    }
+    #[cold]
+    fn remember_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        if self.static_strings.try_reserve().is_err() {
+            return Err(self.memory_failure());
+        }
+        // Interning marks the string for a collection in progress; every
+        // later cycle marks it from the index.
+        let id = match self.strings.try_intern(bytes) {
+            Ok(id) => id,
+            Err(_) => return Err(self.memory_failure()),
+        };
+        self.static_strings.insert(bytes, id);
+        Ok(Value::String(id))
     }
 
     fn string_slice(

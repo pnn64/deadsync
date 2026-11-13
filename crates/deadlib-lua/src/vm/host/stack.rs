@@ -666,6 +666,14 @@ impl NativeStack<'_, '_> {
         self.check_error()?;
         self.call.vm.try_intern(bytes)
     }
+    /// Intern a literal, finding it again by its address. See [`Vm::intern_static`].
+    ///
+    /// # Errors
+    /// Rejects a pending error or failed string storage reservation.
+    pub fn intern_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        self.check_error()?;
+        self.call.vm.intern_static(bytes)
+    }
     /// Intern and push bytes, reserving stack space before publishing a string.
     ///
     /// # Errors
