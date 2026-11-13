@@ -433,3 +433,40 @@ fn raw_traversal_rejects_a_key_the_table_does_not_hold() {
     let message = String::from_utf8(vm.string_bytes(id).unwrap().to_vec()).unwrap();
     assert!(message.contains("invalid key to 'next'"), "{message}");
 }
+
+fn static_field(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let value = call.raw_table_get_static(target, b"field")?;
+    call.push(value)
+}
+
+#[test]
+fn static_name_reads_are_raw_and_agree_with_ordinary_raw_reads() {
+    let mut vm = vm();
+    let function = vm.new_host_function(static_field, &[]).unwrap();
+    vm.set_global(b"static_field", function).unwrap();
+    let program = compile(
+        br#"
+        assert(static_field({}) == nil)
+        assert(static_field({field = 7}) == 7)
+        assert(static_field({field = false}) == false)
+        -- Inherited fields and handlers are not consulted.
+        local calls = 0
+        local inherited = setmetatable({}, {__index = function() calls = calls + 1 return 1 end})
+        assert(static_field(inherited) == nil and calls == 0)
+        assert(static_field(setmetatable({}, {__index = {field = 3}})) == nil)
+        -- Many other fields share the table, and the field is added last.
+        local crowded = {}
+        for i = 1, 200 do crowded['field' .. i] = i end
+        assert(static_field(crowded) == nil)
+        crowded.field = 'found'
+        assert(static_field(crowded) == 'found' and rawget(crowded, 'field') == 'found')
+        crowded.field = nil
+        assert(static_field(crowded) == nil)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}

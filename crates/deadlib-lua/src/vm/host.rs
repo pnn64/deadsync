@@ -1242,6 +1242,25 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].get(key))
     }
 
+    /// Read a field named by a literal without invoking metamethods. The
+    /// name is found as [`Vm::intern_static`] finds it.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle, or if the
+    /// name cannot be stored.
+    #[inline]
+    pub fn raw_table_get_static(
+        &mut self,
+        table: TableId,
+        name: &'static [u8],
+    ) -> Result<Value, Error> {
+        let Value::String(key) = self.vm.intern_static(name)? else {
+            unreachable!("an interned name is a string")
+        };
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].get_string(key))
+    }
+
     /// Set a table entry without invoking metamethods.
     ///
     /// # Errors

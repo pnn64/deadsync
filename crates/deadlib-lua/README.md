@@ -74,7 +74,8 @@ without entering Lua.
 `intern_static` interns a byte string that lives for the whole program, such
 as a literal, and afterwards finds it by the slice's address instead of its
 contents. The string stays alive with the VM, so the value needs no rooting.
-Use it for the field names a callback reads on every call.
+Use it for the field names a callback reads on every call;
+`HostCall::raw_table_get_static` reads such a field in one step.
 
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
