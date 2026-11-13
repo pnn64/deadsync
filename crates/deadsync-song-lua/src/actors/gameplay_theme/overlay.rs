@@ -28,7 +28,7 @@ fn evaluate(
 }
 
 fn order(call: &mut HostCall<'_>, actor: TableId) -> Result<i32, Error> {
-    let value = get(call, actor, b"__songlua_state_draw_order")?;
+    let value = get_static(call, actor, b"__songlua_state_draw_order")?;
     if value == Value::Nil {
         return Ok(0);
     }
@@ -75,7 +75,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
         set(call, table(call, environment)?, "LoadActor", loader)?;
         let definition = evaluate(call, environment, "default.lua", &[])?;
         let actor = own(call, data, definition)?;
-        let screen = get(call, globals, b"__songlua_top_screen")?;
+        let screen = get_static(call, globals, b"__songlua_top_screen")?;
         let screen = table(call, screen)?;
         let overlay = named(call, screen, "Overlay")?;
         if capture_probe {
@@ -87,7 +87,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
             parent(call, actor, screen)?;
             let name = call.try_intern(b"Overlay")?;
             call.with_roots(&[name], |call| {
-                if get(call, actor, b"__songlua_load_name")? != Value::Nil {
+                if get_static(call, actor, b"__songlua_load_name")? != Value::Nil {
                     set(call, actor, "__songlua_load_name", name)?;
                 }
                 set(call, actor, "__songlua_native_name", name)?;
@@ -156,7 +156,7 @@ fn screen_string(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn decorations(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let screen = get(call, globals, b"__songlua_top_screen")?;
+    let screen = get_static(call, globals, b"__songlua_top_screen")?;
     let screen = table(call, screen)?;
     let name = actor_name(call, screen)?;
     let name =

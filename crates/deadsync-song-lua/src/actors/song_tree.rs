@@ -97,7 +97,7 @@ fn aft_names(
     if text(call, actor, "__songlua_actor_type")?
         .is_some_and(|c| c.eq_ignore_ascii_case("ActorFrameTexture"))
     {
-        let allocation = get(call, actor, b"__songlua_aft_allocation")?;
+        let allocation = get_static(call, actor, b"__songlua_aft_allocation")?;
         if allocation != Value::Nil {
             table(call, allocation)?;
             if let Some(name) = framebuffers::capture_name(call, actor)? {
@@ -180,7 +180,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Query::References => Answer::References(references(call)?),
         Query::Wrappers => {
-            let raw = get(call, actor, b"__songlua_wrappers")?;
+            let raw = get_static(call, actor, b"__songlua_wrappers")?;
             let owned = if raw == Value::Nil {
                 call.store()
                     .actors

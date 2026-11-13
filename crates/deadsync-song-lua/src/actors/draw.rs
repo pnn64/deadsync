@@ -117,9 +117,9 @@ fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverla
     // Texture/AFT getter before reading later scalar fields. Keep this read
     // at draw time; snapshotting raw semantic state must not invoke it early.
     if !live(call.store()) {
-        let kind = get(call, actor, b"__songlua_actor_type")?;
+        let kind = get_static(call, actor, b"__songlua_actor_type")?;
         let sprite = matches!(kind,Value::String(id)if call.string_bytes(id).is_some_and(|s|s.eq_ignore_ascii_case(b"Sprite")));
-        if sprite && get(call, actor, b"__songlua_state_sprite_texture")? == Value::Nil {
+        if sprite && get_static(call, actor, b"__songlua_state_sprite_texture")? == Value::Nil {
             return initial_state::read(call, actor);
         }
     }
@@ -152,7 +152,7 @@ fn scoped_context(
     actor: TableId,
     prior: &Context,
 ) -> Result<Option<Context>, Error> {
-    let transition = get(call, actor, b"__songlua_transition_state")?;
+    let transition = get_static(call, actor, b"__songlua_transition_state")?;
     if transition != Value::Nil {
         let transition = sprites::number(call, transition)?.trunc();
         if !(0.0..256.0).contains(&transition) {
@@ -162,12 +162,12 @@ fn scoped_context(
             return Ok(None);
         }
     }
-    if truthy(get(call, actor, b"__songlua_theme_hibernating")?) {
+    if truthy(get_static(call, actor, b"__songlua_theme_hibernating")?) {
         return Ok(None);
     }
     let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
     if kind.eq_ignore_ascii_case("ActorFrameTexture") {
-        let allocation = get(call, actor, b"__songlua_aft_allocation")?;
+        let allocation = get_static(call, actor, b"__songlua_aft_allocation")?;
         if allocation == Value::Nil {
             return Ok(None);
         }
@@ -300,7 +300,7 @@ fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                 return Ok(());
             }
             if !external && kind.eq_ignore_ascii_case("ActorProxy") {
-                let target = get(call, actor, b"__songlua_proxy_target_actor")?;
+                let target = get_static(call, actor, b"__songlua_proxy_target_actor")?;
                 if target == Value::Nil {
                     return Ok(());
                 }
@@ -401,7 +401,7 @@ fn immediate(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     result
 }
 fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(), Error> {
-    if live(call.store()) && truthy(get(call, actor, b"__songlua_live_inactive")?) {
+    if live(call.store()) && truthy(get_static(call, actor, b"__songlua_live_inactive")?) {
         return Ok(());
     }
     if function(call, actor)? != Value::Nil {
@@ -426,7 +426,7 @@ fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(),
         return result;
     }
     if !call.store().actors.contains_key(&actor)
-        && get(call, actor, b"__songlua_actor_type")? == Value::Nil
+        && get_static(call, actor, b"__songlua_actor_type")? == Value::Nil
     {
         let state = initial_state::read(call, actor)?;
         let mut parents = prior.parents.to_vec();
@@ -469,7 +469,7 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
         }
         return Ok(());
     }
-    let screen = get(call, globals, b"__songlua_top_screen")?;
+    let screen = get_static(call, globals, b"__songlua_top_screen")?;
     let screen = if screen == Value::Nil {
         None
     } else {

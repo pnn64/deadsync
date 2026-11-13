@@ -35,7 +35,7 @@ pub(super) const METHODS: &[&str] = &[
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let methods = native_children::helper_function(call, b"course_methods")?;
     let methods = table(call, methods)?;
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     for &name in METHODS {
         let method = get(call, methods, name.as_bytes())?;
@@ -73,7 +73,7 @@ pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) ->
     }
     native_children::adopt(call, display, actor)?;
     if call.store().actors[&actor].offline_instance
-        || get(call, display, b"Condition")? != Value::Boolean(false)
+        || get_static(call, display, b"Condition")? != Value::Boolean(false)
     {
         attach(call, scene, display)?;
         call.store()
@@ -120,7 +120,7 @@ pub(super) fn attach(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Res
             .actors
             .push(actor);
         if !call.store().actors[&actor].initialized {
-            let name = get(call, actor, b"Name")?;
+            let name = get_static(call, actor, b"Name")?;
             if matches!(name, Value::Number(_) | Value::String(_)) {
                 let name = bytes(call, name)?;
                 call.store().actors.get_mut(&actor).unwrap().load_name = Some(name);
@@ -133,7 +133,7 @@ pub(super) fn attach(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Res
         }
         return Ok(());
     }
-    let name = get(call, actor, b"Name")?;
+    let name = get_static(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {
@@ -144,7 +144,7 @@ pub(super) fn attach(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Res
     instance.initialized = boolean(call, actor, "__songlua_init_commands_ran")?;
     instance.started = boolean(call, actor, "__songlua_startup_commands_ran")?;
     if instance.initialized {
-        let name = get(call, actor, b"__songlua_native_name")?;
+        let name = get_static(call, actor, b"__songlua_native_name")?;
         if matches!(name, Value::Number(_) | Value::String(_)) {
             instance.state.name = bytes(call, name)?;
         }
@@ -216,7 +216,7 @@ pub(super) fn prepare_raw_init(call: &mut HostCall<'_>, actor: TableId) -> Resul
         return Ok(());
     }
     refresh_raw_children(call, actor, true)?;
-    let name = get(call, actor, b"Name")?;
+    let name = get_static(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {

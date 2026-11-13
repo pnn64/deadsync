@@ -126,7 +126,7 @@ pub(super) fn create(
             Binding { scene, name },
         )?;
         call.with_roots(&[function], |call| {
-            let value = get(call, actor, b"__songlua_bound_methods")?;
+            let value = get_static(call, actor, b"__songlua_bound_methods")?;
             let bound = table(call, value)?;
             set(call, bound, name, function)?;
             if name == "SetDidTapNoteCallback" {
@@ -285,7 +285,7 @@ fn columns(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<Value,
                     |call| call.push(call.captures()[0]),
                     &[Value::Table(handler)],
                 )?;
-                let value = get(call, column, b"__songlua_bound_methods")?;
+                let value = get_static(call, column, b"__songlua_bound_methods")?;
                 let bound = table(call, value)?;
                 set(call, bound, name, getter)?;
                 set(call, bound, alias, getter)?;

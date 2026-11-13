@@ -519,23 +519,23 @@ fn bpm_node(
     parent: TableId,
     definition: TableId,
 ) -> Result<TableId, Error> {
-    let kind = get(call, definition, b"__songlua_builtin_kind")?;
+    let kind = get_static(call, definition, b"__songlua_builtin_kind")?;
     let kind = assets::text(call, kind)?;
-    let name = get(call, definition, b"Name")?;
+    let name = get_static(call, definition, b"Name")?;
     let name = if name == Value::Nil {
         String::new()
     } else {
         assets::text(call, name)?
     };
     let actor = if kind == "BitmapText" {
-        let text = get(call, definition, b"Text")?;
+        let text = get_static(call, definition, b"Text")?;
         let text = if text == Value::Nil {
             String::new()
         } else {
             assets::text(call, text)?
         };
         let actor = screen_parts::text(call, scene, &name, &text)?;
-        let font = get(call, definition, b"Font")?;
+        let font = get_static(call, definition, b"Font")?;
         let font = assets::text(call, font)?;
         let font = call.try_intern(font.as_bytes())?;
         set(call, actor, "Font", font)?;

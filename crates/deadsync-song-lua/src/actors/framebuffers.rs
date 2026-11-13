@@ -22,7 +22,7 @@ pub(super) const METHODS: &[&str] = &[
 ];
 
 fn allocation(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let value = get(call, actor, b"__songlua_aft_allocation")?;
+    let value = get_static(call, actor, b"__songlua_aft_allocation")?;
     if value == Value::Nil {
         Ok(None)
     } else {
@@ -177,7 +177,7 @@ fn create(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             return report(call, "ActorFrameTexture: Texture Name already in use.");
         }
     }
-    let value = get(call, actor, b"__songlua_state_size")?;
+    let value = get_static(call, actor, b"__songlua_state_size")?;
     let requested = sprites::vector::<2>(call, value)?;
     {
         // Authored request vectors are also the native actor's render size.
@@ -218,12 +218,12 @@ fn create(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
 fn equal(call: &mut HostCall<'_>) -> Result<(), Error> {
     let left = table(call, arg(call, 0))?;
     let right = table(call, arg(call, 1))?;
-    let left = get(call, left, b"__songlua_aft_capture_name")?;
+    let left = get_static(call, left, b"__songlua_aft_capture_name")?;
     if left == Value::Nil {
         return call.push(Value::Boolean(false));
     }
     let left = assets::text(call, left)?;
-    let right = get(call, right, b"__songlua_aft_capture_name")?;
+    let right = get_static(call, right, b"__songlua_aft_capture_name")?;
     let result = right != Value::Nil && left == assets::text(call, right)?;
     call.push(Value::Boolean(result))
 }
@@ -241,7 +241,7 @@ fn texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             set(call, texture, "__songlua_aft_capture_name", name)?;
         }
         let globals = table(call, helper(call, 5)?)?;
-        let meta = get(call, globals, b"__songlua_aft_texture_meta")?;
+        let meta = get_static(call, globals, b"__songlua_aft_texture_meta")?;
         let meta = if meta == Value::Nil {
             let meta = call.try_new_table()?;
             call.with_roots(&[Value::Table(meta)], |call| {
@@ -255,7 +255,7 @@ fn texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             table(call, meta)?
         };
         let helpers = table(call, call.captures()[1])?;
-        let setmetatable = get(call, helpers, b"setmetatable")?;
+        let setmetatable = get_static(call, helpers, b"setmetatable")?;
         call.call(setmetatable, &[Value::Table(texture), Value::Table(meta)])?;
         let allocation = field(call, actor, "__songlua_aft_allocation")?;
         let allocation = table(call, allocation)?;

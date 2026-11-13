@@ -13,7 +13,7 @@ pub struct GraphDisplay {
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let methods = native_children::helper_function(call, b"graph_methods")?;
     let methods = table(call, methods)?;
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     for name in ["Load", "Set"] {
         let method = get(call, methods, name.as_bytes())?;

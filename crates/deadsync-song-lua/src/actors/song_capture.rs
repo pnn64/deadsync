@@ -230,7 +230,7 @@ fn capture(call: &mut HostCall<'_>) -> Result<(), Error> {
                         kind.eq_ignore_ascii_case("BitmapText")
                             || kind.eq_ignore_ascii_case("RollingNumbers")
                     }) {
-                        let text = get(call, actor, b"Text")?;
+                        let text = get_static(call, actor, b"Text")?;
                         raw_set(call, actor, "__songlua_startup_text", text)?;
                     }
                 }
@@ -484,8 +484,8 @@ fn clock_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<[f32; 2]>, 
                 return Err(call.error(b"cycle in actor update ancestry"));
             }
             call.raw_table_set(retained, Value::Table(actor), Value::Boolean(true))?;
-            let hibernate = get(call, actor, b"__songlua_hibernate_seconds")?;
-            let theme = get(call, actor, b"__songlua_theme_hibernating")?;
+            let hibernate = get_static(call, actor, b"__songlua_hibernate_seconds")?;
+            let theme = get_static(call, actor, b"__songlua_theme_hibernating")?;
             let hibernate = if !matches!(theme, Value::Nil | Value::Boolean(false)) {
                 f32::INFINITY
             } else if hibernate == Value::Nil {
@@ -496,7 +496,7 @@ fn clock_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<[f32; 2]>, 
             let rate = if wrapper_child {
                 1.
             } else {
-                let value = get(call, actor, b"__songlua_update_rate")?;
+                let value = get_static(call, actor, b"__songlua_update_rate")?;
                 if value == Value::Nil {
                     call.store()
                         .actors
@@ -510,7 +510,7 @@ fn clock_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<[f32; 2]>, 
             let kind = sprites::field(call, actor, "__songlua_actor_type")?;
             wrapper_child = initial_state::value_text(call, kind)?
                 .is_some_and(|kind| kind.eq_ignore_ascii_case("WrapperState"));
-            let parent = get(call, actor, b"__songlua_parent")?;
+            let parent = get_static(call, actor, b"__songlua_parent")?;
             next = if parent == Value::Nil {
                 call.store()
                     .actors

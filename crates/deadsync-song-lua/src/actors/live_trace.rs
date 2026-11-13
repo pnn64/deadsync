@@ -119,7 +119,7 @@ fn hook(call: &mut HostCall<'_>) -> Result<(), Error> {
     let class = text(call, arg(call, 1))?;
     let name = text(call, arg(call, 2))?;
     if class == "GameState" {
-        let methods = get(call, owner, b"__songlua_class_methods")?;
+        let methods = get_static(call, owner, b"__songlua_class_methods")?;
         if methods != Value::Nil {
             owner = table(call, methods)?;
         }

@@ -142,7 +142,7 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         let blocks = call.try_new_table()?;
         raw_set(call, id, "__songlua_capture_blocks", Value::Table(blocks))?;
-        let binding = get(call, id, b"__songlua_startup_sprite")?;
+        let binding = get_static(call, id, b"__songlua_startup_sprite")?;
         if binding != Value::Nil {
             call.with_roots(&[binding], |call| {
                 let binding = table(call, binding)?;

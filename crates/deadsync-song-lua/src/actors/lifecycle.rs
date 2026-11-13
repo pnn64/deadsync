@@ -135,7 +135,7 @@ pub(super) fn time_left(call: &mut HostCall<'_>, id: TableId) -> Result<f32, Err
             };
         }
         let theme_hibernating = !matches!(
-            get(call, id, b"__songlua_theme_hibernating")?,
+            get_static(call, id, b"__songlua_theme_hibernating")?,
             Value::Nil | Value::Boolean(false)
         );
         let native = {
@@ -163,7 +163,7 @@ pub(super) fn time_left(call: &mut HostCall<'_>, id: TableId) -> Result<f32, Err
         let (hibernate, mut left) = if let Some(native) = native {
             native
         } else {
-            let value = get(call, id, b"__songlua_hibernate_seconds")?;
+            let value = get_static(call, id, b"__songlua_hibernate_seconds")?;
             let hibernate = if theme_hibernating {
                 f32::INFINITY
             } else if value == Value::Nil {
@@ -874,7 +874,7 @@ fn advance_node(
     }
     models::advance_materials(call.store(), actor, material_delta);
     enter_phase(call.store(), node.callback_order, delta);
-    let function = get(call, actor, b"__songlua_update_function")?;
+    let function = get_static(call, actor, b"__songlua_update_function")?;
     if children_active && function != Value::Nil {
         if !matches!(function, Value::Function(_) | Value::Native(_)) {
             return Err(call.error(b"actor update function must be a function"));

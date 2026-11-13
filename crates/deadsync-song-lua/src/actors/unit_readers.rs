@@ -251,7 +251,7 @@ pub fn fixture_mesh_points(
         return meshes::points(call, vertices);
     }
     meshes::upload(call, actor, vertices)?;
-    let value = get(call, actor, b"__songlua_vertices")?;
+    let value = get_static(call, actor, b"__songlua_vertices")?;
     Ok(meshes::source(call, value)?.unwrap())
 }
 

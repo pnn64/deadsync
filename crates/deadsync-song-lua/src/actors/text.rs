@@ -1,8 +1,8 @@
 //! BitmapText bindings and immutable renderer payloads over the Rust host API.
 use super::action_capture;
 use super::{
-    Host, arg, assets, boolish, float_scalar, get, helper, integer_scalar, render, song_media,
-    sprites, table,
+    Host, arg, assets, boolish, float_scalar, get, get_static, helper, integer_scalar, render,
+    song_media, sprites, table,
 };
 use deadlib_lua::{Error, ErrorKind, HostCall, TableId, Value};
 use deadlib_present::actors::TextAttribute;
@@ -235,7 +235,7 @@ fn add_attribute(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                     && strict_integer(call, old, b"length", 0)? == length
                 {
                     let old_color = raw_color(call, old, b"color", true)?.unwrap_or([1.; 4]);
-                    let value = get(call, old, b"vertex_colors")?;
+                    let value = get_static(call, old, b"vertex_colors")?;
                     optional_table(call, value)?;
                     let old_colors = colors(call, value, false)?.unwrap_or([old_color; 4]);
                     let old_glow = raw_color(call, old, b"glow", true)?;
@@ -277,13 +277,13 @@ pub(super) fn visit_attributes(
                 break;
             }
             let entry = table(call, value)?;
-            let value = get(call, entry, b"start")?;
+            let value = get_static(call, entry, b"start")?;
             let start = integer_scalar(call, value).unwrap_or(0).max(0) as usize;
-            let value = get(call, entry, b"length")?;
+            let value = get_static(call, entry, b"length")?;
             let length = integer_scalar(call, value).unwrap_or(1);
             if length != 0 {
                 let color = raw_color(call, entry, b"color", false)?.unwrap_or([1.; 4]);
-                let value = get(call, entry, b"vertex_colors")?;
+                let value = get_static(call, entry, b"vertex_colors")?;
                 let vertex_colors = colors(call, value, false)?;
                 let glow = raw_color(call, entry, b"glow", false)?;
                 visit(TextAttribute {

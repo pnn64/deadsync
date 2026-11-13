@@ -166,7 +166,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
                 && assets::field(call, actor, b"__songlua_actor_type")?
                     .is_some_and(|kind| kind.eq_ignore_ascii_case("Sprite"))
             {
-                let name = get(call, actor, b"__songlua_aft_capture_name")?;
+                let name = get_static(call, actor, b"__songlua_aft_capture_name")?;
                 if let Some(name) = initial_state::value_text(call, name)? {
                     out.kind = Some(Kind::AftSprite(name));
                 }

@@ -154,14 +154,14 @@ fn hold_judgments(
         call.with_roots(&[unnamed], |call| {
             let frames = table(call, frames)?;
             let unnamed = table(call, unnamed)?;
-            let attack = get(call, player, b"__songlua_attack_display")?;
+            let attack = get_static(call, player, b"__songlua_attack_display")?;
             if attack != Value::Nil {
                 table(call, attack)?;
                 call.raw_table_set(unnamed, Value::Number(1.), attack)?;
             }
             // Native holds use raw SL lookup but ordinary THEME method lookup.
             let globals = table(call, helper(call, 5)?)?;
-            let sl = get(call, globals, b"SL")?;
+            let sl = get_static(call, globals, b"SL")?;
             let mods = call.with_roots(&[sl], |call| {
                 let player = get(
                     call,
@@ -169,18 +169,18 @@ fn hold_judgments(
                     if index == 0 { b"P1" } else { b"P2" },
                 )?;
                 call.with_roots(&[player], |call| {
-                    get(call, table(call, player)?, b"ActiveModifiers")
+                    get_static(call, table(call, player)?, b"ActiveModifiers")
                 })
             })?;
             let label = call.with_roots(&[mods], |call| {
-                let label = get(call, table(call, mods)?, b"HoldJudgment")?;
+                let label = get_static(call, table(call, mods)?, b"HoldJudgment")?;
                 if label == Value::Nil {
                     Ok("None 1x2.png".to_owned())
                 } else {
                     assets::text(call, label)
                 }
             })?;
-            let theme = get(call, globals, b"THEME")?;
+            let theme = get_static(call, globals, b"THEME")?;
             let path = call.with_roots(&[theme], |call| {
                 let function = field(call, table(call, theme)?, "GetPathG")?;
                 call.with_roots(&[function], |call| {

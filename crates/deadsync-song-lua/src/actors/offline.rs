@@ -46,7 +46,7 @@ pub(super) fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
         let loader =
             call.new_host_function_with_data(callback, &captures, Op::LoadPreparationActor)?;
         sprites::set(call, globals, "LoadActor", loader)?;
-        let null = get(call, globals, b"NullActor")?;
+        let null = get_static(call, globals, b"NullActor")?;
         let null = table(call, null)?;
         sprites::set(call, null, "__songlua_def_owned", Value::Boolean(true))?;
         let guard = call.store();
@@ -122,7 +122,7 @@ fn create(
                 sprites::set(call, actor, key, value)?;
             }
         }
-        let name = get(call, actor, b"Name")?;
+        let name = get_static(call, actor, b"Name")?;
         let load_name = if matches!(name, Value::Number(_) | Value::String(_)) {
             Some(bytes(call, name)?)
         } else {
@@ -207,7 +207,7 @@ fn restore_pose(actor: &mut Actor, previous: &TemplateState) {
 
 fn already_owned(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
     Ok(!matches!(
-        get(call, actor, b"__songlua_def_owned")?,
+        get_static(call, actor, b"__songlua_def_owned")?,
         Value::Nil | Value::Boolean(false)
     ))
 }
@@ -236,7 +236,7 @@ pub(super) fn clone_actor(
                 Value::Boolean(true),
             ],
         )?;
-        let name = get(call, actor, b"Name")?;
+        let name = get_static(call, actor, b"Name")?;
         let name = if matches!(name, Value::String(_) | Value::Number(_)) {
             Some(bytes(call, name)?)
         } else {
@@ -331,7 +331,7 @@ fn own_children(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             let entry = table(call, call.raw_table_get(entries, Value::Number(i as f64))?)?;
             let key = call.raw_table_get(entry, Value::Number(1.))?;
             let child = table(call, call.raw_table_get(entry, Value::Number(2.))?)?;
-            let typed = get(call, child, b"__songlua_actor_type")? != Value::Nil;
+            let typed = get_static(call, child, b"__songlua_actor_type")? != Value::Nil;
             let child = if typed && already_owned(call, child)? {
                 clone_actor(call, child, true)?
             } else {
@@ -393,7 +393,7 @@ pub(super) fn own_root(call: &mut HostCall<'_>, actor: TableId, init: bool) -> R
 
 pub(super) fn prepare_init(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let initialized = !matches!(
-        get(call, actor, b"__songlua_init_commands_ran")?,
+        get_static(call, actor, b"__songlua_init_commands_ran")?,
         Value::Nil | Value::Boolean(false)
     );
     call.store().actors.get_mut(&actor).unwrap().initialized = initialized;
@@ -401,7 +401,7 @@ pub(super) fn prepare_init(call: &mut HostCall<'_>, actor: TableId) -> Result<()
         return Ok(());
     }
     courses::refresh_raw_children(call, actor, true)?;
-    let name = get(call, actor, b"Name")?;
+    let name = get_static(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {

@@ -112,7 +112,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Binding>().unwrap().clone();
     data.requests.lock().unwrap().actor_names = Some(ActorNames);
     let catalog = table(call, call.captures()[2])?;
-    let slots = get(call, catalog, b"game_state_slots")?;
+    let slots = get_static(call, catalog, b"game_state_slots")?;
     let screen = table(call, call.captures()[3])?;
     let mut captures = call.captures().to_vec();
     captures[2] = slots;
@@ -180,7 +180,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
                     ..data.clone()
                 },
             )?;
-            let bound = get(call, screen, b"__songlua_bound_methods")?;
+            let bound = get_static(call, screen, b"__songlua_bound_methods")?;
             set(call, table(call, bound)?, method, function)?;
         }
         Ok(())
@@ -339,8 +339,9 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                     play(call, child, b"Off", None, true)?;
                 }
                 let named = registry(call, screen)?;
-                let out =
-                    call.with_roots(&[named], |call| get(call, table(call, named)?, b"Out"))?;
+                let out = call.with_roots(&[named], |call| {
+                    get_static(call, table(call, named)?, b"Out")
+                })?;
                 if out != Value::Nil {
                     transitions::start(call, table(call, out)?)?;
                 }
@@ -499,7 +500,7 @@ fn option_row(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId
     let row = dummy(call, scene, "OptionRow", name, None)?;
     let name_value = call.try_intern(name.as_bytes())?;
     let get_name = call.new_host_function(|call| call.push(call.captures()[0]), &[name_value])?;
-    let bound = get(call, row, b"__songlua_bound_methods")?;
+    let bound = get_static(call, row, b"__songlua_bound_methods")?;
     set(call, table(call, bound)?, "GetName", get_name)?;
     bind_queries(call, row)?;
     let focus = call.new_host_function(|call| call.push(Value::Number(1.)), &[])?;
@@ -535,7 +536,7 @@ fn registry(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
 }
 pub(super) fn bind_queries(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let methods = native_children::helper_function(call, b"model_methods")?;
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     for name in ["GetChild", "GetChildren", "GetNumChildren"] {
         let method = get(call, table(call, methods)?, name.as_bytes())?;
         let captures = [

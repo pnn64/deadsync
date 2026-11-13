@@ -1442,7 +1442,7 @@ fn is_frame(store: &mut Store, actor: TableId) -> bool {
 fn sort(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     for child in declared_children(call.store(), actor) {
         if call.store().actors[&child].raw_instance {
-            let value = get(call, child, b"__songlua_state_draw_order")?;
+            let value = get_static(call, child, b"__songlua_state_draw_order")?;
             let n = sprites::number(call, value).unwrap_or(0.);
             let order = if n > -2147483649. && n < 2147483648. {
                 n as i32
@@ -1552,7 +1552,7 @@ fn command_observed(
     field: &[u8],
     function: Value,
 ) -> Result<bool, Error> {
-    let dynamic = match get(call, actor, b"__songlua_dynamic_commands")? {
+    let dynamic = match get_static(call, actor, b"__songlua_dynamic_commands")? {
         Value::Nil => Value::Nil,
         value => {
             let commands = table(call, value)?;
@@ -1798,7 +1798,7 @@ fn build(
     internal: bool,
 ) -> Result<Option<TableId>, Error> {
     let attrs = table(call, call.raw_table_get(node, Value::Number(1.0))?)?;
-    if check_condition && get(call, attrs, b"Condition")? == Value::Boolean(false) {
+    if check_condition && get_static(call, attrs, b"Condition")? == Value::Boolean(false) {
         return Ok(None);
     }
     let template = match call.raw_table_get(node, Value::Number(3.0))? {
@@ -1808,9 +1808,9 @@ fn build(
     let class = if let Some(template) = &template {
         template.state.class.as_bytes().to_vec()
     } else {
-        let mut kind = get(call, attrs, b"Class")?;
+        let mut kind = get_static(call, attrs, b"Class")?;
         if kind == Value::Nil {
-            kind = get(call, attrs, b"Type")?;
+            kind = get_static(call, attrs, b"Type")?;
         }
         if kind == Value::Nil {
             Vec::new()
@@ -1884,13 +1884,13 @@ fn build(
         let key = call.try_intern(b"__songlua_default_texture")?;
         call.raw_table_set(actor, key, Value::Boolean(true))?;
     }
-    let mut name = get(call, attrs, b"Name")?;
+    let mut name = get_static(call, attrs, b"Name")?;
     // Constructors can name a raw CourseContentsList Display before the same
     // declaration is materialized as an ordinary child.
     if name == Value::Nil
         && let Value::Table(source) = call.raw_table_get(node, Value::Number(3.))?
     {
-        name = get(call, source, b"Name")?;
+        name = get_static(call, source, b"Name")?;
         if name != Value::Nil {
             sprites::set(call, actor, "Name", name)?;
         }
@@ -2192,7 +2192,7 @@ fn initialize(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     if call.store().actors[&actor].initialized {
         return Ok(());
     }
-    let original = get(call, actor, b"Name")?;
+    let original = get_static(call, actor, b"Name")?;
     call.with_roots(&[original], |call| initialize_body(call, actor, original))
 }
 fn initialize_body(call: &mut HostCall<'_>, actor: TableId, original: Value) -> Result<(), Error> {
@@ -2261,7 +2261,7 @@ fn initialize_body(call: &mut HostCall<'_>, actor: TableId, original: Value) -> 
             .get(&stream)
             .is_some_and(|a| !a.initialized)
         {
-            let name = get(call, stream, b"Name")?;
+            let name = get_static(call, stream, b"Name")?;
             if name != Value::Nil {
                 let name = bytes(call, name)?;
                 call.store().actors.get_mut(&stream).unwrap().load_name = Some(name);
@@ -2627,8 +2627,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             return call.push(Value::Table(actor));
         }
         Op::GetName if actor_class == "OptionRow" => {
-            let bound = get(call, actor, b"__songlua_bound_methods")?;
-            let function = get(call, table(call, bound)?, b"GetName")?;
+            let bound = get_static(call, actor, b"__songlua_bound_methods")?;
+            let function = get_static(call, table(call, bound)?, b"GetName")?;
             let args = call.arguments().to_vec();
             return call.call_and_return(function, &args);
         }
@@ -2664,8 +2664,8 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             return call.push(Value::Number(count as f64));
         }
         Op::GetChild if actor_class == "TopScreen" => {
-            let bound = get(call, actor, b"__songlua_bound_methods")?;
-            let function = get(call, table(call, bound)?, b"GetChild")?;
+            let bound = get_static(call, actor, b"__songlua_bound_methods")?;
+            let function = get_static(call, table(call, bound)?, b"GetChild")?;
             if function != Value::Nil {
                 let args = call.arguments().to_vec();
                 return call.call_and_return(function, &args);
@@ -2750,7 +2750,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 .live
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                let commands = match get(call, actor, b"__songlua_dynamic_commands")? {
+                let commands = match get_static(call, actor, b"__songlua_dynamic_commands")? {
                     Value::Nil => {
                         let commands = call.try_new_table()?;
                         let field = call.try_intern(b"__songlua_dynamic_commands")?;

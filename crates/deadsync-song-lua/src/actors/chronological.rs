@@ -335,7 +335,7 @@ fn visit_wrappers(
     let value = if ordinary {
         sprites::field(call, actor, "__songlua_wrappers")?
     } else {
-        get(call, actor, b"__songlua_wrappers")?
+        get_static(call, actor, b"__songlua_wrappers")?
     };
     let array = optional_table(call, value)?;
     call.with_roots(&[value], |call| {
@@ -375,7 +375,7 @@ fn visit_wrappers(
 }
 
 fn active(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
-    let sleep = get(call, actor, b"__songlua_hibernate_seconds")?;
+    let sleep = get_static(call, actor, b"__songlua_hibernate_seconds")?;
     let sleeping = if sleep == Value::Nil {
         call.store()
             .actors
@@ -404,7 +404,7 @@ fn active(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
     } {
         return Ok(true);
     }
-    let clock = get(call, actor, b"__songlua_state_motion_clock")?;
+    let clock = get_static(call, actor, b"__songlua_state_motion_clock")?;
     if optional_table(call, clock)?.is_some()
         || call
             .store()
@@ -414,7 +414,7 @@ fn active(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
     {
         return Ok(true);
     }
-    let deferred = get(call, actor, b"__songlua_command_queue_deferred")?;
+    let deferred = get_static(call, actor, b"__songlua_command_queue_deferred")?;
     if if deferred == Value::Nil {
         capture::deferred(call.store(), actor)
     } else {
@@ -531,7 +531,7 @@ pub(super) fn render_spin(
                 ]
             })
     };
-    let value = get(call, actor, b"__songlua_state_spin")?;
+    let value = get_static(call, actor, b"__songlua_state_spin")?;
     let Some(pose) = optional_table(call, value)? else {
         return Ok(fallback);
     };
@@ -565,10 +565,10 @@ fn effect_time(
             state
         })
     };
-    let value = get(call, actor, b"__songlua_state_rainbow")?;
+    let value = get_static(call, actor, b"__songlua_state_rainbow")?;
     let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.rainbow));
     if !rainbow {
-        let value = get(call, actor, b"__songlua_state_effect_mode")?;
+        let value = get_static(call, actor, b"__songlua_state_effect_mode")?;
         let selected = if value == Value::Nil {
             fallback.is_some_and(|s| {
                 !matches!(
@@ -598,12 +598,12 @@ fn effect_time(
             return Ok(None);
         }
     }
-    let value = get(call, actor, b"__songlua_state_motion_clock")?;
+    let value = get_static(call, actor, b"__songlua_state_motion_clock")?;
     let Some(motion) = optional_table(call, value)? else {
         return Ok(fallback.and_then(|s| s.effect_time));
     };
     call.with_roots(&[value], |call| {
-        let value = get(call, actor, b"__songlua_state_effect_clock")?;
+        let value = get_static(call, actor, b"__songlua_state_effect_clock")?;
         let beat = initial_state::value_text(call, value)?
             .is_some_and(|s| matches!(s.as_str(), "beat" | "beatnooffset"));
         let value = sprites::field(call, motion, "units")?;

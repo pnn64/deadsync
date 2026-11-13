@@ -236,7 +236,7 @@ fn reset_fields(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
     {
-        let value = get(call, actor, b"__songlua_capture_blocks")?;
+        let value = get_static(call, actor, b"__songlua_capture_blocks")?;
         if value != Value::Nil {
             let blocks = table(call, value)?;
             let mut stack = call.native_stack()?;

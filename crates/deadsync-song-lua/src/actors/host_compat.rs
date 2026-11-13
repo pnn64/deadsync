@@ -73,7 +73,7 @@ pub(super) fn initialize_pose(call: &mut HostCall<'_>, actor: TableId) -> Result
             *output = value;
         }
     }
-    let value = get(call, actor, b"__songlua_state_vertex_colors")?;
+    let value = get_static(call, actor, b"__songlua_state_vertex_colors")?;
     if let Value::Table(table) = value {
         let colors = call.with_roots(&[value], |call| {
             let mut colors = [[0.; 4]; 4];

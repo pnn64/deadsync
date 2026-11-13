@@ -289,7 +289,7 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
             {
                 let previous = song_capture::capture_startup_commands(call.store());
                 let result = native_children::with_children(call, roots, |call, actor| {
-                    let beat = get(call, actor, b"__songlua_background_start_beat")?;
+                    let beat = get_static(call, actor, b"__songlua_background_start_beat")?;
                     if beat != Value::Nil {
                         sprites::number(call, beat)?;
                         return Ok(());
@@ -299,12 +299,12 @@ fn activate(call: &mut HostCall<'_>) -> Result<(), Error> {
                 song_capture::restore_startup_commands(call.store(), previous);
                 result?;
             }
-            let top = get(call, globals, b"__songlua_top_screen")?;
+            let top = get_static(call, globals, b"__songlua_top_screen")?;
             if top != Value::Nil {
                 call.with_roots(&[top], |call| {
                     let children = sprites::field(call, table(call, top)?, "__songlua_children")?;
                     call.with_roots(&[children], |call| {
-                        let actor = get(call, table(call, children)?, b"In")?;
+                        let actor = get_static(call, table(call, children)?, b"In")?;
                         if actor != Value::Nil {
                             call.with_roots(&[actor], |call| {
                                 transitions::start(call, table(call, actor)?)
@@ -374,7 +374,7 @@ fn named_tree(call: &mut HostCall<'_>, actor: TableId, name: &[u8]) -> Result<()
 }
 pub(super) fn startup(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        if truthy(get(call, actor, b"__songlua_defer_on")?) {
+        if truthy(get_static(call, actor, b"__songlua_defer_on")?) {
             return Ok(());
         }
         if truthy(sprites::field(
@@ -451,7 +451,7 @@ fn read_options(
         }
         let table = sprites::field(call, globals, key)?;
         call.with_roots(&[table], |call| {
-            let value = get(
+            let value = get_static(
                 call,
                 super::table(call, table)?,
                 b"__songlua_noteskin_override",
@@ -463,7 +463,7 @@ fn read_options(
     let top = sprites::field(call, globals, "__songlua_top_screen")?;
     call.with_roots(&[top], |call| {
         let top = table(call, top)?;
-        let value = get(call, top, b"__songlua_min_seconds_to_music")?;
+        let value = get_static(call, top, b"__songlua_min_seconds_to_music")?;
         if value != Value::Nil {
             options.min_seconds_to_music = Some(sprites::number(call, value)? as f32);
         }
@@ -506,12 +506,12 @@ pub(super) fn adopt_created(store: &mut Store, owner: u64, first: u64) {
 // chronological plan. It does not dispatch future queues or transition jobs.
 fn zero_node(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        if truthy(get(call, actor, b"__songlua_live_inactive")?)
-            || truthy(get(call, actor, b"__songlua_theme_hibernating")?)
+        if truthy(get_static(call, actor, b"__songlua_live_inactive")?)
+            || truthy(get_static(call, actor, b"__songlua_theme_hibernating")?)
         {
             return Ok(());
         }
-        let hibernate = get(call, actor, b"__songlua_hibernate_seconds")?;
+        let hibernate = get_static(call, actor, b"__songlua_hibernate_seconds")?;
         if hibernate != Value::Nil && sprites::number(call, hibernate)? > 0. {
             return Ok(());
         }
@@ -576,7 +576,7 @@ fn zero_node(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         if owned && let Some(stream) = song_meters::stream(call, actor)? {
             zero_node(call, stream)?;
         }
-        let key = if truthy(get(call, actor, b"__songlua_update_pending")?) {
+        let key = if truthy(get_static(call, actor, b"__songlua_update_pending")?) {
             b"__songlua_update_previous".as_slice()
         } else {
             b"__songlua_update_function".as_slice()

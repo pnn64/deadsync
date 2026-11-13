@@ -135,7 +135,7 @@ pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error>
 }
 
 pub(super) fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<u8>, Error> {
-    let value = get(call, actor, b"__songlua_transition_state")?;
+    let value = get_static(call, actor, b"__songlua_transition_state")?;
     if value == Value::Nil {
         return Ok(None);
     }
@@ -147,7 +147,7 @@ pub(super) fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<u8
 }
 
 pub(super) fn child(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let value = get(call, actor, b"__songlua_transition_child")?;
+    let value = get_static(call, actor, b"__songlua_transition_child")?;
     if value == Value::Nil {
         Ok(None)
     } else {

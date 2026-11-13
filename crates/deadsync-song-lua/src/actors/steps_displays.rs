@@ -76,7 +76,7 @@ pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<
         screen_parts::append(call, actor, child)?;
         screen_parts::named(call, actor, name, child)?;
     }
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     for method in ["SetFromSteps", "SetFromTrail", "SetFromGameState"] {
         let function = call.new_host_function_with_data(
@@ -179,7 +179,7 @@ fn set_value(
             }
             (difficulty, steps_type, meter as i32)
         } else {
-            let difficulty = get(call, display, b"__songlua_preferred_difficulty")?;
+            let difficulty = get_static(call, display, b"__songlua_preferred_difficulty")?;
             (
                 assets::text(call, difficulty)?,
                 "StepsType_Invalid".into(),

@@ -268,10 +268,10 @@ fn combo_resource(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn transitions(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let top = get(call, globals, b"__songlua_top_screen")?;
+    let top = get_static(call, globals, b"__songlua_top_screen")?;
     let top = table(call, top)?;
     native_children::with_children(call, top, |call, wrapper| {
-        let role = get(call, wrapper, b"__songlua_screen_actor_role")?;
+        let role = get_static(call, wrapper, b"__songlua_screen_actor_role")?;
         if role == Value::Nil {
             return Ok(());
         }

@@ -9,7 +9,7 @@ pub(super) fn initialize(
 ) -> Result<(), Error> {
     let methods = native_children::helper_function(call, b"model_methods")?;
     let methods = table(call, methods)?;
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     for &name in sprites::SPRITE_METHODS
         .iter()

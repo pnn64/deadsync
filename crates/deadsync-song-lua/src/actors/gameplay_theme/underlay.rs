@@ -187,7 +187,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
     let environment = environment(call)?;
     call.with_roots(&[environment], |call| {
         let globals = table(call, helper(call, 5)?)?;
-        let screen = get(call, globals, b"__songlua_top_screen")?;
+        let screen = get_static(call, globals, b"__songlua_top_screen")?;
         let screen = table(call, screen)?;
         let underlay = named(call, screen, "Underlay")?;
         let game = member(call, globals, "GAMESTATE")?;
@@ -294,7 +294,7 @@ fn reorder(call: &mut HostCall<'_>, underlay: TableId) -> Result<(), Error> {
     let mut children = Vec::new();
     native_children::with_children(call, underlay, |call, child| {
         let name = actor_name(call, child).unwrap_or_default();
-        let role = get(call, child, b"__songlua_underlay_role")
+        let role = get_static(call, child, b"__songlua_underlay_role")
             .ok()
             .and_then(|value| {
                 if value == Value::Nil {

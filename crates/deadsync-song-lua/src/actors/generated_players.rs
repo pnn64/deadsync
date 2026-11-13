@@ -298,7 +298,7 @@ fn bind(
     ];
     let function = call.new_host_function_with_data(invoke, &captures, data)?;
     call.with_roots(&[function], |call| {
-        let bound = get(call, actor, b"__songlua_bound_methods")?;
+        let bound = get_static(call, actor, b"__songlua_bound_methods")?;
         set(call, table(call, bound)?, name, function)
     })
 }

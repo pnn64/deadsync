@@ -93,7 +93,7 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
         if let Some(capture_name) = assets::field(call, actor, b"__songlua_aft_capture_name")? {
             Kind::AftSprite { capture_name }
         } else {
-            let binding = get(call, actor, b"__songlua_startup_sprite")?;
+            let binding = get_static(call, actor, b"__songlua_startup_sprite")?;
             let binding = if binding == Value::Nil {
                 actor
             } else {
@@ -148,7 +148,7 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
                 text_changes_in_seconds: false,
             }
         } else {
-            let startup = get(call, actor, b"__songlua_startup_text")?;
+            let startup = get_static(call, actor, b"__songlua_startup_text")?;
             let startup = initial_state::value_text(call, startup)?;
             // Native Option::or evaluates the authored Text lookup even when
             // the earlier startup value is present.

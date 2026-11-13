@@ -298,7 +298,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         let name = actor_name(call, actor)?;
         let name =
             String::from_utf8(name).map_err(|error| call.error(error.to_string().as_bytes()))?;
-        let role = get(call, actor, b"__songlua_screen_actor_role")?;
+        let role = get_static(call, actor, b"__songlua_screen_actor_role")?;
         let role = if role == Value::Nil {
             None
         } else {

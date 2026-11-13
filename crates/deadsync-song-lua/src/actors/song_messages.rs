@@ -318,7 +318,7 @@ pub(super) fn hurry_timing(
         timing(call, actor, 0., None)?;
     }
     if replaying {
-        let duration = get(call, actor, b"__songlua_capture_duration")?;
+        let duration = get_static(call, actor, b"__songlua_capture_duration")?;
         if let Some(duration) = float_scalar(call, duration, true) {
             raw_set(
                 call,
@@ -375,14 +375,14 @@ pub(super) fn record(
     // Read the same per-write clock and command metadata as preparation. These
     // accesses can enter Lua, so no actor metadata borrow crosses them.
     let beat = effects::values(call, false).map_or(0., |values| values[0]);
-    let duration = get(call, id, b"__songlua_capture_duration")
+    let duration = get_static(call, id, b"__songlua_capture_duration")
         .ok()
         .and_then(|v| float_scalar(call, v, true))
         .unwrap_or(0.);
-    let easing = get(call, id, b"__songlua_capture_easing")
+    let easing = get_static(call, id, b"__songlua_capture_easing")
         .ok()
         .and_then(|v| render::text(call, v).map(str::to_owned));
-    let opt1 = get(call, id, b"__songlua_capture_opt1")
+    let opt1 = get_static(call, id, b"__songlua_capture_opt1")
         .ok()
         .and_then(|v| float_scalar(call, v, true));
     let guard = call.store();

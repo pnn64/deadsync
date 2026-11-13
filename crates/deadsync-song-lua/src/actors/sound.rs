@@ -19,7 +19,7 @@ struct SoundBinding {
 
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let sound = call.try_new_table()?;
-    let methods = match get(call, actor, b"__songlua_bound_methods")? {
+    let methods = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => call.try_new_table()?,
         value => table(call, value)?,
     };

@@ -124,7 +124,7 @@ pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<
     if name.eq_ignore_ascii_case("Timer") {
         let actor = dummy(call, scene, "Timer", name, None)?;
         let function = call.new_host_function(timer_seconds, &[])?;
-        let bound = get(call, actor, b"__songlua_bound_methods")?;
+        let bound = get_static(call, actor, b"__songlua_bound_methods")?;
         set(call, table(call, bound)?, "GetSeconds", function)?;
         return Ok(actor);
     }
@@ -334,7 +334,7 @@ fn background(call: &mut HostCall<'_>, scene: u64) -> Result<TableId, Error> {
     let brightness = dummy(call, scene, "ActorFrame", "", Some(implementation))?;
     append(call, implementation, brightness)?;
     let side = width / 2. - 20.;
-    let prefs = get(call, globals, b"PREFSMAN")?;
+    let prefs = get_static(call, globals, b"PREFSMAN")?;
     let level = call.with_roots(&[prefs], |call| {
         let function = field(call, table(call, prefs)?, "GetPreference")?;
         call.with_roots(&[function], |call| {

@@ -171,7 +171,7 @@ pub(super) fn retire(call: &mut HostCall<'_>, id: u64) -> Result<bool, Error> {
         // Native methods are part of the retained actor, even when an authored
         // weak metatable removes the instance's ordinary strong value edges.
         for &actor in &exclusive {
-            if let Value::Table(bound) = get(call, actor, b"__songlua_bound_methods")? {
+            if let Value::Table(bound) = get_static(call, actor, b"__songlua_bound_methods")? {
                 call.raw_table_set(owner, Value::Table(bound), Value::Boolean(true))?;
             }
         }

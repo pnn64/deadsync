@@ -217,7 +217,7 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     if !frame && frame_callback {
         return call.push(Value::Nil);
     }
-    let mut result = match get(call, actor, b"__songlua_bound_methods")? {
+    let mut result = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => Value::Nil,
         Value::Table(bound) => call.raw_table_get(bound, key)?,
         _ => return Err(call.error(b"actor method table expected")),
@@ -288,7 +288,7 @@ fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
         && method_flags(call, key)?.0
         && matches!(value, Value::Native(_))
     {
-        match get(call, actor, b"__songlua_bound_methods")? {
+        match get_static(call, actor, b"__songlua_bound_methods")? {
             Value::Nil => {}
             Value::Table(bound) => return call.raw_table_set(bound, key, value),
             _ => return Err(call.error(b"actor method table expected")),
@@ -406,7 +406,7 @@ pub(super) fn install(
 }
 
 pub(super) fn bind(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    let bound = match get(call, actor, b"__songlua_bound_methods")? {
+    let bound = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => {
             let bound = call.try_new_table()?;
             let key = call.try_intern(b"__songlua_bound_methods")?;
@@ -455,7 +455,7 @@ fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
             call.error(format!("actor method {} requires an actor", setter.name()).as_bytes())
         );
     };
-    let source = match get(call, actor, b"__songlua_bound_methods")? {
+    let source = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => actor,
         Value::Table(bound) => bound,
         _ => return Err(call.error(b"actor method table expected")),

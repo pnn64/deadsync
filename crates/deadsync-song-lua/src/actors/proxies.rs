@@ -4,7 +4,7 @@ use crate::SongLuaProxyTarget;
 use sprites::{field, set};
 
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> Result<(), Error> {
-    let methods = get(call, actor, b"__songlua_bound_methods")?;
+    let methods = get_static(call, actor, b"__songlua_bound_methods")?;
     let methods = if methods == Value::Nil {
         let methods = call.try_new_table()?;
         let key = call.try_intern(b"__songlua_bound_methods")?;
@@ -53,7 +53,7 @@ fn set_target(call: &mut HostCall<'_>) -> Result<(), Error> {
     let Value::Table(target) = arg(call, 1) else {
         return Err(call.error(b"ActorProxy.SetTarget requires an Actor"));
     };
-    let kind = get(call, target, b"__songlua_actor_type")?;
+    let kind = get_static(call, target, b"__songlua_actor_type")?;
     if kind == Value::Nil {
         return Err(call.error(b"ActorProxy.SetTarget requires an Actor"));
     }
@@ -103,7 +103,7 @@ fn set_target(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn get_target(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, call.captures()[0])?;
-    let target = get(call, actor, b"__songlua_proxy_target_actor")?;
+    let target = get_static(call, actor, b"__songlua_proxy_target_actor")?;
     call.push(target)
 }
 

@@ -223,12 +223,12 @@ fn initialize_layer(
         })?;
         if let Some(parent) = parent {
             // Init may change the activation flag. Read its actual post-Init value.
-            let beat = get(call, actor, b"__songlua_foreground_start_beat")?;
+            let beat = get_static(call, actor, b"__songlua_foreground_start_beat")?;
             if beat != Value::Nil {
                 sprites::number(call, beat)?;
                 if let Some(name) = &entry.name {
                     let value = call.try_intern(name.as_bytes())?;
-                    if get(call, actor, b"__songlua_load_name")? != Value::Nil {
+                    if get_static(call, actor, b"__songlua_load_name")? != Value::Nil {
                         raw_set(call, actor, "__songlua_load_name", value)?;
                     }
                     raw_set(call, actor, "__songlua_native_name", value)?;

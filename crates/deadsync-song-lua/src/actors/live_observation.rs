@@ -70,15 +70,15 @@ impl Actors {
 
 fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let screen = get(call, globals, b"__songlua_top_screen")?;
+    let screen = get_static(call, globals, b"__songlua_top_screen")?;
     let screen = table(call, screen)?;
     let children = native_children::named_children(call, screen)?;
     let children = table(call, children)?;
-    let overlay = get(call, children, b"Overlay")?;
+    let overlay = get_static(call, children, b"Overlay")?;
     let overlay = table(call, overlay)?;
     let children = native_children::named_children(call, overlay)?;
     let children = table(call, children)?;
-    let probe = get(call, children, b"ITGmaniaHarnessTraceProbe")?;
+    let probe = get_static(call, children, b"ITGmaniaHarnessTraceProbe")?;
     let actor = if probe == Value::Nil {
         overlay
     } else {
