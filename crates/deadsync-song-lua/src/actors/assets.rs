@@ -111,6 +111,21 @@ fn prefix(base: &Path, path: &Path) -> Option<PathBuf> {
     found
 }
 
+// Whether a texture path exists. A path found once is taken to stay for the
+// lifetime of this runtime: live visuals resolve the same textures on every
+// frame, which would otherwise query the file system per sprite per frame. A
+// missing path is queried again, so a file written during play is still found.
+fn present(call: &mut HostCall<'_>, path: &Path) -> bool {
+    if call.store_ref().present_paths.contains(path) {
+        return true;
+    }
+    let found = path.exists();
+    if found {
+        call.store().present_paths.insert(path.to_owned());
+    }
+    found
+}
+
 pub(super) fn texture_path(
     call: &mut HostCall<'_>,
     actor: TableId,
@@ -131,7 +146,7 @@ pub(super) fn texture_path(
     }
     let raw = Path::new(texture);
     if deadlib_assets::generated_texture_shared_key(texture).is_some()
-        || (raw.is_absolute() && raw.exists())
+        || (raw.is_absolute() && present(call, raw))
     {
         return Ok(Some(raw.to_owned()));
     }
@@ -143,7 +158,7 @@ pub(super) fn texture_path(
     for key in [b"__songlua_script_dir".as_slice(), b"__songlua_song_dir"] {
         if let Some(dir) = field(call, actor, key)? {
             let candidate = Path::new(&dir).join(texture);
-            if candidate.exists() {
+            if present(call, &candidate) {
                 return Ok(Some(candidate));
             }
             if let Some(path) = prefix(Path::new(&dir), raw) {

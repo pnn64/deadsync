@@ -8764,6 +8764,61 @@ return Def.ActorFrame {
     );
 }
 
+// A texture path is remembered once it is found, never while it is missing.
+#[test]
+fn live_sprite_publication_finds_a_texture_written_after_a_missing_lookup() {
+    let mut compiled = compile_with_context(
+        "live-sprite-late-texture",
+        r#"
+return Def.ActorFrame {
+    Def.Sprite {
+        Name='Late', Texture='first.png',
+        InitCommand=function(self) SPRITE=self end,
+    },
+}
+"#,
+        |context| {
+            context.defer_initial_live_update = true;
+            image::RgbaImage::new(16, 16)
+                .save(context.song_dir.join("first.png"))
+                .unwrap();
+            let _ = fs::remove_file(context.song_dir.join("late.png"));
+        },
+    );
+    let local = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Late"))
+        .unwrap();
+    let global = compiled.live_actor_indices()[local];
+    let mut kind = compiled.overlays[local].kind.clone();
+    let path = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+        SongLuaOverlayKind::Sprite { texture_path, .. } => texture_path.clone(),
+        _ => panic!("sprite visual slot"),
+    };
+    let scene = compiled.live_scene.take().unwrap();
+    let owned = scene_actor_at(&scene, global).unwrap();
+    scene_sync_visual(&scene, owned, &mut kind).unwrap();
+    let first = path(&kind);
+    assert!(first.ends_with("first.png"), "{first:?}");
+    let late = first.with_file_name("late.png");
+    scene_set_string(&scene, "LATE_TEXTURE", late.to_string_lossy().as_ref()).unwrap();
+    scene_exec(&scene, "rawset(SPRITE, 'Texture', LATE_TEXTURE)").unwrap();
+    for _ in 0..2 {
+        scene_sync_visual(&scene, owned, &mut kind).unwrap();
+        assert_eq!(
+            path(&kind),
+            first,
+            "a missing texture keeps the published path"
+        );
+    }
+    image::RgbaImage::new(16, 16).save(&late).unwrap();
+    for _ in 0..2 {
+        scene_sync_visual(&scene, owned, &mut kind).unwrap();
+        assert_eq!(path(&kind), late);
+    }
+}
+
 #[test]
 fn live_content_reaches_visual_slots_after_input_and_updates() {
     let mut compiled = compile(
