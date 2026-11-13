@@ -9,7 +9,7 @@ pub(crate) use song_banner::SongBannerLayout;
 mod song_details;
 pub(crate) use song_details::SongDetailsLayout;
 mod stepartist_peak_nps;
-pub(crate) use super::step_artist_bar::StepArtistBarLayout;
+pub(crate) use super::step_artist_bar::{StepArtistBarLayout, StepArtistBarLayoutType};
 pub(crate) use stepartist_peak_nps::StepArtistPeakNpsLayout;
 
 const LEFT_PANEL_REFERENCE_WIDTH: f32 = 720.0;
@@ -188,7 +188,7 @@ impl SongSelectLayout {
 
     pub(crate) fn density_graphs(
         self,
-        mode: StepArtistBarLayout,
+        mode: StepArtistBarLayoutType,
         peak_text_logical_width: f32,
     ) -> [DensityGraphLayout; 2] {
         self.chart_panel_layout

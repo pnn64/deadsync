@@ -2386,17 +2386,17 @@ pub fn push_actors(
         actors,
         step_artist_bar::StepArtistBarParams {
             left_x: panel_left,
-            center_y: step_artist_y,
-            layout: step_artist_bar::StepArtistBarLayout::Legacy,
-            expanded_line_count: 0,
+            layout: step_artist_bar::StepArtistBarLayout::legacy(
+                step_artist_y,
+                175.0,
+                34.5 * scale,
+                138.0 * scale,
+            ),
             accent_color: step_artist_col,
             z_base: 122,
-            background_width: 175.0,
             label_text: step_idx_text.into(),
             label_max_width: 22.0 * scale,
             artist_text: step_artist_text.into(),
-            artist_x_offset: 34.5 * scale,
-            artist_max_width: 138.0 * scale,
             artist_color: [
                 UI_BOX_BG_COLOR[0],
                 UI_BOX_BG_COLOR[1],

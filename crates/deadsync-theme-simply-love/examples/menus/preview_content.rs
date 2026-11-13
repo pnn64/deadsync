@@ -471,6 +471,12 @@ fn build_song(
     let simfile_path = song_directory.join("preview.sm");
     write_simfile(&simfile_path, index, preview)?;
     let mut song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile_path, 0.0)?;
+    if index == 0 {
+        if let Some(chart) = song.charts.first_mut() {
+            chart.step_artist = "Prop1: abc".to_owned();
+            chart.chart_name = "prop2: def".to_owned();
+        }
+    }
     song.has_lua = matches!(index, 2 | 7);
     song.music_length_seconds = preview.duration_seconds as f32;
     song.total_length_seconds = preview.duration_seconds as i32;

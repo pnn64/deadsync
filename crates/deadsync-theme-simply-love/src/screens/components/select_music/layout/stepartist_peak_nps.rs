@@ -1,4 +1,4 @@
-use super::super::step_artist_bar::StepArtistBarLayout;
+use super::super::step_artist_bar::{StepArtistBarLayout, StepArtistBarLayoutType};
 use super::WidgetBounds;
 
 // We don't want any text to touch the edges of any panel
@@ -16,10 +16,10 @@ struct StepArtistPeakNpsOffsetsByMode {
 }
 
 impl StepArtistPeakNpsOffsetsByMode {
-    fn get(self, mode: StepArtistBarLayout) -> StepArtistPeakNpsOffsets {
+    fn get(self, mode: StepArtistBarLayoutType) -> StepArtistPeakNpsOffsets {
         match mode {
-            StepArtistBarLayout::Legacy => self.default,
-            StepArtistBarLayout::Expanded => self.expanded,
+            StepArtistBarLayoutType::Legacy => self.default,
+            StepArtistBarLayoutType::Expanded => self.expanded,
         }
     }
 }
@@ -29,47 +29,26 @@ const OFFSETS: StepArtistPeakNpsOffsetsByMode = StepArtistPeakNpsOffsetsByMode {
     expanded: StepArtistPeakNpsOffsets { artist_x: 45.0 },
 };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct StepArtistPeakNpsVerticalLayout {
-    step_header_y: f32,
-    artist_background_y: f32,
-    artist_background_height: f32,
-    artist_text_y: f32,
-}
-
-fn artist_vertical_layout(
-    mode: StepArtistBarLayout,
+fn artist_bar_vertical_layout(
+    mode: StepArtistBarLayoutType,
     graph_bounds: WidgetBounds,
     step_artist_header: WidgetBounds,
-) -> StepArtistPeakNpsVerticalLayout {
+) -> (f32, f32) {
     match mode {
-        StepArtistBarLayout::Legacy => {
+        StepArtistBarLayoutType::Legacy => {
             let step_header_y = graph_bounds.y - step_artist_header.height * 0.5;
-            StepArtistPeakNpsVerticalLayout {
+            (
                 step_header_y,
-                artist_background_y: step_header_y - step_artist_header.height * 0.5,
-                artist_background_height: step_artist_header.height,
-                artist_text_y: step_header_y,
-            }
+                step_header_y - step_artist_header.height * 0.5,
+            )
         }
-        StepArtistBarLayout::Expanded => StepArtistPeakNpsVerticalLayout {
-            step_header_y: step_artist_header.center_y(),
-            artist_background_y: step_artist_header.y,
-            artist_background_height: step_artist_header.height,
-            artist_text_y: step_artist_header.center_y() - 6.0,
-        },
+        StepArtistBarLayoutType::Expanded => (step_artist_header.center_y(), step_artist_header.y),
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct StepArtistPeakNpsLayout {
     pub step_header_y: f32,
-    pub artist_background_width: f32,
-    pub artist_background_y: f32,
-    pub artist_background_height: f32,
-    pub artist_x_offset: f32,
-    pub artist_text_y: f32,
-    pub artist_max_width: f32,
     pub nps_text_bounds: WidgetBounds,
     pub nps_text_zoom: f32,
     pub nps_text_max_width: f32,
@@ -82,17 +61,13 @@ impl StepArtistPeakNpsLayout {
     pub(crate) fn for_graph(
         graph_bounds: WidgetBounds,
         graph_zoom: f32,
-        mode: StepArtistBarLayout,
+        mode: StepArtistBarLayoutType,
         peak_text_logical_width: f32,
         step_artist_header: WidgetBounds,
-    ) -> Self {
+    ) -> (StepArtistBarLayout, Self) {
         let offsets = OFFSETS.get(mode);
-        let StepArtistPeakNpsVerticalLayout {
-            step_header_y,
-            artist_background_y,
-            artist_background_height,
-            artist_text_y,
-        } = artist_vertical_layout(mode, graph_bounds, step_artist_header);
+        let (step_header_y, artist_background_y) =
+            artist_bar_vertical_layout(mode, graph_bounds, step_artist_header);
         let nps_text_zoom = 0.8 * graph_zoom;
         let panel = graph_bounds;
 
@@ -112,48 +87,53 @@ impl StepArtistPeakNpsLayout {
         let artist_max_width =
             (artist_background_width - offsets.artist_x - padding).max(0.0) * graph_zoom;
 
-        Self {
-            step_header_y,
-            artist_background_width,
-            artist_background_y,
-            artist_background_height,
-            artist_x_offset: offsets.artist_x,
-            artist_text_y,
-            artist_max_width,
-            nps_text_bounds,
-            nps_text_zoom,
-            nps_text_max_width: nps_text_width / nps_text_zoom,
-        }
+        (
+            StepArtistBarLayout::new(
+                artist_background_width,
+                artist_background_y,
+                step_artist_header.height,
+                offsets.artist_x,
+                artist_max_width,
+                match mode {
+                    StepArtistBarLayoutType::Legacy => 1,
+                    StepArtistBarLayoutType::Expanded => 3,
+                },
+            ),
+            Self {
+                step_header_y,
+                nps_text_bounds,
+                nps_text_zoom,
+                nps_text_max_width: nps_text_width / nps_text_zoom,
+            },
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{StepArtistBarLayout, artist_vertical_layout};
+    use super::{StepArtistBarLayoutType, artist_bar_vertical_layout};
     use crate::screens::components::select_music::layout::WidgetBounds;
 
     #[test]
     fn legacy_vertical_layout_anchors_to_graph_top() {
         let graph = WidgetBounds::new(0.0, 100.0, 200.0, 50.0);
         let header = WidgetBounds::new(0.0, 25.0, 200.0, 30.0);
-        let layout = artist_vertical_layout(StepArtistBarLayout::Legacy, graph, header);
+        let (step_header_y, background_y) =
+            artist_bar_vertical_layout(StepArtistBarLayoutType::Legacy, graph, header);
         let expected_header_y = graph.y - header.height * 0.5;
 
-        assert!((layout.step_header_y - expected_header_y).abs() < f32::EPSILON);
-        assert!((layout.artist_background_y - (expected_header_y - 15.0)).abs() < f32::EPSILON);
-        assert_eq!(layout.artist_background_height, 30.0);
-        assert_eq!(layout.artist_text_y, expected_header_y);
+        assert!((step_header_y - expected_header_y).abs() < f32::EPSILON);
+        assert!((background_y - (expected_header_y - 15.0)).abs() < f32::EPSILON);
     }
 
     #[test]
     fn expanded_vertical_layout_follows_header_bounds() {
         let graph = WidgetBounds::new(0.0, 100.0, 200.0, 50.0);
-        let header = WidgetBounds::new(0.0, 25.0, 200.0, 30.0);
-        let layout = artist_vertical_layout(StepArtistBarLayout::Expanded, graph, header);
+        let header = WidgetBounds::new(0.0, 25.0, 200.0, 80.0);
+        let (step_header_y, background_y) =
+            artist_bar_vertical_layout(StepArtistBarLayoutType::Expanded, graph, header);
 
-        assert_eq!(layout.step_header_y, 40.0);
-        assert_eq!(layout.artist_background_y, 25.0);
-        assert_eq!(layout.artist_background_height, 30.0);
-        assert_eq!(layout.artist_text_y, 34.0);
+        assert_eq!(step_header_y, 65.0);
+        assert_eq!(background_y, 25.0);
     }
 }

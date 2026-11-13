@@ -1,5 +1,5 @@
 use super::chart_panel::DIFFICULTY_SLOT_COUNT;
-use super::{SongSelectLayout, StepArtistBarLayout, WidgetBounds, WidgetLayout};
+use super::{SongSelectLayout, StepArtistBarLayoutType, WidgetBounds, WidgetLayout};
 use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
 
@@ -65,7 +65,8 @@ fn wide_song_select_retains_reference_widget_geometry() {
     assert_eq!(p2_pattern.bottom(), chart_panel.bottom());
     assert_eq!(p2_pattern.y, density.bottom() + 24.0);
     assert!((chart_panel.bottom() - density.bottom() - 90.0).abs() < 0.001);
-    let header = layout.density_graphs(StepArtistBarLayout::Legacy, 99.9)[0].step_artist_peak_nps;
+    let header =
+        layout.density_graphs(StepArtistBarLayoutType::Legacy, 99.9)[0].step_artist_peak_nps;
     assert!(
         (header.step_header_y + layout.step_artist_header.height * 0.5 - density.y).abs() < 0.001
     );
@@ -109,7 +110,7 @@ fn non_ultra_wide_left_widgets_share_the_stats_pane_bounds() {
         assert!((layout.density_panel.bounds.height - 64.0 * layout.zoom).abs() < 0.001);
         assert_eq!(layout.chart_panel.height, 154.0);
         assert!(layout.chart_panel.y >= layout.song_details.widget.bounds.bottom());
-        let density_graph = layout.density_graphs(StepArtistBarLayout::Legacy, 99.9)[0];
+        let density_graph = layout.density_graphs(StepArtistBarLayoutType::Legacy, 99.9)[0];
         let step_header_y = density_graph.step_artist_peak_nps.step_header_y;
         assert!(step_header_y >= layout.song_details.widget.bounds.bottom());
         assert!(
@@ -129,12 +130,12 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
         (1147.0, 480.0, UILayoutType::UltraWide),
     ] {
         for (vertical_layout, artist_x_offset) in [
-            (StepArtistBarLayout::Legacy, 49.5),
-            (StepArtistBarLayout::Expanded, 45.0),
+            (StepArtistBarLayoutType::Legacy, 49.5),
+            (StepArtistBarLayoutType::Expanded, 45.0),
         ] {
             let mut presentation = SelectMusicPresentationPolicyView::default();
             presentation.step_artist_expanded =
-                matches!(vertical_layout, StepArtistBarLayout::Expanded);
+                matches!(vertical_layout, StepArtistBarLayoutType::Expanded);
             let layout = SongSelectLayout::new_with_context(
                 screen_width,
                 screen_height,
@@ -145,15 +146,19 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
             let panel = layout.density_panel.bounds;
             assert_eq!(layout.chart_panel.height, 154.0);
             assert!((layout.difficulty_list.bounds.height - 154.0).abs() < 0.001);
-            assert!(
-                (layout.pattern_panels[1].bounds.bottom() - layout.difficulty_list.bounds.bottom())
-                    .abs()
-                    < 0.001
-            );
             let density_graphs = layout.density_graphs(vertical_layout, 99.9);
+            if matches!(vertical_layout, StepArtistBarLayoutType::Legacy) {
+                assert!(
+                    (layout.pattern_panels[1].bounds.bottom()
+                        - layout.difficulty_list.bounds.bottom())
+                    .abs()
+                        < 0.001
+                );
+            }
             for index in 0..density_graphs.len() {
                 let graph = density_graphs[index];
-                let line = graph.step_artist_peak_nps;
+                let bar = graph.step_artist_bar;
+                let peak = graph.step_artist_peak_nps;
                 let gap = 8.0 * layout.zoom;
                 let graph_center_y = if index == 0 {
                     layout.density_panel.bounds.center_y()
@@ -161,10 +166,10 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                     layout.chart_panel.bottom() - graph.bounds.height * 0.5
                 };
                 let expected_header_y = match vertical_layout {
-                    StepArtistBarLayout::Legacy => {
+                    StepArtistBarLayoutType::Legacy => {
                         graph.bounds.y - layout.step_artist_header.height * 0.5
                     }
-                    StepArtistBarLayout::Expanded => layout.step_artist_header.center_y(),
+                    StepArtistBarLayoutType::Expanded => layout.step_artist_header.center_y(),
                 };
                 let graph_top = graph.bounds.y;
 
@@ -178,43 +183,56 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                         < f32::EPSILON
                 );
                 assert!((graph.breakdown_text_zoom - 0.8 * layout.zoom).abs() < f32::EPSILON);
-                assert!((line.step_header_y - expected_header_y).abs() < f32::EPSILON);
+                assert!((peak.step_header_y - expected_header_y).abs() < f32::EPSILON);
                 assert!(layout.step_artist_header.y >= layout.song_details.widget.bounds.bottom());
-                assert!(
-                    (line.artist_background_height - layout.step_artist_header.height).abs()
-                        < 0.001
+                assert!((bar.background_height - layout.step_artist_header.height).abs() < 0.001);
+                assert_eq!(
+                    bar.max_lines,
+                    match vertical_layout {
+                        StepArtistBarLayoutType::Legacy => 1,
+                        StepArtistBarLayoutType::Expanded => 3,
+                    }
                 );
-                if matches!(vertical_layout, StepArtistBarLayout::Expanded) {
+                assert!((bar.artist_text_y - (bar.background_y + 3.0)).abs() < f32::EPSILON);
+                if matches!(vertical_layout, StepArtistBarLayoutType::Expanded) {
                     assert_eq!(layout.chart_panel.y, layout.step_artist_header.bottom());
                     assert_eq!(layout.density_panel.bounds.y, layout.chart_panel.y);
                     assert_eq!(
                         layout.pattern_panels[1].bounds.y,
-                        layout.density_panel.bounds.bottom() + 24.0
+                        layout.density_panel.bounds.bottom()
                     );
-                    assert_eq!(line.artist_background_y, layout.step_artist_header.y);
                     assert!(
-                        (line.artist_background_y + line.artist_background_height
-                            - layout.density_panel.bounds.y)
+                        (layout.pattern_panels[1].bounds.height - 56.0 * layout.zoom).abs() < 0.001
+                    );
+                    let tech_info = layout.tech_info(layout.pattern_panels[1].bounds);
+                    assert!(tech_info.row_centers_y[0] > layout.pattern_panels[1].bounds.y);
+                    assert!(tech_info.row_centers_y[2] < layout.pattern_panels[1].bounds.bottom());
+                    assert_eq!(
+                        layout.step_artist_header.height,
+                        screen_height / StepArtistBarLayoutType::Expanded.height_screen_divisor()
+                    );
+                    assert_eq!(bar.background_y, layout.step_artist_header.y);
+                    assert!(
+                        (bar.background_y + bar.background_height - layout.density_panel.bounds.y)
                             .abs()
                             < 0.001
                     );
-                    assert!(line.artist_text_y < line.step_header_y);
+                    assert!(bar.artist_text_y < peak.step_header_y);
                 }
-                assert!(line.nps_text_bounds.x >= 0.0);
-                assert!((line.nps_text_bounds.right() - (panel.width - gap)).abs() < f32::EPSILON);
+                assert!(peak.nps_text_bounds.x >= 0.0);
+                assert!((peak.nps_text_bounds.right() - (panel.width - gap)).abs() < f32::EPSILON);
                 assert!(
-                    (graph_top + line.nps_text_bounds.y - line.step_header_y).abs() < f32::EPSILON
+                    (graph_top + peak.nps_text_bounds.y - peak.step_header_y).abs() < f32::EPSILON
                 );
                 assert!(
-                    (line.artist_background_width + line.nps_text_bounds.width + gap * 2.0
-                        - panel.width)
+                    (bar.background_width + peak.nps_text_bounds.width + gap * 2.0 - panel.width)
                         .abs()
                         < 0.001
                 );
-                assert_eq!(line.artist_x_offset, artist_x_offset);
-                assert!(line.artist_max_width > 0.0);
-                assert!(line.nps_text_zoom > 0.0);
-                assert!(line.nps_text_max_width > 0.0);
+                assert_eq!(bar.artist_x_offset, artist_x_offset);
+                assert!(bar.artist_max_width > 0.0);
+                assert!(peak.nps_text_zoom > 0.0);
+                assert!(peak.nps_text_max_width > 0.0);
             }
         }
     }

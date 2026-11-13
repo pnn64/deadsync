@@ -16,9 +16,7 @@ use crate::rgba_const;
 pub use crate::screens::components::select_music::layout::SongSelectLayout;
 use crate::screens::components::{
     select_music::{
-        layout::{
-            ChartPanelLayout, DensityGraphLayout, SongDetailsLayout, StepArtistPeakNpsLayout,
-        },
+        layout::{ChartPanelLayout, DensityGraphLayout, SongDetailsLayout, StepArtistBarLayout},
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
@@ -13330,15 +13328,13 @@ pub fn push_actors(
 
     let cycle_elapsed = state.session_elapsed - state.step_artist_cycle_base;
 
-    let step_artist_layout = if step_artist_expanded {
-        step_artist_bar::StepArtistBarLayout::Expanded
+    let step_artist_layout_type = if step_artist_expanded {
+        step_artist_bar::StepArtistBarLayoutType::Expanded
     } else {
-        step_artist_bar::StepArtistBarLayout::Legacy
+        step_artist_bar::StepArtistBarLayoutType::Legacy
     };
     let step_artist = if step_artist_expanded {
-        immediate_chart_p1
-            .map(step_artist_expanded_text)
-            .unwrap_or_else(|| cached_str_ref(""))
+        immediate_chart_p1.map_or_else(|| cached_str_ref(""), step_artist_expanded_text)
     } else {
         cached_str_ref(immediate_chart_p1.map_or("", |c| step_artist_cycle_text(c, cycle_elapsed)))
     };
@@ -13365,67 +13361,43 @@ pub fn push_actors(
             })
         })
         .unwrap_or(panel_w * 0.46 / (0.8 * song_select_layout.zoom).max(f32::EPSILON));
-    let density_graphs = song_select_layout.density_graphs(
-        step_artist_bar::StepArtistBarLayout::from_bool(step_artist_expanded),
-        peak_text_logical_width,
-    );
+    let density_graphs =
+        song_select_layout.density_graphs(step_artist_layout_type, peak_text_logical_width);
 
     // Step Artist & Steps
     let mut push_step_artist =
-        |line_layout: StepArtistPeakNpsLayout,
-         left_x: f32,
-         sel_col: [f32; 4],
-         step_artist: Arc<str>,
-         bar_layout: step_artist_bar::StepArtistBarLayout| {
-            step_artist_bar::push_with_geometry(
+        |layout: StepArtistBarLayout, left_x: f32, sel_col: [f32; 4], step_artist: Arc<str>| {
+            step_artist_bar::push(
                 actors,
                 step_artist_bar::StepArtistBarParams {
                     left_x,
-                    center_y: line_layout.step_header_y,
-                    layout: bar_layout,
-                    expanded_line_count: 0,
+                    layout,
                     accent_color: sel_col,
                     z_base: 120,
-                    background_width: line_layout.artist_background_width,
                     label_text: labels.steps.clone().into(),
                     label_max_width: 40.0 * left_panel_scale,
                     artist_text: step_artist.into(),
-                    artist_x_offset: line_layout.artist_x_offset,
-                    artist_max_width: line_layout.artist_max_width,
                     artist_color: [0.0, 0.0, 0.0, 1.0],
-                },
-                step_artist_bar::StepArtistBarGeometry {
-                    background_y: line_layout.artist_background_y,
-                    background_height: line_layout.artist_background_height,
-                    artist_text_y: line_layout.artist_text_y,
                 },
             );
         };
 
     if is_versus {
         push_step_artist(
-            density_graphs[0].step_artist_peak_nps,
+            density_graphs[0].step_artist_bar,
             graph_left,
             sel_col_p1,
             step_artist,
-            step_artist_bar::StepArtistBarLayout::Legacy,
         );
         push_step_artist(
-            density_graphs[1].step_artist_peak_nps,
+            density_graphs[1].step_artist_bar,
             graph_left,
             sel_col_p2,
             step_artist_p2,
-            step_artist_bar::StepArtistBarLayout::Legacy,
         );
     } else {
-        let line_layout = density_graphs[is_p2_single as usize].step_artist_peak_nps;
-        push_step_artist(
-            line_layout,
-            graph_left,
-            sel_col_p1,
-            step_artist,
-            step_artist_layout,
-        );
+        let bar_layout = density_graphs[is_p2_single as usize].step_artist_bar;
+        push_step_artist(bar_layout, graph_left, sel_col_p1, step_artist);
     }
 
     // Density Graph
