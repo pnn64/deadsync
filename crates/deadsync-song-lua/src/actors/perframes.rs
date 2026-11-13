@@ -387,4 +387,34 @@ impl Access {
             .unwrap_or(Value::Nil);
         vm.pin(children)
     }
+
+    /// One snapshot entry through the production lookup, and whether that
+    /// lookup answered without building the snapshot.
+    pub fn fixture_named_child(
+        &self,
+        vm: &mut Vm,
+        actor: Value,
+        name: &[u8],
+    ) -> Result<(Root, bool), Error> {
+        let name = vm.try_intern(name)?;
+        let function = vm.new_host_function(
+            |call| {
+                let actor = table(call, call.captures()[2])?;
+                let name = bytes(call, call.captures()[3])?;
+                let direct = native_children::find_named(call, actor, &name)?.is_some();
+                let child = native_children::named_child(call, actor, &name)?;
+                call.push(child)?;
+                call.push(Value::Boolean(direct))
+            },
+            &[
+                Value::Table(self.registry),
+                Value::Table(self.helpers),
+                actor,
+                name,
+            ],
+        )?;
+        let results = vm.call(function, &[])?;
+        let (child, direct) = (results[0], results[1] == Value::Boolean(true));
+        Ok((vm.pin(child)?, direct))
+    }
 }

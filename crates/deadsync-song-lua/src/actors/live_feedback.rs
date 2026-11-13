@@ -58,8 +58,7 @@ fn truthy(value: Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 fn child(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
-    let children = native_children::named_children(call, actor)?;
-    call.with_roots(&[children], |call| raw(call, table(call, children)?, name))
+    native_children::named_child(call, actor, name.as_bytes())
 }
 fn invoke(
     call: &mut HostCall<'_>,

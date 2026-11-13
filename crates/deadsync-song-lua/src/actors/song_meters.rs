@@ -92,12 +92,11 @@ pub(super) fn stream(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<T
     {
         return Ok(None);
     }
-    let map = native_children::named_children(call, actor)?;
-    call.with_roots(&[map], |call| {
-        let stream = field(call, table(call, map)?, "Stream")?;
-        if stream == Value::Nil {
-            return Ok(None);
-        }
+    let stream = native_children::named_child(call, actor, b"Stream")?;
+    if stream == Value::Nil {
+        return Ok(None);
+    }
+    call.with_roots(&[stream], |call| {
         let stream = table(call, stream)?;
         if !call.store().actors.contains_key(&stream) {
             native_children::group_members(call, stream)?;
@@ -155,12 +154,11 @@ pub(super) fn read(
     if width <= f32::EPSILON {
         return Ok(None);
     }
-    let map = native_children::named_children(call, actor)?;
-    call.with_roots(&[map], |call| {
-        let stream = field(call, table(call, map)?, "Stream")?;
-        if stream == Value::Nil {
-            return Ok(None);
-        }
+    let stream = native_children::named_child(call, actor, b"Stream")?;
+    if stream == Value::Nil {
+        return Ok(None);
+    }
+    call.with_roots(&[stream], |call| {
         let stream = table(call, stream)?;
         let stream_state = native_children::state(call, stream)?;
         Ok(Some(SongMeterDisplay {

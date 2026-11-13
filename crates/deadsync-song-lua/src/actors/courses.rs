@@ -327,15 +327,12 @@ fn function(call: &HostCall<'_>, value: Value) -> Result<Option<Value>, Error> {
     }
 }
 fn display(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let named = native_children::named_children(call, actor)?;
-    call.with_roots(&[named], |call| {
-        let value = field(call, table(call, named)?, "Display")?;
-        if value == Value::Nil {
-            Ok(None)
-        } else {
-            Ok(Some(table(call, value)?))
-        }
-    })
+    let value = native_children::named_child(call, actor, b"Display")?;
+    if value == Value::Nil {
+        Ok(None)
+    } else {
+        Ok(Some(table(call, value)?))
+    }
 }
 fn position(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let Some(display) = display(call, actor)? else {

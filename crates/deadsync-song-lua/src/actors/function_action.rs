@@ -295,11 +295,7 @@ fn snapshot_columns(call: &mut HostCall<'_>, scope: &Scope) -> Result<Vec<Column
             let key = call.try_intern(b"NoteField")?;
             call.raw_table_get(children, key)?
         } else {
-            let named = native_children::named_children(call, player)?;
-            call.with_roots(&[named], |call| {
-                let named = table(call, named)?;
-                field(call, named, "NoteField")
-            })?
+            native_children::named_child(call, player, b"NoteField")?
         };
         let value = scope.keep(call, value)?;
         let note_field = optional_table(call, value)?;

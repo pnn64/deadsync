@@ -39,6 +39,147 @@ pub(super) fn named_children(call: &mut HostCall<'_>, actor: TableId) -> Result<
     Ok(call.call(function, &[Value::Table(actor)])?[0])
 }
 
+/// One entry of the snapshot [`named_children`] builds: `named_children(actor)[name]`.
+///
+/// The Lua helper defines the result. The usual shape is read here without
+/// building that snapshot; every other shape runs the helper.
+pub(super) fn named_child(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    name: &[u8],
+) -> Result<Value, Error> {
+    if let Some(child) = find_named(call, actor, name)? {
+        return Ok(child);
+    }
+    let children = named_children(call, actor)?;
+    call.with_roots(&[children], |call| get(call, table(call, children)?, name))
+}
+
+// Whether the helper's `isgroup` holds for a table, or `None` when a
+// `__metatable` field or a metatable of the metatable takes part in its answer.
+fn is_group(call: &mut HostCall<'_>, value: TableId) -> Result<Option<bool>, Error> {
+    let Some(metatable) = call.raw_metatable(value)? else {
+        return Ok(Some(false));
+    };
+    if get(call, metatable, b"__metatable")? != Value::Nil {
+        return Ok(None);
+    }
+    Ok(match get(call, metatable, b"__songlua_child_group")? {
+        Value::Nil if call.raw_metatable(metatable)?.is_some() => None,
+        Value::Nil | Value::Boolean(false) => Some(false),
+        _ => Some(true),
+    })
+}
+
+// The helper's result for one name, where it is a value the registry or the
+// child array already holds. `None` leaves the helper to run: for a registry
+// it would create, a name it would export as a new group, every error it would
+// raise, and children whose `GetName` is more than the stored name.
+pub(super) fn find_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    name: &[u8],
+) -> Result<Option<Value>, Error> {
+    let wanted = call.try_intern(name)?;
+    let mut found = Value::Nil;
+    if matches!(
+        get(call, actor, b"__songlua_owned_child_lookup")?,
+        Value::Nil | Value::Boolean(false)
+    ) {
+        let Value::Table(registry) = get(call, actor, b"__songlua_children")? else {
+            return Ok(None);
+        };
+        if let Some(metatable) = call.raw_metatable(registry)? {
+            if get(call, metatable, b"__metatable")? != Value::Nil {
+                return Ok(None);
+            }
+            // The creation order only orders the snapshot; it must be a table.
+            match get(call, metatable, b"__songlua_child_names")? {
+                Value::Table(_) => {}
+                Value::Nil if call.raw_metatable(metatable)?.is_none() => {}
+                _ => return Ok(None),
+            }
+        }
+        let mut key = Value::Nil;
+        while let Some((next, value)) = call.raw_table_next(registry, key)? {
+            key = next;
+            let Value::Table(entry) = value else {
+                if key == wanted {
+                    found = value;
+                }
+                continue;
+            };
+            let Some(group) = is_group(call, entry)? else {
+                return Ok(None);
+            };
+            if !group {
+                if key == wanted {
+                    found = value;
+                }
+                continue;
+            }
+            // Every group is checked, as the snapshot copies all of them. A
+            // group exports its member when all of its members are that one.
+            let mut only = Value::Nil;
+            for index in 1.. {
+                match call.raw_table_get(entry, Value::Number(index as f64))? {
+                    Value::Nil => break,
+                    member @ Value::Table(_) if only == Value::Nil || only == member => {
+                        only = member;
+                    }
+                    Value::Table(_) if key != wanted => {}
+                    _ => return Ok(None),
+                }
+            }
+            if key == wanted {
+                if only == Value::Nil {
+                    return Ok(None);
+                }
+                found = only;
+            }
+        }
+    }
+    let mut swept = false;
+    for index in 1.. {
+        let child = match call.raw_table_get(actor, Value::Number(index as f64))? {
+            Value::Nil => break,
+            Value::Table(child) => child,
+            _ => continue,
+        };
+        // `GetName` runs for every table child and sweeps retired scenes first.
+        if !swept {
+            swept = true;
+            if call.store_ref().collected_scenes.pending() {
+                retirement::sweep(call.store());
+            }
+        }
+        let Some(node) = call.store_ref().actors.get(&child) else {
+            return Ok(None);
+        };
+        if node.raw_instance
+            || node.pending_init
+            || node.offline_instance
+            || node.state.class == "OptionRow"
+        {
+            return Ok(None);
+        }
+        if node.state.name != name {
+            continue;
+        }
+        match found {
+            Value::Table(old) if old == child => {
+                if is_group(call, old)? != Some(false) {
+                    return Ok(None);
+                }
+            }
+            // A second child of that name joins or builds a group.
+            Value::Table(_) => return Ok(None),
+            _ => found = Value::Table(child),
+        }
+    }
+    Ok(Some(found))
+}
+
 pub(super) fn remove(call: &mut HostCall<'_>, actor: TableId, all: bool) -> Result<(), Error> {
     let name = if all {
         Value::Nil

@@ -311,17 +311,14 @@ fn reads_global(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<b
     if initial_state::value_text(call, class)?
         .is_some_and(|s| s.eq_ignore_ascii_case("SongMeterDisplay"))
     {
-        let children = native_children::named_children(call, actor)?;
-        return call.with_roots(&[children], |call| {
-            let stream = field(call, table(call, children)?, "Stream")?;
-            if stream == Value::Nil {
-                return Ok(false);
-            }
-            let id = table(call, stream)?;
-            call.with_roots(&[stream], |call| {
-                super::super::set(call, stream, "__songlua_parent", Value::Table(actor))?;
-                reads_global(call, id, name)
-            })
+        let stream = native_children::named_child(call, actor, b"Stream")?;
+        if stream == Value::Nil {
+            return Ok(false);
+        }
+        let id = table(call, stream)?;
+        return call.with_roots(&[stream], |call| {
+            super::super::set(call, stream, "__songlua_parent", Value::Table(actor))?;
+            reads_global(call, id, name)
         });
     }
     Ok(false)

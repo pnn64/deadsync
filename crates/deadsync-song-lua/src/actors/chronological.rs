@@ -621,30 +621,26 @@ fn field_wrappers(
     player: TableId,
     clock: [f32; 2],
 ) -> Result<Option<Vec<State>>, Error> {
-    let children = native_children::named_children(call, player)?;
-    call.with_roots(&[children], |call| {
-        let children = table(call, children)?;
-        let value = get(call, children, b"NoteField")?;
-        let Some(field) = optional_table(call, value)? else {
-            return Ok(None);
-        };
-        call.with_roots(&[value], |call| {
-            let mut states = Vec::new();
-            visit_wrappers(call, field, false, true, |call, id| {
-                ensure(call, id)?;
-                let mut state = initial_state::read(call, id)?;
-                replay_pose(call.store(), id, &mut state);
-                if let Some(spin) = render_spin(call, id)? {
-                    [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
-                    state.spin_baked = true;
-                }
-                if let Some(time) = effect_time(call, id, clock)? {
-                    state.effect_time = Some(time);
-                }
-                states.push(state);
-                Ok(false)
-            })?;
-            Ok(Some(states))
-        })
+    let value = native_children::named_child(call, player, b"NoteField")?;
+    let Some(field) = optional_table(call, value)? else {
+        return Ok(None);
+    };
+    call.with_roots(&[value], |call| {
+        let mut states = Vec::new();
+        visit_wrappers(call, field, false, true, |call, id| {
+            ensure(call, id)?;
+            let mut state = initial_state::read(call, id)?;
+            replay_pose(call.store(), id, &mut state);
+            if let Some(spin) = render_spin(call, id)? {
+                [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
+                state.spin_baked = true;
+            }
+            if let Some(time) = effect_time(call, id, clock)? {
+                state.effect_time = Some(time);
+            }
+            states.push(state);
+            Ok(false)
+        })?;
+        Ok(Some(states))
     })
 }

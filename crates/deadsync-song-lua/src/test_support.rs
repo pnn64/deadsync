@@ -600,6 +600,19 @@ pub fn actor_named_children(
         .fixture_named_children(&mut runtime.vm, actor)
 }
 
+/// Read one named child through the production lookup. The flag reports
+/// whether it was answered without building the [`actor_named_children`] snapshot.
+pub fn actor_named_child(
+    runtime: &mut super::SongRuntime,
+    actor: deadlib_lua::Value,
+    name: &[u8],
+) -> Result<(deadlib_lua::Root, bool), deadlib_lua::Error> {
+    runtime
+        .actors
+        .perframe_access()
+        .fixture_named_child(&mut runtime.vm, actor, name)
+}
+
 /// Drive the production publication operation on one existing visual slot,
 /// including partial writes when a later authored field read fails.
 pub fn publish_live_visual_content<N, M>(

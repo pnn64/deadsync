@@ -200,32 +200,30 @@ fn child_state(
     actor: TableId,
     body: bool,
 ) -> Result<crate::SongLuaOverlayState, Error> {
-    let map = native_children::named_children(call, actor)?;
-    call.with_roots(&[map], |call| {
-        let child = field(call, table(call, map)?, if body { "" } else { "Line" })?;
-        if child == Value::Nil {
-            return Ok(crate::SongLuaOverlayState::default());
-        }
-        call.with_roots(&[child], |call| {
-            let child = table(call, child)?;
-            let child = if body {
-                let second = call.raw_table_get(child, Value::Number(2.0))?;
-                if second != Value::Nil {
-                    Some(table(call, second)?)
-                } else {
-                    let first = call.raw_table_get(child, Value::Number(1.0))?;
-                    if let Value::Table(first) = first {
-                        Some(first)
-                    } else {
-                        None
-                    }
-                }
+    let name: &[u8] = if body { b"" } else { b"Line" };
+    let child = native_children::named_child(call, actor, name)?;
+    if child == Value::Nil {
+        return Ok(crate::SongLuaOverlayState::default());
+    }
+    call.with_roots(&[child], |call| {
+        let child = table(call, child)?;
+        let child = if body {
+            let second = call.raw_table_get(child, Value::Number(2.0))?;
+            if second != Value::Nil {
+                Some(table(call, second)?)
             } else {
-                Some(child)
-            };
-            child.map_or(Ok(crate::SongLuaOverlayState::default()), |child| {
-                native_children::state(call, child)
-            })
+                let first = call.raw_table_get(child, Value::Number(1.0))?;
+                if let Value::Table(first) = first {
+                    Some(first)
+                } else {
+                    None
+                }
+            }
+        } else {
+            Some(child)
+        };
+        child.map_or(Ok(crate::SongLuaOverlayState::default()), |child| {
+            native_children::state(call, child)
         })
     })
 }

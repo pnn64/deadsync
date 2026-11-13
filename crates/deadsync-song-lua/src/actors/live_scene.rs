@@ -153,15 +153,11 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
                 native_children::with_children(call, actor, |call, c| visit(call, c))
             }
             native_children::with_children(call, screen, |call, c| visit(call, c))?;
-            let children = native_children::named_children(call, screen)?;
-            call.with_roots(&[children], |call| {
-                let key = call.try_intern(b"Out")?;
-                let out = call.raw_table_get(table(call, children)?, key)?;
-                if out != Value::Nil {
-                    transitions::start(call, table(call, out)?)?;
-                }
-                Ok(())
-            })?;
+            let out = native_children::named_child(call, screen, b"Out")?;
+            if out != Value::Nil {
+                let out = table(call, out)?;
+                call.with_roots(&[Value::Table(out)], |call| transitions::start(call, out))?;
+            }
         }
         Phase::EndSounds => {
             let list = table(call, call.raw_table_get(batch, Value::Number(2.))?)?;

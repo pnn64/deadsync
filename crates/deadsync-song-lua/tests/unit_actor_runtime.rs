@@ -377,3 +377,228 @@ fn snapshots_preserve_absence_explicit_one_and_float_bits() {
     }
     assert_eq!(test_support::base_transform_size(), 28);
 }
+
+// Compares two snapshot entries: the same value, or two groups of the same members.
+const SAME_CHILD: &str = r#"return function(a, b)
+    if rawequal(a, b) then return true end
+    if type(a) ~= 'table' or type(b) ~= 'table' then return false end
+    local ma, mb = getmetatable(a), getmetatable(b)
+    if not (ma and mb and rawget(ma, '__songlua_child_group') and rawget(mb, '__songlua_child_group')) then
+        return false
+    end
+    local i = 1
+    while rawget(a, i) ~= nil or rawget(b, i) ~= nil do
+        if not rawequal(rawget(a, i), rawget(b, i)) then return false end
+        i = i + 1
+    end
+    return true
+end"#;
+
+const THREE_CHILDREN: &str =
+    "return Def.ActorFrame{Def.Quad{Name='A'}, Def.Sprite{Name='B'}, Def.Actor{}}";
+
+// (label, declaration, adjustment returning the table to query, names with
+// whether the lookup answers each without the snapshot).
+type ChildShape = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static [(&'static str, bool)],
+);
+const CHILD_SHAPES: &[ChildShape] = &[
+    (
+        "unique names",
+        THREE_CHILDREN,
+        "return root",
+        &[("A", true), ("B", true), ("", true), ("Missing", true)],
+    ),
+    (
+        "duplicate names build a group",
+        "return Def.ActorFrame{Def.Quad{Name='A'}, Def.Quad{Name='A'}, Def.Quad{Name='B'}}",
+        "return root",
+        &[("A", false), ("B", true)],
+    ),
+    (
+        "one child listed twice",
+        THREE_CHILDREN,
+        "rawset(root, #root + 1, root[1]) return root",
+        &[("A", true), ("B", true)],
+    ),
+    (
+        "renamed child",
+        THREE_CHILDREN,
+        "root[1]:name('Renamed') return root",
+        &[("A", true), ("Renamed", true)],
+    ),
+    (
+        "registry values",
+        THREE_CHILDREN,
+        "local r = rawget(root, '__songlua_children')
+         r.Alias = root[1]; r.Number = 5; r.Flag = false; r.B = root[2]; r.A = root[3]
+         return root",
+        &[
+            ("Alias", true),
+            ("Number", true),
+            ("Flag", true),
+            ("B", true),
+            ("A", false),
+            ("", true),
+        ],
+    ),
+    (
+        "registry groups",
+        THREE_CHILDREN,
+        "local r = rawget(root, '__songlua_children')
+         r.One = setmetatable({root[1]}, {__songlua_child_group=true})
+         r.Twice = setmetatable({root[2], root[2]}, {__songlua_child_group=true})
+         r.Two = setmetatable({root[1], root[2]}, {__songlua_child_group=true})
+         r.Empty = setmetatable({}, {__songlua_child_group=true})
+         r.Unmarked = setmetatable({root[1]}, {__songlua_child_group=false})
+         r.B = setmetatable({root[2]}, {__songlua_child_group=true})
+         return root",
+        &[
+            ("One", true),
+            ("B", true),
+            ("Twice", true),
+            ("Two", false),
+            ("Empty", false),
+            ("Unmarked", true),
+            ("A", true),
+            ("Missing", true),
+        ],
+    ),
+    (
+        "group member that is not a table",
+        THREE_CHILDREN,
+        "rawget(root, '__songlua_children').Bad = setmetatable({root[1], 7}, {__songlua_child_group=true})
+         return root",
+        &[("Bad", false), ("A", false), ("Missing", false)],
+    ),
+    (
+        "hidden and inherited metatables",
+        THREE_CHILDREN,
+        "local r = rawget(root, '__songlua_children')
+         r.Hidden = setmetatable({root[1]}, {__metatable='x', __songlua_child_group=true})
+         return root",
+        &[("Hidden", false), ("A", false)],
+    ),
+    (
+        "group mark inherited by the metatable",
+        THREE_CHILDREN,
+        "local r = rawget(root, '__songlua_children')
+         r.Deep = setmetatable({root[2]}, setmetatable({}, {__index={__songlua_child_group=true}}))
+         return root",
+        &[("Deep", false), ("B", false)],
+    ),
+    (
+        "owned lookup ignores the registry",
+        THREE_CHILDREN,
+        "rawget(root, '__songlua_children').Alias = root[1]
+         rawset(root, '__songlua_owned_child_lookup', true)
+         return root",
+        &[("Alias", true), ("A", true)],
+    ),
+    (
+        "child that is not an actor",
+        THREE_CHILDREN,
+        "rawset(root, #root + 1, {}) return root",
+        &[("A", false), ("Missing", false)],
+    ),
+    (
+        "array entry that is not a table",
+        THREE_CHILDREN,
+        "rawset(root, #root + 1, 5) rawset(root, #root + 1, root[2]) return root",
+        &[("A", true), ("B", true)],
+    ),
+    (
+        "registry that is not a table",
+        THREE_CHILDREN,
+        "rawset(root, '__songlua_children', 5) return root",
+        &[("A", false)],
+    ),
+    (
+        "creation order that is not a table",
+        THREE_CHILDREN,
+        "getmetatable(rawget(root, '__songlua_children')).__songlua_child_names = 5 return root",
+        &[("A", false)],
+    ),
+    (
+        "locked registry",
+        THREE_CHILDREN,
+        "getmetatable(rawget(root, '__songlua_children')).__metatable = 'x' return root",
+        &[("A", false)],
+    ),
+    (
+        "plain table of actors",
+        THREE_CHILDREN,
+        "PLAIN = {root[2], root[1]} return PLAIN",
+        &[("A", true), ("B", true), ("Missing", true)],
+    ),
+];
+
+#[test]
+fn single_name_child_lookup_matches_the_snapshot_entry() {
+    for &(label, declaration, adjustment, names) in CHILD_SHAPES {
+        let mut host = runtime();
+        let same = api::eval(host.vm_mut(), SAME_CHILD)[0];
+        let root = instantiate(&mut host, declaration);
+        host.vm_mut().set_global(b"root", root).unwrap();
+        // The first snapshot creates the registry the adjustments edit.
+        let first = test_support::actor_named_children(&mut host, root).unwrap();
+        host.vm_mut().unpin(first).unwrap();
+        let target = api::eval(host.vm_mut(), adjustment)[0];
+        // A table queried for the first time gets its registry here.
+        if let Ok(first) = test_support::actor_named_children(&mut host, target) {
+            host.vm_mut().unpin(first).unwrap();
+        }
+        for &(name, direct) in names {
+            let snapshot = test_support::actor_named_children(&mut host, target);
+            let child = test_support::actor_named_child(&mut host, target, name.as_bytes());
+            match (snapshot, child) {
+                (Ok(snapshot), Ok((child, answered))) => {
+                    let table = host.vm_mut().rooted(snapshot).unwrap();
+                    let expected = api::get(host.vm_mut(), table, name.as_bytes());
+                    let actual = host.vm_mut().rooted(child).unwrap();
+                    assert!(
+                        api::call_bool(host.vm_mut(), same, &[expected, actual]),
+                        "{label}: {name:?} is {actual:?}, the snapshot holds {expected:?}"
+                    );
+                    assert_eq!(answered, direct, "{label}: {name:?}");
+                    host.vm_mut().unpin(snapshot).unwrap();
+                    host.vm_mut().unpin(child).unwrap();
+                }
+                (Err(expected), Err(actual)) => {
+                    assert_eq!(
+                        actual.to_string(),
+                        expected.to_string(),
+                        "{label}: {name:?}"
+                    );
+                    assert!(!direct, "{label}: {name:?}");
+                }
+                (snapshot, child) => panic!(
+                    "{label}: {name:?} snapshot {:?}, lookup {:?}",
+                    snapshot.map(|_| ()),
+                    child.map(|(_, answered)| answered)
+                ),
+            }
+        }
+    }
+}
+
+#[test]
+fn single_name_child_lookup_returns_the_child_and_creates_the_registry_once() {
+    let mut host = runtime();
+    let root = instantiate(&mut host, THREE_CHILDREN);
+    let first = table_index(&mut host, root, 1);
+    let (child, _) = test_support::actor_named_child(&mut host, root, b"A").unwrap();
+    let value = host.vm_mut().rooted(child).unwrap();
+    assert_eq!(pointer(&mut host, value), pointer(&mut host, first));
+    // Once the registry exists the lookup needs no snapshot.
+    for (name, present) in [("A", true), ("B", true), ("Missing", false)] {
+        let (child, answered) =
+            test_support::actor_named_child(&mut host, root, name.as_bytes()).unwrap();
+        assert!(answered, "{name}");
+        let value = host.vm_mut().rooted(child).unwrap();
+        assert_eq!(value != Value::Nil, present, "{name}");
+    }
+}

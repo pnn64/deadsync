@@ -95,10 +95,7 @@ fn player_field(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error>
             });
         }
     }
-    let children = native_children::named_children(call, actor)?;
-    call.with_roots(&[children], |call| {
-        super::super::field(call, children, "NoteField")
-    })
+    native_children::named_child(call, actor, b"NoteField")
 }
 fn field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<Value, Error> {
     sprites::field(call, owner, key)

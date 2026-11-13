@@ -417,15 +417,12 @@ pub(super) fn note_field(call: &mut HostCall<'_>, index: usize) -> Result<Option
                 }
             });
         }
-        let children = native_children::named_children(call, player)?;
-        call.with_roots(&[children], |call| {
-            let value = super::super::field(call, children, "NoteField")?;
-            if value == Value::Nil {
-                Ok(None)
-            } else {
-                table(call, value).map(Some)
-            }
-        })
+        let value = native_children::named_child(call, player, b"NoteField")?;
+        if value == Value::Nil {
+            Ok(None)
+        } else {
+            table(call, value).map(Some)
+        }
     })
 }
 fn read_pending(
