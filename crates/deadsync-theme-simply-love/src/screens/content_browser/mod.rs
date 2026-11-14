@@ -25,7 +25,7 @@ mod state;
 mod sync_dialog;
 
 pub use chart_window::{PreviewSkinModels, preview_skin_models, preview_skin_textures};
-pub use input::{handle_input, handle_raw_key_event};
+pub use input::{handle_input, handle_raw_key_event, handle_text};
 pub use preview::SongRequest;
 pub use render::{get_actors, in_transition, out_transition, push_actors};
 pub use rip::{RipRequest, rip_refused, take_rip_requests};
