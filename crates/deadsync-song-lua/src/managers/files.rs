@@ -2,8 +2,26 @@
 use super::catalog::{arg, text};
 use super::fields::{object, set};
 use super::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 mod rage;
+
+#[derive(Clone)]
+struct FileContext {
+    song_dir: PathBuf,
+    theme_combo_font_directory: Option<PathBuf>,
+}
+
+impl FileContext {
+    fn resolve(&self, raw_path: &str) -> PathBuf {
+        if let Some(directory) = &self.theme_combo_font_directory {
+            let prefix = Path::new(crate::SONG_LUA_THEME_PATH_PREFIX).join("Fonts/_Combo Fonts");
+            if let Ok(relative) = Path::new(raw_path.trim()).strip_prefix(prefix) {
+                return directory.join(relative);
+            }
+        }
+        crate::resolve_compat_path(&self.song_dir, raw_path)
+    }
+}
 
 #[derive(Clone, Copy)]
 enum Operation {
@@ -16,8 +34,14 @@ enum Operation {
 
 pub(super) fn install(vm: &mut Vm, context: &crate::SongLuaCompileContext) -> Result<(), Error> {
     let globals = vm.get_global(b"_G")?;
-    let initialize =
-        vm.new_host_function_with_data(initialize, &[globals], context.song_dir.clone())?;
+    let initialize = vm.new_host_function_with_data(
+        initialize,
+        &[globals],
+        FileContext {
+            song_dir: context.song_dir.clone(),
+            theme_combo_font_directory: context.theme_combo_font_directory.clone(),
+        },
+    )?;
     vm.call(initialize, &[])?;
     rage::install(vm, &context.song_dir)?;
     let code = deadlib_lua::compile_named(
@@ -30,7 +54,7 @@ pub(super) fn install(vm: &mut Vm, context: &crate::SongLuaCompileContext) -> Re
 
 fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
     let globals = table(call, call.captures()[0])?;
-    let song_dir = call.function_data::<PathBuf>().unwrap().clone();
+    let context = call.function_data::<FileContext>().unwrap().clone();
     let fileman = object(call, |call, owner| {
         for (name, operation) in [
             ("GetDirListing", Operation::Listing),
@@ -51,7 +75,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             let function = call.new_host_function_with_data(
                 dispatch,
                 captures,
-                (operation, song_dir.clone()),
+                (operation, context.clone()),
             )?;
             set(owner, name, function, call)?;
         }
@@ -87,8 +111,8 @@ fn boolish(call: &HostCall<'_>, value: Value) -> bool {
 }
 
 fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (operation, song_dir) = call
-        .function_data::<(Operation, PathBuf)>()
+    let (operation, context) = call
+        .function_data::<(Operation, FileContext)>()
         .unwrap()
         .clone();
     let value = match operation {
@@ -98,8 +122,8 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
                     return Ok(());
                 };
                 let entries = crate::fileman_dir_listing(
-                    &song_dir,
-                    &path,
+                    &context.song_dir,
+                    &crate::file_path_string(&context.resolve(&path)),
                     boolish(call, arg(call, 1)),
                     boolish(call, arg(call, 2)),
                 )
@@ -113,11 +137,11 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Operation::Exists => Value::Boolean(
             text(call, arg(call, 0))
-                .is_some_and(|path| crate::resolve_compat_path(&song_dir, &path).exists()),
+                .is_some_and(|path| context.resolve(&path).exists()),
         ),
         Operation::Size => {
             let size = text(call, arg(call, 0))
-                .and_then(|path| crate::resolve_compat_path(&song_dir, &path).metadata().ok())
+                .and_then(|path| context.resolve(&path).metadata().ok())
                 .filter(std::fs::Metadata::is_file)
                 .map(|metadata| metadata.len().min(i64::MAX as u64) as i64)
                 .unwrap_or(0);

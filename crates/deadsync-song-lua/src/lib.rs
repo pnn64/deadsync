@@ -2487,6 +2487,9 @@ pub struct SongLuaCompileContext {
     /// compiling standalone actors without simfile foreground declarations.
     pub foreground_names: Vec<String>,
     pub song_dir: PathBuf,
+    /// Physical backing for the current theme's Fonts/_Combo Fonts FILEMAN queries.
+    /// Standalone hosts without installed theme resources leave this unset.
+    pub theme_combo_font_directory: Option<PathBuf>,
     /// Resolved artwork from the parsed song, including non-conventional filenames.
     pub song_banner_path: Option<PathBuf>,
     pub main_title: String,
@@ -2585,6 +2588,7 @@ impl SongLuaCompileContext {
             defer_initial_live_update: false,
             screen_loading: false,
             song_dir,
+            theme_combo_font_directory: None,
             song_banner_path: None,
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],

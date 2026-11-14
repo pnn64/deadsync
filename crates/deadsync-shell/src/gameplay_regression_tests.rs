@@ -739,6 +739,56 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn lua_songs_render_combo_numbers_in_baked_and_runtime_modes() {
+        std::thread::Builder::new()
+            .name("lua-combo-visibility".into())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+                    true, false, || {
+                    let metrics = space::Metrics::centered(640.0, 480.0);
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(640, 480);
+                    let dir = tempfile::tempdir().unwrap();
+                    let simfile = dir.path().join("song.ssc");
+                    fs::write(&simfile, "#TITLE:Lua combo regression;\n#BPMS:0=120;\n#FGCHANGES:0=default.lua=1=0=0=1;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n1000\n0100\n0010\n0001\n;\n").unwrap();
+                    let assets = fixture_assets();
+                    for live in [false, true] {
+                        for (hide_profile, hide_script) in [(false, false), (true, false), (false, true)] {
+                            fs::write(dir.path().join("default.lua"), if hide_script {
+                                "return Def.ActorFrame{OnCommand=function() SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetChild('Combo'):visible(false) end}"
+                            } else {
+                                "return Def.ActorFrame{}"
+                            }).unwrap();
+                            let profiles = std::array::from_fn(|_| profile_data::Profile {
+                                hide_combo: hide_profile,
+                                ..Default::default()
+                            });
+                            let mut state = build_test_state_with_lua_mode(&simfile,
+                                GameplayViewport::new(640.0, 480.0), GameplaySession::default(),
+                                profiles, "software", None, live);
+                            assert!(state.mods.song_lua_compile_succeeded);
+                            set_fixture_time(&mut state, 1.0);
+                            let mut actors = Vec::new();
+                            let mut text_cache = compose::TextLayoutCache::default();
+                            let mut scratch = compose::ComposeScratch::default();
+                            let without_combo = compose_fixture_frame(&mut state, &assets, &metrics,
+                                &mut actors, &mut text_cache, &mut scratch).ops.len();
+                            state.players_runtime.players[0].combo = 25;
+                            let with_combo = compose_fixture_frame(&mut state, &assets, &metrics,
+                                &mut actors, &mut text_cache, &mut scratch).ops.len();
+                            if hide_profile || hide_script {
+                                assert_eq!(with_combo, without_combo, "hidden combo: live={live}, profile={hide_profile}, script={hide_script}");
+                            } else {
+                                assert!(with_combo > without_combo, "Lua combo must emit digits: live={live}");
+                            }
+                        }
+                    }
+                });
+            }).unwrap().join().unwrap();
+    }
+
+    #[test]
     fn lua_submission_uses_the_current_compile_for_both_services() {
         std::thread::Builder::new()
             .name("lua-submission-eligibility".into())
