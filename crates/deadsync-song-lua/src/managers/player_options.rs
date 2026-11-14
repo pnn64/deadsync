@@ -280,8 +280,8 @@ fn index(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.push(method)
 }
 
-fn nested(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<TableId, Error> {
-    match raw(call, owner, key)? {
+fn nested(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<TableId, Error> {
+    match call.raw_table_get_static(owner, key.as_bytes())? {
         Value::Nil => {
             let value = call.try_new_table()?;
             set(owner, key, value, call)?;
@@ -315,6 +315,26 @@ fn raw_float(
 ) -> Result<f32, Error> {
     let value = raw(call, owner, key)?;
     typed_float(call, value, default)
+}
+// `raw_float` for a field a literal names.
+fn raw_float_static(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: &'static str,
+    default: f32,
+) -> Result<f32, Error> {
+    let value = call.raw_table_get_static(owner, key.as_bytes())?;
+    typed_float(call, value, default)
+}
+// A raw write to a field a literal names.
+fn set_static(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<(), Error> {
+    let key = call.intern_static(key.as_bytes())?;
+    call.raw_table_set(owner, key, value)
 }
 fn get_float(
     call: &mut HostCall<'_>,

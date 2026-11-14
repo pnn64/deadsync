@@ -340,36 +340,37 @@ pub(super) fn advance(
                 ("__songlua_speedmod_cmod", "cmod", 200.0),
                 ("__songlua_speedmod_mmod", "mmod", 0.0),
             ] {
-                let value = raw_float(call, owners[3], field, default)?;
-                let target = raw_float(call, owners[2], field, default)?;
-                let speed = raw_float(call, speeds, key, 1.0)?;
+                let value = raw_float_static(call, owners[3], field, default)?;
+                let target = raw_float_static(call, owners[2], field, default)?;
+                let speed = raw_float_static(call, speeds, key, 1.0)?;
                 let amount = if key == "cmod" {
                     delta * speed * 150.0
                 } else {
                     rate * delta * speed
                 };
                 let value = super::super::song_options::approach(call, value, target, amount)?;
-                set(owners[3], field, value, call)?;
+                set_static(call, owners[3], field, Value::Number(f64::from(value)))?;
             }
-            let mode = if raw_float(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
+            let mode = if raw_float_static(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
                 "cmod"
-            } else if raw_float(call, owners[3], "__songlua_speedmod_mmod", 0.0)? != 0.0 {
+            } else if raw_float_static(call, owners[3], "__songlua_speedmod_mmod", 0.0)? != 0.0 {
                 "mmod"
             } else {
                 "xmod"
             };
-            set(owners[3], "__songlua_speedmod_active", mode, call)?;
+            let mode = call.intern_static(mode.as_bytes())?;
+            set_static(call, owners[3], "__songlua_speedmod_active", mode)?;
             for key in [SKIN, SKIN_OVERRIDE] {
-                let value = raw(call, owners[2], key)?;
-                set(owners[3], key, value, call)?;
+                let value = call.raw_table_get_static(owners[2], key.as_bytes())?;
+                set_static(call, owners[3], key, value)?;
             }
-            let windows = raw(call, owners[2], WINDOWS)?;
+            let windows = call.raw_table_get_static(owners[2], WINDOWS.as_bytes())?;
             let windows = if let Value::Table(windows) = windows {
                 Value::Table(copy(call, windows)?)
             } else {
                 windows
             };
-            set(owners[3], WINDOWS, windows, call)
+            set_static(call, owners[3], WINDOWS, windows)
         },
     )
 }

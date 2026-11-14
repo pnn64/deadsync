@@ -171,12 +171,14 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
             }
             *binding.clock.lock().expect("option clock") = time;
             song_options::advance(call, songs, deltas[0], call.captures()[2])?;
-            let prefs = get(call, call.captures()[1], "PREFSMAN")?;
+            let name = call.intern_static(b"PREFSMAN")?;
+            let prefs = call.table_get(call.captures()[1], name)?;
             table(call, prefs)?;
             let rate_tweens = call.with_roots(&[prefs], |call| {
-                let method = get(call, prefs, "GetPreference")?;
+                let name = call.intern_static(b"GetPreference")?;
+                let method = call.table_get(prefs, name)?;
                 let method = function(call, method)?;
-                let key = call.try_intern(b"RateModsAffectFGChanges")?;
+                let key = call.intern_static(b"RateModsAffectFGChanges")?;
                 Ok(truthy(
                     call.call(method, &[prefs, key])?
                         .first()

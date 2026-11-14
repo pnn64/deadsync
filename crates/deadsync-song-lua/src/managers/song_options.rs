@@ -429,16 +429,23 @@ pub(super) fn advance(
     if !delta.is_finite() || delta < 0.0 {
         return Err(call.error(b"invalid native option frame delta"));
     }
+    // This runs every frame: its names are literals, found by address.
+    let float = |call: &mut HostCall<'_>, owner, key: &'static str| {
+        let value = call.raw_table_get_static(owner, key.as_bytes())?;
+        Ok::<_, Error>(number(call, value, tonumber)? as f32)
+    };
     for (field, speed) in FLOATS {
-        let value = raw_float(call, levels[3], field, tonumber)?;
-        let target = raw_float(call, levels[2], field, tonumber)?;
-        let amount = delta * raw_float(call, levels[2], speed, tonumber)?;
+        let value = float(call, levels[3], field)?;
+        let target = float(call, levels[2], field)?;
+        let amount = delta * float(call, levels[2], speed)?;
         let value = approach(call, value, target, amount)?;
-        set(levels[3], field, value, call)?;
+        let field = call.intern_static(field.as_bytes())?;
+        call.raw_table_set(levels[3], field, Value::Number(f64::from(value)))?;
     }
     for key in SWITCHES {
-        let value = raw(call, levels[2], key)?;
-        set(levels[3], key, value, call)?;
+        let value = call.raw_table_get_static(levels[2], key.as_bytes())?;
+        let key = call.intern_static(key.as_bytes())?;
+        call.raw_table_set(levels[3], key, value)?;
     }
     Ok(())
 }
