@@ -192,6 +192,25 @@ impl Known {
     }
 }
 
+// The table is the definition: debug builds check every remembered answer
+// against it.
+#[inline]
+fn check(call: &mut HostCall<'_>, table: TableId, field: Field, value: Value) -> Result<(), Error> {
+    if cfg!(debug_assertions) {
+        let held = call.raw_table_get_static(table, field.name().as_bytes())?;
+        let same = match (value, held) {
+            (Value::Number(a), Value::Number(b)) => a.to_bits() == b.to_bits(),
+            (a, b) => a == b,
+        };
+        assert!(
+            same,
+            "stale {}: {value:?}, the table holds {held:?}",
+            field.name()
+        );
+    }
+    Ok(())
+}
+
 /// `table[field]` without metamethods. A table that is an owned actor answers
 /// from what it is known to hold; any other table is read.
 pub(super) fn get(call: &mut HostCall<'_>, table: TableId, field: Field) -> Result<Value, Error> {
@@ -200,20 +219,7 @@ pub(super) fn get(call: &mut HostCall<'_>, table: TableId, field: Field) -> Resu
         return call.raw_table_get_static(table, field.name().as_bytes());
     };
     if let Some(value) = actor.known.at(table, version).find(field) {
-        // The table is the definition: check every remembered answer against it.
-        #[cfg(debug_assertions)]
-        {
-            let held = call.raw_table_get_static(table, field.name().as_bytes())?;
-            let same = match (value, held) {
-                (Value::Number(a), Value::Number(b)) => a.to_bits() == b.to_bits(),
-                (a, b) => a == b,
-            };
-            assert!(
-                same,
-                "stale {}: {value:?}, the table holds {held:?}",
-                field.name()
-            );
-        }
+        check(call, table, field, value)?;
         return Ok(value);
     }
     let value = call.raw_table_get_static(table, field.name().as_bytes())?;
@@ -222,6 +228,81 @@ pub(super) fn get(call: &mut HostCall<'_>, table: TableId, field: Field) -> Resu
         actor.known.at(table, version).record(field, value);
     }
     Ok(value)
+}
+
+/// `get` for several fields of one table. The fields are read together, so
+/// nothing may write to the table between the reads this replaces.
+pub(super) fn get_all<const N: usize>(
+    call: &mut HostCall<'_>,
+    table: TableId,
+    fields: [Field; N],
+) -> Result<[Value; N], Error> {
+    let version = call.raw_fields_version(table)?;
+    let mut values = [Value::Nil; N];
+    if let Some(actor) = call.store().actors.get_mut(&table) {
+        let known = actor.known.at(table, version);
+        let mut remembered = true;
+        for (value, field) in values.iter_mut().zip(fields) {
+            match known.find(field) {
+                Some(found) => *value = found,
+                None => remembered = false,
+            }
+        }
+        if remembered {
+            for (value, field) in values.iter().zip(fields) {
+                check(call, table, field, *value)?;
+            }
+            return Ok(values);
+        }
+    }
+    for (value, field) in values.iter_mut().zip(fields) {
+        *value = get(call, table, field)?;
+    }
+    Ok(values)
+}
+
+/// Many reads of one table's fields. What the actor knows of its table is
+/// held here meanwhile, so each read is `get` without finding the actor
+/// again; `finish` hands it back.
+pub(super) struct Reader {
+    table: TableId,
+    // `None` for a table that is not an owned actor.
+    known: Option<Known>,
+}
+impl Reader {
+    pub(super) fn new(call: &mut HostCall<'_>, table: TableId) -> Self {
+        let known = call
+            .store()
+            .actors
+            .get_mut(&table)
+            .map(|actor| std::mem::take(&mut actor.known));
+        Self { table, known }
+    }
+    #[inline]
+    pub(super) fn get(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
+        let Some(known) = &mut self.known else {
+            return call.raw_table_get_static(self.table, field.name().as_bytes());
+        };
+        // Asked again for every read: a write in between is seen like any other.
+        let version = call.raw_fields_version(self.table)?;
+        let known = known.at(self.table, version);
+        if let Some(value) = known.find(field) {
+            check(call, self.table, field, value)?;
+            return Ok(value);
+        }
+        let value = call.raw_table_get_static(self.table, field.name().as_bytes())?;
+        known.record(field, value);
+        Ok(value)
+    }
+    /// Give the actor back what it knows. Without this the actor merely
+    /// reads its table again.
+    pub(super) fn finish(self, call: &mut HostCall<'_>) {
+        if let Some(known) = self.known
+            && let Some(actor) = call.store().actors.get_mut(&self.table)
+        {
+            actor.known = known;
+        }
+    }
 }
 
 #[cfg(test)]

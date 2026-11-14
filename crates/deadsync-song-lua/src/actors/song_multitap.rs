@@ -185,20 +185,28 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                             DeltaSource::Wrappers => deltas[p].wrappers,
                             DeltaSource::Columns => deltas[p].input,
                         });
-                    if truthy(fields::get(call, actor, Field::LIVE_INACTIVE)?) {
+                    // Nothing writes to the actor between these reads.
+                    let [inactive, own, hibernating, left] = fields::get_all(
+                        call,
+                        actor,
+                        [
+                            Field::LIVE_INACTIVE,
+                            Field::LIVE_DELTA,
+                            Field::THEME_HIBERNATING,
+                            Field::HIBERNATE_SECONDS,
+                        ],
+                    )?;
+                    if truthy(inactive) {
                         incoming = None;
                         span = None;
-                    } else {
-                        let own = fields::get(call, actor, Field::LIVE_DELTA)?;
-                        if own != Value::Nil {
-                            let own = sprites::number(call, own)?;
-                            incoming = Some(own);
-                            span = Some(own as f32);
-                        }
+                    } else if own != Value::Nil {
+                        let own = sprites::number(call, own)?;
+                        incoming = Some(own);
+                        span = Some(own as f32);
                     }
                     let input = (incoming, span);
                     let awake = incoming
-                        .map(|d| hibernate(call, actor, d))
+                        .map(|d| hibernate(call, actor, d, hibernating, left))
                         .transpose()?
                         .flatten();
                     let span = match (incoming, awake, span) {
@@ -298,11 +306,18 @@ fn phase(store: &mut Store, order: usize, delta: f32) {
         clock.enter(order, delta);
     }
 }
-fn hibernate(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<Option<f64>, Error> {
-    if truthy(fields::get(call, actor, Field::THEME_HIBERNATING)?) {
+// `hibernating` and `left` are the actor's theme hibernation flag and its
+// remaining hibernation seconds.
+fn hibernate(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    delta: f64,
+    hibernating: Value,
+    left: Value,
+) -> Result<Option<f64>, Error> {
+    if truthy(hibernating) {
         return Ok(None);
     }
-    let left = fields::get(call, actor, Field::HIBERNATE_SECONDS)?;
     let left = if left == Value::Nil {
         call.store().actors.get(&actor).map_or(0., |a| a.hibernate)
     } else {
@@ -339,16 +354,16 @@ fn recurring_update(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Resu
     Ok(())
 }
 fn callback(call: &mut HostCall<'_>, actor: TableId, delta: f64) -> Result<(), Error> {
-    let pending = truthy(fields::get(call, actor, Field::UPDATE_PENDING)?);
-    let function = fields::get(
+    let [pending, previous, current] = fields::get_all(
         call,
         actor,
-        if pending {
-            Field::UPDATE_PREVIOUS
-        } else {
-            Field::UPDATE_FUNCTION
-        },
+        [
+            Field::UPDATE_PENDING,
+            Field::UPDATE_PREVIOUS,
+            Field::UPDATE_FUNCTION,
+        ],
     )?;
+    let function = if truthy(pending) { previous } else { current };
     if function == Value::Nil {
         return Ok(());
     }
