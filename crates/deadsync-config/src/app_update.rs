@@ -142,6 +142,10 @@ pub fn set_input_debounce_seconds(cfg: &mut Config, seconds: f32) -> bool {
     )
 }
 
+pub fn set_axis_fix(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.axis_fix, enabled)
+}
+
 pub fn set_arcade_options_navigation(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.arcade_options_navigation, enabled)
 }

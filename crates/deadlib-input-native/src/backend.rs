@@ -2,6 +2,8 @@ use std::time::Instant;
 
 use deadlib_platform::input::{PadDir, PadEvent, PadId};
 
+#[cfg(any(target_os = "linux", test))]
+mod axis_fix;
 #[cfg(any(target_os = "linux", target_os = "freebsd", test))]
 mod deferred_sample;
 #[cfg(target_os = "freebsd")]
@@ -125,6 +127,7 @@ pub struct BackendHost {
     instant_nanos: fn(Instant) -> u64,
     qpc_ticks_to_nanos: fn(u64) -> Option<u64>,
     boost_input_thread: fn() -> InputThreadPolicy,
+    axis_fix: bool,
 }
 
 impl BackendHost {
@@ -144,7 +147,23 @@ impl BackendHost {
             instant_nanos,
             qpc_ticks_to_nanos,
             boost_input_thread,
+            axis_fix: false,
         }
+    }
+
+    /// Enable the Linux evdev Axis Fix workaround for this backend run.
+    /// The setting is captured at startup; changing it requires a restart.
+    #[inline(always)]
+    #[must_use]
+    pub const fn with_axis_fix(mut self, enabled: bool) -> Self {
+        self.axis_fix = enabled;
+        self
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn axis_fix(self) -> bool {
+        self.axis_fix
     }
 
     #[inline(always)]
@@ -374,6 +393,16 @@ pub fn emit_hat_axis_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn axis_fix_is_an_explicit_startup_setting() {
+        let host = backend_host(|_, _| 0, |_, _| false);
+        assert!(!host.axis_fix());
+        let enabled = host.with_axis_fix(true);
+        assert!(enabled.axis_fix());
+        assert!(!host.axis_fix());
+        assert!(!enabled.with_axis_fix(false).axis_fix());
+    }
 
     #[test]
     fn host_time_sample_uses_authoritative_host_clock() {

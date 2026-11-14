@@ -411,6 +411,7 @@ const fn apply_runtime_opts(
     cfg.song_parsing_threads = loaded.song_parsing_threads;
     cfg.smooth_histogram = loaded.smooth_histogram;
     cfg.shade_scatterplot_judgments = loaded.shade_scatterplot_judgments;
+    cfg.axis_fix = loaded.axis_fix;
     cfg.arcade_options_navigation = loaded.arcade_options_navigation;
     cfg.delayed_back = loaded.delayed_back;
     cfg.three_key_navigation = loaded.three_key_navigation;

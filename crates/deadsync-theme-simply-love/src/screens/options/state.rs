@@ -766,6 +766,13 @@ pub fn init(view: OptionsInitView) -> State {
         SubRowId::GamepadBackend,
         windows_backend_choice_index(cfg.windows_gamepad_backend),
     );
+    #[cfg(target_os = "linux")]
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::AxisFix,
+        usize::from(cfg.axis_fix),
+    );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::InputBackend].choice_indices,
         INPUT_BACKEND_OPTIONS_ROWS,

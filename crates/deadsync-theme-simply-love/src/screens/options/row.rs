@@ -76,6 +76,8 @@ pub enum SubRowId {
     InputOptions,
     // Input Backend Options
     GamepadBackend,
+    #[cfg(target_os = "linux")]
+    AxisFix,
     SmxInput,
     UseFsrs,
     DebugFsrDump,

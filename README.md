@@ -295,6 +295,12 @@ P1_Back=PadCode[0x00030031]@0
 
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
+#### Axis Fix (Linux)
+
+For dance pad adapters that report directional buttons as X/Y axes, enable **Axis Fix** in **Input Options**, then restart DeadSync and configure the directions through the mapping screen. This uses ITGmania's Axis Fix interpretation, including simultaneous Left+Right and Up+Down presses on compatible adapters.
+
+The option defaults to **Off**. It can also be set with `AxisFix=1` in the `[Options]` section of `deadsync.ini`; use `AxisFix=0` to disable it. Leave it off for ordinary analog controllers.
+
 #### Debug shortcuts
 
 | Key | Action |

@@ -4,7 +4,7 @@ use crate::bools::{
 use crate::coin::{CoinOptions, load_coin_options};
 use crate::defaults::{
     DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ALLOW_SONG_DELETION, DEFAULT_ARCADE_OPTIONS_NAVIGATION,
-    DEFAULT_ARROWCLOUD_EVENT_BOARDS,
+    DEFAULT_ARROWCLOUD_EVENT_BOARDS, DEFAULT_AXIS_FIX,
     DEFAULT_GROOVESTATS_SCOREBOX_EVENTS, DEFAULT_GROOVESTATS_SCOREBOX_EX,
     DEFAULT_GROOVESTATS_SCOREBOX_ITG,
     DEFAULT_AUTO_DOWNLOAD_UNLOCKS, DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
@@ -1715,6 +1715,7 @@ pub struct RuntimeOptions {
     pub song_parsing_threads: u8,
     pub smooth_histogram: bool,
     pub shade_scatterplot_judgments: bool,
+    pub axis_fix: bool,
     pub arcade_options_navigation: bool,
     pub delayed_back: bool,
     pub three_key_navigation: bool,
@@ -1735,6 +1736,7 @@ impl Default for RuntimeOptions {
             song_parsing_threads: DEFAULT_SONG_PARSING_THREADS,
             smooth_histogram: DEFAULT_SMOOTH_HISTOGRAM,
             shade_scatterplot_judgments: DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
+            axis_fix: DEFAULT_AXIS_FIX,
             arcade_options_navigation: DEFAULT_ARCADE_OPTIONS_NAVIGATION,
             delayed_back: DEFAULT_DELAYED_BACK,
             three_key_navigation: DEFAULT_THREE_KEY_NAVIGATION,
@@ -1768,6 +1770,10 @@ pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> Runtim
             conf.get("Options", "ShadeScatterplotJudgments"),
             default.shade_scatterplot_judgments,
         ),
+        axis_fix: conf
+            .get("Options", "AxisFix")
+            .and_then(parse_loose_bool_str)
+            .unwrap_or(default.axis_fix),
         arcade_options_navigation: conf
             .get("Options", "ArcadeOptionsNavigation")
             .and_then(parse_loose_bool_str)
@@ -1850,6 +1856,7 @@ pub fn push_runtime_fastload_option_lines(content: &mut String, options: Runtime
 }
 
 pub fn push_runtime_navigation_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(content, "AxisFix", options.axis_fix);
     push_bool(
         content,
         "ArcadeOptionsNavigation",
@@ -2887,6 +2894,7 @@ mod tests {
             song_parsing_threads: 0,
             smooth_histogram: true,
             shade_scatterplot_judgments: false,
+            axis_fix: false,
             arcade_options_navigation: false,
             delayed_back: true,
             three_key_navigation: false,
@@ -3547,6 +3555,7 @@ mod tests {
             SongParsingThreads=4
             SmoothHistogram=0
             ShadeScatterplotJudgments=1
+            AxisFix=1
             ArcadeOptionsNavigation=1
             DelayedBack=0
             ThreeKeyNavigation=1
@@ -3567,6 +3576,7 @@ mod tests {
         assert_eq!(loaded.song_parsing_threads, 4);
         assert!(!loaded.smooth_histogram);
         assert!(loaded.shade_scatterplot_judgments);
+        assert!(loaded.axis_fix);
         assert!(loaded.arcade_options_navigation);
         assert!(!loaded.delayed_back);
         assert!(loaded.three_key_navigation);
@@ -3594,6 +3604,7 @@ mod tests {
             SongParsingThreads=many
             SmoothHistogram=bad
             ShadeScatterplotJudgments=bad
+            AxisFix=bad
             ArcadeOptionsNavigation=bad
             DelayedBack=bad
             ThreeKeyNavigation=bad
@@ -3974,6 +3985,7 @@ mod tests {
             song_parsing_threads: 6,
             smooth_histogram: true,
             shade_scatterplot_judgments: false,
+            axis_fix: true,
             arcade_options_navigation: true,
             delayed_back: false,
             three_key_navigation: true,
@@ -3999,6 +4011,7 @@ mod tests {
                 "CacheSongs=0\n",
                 "AllowSongDeletion=1\n",
                 "FastLoad=1\n",
+                "AxisFix=1\n",
                 "ArcadeOptionsNavigation=1\n",
                 "DelayedBack=0\n",
                 "ThreeKeyNavigation=1\n",

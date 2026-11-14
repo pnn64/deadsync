@@ -491,6 +491,12 @@ pub(super) fn apply_submenu_choice_delta(
                 ));
             }
         }
+        #[cfg(target_os = "linux")]
+        if row.id == SubRowId::AxisFix {
+            action = Some(options_config_effect(
+                crate::SimplyLoveOptionsConfigRequest::AxisFix(new_index == 1),
+            ));
+        }
         if row.id == SubRowId::UseFsrs {
             action = Some(options_config_effect(
                 crate::SimplyLoveOptionsConfigRequest::UseFsrs(yes_no_from_choice(new_index)),

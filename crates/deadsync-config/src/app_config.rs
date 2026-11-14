@@ -375,6 +375,8 @@ pub struct Config {
     pub auto_screenshot_eval: u8,
     /// `ITGmania` `InputFilter` parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// Enable the legacy dance-pad axis workaround (`ITGmania` Axis Fix).
+    pub axis_fix: bool,
     /// `StepMania` parity: option menus use Start-to-advance arcade navigation.
     pub arcade_options_navigation: bool,
     /// ITGmania/Simply Love parity: use left/right/start style menu navigation.
@@ -598,6 +600,7 @@ impl Default for Config {
             shade_scatterplot_judgments: runtime.shade_scatterplot_judgments,
             auto_screenshot_eval: select_music.auto_screenshot_eval,
             input_debounce_seconds: DEFAULT_INPUT_DEBOUNCE_SECONDS,
+            axis_fix: runtime.axis_fix,
             arcade_options_navigation: runtime.arcade_options_navigation,
             three_key_navigation: runtime.three_key_navigation,
             use_fsrs: runtime.use_fsrs,

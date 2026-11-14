@@ -25,6 +25,7 @@ fn native_input_host() -> deadlib_input_native::BackendHost {
             )
         },
     )
+    .with_axis_fix(deadsync_config::runtime::get().axis_fix)
 }
 
 /// Launch input workers and connect their events to the application loop.

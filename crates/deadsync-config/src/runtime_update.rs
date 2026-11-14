@@ -119,6 +119,7 @@ update_config_fn!(pub fn update_cache_songs(enabled: bool) => set_cache_songs);
 update_config_fn!(pub fn update_fastload(enabled: bool) => set_fastload);
 update_config_fn!(pub fn update_allow_song_deletion(enabled: bool) => set_allow_song_deletion);
 
+update_config_fn!(pub fn update_axis_fix(enabled: bool) => set_axis_fix);
 update_config_fn!(pub fn update_arcade_options_navigation(enabled: bool) => set_arcade_options_navigation);
 update_config_fn!(pub fn update_coin_mode(mode: CoinMode) => set_coin_mode);
 update_config_fn!(pub fn update_coins_per_credit(coins: u8) => set_coins_per_credit);

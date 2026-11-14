@@ -1,7 +1,8 @@
 use super::{
     BackendHost, GpSystemEvent, PadBackend, PadCode, PadEvent, PadId, PadOrderBackend, ReceiptTime,
-    emit_hat_axis_edges, uuid_from_bytes,
+    uuid_from_bytes,
 };
+use crate::backend::axis_fix::{AxisRange, DirectionState};
 use crate::backend::poll_registration;
 use deadlib_platform::input::RawKeyboardEvent;
 use log::{debug, warn};
@@ -66,6 +67,7 @@ const IOC_TYPESHIFT: u32 = IOC_NRSHIFT + IOC_NRBITS;
 const IOC_SIZESHIFT: u32 = IOC_TYPESHIFT + IOC_TYPEBITS;
 const IOC_DIRSHIFT: u32 = IOC_SIZESHIFT + IOC_SIZEBITS;
 const IOC_WRITE: u32 = 1;
+const IOC_READ: u32 = 2;
 
 type UdevCtxHandle = c_void;
 type UdevEnumHandle = c_void;
@@ -99,6 +101,16 @@ struct InputEventRaw {
     type_: u16,
     code: u16,
     value: i32,
+}
+
+#[repr(C)]
+struct InputAbsInfo {
+    value: i32,
+    minimum: i32,
+    maximum: i32,
+    fuzz: i32,
+    flat: i32,
+    resolution: i32,
 }
 
 // The kernel writes fixed-size records, so a width mismatch here desynchronises
@@ -165,7 +177,8 @@ struct Dev {
     name: String,
     path: String,
     file: std::fs::File,
-    dir: [bool; 4],
+    directions: DirectionState,
+    axis_ranges: [Option<AxisRange>; 2],
 }
 
 struct KeyDev {
@@ -222,6 +235,75 @@ const fn iow(type_: u8, nr: u8, size: usize) -> libc::c_ulong {
 }
 
 const EVIOCSCLOCKID: libc::c_ulong = iow(b'E', 0xa0, size_of::<libc::c_int>());
+
+const fn eviocgabs(axis: u16) -> libc::c_ulong {
+    ((IOC_READ << IOC_DIRSHIFT)
+        | ((b'E' as u32) << IOC_TYPESHIFT)
+        | ((0x40 + axis as u32) << IOC_NRSHIFT)
+        | ((size_of::<InputAbsInfo>() as u32) << IOC_SIZESHIFT)) as libc::c_ulong
+}
+
+fn axis_range(file: &std::fs::File, axis: u16) -> Option<AxisRange> {
+    let mut info = MaybeUninit::<InputAbsInfo>::uninit();
+    // SAFETY: EVIOCGABS writes one input_absinfo into the correctly sized output
+    // buffer. A failed ioctl leaves it unread and disables this axis workaround.
+    if unsafe { libc::ioctl(file.as_raw_fd(), eviocgabs(axis), info.as_mut_ptr()) } < 0 {
+        return None;
+    }
+    // SAFETY: The successful EVIOCGABS initialized the complete output struct.
+    let info = unsafe { info.assume_init() };
+    AxisRange::new(info.minimum, info.maximum)
+}
+
+fn emit_abs_event(
+    dev: &mut Dev,
+    code: u16,
+    value: i32,
+    timestamp: std::time::Instant,
+    host_nanos: u64,
+    emit_pad: &mut impl FnMut(PadEvent),
+) {
+    emit_pad(PadEvent::RawAxis {
+        id: dev.id,
+        timestamp,
+        host_nanos,
+        code: PadCode(code_u32(EV_ABS, code)),
+        uuid: dev.uuid,
+        value: value as f32,
+    });
+
+    match code {
+        ABS_HAT0X | ABS_HAT0Y => dev.directions.set_hat(code == ABS_HAT0X, value),
+        ABS_X | ABS_Y => {
+            let Some(range) = dev.axis_ranges[usize::from(code)] else {
+                return;
+            };
+            dev.directions
+                .set_axis(code == ABS_X, range.directions(value));
+        }
+        _ => return,
+    }
+    dev.directions.emit(emit_pad, dev.id, timestamp, host_nanos);
+}
+
+fn disconnect_dev(
+    mut dev: Dev,
+    emit_pad: &mut impl FnMut(PadEvent),
+    emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
+) {
+    if dev.directions.is_pressed() {
+        let (timestamp, host_nanos) = host.sample_time();
+        dev.directions
+            .release(emit_pad, dev.id, timestamp, host_nanos);
+    }
+    emit_sys(GpSystemEvent::Disconnected {
+        name: dev.name,
+        id: dev.id,
+        backend: PadBackend::LinuxEvdev,
+        initial: false,
+    });
+}
 
 enum Discovery {
     Udev(UdevState),
@@ -868,16 +950,13 @@ fn remove_dev_by_path(
     path: &str,
     devs: &mut Vec<Dev>,
     key_devs: &mut Vec<KeyDev>,
+    emit_pad: &mut impl FnMut(PadEvent),
     emit_sys: &mut impl FnMut(GpSystemEvent),
+    host: BackendHost,
 ) {
     if let Some(idx) = devs.iter().position(|dev| dev.path == path) {
         let dev = devs.swap_remove(idx);
-        emit_sys(GpSystemEvent::Disconnected {
-            name: dev.name,
-            id: dev.id,
-            backend: PadBackend::LinuxEvdev,
-            initial: false,
-        });
+        disconnect_dev(dev, emit_pad, emit_sys, host);
         return;
     }
     if let Some(idx) = key_devs.iter().position(|dev| dev.path == path) {
@@ -890,6 +969,7 @@ fn open_dev(
     spec: DevSpec,
     id: PadId,
     initial: bool,
+    axis_fix: bool,
     emit_sys: &mut impl FnMut(GpSystemEvent),
 ) -> Option<Dev> {
     let file = match std::fs::File::open(&spec.path) {
@@ -903,6 +983,11 @@ fn open_dev(
         }
     };
     configure_evdev_clock(&file);
+    let axis_ranges = if axis_fix {
+        [axis_range(&file, ABS_X), axis_range(&file, ABS_Y)]
+    } else {
+        [None; 2]
+    };
     emit_sys(GpSystemEvent::Connected {
         name: spec.name.clone(),
         id,
@@ -917,7 +1002,8 @@ fn open_dev(
         name: spec.name,
         path: spec.path,
         file,
-        dir: [false; 4],
+        directions: DirectionState::default(),
+        axis_ranges,
     })
 }
 
@@ -977,7 +1063,7 @@ fn add_dev_if_new(
     // Stable, persisted slot so this pad keeps the same PadId across launches.
     let id =
         existing_id.unwrap_or_else(|| host.pad_id_for_uuid(PadOrderBackend::LinuxEvdev, spec.uuid));
-    if let Some(dev) = open_dev(spec, id, initial, emit_sys) {
+    if let Some(dev) = open_dev(spec, id, initial, host.axis_fix(), emit_sys) {
         if existing_id.is_none() {
             id_by_uuid.insert(dev.uuid, id);
         }
@@ -1005,6 +1091,7 @@ fn refresh_fallback(
     id_by_uuid: &mut HashMap<[u8; 16], PadId>,
     scratch: &mut FallbackScratch,
     scan_keyboards: bool,
+    emit_pad: &mut impl FnMut(PadEvent),
     emit_sys: &mut impl FnMut(GpSystemEvent),
     host: BackendHost,
 ) {
@@ -1015,12 +1102,7 @@ fn refresh_fallback(
             continue;
         }
         let dev = devs.swap_remove(idx);
-        emit_sys(GpSystemEvent::Disconnected {
-            name: dev.name,
-            id: dev.id,
-            backend: PadBackend::LinuxEvdev,
-            initial: false,
-        });
+        disconnect_dev(dev, emit_pad, emit_sys, host);
     }
     for idx in (0..key_devs.len()).rev() {
         if scratch.key_seen[idx] {
@@ -1248,31 +1330,13 @@ fn run_inner(
                 let (event_timestamp, event_host_nanos) =
                     receipt.event_time(host, i64::from(ev.tv_sec), i64::from(ev.tv_usec));
 
-                emit_pad(PadEvent::RawAxis {
-                    id: dev.id,
-                    timestamp: event_timestamp,
-                    host_nanos: event_host_nanos,
-                    code: PadCode(code_u32(ev.type_, ev.code)),
-                    uuid: dev.uuid,
-                    value: ev.value as f32,
-                });
-
-                let horizontal = if ev.code == ABS_HAT0X {
-                    true
-                } else if ev.code == ABS_HAT0Y {
-                    false
-                } else {
-                    continue;
-                };
-
-                emit_hat_axis_edges(
-                    &mut emit_pad,
-                    dev.id,
-                    &mut dev.dir,
+                emit_abs_event(
+                    dev,
+                    ev.code,
+                    ev.value,
                     event_timestamp,
                     event_host_nanos,
-                    horizontal,
-                    ev.value,
+                    &mut emit_pad,
                 );
             }
         }
@@ -1336,12 +1400,7 @@ fn run_inner(
         // Polling appends each device index at most once, in ascending order.
         for &idx in remove.iter().rev() {
             let dev = devs.swap_remove(idx);
-            emit_sys(GpSystemEvent::Disconnected {
-                name: dev.name,
-                id: dev.id,
-                backend: PadBackend::LinuxEvdev,
-                initial: false,
-            });
+            disconnect_dev(dev, &mut emit_pad, &mut emit_sys, host);
         }
         // Ordinary input does not change keyboard presence.
         for &idx in key_remove.iter().rev() {
@@ -1361,7 +1420,14 @@ fn run_inner(
                     DevClass::Keyboard => {}
                 },
                 HotplugEvent::Remove(path) => {
-                    remove_dev_by_path(&path, &mut devs, &mut key_devs, &mut emit_sys);
+                    remove_dev_by_path(
+                        &path,
+                        &mut devs,
+                        &mut key_devs,
+                        &mut emit_pad,
+                        &mut emit_sys,
+                        host,
+                    );
                 }
             }
         }
@@ -1372,6 +1438,7 @@ fn run_inner(
                 &mut id_by_uuid,
                 &mut fallback,
                 scan_keyboards,
+                &mut emit_pad,
                 &mut emit_sys,
                 host,
             );
@@ -1395,6 +1462,204 @@ fn run_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_platform::input::PadDir;
+    use std::time::Instant;
+
+    fn test_host() -> BackendHost {
+        BackendHost::new(
+            |_, _| 0,
+            |_, _| false,
+            || 42,
+            |_| 0,
+            |_| None,
+            crate::backend::InputThreadPolicy::none,
+        )
+    }
+
+    fn test_dev(axis_fix: bool) -> Dev {
+        Dev {
+            id: PadId(7),
+            uuid: [8; 16],
+            name: "PSX adapter".to_owned(),
+            path: "/dev/null".to_owned(),
+            file: std::fs::File::open("/dev/null").unwrap(),
+            directions: DirectionState::default(),
+            axis_ranges: if axis_fix {
+                [AxisRange::new(0, 255); 2]
+            } else {
+                [None; 2]
+            },
+        }
+    }
+
+    #[test]
+    fn axis_fix_off_preserves_raw_axis_and_existing_hats() {
+        let mut dev = test_dev(false);
+        let timestamp = Instant::now();
+        let mut events = Vec::new();
+        for (code, value) in [(ABS_X, 0), (ABS_Y, 255), (ABS_HAT0X, -1)] {
+            emit_abs_event(&mut dev, code, value, timestamp, 123, &mut |event| {
+                events.push(event);
+            });
+        }
+        assert_eq!(events.len(), 4);
+        for (event, expected_code, expected_value) in [
+            (&events[0], ABS_X, 0.0),
+            (&events[1], ABS_Y, 255.0),
+            (&events[2], ABS_HAT0X, -1.0),
+        ] {
+            assert!(matches!(
+                event,
+                PadEvent::RawAxis { id, timestamp: at, host_nanos: 123, code, uuid, value }
+                    if *id == PadId(7) && *at == timestamp && *uuid == [8; 16]
+                        && *code == PadCode(code_u32(EV_ABS, expected_code))
+                        && *value == expected_value
+            ));
+        }
+        assert!(matches!(
+            events[3],
+            PadEvent::Dir { id: PadId(7), timestamp: at, host_nanos: 123, dir: PadDir::Left, pressed: true }
+                if at == timestamp
+        ));
+    }
+
+    #[test]
+    fn axis_fix_routes_full_opposite_sequence_with_raw_identity_and_time() {
+        let mut dev = test_dev(true);
+        let timestamp = Instant::now();
+        let mut raw = Vec::new();
+        let mut edges = Vec::new();
+        for (code, value) in [
+            (ABS_X, 0),
+            (ABS_X, 128),
+            (ABS_X, 255),
+            (ABS_X, 127),
+            (ABS_Y, 128),
+            (ABS_RX, 128),
+        ] {
+            emit_abs_event(
+                &mut dev,
+                code,
+                value,
+                timestamp,
+                123,
+                &mut |event| match event {
+                    PadEvent::RawAxis {
+                        id,
+                        timestamp: at,
+                        host_nanos,
+                        code,
+                        uuid,
+                        value,
+                    } => {
+                        assert_eq!(
+                            (id, at, host_nanos, uuid),
+                            (PadId(7), timestamp, 123, [8; 16])
+                        );
+                        raw.push((code, value));
+                    }
+                    PadEvent::Dir {
+                        id,
+                        timestamp: at,
+                        host_nanos,
+                        dir,
+                        pressed,
+                    } => {
+                        assert_eq!((id, at, host_nanos), (PadId(7), timestamp, 123));
+                        edges.push((dir, pressed));
+                    }
+                    other => panic!("unexpected event: {other:?}"),
+                },
+            );
+        }
+        assert_eq!(
+            raw,
+            vec![
+                (PadCode(code_u32(EV_ABS, ABS_X)), 0.0),
+                (PadCode(code_u32(EV_ABS, ABS_X)), 128.0),
+                (PadCode(code_u32(EV_ABS, ABS_X)), 255.0),
+                (PadCode(code_u32(EV_ABS, ABS_X)), 127.0),
+                (PadCode(code_u32(EV_ABS, ABS_Y)), 128.0),
+                (PadCode(code_u32(EV_ABS, ABS_RX)), 128.0),
+            ]
+        );
+        assert_eq!(
+            edges,
+            vec![
+                (PadDir::Left, true),
+                (PadDir::Right, true),
+                (PadDir::Left, false),
+                (PadDir::Right, false),
+                (PadDir::Up, true),
+                (PadDir::Down, true),
+            ]
+        );
+    }
+
+    #[test]
+    fn absent_axis_ioctl_does_not_invent_a_range() {
+        assert_eq!(size_of::<InputAbsInfo>(), 24);
+        assert_eq!(eviocgabs(ABS_X), 0x8018_4540);
+        assert_eq!(eviocgabs(ABS_Y), 0x8018_4541);
+        let file = std::fs::File::open("/dev/null").unwrap();
+        assert!(axis_range(&file, ABS_X).is_none());
+        assert!(axis_range(&file, ABS_Y).is_none());
+    }
+
+    #[test]
+    fn removal_releases_each_held_direction_before_disconnect() {
+        let mut dev = test_dev(true);
+        let timestamp = Instant::now();
+        for (code, value) in [(ABS_X, 128), (ABS_Y, 128), (ABS_HAT0X, -1)] {
+            emit_abs_event(&mut dev, code, value, timestamp, 123, &mut |_| {});
+        }
+        let mut devs = vec![dev];
+        let mut key_devs = Vec::new();
+        let releases = std::cell::RefCell::new(Vec::new());
+        let disconnected = std::cell::Cell::new(false);
+        let before = Instant::now();
+        remove_dev_by_path(
+            "/dev/null",
+            &mut devs,
+            &mut key_devs,
+            &mut |event| {
+                let PadEvent::Dir {
+                    id,
+                    timestamp,
+                    host_nanos,
+                    dir,
+                    pressed,
+                } = event
+                else {
+                    panic!("unexpected non-direction release");
+                };
+                assert_eq!(id, PadId(7));
+                assert_eq!(host_nanos, 42);
+                assert!(timestamp >= before && timestamp <= Instant::now());
+                assert!(!pressed);
+                releases.borrow_mut().push(dir);
+            },
+            &mut |event| {
+                assert_eq!(
+                    *releases.borrow(),
+                    vec![PadDir::Up, PadDir::Down, PadDir::Left, PadDir::Right]
+                );
+                assert!(matches!(
+                    event,
+                    GpSystemEvent::Disconnected {
+                        id: PadId(7),
+                        backend: PadBackend::LinuxEvdev,
+                        initial: false,
+                        ..
+                    }
+                ));
+                disconnected.set(true);
+            },
+            test_host(),
+        );
+        assert!(devs.is_empty());
+        assert!(disconnected.get());
+    }
 
     #[test]
     fn keyboard_removal_publishes_presence_without_poll_refresh() {
@@ -1409,9 +1674,14 @@ mod tests {
         publish_keyboard_backend_state(&key_devs);
         assert!(keyboard_backend_active());
         for (path, expected_active) in [("missing", true), ("first", true), ("last", false)] {
-            remove_dev_by_path(path, &mut devs, &mut key_devs, &mut |_| {
-                panic!("keyboard removal must not emit a pad disconnect");
-            });
+            remove_dev_by_path(
+                path,
+                &mut devs,
+                &mut key_devs,
+                &mut |_| panic!("keyboard removal must not emit pad input"),
+                &mut |_| panic!("keyboard removal must not emit a pad disconnect"),
+                test_host(),
+            );
             assert_eq!(keyboard_backend_active(), expected_active);
         }
         assert!(key_devs.is_empty());

@@ -440,6 +440,56 @@ fn system_choice_emits_shell_options_config_request() {
     ));
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn axis_fix_choice_tracks_saved_state_and_emits_both_toggle_values() {
+    let asset_manager = AssetManager::new();
+    for initial in [false, true] {
+        let config = config::app_config::Config {
+            axis_fix: initial,
+            ..config::app_config::Config::default()
+        };
+        let mut state = init_with_config(config);
+        state.view = OptionsView::Submenu(SubmenuKind::InputBackend);
+        let row = select_visible_row(&mut state, SubmenuKind::InputBackend, SubRowId::AxisFix);
+        assert_eq!(
+            state.sub[SubmenuKind::InputBackend].choice_indices[row],
+            usize::from(initial)
+        );
+        assert_eq!(
+            state.sub[SubmenuKind::InputBackend].cursor_indices[row],
+            usize::from(initial)
+        );
+
+        for enabled in [!initial, initial] {
+            let delta = if enabled { 1 } else { -1 };
+            let effect = apply_submenu_choice_delta(
+                &mut state,
+                &asset_manager,
+                delta,
+                NavWrap::Clamp,
+            )
+            .expect("Axis Fix choice should emit shell config work");
+            assert_eq!(
+                state.sub[SubmenuKind::InputBackend].choice_indices[row],
+                usize::from(enabled)
+            );
+            assert_eq!(
+                state.sub[SubmenuKind::InputBackend].cursor_indices[row],
+                usize::from(enabled)
+            );
+            assert!(matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                    crate::SimplyLoveConfigRequest::Options(
+                        crate::SimplyLoveOptionsConfigRequest::AxisFix(value)
+                    )
+                )) if value == enabled
+            ));
+        }
+    }
+}
+
 #[test]
 fn show_local_ip_choice_emits_machine_config_request() {
     let asset_manager = AssetManager::new();
@@ -2500,6 +2550,8 @@ fn max_fps_hold_delta_accelerates() {
 fn input_backend_items_match_rows() {
     let expected = [
         (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
+        #[cfg(target_os = "linux")]
+        (SubRowId::AxisFix, ItemId::InpAxisFix),
         (SubRowId::UseFsrs, ItemId::InpUseFsrs),
         (SubRowId::SmxConfig, ItemId::InpSmxConfig),
         (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),

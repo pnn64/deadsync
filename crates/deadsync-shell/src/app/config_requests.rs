@@ -35,6 +35,7 @@ pub(super) fn execute_options(
             config::runtime_update::update_windows_gamepad_backend(backend)
         }
         Request::UseFsrs(enabled) => config::runtime_update::update_use_fsrs(enabled),
+        Request::AxisFix(enabled) => config::runtime_update::update_axis_fix(enabled),
         Request::ThreeKeyNavigation(enabled) => {
             config::runtime_update::update_three_key_navigation(enabled)
         }

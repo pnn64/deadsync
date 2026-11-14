@@ -738,6 +738,7 @@ pub enum SimplyLoveOptionsConfigRequest {
     GfxDebug(bool),
     #[cfg(target_os = "windows")]
     WindowsPadBackend(WindowsPadBackend),
+    AxisFix(bool),
     UseFsrs(bool),
     ThreeKeyNavigation(bool),
     ArcadeOptionsNavigation(bool),

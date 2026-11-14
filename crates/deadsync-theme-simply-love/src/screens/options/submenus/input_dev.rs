@@ -86,6 +86,8 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "InputOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "GamepadBackend")),
+            #[cfg(target_os = "linux")]
+            HelpEntry::Bullet(lookup_key("OptionsInput", "AxisFix")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "UseFSRs")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "SmxConfig")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "DebugFsrDump")),
@@ -114,6 +116,16 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ROWS: &[SubRow] = &[
         label: lookup_key("OptionsInput", "GamepadBackend"),
         choices: INPUT_BACKEND_CHOICES,
         inline: INPUT_BACKEND_INLINE,
+    },
+    #[cfg(target_os = "linux")]
+    SubRow {
+        id: SubRowId::AxisFix,
+        label: lookup_key("OptionsInput", "AxisFix"),
+        choices: &[
+            localized_choice("Common", "Off"),
+            localized_choice("Common", "On"),
+        ],
+        inline: true,
     },
     SubRow {
         id: SubRowId::UseFsrs,
@@ -178,6 +190,15 @@ pub(in crate::screens::options) const INPUT_BACKEND_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "GamepadBackendHelp",
+        ))],
+    },
+    #[cfg(target_os = "linux")]
+    Item {
+        id: ItemId::InpAxisFix,
+        name: lookup_key("OptionsInput", "AxisFix"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "AxisFixHelp",
         ))],
     },
     Item {

@@ -94,6 +94,8 @@ pub enum ItemId {
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    #[cfg(target_os = "linux")]
+    InpAxisFix,
     InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,

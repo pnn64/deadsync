@@ -119,6 +119,7 @@ pub const DEFAULT_SMOOTH_HISTOGRAM: bool = true;
 pub const DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS: bool = false;
 pub const DEFAULT_AUTO_SCREENSHOT_EVAL: u8 = 0;
 pub const DEFAULT_INPUT_DEBOUNCE_SECONDS: f32 = 0.02;
+pub const DEFAULT_AXIS_FIX: bool = false;
 pub const DEFAULT_ARCADE_OPTIONS_NAVIGATION: bool = false;
 pub const DEFAULT_THREE_KEY_NAVIGATION: bool = false;
 pub const DEFAULT_USE_FSRS: bool = false;
@@ -140,6 +141,7 @@ mod tests {
         assert!(!DEFAULT_MACHINE_ENABLE_HEART_RATE_MONITORS);
         assert!(!DEFAULT_ALLOW_SONG_DELETION);
         assert!(!DEFAULT_SHOW_LOCAL_IP);
+        assert!(!DEFAULT_AXIS_FIX);
         assert!(DEFAULT_LIGHTS_SIMPLIFY_BASS);
     }
 }
