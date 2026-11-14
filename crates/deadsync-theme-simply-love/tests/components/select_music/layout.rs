@@ -1,4 +1,4 @@
-use super::chart_panel::DIFFICULTY_SLOT_COUNT;
+use super::difficulty_list::DIFFICULTY_SLOT_COUNT;
 use super::{SongSelectLayout, StepArtistBarLayoutType, WidgetBounds, WidgetLayout};
 use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
@@ -144,7 +144,13 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                 SelectMusicSessionView::default(),
             );
             let panel = layout.density_panel.bounds;
-            assert_eq!(layout.chart_panel.height, 154.0);
+            let expected_chart_panel_height =
+                if matches!(vertical_layout, StepArtistBarLayoutType::Expanded) {
+                    120.0 * layout.zoom + 2.0
+                } else {
+                    154.0
+                };
+            assert!((layout.chart_panel.height - expected_chart_panel_height).abs() < 0.001);
             assert!((layout.difficulty_list.bounds.height - 154.0).abs() < 0.001);
             let density_graphs = layout.density_graphs(vertical_layout, 99.9);
             if matches!(vertical_layout, StepArtistBarLayoutType::Legacy) {
@@ -197,9 +203,12 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                 if matches!(vertical_layout, StepArtistBarLayoutType::Expanded) {
                     assert_eq!(layout.chart_panel.y, layout.step_artist_header.bottom());
                     assert_eq!(layout.density_panel.bounds.y, layout.chart_panel.y);
-                    assert_eq!(
-                        layout.pattern_panels[1].bounds.y,
-                        layout.density_panel.bounds.bottom()
+                    assert!(
+                        (layout.pattern_panels[1].bounds.y
+                            - layout.density_panel.bounds.bottom()
+                            - 2.0)
+                            .abs()
+                            < 0.001
                     );
                     assert!(
                         (layout.pattern_panels[1].bounds.height - 56.0 * layout.zoom).abs() < 0.001
@@ -236,6 +245,34 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
             }
         }
     }
+}
+
+#[test]
+fn expanded_p2_density_graph_respects_the_gap_after_the_tech_panel() {
+    let mut presentation = SelectMusicPresentationPolicyView::default();
+    presentation.step_artist_expanded = true;
+    let session = SelectMusicSessionView {
+        player_side: deadsync_profile::PlayerSide::P2,
+        ..SelectMusicSessionView::default()
+    };
+    let layout =
+        SongSelectLayout::new_with_context(853.0, 480.0, UILayoutType::Wide, presentation, session);
+    let tech_panel = layout.pattern_panels[0].bounds;
+    let density_panel = layout.density_panel.bounds;
+    let p2_graph = layout.density_graphs(StepArtistBarLayoutType::Expanded, 99.9)[1];
+
+    assert!((density_panel.y - tech_panel.bottom() - 2.0).abs() < 0.001);
+    assert_eq!(density_panel, layout.pattern_panels[1].bounds);
+    assert_eq!(p2_graph.bounds, density_panel);
+    assert!((density_panel.bottom() - layout.chart_panel.bottom()).abs() < 0.001);
+    assert_eq!(
+        layout.difficulty_list.bounds.right(),
+        layout.chart_panel.right()
+    );
+    assert_eq!(
+        layout.difficulty_list.bounds.bottom(),
+        layout.chart_panel.bottom()
+    );
 }
 
 #[test]

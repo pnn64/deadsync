@@ -1,13 +1,9 @@
 use super::super::step_artist_bar::StepArtistBarLayoutType;
+use super::difficulty_list::{
+    DIFFICULTY_LIST_HEIGHT, DIFFICULTY_LIST_WIDTH, DIFFICULTY_SLOT_BORDER,
+};
 use super::{StepArtistPeakNpsLayout, WidgetBounds, WidgetLayout};
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
-
-pub(crate) const DIFFICULTY_LIST_WIDTH: f32 = 32.0;
-pub(crate) const DIFFICULTY_SLOT_COUNT: usize = 5;
-const DIFFICULTY_SLOT_SIZE: f32 = 28.0;
-const DIFFICULTY_LIST_GAP: f32 = 2.0;
-const DIFFICULTY_LIST_HEIGHT: f32 =
-    DIFFICULTY_SLOT_SIZE * DIFFICULTY_SLOT_COUNT as f32 + DIFFICULTY_LIST_GAP * 7.0;
 
 const CHART_PANEL_HEIGHT: f32 = 64.0;
 const CHART_PANEL_TOP_GAP: f32 = 2.0;
@@ -17,6 +13,30 @@ const GRAPH_BODY_HEIGHT: f32 = 47.0;
 const BREAKDOWN_TEXT_Y_OFFSET: f32 = 8.5;
 const BREAKDOWN_TEXT_ZOOM: f32 = 0.8;
 
+fn get_panel_heights(step_artist_expanded: bool, is_p2_single: bool, zoom: f32) -> (f32, f32, f32) {
+    let density_height = CHART_PANEL_HEIGHT * zoom;
+    let expanded_tech_height = EXPANDED_TECH_PANEL_HEIGHT * zoom;
+    let top_height = if step_artist_expanded && is_p2_single {
+        expanded_tech_height
+    } else {
+        density_height
+    };
+    let gap = if step_artist_expanded {
+        2.0
+    } else {
+        TECH_PANEL_GAP
+    };
+    let bottom_height = if step_artist_expanded && !is_p2_single {
+        expanded_tech_height
+    } else if step_artist_expanded {
+        density_height
+    } else {
+        DIFFICULTY_LIST_HEIGHT - top_height - gap
+    };
+
+    (top_height, gap, bottom_height)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ChartPanelLayout {
     pub step_artist_expanded: bool,
@@ -25,10 +45,9 @@ pub(crate) struct ChartPanelLayout {
     pub density_panel: WidgetLayout,
     pub pattern_panels: [WidgetLayout; 2],
     pub zoom: f32,
-    pub difficulty_list: DifficultyListLayout,
 }
 
-// contains the step artist header, density panel, tech info panels, and difficulty list
+// contains the step artist header, density panel, tech info panels
 impl ChartPanelLayout {
     pub(crate) fn uses_expanded_step_artist(
         presentation: SelectMusicPresentationPolicyView,
@@ -51,7 +70,12 @@ impl ChartPanelLayout {
         );
         let step_artist_expanded =
             matches!(step_artist_bar_layout, StepArtistBarLayoutType::Expanded);
+        let is_p2_single =
+            deadsync_profile::is_single_p2_side(session.play_style, session.player_side);
         let density_height = CHART_PANEL_HEIGHT * zoom;
+        let (top_pattern_height, lower_pattern_gap, bottom_pattern_height) =
+            get_panel_heights(step_artist_expanded, is_p2_single, zoom);
+        let chart_panel_height = top_pattern_height + lower_pattern_gap + bottom_pattern_height;
         let step_artist_height = screen_height / step_artist_bar_layout.height_screen_divisor();
         let step_artist_header = WidgetBounds::new(
             left,
@@ -60,32 +84,32 @@ impl ChartPanelLayout {
             step_artist_height,
         );
         let chart_panel_top = step_artist_header.bottom();
-        let bounds = WidgetBounds::new(left, chart_panel_top, right - left, DIFFICULTY_LIST_HEIGHT);
+        let bounds = WidgetBounds::new(left, chart_panel_top, right - left, chart_panel_height);
         let difficulty_list_left = right - DIFFICULTY_LIST_WIDTH;
-        let component_right = difficulty_list_left - DIFFICULTY_LIST_GAP;
+        let component_right = difficulty_list_left - DIFFICULTY_SLOT_BORDER;
+        let density_panel_top = if is_p2_single {
+            bounds.bottom() - density_height
+        } else {
+            chart_panel_top
+        };
         let density_panel = WidgetLayout::from_edges(
             left,
-            chart_panel_top,
+            density_panel_top,
             component_right,
-            chart_panel_top + density_height,
+            density_panel_top + density_height,
             zoom,
         );
-        let difficulty_list_widget =
-            WidgetLayout::from_edges(difficulty_list_left, bounds.y, right, bounds.bottom(), zoom);
 
-        let lower_pattern_gap = if step_artist_expanded {
-            0.0 // vertical space hogged by expanded step artist bar
-        } else {
-            TECH_PANEL_GAP
-        };
-        let lower_pattern_top = density_panel.bounds.bottom() + lower_pattern_gap;
-        let lower_pattern_bottom = if step_artist_expanded {
-            lower_pattern_top + EXPANDED_TECH_PANEL_HEIGHT * zoom
-        } else {
-            bounds.bottom()
-        };
+        let lower_pattern_top = chart_panel_top + top_pattern_height + lower_pattern_gap;
+        let lower_pattern_bottom = lower_pattern_top + bottom_pattern_height;
         let pattern_panels = [
-            density_panel,
+            WidgetLayout::from_edges(
+                left,
+                chart_panel_top,
+                component_right,
+                chart_panel_top + top_pattern_height,
+                zoom,
+            ),
             WidgetLayout::from_edges(
                 left,
                 lower_pattern_top,
@@ -102,7 +126,6 @@ impl ChartPanelLayout {
             density_panel,
             pattern_panels,
             zoom,
-            difficulty_list: DifficultyListLayout::new(difficulty_list_widget),
         }
     }
 
@@ -129,29 +152,6 @@ impl ChartPanelLayout {
                 self.step_artist_header,
             ),
         ]
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct DifficultyListLayout {
-    pub bounds: WidgetBounds,
-    pub slot_centers_y: [f32; DIFFICULTY_SLOT_COUNT],
-    pub slot_size: f32,
-}
-
-impl DifficultyListLayout {
-    fn new(widget: WidgetLayout) -> Self {
-        const BORDER: f32 = 2.0;
-        let slot_height = (widget.bounds.height - BORDER * 2.0) / DIFFICULTY_SLOT_COUNT as f32;
-        let slot_centers_y = std::array::from_fn(|slot| {
-            widget.bounds.y + BORDER + (slot as f32 + 0.5) * slot_height
-        });
-
-        Self {
-            bounds: widget.bounds,
-            slot_centers_y,
-            slot_size: DIFFICULTY_SLOT_SIZE,
-        }
     }
 }
 

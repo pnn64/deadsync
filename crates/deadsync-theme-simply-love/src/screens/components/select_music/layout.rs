@@ -2,8 +2,11 @@ use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
 mod widget;
 pub(crate) use widget::{WidgetBounds, WidgetLayout};
+mod difficulty_list;
+pub(crate) use difficulty_list::DifficultyListLayout;
 mod chart_panel;
-pub(crate) use chart_panel::{ChartPanelLayout, DensityGraphLayout, DifficultyListLayout};
+pub(crate) use chart_panel::ChartPanelLayout;
+pub(crate) use chart_panel::DensityGraphLayout;
 mod song_banner;
 pub(crate) use song_banner::SongBannerLayout;
 mod song_details;
@@ -181,7 +184,7 @@ impl SongSelectLayout {
             chart_panel: chart_panel_layout.bounds,
             density_panel: chart_panel_layout.density_panel,
             pattern_panels: chart_panel_layout.pattern_panels,
-            difficulty_list: chart_panel_layout.difficulty_list,
+            difficulty_list: DifficultyListLayout::anchored_bottom_right(chart_panel_layout.bounds),
             chart_panel_layout,
         }
     }
