@@ -1254,7 +1254,12 @@ fn find_child_dir_case_insensitive(parent: &Path, name: &str) -> Option<PathBuf>
     if let Some(cached) = cached_path_lookup(cache, parent, name) {
         return cached;
     }
-    let entries = fs::read_dir(parent).ok()?;
+    let Ok(entries) = fs::read_dir(parent) else {
+        // A parent that cannot be listed has no such child. Like any other
+        // miss, that holds until the lookups are cleared.
+        cache_path_lookup(cache, parent, name, None);
+        return None;
+    };
     let mut found = None;
     for entry in entries.flatten() {
         let matches = entry
@@ -2090,6 +2095,31 @@ mod tests {
         assert!(
             resolve_skin_dir(&root, "dance", "FRESH").is_none(),
             "missing directory result should remain cached until refresh"
+        );
+
+        clear_lookup_caches();
+        assert_eq!(
+            resolve_skin_dir(&root, "dance", "fresh"),
+            Some(root.join("dance/Fresh"))
+        );
+        let _ = fs::remove_dir_all(&root);
+        clear_lookup_caches();
+    }
+
+    #[test]
+    fn clear_lookup_caches_rechecks_missing_parent_dirs() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        clear_lookup_caches();
+        // Neither the game directory nor `common` exists under this root yet.
+        let root = temp_root("skin-parent");
+
+        assert!(resolve_skin_dir(&root, "dance", "fresh").is_none());
+        fs::create_dir_all(root.join("dance/Fresh")).unwrap();
+        assert!(
+            resolve_skin_dir(&root, "dance", "FRESH").is_none(),
+            "a missing parent directory should remain cached until refresh"
         );
 
         clear_lookup_caches();
