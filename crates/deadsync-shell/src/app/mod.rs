@@ -2246,8 +2246,8 @@ impl App {
                 banner_failed: deadsync_online::banners::failed_ids(),
                 pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
                 pack_sync_confidence: self.frame_config.null_or_die_confidence_percent,
-                pack_sync_menu_only: self.frame_config.only_dedicated_menu_buttons,
-                pack_sync_three_key: self.frame_config.three_key_navigation,
+                only_dedicated_menu_buttons: self.frame_config.only_dedicated_menu_buttons,
+                three_key_navigation: self.frame_config.three_key_navigation,
             },
             ready_dirs,
             installed,
@@ -8598,8 +8598,17 @@ impl App {
         result.consumed || has_effect
     }
 
+    /// Typed text, the key that typed it where the platform says, and whether
+    /// it is the key repeating: the Content Browser types only with keys that
+    /// are not a player's buttons.
     #[inline(always)]
-    fn handle_key_text(&mut self, event_loop: &ActiveEventLoop, text: &str) {
+    fn handle_key_text(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        text: &str,
+        typed_by: Option<deadlib_platform::input::KeyCode>,
+        repeat: bool,
+    ) {
         let action = match raw_key_text_route(self.state.screens.current_screen) {
             RawKeyTextRoute::ManageLocalProfiles => screens::manage_local_profiles::handle_text(
                 &mut self.state.screens.manage_local_profiles_state,
@@ -8607,10 +8616,11 @@ impl App {
             ),
             RawKeyTextRoute::ContentBrowser => {
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                content_browser::handle_raw_key_event(
+                content_browser::handle_text(
                     &mut self.state.screens.content_browser_state,
-                    None,
-                    Some(text),
+                    text,
+                    typed_by,
+                    repeat,
                     &mut self.theme_effect_scratch,
                 );
                 if let Err(e) = self.drain_theme_effects(event_loop) {
@@ -8784,8 +8794,7 @@ impl App {
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = content_browser::handle_raw_key_event(
                     &mut self.state.screens.content_browser_state,
-                    Some(&raw_key),
-                    None,
+                    &raw_key,
                     &mut self.theme_effect_scratch,
                 );
                 let has_effect = !self.theme_effect_scratch.is_empty();
@@ -11138,7 +11147,11 @@ impl ApplicationHandler<UserEvent> for App {
                 if key_event.state == winit::event::ElementState::Pressed
                     && let Some(text) = key_event.text.as_deref()
                 {
-                    self.handle_key_text(event_loop, text);
+                    let typed_by = match key_event.physical_key {
+                        winit::keyboard::PhysicalKey::Code(code) => Some(code),
+                        winit::keyboard::PhysicalKey::Unidentified(_) => None,
+                    };
+                    self.handle_key_text(event_loop, text, typed_by, key_event.repeat);
                 }
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);

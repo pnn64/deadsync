@@ -173,6 +173,44 @@ pub(super) fn text(source: &str) -> Arc<str> {
             "MessageLEFTRIGHTChangeSTARTTypeItUPDOWNOptions"
         }
         "LEFT/RIGHT change   UP/DOWN options" => "MessageLEFTRIGHTChangeUPDOWNOptions",
+        "LEFT+RIGHT exit" => "MessageLEFTPlusRIGHTExit",
+        "LEFT+RIGHT done" => "MessageLEFTPlusRIGHTDone",
+        "LEFT+RIGHT back" => "MessageLEFTPlusRIGHTBack",
+        "LEFT/RIGHT difficulty   START stop the preview" => {
+            "MessageLEFTRIGHTDifficultySTARTStopThePreview"
+        }
+        "LEFT/RIGHT songs   START stop the preview" => "MessageLEFTRIGHTSongsSTARTStopThePreview",
+        "START download this pack   RIGHT back to the songs" => {
+            "MessageSTARTDownloadThisPackRIGHTBackToTheSongs"
+        }
+        "LEFT/RIGHT songs   START song options" => "MessageLEFTRIGHTSongsSTARTSongOptions",
+        "LEFT/RIGHT views   START options" => "MessageLEFTRIGHTViewsSTARTOptions",
+        "LEFT/RIGHT views   START open" => "MessageLEFTRIGHTViewsSTARTOpen",
+        "LEFT/RIGHT year   START packs" => "MessageLEFTRIGHTYearSTARTPacks",
+        "LEFT/RIGHT packs   START details" => "MessageLEFTRIGHTPacksSTARTDetails",
+        "LEFT/RIGHT list   START open" => "MessageLEFTRIGHTListSTARTOpen",
+        "LEFT/RIGHT browse   START details" => "MessageLEFTRIGHTBrowseSTARTDetails",
+        "LEFT/RIGHT browse   START sync" => "MessageLEFTRIGHTBrowseSTARTSync",
+        "LEFT/RIGHT move   START choose" => "MessageLEFTRIGHTMoveSTARTChoose",
+        "LEFT/RIGHT keep or re-rip   START choose" => "MessageLEFTRIGHTKeepOrReRipSTARTChoose",
+        "START reset options   LEFT/RIGHT options" => "MessageSTARTResetOptionsLEFTRIGHTOptions",
+        "LEFT/RIGHT options" => "MessageLEFTRIGHTOptions",
+        "START rip a pack   LEFT/RIGHT options" => "MessageSTARTRipAPackLEFTRIGHTOptions",
+        "START type names   LEFT/RIGHT options" => "MessageSTARTTypeNamesLEFTRIGHTOptions",
+        "START choose eras   LEFT/RIGHT options" => "MessageSTARTChooseErasLEFTRIGHTOptions",
+        "START choose authors   LEFT/RIGHT options" => "MessageSTARTChooseAuthorsLEFTRIGHTOptions",
+        "LEFT/RIGHT change   START done" => "MessageLEFTRIGHTChangeSTARTDone",
+        "START change   LEFT/RIGHT options" => "MessageSTARTChangeLEFTRIGHTOptions",
+        "START shift    LEFT+RIGHT go back" => "MessageSTARTShiftLEFTPlusRIGHTGoBack",
+        "LEFT/RIGHT choose    START save    LEFT+RIGHT close" => {
+            "MessageLEFTRIGHTChooseSTARTSaveLEFTPlusRIGHTClose"
+        }
+        "LEFT/RIGHT choose    START go    LEFT+RIGHT close" => {
+            "MessageLEFTRIGHTChooseSTARTGoLEFTPlusRIGHTClose"
+        }
+        "LEFT/RIGHT choose    START go    LEFT+RIGHT cancel" => "ChooseGoBackThreeKeyHint",
+        "LEFT+RIGHT cancel" => "MessageLEFTPlusRIGHTCancel",
+        "START keep it" => "MessageSTARTKeepIt",
         "15 SONGS" => "Message15SONGS",
         "- - - TEAR HERE - - -" => "MessageTEARHERE",
         "CHOOSE ERAS" => "MessageCHOOSEERAS",
