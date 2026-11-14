@@ -158,14 +158,26 @@ pub(super) fn entries(
     mut visit: impl FnMut(&mut HostCall<'_>, Value, Value) -> Result<(), Error>,
 ) -> Result<(), Error> {
     call.with_roots(&[Value::Table(source)], |call| {
+        // The traversal function captured at installation is the standard
+        // `next`, which is the raw walk without a call for each entry.
+        let next = call.captures()[3];
+        let raw = call.is_raw_next(next);
         let mut key = Value::Nil;
         loop {
-            let pair = call.call(call.captures()[3], &[Value::Table(source), key])?;
-            key = pair.first().copied().unwrap_or(Value::Nil);
-            if key == Value::Nil {
-                break;
-            }
-            let value = pair.get(1).copied().unwrap_or(Value::Nil);
+            let value = if raw {
+                let Some((next, value)) = call.raw_table_next(source, key)? else {
+                    break;
+                };
+                key = next;
+                value
+            } else {
+                let pair = call.call(next, &[Value::Table(source), key])?;
+                key = pair.first().copied().unwrap_or(Value::Nil);
+                if key == Value::Nil {
+                    break;
+                }
+                pair.get(1).copied().unwrap_or(Value::Nil)
+            };
             call.with_roots(&[key, value], |call| visit(call, key, value))?;
         }
         Ok(())
@@ -265,7 +277,10 @@ pub(super) fn advance(
             Value::Table(speeds),
         ],
         |call| {
-            let mut keys = smallvec::SmallVec::<[smallvec::SmallVec<[u8; 32]>; 16]>::new();
+            // Each modifier name with the string that is its key, when the
+            // key is a string: the name then needs no further lookup.
+            type Name = (smallvec::SmallVec<[u8; 32]>, Option<Value>);
+            let mut keys = smallvec::SmallVec::<[Name; 16]>::new();
             for owner in [current, target] {
                 entries(call, owner, |call, key, _| {
                     let id = call
@@ -275,38 +290,49 @@ pub(super) fn advance(
                         .string_bytes(id)
                         .ok_or_else(|| call.error(b"invalid UTF-8 string"))?;
                     std::str::from_utf8(bytes).map_err(|_| call.error(b"invalid UTF-8 string"))?;
-                    keys.push(smallvec::SmallVec::from_slice(bytes));
+                    let string = matches!(key, Value::String(_)).then_some(key);
+                    keys.push((smallvec::SmallVec::from_slice(bytes), string));
                     Ok(())
                 })?;
             }
-            keys.sort_unstable();
-            keys.dedup();
-            for key in keys {
+            // One string exists for each spelling, so equal names share a key.
+            keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+            keys.dedup_by(|a, b| a.0 == b.0);
+            for (key, string) in keys {
                 let key = std::str::from_utf8(&key).expect("validated modifier key");
-                let value = raw(call, target, key)?;
-                let value = if value == Value::Nil {
-                    default_value(call, &key)?
-                } else {
-                    value
+                let name = match string {
+                    Some(name) => name,
+                    None => call.try_intern(key.as_bytes())?,
                 };
-                if matches!(value, Value::Boolean(_) | Value::String(_))
-                    || matches!(
-                        key,
-                        "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
-                    )
-                {
-                    set(current, key, value, call)?;
-                } else if let Some(target) = float(call, value) {
-                    let value = raw_float(call, current, key, 0.0)?;
-                    let speed = raw_float(call, speeds, key, 1.0)?;
-                    let value = super::super::song_options::approach(
-                        call,
-                        value,
-                        target,
-                        rate * delta * speed,
-                    )?;
-                    set(current, key, value, call)?;
-                }
+                call.with_roots(&[name], |call| {
+                    let value = call.raw_table_get(target, name)?;
+                    let value = if value == Value::Nil {
+                        default_value(call, key)?
+                    } else {
+                        value
+                    };
+                    if matches!(value, Value::Boolean(_) | Value::String(_))
+                        || matches!(
+                            key,
+                            "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
+                        )
+                    {
+                        call.raw_table_set(current, name, value)?;
+                    } else if let Some(target) = float(call, value) {
+                        let value = call.raw_table_get(current, name)?;
+                        let value = typed_float(call, value, 0.0)?;
+                        let speed = call.raw_table_get(speeds, name)?;
+                        let speed = typed_float(call, speed, 1.0)?;
+                        let value = super::super::song_options::approach(
+                            call,
+                            value,
+                            target,
+                            rate * delta * speed,
+                        )?;
+                        call.raw_table_set(current, name, Value::Number(f64::from(value)))?;
+                    }
+                    Ok(())
+                })?;
             }
             for (field, key, default) in [
                 ("__songlua_time_spacing", "_spacing", 0.0),
