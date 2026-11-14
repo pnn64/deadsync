@@ -3859,7 +3859,7 @@ fn select_music_feature_policy_is_shell_prepared() {
         "config.music_select_shortcut_load_songs",
         "config.music_select_shortcut_test_input",
         "config.show_select_music_scorebox",
-        "config.select_music_scorebox_cycle_itg",
+        "crate::app::scorebox_pane_filter(config)",
         "config.select_music_scorebox_placement",
         "config.show_select_music_stage_display",
         "config.show_select_music_gameplay_timer",

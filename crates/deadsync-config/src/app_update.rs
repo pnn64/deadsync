@@ -469,7 +469,13 @@ pub fn set_machine_pack_ini_offsets(cfg: &mut Config, enabled: bool) -> bool {
 }
 
 pub fn set_enable_groovestats(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.enable_groovestats, enabled)
+    // GrooveStats turned on after ArrowCloud: keep the ArrowCloud boards the
+    // player already sees.
+    let pinned = enabled && cfg.enable_arrowcloud && cfg.arrowcloud_regular_boards.is_none();
+    if pinned {
+        cfg.arrowcloud_regular_boards = Some(true);
+    }
+    set_if_changed(&mut cfg.enable_groovestats, enabled) || pinned
 }
 
 pub fn set_show_srpg_shop(cfg: &mut Config, enabled: bool) -> bool {
@@ -485,7 +491,13 @@ pub fn set_enable_boogiestats(cfg: &mut Config, enabled: bool) -> bool {
 }
 
 pub fn set_enable_arrowcloud(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.enable_arrowcloud, enabled)
+    // ArrowCloud turned on: settle its regular boards from the order the
+    // services were enabled, off only when GrooveStats was already on.
+    let pinned = enabled && cfg.arrowcloud_regular_boards.is_none();
+    if pinned {
+        cfg.arrowcloud_regular_boards = Some(!cfg.enable_groovestats);
+    }
+    set_if_changed(&mut cfg.enable_arrowcloud, enabled) || pinned
 }
 
 pub fn set_enable_golf(cfg: &mut Config, enabled: bool) -> bool {
@@ -754,20 +766,21 @@ pub fn set_show_select_music_scorebox(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_select_music_scorebox, enabled)
 }
 
-pub fn set_select_music_scorebox_cycle_itg(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_itg, enabled)
+/// Set the `GrooveStats` scorebox boards from a mask of ITG (bit 0), EX
+/// (bit 1) and event boards (bit 2).
+pub fn set_groovestats_scorebox_boards(cfg: &mut Config, mask: u8) -> bool {
+    let itg = set_if_changed(&mut cfg.groovestats_scorebox_itg, mask & 1 != 0);
+    let ex = set_if_changed(&mut cfg.groovestats_scorebox_ex, mask & (1 << 1) != 0);
+    let events = set_if_changed(&mut cfg.groovestats_scorebox_events, mask & (1 << 2) != 0);
+    itg || ex || events
 }
 
-pub fn set_select_music_scorebox_cycle_ex(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_ex, enabled)
+pub fn set_arrowcloud_regular_boards(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.arrowcloud_regular_boards, Some(enabled))
 }
 
-pub fn set_select_music_scorebox_cycle_hard_ex(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_hard_ex, enabled)
-}
-
-pub fn set_select_music_scorebox_cycle_tournaments(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_tournaments, enabled)
+pub fn set_arrowcloud_event_boards(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.arrowcloud_event_boards, enabled)
 }
 
 pub fn set_select_music_chart_info_peak_nps(cfg: &mut Config, enabled: bool) -> bool {
@@ -886,6 +899,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn arrowcloud_regular_boards_settle_by_service_order() {
+        // GrooveStats first: ArrowCloud's regular boards start off.
+        let mut cfg = Config::default();
+        assert!(set_enable_groovestats(&mut cfg, true));
+        assert_eq!(cfg.arrowcloud_regular_boards, None);
+        assert!(set_enable_arrowcloud(&mut cfg, true));
+        assert_eq!(cfg.arrowcloud_regular_boards, Some(false));
+
+        // ArrowCloud first: they start on and stay on once GrooveStats is on.
+        let mut cfg = Config::default();
+        assert!(set_enable_arrowcloud(&mut cfg, true));
+        assert_eq!(cfg.arrowcloud_regular_boards, Some(true));
+        assert!(set_enable_groovestats(&mut cfg, true));
+        assert_eq!(cfg.arrowcloud_regular_boards, Some(true));
+
+        // ArrowCloud already on with nothing stored: GrooveStats keeps them on.
+        let mut cfg = Config {
+            enable_arrowcloud: true,
+            ..Config::default()
+        };
+        assert!(set_enable_groovestats(&mut cfg, true));
+        assert_eq!(cfg.arrowcloud_regular_boards, Some(true));
+
+        // A player's own choice is never overwritten.
+        let mut cfg = Config {
+            arrowcloud_regular_boards: Some(false),
+            ..Config::default()
+        };
+        set_enable_arrowcloud(&mut cfg, true);
+        set_enable_groovestats(&mut cfg, true);
+        assert_eq!(cfg.arrowcloud_regular_boards, Some(false));
+    }
+
+    #[test]
     fn max_fps_keeps_off() {
         use crate::options::{MAX_FPS_MAX, MAX_FPS_MIN};
 
@@ -922,9 +969,6 @@ mod tests {
     }
 }
 
-pub fn set_select_music_scorebox_cycle_golf(cfg: &mut Config, enabled: bool) -> bool {
-    set_if_changed(&mut cfg.select_music_scorebox_cycle_golf, enabled)
-}
 pub fn set_select_music_scorebox_events_first(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.select_music_scorebox_events_first, enabled)
 }

@@ -730,10 +730,10 @@ mod tests {
             enable_arrowcloud: false,
             auto_populate_gs_scores: true,
             auto_download_unlocks: true,
-            select_music_scorebox_cycle_itg: false,
-            select_music_scorebox_cycle_ex: true,
-            select_music_scorebox_cycle_hard_ex: false,
-            select_music_scorebox_cycle_tournaments: true,
+            groovestats_scorebox_itg: false,
+            groovestats_scorebox_ex: true,
+            arrowcloud_regular_boards: Some(false),
+            groovestats_scorebox_events: true,
             ..Default::default()
         };
 
@@ -748,9 +748,9 @@ mod tests {
         assert!(!policy.enable_arrowcloud);
         assert!(policy.auto_populate_gs_scores);
         assert!(policy.auto_download_unlocks);
-        assert!(!policy.pane_filter.itg);
-        assert!(policy.pane_filter.ex);
-        assert!(!policy.pane_filter.hard_ex);
-        assert!(policy.pane_filter.tournaments);
+        assert!(!policy.pane_filter.groovestats_itg);
+        assert!(policy.pane_filter.groovestats_ex);
+        assert!(!policy.pane_filter.arrowcloud_regular);
+        assert!(policy.pane_filter.groovestats_events);
     }
 }

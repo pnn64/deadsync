@@ -317,6 +317,24 @@ A `save` directory is created inside the data directory to store your personal d
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
 
+### Scorebox leaderboards
+
+Each online service chooses its own scorebox boards under
+**Options > Online Score Services**:
+
+- **GrooveStats Options > Scorebox Boards** toggles the GrooveStats ITG, EX and
+  event (ITL, SRPG) boards. All three are on by default.
+- **ArrowCloud Options > Regular Boards** turns ArrowCloud's ITG/EX/H.EX boards
+  on or off. Which of them appear is set in your board preferences on the
+  ArrowCloud website. Its default is set when ArrowCloud is enabled: off if
+  GrooveStats was already enabled, so GrooveStats' ITG and EX boards aren't
+  duplicated, and on otherwise. Enabling GrooveStats later keeps it on.
+- **ArrowCloud Options > Event Boards** turns ArrowCloud event boards such as
+  Golf on or off. On by default.
+
+**Select Music Options** keeps the display settings: Show GS Box, its
+placement, and Lead With Event Boards.
+
 ### Lua chart score submission
 
 Lua charts can submit scores when all declared song Lua compiles without errors
@@ -346,8 +364,8 @@ player and Select Music choices.
 - **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
   Turning the master switch on also turns this on, so pars appear right away;
   switch it off here if you would rather not see them.
-- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
-  shows the online event board alongside the other selectable leaderboards,
+- **Options > Online Score Services > ArrowCloud Options > Event Boards** (on
+  by default) shows the online golf board alongside the other leaderboards,
   framed in fairway green over the In The Golf course pattern.
   ArrowCloud sends it with the chart's other boards in the same request, so
   turning it on or off takes effect immediately.

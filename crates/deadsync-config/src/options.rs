@@ -1,7 +1,12 @@
-use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
+use crate::bools::{
+    parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default, parse_u8_bool_str,
+};
 use crate::coin::{CoinOptions, load_coin_options};
 use crate::defaults::{
     DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ALLOW_SONG_DELETION, DEFAULT_ARCADE_OPTIONS_NAVIGATION,
+    DEFAULT_ARROWCLOUD_EVENT_BOARDS,
+    DEFAULT_GROOVESTATS_SCOREBOX_EVENTS, DEFAULT_GROOVESTATS_SCOREBOX_EX,
+    DEFAULT_GROOVESTATS_SCOREBOX_ITG,
     DEFAULT_AUTO_DOWNLOAD_UNLOCKS, DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
     DEFAULT_AUTOSUBMIT_COURSE_POST_FAIL_PASSES, DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY,
     DEFAULT_BANNER_CACHE, DEFAULT_BG_BRIGHTNESS, DEFAULT_CACHE_SONGS, DEFAULT_CDTITLE_CACHE,
@@ -14,8 +19,6 @@ use crate::defaults::{
     DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
     DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
-    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
-    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
     DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHARE_RIPS,
     DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS, DEFAULT_SHOW_CONSOLE,
     DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_LOCAL_IP, DEFAULT_SHOW_MOST_PLAYED_COURSES,
@@ -60,7 +63,7 @@ use deadsync_theme::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 
-pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 5;
+pub const GROOVESTATS_SCOREBOX_NUM_CHOICES: usize = 3;
 pub const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 pub const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
 pub const SHOW_STATS_MODE_MAX: u8 = 3;
@@ -297,6 +300,17 @@ pub struct SystemOptions {
     pub enable_arrowcloud: bool,
     pub enable_golf: bool,
     pub enable_boogiestats: bool,
+    /// Which `GrooveStats` boards the scorebox cycles through.
+    pub groovestats_scorebox_itg: bool,
+    pub groovestats_scorebox_ex: bool,
+    /// ITL, SRPG and other event boards `GrooveStats` returns.
+    pub groovestats_scorebox_events: bool,
+    /// `ArrowCloud`'s ITG/EX/H.EX boards. Which of them appear is the
+    /// player's board preference on the site; this only turns them on or off.
+    /// `None` until the player sets it: see [`arrowcloud_regular_boards_shown`].
+    pub arrowcloud_regular_boards: Option<bool>,
+    /// `ArrowCloud` event boards such as Golf.
+    pub arrowcloud_event_boards: bool,
     pub submit_arrowcloud_fails: bool,
     pub show_arrowcloud_result_dialogs: bool,
     pub arrowcloud_qr_login_when: ArrowCloudQrLoginWhen,
@@ -368,6 +382,11 @@ impl Default for SystemOptions {
             enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
             enable_golf: false,
             enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
+            groovestats_scorebox_itg: DEFAULT_GROOVESTATS_SCOREBOX_ITG,
+            groovestats_scorebox_ex: DEFAULT_GROOVESTATS_SCOREBOX_EX,
+            groovestats_scorebox_events: DEFAULT_GROOVESTATS_SCOREBOX_EVENTS,
+            arrowcloud_regular_boards: None,
+            arrowcloud_event_boards: DEFAULT_ARROWCLOUD_EVENT_BOARDS,
             submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
             show_arrowcloud_result_dialogs: DEFAULT_SHOW_ARROWCLOUD_RESULT_DIALOGS,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
@@ -646,6 +665,9 @@ pub fn load_bool_option(conf: &SimpleIni, section: &str, key: &str, default: boo
 pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOptions {
     let show_stats_mode = conf.get("Options", "ShowStatsMode");
     let show_stats_legacy = conf.get("Options", "ShowStats");
+    let enable_golf =
+        parse_u8_bool_or_default(conf.get("Options", "EnableGolf"), default.enable_golf);
+    let boards = load_scorebox_boards(conf, default, enable_golf);
 
     SystemOptions {
         coin: load_coin_options(conf, default.coin),
@@ -681,14 +703,16 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "EnableArrowCloud"),
             default.enable_arrowcloud,
         ),
-        enable_golf: parse_u8_bool_or_default(
-            conf.get("Options", "EnableGolf"),
-            default.enable_golf,
-        ),
+        enable_golf,
         enable_boogiestats: parse_u8_bool_or_default(
             conf.get("Options", "EnableBoogieStats"),
             default.enable_boogiestats,
         ),
+        groovestats_scorebox_itg: boards.groovestats_itg,
+        groovestats_scorebox_ex: boards.groovestats_ex,
+        groovestats_scorebox_events: boards.groovestats_events,
+        arrowcloud_regular_boards: boards.arrowcloud_regular,
+        arrowcloud_event_boards: boards.arrowcloud_events,
         submit_arrowcloud_fails: parse_u8_bool_or_default(
             conf.get("Options", "SubmitArrowCloudFails"),
             default.submit_arrowcloud_fails,
@@ -951,11 +975,111 @@ pub fn push_system_course_option_lines(content: &mut String, options: SystemOpti
     );
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ScoreboxBoards {
+    groovestats_itg: bool,
+    groovestats_ex: bool,
+    groovestats_events: bool,
+    arrowcloud_regular: Option<bool>,
+    arrowcloud_events: bool,
+}
+
+/// Whether `ArrowCloud`'s regular boards show. The setting is filled in when
+/// `ArrowCloud` is enabled (off if `GrooveStats` already was, whose ITG and EX
+/// boards would repeat them) or when `GrooveStats` is enabled after it (on).
+/// Until then it follows `GrooveStats`.
+#[inline(always)]
+#[must_use]
+pub const fn arrowcloud_regular_boards_shown(
+    setting: Option<bool>,
+    enable_groovestats: bool,
+) -> bool {
+    match setting {
+        Some(enabled) => enabled,
+        None => !enable_groovestats,
+    }
+}
+
+/// Scorebox board choices, kept per online service.
+///
+/// They used to be one set of Select Music switches keyed by score type, each
+/// covering both services (`SelectMusicScoreboxCycle*`). A config written
+/// before the move has none of the new keys, so each new choice inherits what
+/// the old switches showed for that service:
+///
+/// - `GrooveStats` ITG, EX and event boards copy the ITG, EX and Tournaments
+///   switches.
+/// - `ArrowCloud` regular boards stay on if any of ITG, EX or H.EX was on.
+///   That counts as the player's choice, so they no longer follow `GrooveStats`.
+/// - `ArrowCloud` event boards copy the Golf switch, but only when golf was
+///   enabled. With golf off that switch did nothing, so it keeps the default.
+fn load_scorebox_boards(
+    conf: &SimpleIni,
+    default: SystemOptions,
+    enable_golf: bool,
+) -> ScoreboxBoards {
+    let read = |key: &str| conf.get("Options", key).and_then(parse_u8_bool_str);
+    let legacy_itg = read("SelectMusicScoreboxCycleItg");
+    let legacy_ex = read("SelectMusicScoreboxCycleEx");
+    let legacy_hard_ex = read("SelectMusicScoreboxCycleHardEx");
+    let legacy_tournaments = read("SelectMusicScoreboxCycleTournaments");
+    let legacy_golf = read("SelectMusicScoreboxCycleGolf").filter(|_| enable_golf);
+    // Each old switch defaulted to on when it was missing.
+    let legacy_regular = (legacy_itg.is_some() || legacy_ex.is_some() || legacy_hard_ex.is_some())
+        .then(|| {
+            legacy_itg.unwrap_or(true)
+                || legacy_ex.unwrap_or(true)
+                || legacy_hard_ex.unwrap_or(true)
+        });
+    ScoreboxBoards {
+        groovestats_itg: read("GrooveStatsScoreboxItg")
+            .or(legacy_itg)
+            .unwrap_or(default.groovestats_scorebox_itg),
+        groovestats_ex: read("GrooveStatsScoreboxEx")
+            .or(legacy_ex)
+            .unwrap_or(default.groovestats_scorebox_ex),
+        groovestats_events: read("GrooveStatsScoreboxEvents")
+            .or(legacy_tournaments)
+            .unwrap_or(default.groovestats_scorebox_events),
+        arrowcloud_regular: read("ArrowCloudRegularBoards")
+            .or(legacy_regular)
+            .or(default.arrowcloud_regular_boards),
+        arrowcloud_events: read("ArrowCloudEventBoards")
+            .or(legacy_golf)
+            .unwrap_or(default.arrowcloud_event_boards),
+    }
+}
+
 pub fn push_system_online_option_lines(content: &mut String, options: SystemOptions) {
     push_bool(content, "EnableArrowCloud", options.enable_arrowcloud);
     push_bool(content, "EnableGolf", options.enable_golf);
+    // Left out until the player picks, so the default keeps following
+    // GrooveStats.
+    if let Some(enabled) = options.arrowcloud_regular_boards {
+        push_bool(content, "ArrowCloudRegularBoards", enabled);
+    }
+    push_bool(
+        content,
+        "ArrowCloudEventBoards",
+        options.arrowcloud_event_boards,
+    );
     push_bool(content, "EnableBoogieStats", options.enable_boogiestats);
     push_bool(content, "EnableGrooveStats", options.enable_groovestats);
+    push_bool(
+        content,
+        "GrooveStatsScoreboxItg",
+        options.groovestats_scorebox_itg,
+    );
+    push_bool(
+        content,
+        "GrooveStatsScoreboxEx",
+        options.groovestats_scorebox_ex,
+    );
+    push_bool(
+        content,
+        "GrooveStatsScoreboxEvents",
+        options.groovestats_scorebox_events,
+    );
     push_bool(content, "ShowSrpgShop", options.show_srpg_shop);
     push_line(content, "SrpgShopFolder", options.srpg_shop_folder.as_str());
     push_bool(
@@ -1198,11 +1322,6 @@ pub struct SelectMusicOptions {
     pub step_artist_box_mode: SelectMusicStepArtistBoxMode,
     pub show_scorebox: bool,
     pub scorebox_placement: SelectMusicScoreboxPlacement,
-    pub scorebox_cycle_itg: bool,
-    pub scorebox_cycle_ex: bool,
-    pub scorebox_cycle_hard_ex: bool,
-    pub scorebox_cycle_tournaments: bool,
-    pub scorebox_cycle_golf: bool,
     pub scorebox_events_first: bool,
     pub show_golf_pars: bool,
     pub chart_info_peak_nps: bool,
@@ -1246,11 +1365,6 @@ impl Default for SelectMusicOptions {
             step_artist_box_mode: SelectMusicStepArtistBoxMode::Default,
             show_scorebox: DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
             scorebox_placement: SelectMusicScoreboxPlacement::Auto,
-            scorebox_cycle_itg: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG,
-            scorebox_cycle_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
-            scorebox_cycle_hard_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
-            scorebox_cycle_tournaments: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
-            scorebox_cycle_golf: false,
             scorebox_events_first: true,
             show_golf_pars: false,
             chart_info_peak_nps: DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
@@ -1413,22 +1527,6 @@ pub fn load_select_music_options(
             .get("Options", "SelectMusicScoreboxPlacement")
             .and_then(|value| SelectMusicScoreboxPlacement::from_str(value).ok())
             .unwrap_or(default.scorebox_placement),
-        scorebox_cycle_itg: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleItg"),
-            default.scorebox_cycle_itg,
-        ),
-        scorebox_cycle_ex: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleEx"),
-            default.scorebox_cycle_ex,
-        ),
-        scorebox_cycle_hard_ex: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleHardEx"),
-            default.scorebox_cycle_hard_ex,
-        ),
-        scorebox_cycle_golf: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleGolf"),
-            default.scorebox_cycle_golf,
-        ),
         scorebox_events_first: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicScoreboxEventsFirst"),
             default.scorebox_events_first,
@@ -1436,10 +1534,6 @@ pub fn load_select_music_options(
         show_golf_pars: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicShowGolfPars"),
             default.show_golf_pars,
-        ),
-        scorebox_cycle_tournaments: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicScoreboxCycleTournaments"),
-            default.scorebox_cycle_tournaments,
         ),
         chart_info_peak_nps: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicChartInfoPeakNps"),
@@ -1577,11 +1671,6 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
     push_bool(content, "SelectMusicScorebox", select.show_scorebox);
     push_bool(
         content,
-        "SelectMusicScoreboxCycleGolf",
-        select.scorebox_cycle_golf,
-    );
-    push_bool(
-        content,
         "SelectMusicScoreboxEventsFirst",
         select.scorebox_events_first,
     );
@@ -1590,26 +1679,6 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         content,
         "SelectMusicScoreboxPlacement",
         select.scorebox_placement.as_str(),
-    );
-    push_bool(
-        content,
-        "SelectMusicScoreboxCycleItg",
-        select.scorebox_cycle_itg,
-    );
-    push_bool(
-        content,
-        "SelectMusicScoreboxCycleEx",
-        select.scorebox_cycle_ex,
-    );
-    push_bool(
-        content,
-        "SelectMusicScoreboxCycleHardEx",
-        select.scorebox_cycle_hard_ex,
-    );
-    push_bool(
-        content,
-        "SelectMusicScoreboxCycleTournaments",
-        select.scorebox_cycle_tournaments,
     );
     push_bool(
         content,
@@ -1842,26 +1911,19 @@ pub fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
 
 #[inline(always)]
 #[must_use]
-pub const fn scorebox_cycle_mask(itg: bool, ex: bool, hard_ex: bool, tournaments: bool) -> u8 {
-    (itg as u8) | ((ex as u8) << 1) | ((hard_ex as u8) << 2) | ((tournaments as u8) << 3)
+pub const fn groovestats_scorebox_mask(itg: bool, ex: bool, events: bool) -> u8 {
+    (itg as u8) | ((ex as u8) << 1) | ((events as u8) << 2)
 }
 
 #[inline(always)]
 #[must_use]
-pub const fn scorebox_cycle_cursor_index(
-    itg: bool,
-    ex: bool,
-    hard_ex: bool,
-    tournaments: bool,
-) -> usize {
+pub const fn groovestats_scorebox_cursor_index(itg: bool, ex: bool, events: bool) -> usize {
     if itg {
         0
     } else if ex {
         1
-    } else if hard_ex {
+    } else if events {
         2
-    } else if tournaments {
-        3
     } else {
         0
     }
@@ -1869,8 +1931,8 @@ pub const fn scorebox_cycle_cursor_index(
 
 #[inline(always)]
 #[must_use]
-pub const fn scorebox_cycle_bit_from_choice(idx: usize) -> u8 {
-    if idx < SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES {
+pub const fn groovestats_scorebox_bit_from_choice(idx: usize) -> u8 {
+    if idx < GROOVESTATS_SCOREBOX_NUM_CHOICES {
         1u8 << (idx as u8)
     } else {
         0
@@ -2743,11 +2805,6 @@ mod tests {
             step_artist_box_mode: SelectMusicStepArtistBoxMode::Default,
             show_scorebox: false,
             scorebox_placement: SelectMusicScoreboxPlacement::Auto,
-            scorebox_cycle_itg: true,
-            scorebox_cycle_ex: false,
-            scorebox_cycle_hard_ex: false,
-            scorebox_cycle_tournaments: false,
-            scorebox_cycle_golf: false,
             scorebox_events_first: true,
             show_golf_pars: false,
             chart_info_peak_nps: true,
@@ -2770,6 +2827,11 @@ mod tests {
             enable_arrowcloud: false,
             enable_golf: false,
             enable_boogiestats: false,
+            groovestats_scorebox_itg: true,
+            groovestats_scorebox_ex: true,
+            groovestats_scorebox_events: true,
+            arrowcloud_regular_boards: None,
+            arrowcloud_event_boards: true,
             submit_arrowcloud_fails: false,
             show_arrowcloud_result_dialogs: true,
             arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
@@ -3277,8 +3339,12 @@ mod tests {
                 "DefaultFailType=Immediate\n",
                 "EnableArrowCloud=1\n",
                 "EnableGolf=0\n",
+                "ArrowCloudEventBoards=1\n",
                 "EnableBoogieStats=0\n",
                 "EnableGrooveStats=1\n",
+                "GrooveStatsScoreboxItg=1\n",
+                "GrooveStatsScoreboxEx=1\n",
+                "GrooveStatsScoreboxEvents=1\n",
                 "ShowSrpgShop=1\n",
                 "SrpgShopFolder=Unlocks\n",
                 "SubmitArrowCloudFails=1\n",
@@ -3668,10 +3734,6 @@ mod tests {
             SelectMusicStepArtistBox=Expanded
             SelectMusicScorebox=1
             SelectMusicScoreboxPlacement=StepPane
-            SelectMusicScoreboxCycleItg=0
-            SelectMusicScoreboxCycleEx=1
-            SelectMusicScoreboxCycleHardEx=1
-            SelectMusicScoreboxCycleTournaments=1
             SelectMusicChartInfoPeakNps=0
             SelectMusicChartInfoEffectiveBpm=0
             SelectMusicChartInfoMatrixRating=1
@@ -3719,10 +3781,6 @@ mod tests {
             loaded.scorebox_placement,
             SelectMusicScoreboxPlacement::StepPane
         );
-        assert!(!loaded.scorebox_cycle_itg);
-        assert!(loaded.scorebox_cycle_ex);
-        assert!(loaded.scorebox_cycle_hard_ex);
-        assert!(loaded.scorebox_cycle_tournaments);
         assert!(!loaded.chart_info_peak_nps);
         assert!(!loaded.chart_info_effective_bpm);
         assert!(loaded.chart_info_matrix_rating);
@@ -3752,10 +3810,9 @@ mod tests {
     #[test]
     fn golf_select_music_options_default_off_and_persist() {
         let defaults = default_select_music_options();
-        assert!(!defaults.show_golf_pars && !defaults.scorebox_cycle_golf);
+        assert!(!defaults.show_golf_pars);
         let mut options = defaults;
         options.show_golf_pars = true;
-        options.scorebox_cycle_golf = true;
         let mut text = String::from("[Options]\n");
         push_select_music_option_lines(
             &mut text,
@@ -3765,7 +3822,7 @@ mod tests {
             },
         );
         let loaded = load_select_music_options(&ini(&text), defaults);
-        assert!(loaded.show_golf_pars && loaded.scorebox_cycle_golf);
+        assert!(loaded.show_golf_pars);
     }
 
     #[test]
@@ -3816,14 +3873,9 @@ mod tests {
                 "SelectMusicPatternInfo=Auto\n",
                 "SelectMusicStepArtistBox=Default\n",
                 "SelectMusicScorebox=0\n",
-                "SelectMusicScoreboxCycleGolf=0\n",
                 "SelectMusicScoreboxEventsFirst=1\n",
                 "SelectMusicShowGolfPars=0\n",
                 "SelectMusicScoreboxPlacement=Auto\n",
-                "SelectMusicScoreboxCycleItg=1\n",
-                "SelectMusicScoreboxCycleEx=0\n",
-                "SelectMusicScoreboxCycleHardEx=0\n",
-                "SelectMusicScoreboxCycleTournaments=0\n",
                 "SelectMusicChartInfoPeakNps=1\n",
                 "SelectMusicChartInfoEffectiveBpm=1\n",
                 "SelectMusicChartInfoMatrixRating=0\n",
@@ -3973,13 +4025,105 @@ mod tests {
     }
 
     #[test]
-    fn scorebox_cycle_bits_follow_choice_order() {
-        assert_eq!(scorebox_cycle_mask(true, false, true, false), 0b0101);
-        assert_eq!(scorebox_cycle_cursor_index(false, false, true, true), 2);
-        assert_eq!(scorebox_cycle_bit_from_choice(0), 0b0001);
-        assert_eq!(scorebox_cycle_bit_from_choice(3), 0b1000);
-        assert_eq!(scorebox_cycle_bit_from_choice(4), 0b10000);
-        assert_eq!(scorebox_cycle_bit_from_choice(5), 0);
+    fn groovestats_scorebox_bits_follow_choice_order() {
+        assert_eq!(groovestats_scorebox_mask(true, false, true), 0b101);
+        assert_eq!(groovestats_scorebox_cursor_index(false, false, true), 2);
+        assert_eq!(groovestats_scorebox_bit_from_choice(0), 0b001);
+        assert_eq!(groovestats_scorebox_bit_from_choice(2), 0b100);
+        assert_eq!(groovestats_scorebox_bit_from_choice(3), 0);
+    }
+
+    fn scorebox_boards(options: SystemOptions) -> [bool; 5] {
+        [
+            options.groovestats_scorebox_itg,
+            options.groovestats_scorebox_ex,
+            options.groovestats_scorebox_events,
+            arrowcloud_regular_boards_shown(
+                options.arrowcloud_regular_boards,
+                options.enable_groovestats,
+            ),
+            options.arrowcloud_event_boards,
+        ]
+    }
+
+    #[test]
+    fn scorebox_boards_default_to_groovestats_and_arrowcloud_events() {
+        let defaults = SystemOptions::default();
+        assert_eq!(defaults.arrowcloud_regular_boards, None);
+        // ArrowCloud's regular boards follow GrooveStats until the player picks.
+        let load = |text: &str| scorebox_boards(load_system_options(&ini(text), defaults));
+        assert_eq!(load("[Options]\nEnableGrooveStats=0\n"), [true, true, true, true, true]);
+        assert_eq!(load("[Options]\nEnableGrooveStats=1\n"), [true, true, true, false, true]);
+
+        // An unset choice is not written, so it keeps following GrooveStats.
+        let mut text = String::from("[Options]\n");
+        push_system_online_option_lines(&mut text, defaults);
+        assert!(!text.contains("ArrowCloudRegularBoards"));
+        let reloaded = load_system_options(&ini(&text), defaults);
+        assert_eq!(reloaded.arrowcloud_regular_boards, None);
+
+        // A choice the player made sticks either way.
+        let off = load("[Options]\nEnableGrooveStats=0\nArrowCloudRegularBoards=0\n");
+        assert!(!off[3]);
+        let on = load("[Options]\nEnableGrooveStats=1\nArrowCloudRegularBoards=1\n");
+        assert!(on[3]);
+    }
+
+    #[test]
+    fn scorebox_boards_round_trip_per_service() {
+        let defaults = SystemOptions::default();
+        let options = SystemOptions {
+            groovestats_scorebox_itg: false,
+            groovestats_scorebox_ex: true,
+            groovestats_scorebox_events: false,
+            arrowcloud_regular_boards: Some(true),
+            arrowcloud_event_boards: false,
+            ..defaults
+        };
+        let mut text = String::from("[Options]\n");
+        push_system_online_option_lines(&mut text, options);
+        assert!(!text.contains("SelectMusicScoreboxCycle"));
+        assert_eq!(
+            scorebox_boards(load_system_options(&ini(&text), defaults)),
+            [false, true, false, true, false]
+        );
+    }
+
+    #[test]
+    fn scorebox_boards_migrate_from_select_music_switches() {
+        let defaults = SystemOptions::default();
+        let migrate = |lines: &str| {
+            scorebox_boards(load_system_options(&ini(&format!("[Options]\n{lines}")), defaults))
+        };
+        // A config saved before the move always has every old switch.
+        let saved = |itg, ex, hard_ex, tournaments, golf, enable_golf| {
+            format!(
+                "SelectMusicScoreboxCycleItg={itg}\nSelectMusicScoreboxCycleEx={ex}\n\
+                 SelectMusicScoreboxCycleHardEx={hard_ex}\n\
+                 SelectMusicScoreboxCycleTournaments={tournaments}\n\
+                 SelectMusicScoreboxCycleGolf={golf}\nEnableGolf={enable_golf}\n"
+            )
+        };
+        // Old defaults: everything but golf, golf disabled. ArrowCloud's
+        // regular boards stay on, and event boards take the new default.
+        assert_eq!(migrate(&saved(1, 1, 1, 1, 0, 0)), [true, true, true, true, true]);
+        // Each GrooveStats board copies its old switch.
+        assert_eq!(migrate(&saved(0, 1, 0, 0, 0, 0)), [false, true, false, true, true]);
+        // H.EX alone keeps ArrowCloud's regular boards.
+        assert_eq!(migrate(&saved(0, 0, 1, 1, 0, 0)), [false, false, true, true, true]);
+        // ITG, EX and H.EX all off turns them off.
+        assert_eq!(migrate(&saved(0, 0, 0, 1, 0, 0)), [false, false, true, false, true]);
+        // With golf enabled, the golf switch carries over either way.
+        assert!(!migrate(&saved(1, 1, 1, 1, 0, 1))[4]);
+        assert!(migrate(&saved(1, 1, 1, 1, 1, 1))[4]);
+        // New keys win over the old switches.
+        assert_eq!(
+            migrate(&format!(
+                "{}ArrowCloudRegularBoards=0\nGrooveStatsScoreboxItg=1\n",
+                saved(0, 1, 1, 1, 0, 0)
+            )),
+            [true, true, true, false, true]
+        );
     }
 
     #[test]

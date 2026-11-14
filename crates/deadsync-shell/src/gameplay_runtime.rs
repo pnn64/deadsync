@@ -78,14 +78,7 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
         show_bpm_decimal: config.show_bpm_decimal,
         bpm_position: config.gameplay_bpm_position,
         machine_font: config.machine_font,
-        scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter {
-            itg: config.select_music_scorebox_cycle_itg,
-            ex: config.select_music_scorebox_cycle_ex,
-            hard_ex: config.select_music_scorebox_cycle_hard_ex,
-            tournaments: config.select_music_scorebox_cycle_tournaments,
-            golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
-            events_first: config.select_music_scorebox_events_first,
-        },
+        scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
     }
 }
 

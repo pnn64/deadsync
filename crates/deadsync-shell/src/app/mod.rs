@@ -768,15 +768,19 @@ fn evaluation_context_view(
     }
 }
 
-const fn scorebox_pane_filter(
+pub(crate) const fn scorebox_pane_filter(
     config: &config::app_config::Config,
 ) -> deadsync_score::SelectMusicScoreboxFilter {
     deadsync_score::SelectMusicScoreboxFilter {
-        itg: config.select_music_scorebox_cycle_itg,
-        ex: config.select_music_scorebox_cycle_ex,
-        hard_ex: config.select_music_scorebox_cycle_hard_ex,
-        tournaments: config.select_music_scorebox_cycle_tournaments,
-        golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
+        groovestats_itg: config.groovestats_scorebox_itg,
+        groovestats_ex: config.groovestats_scorebox_ex,
+        groovestats_events: config.groovestats_scorebox_events,
+        arrowcloud_regular: config::options::arrowcloud_regular_boards_shown(
+            config.arrowcloud_regular_boards,
+            config.enable_groovestats,
+        ),
+        arrowcloud_events: config.arrowcloud_event_boards,
+        golf: config.enable_golf,
         events_first: config.select_music_scorebox_events_first,
     }
 }

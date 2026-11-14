@@ -228,7 +228,6 @@ pub enum ItemId {
     SmStageDisplay,
     SmShowRivals,
     SmScoreboxPlacement,
-    SmScoreboxCycle,
     SmScoreboxEventsFirst,
 
     // Course Options submenu
@@ -249,6 +248,7 @@ pub enum ItemId {
 
     // GrooveStats Options submenu
     GsEnable,
+    GsScoreboxBoards,
     GsShowSrpgShop,
     GsSrpgShopFolder,
     GsEnableBoogie,
@@ -259,6 +259,8 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcRegularBoards,
+    AcEventBoards,
     AcGolf,
     AcSubmitFails,
     AcResultDialogs,

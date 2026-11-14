@@ -219,10 +219,9 @@ update_config_fn!(pub fn update_show_select_music_gameplay_timer(enabled: bool) 
 update_config_fn!(pub fn update_show_select_music_stage_display(enabled: bool) => set_show_select_music_stage_display);
 update_config_fn!(pub fn update_show_select_music_scorebox(enabled: bool) => set_show_select_music_scorebox);
 update_config_fn!(pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) => set_select_music_scorebox_placement);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_itg(enabled: bool) => set_select_music_scorebox_cycle_itg);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_ex(enabled: bool) => set_select_music_scorebox_cycle_ex);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_hard_ex(enabled: bool) => set_select_music_scorebox_cycle_hard_ex);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) => set_select_music_scorebox_cycle_tournaments);
+update_config_fn!(pub fn update_groovestats_scorebox_boards(mask: u8) => set_groovestats_scorebox_boards);
+update_config_fn!(pub fn update_arrowcloud_regular_boards(enabled: bool) => set_arrowcloud_regular_boards);
+update_config_fn!(pub fn update_arrowcloud_event_boards(enabled: bool) => set_arrowcloud_event_boards);
 update_config_fn!(pub fn update_select_music_chart_info_peak_nps(enabled: bool) => set_select_music_chart_info_peak_nps);
 update_config_fn!(pub fn update_select_music_chart_info_effective_bpm(enabled: bool) => set_select_music_chart_info_effective_bpm);
 update_config_fn!(pub fn update_select_music_chart_info_matrix_rating(enabled: bool) => set_select_music_chart_info_matrix_rating);
@@ -403,6 +402,5 @@ pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_h
     }
 }
 
-update_config_fn!(pub fn update_select_music_scorebox_cycle_golf(enabled: bool) => set_select_music_scorebox_cycle_golf);
 update_config_fn!(pub fn update_select_music_scorebox_events_first(enabled: bool) => set_select_music_scorebox_events_first);
 update_config_fn!(pub fn update_select_music_show_golf_pars(enabled: bool) => set_select_music_show_golf_pars);

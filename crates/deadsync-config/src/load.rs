@@ -255,6 +255,11 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
     cfg.enable_golf = loaded.enable_golf;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
+    cfg.groovestats_scorebox_itg = loaded.groovestats_scorebox_itg;
+    cfg.groovestats_scorebox_ex = loaded.groovestats_scorebox_ex;
+    cfg.groovestats_scorebox_events = loaded.groovestats_scorebox_events;
+    cfg.arrowcloud_regular_boards = loaded.arrowcloud_regular_boards;
+    cfg.arrowcloud_event_boards = loaded.arrowcloud_event_boards;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
     cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;
     cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
@@ -383,11 +388,6 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_step_artist_box_mode = loaded.step_artist_box_mode;
     cfg.show_select_music_scorebox = loaded.show_scorebox;
     cfg.select_music_scorebox_placement = loaded.scorebox_placement;
-    cfg.select_music_scorebox_cycle_itg = loaded.scorebox_cycle_itg;
-    cfg.select_music_scorebox_cycle_ex = loaded.scorebox_cycle_ex;
-    cfg.select_music_scorebox_cycle_hard_ex = loaded.scorebox_cycle_hard_ex;
-    cfg.select_music_scorebox_cycle_tournaments = loaded.scorebox_cycle_tournaments;
-    cfg.select_music_scorebox_cycle_golf = loaded.scorebox_cycle_golf;
     cfg.select_music_scorebox_events_first = loaded.scorebox_events_first;
     cfg.select_music_show_golf_pars = loaded.show_golf_pars;
     cfg.select_music_chart_info_peak_nps = loaded.chart_info_peak_nps;
