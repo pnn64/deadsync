@@ -106,7 +106,7 @@ use deadlib_platform::frame_pacing::{
     FrameIntervalState, FrameLoopMode, FrameWaitControl, elapsed_us_between, elapsed_us_since,
     foreground_input_active,
 };
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
 use deadlib_platform::host_time;
 use deadlib_present::compose;
 use deadlib_present::space::{self as space, Metrics};
@@ -9106,7 +9106,7 @@ impl App {
         }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+    #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
     #[inline(always)]
     fn handle_unix_window_keyboard_fallback(
         &mut self,
@@ -11136,7 +11136,7 @@ impl ApplicationHandler<UserEvent> for App {
                 {
                     self.handle_key_text(event_loop, text);
                 }
-                #[cfg(any(target_os = "linux", target_os = "freebsd"))]
+                #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "macos"))]
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
             }
             WindowEvent::RedrawRequested => {
