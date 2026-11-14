@@ -29,7 +29,7 @@ use deadsync_noteskin::{
 use log::warn;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 // Session catalog snapshots, capped at 16 installed skins. Startup discovers
 // metadata; a Downloads worker may replace it after validating an installation.
@@ -89,9 +89,27 @@ pub fn clear_itg_runtime_caches() {
     noteskin_itg::clear_data_cache();
     noteskin_itg::clear_lookup_caches();
     texture::clear_source_caches();
+    *NOTESKIN_ROOTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
 }
 
-fn noteskin_roots() -> Vec<PathBuf> {
+// The noteskin search roots. Finding the workspace ones asks the file system
+// about every ancestor of three directories, and song Lua can ask whether a
+// skin exists on a gameplay frame, so the list is kept like the other source
+// lookups: until `clear_itg_runtime_caches`. A hit is one lock and one Arc
+// clone.
+static NOTESKIN_ROOTS: Mutex<Option<Arc<[PathBuf]>>> = Mutex::new(None);
+
+fn noteskin_roots() -> Arc<[PathBuf]> {
+    let mut kept = NOTESKIN_ROOTS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    kept.get_or_insert_with(|| find_noteskin_roots().into())
+        .clone()
+}
+
+fn find_noteskin_roots() -> Vec<PathBuf> {
     let mut roots = crate::paths().noteskin_roots.clone();
     if let Ok(cwd) = std::env::current_dir() {
         add_workspace_noteskin_roots(&mut roots, &cwd);
