@@ -1143,6 +1143,9 @@ where
         if player_idx >= self.setup.num_players {
             return AccelEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_accel_effects(false, profile_mask_bits, options.accel);
+        }
         effective_attack_accel_effects(
             self.player_attack_base_cleared(player_idx),
             profile_mask_bits,
@@ -1159,6 +1162,9 @@ where
         if player_idx >= self.setup.num_players {
             return VisualEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_visual_effects(false, profile_mask_bits, options.visual);
+        }
         effective_attack_visual_effects(
             self.player_attack_base_cleared(player_idx),
             profile_mask_bits,
@@ -1171,6 +1177,9 @@ where
         if player_idx >= self.setup.num_players {
             return AppearanceEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return options.appearance;
+        }
         self.mods.attacks.appearance[player_idx]
     }
 
@@ -1178,6 +1187,9 @@ where
     pub fn effective_visibility_effects_for_player(&self, player_idx: usize) -> VisibilityEffects {
         if player_idx >= self.setup.num_players {
             return VisibilityEffects::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_visibility_effects(options.visibility);
         }
         effective_attack_visibility_effects(self.mods.attacks.visibility[player_idx])
     }
@@ -1199,6 +1211,9 @@ where
         if player_idx >= self.setup.num_players {
             return ScrollEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_scroll_effects(false, base_scroll, options.scroll);
+        }
         effective_attack_scroll_effects(
             self.player_attack_base_cleared(player_idx),
             base_scroll,
@@ -1214,6 +1229,9 @@ where
     ) -> PerspectiveEffects {
         if player_idx >= self.setup.num_players {
             return PerspectiveEffects::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_perspective_effects(false, base_perspective, options.perspective);
         }
         effective_attack_perspective_effects(
             self.player_attack_base_cleared(player_idx),
@@ -1231,6 +1249,9 @@ where
         if player_idx >= self.setup.num_players {
             return 0.0;
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_mini_percent(options.mini_percent, base_mini_percent, false);
+        }
         effective_mini_percent(
             self.mods.attacks.mini_percent[player_idx],
             base_mini_percent,
@@ -1246,6 +1267,9 @@ where
     ) -> ScrollSpeedSetting {
         if player_idx >= self.setup.num_players {
             return ScrollSpeedSetting::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return options.scroll_speed.unwrap_or(base_scroll_speed);
         }
         effective_attack_scroll_speed(
             self.player_attack_base_cleared(player_idx),

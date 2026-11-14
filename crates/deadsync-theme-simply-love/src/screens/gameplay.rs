@@ -984,6 +984,8 @@ impl State {
     /// Transfer authored callbacks from the loading worker to the gameplay screen.
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
+        scene.prepare_gameplay_player_options(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
         // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
         scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
             .map_err(|error| error.to_string())?;
@@ -1049,6 +1051,8 @@ impl State {
         let outro_before_actors = frame.gameplay_outro;
         let output = scene.update(frame).map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
+        scene.prepare_gameplay_player_options(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
         // Native ScreenGameplay checks failure after updating its actor tree.
         // Lua can drain life during this update, after the core's earlier check.
         if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
@@ -1103,6 +1107,8 @@ impl State {
         if !scene.has_custom_draw().map_err(|error| error.to_string())? { return Ok(()); }
         let output = scene.draw().map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, &mut self.gameplay);
+        scene.prepare_gameplay_player_options(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
         match output.request.as_ref() {
             Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message))
                 if message == "SM_DoNextScreen" && self.song_lua_out.is_none() => {
@@ -3218,6 +3224,9 @@ pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongL
 
             scene.apply_output_player_writes(&output, &mut state.gameplay);
             state.song_lua_output.append(output);
+            if let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
+                state.song_lua_output.errors.push(error.to_string());
+            }
             if let Err(error) = scene.write_visuals(&mut state.gameplay.mods.song_lua_visuals) {
                 state.song_lua_output.errors.push(error);
             }

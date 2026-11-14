@@ -232,8 +232,21 @@ impl SongLiveScene {
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
+        let options = runtime
+            .gameplay_player_options(std::array::from_fn(|player| {
+                deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
+            }))?
+            .map(Some);
         for player in 0..LUA_PLAYERS {
             game.mods.song_lua_fail_types[player] = runtime.gameplay_fail_type(player)?;
+        }
+        let changed = game.mods.song_lua_player_options != options;
+        game.mods.song_lua_player_options = options;
+        drop(runtime);
+        if changed {
+            // Current setters in Update/Input/Draw can change speed and reverse
+            // after the gameplay core's normal motion refresh for this frame.
+            game.refresh_live_notefield_options(game.clock.song_position.current_bpm);
         }
         Ok(())
     }

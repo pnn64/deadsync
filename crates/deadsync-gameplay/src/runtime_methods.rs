@@ -159,7 +159,8 @@ where
     fn live_notefield_refresh_needed(&self, current_bpm: f32) -> bool {
         let dynamic_motion = self.mods.attacks.cleared_for_outro
             || (0..self.setup.num_players).any(|player| {
-                !self.mods.attacks.mask_windows[player].is_empty()
+                self.mods.song_lua_player_options[player].is_some()
+                    || !self.mods.attacks.mask_windows[player].is_empty()
                     || !self.mods.attacks.song_lua_ease_windows[player].is_empty()
             });
         self.display
@@ -2108,10 +2109,16 @@ where
         }
         refresh_active_attack_masks(self, delta_time);
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            let expand_period = self
+                .effective_accel_effects_for_player_with_mask(
+                    player,
+                    self.profiles_runtime.profiles[player].accel_mask_bits(),
+                )
+                .expand_period;
             self.mods.expand_seconds[player] = advance_expand_phase(
                 self.mods.expand_seconds[player],
                 delta_time,
-                self.mods.attacks.accel[player].expand_period.unwrap_or(0.0),
+                expand_period,
                 self.is_in_freeze(),
                 self.is_in_delay(),
             );

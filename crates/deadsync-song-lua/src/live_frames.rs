@@ -3,6 +3,8 @@ use super::*;
 use crate::{SongLuaLiveFrame, SongLuaLivePlayer};
 use deadlib_lua::NativeStack;
 
+mod player_options;
+
 #[derive(Default)]
 struct Attacks {
     windows: Arc<[deadsync_gameplay::ChartAttackWindow]>,

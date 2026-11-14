@@ -1477,6 +1477,151 @@ return Def.ActorFrame { Name = 'Foreground',
     }
 
     #[test]
+    fn runtime_song_options_reach_note_effects_and_reset_for_both_players() {
+        std::thread::Builder::new()
+            .name("runtime-song-options".into())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                with_session(
+                    profile_data::PlayStyle::Versus,
+                    profile_data::PlayerSide::P1,
+                    true,
+                    true,
+                    || {
+                        let dir = tempfile::tempdir().unwrap();
+                        let simfile = dir.path().join("runtime-song-options.ssc");
+                        let measures = ["1000\n0000\n0010\n0000"; 12].join("\n,\n");
+                        fs::write(&simfile, format!(
+                            "#TITLE:Runtime song option bridge;\n#BPMS:0=120;\n\
+                            #FGCHANGES:0=default.lua=1=0=0=0=StretchNoLoop====;\n\
+                            #NOTEDATA:;\n#STEPSTYPE:dance-single;\n\
+                            #DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n{measures}\n;\n"
+                        )).unwrap();
+                        // Gemini keeps the foreground alive with a separate actor
+                        // and writes Song options from a recurring queued command.
+                        fs::write(dir.path().join("default.lua"), r#"
+RuntimeModTicks = 0
+local values = {
+    {-0.1, 0.2, 0.4, 1.5, 0.25, 0.5},
+    {0.35, 0.6, 0.8, 2.5, -0.1, 1},
+}
+return Def.ActorFrame {
+    Def.Actor { OnCommand = function(self) self:sleep(9e9) end },
+    Def.Actor {
+        OnCommand = function(self) self:queuecommand('Update') end,
+        UpdateCommand = function(self)
+            RuntimeModTicks = RuntimeModTicks + 1
+            local beat = GAMESTATE:GetSongBeat()
+            local active = beat >= 8 and beat < 16
+            for player = 1, 2 do
+                local pn = 'PlayerNumber_P' .. player
+                if GAMESTATE:IsPlayerEnabled(pn)
+                    and GAMESTATE:GetCurrentSteps(pn):GetDifficulty() == 'Difficulty_Challenge' then
+                    local po = GAMESTATE:GetPlayerState(pn):GetPlayerOptions('ModsLevel_Song')
+                    local v = active and values[player] or {0, 0, 0, 1, 0, 0}
+                    po:FailSetting('FailType_Off')
+                    po:Flip(v[1], 10000)
+                    po:Brake(v[2], 10000)
+                    po:Stealth(v[3], 10000)
+                    po:XMod(v[4], 10000)
+                    po:Mini(v[5], 10000)
+                    po:Reverse(v[6], 10000)
+                end
+            end
+            self:sleep(1/75):queuecommand('Update')
+        end,
+    },
+}
+"#).unwrap();
+                        let probe = dir.path().join("assert-current-options.lua");
+                        fs::write(&probe, r#"
+assert(RuntimeModTicks > 0, 'the authored queued command must execute')
+local beat = GAMESTATE:GetSongBeat()
+local active = beat >= 8 and beat < 16
+local values = {{-0.1, 0.2, 0.4, 1.5, 0.25, 0.5}, {0.35, 0.6, 0.8, 2.5, -0.1, 1}}
+local methods = {'Flip', 'Brake', 'Stealth', 'XMod', 'Mini', 'Reverse'}
+for player = 1, 2 do
+    local po = GAMESTATE:GetPlayerState('PlayerNumber_P' .. player):GetPlayerOptions('ModsLevel_Current')
+    local expected = active and values[player] or {0, 0, 0, 1, 0, 0}
+    for i, name in ipairs(methods) do
+        local actual = po[name](po)
+        assert(math.abs(actual - expected[i]) < 0.00001,
+            'P' .. player .. ' Current ' .. name .. ': ' .. tostring(actual))
+    end
+end
+"#).unwrap();
+                        space::set_current_metrics(space::Metrics::centered(640.0, 480.0));
+                        space::set_current_window_px(640, 480);
+                        let profiles = std::array::from_fn(|_| profile_data::Profile {
+                            scroll_speed: ScrollSpeedSetting::XMod(1.0),
+                            ..Default::default()
+                        });
+                        let session = GameplaySession {
+                            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+                            joined_sides: [true, true],
+                            ..Default::default()
+                        };
+                        let mut state = build_test_state_with_lua_mode(
+                            &simfile, GameplayViewport::new(640.0, 480.0), session,
+                            profiles, "Software", None, true,
+                        );
+                        assert!(state.song_lua.is_some(), "Runtime mode retains the Lua scene");
+                        assert!(state.take_song_lua_output().errors.is_empty());
+                        state.boundary.total_elapsed_in_screen = 10.0;
+                        state.gameplay.set_live_autoplay_enabled(true);
+                        for tick in 0..=540 {
+                            let now = tick as f32 / 60.0;
+                            let host_nanos = 1_000_000_000 + tick as u64 * 1_000_000_000 / 60;
+                            screen_gameplay::update(&mut state, if tick == 0 { 0.0 } else { 1.0 / 60.0 },
+                                deadsync_gameplay::GameplayAudioSnapshot {
+                                    stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                                        music_nanos: deadsync_core::song_time::song_time_ns_from_seconds(now),
+                                        has_music_mapping: true, valid_at_host_nanos: host_nanos,
+                                        ..Default::default()
+                                    }, ..Default::default()
+                                }, || host_nanos, &mut Vec::new());
+                            let output = state.take_song_lua_output();
+                            assert!(output.errors.is_empty(), "tick {tick}: {:?}", output.errors);
+                            if ![30, 300, 540].contains(&tick) { continue; }
+                            // Verify the VM independently before checking the state
+                            // actually consumed by normal notefield composition.
+                            state.song_lua.as_mut().unwrap().runtime_mut()
+                                .execute_file(&probe, &[]).unwrap();
+                            let active = tick == 300;
+                            for (player, targets) in [
+                                [-0.1, 0.2, 0.4, 1.5, 0.25, 0.5],
+                                [0.35, 0.6, 0.8, 2.5, -0.1, 1.0],
+                            ].into_iter().enumerate() {
+                                let expected = if active { targets } else { [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] };
+                                let visual = deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, player);
+                                let accel = state.gameplay.effective_accel_effects_for_player_with_mask(player, 0);
+                                let appearance = state.gameplay.effective_appearance_effects_for_player(player);
+                                let mini = deadsync_gameplay::effective_mini_percent_for_player(&state.gameplay, player) / 100.0;
+                                let reverse = deadsync_gameplay::effective_scroll_effects_for_player(&state.gameplay, player).reverse;
+                                for (name, actual, expected) in [
+                                    ("Flip", visual.flip, expected[0]),
+                                    ("Brake", accel.brake, expected[1]),
+                                    ("Stealth", appearance.stealth, expected[2]),
+                                    ("Mini", mini, expected[4]),
+                                    ("Reverse", reverse, expected[5]),
+                                ] {
+                                    assert!((actual - expected).abs() < 0.00001,
+                                        "tick {tick}, P{}, {name}: gameplay {actual}, Current {expected}", player + 1);
+                                }
+                                assert_eq!(state.gameplay.effective_scroll_speed_for_player_with_base(
+                                    player, ScrollSpeedSetting::XMod(1.0)), ScrollSpeedSetting::XMod(expected[3]),
+                                    "tick {tick}, P{} XMod", player + 1);
+                            }
+                        }
+                    },
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
     fn hidden_gameplay_intro_keeps_transition_timing() {
         let simfile = write_fixture("hidden-intro", generated_sprite_core_simfile());
         with_session(

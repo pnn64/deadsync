@@ -140,6 +140,7 @@ include!("course_display.rs");
 include!("score_display.rs");
 include!("ghost.rs");
 include!("attacks.rs");
+include!("live_player_options.rs");
 include!("runtime_config.rs");
 include!("cues.rs");
 include!("player.rs");

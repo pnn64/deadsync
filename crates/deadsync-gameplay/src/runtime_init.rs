@@ -1290,6 +1290,7 @@ where
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             song_lua_fail_types: [None; MAX_PLAYERS],
+            song_lua_player_options: [None; MAX_PLAYERS],
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
