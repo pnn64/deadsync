@@ -1,4 +1,4 @@
-use super::difficulty_list::DIFFICULTY_SLOT_COUNT;
+use super::difficulty_list::{DIFFICULTY_LIST_HEIGHT, DIFFICULTY_SLOT_COUNT};
 use super::{SongSelectLayout, StepArtistBarLayoutType, WidgetBounds, WidgetLayout};
 use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
@@ -22,6 +22,21 @@ fn song_details_children_fit_their_widget_at_squareish_sizes() {
         }
         assert!(layout.banner.bounds.x >= 0.0);
         assert!(layout.chart_panel.x >= 0.0);
+    }
+}
+
+#[test]
+fn song_banner_top_aligns_with_screen_bar_bottom() {
+    use super::SCREEN_BAR_HEIGHT;
+
+    for (width, height, layout_type) in [
+        (480.0, 480.0, UILayoutType::Squareish),
+        (640.0, 480.0, UILayoutType::Squareish),
+        (853.0, 480.0, UILayoutType::Wide),
+        (1147.0, 480.0, UILayoutType::UltraWide),
+    ] {
+        let layout = SongSelectLayout::new(width, height, layout_type);
+        assert_eq!(layout.banner.bounds.y, SCREEN_BAR_HEIGHT);
     }
 }
 
@@ -55,7 +70,7 @@ fn wide_song_select_retains_reference_widget_geometry() {
     );
     assert_eq!(
         chart_panel,
-        WidgetBounds::new(pane.x, density.y, pane.width, 154.0)
+        WidgetBounds::new(pane.x, density.y, pane.width, DIFFICULTY_LIST_HEIGHT)
     );
     assert_eq!(chart_panel.y, density.y);
     assert_eq!(difficulty_list.y, density.y);
@@ -64,7 +79,10 @@ fn wide_song_select_retains_reference_widget_geometry() {
     assert_eq!(p1_pattern, density);
     assert_eq!(p2_pattern.bottom(), chart_panel.bottom());
     assert_eq!(p2_pattern.y, density.bottom() + 24.0);
-    assert!((chart_panel.bottom() - density.bottom() - 90.0).abs() < 0.001);
+    assert!(
+        (chart_panel.bottom() - density.bottom() - (DIFFICULTY_LIST_HEIGHT - density.height)).abs()
+            < 0.001
+    );
     let header =
         layout.density_graphs(StepArtistBarLayoutType::Legacy, 99.9)[0].step_artist_peak_nps;
     assert!(
@@ -108,7 +126,7 @@ fn non_ultra_wide_left_widgets_share_the_stats_pane_bounds() {
         assert_eq!(layout.chart_panel.width, expected_width);
         assert_eq!(layout.density_panel.bounds.width, expected_width - 34.0);
         assert!((layout.density_panel.bounds.height - 64.0 * layout.zoom).abs() < 0.001);
-        assert_eq!(layout.chart_panel.height, 154.0);
+        assert_eq!(layout.chart_panel.height, DIFFICULTY_LIST_HEIGHT);
         assert!(layout.chart_panel.y >= layout.song_details.widget.bounds.bottom());
         let density_graph = layout.density_graphs(StepArtistBarLayoutType::Legacy, 99.9)[0];
         let step_header_y = density_graph.step_artist_peak_nps.step_header_y;
@@ -148,10 +166,10 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                 if matches!(vertical_layout, StepArtistBarLayoutType::Expanded) {
                     120.0 * layout.zoom + 2.0
                 } else {
-                    154.0
+                    DIFFICULTY_LIST_HEIGHT
                 };
             assert!((layout.chart_panel.height - expected_chart_panel_height).abs() < 0.001);
-            assert!((layout.difficulty_list.bounds.height - 154.0).abs() < 0.001);
+            assert!((layout.difficulty_list.bounds.height - DIFFICULTY_LIST_HEIGHT).abs() < 0.001);
             let density_graphs = layout.density_graphs(vertical_layout, 99.9);
             if matches!(vertical_layout, StepArtistBarLayoutType::Legacy) {
                 assert!(

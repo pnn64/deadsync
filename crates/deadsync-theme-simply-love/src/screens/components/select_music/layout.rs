@@ -1,3 +1,4 @@
+use crate::screens::components::shared::screen_bar::SCREEN_BAR_HEIGHT;
 use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
 mod widget;
@@ -19,7 +20,6 @@ const LEFT_PANEL_REFERENCE_WIDTH: f32 = 720.0;
 const LEFT_PANEL_RIGHT_EDGE_INSET: f32 = 10.0;
 const SONG_BANNER_DESIGN_WIDTH: f32 = 418.0;
 const SONG_BANNER_DESIGN_HEIGHT: f32 = 164.0;
-const SONG_BANNER_CENTER_Y: f32 = 96.0;
 const SONG_DETAILS_HEIGHT: f32 = 50.0;
 const SECTION_GAP: f32 = 2.0;
 
@@ -146,11 +146,11 @@ impl SongSelectLayout {
         let zoom = left_pane.zoom;
         let banner_zoom = left_pane.bounds.width / SONG_BANNER_DESIGN_WIDTH;
 
-        let banner_widget = WidgetLayout::from_center(
-            left_pane.bounds.center_x(),
-            SONG_BANNER_CENTER_Y,
-            left_pane.bounds.width,
-            SONG_BANNER_DESIGN_HEIGHT * banner_zoom,
+        let banner_widget = WidgetLayout::from_edges(
+            left_pane.bounds.x,
+            SCREEN_BAR_HEIGHT,
+            left_pane.bounds.right(),
+            SCREEN_BAR_HEIGHT + SONG_BANNER_DESIGN_HEIGHT * banner_zoom,
             banner_zoom,
         );
         let banner = SongBannerLayout::new(banner_widget);

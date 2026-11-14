@@ -59,22 +59,4 @@ impl WidgetLayout {
             zoom,
         }
     }
-
-    pub(super) fn from_center(
-        center_x: f32,
-        center_y: f32,
-        width: f32,
-        height: f32,
-        zoom: f32,
-    ) -> Self {
-        Self {
-            bounds: WidgetBounds::new(
-                center_x - width * 0.5,
-                center_y - height * 0.5,
-                width,
-                height,
-            ),
-            zoom,
-        }
-    }
 }
