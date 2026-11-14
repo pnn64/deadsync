@@ -1,5 +1,5 @@
 //! Song file loading through the shared Rust VM. Actor/media loading is separate.
-use deadlib_lua::{Error, ErrorKind, HostCall, Root, Value, Vm};
+use deadlib_lua::{Error, ErrorKind, HostCall, IndexView, Root, TableId, Value, Vm};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -309,7 +309,19 @@ fn finish_load(call: &mut HostCall<'_>) -> Result<(), Error> {
             ("__index", env_index as deadlib_lua::HostFunction),
             ("__newindex", env_newindex),
         ] {
-            let function = call.new_host_function(callback, &[Value::Table(proxy), globals])?;
+            let captures = [Value::Table(proxy), globals];
+            let function = if name == "__index" {
+                // A literal's string lives as long as the VM, so the resolver
+                // can hold it without a root.
+                let keys = EnvKeys {
+                    target: call.intern_static(TARGET.as_bytes())?,
+                };
+                let function = call.new_host_function_with_data(callback, &captures, keys)?;
+                call.set_index_resolver(function, resolve_env_index)?;
+                function
+            } else {
+                call.new_host_function(callback, &captures)?
+            };
             let key = call.try_intern(name.as_bytes())?;
             call.raw_table_set(mt, key, function)?;
         }
@@ -327,6 +339,34 @@ fn finish_load(call: &mut HostCall<'_>) -> Result<(), Error> {
         call.raw_table_set(registry, wrapper, Value::Table(proxy))?;
         call.push(wrapper)
     })
+}
+
+// What `resolve_env_index` needs and cannot make itself: the key of the
+// proxy's target field.
+struct EnvKeys {
+    target: Value,
+}
+
+/// `env_index` for a read that consults nothing but tables: the proxy holds
+/// a table target, and neither the target nor the globals reach a function
+/// `__index` for this key. Every global read in song code comes through here.
+/// Anything else is left to the handler, including its error for a target
+/// that is not a table.
+fn resolve_env_index(view: &IndexView<'_>, _: TableId, key: Value) -> Option<Value> {
+    let keys = view.function_data::<EnvKeys>()?;
+    let Value::Table(proxy) = view.captures()[0] else {
+        return None;
+    };
+    let Value::Table(target) = view.get(proxy, keys.target)? else {
+        return None;
+    };
+    match view.get(target, key)? {
+        Value::Nil => match view.captures()[1] {
+            Value::Table(globals) => view.get(globals, key),
+            _ => None,
+        },
+        value => Some(value),
+    }
 }
 
 fn env_index(call: &mut HostCall<'_>) -> Result<(), Error> {
