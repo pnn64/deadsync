@@ -755,6 +755,7 @@ impl Vm {
         self.frames[owner].pc = 0;
         self.frames[owner].vararg_start = 0;
     }
+    #[inline]
     fn gc_debt(&self) -> usize {
         self.strings
             .bytes
@@ -973,6 +974,8 @@ impl Vm {
         }
     }
 
+    // Runs at every frame entry: the test stays inline and the work does not.
+    #[inline]
     pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {
         self.gc.pending = false;
         if !self.gc.stopped
@@ -980,18 +983,24 @@ impl Vm {
             && !self.gc.closing
             && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            if self.advance_gc_some(self.gc_step_budget(0))? {
-                if self.gc.finalizers.is_empty() {
-                    self.finish_gc_cycle();
-                } else {
-                    if let Err(error) = self.push_finalizers(false) {
-                        self.defer_gc_until_allocation();
-                        return Err(error);
-                    }
-                }
+            return self.step_gc();
+        }
+        Ok(())
+    }
+    #[cold]
+    #[inline(never)]
+    fn step_gc(&mut self) -> Result<(), Error> {
+        if self.advance_gc_some(self.gc_step_budget(0))? {
+            if self.gc.finalizers.is_empty() {
+                self.finish_gc_cycle();
             } else {
-                self.defer_gc_until_allocation();
+                if let Err(error) = self.push_finalizers(false) {
+                    self.defer_gc_until_allocation();
+                    return Err(error);
+                }
             }
+        } else {
+            self.defer_gc_until_allocation();
         }
         Ok(())
     }

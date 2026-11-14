@@ -1121,7 +1121,17 @@ impl Vm {
     fn memory_failure(&self) -> Error {
         Error::memory().with_value(Value::String(self.memory_error))
     }
+    // Calls and returns reserve on every frame; usually the capacity is there.
+    #[inline]
     fn reserve_registers(&mut self, len: usize) -> Result<(), Error> {
+        if len <= self.registers.capacity() {
+            return Ok(());
+        }
+        self.grow_registers(len)
+    }
+    #[cold]
+    #[inline(never)]
+    fn grow_registers(&mut self, len: usize) -> Result<(), Error> {
         let before = self.registers.capacity();
         self.registers
             .try_reserve(len.saturating_sub(self.registers.len()))
@@ -1129,16 +1139,22 @@ impl Vm {
         self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
         Ok(())
     }
+    #[inline]
     fn resize_registers(&mut self, len: usize) {
         self.hooks.preserve_popped(&self.registers, len);
         let before = self.registers.capacity();
         self.registers.resize(len, Value::Nil);
-        self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
+        if self.registers.capacity() != before {
+            self.gc_note_control(
+                (self.registers.capacity() - before) * std::mem::size_of::<Value>(),
+            );
+        }
     }
     fn truncate_registers(&mut self, len: usize) {
         self.hooks.preserve_popped(&self.registers, len);
         self.registers.truncate(len);
     }
+    #[inline]
     fn push_record(&mut self, mut frame: Frame) {
         frame.c_level_bias = self.threads[slot_index(self.thread.0)].native_bias;
         let before = self.frames.capacity();
