@@ -177,6 +177,14 @@ impl NativeStack<'_, '_> {
         let target = self.indexed_value(index)?;
         self.write_table(target, key, value, true).map(|_| ())
     }
+    /// A counter that changes whenever a string-keyed entry of the table is
+    /// added, replaced or removed. See [`HostCall::raw_fields_version`].
+    ///
+    /// # Errors
+    /// Rejects an invalid or collected table handle.
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.call.raw_fields_version(table)
+    }
     /// Push a raw integer-key lookup.
     ///
     /// # Errors

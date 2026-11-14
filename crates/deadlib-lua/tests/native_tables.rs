@@ -475,3 +475,35 @@ return direct_error == pushed_error, direct_error
         ]
     );
 }
+
+#[test]
+fn the_native_stack_reads_the_same_fields_version_as_a_host_call() {
+    fn versions(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let Value::Table(table) = call.arguments()[0] else {
+            return Err(call.error(b"table expected"));
+        };
+        let from_call = call.raw_fields_version(table)?;
+        let mut stack = call.native_stack()?;
+        let from_stack = stack.raw_fields_version(table)?;
+        assert_eq!(from_call, from_stack);
+        stack.push(Value::Number(f64::from(from_stack)))?;
+        stack.finish(1)
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(versions, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local t = {name = 1}
+local first = version(t)
+local _ = t.name
+local same = version(t) == first
+t.name = 2
+return same, version(t) ~= first
+"#
+        ),
+        [Value::Boolean(true), Value::Boolean(true)]
+    );
+}
