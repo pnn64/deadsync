@@ -286,12 +286,52 @@ pub(super) fn set_options(
         effect(call)
     })
 }
+/// What an advance reads: Song and Current, Current's and Song's option
+/// states, Song's approach speeds, Song's disabled windows and Current's copy
+/// of them, each with its fields version and array length; and whether that
+/// copy has a metatable. Once an advance settles, the next one with the same
+/// inputs, and a finite, non-negative rate and delta, again writes nothing
+/// and raises nothing.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct Inputs([(Option<TableId>, u32, usize); 7], bool);
+
+pub(super) fn inputs(call: &mut HostCall<'_>, owners: [TableId; 4]) -> Result<Inputs, Error> {
+    let fields = [
+        Value::Table(owners[2]),
+        Value::Table(owners[3]),
+        call.raw_table_get_static(owners[3], STATE.as_bytes())?,
+        call.raw_table_get_static(owners[2], STATE.as_bytes())?,
+        call.raw_table_get_static(owners[2], SPEEDS.as_bytes())?,
+        call.raw_table_get_static(owners[2], WINDOWS.as_bytes())?,
+        call.raw_table_get_static(owners[3], WINDOWS.as_bytes())?,
+    ];
+    let mut tables = [(None, 0, 0); 7];
+    for (entry, field) in tables.iter_mut().zip(fields) {
+        if let Value::Table(table) = field {
+            *entry = (
+                Some(table),
+                call.raw_fields_version(table)?,
+                call.raw_table_len(table)?,
+            );
+        }
+    }
+    let held = match fields[6] {
+        Value::Table(held) => call.raw_metatable(held)?.is_some(),
+        _ => false,
+    };
+    Ok(Inputs(tables, held))
+}
+
+/// Approach Current toward Song, and report whether it had already settled:
+/// nothing was written, every approached value stood at its target and every
+/// approach speed was finite and non-negative.
 pub(super) fn advance(
     call: &mut HostCall<'_>,
     owners: [TableId; 4],
     delta: f32,
     rate: f32,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
+    let mut settled = true;
     let current = nested(call, owners[3], STATE)?;
     let target = nested(call, owners[2], STATE)?;
     let speeds = nested(call, owners[2], SPEEDS)?;
@@ -342,12 +382,15 @@ pub(super) fn advance(
                             "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
                         )
                     {
-                        update(call, current, name, value)?;
+                        if update(call, current, name, value)? {
+                            settled = false;
+                        }
                     } else if let Some(target) = float(call, value) {
                         let old = call.raw_table_get(current, name)?;
                         let value = typed_float(call, old, 0.0)?;
                         let speed = call.raw_table_get(speeds, name)?;
                         let speed = typed_float(call, speed, 1.0)?;
+                        settled &= value == target && speed.is_finite() && speed >= 0.0;
                         let value = super::super::song_options::approach(
                             call,
                             value,
@@ -357,6 +400,7 @@ pub(super) fn advance(
                         let value = Value::Number(f64::from(value));
                         if !unchanged(old, value) {
                             call.raw_table_set(current, name, value)?;
+                            settled = false;
                         }
                     }
                     Ok(())
@@ -376,8 +420,11 @@ pub(super) fn advance(
                 } else {
                     rate * delta * speed
                 };
+                settled &= value == target && speed.is_finite() && speed >= 0.0;
                 let value = super::super::song_options::approach(call, value, target, amount)?;
-                update_static(call, owners[3], field, Value::Number(f64::from(value)))?;
+                if update_static(call, owners[3], field, Value::Number(f64::from(value)))? {
+                    settled = false;
+                }
             }
             let mode = if raw_float_static(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
                 "cmod"
@@ -387,10 +434,14 @@ pub(super) fn advance(
                 "xmod"
             };
             let mode = call.intern_static(mode.as_bytes())?;
-            update_static(call, owners[3], "__songlua_speedmod_active", mode)?;
+            if update_static(call, owners[3], "__songlua_speedmod_active", mode)? {
+                settled = false;
+            }
             for key in [SKIN, SKIN_OVERRIDE] {
                 let value = call.raw_table_get_static(owners[2], key.as_bytes())?;
-                update_static(call, owners[3], key, value)?;
+                if update_static(call, owners[3], key, value)? {
+                    settled = false;
+                }
             }
             // Current holds a copy of Song's disabled windows. A copy whose
             // entries already match, with no metatable of its own, is what
@@ -400,14 +451,14 @@ pub(super) fn advance(
             if let (Value::Table(windows), Value::Table(held)) = (windows, held)
                 && same_entries(call, windows, held)?
             {
-                return Ok(());
+                return Ok(settled);
             }
             let windows = if let Value::Table(windows) = windows {
                 Value::Table(copy(call, windows)?)
             } else {
                 windows
             };
-            update_static(call, owners[3], WINDOWS, windows)
+            Ok(!update_static(call, owners[3], WINDOWS, windows)? && settled)
         },
     )
 }

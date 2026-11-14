@@ -281,7 +281,10 @@ mod tests {
             assert_eq!(disabled(&mut runtime), "TimingWindow_W5");
         }
         // A change made to Current alone lasts until the next advance.
-        execute(&mut runtime, "CURRENT:DisableTimingWindow('TimingWindow_W1')");
+        execute(
+            &mut runtime,
+            "CURRENT:DisableTimingWindow('TimingWindow_W1')",
+        );
         assert_eq!(disabled(&mut runtime), "TimingWindow_W1,TimingWindow_W5");
         runtime.advance_options(0.2, None).unwrap();
         assert_eq!(disabled(&mut runtime), "TimingWindow_W5");
@@ -297,6 +300,48 @@ mod tests {
         execute(&mut runtime, "SONG:ResetDisabledTimingWindows()");
         runtime.advance_options(0.4, None).unwrap();
         assert_eq!(disabled(&mut runtime), "");
+    }
+
+    #[test]
+    fn settled_options_resume_approaching_when_song_or_speed_changes() {
+        let mut runtime = runtime();
+        let flip = |runtime: &mut SongRuntime| {
+            runtime
+                .gameplay_player_options([AppearanceEffects::default(); LUA_PLAYERS])
+                .unwrap()[0]
+                .visual
+                .flip
+                .unwrap_or(0.0)
+        };
+        execute(
+            &mut runtime,
+            "SONG = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+             SONG:Flip(0.5, 1)",
+        );
+        let mut seconds = 0.0;
+        let mut advance = |runtime: &mut SongRuntime| {
+            seconds += 0.1;
+            runtime.advance_options(seconds, None).unwrap();
+        };
+        for _ in 0..10 {
+            advance(&mut runtime);
+        }
+        assert_eq!(flip(&mut runtime), 0.5);
+        // Settled frames leave Current where it stands.
+        advance(&mut runtime);
+        assert_eq!(flip(&mut runtime), 0.5);
+        // A new target moves it again, at the stored speed of 1 per second.
+        execute(&mut runtime, "SONG:Flip(1, 1)");
+        advance(&mut runtime);
+        assert!((flip(&mut runtime) - 0.6).abs() < 1e-5);
+        // A new speed alone takes effect on the next frame.
+        execute(&mut runtime, "SONG:Flip(1, 2)");
+        advance(&mut runtime);
+        assert!((flip(&mut runtime) - 0.8).abs() < 1e-5);
+        for _ in 0..5 {
+            advance(&mut runtime);
+        }
+        assert_eq!(flip(&mut runtime), 1.0);
     }
 
     #[test]

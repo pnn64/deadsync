@@ -15,6 +15,8 @@ enum Operation {
 struct Binding {
     operation: Operation,
     clock: Arc<Mutex<i64>>,
+    // Per player, what the last settled advance read.
+    settled: Arc<Mutex<[Option<levels::Inputs>; crate::LUA_PLAYERS]>>,
 }
 pub(super) fn install(
     call: &mut HostCall<'_>,
@@ -36,6 +38,7 @@ pub(super) fn install(
         captures.push(call.raw_table_get(songs, Value::Number(level as f64))?);
     }
     let clock = Arc::new(Mutex::new(0));
+    let settled = Arc::new(Mutex::new([None; crate::LUA_PLAYERS]));
     let operations = object(call, |call, operations| {
         for (name, operation) in [
             ("Advance", Operation::Advance),
@@ -50,6 +53,7 @@ pub(super) fn install(
                 Binding {
                     operation,
                     clock: clock.clone(),
+                    settled: settled.clone(),
                 },
             )?;
             set(operations, name, method, call)?;
@@ -193,7 +197,30 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
                 1.0
             };
             for (i, player) in players.into_iter().enumerate() {
-                levels::advance(call, player, deltas[i + 1], rate)?;
+                let delta = deltas[i + 1];
+                let inputs = levels::inputs(call, player)?;
+                let remembered = binding.settled.lock().expect("settled options")[i];
+                // A settled advance repeated over the same inputs writes
+                // nothing; with a finite, non-negative rate and delta and
+                // speeds already known to be so, it raises nothing either.
+                if remembered == Some(inputs) && rate.is_finite() && rate >= 0.0 && delta >= 0.0 {
+                    // Debug builds advance anyway and check that it changed nothing.
+                    if cfg!(debug_assertions) {
+                        let settled = levels::advance(call, player, delta, rate)?;
+                        assert!(
+                            settled && levels::inputs(call, player)? == inputs,
+                            "a skipped options advance would have changed Current"
+                        );
+                    }
+                    continue;
+                }
+                let settled = levels::advance(call, player, delta, rate)?;
+                let after = if settled {
+                    Some(levels::inputs(call, player)?)
+                } else {
+                    None
+                };
+                binding.settled.lock().expect("settled options")[i] = after;
             }
             Ok(())
         }

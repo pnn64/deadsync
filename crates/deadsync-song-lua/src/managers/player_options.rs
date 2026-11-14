@@ -334,26 +334,27 @@ pub(super) fn unchanged(old: Value, new: Value) -> bool {
         (old, new) => old == new,
     }
 }
-// A raw write that is skipped when the entry already holds the value. The
-// write runs no metamethod and leaves contents and traversal order as they
-// are, so skipping it changes only the table's version.
+// A raw write that is skipped when the entry already holds the value, and
+// whether it was made. The write runs no metamethod and leaves contents and
+// traversal order as they are, so skipping it changes only the version.
 pub(super) fn update(
     call: &mut HostCall<'_>,
     owner: TableId,
     key: Value,
     value: Value,
-) -> Result<(), Error> {
-    if !unchanged(call.raw_table_get(owner, key)?, value) {
-        call.raw_table_set(owner, key, value)?;
+) -> Result<bool, Error> {
+    if unchanged(call.raw_table_get(owner, key)?, value) {
+        return Ok(false);
     }
-    Ok(())
+    call.raw_table_set(owner, key, value)?;
+    Ok(true)
 }
 fn update_static(
     call: &mut HostCall<'_>,
     owner: TableId,
     key: &'static str,
     value: Value,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     let key = call.intern_static(key.as_bytes())?;
     update(call, owner, key, value)
 }
