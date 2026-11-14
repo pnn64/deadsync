@@ -1592,7 +1592,7 @@ fn run_scoped(
     function: Value,
     params: Option<Value>,
 ) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_script_dir")?;
+    let key = call.intern_static(b"__songlua_script_dir")?;
     let directory = call.table_get(Value::Table(actor), key)?;
     if directory == Value::Nil {
         return run(call, actor, function, params);

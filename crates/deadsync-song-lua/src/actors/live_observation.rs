@@ -101,8 +101,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn observe(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let helpers = table(call, call.captures()[1])?;
-    let key = call.try_intern(OBSERVER)?;
-    let observer = call.raw_table_get(helpers, key)?;
+    let observer = get_static(call, helpers, OBSERVER)?;
     if observer != Value::Nil {
         call.call(observer, &[Value::Table(actor)])?;
     }

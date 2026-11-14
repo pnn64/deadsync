@@ -121,21 +121,24 @@ fn truthy(value: Value) -> bool {
 fn invoke(
     call: &mut HostCall<'_>,
     actor: TableId,
-    method: &str,
+    method: &'static str,
     args: &[Value],
 ) -> Result<Value, Error> {
-    let roots: Vec<_> = std::iter::once(Value::Table(actor))
+    // The receiver and the arguments: kept alive, then passed.
+    let values: smallvec::SmallVec<[Value; 4]> = std::iter::once(Value::Table(actor))
         .chain(args.iter().copied())
         .collect();
-    call.with_roots(&roots, |call| {
-        let f = sprites::field(call, actor, method)?;
+    call.with_roots(&values, |call| {
+        let name = call.intern_static(method.as_bytes())?;
+        let f = call.table_get(Value::Table(actor), name)?;
         if !matches!(f, Value::Function(_) | Value::Native(_)) {
             return Err(call.error(format!("{method} function expected").as_bytes()));
         }
-        let args: Vec<_> = std::iter::once(Value::Table(actor))
-            .chain(args.iter().copied())
-            .collect();
-        Ok(call.call(f, &args)?.first().copied().unwrap_or(Value::Nil))
+        Ok(call
+            .call(f, &values)?
+            .first()
+            .copied()
+            .unwrap_or(Value::Nil))
     })
 }
 fn command(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
@@ -265,18 +268,18 @@ fn clock(call: &mut HostCall<'_>) -> Result<(), Error> {
 // Ordinary method lookups preserve author overrides and their side effects.
 fn options(call: &mut HostCall<'_>) -> Result<(bool, Value), Error> {
     let globals = helper(call, 5)?;
-    let key = call.try_intern(b"PREFSMAN")?;
+    let key = call.intern_static(b"PREFSMAN")?;
     let prefs = call.table_get(globals, key)?;
     let prefs = table(call, prefs)?;
     let rate_tweens = call.with_roots(&[Value::Table(prefs)], |call| {
-        let pref = call.try_intern(b"RateModsAffectFGChanges")?;
+        let pref = call.intern_static(b"RateModsAffectFGChanges")?;
         Ok(truthy(invoke(call, prefs, "GetPreference", &[pref])?))
     })?;
-    let key = call.try_intern(b"GAMESTATE")?;
+    let key = call.intern_static(b"GAMESTATE")?;
     let game = call.table_get(globals, key)?;
     let game = table(call, game)?;
     let options = call.with_roots(&[Value::Table(game)], |call| {
-        let level = call.try_intern(b"ModsLevel_Current")?;
+        let level = call.intern_static(b"ModsLevel_Current")?;
         invoke(call, game, "GetSongOptionsObject", &[level])
     })?;
     table(call, options)?;
