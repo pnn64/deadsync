@@ -4816,7 +4816,9 @@ return Def.Actor { OnCommand = function()
         local combo = player:GetChild('Combo')
         assert(combo:GetParent() == player and combo:GetName() == 'Combo')
         if $POPULATED then
-            assert(tostring(combo):find('ActorFrame', 1, true))
+            -- Native's populated combo is a Combo: an ActorFrame registered
+            -- under its own Lua class name.
+            assert(tostring(combo):find('^Combo %(') and combo.__songlua_actor_type == 'ActorFrame')
             local number = combo:GetChild('Number')
             assert(tostring(number):find('BitmapText', 1, true))
             assert(number:GetParent() == combo and combo:GetNumChildren() == 3)

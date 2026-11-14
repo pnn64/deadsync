@@ -127,6 +127,11 @@ fn combo(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, E
                         Ok(actor)
                     } else {
                         let frame = dummy(call, scene, "ActorFrame", "Combo", None)?;
+                        // Native Player::Init's combo is a Combo, an ActorFrame
+                        // registered under its own Lua class: it behaves as a
+                        // frame, but tostring names it Combo.
+                        let class = call.try_intern(b"Combo")?;
+                        set(call, frame, "__songlua_lua_class", class)?;
                         let number = dummy(call, scene, "BitmapText", "Number", Some(frame))?;
                         append(call, frame, number)?;
                         native_children::insert(call, frame, "Number", Value::Table(number))?;

@@ -102,6 +102,9 @@ fn player_init_owns_ordered_children_and_shared_named_aliases() {
                     end
                     assert(unnamed:GetChild('HoldJudgment')==holds[count][1])
                     assert(combo:GetChild('Number')==combo[1] and combo[1]:GetParent()==combo)
+                    -- Native's combo is an ActorFrame registered as Combo.
+                    assert(tostring(combo):find('^Combo %(') and combo.__songlua_actor_type=='ActorFrame')
+                    assert(combo.GetNumChildren and tostring(combo[1]):find('^BitmapText %('))
                     assert(judgment:GetChild('JudgmentWithOffsets')==judgment[1])
                     assert(judgment[1].__songlua_judgment_sprite_player==pi-1)
                     assert(not judgment[1]:GetVisible() and not judgment[1].__songlua_sprite_animate)
@@ -131,6 +134,7 @@ fn hidden_or_empty_font_combo_is_the_existing_invisible_leaf() {
         p.script(
             r#"
             assert(c.__songlua_actor_type=='Actor' and not c:GetVisible())
+            assert(tostring(c):find('^Actor %('))
             assert(c.GetChild==nil and c.SetUpdateFunction==nil and c[1]==nil)
             assert(c:GetParent()==p and p[2]==c)
             log(q:GetChild('Combo').__songlua_actor_type,q:GetChild('Combo'):GetVisible())
