@@ -171,6 +171,10 @@ fn scale_for_width(pane_width: f32, constants: &PaneLayoutConstants) -> f32 {
     (constants.scale_base + constants.scale_per_width * pane_width).clamp(0.0, 1.0)
 }
 
+fn pane_height_for_width(pane_width: f32, constants: &PaneLayoutConstants) -> f32 {
+    PANE_HEIGHT * scale_for_width(pane_width, constants)
+}
+
 fn stats_value_columns_for(pane_width: f32, constants: &PaneLayoutConstants) -> [f32; 2] {
     let scale = scale_for_width(pane_width, constants);
     constants
@@ -197,8 +201,9 @@ fn constrain_text_width(actor: &mut Actor, max_width: Option<f32>) {
 #[must_use]
 pub fn layout(pane_cx: f32) -> PaneLayout {
     let pane_width = screen_width() * 0.5 - PANE_WIDTH_INSET;
-    let pane_center_y = screen_height() - PANE_BOTTOM_INSET - PANE_HEIGHT * 0.5;
-    PaneLayout::from_center([pane_cx, pane_center_y], [pane_width, PANE_HEIGHT])
+    let pane_height = pane_height_for_width(pane_width, layout_constants(UILayoutType::current()));
+    let pane_center_y = screen_height() - PANE_BOTTOM_INSET - pane_height * 0.5;
+    PaneLayout::from_center([pane_cx, pane_center_y], [pane_width, pane_height])
 }
 
 pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
@@ -312,7 +317,7 @@ pub fn push_score_line(
 
 #[cfg(test)]
 mod tests {
-    use super::{PaneLayout, layout_constants, stats_value_columns_for};
+    use super::{PaneLayout, layout_constants, pane_height_for_width, stats_value_columns_for};
     use crate::ui_layout::UILayoutType;
 
     #[test]
@@ -351,6 +356,16 @@ mod tests {
             assert!(left_label_right < right_value_left);
             assert!(right_label_right < meter_left);
         }
+    }
+
+    #[test]
+    fn stats_pane_height_scales_with_squareish_width() {
+        let squareish_height =
+            pane_height_for_width(230.0, layout_constants(UILayoutType::Squareish));
+        let wide_height = pane_height_for_width(416.5, layout_constants(UILayoutType::Wide));
+
+        assert!((squareish_height - 60.0 * (230.0 / 310.0)).abs() < f32::EPSILON);
+        assert_eq!(wide_height, 60.0);
     }
 
     #[test]
