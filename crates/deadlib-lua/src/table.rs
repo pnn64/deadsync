@@ -84,13 +84,17 @@ impl Key {
             Self::ParserPrototype(v) => (v.0, 10),
         }
     }
-    /// One multiplication mixes every identity bit into the upper half, which
-    /// the fold brings down to the low bits that select a slot. Slot order is
-    /// never observable: traversal follows insertion order.
+    /// A multiplication carries bits only upward, so the high half is first
+    /// folded into the low half: a number's varying bits sit near the top of
+    /// its word, and without the fold small integers and simple fractions all
+    /// leave the same low bits. The product's upper half, folded down again,
+    /// then depends on every identity bit. Slot order is never observable:
+    /// traversal follows insertion order.
     #[inline]
     fn hash(self) -> usize {
         let (bits, tag) = self.identity();
-        let h = (bits ^ tag.rotate_left(59)).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        let bits = bits ^ tag.rotate_left(59);
+        let h = (bits ^ (bits >> 32)).wrapping_mul(0x9e37_79b9_7f4a_7c15);
         (h ^ (h >> 32)) as usize
     }
 }
@@ -984,6 +988,48 @@ mod allocation_tests {
             }
         }
         assert!(table.slots.len() > TAGGED_SLOTS);
+    }
+    // The longest distance from an entry's home slot to the slot that holds it.
+    fn longest_probe(table: &Table) -> usize {
+        let mask = table.slots.len() - 1;
+        let (_, index) = Table::slot_tag(table.slots.len(), 0);
+        let mut longest = 0;
+        for (slot, &word) in table.slots.iter().enumerate() {
+            if word != 0 {
+                let entry = &table.entries[(word & index) as usize - 1];
+                let home = entry.key.hash() & mask;
+                longest = longest.max(slot.wrapping_sub(home) & mask);
+            }
+        }
+        longest
+    }
+    #[test]
+    fn number_keys_spread_across_hash_slots() {
+        // Keys whose bits differ only near the top of the word: small integers
+        // and simple fractions, as in sparse arrays and beat-keyed tables.
+        let families: [(&str, fn(u32) -> f64); 5] = [
+            ("from two", |n| f64::from(n) + 2.0),
+            ("negative", |n| -f64::from(n)),
+            ("quarters", |n| f64::from(n) / 4.0),
+            ("from zero", f64::from),
+            ("large", |n| f64::from(n) * 65536.0 + 1e9),
+        ];
+        for (label, key) in families {
+            let mut table = Table::with_capacity(0, 0).unwrap();
+            for n in 0..4096 {
+                table
+                    .set(Value::Number(key(n)), Value::Boolean(true))
+                    .unwrap();
+            }
+            if table.slots.is_empty() {
+                continue;
+            }
+            let longest = longest_probe(&table);
+            assert!(
+                longest < 64,
+                "{label}: an entry sits {longest} slots from home"
+            );
+        }
     }
     fn check_hash(table: &Table, count: i32) {
         for n in 1..=count {
