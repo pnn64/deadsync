@@ -324,25 +324,43 @@ pub(super) fn accept_ghost(state: &mut State) {
 }
 
 /// Help text joined to one line; `None` when the entry has none.
-fn help_text(m: &SettingMatch) -> Option<Arc<str>> {
+pub(super) fn help_text(m: &SettingMatch) -> Option<Arc<str>> {
     m.help
         .get_or_init(|| {
-            let mut joined = String::new();
-            for entry in m.help_entries {
-                let (HelpEntry::Paragraph(key) | HelpEntry::Bullet(key)) = entry else {
-                    continue;
-                };
-                let line = key.get().replace("\\n", "\n");
-                for part in line.lines().map(str::trim).filter(|s| !s.is_empty()) {
-                    if !joined.is_empty() {
-                        joined.push(' ');
-                    }
-                    joined.push_str(part);
-                }
-            }
+            // Bullets list a page's rows; run into one line they read as noise,
+            // so they only stand in when an entry has no paragraph at all.
+            let paragraphs = join_help(m.help_entries, |entry| match entry {
+                HelpEntry::Paragraph(key) => Some(key),
+                _ => None,
+            });
+            let joined = if paragraphs.is_empty() {
+                join_help(m.help_entries, |entry| match entry {
+                    HelpEntry::Bullet(key) => Some(key),
+                    _ => None,
+                })
+            } else {
+                paragraphs
+            };
             (!joined.is_empty()).then(|| Arc::from(joined))
         })
         .clone()
+}
+
+fn join_help<'a>(
+    entries: &'a [HelpEntry],
+    pick: impl Fn(&'a HelpEntry) -> Option<&'a LookupKey>,
+) -> String {
+    let mut joined = String::new();
+    for key in entries.iter().filter_map(pick) {
+        let line = key.get().replace("\\n", "\n");
+        for part in line.lines().map(str::trim).filter(|s| !s.is_empty()) {
+            if !joined.is_empty() {
+                joined.push(' ');
+            }
+            joined.push_str(part);
+        }
+    }
+    joined
 }
 
 /// Jump to the focused result and close the overlay.
@@ -468,8 +486,6 @@ pub(super) fn handle_raw_key_event(
                 KeyCode::Tab | KeyCode::ArrowRight => accept_ghost(state),
                 KeyCode::ArrowUp => move_selection(state, -1),
                 KeyCode::ArrowDown => move_selection(state, 1),
-                KeyCode::PageUp => move_selection(state, -(SEARCH_MAX_RESULTS as isize)),
-                KeyCode::PageDown => move_selection(state, SEARCH_MAX_RESULTS as isize),
                 KeyCode::Enter | KeyCode::NumpadEnter => commit(state),
                 _ => {}
             }

@@ -4454,3 +4454,37 @@ fn search_owns_pad_input_while_open() {
     press(&mut state, &asset_manager, VirtualAction::p1_back);
     assert!(!state.search.is_open());
 }
+
+#[test]
+fn search_help_shows_paragraphs_not_bullet_lists() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "input options");
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should be open");
+    };
+    let input = open
+        .matches
+        .iter()
+        .find(|m| matches!(m.target, search::SearchTarget::Main(_)))
+        .expect("the Input Options entry should match");
+    let help = search::help_text(input).expect("Input Options has help");
+    assert!(help.contains("input diagnostics"), "{help}");
+    // Its bullets list the page's rows; they belong on the page, not in one run-on line.
+    assert!(!help.contains("Test Input"), "{help}");
+}
+
+#[test]
+fn search_ignores_page_keys() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "graph");
+    let before = focused_search_target(&state);
+    assert!(before.is_some());
+    for code in [KeyCode::PageDown, KeyCode::PageUp] {
+        handle_raw_key_event(&mut state, Some(&search_key(code)), None, false, &mut Vec::new());
+        assert_eq!(focused_search_target(&state), before);
+    }
+}
