@@ -557,3 +557,31 @@ fn clearing_a_weak_entry_changes_the_fields_version() {
     .unwrap();
     vm.execute(&program).unwrap();
 }
+
+fn raw_next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let raw = call.is_raw_next(call.arguments()[0]);
+    call.push(Value::Boolean(raw))
+}
+
+#[test]
+fn only_the_standard_traversal_functions_are_the_raw_next() {
+    let mut vm = vm();
+    let function = vm.new_host_function(raw_next, &[]).unwrap();
+    vm.set_global(b"raw_next", function).unwrap();
+    let program = compile(
+        br#"
+        local standard = next
+        assert(raw_next(next))
+        assert(raw_next((pairs({}))))
+        assert(not raw_next(function(t, k) return standard(t, k) end))
+        assert(not raw_next(pairs) and not raw_next(ipairs) and not raw_next((ipairs({}))))
+        assert(not raw_next(rawget) and not raw_next(raw_next))
+        assert(not raw_next(nil) and not raw_next('next') and not raw_next({}))
+        -- Replacing the global does not change what the function is.
+        next = function() end
+        assert(not raw_next(next) and raw_next(standard))
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}

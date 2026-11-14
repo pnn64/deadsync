@@ -69,7 +69,8 @@ still answers whenever a debug hook or an instruction limit is active.
 
 `HostCall::raw_metatable` and `raw_table_next` read a table's actual metatable
 and walk its entries without metamethods, so a callback can inspect a table
-without entering Lua.
+without entering Lua. `HostCall::is_raw_next` tells whether a traversal
+function the embedding holds is that same walk.
 
 `intern_static` interns a byte string that lives for the whole program, such
 as a literal, and afterwards finds it by the slice's address instead of its

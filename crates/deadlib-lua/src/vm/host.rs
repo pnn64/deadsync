@@ -1321,6 +1321,14 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].metatable())
     }
 
+    /// Whether calling `function` with a table and a key is exactly
+    /// [`Self::raw_table_next`]: true for the standard library's `next` and
+    /// for the iterator `pairs` returns, whatever the globals now hold.
+    #[inline]
+    pub fn is_raw_next(&self, function: Value) -> bool {
+        matches!(function, Value::Native(NEXT | PAIRS_NEXT))
+    }
+
     /// Return the entry after `key` in a table's traversal order, as Lua's
     /// `next` does. `Value::Nil` starts a traversal and `None` ends it.
     ///
