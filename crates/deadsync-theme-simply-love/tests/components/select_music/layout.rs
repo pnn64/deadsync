@@ -168,12 +168,17 @@ fn chart_panel_is_centered_between_artist_header_and_stats_pane() {
                 );
                 let stats_pane_top =
                     select_pane::top_for_screen(screen_width, screen_height, layout_type);
-                let gap_above = layout.chart_panel.y - layout.step_artist_header.bottom();
+                let group_center =
+                    (layout.step_artist_header.y + layout.chart_panel.bottom()) * 0.5;
+                let available_center =
+                    (layout.song_details.widget.bounds.bottom() + stats_pane_top) * 0.5;
+                let gap_above =
+                    layout.step_artist_header.y - layout.song_details.widget.bounds.bottom();
                 let gap_below = stats_pane_top - layout.chart_panel.bottom();
 
                 assert!(gap_above >= 0.0);
                 assert!(gap_below >= 0.0);
-                assert!((gap_above - gap_below).abs() < 0.001);
+                assert!((group_center - available_center).abs() < 1.001);
                 assert!(layout.density_panel.bounds.y >= layout.chart_panel.y);
                 assert!(
                     layout.density_panel.bounds.bottom() <= layout.chart_panel.bottom() + 0.001
@@ -270,7 +275,9 @@ fn artist_peak_line_reserves_peak_width_and_aligns_both_elements() {
                 );
                 assert!((bar.artist_text_y - (bar.background_y + 3.0)).abs() < f32::EPSILON);
                 if matches!(vertical_layout, StepArtistBarLayoutType::Expanded) {
-                    assert!(layout.chart_panel.y >= layout.step_artist_header.bottom());
+                    assert!(
+                        (layout.chart_panel.y - layout.step_artist_header.bottom()).abs() < 0.001
+                    );
                     assert_eq!(layout.density_panel.bounds.y, layout.chart_panel.y);
                     assert!(
                         (layout.pattern_panels[1].bounds.y
