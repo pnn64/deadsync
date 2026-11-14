@@ -156,6 +156,27 @@ impl NativeStack<'_, '_> {
             self.set_top(self.top() - 1)
         }
     }
+    /// Assign `value` to the field a literal names in the indexed table,
+    /// without invoking metamethods. This is the assignment a raw
+    /// [`Self::set_table`] makes for a pushed name and value, without moving
+    /// either through the stack. The name is found as [`Vm::intern_static`]
+    /// finds it.
+    ///
+    /// # Errors
+    /// Rejects a pending error, an invalid value or index, and a target that
+    /// is not a table.
+    pub fn raw_set_static(
+        &mut self,
+        index: isize,
+        name: &'static [u8],
+        value: Value,
+    ) -> Result<(), Error> {
+        self.check_error()?;
+        let key = self.call.vm.intern_static(name)?;
+        self.call.vm.validate_value(value)?;
+        let target = self.indexed_value(index)?;
+        self.write_table(target, key, value, true).map(|_| ())
+    }
     /// Push a raw integer-key lookup.
     ///
     /// # Errors

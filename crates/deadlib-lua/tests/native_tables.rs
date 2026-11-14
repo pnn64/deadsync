@@ -413,3 +413,65 @@ return ordinary,depth
         .join()
         .unwrap();
 }
+
+#[test]
+fn a_raw_literal_field_write_is_the_pushed_raw_assignment() {
+    fn direct(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let value = stack.value(2).unwrap();
+        stack.raw_set_static(1, b"field", value)?;
+        assert_eq!(stack.top(), 2);
+        stack.finish(0)
+    }
+    fn pushed(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let value = stack.value(2).unwrap();
+        let key = stack.intern(b"field");
+        stack.push(key)?;
+        stack.push(value)?;
+        stack.set_table(1, true)?;
+        assert_eq!(stack.top(), 2);
+        stack.finish(0)
+    }
+    let mut vm = Vm::new();
+    for (name, callback) in [
+        (b"direct".as_slice(), direct as deadlib_lua::HostFunction),
+        (b"pushed", pushed),
+    ] {
+        let function = vm.new_host_function(callback, &[]).unwrap();
+        vm.set_global(name, function).unwrap();
+    }
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local payload = {}
+for _, write in ipairs({direct, pushed}) do
+    local calls = 0
+    local target = setmetatable({}, {__newindex = function() calls = calls + 1 end})
+    for _, value in ipairs({payload, 7, 'text', false}) do
+        write(target, value)
+        collectgarbage()
+        assert(calls == 0 and rawget(target, 'field') == value)
+    end
+    write(target, nil)
+    assert(rawget(target, 'field') == nil and next(target) == nil)
+    -- Crowded tables and tables that must grow take the same write.
+    local crowded = {}
+    for i = 1, 100 do crowded['field' .. i] = i end
+    write(crowded, payload)
+    assert(crowded.field == payload and crowded.field100 == 100)
+end
+-- A target that is not a table is refused the same way.
+local ok1, direct_error = pcall(direct, 5, 1)
+local ok2, pushed_error = pcall(pushed, 5, 1)
+assert(not ok1 and not ok2)
+return direct_error == pushed_error, direct_error
+"#
+        ),
+        [
+            Value::Boolean(true),
+            vm.intern(b"raw native access requires a table")
+        ]
+    );
+}

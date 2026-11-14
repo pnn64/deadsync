@@ -76,7 +76,8 @@ function the embedding holds is that same walk.
 as a literal, and afterwards finds it by the slice's address instead of its
 contents. The string stays alive with the VM, so the value needs no rooting.
 Use it for the field names a callback reads on every call;
-`HostCall::raw_table_get_static` reads such a field in one step.
+`HostCall::raw_table_get_static` reads such a field in one step, and
+`NativeStack::raw_set_static` writes one without pushing its name and value.
 `HostCall::raw_fields_version` changes whenever a string-keyed entry of a
 table changes, so an embedding can remember those reads per table and repeat
 them only after a write.
