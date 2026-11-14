@@ -326,15 +326,36 @@ fn raw_float_static(
     let value = call.raw_table_get_static(owner, key.as_bytes())?;
     typed_float(call, value, default)
 }
-// A raw write to a field a literal names.
-fn set_static(
+// Whether a raw write of `new` over `old` would leave the entry as it is.
+// Numbers compare by bits: -0 and 0 are different values to store.
+pub(super) fn unchanged(old: Value, new: Value) -> bool {
+    match (old, new) {
+        (Value::Number(old), Value::Number(new)) => old.to_bits() == new.to_bits(),
+        (old, new) => old == new,
+    }
+}
+// A raw write that is skipped when the entry already holds the value. The
+// write runs no metamethod and leaves contents and traversal order as they
+// are, so skipping it changes only the table's version.
+pub(super) fn update(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: Value,
+    value: Value,
+) -> Result<(), Error> {
+    if !unchanged(call.raw_table_get(owner, key)?, value) {
+        call.raw_table_set(owner, key, value)?;
+    }
+    Ok(())
+}
+fn update_static(
     call: &mut HostCall<'_>,
     owner: TableId,
     key: &'static str,
     value: Value,
 ) -> Result<(), Error> {
     let key = call.intern_static(key.as_bytes())?;
-    call.raw_table_set(owner, key, value)
+    update(call, owner, key, value)
 }
 fn get_float(
     call: &mut HostCall<'_>,

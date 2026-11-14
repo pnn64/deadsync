@@ -183,6 +183,31 @@ pub(super) fn entries(
         Ok(())
     })
 }
+// Whether `copy` already holds exactly `source`'s raw entries and has no
+// metatable, as a fresh `copy` of it would.
+fn same_entries(call: &mut HostCall<'_>, source: TableId, copy: TableId) -> Result<bool, Error> {
+    if call.raw_metatable(copy)?.is_some() {
+        return Ok(false);
+    }
+    let mut count = 0usize;
+    let mut key = Value::Nil;
+    while let Some((next, value)) = call.raw_table_next(source, key)? {
+        key = next;
+        count += 1;
+        if !unchanged(call.raw_table_get(copy, key)?, value) {
+            return Ok(false);
+        }
+    }
+    let mut key = Value::Nil;
+    while let Some((next, _)) = call.raw_table_next(copy, key)? {
+        key = next;
+        count = match count.checked_sub(1) {
+            Some(count) => count,
+            None => return Ok(false),
+        };
+    }
+    Ok(count == 0)
+}
 pub(super) fn copy(call: &mut HostCall<'_>, source: TableId) -> Result<TableId, Error> {
     object(call, |call, target| {
         entries(call, source, |call, k, v| call.raw_table_set(target, k, v))
@@ -317,10 +342,10 @@ pub(super) fn advance(
                             "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
                         )
                     {
-                        call.raw_table_set(current, name, value)?;
+                        update(call, current, name, value)?;
                     } else if let Some(target) = float(call, value) {
-                        let value = call.raw_table_get(current, name)?;
-                        let value = typed_float(call, value, 0.0)?;
+                        let old = call.raw_table_get(current, name)?;
+                        let value = typed_float(call, old, 0.0)?;
                         let speed = call.raw_table_get(speeds, name)?;
                         let speed = typed_float(call, speed, 1.0)?;
                         let value = super::super::song_options::approach(
@@ -329,7 +354,10 @@ pub(super) fn advance(
                             target,
                             rate * delta * speed,
                         )?;
-                        call.raw_table_set(current, name, Value::Number(f64::from(value)))?;
+                        let value = Value::Number(f64::from(value));
+                        if !unchanged(old, value) {
+                            call.raw_table_set(current, name, value)?;
+                        }
                     }
                     Ok(())
                 })?;
@@ -349,7 +377,7 @@ pub(super) fn advance(
                     rate * delta * speed
                 };
                 let value = super::super::song_options::approach(call, value, target, amount)?;
-                set_static(call, owners[3], field, Value::Number(f64::from(value)))?;
+                update_static(call, owners[3], field, Value::Number(f64::from(value)))?;
             }
             let mode = if raw_float_static(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
                 "cmod"
@@ -359,18 +387,27 @@ pub(super) fn advance(
                 "xmod"
             };
             let mode = call.intern_static(mode.as_bytes())?;
-            set_static(call, owners[3], "__songlua_speedmod_active", mode)?;
+            update_static(call, owners[3], "__songlua_speedmod_active", mode)?;
             for key in [SKIN, SKIN_OVERRIDE] {
                 let value = call.raw_table_get_static(owners[2], key.as_bytes())?;
-                set_static(call, owners[3], key, value)?;
+                update_static(call, owners[3], key, value)?;
             }
+            // Current holds a copy of Song's disabled windows. A copy whose
+            // entries already match, with no metatable of its own, is what
+            // a fresh copy would be.
             let windows = call.raw_table_get_static(owners[2], WINDOWS.as_bytes())?;
+            let held = call.raw_table_get_static(owners[3], WINDOWS.as_bytes())?;
+            if let (Value::Table(windows), Value::Table(held)) = (windows, held)
+                && same_entries(call, windows, held)?
+            {
+                return Ok(());
+            }
             let windows = if let Value::Table(windows) = windows {
                 Value::Table(copy(call, windows)?)
             } else {
                 windows
             };
-            set_static(call, owners[3], WINDOWS, windows)
+            update_static(call, owners[3], WINDOWS, windows)
         },
     )
 }

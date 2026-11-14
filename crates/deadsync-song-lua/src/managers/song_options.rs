@@ -440,12 +440,12 @@ pub(super) fn advance(
         let amount = delta * float(call, levels[2], speed)?;
         let value = approach(call, value, target, amount)?;
         let field = call.intern_static(field.as_bytes())?;
-        call.raw_table_set(levels[3], field, Value::Number(f64::from(value)))?;
+        super::player_options::update(call, levels[3], field, Value::Number(f64::from(value)))?;
     }
     for key in SWITCHES {
         let value = call.raw_table_get_static(levels[2], key.as_bytes())?;
         let key = call.intern_static(key.as_bytes())?;
-        call.raw_table_set(levels[3], key, value)?;
+        super::player_options::update(call, levels[3], key, value)?;
     }
     Ok(())
 }

@@ -1,7 +1,21 @@
 //! Read the retained Current owners without executing authored getters or
 //! advancing their approach clocks a second time.
 use super::*;
+use deadlib_lua::TableId;
 use deadsync_gameplay::{AppearanceEffects, SongLuaPlayerOptions};
+
+/// What a player's last snapshot read and produced. A later snapshot of the
+/// same tables at the same versions, from the same profile appearance,
+/// produces the same options. Debug builds walk anyway and compare.
+#[derive(Clone, Copy)]
+struct Snapshot {
+    current: (TableId, u32),
+    state: Option<(TableId, u32)>,
+    appearance: AppearanceEffects,
+    options: SongLuaPlayerOptions,
+}
+#[derive(Default)]
+pub(crate) struct OptionSnapshots([Option<Snapshot>; LUA_PLAYERS]);
 
 impl SongRuntime {
     pub(crate) fn gameplay_player_options(
@@ -9,15 +23,13 @@ impl SongRuntime {
         appearance: [AppearanceEffects; LUA_PLAYERS],
     ) -> Result<[SongLuaPlayerOptions; LUA_PLAYERS], Error> {
         let catalog = self.vm.rooted(self.catalog)?;
+        let snapshots = &mut self.option_snapshots;
         self.vm.with_native_stack(|stack| {
             let base = stack.top();
             stack.push(catalog)?;
             read(stack, stack.top(), "player_options", true)?;
             let players = stack.top();
-            let mut output = appearance.map(|appearance| SongLuaPlayerOptions {
-                appearance,
-                ..Default::default()
-            });
+            let mut output = [SongLuaPlayerOptions::default(); LUA_PLAYERS];
             for (player, options) in output.iter_mut().enumerate() {
                 index(stack, players, player + 1)?;
                 // ModsGroup's fourth owner is Current; the global compiler
@@ -25,56 +37,105 @@ impl SongRuntime {
                 index(stack, stack.top(), 4)?;
                 let current = stack.top();
                 require_table(stack, current)?;
-                read(stack, current, "__songlua_player_option_state", true)?;
-                if stack.value(-1) != Some(Value::Nil) {
-                    let state = stack.top();
-                    require_table(stack, state)?;
-                    stack.push(Value::Nil)?;
-                    while stack.next_table(state as isize)? {
-                        let value = match stack.value(-1) {
-                            Some(Value::Boolean(value)) => Some(f32::from(value)),
-                            Some(Value::Number(value)) => Some(value as f32),
-                            Some(Value::String(_)) => stack.to_number(-1).map(|n| n as f32),
-                            _ => None,
-                        };
-                        if let Some(value) = value {
-                            // Coerce a copy, preserving the original traversal key.
-                            stack.push(stack.value(-2).unwrap())?;
-                            if let Some(name) = stack.to_bytes(-1)?
-                                && let Ok(name) = std::str::from_utf8(name)
-                            {
-                                options.set_current(name, value);
-                            }
-                            stack.set_top(stack.top() - 1)?;
-                        }
-                        stack.set_top(stack.top() - 1)?;
-                    }
-                }
-                stack.set_top(current)?;
-                // Speed fields coexist on the owner. Native mode selection uses
-                // Current's approached spacing and maximum BPM, not their presence.
-                let spacing = current_number(stack, current, "__songlua_time_spacing", 0.0)?;
-                let max = current_number(stack, current, "__songlua_speedmod_mmod", 0.0)?;
-                let (key, value) = if spacing != 0.0 {
-                    (
-                        "cmod",
-                        current_number(stack, current, "__songlua_speedmod_cmod", 200.0)?,
-                    )
-                } else if max != 0.0 {
-                    ("mmod", max)
-                } else {
-                    (
-                        "xmod",
-                        current_number(stack, current, "__songlua_speedmod_xmod", 1.0)?,
-                    )
+                let Some(Value::Table(current_table)) = stack.value(-1) else {
+                    unreachable!("Current owner is a table")
                 };
-                options.set_current(key, value);
+                read(stack, current, "__songlua_player_option_state", true)?;
+                let state = match stack.value(-1) {
+                    Some(Value::Table(state)) => Some(state),
+                    _ => None,
+                };
+                // Numeric keys name no modifier, so string-keyed versions
+                // cover everything a walk reads.
+                let current_key = (current_table, stack.raw_fields_version(current_table)?);
+                let state_key = match state {
+                    Some(state) => Some((state, stack.raw_fields_version(state)?)),
+                    None => None,
+                };
+                let remembered = snapshots.0[player].filter(|s| {
+                    s.current == current_key
+                        && s.state == state_key
+                        && s.appearance == appearance[player]
+                });
+                *options = match remembered {
+                    Some(snapshot) if !cfg!(debug_assertions) => snapshot.options,
+                    remembered => {
+                        let walked = walk(stack, current, appearance[player])?;
+                        if let Some(snapshot) = remembered {
+                            assert_eq!(snapshot.options, walked, "stale Current option snapshot");
+                        }
+                        snapshots.0[player] = Some(Snapshot {
+                            current: current_key,
+                            state: state_key,
+                            appearance: appearance[player],
+                            options: walked,
+                        });
+                        walked
+                    }
+                };
                 stack.set_top(players)?;
             }
             stack.set_top(base)?;
             Ok(output)
         })
     }
+}
+
+// Current's options from its state table, which `read` left above `current`
+// on the stack, and its speed fields.
+fn walk(
+    stack: &mut NativeStack<'_, '_>,
+    current: usize,
+    appearance: AppearanceEffects,
+) -> Result<SongLuaPlayerOptions, Error> {
+    let mut options = SongLuaPlayerOptions {
+        appearance,
+        ..Default::default()
+    };
+    if stack.value(-1) != Some(Value::Nil) {
+        let state = stack.top();
+        require_table(stack, state)?;
+        stack.push(Value::Nil)?;
+        while stack.next_table(state as isize)? {
+            let value = match stack.value(-1) {
+                Some(Value::Boolean(value)) => Some(f32::from(value)),
+                Some(Value::Number(value)) => Some(value as f32),
+                Some(Value::String(_)) => stack.to_number(-1).map(|n| n as f32),
+                _ => None,
+            };
+            if let Some(value) = value {
+                // Coerce a copy, preserving the original traversal key.
+                stack.push(stack.value(-2).unwrap())?;
+                if let Some(name) = stack.to_bytes(-1)?
+                    && let Ok(name) = std::str::from_utf8(name)
+                {
+                    options.set_current(name, value);
+                }
+                stack.set_top(stack.top() - 1)?;
+            }
+            stack.set_top(stack.top() - 1)?;
+        }
+    }
+    stack.set_top(current)?;
+    // Speed fields coexist on the owner. Native mode selection uses
+    // Current's approached spacing and maximum BPM, not their presence.
+    let spacing = current_number(stack, current, "__songlua_time_spacing", 0.0)?;
+    let max = current_number(stack, current, "__songlua_speedmod_mmod", 0.0)?;
+    let (key, value) = if spacing != 0.0 {
+        (
+            "cmod",
+            current_number(stack, current, "__songlua_speedmod_cmod", 200.0)?,
+        )
+    } else if max != 0.0 {
+        ("mmod", max)
+    } else {
+        (
+            "xmod",
+            current_number(stack, current, "__songlua_speedmod_xmod", 1.0)?,
+        )
+    };
+    options.set_current(key, value);
+    Ok(options)
 }
 
 fn current_number(
@@ -147,6 +208,95 @@ mod tests {
             runtime.gameplay_player_options(appearance).unwrap(),
             options
         );
+    }
+
+    #[test]
+    fn remembered_snapshots_follow_their_tables_and_appearance() {
+        fn first(
+            runtime: &mut SongRuntime,
+            appearance: [AppearanceEffects; LUA_PLAYERS],
+        ) -> SongLuaPlayerOptions {
+            runtime.gameplay_player_options(appearance).unwrap()[0]
+        }
+        let mut runtime = runtime();
+        let plain = [AppearanceEffects::default(); LUA_PLAYERS];
+        let hidden = [AppearanceEffects {
+            hidden: 0.6,
+            ..Default::default()
+        }; LUA_PLAYERS];
+        let initial = first(&mut runtime, plain);
+        assert_eq!(first(&mut runtime, plain), initial);
+        execute(
+            &mut runtime,
+            "CURRENT = GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Current')
+             CURRENT:Flip(0.5)",
+        );
+        assert_eq!(first(&mut runtime, plain).visual.flip, Some(0.5));
+        // A replaced state table is read, not the remembered one.
+        execute(
+            &mut runtime,
+            "rawset(CURRENT, '__songlua_player_option_state', {flip = 0.25})",
+        );
+        assert_eq!(first(&mut runtime, plain).visual.flip, Some(0.25));
+        // So is a speed field written straight to Current.
+        execute(
+            &mut runtime,
+            "rawset(CURRENT, '__songlua_speedmod_xmod', 3)",
+        );
+        assert_eq!(
+            first(&mut runtime, plain).scroll_speed,
+            Some(ScrollSpeedSetting::XMod(3.0))
+        );
+        // The profile appearance is part of what a snapshot depends on.
+        assert_eq!(first(&mut runtime, hidden).appearance.hidden, 0.6);
+        assert_eq!(first(&mut runtime, plain).appearance.hidden, 0.0);
+        assert_eq!(first(&mut runtime, plain).visual.flip, Some(0.25));
+    }
+
+    #[test]
+    fn current_disabled_windows_follow_song_through_each_advance() {
+        let mut runtime = runtime();
+        execute(
+            &mut runtime,
+            r#"
+            local ps = GAMESTATE:GetPlayerState(PLAYER_1)
+            SONG = ps:GetPlayerOptions('ModsLevel_Song')
+            CURRENT = ps:GetPlayerOptions('ModsLevel_Current')
+            function DISABLED()
+                return table.concat(CURRENT:GetDisabledTimingWindows(), ',')
+            end
+            SONG:DisableTimingWindow('TimingWindow_W5')
+        "#,
+        );
+        let disabled = |runtime: &mut SongRuntime| {
+            let code = deadlib_lua::compile_named(b"return DISABLED()", b"=disabled").unwrap();
+            let value = runtime.vm.execute(&code).unwrap()[0];
+            let Value::String(id) = value else {
+                panic!("disabled window list")
+            };
+            String::from_utf8(runtime.vm.string_bytes(id).unwrap().to_vec()).unwrap()
+        };
+        for _ in 0..2 {
+            runtime.advance_options(0.1, None).unwrap();
+            assert_eq!(disabled(&mut runtime), "TimingWindow_W5");
+        }
+        // A change made to Current alone lasts until the next advance.
+        execute(&mut runtime, "CURRENT:DisableTimingWindow('TimingWindow_W1')");
+        assert_eq!(disabled(&mut runtime), "TimingWindow_W1,TimingWindow_W5");
+        runtime.advance_options(0.2, None).unwrap();
+        assert_eq!(disabled(&mut runtime), "TimingWindow_W5");
+        // So does a metatable on Current's copy, which a fresh copy lacks.
+        execute(
+            &mut runtime,
+            r#"setmetatable(rawget(CURRENT, '__songlua_disabled_timing_windows'),
+                {__index = function() return true end})"#,
+        );
+        assert!(disabled(&mut runtime).contains("TimingWindow_W1"));
+        runtime.advance_options(0.3, None).unwrap();
+        assert_eq!(disabled(&mut runtime), "TimingWindow_W5");
+        execute(&mut runtime, "SONG:ResetDisabledTimingWindows()");
+        runtime.advance_options(0.4, None).unwrap();
+        assert_eq!(disabled(&mut runtime), "");
     }
 
     #[test]

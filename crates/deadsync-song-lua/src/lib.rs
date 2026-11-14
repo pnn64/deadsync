@@ -238,6 +238,7 @@ pub struct SongRuntime {
     position: Root,
     players: Vec<Root>,
     operations: [Root; 6],
+    option_snapshots: live_frames::OptionSnapshots,
 }
 
 impl SongRuntime {
@@ -477,6 +478,7 @@ impl SongRuntime {
             position: song_position,
             players,
             operations: roots.try_into().expect("six clock operations"),
+            option_snapshots: Default::default(),
         })
     }
 

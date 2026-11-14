@@ -4,6 +4,7 @@ use crate::{SongLuaLiveFrame, SongLuaLivePlayer};
 use deadlib_lua::NativeStack;
 
 mod player_options;
+pub(crate) use player_options::OptionSnapshots;
 
 #[derive(Default)]
 struct Attacks {
