@@ -4389,6 +4389,7 @@ pub enum TimingTickMode {
     Off,
     Assist,
     Hit,
+    Beat,
 }
 
 #[derive(Debug)]

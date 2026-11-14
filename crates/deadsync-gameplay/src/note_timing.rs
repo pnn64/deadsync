@@ -645,6 +645,43 @@ impl GameplayTimeToBeatCaches {
         )
         .max(song_row)
     }
+    
+    pub fn beat_tick_row_no_offset(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        music_time_ns: SongTimeNs,
+    ) -> i32 {
+        beat_tick_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            music_time_ns,
+            &mut self.assist,
+        )
+    }
+
+    pub fn beat_tick_future_row(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        audio_output_delay_seconds: f32,
+        music_time_ns: SongTimeNs,
+        slope: f32,
+        song_row: i32,
+    ) -> i32 {
+        let horizon = assist_lookahead_music_horizon_seconds(
+            audio_output_delay_seconds,
+            slope,
+        );
+
+        beat_tick_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            song_time_ns_add_seconds(music_time_ns, horizon),
+            &mut self.assist_future,
+        )
+        .max(song_row)
+    }
 
     #[inline(always)]
     pub fn lane_search_rows(
@@ -655,6 +692,33 @@ impl GameplayTimeToBeatCaches {
     ) -> LaneSearchRows {
         self.input[player].rows(timing, time_ns)
     }
+}
+
+#[inline(always)]
+fn beat_tick_row_no_offset_cached(
+    timing: &TimingData,
+    global_offset_seconds: f32,
+    music_time_ns: SongTimeNs,
+    cache: &mut BeatInfoCache,
+) -> i32 {
+    let target_time_ns = song_time_ns_add_seconds(
+        music_time_ns,
+        -global_offset_seconds,
+    );
+
+    let beat = timing
+        .get_beat_info_from_time_ns_cached(target_time_ns, cache)
+        .beat;
+
+    if !beat.is_finite() {
+        return -1;
+    }
+
+    // Metronome rows are absolute musical rows, not
+    // indices into the chart's nonempty-row table.
+    (beat.floor() as i32)
+        .saturating_mul(ROWS_PER_BEAT)
+        .max(-1)
 }
 
 #[inline(always)]
@@ -972,7 +1036,7 @@ pub fn assist_clap_schedule_update(
     assist_enabled: bool,
     timeline_reset: bool,
 ) -> AssistClapScheduleUpdate {
-    let song_row = song_row.max(0);
+    let song_row = song_row.max(-1);
     if !assist_enabled {
         return AssistClapScheduleUpdate {
             cursor: assist_clap_cursor_for_row(rows, song_row),
@@ -1096,6 +1160,54 @@ pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec
     build_assist_clap_rows_with_capacity(notes, note_range, note_row_count(notes, note_range))
 }
 
+#[must_use]
+pub fn build_beat_tick_rows(timing: &TimingData, last_beat: f32) -> Vec<usize> {
+    if !last_beat.is_finite() || last_beat < 0.0 {
+        return Vec::new();
+    }
+
+    let max_beat = last_beat
+        .floor()
+        .min((i32::MAX / ROWS_PER_BEAT) as f32) as usize;
+
+    let mut rows = Vec::new();
+    let mut last_tick_time_ns = None;
+
+    for beat_number in 0..=max_beat {
+        let row = beat_number * ROWS_PER_BEAT as usize;
+        let beat = note_row_to_beat(row as i32);
+
+        // Warped beats do not occupy audible musical time.
+        if timing.is_warp_at_beat(beat) {
+            continue;
+        }
+
+        let tick_time_ns = timing.get_time_for_beat_no_offset_ns(beat);
+
+        // Prevent duplicate or non-monotonic tick timestamps.
+        if last_tick_time_ns.is_some_and(|previous| tick_time_ns <= previous) {
+            continue;
+        }
+
+        rows.push(row);
+        last_tick_time_ns = Some(tick_time_ns);
+    }
+
+    rows
+}
+
+#[inline(always)]
+#[must_use]
+pub fn beat_tick_music_seconds_for_row(
+    timing: &TimingData,
+    row: usize,
+) -> Option<f64> {
+    let row = i32::try_from(row).ok()?;
+    let beat = note_row_to_beat(row);
+
+    Some(timing.get_time_for_beat_no_offset_ns(beat) as f64 * 1.0e-9)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayTimeBounds {
     pub first_judgable_second: f32,
@@ -1213,3 +1325,56 @@ fn build_note_count_stats_for_players(
     })
 }
 
+#[cfg(test)]
+mod beat_tick_tests {
+    use super::*;
+    use deadsync_rules::timing::WarpSegment;
+
+    #[test]
+    fn beat_ticks_follow_the_musical_grid_and_bpm_changes() {
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0), (4.0, 240.0)],
+            ..Default::default()
+        };
+
+        let timing = TimingData::from_segments(
+            0.0, 0.0, &segments, &[]
+        );
+
+        let rows = build_beat_tick_rows(&timing, 6.0);
+
+        assert_eq!(
+            rows,
+            vec![0, 48, 96, 144, 192, 240, 288]
+        );
+
+        // Beat 5 should occur 0.25 seconds after beat 4.
+        let time = beat_tick_music_seconds_for_row(&timing, 240)
+            .expect("valid beat tick row");
+
+        assert!((time - 2.25).abs() < 0.000001);
+    }
+
+    #[test]
+    fn beat_ticks_skip_warped_beats() {
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            warps: vec![WarpSegment {
+                beat: 4.0,
+                length: 4.0,
+            }],
+            ..Default::default()
+        };
+
+        let timing = TimingData::from_segments(
+            0.0, 0.0, &segments, &[]
+        );
+
+        let rows = build_beat_tick_rows(&timing, 9.0);
+
+        assert_eq!(
+            rows,
+            vec![0, 48, 96, 144, 384, 432]
+        );
+    }
+}
