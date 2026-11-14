@@ -181,14 +181,15 @@ pub(super) fn write(
             // native semantic snapshots omit that inferred flag. With no actor
             // type on the snapshot, its later reader defaults to a bound texture.
             // Explicit texture setters publish the flag into the raw table.
-            if target == Target::SpriteTexture && get(call, snapshot, key.as_bytes())? == Value::Nil
+            if target == Target::SpriteTexture
+                && get_static(call, snapshot, key.as_bytes())? == Value::Nil
             {
                 continue;
             }
             let value = crate::perframe::overlay_state_update_value(state, target);
             let overrides = live && live_override(target);
             if !overrides
-                && (get(call, snapshot, key.as_bytes())? != Value::Nil
+                && (get_static(call, snapshot, key.as_bytes())? != Value::Nil
                     || value == crate::perframe::overlay_state_update_value(&default, target))
             {
                 continue;
@@ -213,7 +214,7 @@ pub(super) fn write(
                 state.decode_movie,
             ),
         ] {
-            if changed && get(call, snapshot, key.as_bytes())? == Value::Nil {
+            if changed && get_static(call, snapshot, key.as_bytes())? == Value::Nil {
                 song_replay::raw_set(call, snapshot, key, value)?;
             }
         }
@@ -223,22 +224,17 @@ pub(super) fn write(
 fn validate_keys(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     // Native snapshot iteration validates string keys but never calls authored
     // property getters. Preserve that boundary before copying raw semantic data.
-    {
-        let mut stack = call.native_stack()?;
-        let base = stack.top();
-        stack.push(Value::Table(actor))?;
-        let table = stack.top_offset();
-        stack.push(Value::Nil)?;
-        while stack.next_table(table)? {
-            if matches!(stack.value(-2), Some(Value::String(_))) {
-                let valid = std::str::from_utf8(stack.to_bytes(-2)?.unwrap()).is_ok();
-                if !valid {
-                    return Err(stack.error(b"actor snapshot key is not UTF-8"));
-                }
+    let mut key = Value::Nil;
+    while let Some((next, _)) = call.raw_table_next(actor, key)? {
+        key = next;
+        if let Value::String(id) = key {
+            let valid = call
+                .string_bytes(id)
+                .is_some_and(|bytes| std::str::from_utf8(bytes).is_ok());
+            if !valid {
+                return Err(call.error(b"actor snapshot key is not UTF-8"));
             }
-            stack.set_top(stack.top() - 1)?;
         }
-        stack.set_top(base)?;
     }
     Ok(())
 }
@@ -259,14 +255,118 @@ fn copy_selected(call: &mut HostCall<'_>, actor: TableId, mutable: bool) -> Resu
         &[Value::Table(actor)],
     )?;
     call.call(validate, &[])?;
+    copy(call, actor, mutable)
+}
+fn copy_validated(call: &mut HostCall<'_>, actor: TableId) -> Result<TableId, Error> {
+    copy(call, actor, false)
+}
+
+/// The snapshot fields of `actor`, copied as the `manual_state_snapshot`
+/// helper copies them.
+pub(super) fn copy(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    mutable: bool,
+) -> Result<TableId, Error> {
+    match copy_native(call, actor, mutable)? {
+        Some(copy) => Ok(copy),
+        None => copy_with_helper(call, actor, mutable),
+    }
+}
+pub(super) fn copy_with_helper(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    mutable: bool,
+) -> Result<TableId, Error> {
     let function = native_children::helper_function(call, b"manual_state_snapshot")?;
     let value = call.call(function, &[Value::Table(actor), Value::Boolean(mutable)])?[0];
     table(call, value)
 }
-fn copy_validated(call: &mut HostCall<'_>, actor: TableId) -> Result<TableId, Error> {
-    let function = native_children::helper_function(call, b"manual_state_snapshot")?;
-    let value = call.call(function, &[Value::Table(actor)])?[0];
-    table(call, value)
+
+// How many tables deep a field's value is copied here. Actor state nests two
+// (vertex colours) or three (text attributes).
+const COPY_DEPTH: usize = 4;
+
+/// The helper's copy without entering Lua, for the shapes actor tables have:
+/// the same entries, written in the same order. `None` leaves the table to
+/// the helper, which defines the result: a field name that is not UTF-8, a
+/// wrapper that is not a table, a table used as a key, or a value nested
+/// deeper than `COPY_DEPTH`.
+pub(super) fn copy_native(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    mutable: bool,
+) -> Result<Option<TableId>, Error> {
+    let out = call.try_new_table()?;
+    call.with_roots(&[Value::Table(out)], |call| {
+        let mut key = Value::Nil;
+        while let Some((next, value)) = call.raw_table_next(actor, key)? {
+            key = next;
+            let Value::String(id) = key else {
+                continue;
+            };
+            let (selected, wrappers) = match call.string_bytes(id).map(std::str::from_utf8) {
+                Some(Ok(name)) => (
+                    semantic(name) || mutable && name.starts_with("__songlua_capture_"),
+                    name == "__songlua_wrappers",
+                ),
+                _ => return Ok(None),
+            };
+            if !selected {
+                continue;
+            }
+            let copied = match value {
+                Value::Table(list) if wrappers => wrapper_list(call, list)?,
+                value => clone_value(call, value, COPY_DEPTH)?,
+            };
+            let Some(copied) = copied else {
+                return Ok(None);
+            };
+            call.raw_table_set(out, key, copied)?;
+        }
+        Ok(Some(out))
+    })
+}
+// A new list of the same wrapper tables.
+fn wrapper_list(call: &mut HostCall<'_>, list: TableId) -> Result<Option<Value>, Error> {
+    let out = call.try_new_table()?;
+    for index in 1usize.. {
+        let index = Value::Number(index as f64);
+        match call.raw_table_get(list, index)? {
+            Value::Nil => break,
+            wrapper @ Value::Table(_) => call.raw_table_set(out, index, wrapper)?,
+            _ => return Ok(None),
+        }
+    }
+    Ok(Some(Value::Table(out)))
+}
+// The helper's `clone`: tables are copied entry by entry, other values kept.
+fn clone_value(
+    call: &mut HostCall<'_>,
+    value: Value,
+    depth: usize,
+) -> Result<Option<Value>, Error> {
+    let Value::Table(source) = value else {
+        return Ok(Some(value));
+    };
+    if depth == 0 {
+        return Ok(None);
+    }
+    let out = call.try_new_table()?;
+    call.with_roots(&[Value::Table(out)], |call| {
+        let mut key = Value::Nil;
+        while let Some((next, value)) = call.raw_table_next(source, key)? {
+            key = next;
+            if matches!(key, Value::Table(_)) {
+                return Ok(None);
+            }
+            let Some(value) = clone_value(call, value, depth - 1)? else {
+                return Ok(None);
+            };
+            call.raw_table_set(out, key, value)?;
+        }
+        Ok(Some(Value::Table(out)))
+    })
 }
 fn semantic(key: &str) -> bool {
     [

@@ -613,6 +613,21 @@ pub fn actor_named_child(
         .fixture_named_child(&mut runtime.vm, actor, name)
 }
 
+/// Copy a table's manual-draw snapshot fields through the Lua helper
+/// (`helper`) or through the production path. The flag reports whether the
+/// production path answered without the helper.
+pub fn actor_state_copy(
+    runtime: &mut super::SongRuntime,
+    actor: deadlib_lua::Value,
+    mutable: bool,
+    helper: bool,
+) -> Result<(deadlib_lua::Root, bool), deadlib_lua::Error> {
+    runtime
+        .actors
+        .perframe_access()
+        .fixture_state_copy(&mut runtime.vm, actor, mutable, helper)
+}
+
 /// Drive the production publication operation on one existing visual slot,
 /// including partial writes when a later authored field read fails.
 pub fn publish_live_visual_content<N, M>(

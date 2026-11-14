@@ -602,3 +602,176 @@ fn single_name_child_lookup_returns_the_child_and_creates_the_registry_once() {
         assert_eq!(value != Value::Nil, present, "{name}");
     }
 }
+
+// Whether two copies hold the same entries in the same order, and share a
+// table with the source exactly where the other does.
+const SAME_COPY: &str = r#"
+local function same(source, a, b)
+    if type(a) ~= 'table' or type(b) ~= 'table' then return rawequal(a, b) end
+    if rawequal(a, source) ~= rawequal(b, source) then return false end
+    if rawequal(a, b) then return true end
+    local ka, va = next(a)
+    local kb, vb = next(b)
+    while ka ~= nil or kb ~= nil do
+        local key = type(ka) == 'table' and type(kb) == 'table' or rawequal(ka, kb)
+        local from = nil
+        if type(source) == 'table' and ka ~= nil and type(ka) ~= 'table' then
+            from = rawget(source, ka)
+        end
+        if not key or not same(from, va, vb) then return false end
+        ka, va = next(a, ka)
+        kb, vb = next(b, kb)
+    end
+    return true
+end
+return same
+"#;
+// A label, the table to copy, and whether the production path copies it
+// without the Lua helper.
+type CopyShape = (&'static str, &'static str, bool);
+const COPY_SHAPES: &[CopyShape] = &[
+    ("empty", "return {}", true),
+    (
+        "actor fields",
+        r#"return {
+            __songlua_state_x = 1, __songlua_state_diffuse = {1, 0.5, 0, 1},
+            __songlua_state_vertex_colors = {{1, 0, 0, 1}, {0, 1, 0, 1}, {0, 0, 1, 1}, {1, 1, 1, 1}},
+            __songlua_visible = false, __songlua_native_name = 'n', __songlua_hibernate_seconds = 2,
+            __songlua_theme_hibernating = true, __songlua_update_rate = 0.5,
+            __songlua_current_x = 1, __songlua_current_y = 2, __songlua_current_z = 3,
+            __songlua_diffuse = {1, 1, 1, 1}, __songlua_text_attributes = {{1, 2, {3, 4}}},
+            __songlua_stroke_color = {0, 0, 0, 1}, __songlua_aux = 4, __songlua_stream_width = 5,
+            __songlua_sprite_animation_length_seconds = 6, __songlua_sprite_effect_mode = 'm',
+            Text = 't', Texture = 'a.png', File = 'f', StreamWidth = 7,
+            __songlua_graph_display_w = 1, __songlua_scroller_x = 2,
+            __songlua_aft_capture_name = 'c', __songlua_command_queue = {},
+            __songlua_command_queue_deferred = true,
+            __songlua_recurring_update_command = 'Update', __songlua_capture_pending = {1, 2},
+            -- Not snapshot fields.
+            Name = 'actor', text = 'lower', __songlua_actor_type = 'Sprite', __songlua_state = 1,
+            __songlua_update_function = function() end,
+            'array', {}, [true] = 1, [1.5] = 2, [{}] = 3,
+        }"#,
+        true,
+    ),
+    (
+        "names at the edge of each prefix",
+        r#"return {
+            ['__songlua_state_'] = 1, ['__songlua_aft_'] = 2, ['__songlua_scroller_'] = 3,
+            ['__songlua_graph_display_'] = 4, ['__songlua_recurring_update_'] = 5,
+            ['__songlua_command_queue'] = 6, ['__songlua_command_queueX'] = 7,
+            ['__songlua_capture_'] = 8, ['__songlua_capture'] = 9, ['__songlua_stat'] = 10,
+            ['__songlua_state'] = 11, ['_songlua_state_x'] = 12, ['__SONGLUA_STATE_X'] = 13,
+            Texture = false, texture = 1, ['Text\0'] = 2, [''] = 3,
+        }"#,
+        true,
+    ),
+    (
+        "wrappers",
+        "local a, b = {}, {x = 1}
+         return {__songlua_wrappers = {a, b, nil, {}}, __songlua_state_x = a}",
+        true,
+    ),
+    (
+        "wrappers that are not a list",
+        "return {__songlua_wrappers = 'none', __songlua_state_x = 1}",
+        true,
+    ),
+    (
+        "a wrapper that is not a table",
+        "return {__songlua_wrappers = {{}, 5}}",
+        false,
+    ),
+    (
+        "a value nested too deep",
+        "return {__songlua_state_deep = {{{{{{{{1}}}}}}}}}",
+        false,
+    ),
+    (
+        "a table used as a key",
+        "return {__songlua_state_keyed = {[{}] = 1}}",
+        false,
+    ),
+    (
+        "metatables are neither followed nor copied",
+        r#"local value = setmetatable({1, 2}, {__index = function() error('index') end})
+        return setmetatable({__songlua_state_x = value}, {
+            __index = function() error('index') end,
+            __newindex = function() error('newindex') end,
+        })"#,
+        true,
+    ),
+];
+
+#[test]
+fn manual_draw_copy_matches_the_lua_helper() {
+    for &(label, source, native) in COPY_SHAPES {
+        for mutable in [false, true] {
+            let mut host = runtime();
+            let same = api::eval(host.vm_mut(), SAME_COPY)[0];
+            let table = api::eval(host.vm_mut(), source)[0];
+            let helper = test_support::actor_state_copy(&mut host, table, mutable, true);
+            let production = test_support::actor_state_copy(&mut host, table, mutable, false);
+            match (helper, production) {
+                (Ok((expected, _)), Ok((actual, answered))) => {
+                    let expected = host.vm_mut().rooted(expected).unwrap();
+                    let actual = host.vm_mut().rooted(actual).unwrap();
+                    assert!(
+                        api::call_bool(host.vm_mut(), same, &[table, expected, actual]),
+                        "{label}, mutable {mutable}"
+                    );
+                    assert_eq!(answered, native, "{label}, mutable {mutable}");
+                }
+                (Err(expected), Err(actual)) => {
+                    assert_eq!(actual.to_string(), expected.to_string(), "{label}");
+                    assert!(!native, "{label}");
+                }
+                (helper, production) => panic!(
+                    "{label}: helper {:?}, production {:?}",
+                    helper.map(|_| ()),
+                    production.map(|(_, answered)| answered)
+                ),
+            }
+        }
+    }
+}
+
+#[test]
+fn manual_draw_copy_keeps_the_snapshot_fields_and_shares_only_wrappers() {
+    let mut host = runtime();
+    let source = api::eval(
+        host.vm_mut(),
+        "WRAPPER = {}
+         SOURCE = {__songlua_state_diffuse = {1, 2, 3, 4}, __songlua_wrappers = {WRAPPER},
+            __songlua_capture_pending = {5}, Name = 'actor', Text = 'text'}
+         return SOURCE",
+    )[0];
+    for mutable in [false, true] {
+        let (copy, native) =
+            test_support::actor_state_copy(&mut host, source, mutable, false).unwrap();
+        assert!(native);
+        let copy = host.vm_mut().rooted(copy).unwrap();
+        host.vm_mut().set_global(b"COPY", copy).unwrap();
+        host.vm_mut()
+            .set_global(b"MUTABLE", Value::Boolean(mutable))
+            .unwrap();
+        api::eval(
+            host.vm_mut(),
+            "local count = 0
+             for _ in pairs(COPY) do count = count + 1 end
+             assert(count == (MUTABLE and 4 or 3), count)
+             assert(COPY ~= SOURCE and COPY.Name == nil and COPY.Text == 'text')
+             local diffuse = COPY.__songlua_state_diffuse
+             assert(diffuse ~= SOURCE.__songlua_state_diffuse and #diffuse == 4 and diffuse[4] == 4)
+             local wrappers = COPY.__songlua_wrappers
+             assert(wrappers ~= SOURCE.__songlua_wrappers and #wrappers == 1)
+             assert(wrappers[1] == WRAPPER)
+             local pending = COPY.__songlua_capture_pending
+             if MUTABLE then
+                 assert(pending ~= SOURCE.__songlua_capture_pending and pending[1] == 5)
+             else
+                 assert(pending == nil)
+             end",
+        );
+    }
+}

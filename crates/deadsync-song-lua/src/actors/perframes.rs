@@ -417,4 +417,40 @@ impl Access {
         let (child, direct) = (results[0], results[1] == Value::Boolean(true));
         Ok((vm.pin(child)?, direct))
     }
+
+    /// A table's manual-draw snapshot fields, copied by the Lua helper
+    /// (`helper`) or by the production path, and whether the production path
+    /// answered without the helper.
+    pub fn fixture_state_copy(
+        &self,
+        vm: &mut Vm,
+        actor: Value,
+        mutable: bool,
+        helper: bool,
+    ) -> Result<(Root, bool), Error> {
+        let function = vm.new_host_function_with_data(
+            |call| {
+                let (mutable, helper) = *call.function_data::<(bool, bool)>().unwrap();
+                let actor = table(call, call.captures()[2])?;
+                let (copy, native) = if helper {
+                    let copy = state_snapshot::copy_with_helper(call, actor, mutable)?;
+                    (copy, false)
+                } else {
+                    let native = state_snapshot::copy_native(call, actor, mutable)?.is_some();
+                    (state_snapshot::copy(call, actor, mutable)?, native)
+                };
+                call.push(Value::Table(copy))?;
+                call.push(Value::Boolean(native))
+            },
+            &[
+                Value::Table(self.registry),
+                Value::Table(self.helpers),
+                actor,
+            ],
+            (mutable, helper),
+        )?;
+        let results = vm.call(function, &[])?;
+        let (copy, native) = (results[0], results[1] == Value::Boolean(true));
+        Ok((vm.pin(copy)?, native))
+    }
 }
