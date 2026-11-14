@@ -625,6 +625,9 @@ fn write(
     value: Value,
     raw: bool,
 ) -> Result<(), Error> {
+    if raw {
+        return stack.raw_set_static(owner as isize, key.as_bytes(), value);
+    }
     let key = stack.intern_static(key.as_bytes())?;
     stack.push(key)?;
     stack.push(value)?;
