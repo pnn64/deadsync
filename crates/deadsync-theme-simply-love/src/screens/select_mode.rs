@@ -10,10 +10,11 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
 use crate::views::SelectFlowRuntimeView;
+use crate::ui_layout::UILayoutType;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
-use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_width};
 use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
@@ -24,6 +25,7 @@ use std::sync::Arc;
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
 const ROOT_ZOOM: f32 = 1.25;
+const ROOT_REFERENCE_WIDTH: f32 = 640.0;
 
 // Simply Love: Graphics/ScreenSelectPlayMode Icon.lua
 const CURSOR_MIN_W: f32 = 90.0;
@@ -302,16 +304,45 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 #[inline(always)]
+fn root_scale() -> f32 {
+    root_scale_for_width(UILayoutType::current(), screen_width())
+}
+
+fn root_scale_for_width(layout_type: UILayoutType, width: f32) -> f32 {
+    let width_scale = if layout_type == UILayoutType::Squareish {
+        (width / ROOT_REFERENCE_WIDTH).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    ROOT_ZOOM * width_scale
+}
+
 fn root_pt(x: f32, y: f32) -> (f32, f32) {
+    let scale = root_scale();
     (
-        x.mul_add(ROOT_ZOOM, screen_center_x() + ROOT_X_OFF),
-        y.mul_add(ROOT_ZOOM, screen_center_y()),
+        x.mul_add(scale, screen_center_x() + ROOT_X_OFF),
+        y.mul_add(scale, screen_center_y()),
     )
 }
 
 #[inline(always)]
 fn root_sz(w: f32, h: f32) -> (f32, f32) {
-    (w * ROOT_ZOOM, h * ROOT_ZOOM)
+    let scale = root_scale();
+    (w * scale, h * scale)
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::root_scale_for_width;
+    use crate::ui_layout::UILayoutType;
+
+    #[test]
+    fn play_mode_content_scales_to_squareish_widths() {
+        assert!((root_scale_for_width(UILayoutType::Squareish, 480.0) - 0.9375).abs() < 0.001);
+        assert!((root_scale_for_width(UILayoutType::Squareish, 600.0) - 1.171875).abs() < 0.001);
+        assert_eq!(root_scale_for_width(UILayoutType::Wide, 853.0), 1.25);
+        assert_eq!(root_scale_for_width(UILayoutType::UltraWide, 1147.0), 1.25);
+    }
 }
 
 #[inline(always)]
@@ -346,6 +377,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let root_scale = root_scale();
     actors.reserve(256);
     let exit_t = exit_anim_t(state.flow.exit_requested());
 
@@ -422,7 +454,7 @@ pub fn push_actors(
         settext(Arc::clone(&text.descriptions[selected_index])):
         align(0.0, 0.0):
         xy(dx, dy):
-        zoom(0.825 * ROOT_ZOOM):
+        zoom(0.825 * root_scale):
         diffuse(1.0, 1.0, 1.0, desc_alpha):
         horizalign(left)
     ));
@@ -499,7 +531,7 @@ pub fn push_actors(
         settext("77.41"):
         align(0.5, 0.5):
         xy(sx, sy):
-        zoom(0.225 * ROOT_ZOOM):
+        zoom(0.225 * root_scale):
         diffuse(1.0, 1.0, 1.0, score_alpha)
     ));
 
@@ -556,8 +588,8 @@ pub fn push_actors(
 
     for &(dir, x_off) in demo.columns {
         let (x, y) = (
-            (x_off * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
-            ((-55.0) * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
+            (x_off * root_scale).mul_add(demo.field_zoom, nfx),
+            ((-55.0) * root_scale).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let receptor_texture = if dir == "center" {
@@ -616,8 +648,8 @@ pub fn push_actors(
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
         let (x, y) = (
-            (col_x * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
-            (y * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
+            (col_x * root_scale).mul_add(demo.field_zoom, nfx),
+            (y * root_scale).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let is_center = *dir == "center";

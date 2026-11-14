@@ -8,8 +8,15 @@ use crate::i18n::tr;
 use crate::rgba_const;
 use crate::screens::Screen;
 use crate::screens::components::{
+    select_course::{
+        course_summary,
+        layout::{self, CourseSelectLayout},
+        rating_list,
+    },
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
-    shared::{banner as shared_banner, mode_pads, timers, transitions, visual_style_bg},
+    shared::{
+        banner as shared_banner, mode_pads, selection_flash, timers, transitions, visual_style_bg,
+    },
 };
 use crate::screens::input as screen_input;
 use crate::views::{CourseStagePlan, SelectedCoursePlan};
@@ -20,11 +27,9 @@ use crate::views::{
 };
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::PadDir;
-use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
-use deadlib_present::space::{
-    is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
-};
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData, SongPack};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -66,22 +71,8 @@ const MUSIC_WHEEL_SWITCH_SECONDS: f32 = 0.10;
 const MUSIC_WHEEL_SETTLE_MIN_SPEED: f32 = 0.2;
 const MUSIC_WHEEL_HOLD_SPIN_SPEED_DEFAULT: f32 = 15.0;
 const MUSIC_WHEEL_STOP_SPINDOWN_THRESHOLD: f32 = 0.25;
-const BANNER_NATIVE_WIDTH: f32 = 418.0;
-const BANNER_NATIVE_HEIGHT: f32 = 164.0;
 const BANNER_UPDATE_DELAY_SECONDS: f32 = 0.01;
-const COURSE_TRACKLIST_ROW_SPACING: f32 = 23.0;
-const COURSE_TRACKLIST_SCROLL_STEP_SECONDS: f32 = 0.5;
-const COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS: f32 = 0.5;
-const COURSE_TRACKLIST_TARGET_VISIBLE_ROWS: usize = 6;
 static WHEEL_CONTENT_GENERATION: AtomicU64 = AtomicU64::new(1);
-const COURSE_TRACKLIST_SCROLL_MIN_ENTRIES: usize = 6;
-const COURSE_RATING_VISIBLE_SLOTS: usize = 5;
-const COURSE_TRACKLIST_RATING_BOX_W: f32 = 32.0;
-const COURSE_TRACKLIST_RATING_BOX_H: f32 = 152.0;
-// Manual tune knob for the whole course tracklist text block.
-// Negative moves up, positive moves down.
-const COURSE_TRACKLIST_TEXT_Y_OFFSET: f32 = 0.0;
-const COURSE_TRACKLIST_TEXT_HEIGHT: f32 = 15.0;
 const SL_EXIT_PROMPT_BG_ALPHA: f32 = 0.925;
 const SL_EXIT_PROMPT_CHOICE_Y: f32 = 250.0;
 const SL_EXIT_PROMPT_CHOICE_X_OFFSET: f32 = 100.0;
@@ -195,6 +186,20 @@ impl CourseSongEntry {
     }
 }
 
+impl rating_list::RatingListEntry for CourseSongEntry {
+    fn title(&self) -> &Arc<str> {
+        &self.title
+    }
+
+    fn difficulty(&self) -> &str {
+        &self.difficulty
+    }
+
+    fn meter_text(&self) -> &Arc<str> {
+        &self.meter_text
+    }
+}
+
 #[derive(Clone, Debug)]
 struct CourseMeta {
     source: CourseFile,
@@ -229,6 +234,16 @@ struct CourseRatingMeta {
     max_bpm: Option<f64>,
     total_length_seconds: i32,
     runtime_stages: Vec<CourseStagePlan>,
+}
+
+impl rating_list::RatingSelectorEntry for CourseRatingMeta {
+    fn difficulty_name(&self) -> &str {
+        &self.course_difficulty_name
+    }
+
+    fn meter_text(&self) -> &Arc<str> {
+        &self.course_meter_text
+    }
 }
 
 /// Immutable actor-ready stat text compiled with each course rating.
@@ -2102,74 +2117,6 @@ fn course_selection_anim_beat(state: &State) -> f32 {
     state.session_elapsed * 2.5
 }
 
-#[inline(always)]
-fn course_arrow_bounce01(selection_beat: f32, global_offset_seconds: f32) -> f32 {
-    // Match SelectMusic arrow timing: effectperiod(1) + effectoffset(-10*GlobalOffsetSeconds).
-    let effect_offset = -10.0 * global_offset_seconds;
-    let t = (selection_beat + effect_offset).rem_euclid(1.0);
-    (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
-}
-
-#[inline(always)]
-fn course_tracklist_scroll(
-    entry_count: usize,
-    visible_rows: usize,
-    elapsed: f32,
-) -> (usize, f32, usize) {
-    if entry_count == 0
-        || visible_rows == 0
-        || entry_count <= COURSE_TRACKLIST_SCROLL_MIN_ENTRIES
-        || entry_count <= visible_rows
-    {
-        return (0, 0.0, 0);
-    }
-    let max_start = entry_count - visible_rows;
-    let step = COURSE_TRACKLIST_SCROLL_STEP_SECONDS.max(1e-3);
-    let pause = COURSE_TRACKLIST_SCROLL_END_PAUSE_SECONDS.max(0.0);
-    let sweep = max_start as f32 * step;
-    let cycle = pause + sweep + pause + sweep;
-    if cycle <= f32::EPSILON {
-        return (0, 0.0, 0);
-    }
-
-    let mut t = elapsed.max(0.0).rem_euclid(cycle);
-    let pos = if t < pause {
-        0.0
-    } else {
-        t -= pause;
-        if t < sweep {
-            t / step
-        } else {
-            t -= sweep;
-            if t < pause {
-                max_start as f32
-            } else {
-                t -= pause;
-                (max_start as f32 - t / step).max(0.0)
-            }
-        }
-    }
-    .clamp(0.0, max_start as f32);
-
-    let start = pos.floor() as usize;
-    let frac = pos - start as f32;
-    let focus = pos.round().clamp(0.0, max_start as f32) as usize;
-    (start, frac, focus)
-}
-
-fn sl_select_music_bg_flash() -> Actor {
-    act!(quad:
-        align(0.0, 0.0):
-        xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(-98):
-        sleep(0.6):
-        linear(0.5): alpha(0.0):
-        linear(0.0): visible(false)
-    )
-}
-
 pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_> {
     MusicWheelRuntimeRequest {
         read_scores: true,
@@ -2249,6 +2196,7 @@ pub fn push_actors(
     _asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let course_layout = CourseSelectLayout::current();
     actors.reserve(256);
     let side = state.context.player_side;
     let play_style = state.context.play_style;
@@ -2275,7 +2223,7 @@ pub fn push_actors(
             visual_policy: visual_policy.music_selection_background(),
         },
     );
-    actors.push(sl_select_music_bg_flash());
+    selection_flash::push(actors, state.selection_animation_timer);
     screen_bars::push(
         actors,
         state.labels.title.as_ref(),
@@ -2301,25 +2249,16 @@ pub fn push_actors(
         state.context.joined,
     ));
 
-    let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
-        (0.7655, screen_center_x() - 170.0, 96.0)
-    } else {
-        (0.75, screen_center_x() - 166.0, 96.0)
-    };
     actors.push(shared_banner::sprite(
         state.current_banner_key.clone(),
-        banner_cx,
-        banner_cy,
-        BANNER_NATIVE_WIDTH,
-        BANNER_NATIVE_HEIGHT,
-        banner_zoom,
+        course_layout.content_center_x,
+        course_layout.banner_center_y,
+        layout::BANNER_NATIVE_WIDTH,
+        layout::BANNER_NATIVE_HEIGHT,
+        course_layout.banner_zoom,
         51,
     ));
 
-    let songs_label = Arc::clone(&state.labels.songs);
-    let songs_value = Arc::clone(&state.summary_text.songs);
-    let bpm_text = Arc::clone(&state.summary_text.bpm);
-    let len_text = Arc::clone(&state.summary_text.length);
     let desc_text = Arc::clone(&state.summary_text.description);
 
     let (stats_text, meter_text) = selected_rating.map_or_else(
@@ -2339,25 +2278,26 @@ pub fn push_actors(
     } else {
         screen_width().mul_add(0.25, -5.0)
     };
+    let stats_values = select_pane::StatsValues {
+        steps: stats_text.steps,
+        mines: stats_text.mines,
+        jumps: stats_text.jumps,
+        hands: stats_text.hands,
+        holds: stats_text.holds,
+        rolls: stats_text.rolls,
+    };
     select_pane::push_base(
         actors,
         select_pane::StatsPaneParams {
             machine_font: visual_policy.machine_font,
             pane_cx,
             accent_color: pane_sel_col,
-            values: select_pane::StatsValues {
-                steps: stats_text.steps,
-                mines: stats_text.mines,
-                jumps: stats_text.jumps,
-                hands: stats_text.hands,
-                holds: stats_text.holds,
-                rolls: stats_text.rolls,
-            },
+            values: stats_values,
             meter: Some(meter_text),
         },
     );
-    let pane_layout = select_pane::layout();
-    let lines = [
+    let pane_layout = select_pane::layout(pane_cx);
+    for (row, (name, score)) in [
         (
             Arc::clone(&state.score_text.machine_name),
             Arc::clone(&state.score_text.machine_score),
@@ -2366,65 +2306,34 @@ pub fn push_actors(
             Arc::clone(&state.score_text.player_name),
             Arc::clone(&state.score_text.player_score),
         ),
-    ];
-    for (i, (name, pct)) in lines.into_iter().enumerate() {
-        actors.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(50.0f32.mul_add(-pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): maxwidth(30.0): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
-        actors.push(act!(text: font("miso"): settext(pct): align(1.0, 0.5): xy(25.0f32.mul_add(pane_layout.text_zoom, pane_cx + pane_layout.cols[2]), pane_layout.pane_top + pane_layout.rows[i]): zoom(pane_layout.text_zoom): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        select_pane::push_score_line(actors, pane_layout, row, name, score);
     }
 
-    let (box_w, frame_x, frame_y) = if is_wide() {
-        (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
-    } else {
-        (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
-    };
-    actors.push(Actor::Frame {
-        align: [0.0, 0.0],
-        offset: [frame_x, frame_y],
-        size: [SizeSpec::Px(box_w), SizeSpec::Px(50.0)],
-        background: None,
-        z: 51,
-        children: vec![
-            act!(quad:
-                setsize(box_w, 50.0):
-                diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-            ),
-            Actor::Frame {
-                align: [0.0, 0.0],
-                offset: [-110.0, -6.0],
-                size: [SizeSpec::Fill, SizeSpec::Fill],
-                background: None,
-                z: 0,
-                children: vec![
-                    act!(text: font("miso"): settext(songs_label): align(1.0, 0.0): y(-11.0): maxwidth(56.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(songs_value): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(Arc::clone(&state.labels.bpm)): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(bpm_text): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                    act!(text: font("miso"): settext(Arc::clone(&state.labels.length)): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                    act!(text: font("miso"): settext(len_text): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                ],
-            },
-        ],
-    });
+    course_summary::push(
+        actors,
+        course_summary::Params {
+            layout: course_layout.course_summary(),
+            songs_label: &state.labels.songs,
+            songs_value: &state.summary_text.songs,
+            bpm_label: &state.labels.bpm,
+            bpm_value: &state.summary_text.bpm,
+            length_label: &state.labels.length,
+            length_value: &state.summary_text.length,
+            background_color: UI_BOX_BG_COLOR,
+        },
+    );
 
-    let panel_w = if is_wide() { 286.0 } else { 276.0 };
-    let rating_box_cx = screen_center_x() - 26.0;
-    let rating_box_cy = screen_center_y() + 67.0;
-    let rating_box_left = COURSE_TRACKLIST_RATING_BOX_W.mul_add(-0.5, rating_box_cx);
-    let rating_box_top = COURSE_TRACKLIST_RATING_BOX_H.mul_add(-0.5, rating_box_cy);
-    let rating_box_bottom = COURSE_TRACKLIST_RATING_BOX_H.mul_add(0.5, rating_box_cy);
-    let panel_right = rating_box_left - 2.0;
-    let panel_h = rating_box_bottom - rating_box_top;
-    let panel_cx = panel_right - panel_w * 0.5;
-    let panel_top = rating_box_top;
-    let panel_bottom = rating_box_bottom;
-    let panel_cy = panel_top + panel_h * 0.5;
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(panel_cx, panel_cy):
-        setsize(panel_w, panel_h):
-        z(120):
-        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-    ));
+    let rating_list_layout = course_layout.rating_list();
+    let panel_left = rating_list_layout.panel_left;
+    let panel_top = rating_list_layout.panel_top;
+    let panel_w = rating_list_layout.panel_width;
+    let panel_bottom = rating_list_layout.panel_bottom;
+    let panel_cx = panel_left + panel_w * 0.5;
+    let scale = rating_list_layout.scale;
 
     let (step_idx_text, step_artist_text, step_artist_col) = match selected_rating {
         Some(rating) if !rating.entries.is_empty() => {
@@ -2448,179 +2357,46 @@ pub fn push_actors(
         ),
     };
     let has_desc = !desc_text.trim().is_empty();
-    let list_left_x = panel_cx - panel_w * 0.5 + 10.0;
-    let list_title_x = list_left_x + 38.0;
-    let list_start_y = panel_top + 8.0 + COURSE_TRACKLIST_TEXT_Y_OFFSET;
-    let list_right_pad = 14.0;
-    let list_clip = Some([panel_cx - panel_w * 0.5, panel_top, panel_w, panel_h]);
-    if let Some(rating) = selected_rating
-        && !rating.entries.is_empty()
-    {
-        let visible_rows = rating
-            .entries
-            .len()
-            .clamp(1, COURSE_TRACKLIST_TARGET_VISIBLE_ROWS);
-        let row_spacing = COURSE_TRACKLIST_ROW_SPACING;
-        let (start_idx, frac, _) =
-            course_tracklist_scroll(rating.entries.len(), visible_rows, state.session_elapsed);
-        let rows_to_draw = visible_rows + 2;
-        let title_maxwidth = (panel_w - (list_title_x - list_left_x) - list_right_pad).max(40.0);
-        for row in 0..rows_to_draw {
-            let idx = start_idx + row;
-            if idx >= rating.entries.len() {
-                break;
-            }
-            let entry = &rating.entries[idx];
-            let y = frac.mul_add(
-                -row_spacing,
-                (row as f32).mul_add(row_spacing, list_start_y),
-            );
-            if y > panel_bottom + row_spacing {
-                break;
-            }
-            let diff_color = color::difficulty_rgba_with_scheme(
-                &entry.difficulty,
+    rating_list::push(
+        actors,
+        rating_list::Params {
+            layout: rating_list_layout,
+            entries: selected_rating.map(|rating| rating.entries.as_slice()),
+            ratings: selected_meta.map(|meta| meta.ratings.as_slice()),
+            selected_rating_index,
+            no_course_text: &state.labels.select_hint,
+            elapsed: state.session_elapsed,
+            panel_color: UI_BOX_BG_COLOR,
+            machine_font: visual_policy.machine_font,
+            selection_animation_beat,
+            global_offset_seconds: state.context.policy.global_offset_seconds,
+            is_p2_single,
+        },
+        |difficulty| {
+            color::difficulty_rgba_with_scheme(
+                difficulty,
                 state.active_color_index,
                 state.context.policy.difficulty_color_scheme,
-            );
-            let mut meter_actor = act!(text:
-                font("miso"):
-                settext(Arc::clone(&entry.meter_text)):
-                align(0.0, 0.0):
-                xy(list_left_x, y):
-                zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
-                maxwidth(34.0):
-                z(121):
-                diffuse(diff_color[0], diff_color[1], diff_color[2], 1.0)
-            );
-            if let Actor::Text { clip, .. } = &mut meter_actor {
-                *clip = list_clip;
-            }
-            actors.push(meter_actor);
+            )
+        },
+    );
 
-            let mut title_actor = act!(text:
-                font("miso"):
-                settext(Arc::clone(&entry.title)):
-                align(0.0, 0.0):
-                xy(list_title_x, y):
-                zoomtoheight(COURSE_TRACKLIST_TEXT_HEIGHT):
-                maxwidth(title_maxwidth):
-                z(121):
-                diffuse(1.0, 1.0, 1.0, 1.0)
-            );
-            if let Actor::Text { clip, .. } = &mut title_actor {
-                *clip = list_clip;
-            }
-            actors.push(title_actor);
-        }
-    } else {
-        let mut no_course_actor = act!(text:
-            font("miso"):
-            settext(Arc::clone(&state.labels.select_hint)):
-            align(0.0, 0.0):
-            xy(list_left_x, list_start_y):
-            zoom(0.72):
-            maxwidth(panel_w - 16.0):
-            z(121):
-            diffuse(1.0, 1.0, 1.0, 1.0)
-        );
-        if let Actor::Text { clip, .. } = &mut no_course_actor {
-            *clip = list_clip;
-        }
-        actors.push(no_course_actor);
-    }
-
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(rating_box_cx, rating_box_cy):
-        setsize(COURSE_TRACKLIST_RATING_BOX_W, COURSE_TRACKLIST_RATING_BOX_H):
-        z(120):
-        diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])
-    ));
-    let rating_len = selected_meta.map_or(0, |meta| meta.ratings.len());
-    let rating_top_index = if rating_len > COURSE_RATING_VISIBLE_SLOTS {
-        selected_rating_index
-            .saturating_sub(COURSE_RATING_VISIBLE_SLOTS - 1)
-            .min(rating_len - COURSE_RATING_VISIBLE_SLOTS)
-    } else {
-        0
-    };
-    if let Some(meta) = selected_meta {
-        for slot in 0..COURSE_RATING_VISIBLE_SLOTS {
-            let y = ((slot as i32 - 2) as f32).mul_add(30.0, rating_box_cy);
-            actors.push(act!(quad:
-                align(0.5, 0.5):
-                xy(rating_box_cx, y):
-                setsize(28.0, 28.0):
-                z(121):
-                diffuse(0.059, 0.059, 0.059, 1.0)
-            ));
-            let idx = rating_top_index + slot;
-            if idx >= meta.ratings.len() {
-                continue;
-            }
-            if let Some(rating) = meta.ratings[idx].as_ref() {
-                let color = color::difficulty_rgba_with_scheme(
-                    rating.course_difficulty_name.as_str(),
-                    state.active_color_index,
-                    state.context.policy.difficulty_color_scheme,
-                );
-                actors.push(act!(text:
-                    font(machine_font_key(visual_policy.machine_font, FontRole::Header)):
-                    settext(Arc::clone(&rating.course_meter_text)):
-                    align(0.5, 0.5):
-                    xy(rating_box_cx, y):
-                    zoom(0.45):
-                    z(122):
-                    diffuse(color[0], color[1], color[2], 1.0)
-                ));
-            }
-        }
-    }
-    if rating_len > 0 {
-        let selected_slot = (selected_rating_index.saturating_sub(rating_top_index))
-            .min(COURSE_RATING_VISIBLE_SLOTS - 1);
-        let arrow_y = ((selected_slot as i32 - 2) as f32).mul_add(30.0, rating_box_cy) + 1.0;
-        let bounce = course_arrow_bounce01(
-            selection_animation_beat,
-            state.context.policy.global_offset_seconds,
-        );
-        let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
-            (rating_box_cx + 8.0, 3.0 * bounce, 180.0)
-        } else {
-            (rating_box_cx - 27.0, -3.0 * bounce, 0.0)
-        };
-        actors.push(act!(sprite("meter_arrow.png"):
-            align(0.0, 0.5):
-            xy(arrow_x0 + arrow_dx, arrow_y):
-            rotationz(arrow_rot):
-            zoom(0.575):
-            z(122)
-        ));
-    }
-
-    let step_artist_x0 = if is_p2_single {
-        screen_center_x() - 244.0
-    } else if is_wide() {
-        screen_center_x() - 355.5
-    } else {
-        screen_center_x() - 345.5
-    };
-    let step_artist_y = 0.5f32.mul_add(-(screen_height() / 28.0), screen_center_y() - 9.0);
+    let step_artist_y = panel_top - 0.5 * (screen_height() / 28.0) * scale;
     step_artist_bar::push(
         actors,
         step_artist_bar::StepArtistBarParams {
-            x0: step_artist_x0,
-            center_y: step_artist_y,
-            layout: step_artist_bar::StepArtistBarLayout::Legacy,
-            expanded_line_count: 0,
+            left_x: panel_left,
+            layout: step_artist_bar::StepArtistBarLayout::legacy(
+                step_artist_y,
+                175.0,
+                34.5 * scale,
+                138.0 * scale,
+            ),
             accent_color: step_artist_col,
             z_base: 122,
             label_text: step_idx_text.into(),
-            label_max_width: 22.0,
+            label_max_width: 22.0 * scale,
             artist_text: step_artist_text.into(),
-            artist_x_offset: 60.0,
-            artist_max_width: 138.0,
             artist_color: [
                 UI_BOX_BG_COLOR[0],
                 UI_BOX_BG_COLOR[1],
@@ -2633,8 +2409,8 @@ pub fn push_actors(
     if has_desc {
         actors.push(act!(quad:
             align(0.5, 0.5):
-            xy(panel_cx, panel_cy + panel_h * 0.5 - 9.0):
-            setsize(panel_w, 16.0):
+            xy(panel_cx, panel_bottom - 9.0 * scale):
+            setsize(panel_w, 16.0 * scale):
             z(122):
             diffuse(0.0, 0.0, 0.0, 0.5)
         ));
@@ -2642,9 +2418,9 @@ pub fn push_actors(
             font("miso"):
             settext(desc_text):
             align(0.5, 0.5):
-            xy(panel_cx, panel_cy + panel_h * 0.5 - 9.0):
-            zoom(0.72):
-            maxwidth(panel_w - 8.0):
+            xy(panel_cx, panel_bottom - 9.0 * scale):
+            zoom(0.72 * scale):
+            maxwidth(panel_w - 8.0 * scale):
             z(123):
             diffuse(1.0, 1.0, 1.0, 1.0)
         ));
@@ -2686,8 +2462,11 @@ pub fn push_actors(
             font("miso"):
             settext(Arc::clone(&state.labels.pick_prompt)):
             align(0.5, 0.5):
-            xy(screen_center_x() - 26.0, screen_center_y() + 67.0):
-            zoom(0.8):
+            xy(
+                rating_list_layout.rating_box_center_x,
+                rating_list_layout.rating_box_center_y
+            ):
+            zoom(0.8 * scale):
             z(122):
             diffuse(1.0, 1.0, 1.0, 0.8)
         ));

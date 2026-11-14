@@ -19,10 +19,9 @@ pub fn fallback_banner_key(color_index: i32) -> String {
 
 pub fn build_density_graph_mesh(
     chart_opt: Option<DensityGraphSource>,
-    wide_screen: bool,
+    graph_size: [f32; 2],
 ) -> Option<Arc<[MeshVertex]>> {
-    let graph_w = if wide_screen { 286.0 } else { 276.0 };
-    let graph_h = 64.0;
+    let [graph_w, graph_h] = graph_size;
     chart_opt.and_then(|chart| {
         let verts = density::build_density_histogram_mesh(
             &chart.measure_nps_vec,
@@ -284,15 +283,24 @@ mod tests {
 
     #[test]
     fn density_graph_wrapper_handles_missing_and_populated_charts() {
-        assert!(build_density_graph_mesh(None, false).is_none());
+        assert!(build_density_graph_mesh(None, [198.0, 42.0]).is_none());
         let source = DensityGraphSource {
             max_nps: 8.0,
-            measure_nps_vec: vec![2.0, 8.0, 4.0],
-            measure_seconds_vec: vec![0.0, 1.0, 2.0],
+            measure_nps_vec: (0..129)
+                .map(|index| if index % 2 == 0 { 2.0 } else { 8.0 })
+                .collect(),
+            measure_seconds_vec: (0..129).map(|index| index as f32 * 0.25).collect(),
             first_second: 0.0,
-            last_second: 2.0,
+            last_second: 32.0,
         };
 
-        assert!(build_density_graph_mesh(Some(source), true).is_some());
+        for graph_size in [[198.0, 42.0], [384.5, 64.0], [286.0, 64.0]] {
+            let mesh = build_density_graph_mesh(Some(source.clone()), graph_size)
+                .expect("generated chart density should produce a mesh");
+            assert!(mesh.iter().all(|vertex| {
+                (0.0..=graph_size[0]).contains(&vertex.pos[0])
+                    && (0.0..=graph_size[1]).contains(&vertex.pos[1])
+            }));
+        }
     }
 }

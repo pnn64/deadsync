@@ -1,13 +1,44 @@
 use crate::act;
 use crate::fonts::machine_font_key;
 use deadlib_present::actors::{Actor, InlineText, TextContent};
-use deadlib_present::space::{screen_center_x, widescale};
+use deadlib_present::space::{screen_height, screen_width};
 use deadsync_config::theme::MachineFont;
 use deadsync_theme::FontRole;
 use std::sync::Arc;
 
 const SESSION_LAYOUT_SLOT: u8 = 0;
 const GAMEPLAY_LAYOUT_SLOT: u8 = 1;
+const GAMEPLAY_TIMER_RIGHT_RESERVE: f32 = 130.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct HeaderTimerLayout {
+    session_x: f32,
+    gameplay_x: f32,
+    zoom: f32,
+}
+
+impl HeaderTimerLayout {
+    fn new(width: f32, height: f32) -> Self {
+        let aspect = if height > 0.0 && height.is_finite() {
+            width / height
+        } else {
+            4.0 / 3.0
+        };
+        let widescreen_progress = ((aspect - 4.0 / 3.0) / (16.0 / 9.0 - 4.0 / 3.0)).clamp(0.0, 1.0);
+        let gameplay_offset = 120.0 + 80.0 * widescreen_progress;
+        let zoom = 0.3 + 0.06 * widescreen_progress;
+        let center_x = width * 0.5;
+        Self {
+            session_x: center_x,
+            gameplay_x: (center_x + gameplay_offset).min(width - GAMEPLAY_TIMER_RIGHT_RESERVE),
+            zoom,
+        }
+    }
+
+    fn current() -> Self {
+        Self::new(screen_width(), screen_height())
+    }
+}
 
 /// Retained elapsed-time text owned by one screen on the game thread.
 ///
@@ -104,30 +135,39 @@ fn push_two_digits(text: &mut InlineText, value: u64) -> bool {
 
 #[must_use]
 pub fn build_session(timer: &TimerText, machine_font: MachineFont) -> Actor {
+    let layout = HeaderTimerLayout::current();
     build_header_timer(
         timer.content(SESSION_LAYOUT_SLOT),
-        screen_center_x(),
+        layout.session_x,
+        layout.zoom,
         machine_font,
     )
 }
 
 #[must_use]
 pub fn build_gameplay(timer: &TimerText, machine_font: MachineFont) -> Actor {
+    let layout = HeaderTimerLayout::current();
     build_header_timer(
         timer.content(GAMEPLAY_LAYOUT_SLOT),
-        screen_center_x() + widescale(150.0, 200.0),
+        layout.gameplay_x,
+        layout.zoom,
         machine_font,
     )
 }
 
-fn build_header_timer(text: impl Into<TextContent>, x: f32, machine_font: MachineFont) -> Actor {
+fn build_header_timer(
+    text: impl Into<TextContent>,
+    x: f32,
+    zoom: f32,
+    machine_font: MachineFont,
+) -> Actor {
     let text = text.into();
     act!(text:
         font(machine_font_key(machine_font, FontRole::Numbers)):
         settext(text):
         align(0.5, 0.5):
         xy(x, 10.0):
-        zoom(widescale(0.3, 0.36)):
+        zoom(zoom):
         z(121):
         diffuse(1.0, 1.0, 1.0, 1.0):
         horizalign(center)
@@ -184,5 +224,31 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn header_timers_scale_continuously_with_aspect_ratio() {
+        let square = HeaderTimerLayout::new(480.0, 480.0);
+        assert_eq!(square.session_x, 240.0);
+        assert_eq!(square.gameplay_x, 350.0);
+        assert_eq!(square.zoom, 0.3);
+
+        let four_three = HeaderTimerLayout::new(640.0, 480.0);
+        assert_eq!(four_three.session_x, 320.0);
+        assert_eq!(four_three.gameplay_x, 440.0);
+
+        let three_two = HeaderTimerLayout::new(960.0, 640.0);
+        assert_eq!(three_two.gameplay_x, 630.0);
+        assert!((three_two.zoom - 0.3225).abs() < f32::EPSILON);
+
+        let wide = HeaderTimerLayout::new(1280.0, 720.0);
+        assert_eq!(wide.session_x, 640.0);
+        assert_eq!(wide.gameplay_x, 840.0);
+        assert_eq!(wide.zoom, 0.36);
+
+        let ultra_wide = HeaderTimerLayout::new(1720.0, 720.0);
+        assert_eq!(ultra_wide.session_x, 860.0);
+        assert_eq!(ultra_wide.gameplay_x, 1_060.0);
+        assert_eq!(ultra_wide.zoom, 0.36);
     }
 }

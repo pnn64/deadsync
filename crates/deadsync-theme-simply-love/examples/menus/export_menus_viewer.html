@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simply Love Exports · Menus</title>
+  <link rel="stylesheet" href="menus.css">
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>Simply Love Exports</h1>
+      <p>Menus</p>
+    </div>
+    <nav class="gallery-nav" aria-label="Export galleries">
+      <a href="../menu-exports/index.html" aria-current="page">Menus</a>
+      <a href="../gameplay-exports/index.html">Gameplay</a>
+    </nav>
+  </header>
+  <div class="filters" id="gallery-filters">
+    <fieldset>
+      <legend>Screens</legend>
+      <div class="filter-tabs">
+        {% for menu in menus %}
+        {% if menu.value == "song-select" %}
+        <div class="screen-filter-group" data-sub-filter-parent="{{ menu.value }}">
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="screen" data-filter-value="{{ menu.value }}" checked>
+          {{ menu.label }}
+        </label>
+        <label class="filter-tab filter-tab-sub">
+          <input type="checkbox" data-filter-group="variant" data-filter-value="expanded-steps" checked>
+          Expanded Steps
+        </label>
+        </div>
+        {% else %}
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="screen" data-filter-value="{{ menu.value }}" checked>
+          {{ menu.label }}
+        </label>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Resolution</legend>
+      <div class="filter-tabs">
+        {% for resolution in resolutions %}
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="resolution" data-filter-value="{{ resolution }}" checked>
+          {{ resolution }}
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <button type="button" id="reset-filters">Reset filters</button>
+  </div>
+  <main>
+    {% for menu in menus %}
+    <section class="menu-section" data-screen="{{ menu.value }}">
+      <h2>{{ menu.label }}</h2>
+      <div class="menu-screens">
+      {% for image in menu.images %}
+      <figure data-resolution="{{ image.resolution }}"{% if let Some(variant) = image.variant %} data-variant="{{ variant }}"{% endif %}>
+        <div class="image-frame">
+          <a href="{{ image.src }}"><img loading="lazy" src="{{ image.src }}" alt="{{ menu.label }} at {{ image.resolution }}"></a>
+          {% if image.disabled %}<span class="disabled">DISABLED · 16:9 ONLY</span>{% endif %}
+        </div>
+        <figcaption>{{ image.caption }}</figcaption>
+      </figure>
+      {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </main>
+  <script>
+    (() => {
+      const storageKey = 'menuGalleryFilters';
+      const controls = [...document.querySelectorAll('#gallery-filters input[type=checkbox]')];
+      const sections = [...document.querySelectorAll('section[data-screen]')];
+      const images = [...document.querySelectorAll('figure[data-resolution]')];
+      const screenFilterGroups = [...document.querySelectorAll('[data-sub-filter-parent]')];
+      const key = control => control.dataset.filterGroup + ':' + control.dataset.filterValue;
+
+      const apply = () => {
+        const enabled = new Map(controls.map(control => [key(control), control.checked]));
+        for (const section of sections) {
+          section.hidden = !enabled.get('screen:' + section.dataset.screen);
+        }
+        for (const group of screenFilterGroups) {
+          group.hidden = !enabled.get('screen:' + group.dataset.subFilterParent);
+        }
+        for (const image of images) {
+          const resolutionEnabled = enabled.get('resolution:' + image.dataset.resolution);
+          const variantEnabled = !image.dataset.variant
+            || enabled.get('variant:' + image.dataset.variant);
+          image.hidden = !resolutionEnabled || !variantEnabled;
+        }
+      };
+
+      const save = () => {
+        const preferences = Object.fromEntries(controls.map(control => [key(control), control.checked]));
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(preferences));
+        } catch {}
+      };
+
+      let preferences;
+      try {
+        preferences = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      } catch {}
+      if (preferences && typeof preferences === 'object') {
+        for (const control of controls) {
+          if (typeof preferences[key(control)] === 'boolean') {
+            control.checked = preferences[key(control)];
+          }
+        }
+      }
+
+      for (const control of controls) {
+        control.addEventListener('change', () => {
+          save();
+          apply();
+        });
+      }
+
+      document.querySelector('#reset-filters').addEventListener('click', () => {
+        for (const control of controls) {
+          control.checked = true;
+        }
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {}
+        apply();
+      });
+      apply();
+    })();
+  </script>
+</body>
+</html>

@@ -8,8 +8,8 @@ license = "GPL-3.0"
 test-support = []
 
 [[example]]
-name = "export_gameplay"
-path = "examples/gameplay/export_gameplay.rs"
+name = "export_screenshot"
+path = "examples/export_screenshot.rs"
 harness = false
 test = false
 
