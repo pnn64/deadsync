@@ -409,17 +409,15 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
 }
 
 pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
-    let (previous, render, clock) = {
-        let store = call.store();
-        let clock = store.clock.clone();
-        let actor = store.actors.get_mut(&actor).unwrap();
+    let (previous, render) = {
+        let actor = call.store().actors.get_mut(&actor).unwrap();
         let previous = actor
             .effects
             .motion
             .get_or_insert_with(Motion::default)
             .units
             .unwrap_or(0.0);
-        (previous, actor.state.render, clock)
+        (previous, actor.state.render)
     };
     let (units, elapsed) = if render.effect_timer {
         let mut units = previous + delta;
@@ -429,6 +427,8 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
         }
         (units, delta)
     } else {
+        // Only an effect that follows the song's clocks needs them.
+        let clock = call.store().clock.clone();
         let units = if render.effect_clock == EffectClock::Beat {
             if render.effect_no_offset {
                 let seconds = music(call, &clock)?;
