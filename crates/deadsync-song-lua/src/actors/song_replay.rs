@@ -377,6 +377,11 @@ pub(super) fn raw_set(
     key: &'static str,
     value: Value,
 ) -> Result<(), Error> {
+    if matches!(value, Value::Nil | Value::Boolean(_) | Value::Number(_)) {
+        // Nothing to keep alive while the name is found.
+        let key = call.intern_static(key.as_bytes())?;
+        return call.raw_table_set(actor, key, value);
+    }
     call.with_roots(&[value], |call| {
         let key = call.intern_static(key.as_bytes())?;
         call.raw_table_set(actor, key, value)
@@ -421,34 +426,29 @@ pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), E
         return Ok(());
     };
     for (key, value) in [
-        ("aux", dest.aux),
-        ("x", dest.x),
-        ("y", dest.y),
-        ("z", dest.z),
-        ("zoom", dest.zoom),
-        ("zoom_x", dest.zoom_x),
-        ("zoom_y", dest.zoom_y),
-        ("zoom_z", dest.zoom_z),
-        ("rot_x_deg", dest.rot_x_deg),
-        ("rot_y_deg", dest.rot_y_deg),
-        ("rot_z_deg", dest.rot_z_deg),
-        ("skew_x", dest.skew_x),
-        ("skew_y", dest.skew_y),
-        ("cropleft", dest.cropleft),
-        ("cropright", dest.cropright),
-        ("croptop", dest.croptop),
-        ("cropbottom", dest.cropbottom),
-        ("fadeleft", dest.fadeleft),
-        ("faderight", dest.faderight),
-        ("fadetop", dest.fadetop),
-        ("fadebottom", dest.fadebottom),
+        ("__songlua_state_aux", dest.aux),
+        ("__songlua_state_x", dest.x),
+        ("__songlua_state_y", dest.y),
+        ("__songlua_state_z", dest.z),
+        ("__songlua_state_zoom", dest.zoom),
+        ("__songlua_state_zoom_x", dest.zoom_x),
+        ("__songlua_state_zoom_y", dest.zoom_y),
+        ("__songlua_state_zoom_z", dest.zoom_z),
+        ("__songlua_state_rot_x_deg", dest.rot_x_deg),
+        ("__songlua_state_rot_y_deg", dest.rot_y_deg),
+        ("__songlua_state_rot_z_deg", dest.rot_z_deg),
+        ("__songlua_state_skew_x", dest.skew_x),
+        ("__songlua_state_skew_y", dest.skew_y),
+        ("__songlua_state_cropleft", dest.cropleft),
+        ("__songlua_state_cropright", dest.cropright),
+        ("__songlua_state_croptop", dest.croptop),
+        ("__songlua_state_cropbottom", dest.cropbottom),
+        ("__songlua_state_fadeleft", dest.fadeleft),
+        ("__songlua_state_faderight", dest.faderight),
+        ("__songlua_state_fadetop", dest.fadetop),
+        ("__songlua_state_fadebottom", dest.fadebottom),
     ] {
-        raw_set_named(
-            call,
-            id,
-            &format!("__songlua_state_{key}"),
-            Value::Number(f64::from(value)),
-        )?;
+        raw_set(call, id, key, Value::Number(f64::from(value)))?;
     }
     for (key, values) in [
         ("__songlua_diffuse", dest.diffuse),
@@ -521,38 +521,33 @@ pub(super) fn publish_scalar(
     let Some((current, dest, size)) = poses else {
         return Ok(());
     };
-    let keys: &[(&str, f32)] = match name {
-        "x" | "addx" => &[("x", dest.x)],
-        "y" | "addy" => &[("y", dest.y)],
-        "z" | "addz" => &[("z", dest.z)],
-        "xy" => &[("x", dest.x), ("y", dest.y)],
-        "aux" => &[("aux", dest.aux)],
+    let keys: &[(&'static str, f32)] = match name {
+        "x" | "addx" => &[("__songlua_state_x", dest.x)],
+        "y" | "addy" => &[("__songlua_state_y", dest.y)],
+        "z" | "addz" => &[("__songlua_state_z", dest.z)],
+        "xy" => &[("__songlua_state_x", dest.x), ("__songlua_state_y", dest.y)],
+        "aux" => &[("__songlua_state_aux", dest.aux)],
         "zoom" => &[
-            ("zoom", dest.zoom),
-            ("zoom_x", dest.zoom_x),
-            ("zoom_y", dest.zoom_y),
-            ("zoom_z", dest.zoom_z),
+            ("__songlua_state_zoom", dest.zoom),
+            ("__songlua_state_zoom_x", dest.zoom_x),
+            ("__songlua_state_zoom_y", dest.zoom_y),
+            ("__songlua_state_zoom_z", dest.zoom_z),
         ],
-        "zoomx" => &[("zoom_x", dest.zoom_x)],
-        "zoomy" => &[("zoom_y", dest.zoom_y)],
-        "zoomz" => &[("zoom_z", dest.zoom_z)],
-        "rotationx" | "addrotationx" => &[("rot_x_deg", dest.rot_x_deg)],
-        "rotationy" | "addrotationy" => &[("rot_y_deg", dest.rot_y_deg)],
-        "rotationz" | "addrotationz" => &[("rot_z_deg", dest.rot_z_deg)],
+        "zoomx" => &[("__songlua_state_zoom_x", dest.zoom_x)],
+        "zoomy" => &[("__songlua_state_zoom_y", dest.zoom_y)],
+        "zoomz" => &[("__songlua_state_zoom_z", dest.zoom_z)],
+        "rotationx" | "addrotationx" => &[("__songlua_state_rot_x_deg", dest.rot_x_deg)],
+        "rotationy" | "addrotationy" => &[("__songlua_state_rot_y_deg", dest.rot_y_deg)],
+        "rotationz" | "addrotationz" => &[("__songlua_state_rot_z_deg", dest.rot_z_deg)],
         _ => &[],
     };
     for &(key, value) in keys {
-        raw_set_named(
-            call,
-            id,
-            &format!("__songlua_state_{key}"),
-            Value::Number(f64::from(value)),
-        )?;
+        raw_set(call, id, key, Value::Number(f64::from(value)))?;
         let current = match key {
-            "x" => Some(("__songlua_current_x", current.x)),
-            "y" => Some(("__songlua_current_y", current.y)),
-            "z" => Some(("__songlua_current_z", current.z)),
-            "aux" => Some(("__songlua_aux", current.aux)),
+            "__songlua_state_x" => Some(("__songlua_current_x", current.x)),
+            "__songlua_state_y" => Some(("__songlua_current_y", current.y)),
+            "__songlua_state_z" => Some(("__songlua_current_z", current.z)),
+            "__songlua_state_aux" => Some(("__songlua_aux", current.aux)),
             _ => None,
         };
         if let Some((key, value)) = current
