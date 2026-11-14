@@ -1157,6 +1157,19 @@ impl HostCall<'_> {
             .new_host_function_with_data(callback, captures, data)
     }
 
+    /// Give a host function a pure fast path as an `__index` handler, from
+    /// inside a host call. See [`Vm::set_index_resolver`].
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function of this VM.
+    pub fn set_index_resolver(
+        &mut self,
+        function: Value,
+        resolver: IndexResolver,
+    ) -> Result<(), Error> {
+        self.vm.set_index_resolver(function, resolver)
+    }
+
     /// Keep temporary values alive across nested calls for the duration of `run`.
     ///
     /// Roots are released on both success and error, including partial setup

@@ -221,3 +221,64 @@ fn a_view_defers_function_handlers_instead_of_resolving_them() {
     // `answer` resolved inline; the other two each called the handler once.
     assert_eq!(calls(&mut vm), 2);
 }
+
+// A handler made inside a host callback gets its resolver there.
+fn make_handler(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let class = call.arguments()[0];
+    let handler = call.new_host_function(index, &[class])?;
+    call.set_index_resolver(handler, resolve)?;
+    // Only a host function can take one.
+    assert!(call.set_index_resolver(class, resolve).is_err());
+    call.push(handler)
+}
+
+#[test]
+fn a_host_callback_can_give_its_handler_a_resolver() {
+    let mut vm = Vm::new();
+    vm.set_host_state(Box::new(Calls(0)));
+    let factory = vm.new_host_function(make_handler, &[]).unwrap();
+    vm.set_global(b"make_handler", factory).unwrap();
+    let program = compile(
+        br#"
+        local object = setmetatable({}, {__index = make_handler({answer = 42})})
+        local answer, computed
+        for round = 1, 50 do answer, computed = object.answer, object.computed end
+        return answer, computed == 'from handler'
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap(),
+        &[Value::Number(42.0), Value::Boolean(true)]
+    );
+    // The class field never reached the handler; the computed member always did.
+    assert_eq!(calls(&mut vm), 50);
+}
+
+#[test]
+fn global_reads_through_an_environment_handler_use_the_resolver() {
+    let mut vm = vm();
+    let program = compile(
+        br#"
+        local environment = setmetatable({own = 1}, {__index = handler})
+        local function read() return own, answer, no, computed == 'from handler', missing end
+        setfenv(read, environment)
+        local a, b, c, d, e
+        for round = 1, 50 do a, b, c, d, e = read() end
+        return a, b, c, d, e
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap(),
+        &[
+            Value::Number(1.0),
+            Value::Number(42.0),
+            Value::Boolean(false),
+            Value::Boolean(true),
+            Value::Nil
+        ]
+    );
+    // Per round the handler runs for the computed and the missing global only.
+    assert_eq!(calls(&mut vm), 50 * 2);
+}
