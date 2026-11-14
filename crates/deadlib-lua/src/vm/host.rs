@@ -619,6 +619,16 @@ impl Vm {
     }
 }
 
+// The handles of one `HostCall::with_roots` scope. Nearly every scope holds
+// a value or two, so those stay on the Rust stack.
+struct RootScope {
+    few: [Option<Root>; Self::FEW],
+    many: Option<Buffer<Root>>,
+}
+impl RootScope {
+    const FEW: usize = 4;
+}
+
 impl HostCall<'_> {
     /// Event being delivered by an external native hook, without a Lua call frame.
     pub fn hook_event(&self) -> Option<NativeHookEvent> {
@@ -1157,22 +1167,41 @@ impl HostCall<'_> {
         values: &[Value],
         run: impl FnOnce(&mut Self) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let mut scope = RootScope {
+            few: [None; RootScope::FEW],
+            many: None,
+        };
+        let result = self.pin_scope(values, &mut scope).and_then(|()| run(self));
+        self.unpin_scope(&scope);
+        result
+    }
+    // Pinning stops at the first invalid value; `unpin_scope` releases the rest.
+    fn pin_scope(&mut self, values: &[Value], scope: &mut RootScope) -> Result<(), Error> {
+        if values.len() <= RootScope::FEW {
+            for (root, &value) in scope.few.iter_mut().zip(values) {
+                *root = Some(self.vm.pin(value)?);
+            }
+            return Ok(());
+        }
         let mut roots = Buffer::new_in(self.vm.roots.memory().clone());
         roots
             .try_reserve(values.len())
             .map_err(|_| self.vm.memory_failure())?;
-        let result = (|| {
-            for &value in values {
-                roots.push(self.vm.pin(value)?);
-            }
-            run(self)
-        })();
-        for root in roots.iter().copied() {
-            // These handles are private to this scope, so user code cannot
-            // unpin them while `run` is active.
-            self.vm.unpin(root).expect("temporary host root");
+        let roots = scope.many.insert(roots);
+        for &value in values {
+            roots.push(self.vm.pin(value)?);
         }
-        result
+        Ok(())
+    }
+    fn unpin_scope(&mut self, scope: &RootScope) {
+        // These handles are private to their scope, so user code cannot unpin
+        // them while it is active.
+        for root in scope.few.iter().flatten() {
+            self.vm.unpin(*root).expect("temporary host root");
+        }
+        for root in scope.many.iter().flat_map(|roots| roots.iter()) {
+            self.vm.unpin(*root).expect("temporary host root");
+        }
     }
 
     /// Read a value's field, honoring Lua's `__index` semantics.

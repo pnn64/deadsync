@@ -146,3 +146,107 @@ fn partial_root_setup_failure_releases_earlier_roots() {
         &[Value::Boolean(true)]
     );
 }
+
+fn many(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let producer = call.arguments()[0];
+    let collect = call.arguments()[1];
+    let fail = call.arguments()[2] == Value::Boolean(true);
+    // Nothing but the scope below keeps the produced tables alive.
+    let values = call.call(producer, &[])?.to_vec();
+    let kept = call.with_roots(&values, |call| {
+        call.call(collect, &[])?;
+        let key = call.try_intern(b"index")?;
+        for (index, value) in values.iter().enumerate() {
+            let Value::Table(table) = *value else {
+                unreachable!()
+            };
+            assert_eq!(call.raw_table_get(table, key)?, Value::Number(index as f64));
+        }
+        if fail {
+            Err(call.error(b"scope failed"))
+        } else {
+            Ok(values.len())
+        }
+    })?;
+    call.push(Value::Number(kept as f64))
+}
+
+#[test]
+fn root_scopes_of_every_size_keep_their_values_and_release_them() {
+    let mut vm = Vm::new();
+    let callback = vm.new_host_function(many, &[]).unwrap();
+    vm.set_global(b"many", callback).unwrap();
+    vm.execute(
+        &compile(
+            br#"
+        -- Sizes on both sides of the number of roots a scope holds inline.
+        for _, count in ipairs({1, 2, 3, 4, 5, 6, 9, 40}) do
+            for _, fail in ipairs({false, true}) do
+                local weak = setmetatable({}, {__mode = 'v'})
+                local function produce()
+                    local list = {}
+                    for index = 1, count do
+                        list[index] = {index = index - 1}
+                        weak[index] = list[index]
+                    end
+                    return unpack(list)
+                end
+                local function collect()
+                    collectgarbage(); collectgarbage()
+                    for index = 1, count do
+                        assert(weak[index], 'released inside a scope of ' .. count)
+                    end
+                end
+                local ok, result = pcall(many, produce, collect, fail)
+                assert(ok == not fail, tostring(result))
+                assert(fail or result == count)
+                collectgarbage(); collectgarbage()
+                for index = 1, count do
+                    assert(weak[index] == nil, 'retained after a scope of ' .. count)
+                end
+            end
+        end
+    "#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_large_root_scope_releases_earlier_roots_when_one_value_is_invalid() {
+    let mut vm = Vm::new();
+    let stale = vm.try_new_table().unwrap();
+    vm.execute(&compile(b"collectgarbage(); collectgarbage()").unwrap())
+        .unwrap();
+    fn invalid(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let stale = *call.function_data::<deadlib_lua::TableId>().unwrap();
+        let value = call.call(call.arguments()[0], &[])?[0];
+        let mut values = vec![value; 9];
+        values.push(Value::Table(stale));
+        let error = call
+            .with_roots(&values, |_| -> Result<(), Error> {
+                panic!("invalid root must reject setup before running the closure")
+            })
+            .unwrap_err();
+        assert!(error.to_string().contains("invalid"));
+        Ok(())
+    }
+    let callback = vm.new_host_function_with_data(invalid, &[], stale).unwrap();
+    vm.set_global(b"invalid", callback).unwrap();
+    assert_eq!(
+        vm.execute(
+            &compile(
+                br#"
+        local weak = setmetatable({}, {__mode = 'v'})
+        invalid(function() local t = {}; weak[1] = t; return t end)
+        collectgarbage(); collectgarbage()
+        return weak[1] == nil
+    "#
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
