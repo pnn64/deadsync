@@ -15561,10 +15561,7 @@ mod tests {
             expanded_layout.step_artist_header.y
                 >= expanded_layout.song_details.widget.bounds.bottom()
         );
-        assert_eq!(
-            expanded_layout.step_artist_header.bottom(),
-            expanded_layout.chart_panel.y
-        );
+        assert!(expanded_layout.chart_panel.y >= expanded_layout.step_artist_header.bottom());
 
         set_current_metrics(previous);
     }

@@ -56,6 +56,14 @@ impl ChartPanelLayout {
         presentation.step_artist_expanded && !session.play_style.is_versus()
     }
 
+    pub(crate) fn centered_between(mut self, top: f32, bottom: f32) -> Self {
+        let offset = ((bottom - top - self.bounds.height) * 0.5).max(0.0);
+        self.bounds = self.bounds.translated_y(offset);
+        self.density_panel = self.density_panel.translated_y(offset);
+        self.pattern_panels = self.pattern_panels.map(|panel| panel.translated_y(offset));
+        self
+    }
+
     pub(crate) fn new(
         left: f32,
         right: f32,

@@ -1,3 +1,4 @@
+use super::select_pane;
 use crate::screens::components::shared::screen_bar::SCREEN_BAR_HEIGHT;
 use crate::ui_layout::UILayoutType;
 use crate::views::{SelectMusicPresentationPolicyView, SelectMusicSessionView};
@@ -172,6 +173,10 @@ impl SongSelectLayout {
             screen_height,
             presentation,
             session,
+        );
+        let chart_panel_layout = chart_panel_layout.centered_between(
+            chart_panel_layout.step_artist_header.bottom(),
+            select_pane::top_for_screen(screen_width, screen_height, layout_type),
         );
 
         Self {

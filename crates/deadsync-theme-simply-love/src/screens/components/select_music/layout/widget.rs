@@ -31,6 +31,11 @@ impl WidgetBounds {
     pub fn center_y(self) -> f32 {
         self.y + self.height * 0.5
     }
+
+    pub(super) fn translated_y(mut self, offset: f32) -> Self {
+        self.y += offset;
+        self
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,6 +45,11 @@ pub(crate) struct WidgetLayout {
 }
 
 impl WidgetLayout {
+    pub(super) fn translated_y(mut self, offset: f32) -> Self {
+        self.bounds = self.bounds.translated_y(offset);
+        self
+    }
+
     pub(super) fn child(self, bounds: WidgetBounds) -> Self {
         let zoom = self.zoom;
         Self {

@@ -200,10 +200,25 @@ fn constrain_text_width(actor: &mut Actor, max_width: Option<f32>) {
 #[inline(always)]
 #[must_use]
 pub fn layout(pane_cx: f32) -> PaneLayout {
-    let pane_width = screen_width() * 0.5 - PANE_WIDTH_INSET;
-    let pane_height = pane_height_for_width(pane_width, layout_constants(UILayoutType::current()));
-    let pane_center_y = screen_height() - PANE_BOTTOM_INSET - pane_height * 0.5;
+    let screen_width = screen_width();
+    let screen_height = screen_height();
+    let layout_type = UILayoutType::current();
+    let pane_width = screen_width * 0.5 - PANE_WIDTH_INSET;
+    let pane_height = pane_height_for_width(pane_width, layout_constants(layout_type));
+    let pane_center_y =
+        top_for_screen(screen_width, screen_height, layout_type) + pane_height * 0.5;
     PaneLayout::from_center([pane_cx, pane_center_y], [pane_width, pane_height])
+}
+
+pub(crate) fn top_for_screen(
+    screen_width: f32,
+    screen_height: f32,
+    layout_type: UILayoutType,
+) -> f32 {
+    let pane_width = screen_width * 0.5 - PANE_WIDTH_INSET;
+    screen_height
+        - PANE_BOTTOM_INSET
+        - pane_height_for_width(pane_width, layout_constants(layout_type))
 }
 
 pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
