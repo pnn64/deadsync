@@ -320,6 +320,9 @@ pub struct State {
     pub(super) advanced_prev_visible_rows: Vec<usize>,
     pub(super) select_music_prev_visible_rows: Vec<usize>,
     pub(super) i18n_revision: u64,
+    pub(super) search: search::SettingSearchState,
+    /// Where a search jump lands once the page fades finish.
+    pub(super) search_jump: Option<search::SearchTarget>,
 }
 
 impl State {
@@ -451,6 +454,8 @@ pub fn init(view: OptionsInitView) -> State {
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
         pending_submenu_parent_kind: None,
+        search: search::SettingSearchState::Hidden,
+        search_jump: None,
         submenu_parent_kind: None,
         submenu_fade_t: 0.0,
         content_alpha: 1.0,

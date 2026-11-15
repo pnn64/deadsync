@@ -2257,6 +2257,10 @@ fn handle_input_impl(
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
     }
+    if state.search.is_open() {
+        search::handle_input(state, ev);
+        return ThemeEffect::None;
+    }
     if let Some(effect) = handle_twitch_channel_input(state, ev) {
         return effect;
     }

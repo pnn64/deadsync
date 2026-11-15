@@ -15,7 +15,7 @@ fn clean_label(raw: &str) -> &str {
 
 /// Only successful matches need a label handle. Unchanged labels share the
 /// row's existing allocation; trimmed labels allocate their final Arc directly.
-pub(super) fn matched_setting_label(
+pub(crate) fn matched_setting_label(
     query: &fuzzy::Query,
     raw: &Arc<str>,
     aliases: &[&str],
@@ -37,13 +37,13 @@ pub(super) fn matched_setting_label(
 /// Display variants belong to one immutable result label. Prepare a variant
 /// when it enters the visible window, then share it with subsequent actors.
 #[derive(Clone, Debug, Default)]
-pub(super) struct SearchRowText {
+pub(crate) struct SearchRowText {
     variants: [OnceCell<Arc<str>>; 2],
 }
 
 impl SearchRowText {
     #[inline]
-    pub(super) fn get(&self, label: &Arc<str>, focused: bool) -> Arc<str> {
+    pub(crate) fn get(&self, label: &Arc<str>, focused: bool) -> Arc<str> {
         Arc::clone(
             self.variants[usize::from(focused)].get_or_init(|| build_row_text(label, focused)),
         )

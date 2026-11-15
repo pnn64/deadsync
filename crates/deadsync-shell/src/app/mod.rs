@@ -8619,11 +8619,13 @@ impl App {
                 return;
             }
             RawKeyTextRoute::Options => {
+                let ctrl_held = self.state.shell.interaction.controls().ctrl();
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 screens::options::handle_raw_key_event(
                     &mut self.state.screens.options_state,
                     None,
                     Some(text),
+                    ctrl_held,
                     &mut self.theme_effect_scratch,
                 );
                 if let Err(e) = self.drain_theme_effects(event_loop) {
@@ -8812,6 +8814,7 @@ impl App {
                     &mut self.state.screens.options_state,
                     Some(&raw_key),
                     None,
+                    ctrl_held,
                     &mut self.theme_effect_scratch,
                 );
                 let has_effect = !self.theme_effect_scratch.is_empty();
