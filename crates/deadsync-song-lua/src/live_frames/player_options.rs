@@ -25,6 +25,11 @@ impl SongRuntime {
         &mut self,
         appearance: [AppearanceEffects; LUA_PLAYERS],
     ) -> Result<(), Error> {
+        // Debug builds walk anyway and compare.
+        let held = self.snapshots_hold(appearance)?;
+        if held && !cfg!(debug_assertions) {
+            return Ok(());
+        }
         let catalog = self.vm.rooted(self.catalog)?;
         let snapshots = &mut self.option_snapshots;
         self.vm.with_native_stack(|stack| {
@@ -62,6 +67,10 @@ impl SongRuntime {
                 match remembered {
                     Some(_) if !cfg!(debug_assertions) => {}
                     remembered => {
+                        assert!(
+                            remembered.is_some() || !held,
+                            "raw reads trusted a snapshot that the stack path does not"
+                        );
                         let walked = walk(stack, current, appearance[player])?;
                         if let Some(snapshot) = remembered {
                             assert_eq!(snapshot.options, walked, "stale Current option snapshot");
@@ -79,6 +88,39 @@ impl SongRuntime {
             stack.set_top(base)?;
             Ok(())
         })
+    }
+
+    /// Whether every player's snapshot still describes Current, by raw reads
+    /// alone; `false` for anything unusual, which the stack path then reads.
+    fn snapshots_hold(
+        &mut self,
+        appearance: [AppearanceEffects; LUA_PLAYERS],
+    ) -> Result<bool, Error> {
+        for (player, appearance) in appearance.into_iter().enumerate() {
+            let Some(levels) = super::player_levels(&mut self.vm, self.catalog, player)? else {
+                return Ok(false);
+            };
+            let Value::Table(current) = self.vm.raw_table_get(levels, Value::Number(4.))? else {
+                return Ok(false);
+            };
+            let key = self.vm.intern_static(b"__songlua_player_option_state")?;
+            let state = match self.vm.raw_table_get(current, key)? {
+                Value::Table(state) => Some((state, self.vm.raw_fields_version(state)?)),
+                _ => None,
+            };
+            let current = (current, self.vm.raw_fields_version(current)?);
+            let held = self.option_snapshots.0[player]
+                .as_ref()
+                .is_some_and(|snapshot| {
+                    snapshot.current == current
+                        && snapshot.state == state
+                        && snapshot.appearance == appearance
+                });
+            if !held {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Each player's options as of the last successful refresh.

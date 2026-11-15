@@ -59,6 +59,11 @@ impl SongRuntime {
         &mut self,
         player: usize,
     ) -> Result<Option<deadsync_gameplay::GameplayFailType>, Error> {
+        // Raw reads decide the usual case. Anything else, including an option
+        // state that the stack path below creates, takes that path.
+        if let Some(fail_type) = self.read_fail_type(player)? {
+            return Ok(fail_type);
+        }
         let catalog = self.vm.rooted(self.catalog)?;
         self.vm.with_native_stack(|s| {
             let base = s.top();
@@ -99,6 +104,32 @@ impl SongRuntime {
                 .transpose()?;
             s.set_top(base)?;
             Ok(value)
+        })
+    }
+
+    /// The fail type when Song's option state, and Current's when Song names
+    /// none, are tables holding a number or nothing as `failsetting`, and the
+    /// number names a fail type; `None` otherwise.
+    fn read_fail_type(
+        &mut self,
+        player: usize,
+    ) -> Result<Option<Option<deadsync_gameplay::GameplayFailType>>, Error> {
+        let Some(levels) = player_levels(&mut self.vm, self.catalog, player)? else {
+            return Ok(None);
+        };
+        let Some(mut value) = fail_setting(&mut self.vm, levels, 3)? else {
+            return Ok(None);
+        };
+        if value.is_none() {
+            match fail_setting(&mut self.vm, levels, 4)? {
+                None => return Ok(None),
+                Some(Some(_)) => value = Some(0.),
+                Some(None) => {}
+            }
+        }
+        Ok(match value {
+            None => Some(None),
+            Some(value) => deadsync_gameplay::GameplayFailType::from_value(value).map(Some),
         })
     }
 
@@ -606,6 +637,39 @@ fn require_table(stack: &NativeStack<'_, '_>, index: usize) -> Result<(), Error>
     } else {
         Err(stack.error(b"live frame table expected"))
     }
+}
+// A player's ModsGroup levels by raw reads, as the stack paths find them, or
+// `None` when a step on the way is not a table.
+fn player_levels(vm: &mut Vm, catalog: Root, player: usize) -> Result<Option<TableId>, Error> {
+    let Value::Table(catalog) = vm.rooted(catalog)? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"player_options")?;
+    let Value::Table(players) = vm.raw_table_get(catalog, key)? else {
+        return Ok(None);
+    };
+    match vm.raw_table_get(players, Value::Number((player + 1) as f64))? {
+        Value::Table(levels) => Ok(Some(levels)),
+        _ => Ok(None),
+    }
+}
+// One level's `failsetting`: `Some(None)` when its option state holds none,
+// `None` when the level or its state is not a table or the value is not a
+// number.
+fn fail_setting(vm: &mut Vm, levels: TableId, level: usize) -> Result<Option<Option<f32>>, Error> {
+    let Value::Table(owner) = vm.raw_table_get(levels, Value::Number(level as f64))? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"__songlua_player_option_state")?;
+    let Value::Table(state) = vm.raw_table_get(owner, key)? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"failsetting")?;
+    Ok(match vm.raw_table_get(state, key)? {
+        Value::Nil => Some(None),
+        Value::Number(value) => Some(Some(value as f32)),
+        _ => None,
+    })
 }
 fn read(
     stack: &mut NativeStack<'_, '_>,
