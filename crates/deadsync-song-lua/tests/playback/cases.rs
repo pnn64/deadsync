@@ -10080,7 +10080,11 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
     for width in [40, 80] {
         assets.queue_texture_upload(key.into(), image::RgbaImage::new(width, 20));
         for _ in 0..3 {
-            match draw(&assets).expect_actor("prepared sprite must render") {
+            // Other tests can invalidate the shared metadata registry during draw.
+            let generation_before = assets.texture_context().revision();
+            let actor = draw(&assets).expect_actor("prepared sprite must render");
+            let generation_after = assets.texture_context().revision();
+            match actor {
                 Actor::Sprite {
                     source:
                         SpriteSource::TextureHandle {
@@ -10091,7 +10095,10 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
                     ..
                 } => {
                     assert_eq!(handle, assets.texture_context().texture_handle(key));
-                    assert_eq!(generation, assets.texture_context().revision());
+                    assert!(
+                        (generation_before..=generation_after).contains(&generation),
+                        "sprite generation {generation} is outside draw revisions {generation_before}..={generation_after}",
+                    );
                     assert!(
                         matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if w == width as f32 / 4.0 && h == 10.0)
                     );
