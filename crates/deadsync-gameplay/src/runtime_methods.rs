@@ -916,6 +916,38 @@ where
         }
     }
 
+    fn advance_autoplay_roll_frame(
+        &mut self,
+        previous_music_time_ns: SongTimeNs,
+        music_time_ns: SongTimeNs,
+        delta_time: f32,
+    ) {
+        if !self.live_autoplay_enabled() || self.setup.session.play_style.is_pump() {
+            return;
+        }
+        let mut mask = self.hold_runtime.active_roll_mask();
+        while mask != 0 {
+            let column = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            let Some(active) = self.hold_runtime.active_holds[column].as_mut() else { continue; };
+            let note = &mut self.chart_runtime.notes[active.note_index];
+            let Some(hold) = note.hold.as_mut() else { continue; };
+            // Player::UpdateHoldNotes drains the frame delta, even when the
+            // audio clock stalls. CrossedRows starts new rolls afterwards.
+            if active.start_time_ns <= previous_music_time_ns && !active.let_go {
+                let player = player_index_for_column(self.setup.num_players, self.setup.cols_per_player, column);
+                let timing = &self.timing_runtime.timing_players[player];
+                let beat = timing.get_beat_for_time(song_time_ns_to_seconds(music_time_ns));
+                advance_hold_last_held(hold, timing, beat, note.row_index, note.beat);
+                active.life = (active.life - delta_time / deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL).max(0.0);
+                hold.life = active.life;
+            }
+            // The ordinary hold pass still resolves the tail or LetGo, but
+            // must not subtract a second interval from the music clock.
+            active.last_update_time_ns = music_time_ns.max(active.start_time_ns);
+        }
+    }
+
     fn update_pump_active_hold(
         &mut self,
         column: usize,
@@ -2155,6 +2187,7 @@ where
         } else {
             None
         };
+        self.advance_autoplay_roll_frame(previous_music_time_ns, music_time_ns, delta_time);
         self.update_active_holds(&current_inputs, music_time_ns);
         if let Some(started) = active_holds_started {
             phase_timings.active_holds_us = elapsed_us_since(started);

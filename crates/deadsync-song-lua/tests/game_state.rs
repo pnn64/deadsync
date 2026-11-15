@@ -94,6 +94,27 @@ GetNoteSkinNames=function()return {'cel','metal','my skin'}end}
 "#;
 
 #[test]
+fn joining_updates_the_retained_roster_and_reload_context() {
+    let mut context = context();
+    context.players[1].enabled = false;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    execute(&mut runtime, r#"
+        assert(#GAMESTATE:GetEnabledPlayers()==1)
+        local before=GAMESTATE:GetEnabledPlayers()
+        assert(GAMESTATE:JoinPlayer(PLAYER_2)==GAMESTATE)
+        assert(#before==1 and #GAMESTATE:GetEnabledPlayers()==2)
+        assert(GAMESTATE:IsSideJoined(PLAYER_2) and GAMESTATE:IsHumanPlayer(PLAYER_2))
+        assert(GAMESTATE:GetNumSidesJoined()==2 and GAMESTATE:GetNumPlayersEnabled()==2)
+        assert(GAMESTATE:GetCurrentStyle():GetName()=='versus')
+        assert(GAMESTATE:GetMasterPlayerNumber()==PLAYER_1)
+        assert(not pcall(GAMESTATE.JoinPlayer,GAMESTATE,false))
+    "#);
+    let selected = runtime.selected_gameplay_context(&context).unwrap();
+    assert_eq!(selected.players.each_ref().map(|p| p.enabled), [true, true]);
+    assert_eq!(selected.style_name, "versus");
+}
+
+#[test]
 fn full_class_surface_defaults_and_selector_argument_rules_match_production() {
     for enabled in [[true, true], [true, false], [false, true], [false, false]] {
         let mut c = context();
@@ -111,7 +132,8 @@ fn full_class_surface_defaults_and_selector_argument_rules_match_production() {
             assert(GAMESTATE:GetCurrentSong()==catalog.song and GAMESTATE:GetCurrentCourse()==catalog.course)
             assert(GAMESTATE:GetCurrentGame()==GAMESTATE:GetCurrentGame())
             assert(GAMESTATE:GetCurrentGame():GetName()=='dance')
-            assert(GAMESTATE:GetEnabledPlayers()==GAMESTATE:GetHumanPlayers())
+            assert(GAMESTATE:GetEnabledPlayers()~=GAMESTATE:GetHumanPlayers())
+            assert(snapshot(GAMESTATE:GetEnabledPlayers())==snapshot(GAMESTATE:GetHumanPlayers()))
             for _,v in ipairs{0,1,-1,2,0.5,'P1','p2','playernumber_p1','PLAYERNUMBER_P2','0',false,{}}do
                 out[#out+1]={GAMESTATE:IsPlayerEnabled(v),GAMESTATE:IsHumanPlayer(v),GAMESTATE:IsSideJoined(v),IsHumanPlayer(v),GAMESTATE:GetPlayerState(v)~=nil,GAMESTATE:GetCurrentTrail(v)~=nil,(pcall(GAMESTATE.GetCurrentSteps,GAMESTATE,v))}
             end
@@ -241,7 +263,8 @@ fn game_commands_apply_clauses_in_order_with_legacy_one_based_numeric_players() 
         local out={}
         for _,p in ipairs{0,3,-1,0.5,'0','bad',false,{}}do out[#out+1]=pcall(GAMESTATE.ApplyGameCommand,GAMESTATE,'mod,2x',p)end
         for _,text in ipairs{false,1,{}}do out[#out+1]=pcall(GAMESTATE.ApplyGameCommand,GAMESTATE,text);out[#out+1]=pcall(GAMESTATE.ApplyStageModifiers,GAMESTATE,0,text)end
-        for _,name in ipairs{'InsertCoin','SaveProfiles','AddStageToPlayer','ResetPlayerOptions','SetPreferredDifficulty','UnjoinPlayer','JoinPlayer'}do out[#out+1]=pack(GAMESTATE[name](GAMESTATE,false,{}))end
+        for _,name in ipairs{'InsertCoin','SaveProfiles','AddStageToPlayer','ResetPlayerOptions','SetPreferredDifficulty'}do out[#out+1]=pack(GAMESTATE[name](GAMESTATE,false,{}))end
+        for _,name in ipairs{'UnjoinPlayer','JoinPlayer'}do out[#out+1]=pcall(GAMESTATE[name],GAMESTATE,false,{})end
         return snapshot(out),all_options(),__songlua_side_effect_count
     "#);
 }

@@ -82,6 +82,7 @@ impl SongLayerPlan {
                             crate::file_path_string(&context.song_dir).trim_end_matches('/')
                         ))
                     })
+                    .or_else(|| context.background_sources.get(index).cloned())
                     .unwrap_or_else(|| path.clone());
                 Ok(Entry {
                     path,

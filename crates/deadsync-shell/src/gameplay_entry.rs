@@ -196,6 +196,11 @@ pub fn apply_song_lua_reload(
 ) -> Result<bool, String> {
     let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
     let mut selected_session = session.clone();
+    if let Some(players) = prepared.loaded_players() {
+        selected_session.joined_sides = if session.p2_runtime_player() {
+            [players[1], players[0]]
+        } else { players };
+    }
     if let Some(style) = prepared.loaded_style() {
         use deadsync_gameplay::GameplayInputPlayStyle as Style;
         selected_session.play_style = match (session.play_style.is_pump(), style) {
@@ -211,9 +216,9 @@ pub fn apply_song_lua_reload(
             (true, "routine") => Style::PumpRoutine,
             _ => return Err(format!("Lua reload selected unsupported style {style}")),
         };
-        // GameState::SetCurrentStyle preserves joined sides and rejects styles
-        // that require a different number of them.
-        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+        // Authored JoinPlayer mutations belong to the retained
+        // session; validate the selected style against the newly loaded roster.
+        if selected_session.play_style.player_count() != selected_session.joined_sides.iter().filter(|joined| **joined).count() {
             return Err(format!("Lua reload style {style} is incompatible with joined sides"));
         }
     }

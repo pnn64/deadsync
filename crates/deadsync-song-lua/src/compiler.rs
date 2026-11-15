@@ -194,6 +194,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
             })
         })),
         loaded_style: Some(selected.style_name.clone()),
+        loaded_players: Some(selected.players.each_ref().map(|player| player.enabled)),
         startup_reloads: reloads,
         entry_path: paths[primary].clone(),
         screen_width: selected.screen_width,

@@ -221,6 +221,7 @@ fn compile_live<S, V>(
             })
         })),
         loaded_style: Some(selected.style_name.clone()),
+        loaded_players: Some(selected.players.each_ref().map(|player| player.enabled)),
         startup_reloads: reloads,
         entry_path: trace.clone(),
         screen_width: selected.screen_width,

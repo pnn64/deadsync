@@ -219,6 +219,7 @@ pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             },
             entry_path: entry_path.clone(),
             loaded_steps: compiled.loaded_steps,
+            loaded_players: compiled.loaded_players,
             loaded_style: if layer + 1 == entry_paths.len() {
                 compiled.loaded_style.take()
             } else {

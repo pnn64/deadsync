@@ -95,7 +95,7 @@ fn remember(call: &mut HostCall<'_>) -> Result<(), Error> {
     let kind = text(call, arg(call, 1))?;
     let label = match kind.as_str() {
         "Song" => json!({"type":kind,"song_dir":text(call,arg(call,2))?}),
-        "Style" => json!({"type":kind,"name":text(call,arg(call,2))?}),
+        "Style" => json!({"type":kind,"name":crate::song_lua_style_info(&text(call,arg(call,2))?).name}),
         "StageStats" | "PlayerStageStats" | "PlayerState" | "PlayerOptions" => {
             json!({"type":kind,"path":text(call,arg(call,2))?})
         }
@@ -270,9 +270,8 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
     }
     if observed && (!special || result.is_ok()) {
         let modifier = matches!(data.class.as_str(), "PlayerOptions" | "SongOptions");
-        let kind = if data.name.starts_with("Get")
-            || data.name.starts_with("Is")
-            || data.name.starts_with("Supports")
+        let kind = if ["Get", "get", "Is", "is", "Has", "has", "Can", "can", "Supports", "supports"]
+            .iter().any(|prefix| data.name.starts_with(prefix))
             || modifier && count == 1
         {
             "query"

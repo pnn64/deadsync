@@ -2478,6 +2478,8 @@ pub struct SongLuaCompileContext {
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
+    /// Native logical source spelling for each resolved background entry.
+    pub background_sources: Vec<PathBuf>,
     /// Authored song beats for session entries, in the same path order.
     /// Empty for direct actor compilation without a simfile layer schedule.
     pub layer_start_beats: Vec<f32>,
@@ -2538,6 +2540,9 @@ pub struct SongLuaCompileContext {
     /// audio duration. Note times include the load offset; hints stay absolute.
     pub song_note_bounds: Option<[f32; 2]>,
     pub style_name: String,
+    /// Host layout for separate player fields after an authored join/reload.
+    /// Standalone contexts can keep their explicit player positions instead.
+    pub versus_player_screen_x: Option<[f32; LUA_PLAYERS]>,
     /// Song charts in simfile load order; never synthesize missing difficulties.
     pub song_steps: Vec<SongLuaStep>,
     /// Lua catalog entries map to playable payloads; an empty map is identity.
@@ -2581,6 +2586,7 @@ impl SongLuaCompileContext {
         let song_dir = std::path::absolute(&song_dir).unwrap_or(song_dir);
         Self {
             background_layer_count: 0,
+            background_sources: Vec::new(),
             bake_progress: None,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
@@ -2617,6 +2623,7 @@ impl SongLuaCompileContext {
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),
+            versus_player_screen_x: None,
             song_steps: Vec::new(),
             song_step_chart_indices: Vec::new(),
             player_step_indices: [None; LUA_PLAYERS],
@@ -3006,6 +3013,7 @@ pub struct CompiledSongLua<OverlayActor> {
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
     pub loaded_style: Option<String>,
+    pub loaded_players: Option<[bool; LUA_PLAYERS]>,
     pub startup_reloads: u32,
     pub startup: SongLuaStartup,
     pub entry_path: PathBuf,
@@ -3110,6 +3118,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             live_indices: Vec::new(),
             loaded_steps: None,
             loaded_style: None,
+            loaded_players: None,
             startup_reloads: 0,
             startup: SongLuaStartup::default(),
             entry_path: PathBuf::new(),

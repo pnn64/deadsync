@@ -1523,7 +1523,8 @@ fn replay_native_archive(
     use std::io::Write as _;
     use std::sync::atomic::Ordering;
     let trace_path = archive.root.join(&archive.manifest.chart.trace);
-    let trace: Value = serde_json::from_slice(&fs::read(&trace_path).expect("read native gameplay trace"))
+    let trace: Value = serde_json::from_reader(std::io::BufReader::new(
+        fs::File::open(&trace_path).expect("open native gameplay trace")))
         .expect("parse native gameplay trace");
     assert_eq!(trace["harness_version"], archive.manifest.harness_version);
     assert_eq!(trace["schema_version"], archive.manifest.oracle_schema_version);

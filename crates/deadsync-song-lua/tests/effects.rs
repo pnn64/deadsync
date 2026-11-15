@@ -277,6 +277,31 @@ fn queued_resets_and_reentrant_callbacks_keep_clocks_and_gc_roots() {
 }
 
 #[test]
+fn effect_getters_stay_zero_until_the_first_actor_update() {
+    let mut context = SongLuaCompileContext::new(".", "initial effect clock");
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let definition = execute(&mut runtime, "return Def.Quad{}")[0];
+    let scene = runtime.instantiate_actor(definition).unwrap();
+    let root = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"root", root).unwrap();
+    execute(&mut runtime, r#"
+        local r=__songlua_compile_song_runtime
+        r.__songlua_music_seconds=-.75
+        r.__songlua_song_beat=-1.5
+        for _,clock in ipairs({'music','beat','timer'}) do
+            root:effectclock(clock)
+            assert(root:GetSecsIntoEffect()==0)
+            assert(root:GetEffectDelta()==0)
+        end
+        root:effectclock('music')
+    "#);
+    execute(&mut runtime, "__songlua_compile_song_runtime.__songlua_music_seconds=2");
+    runtime.advance_actor_scene(scene, 0.25).unwrap();
+    execute(&mut runtime, "assert(root:GetSecsIntoEffect()==2 and root:GetEffectDelta()==2)");
+}
+
+#[test]
 fn failed_first_clock_read_retains_partial_state_and_recovers() {
     let mut pair = Pair::new("return Def.Quad{}");
     pair.script(

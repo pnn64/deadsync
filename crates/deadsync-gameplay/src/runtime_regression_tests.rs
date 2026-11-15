@@ -2929,6 +2929,37 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn autoplay_roll_uses_frame_time_when_audio_stalls() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+        state.run_autoplay_or_replay_frame(start);
+        state.advance_autoplay_roll_frame(start - 1, start, 0.3);
+        state.update_active_holds(&[false; MAX_COLS], start);
+        assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0,
+            "a roll head is crossed after this frame's hold-life update");
+
+        // Only 10 ms of audio progress, but a long native frame drains 60%.
+        let at = start + 10_000_000;
+        state.run_autoplay_or_replay_frame(at);
+        state.advance_autoplay_roll_frame(start, at, 0.6 * deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL);
+        state.update_active_holds(&[false; MAX_COLS], at);
+        assert!((state.hold_runtime.active_holds[0].as_ref().unwrap().life - 0.4).abs() < 0.00001);
+        // Autoplay refills below half life before the next frame's drain.
+        state.run_autoplay_or_replay_frame(at);
+        assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0);
+        state.advance_autoplay_roll_frame(at, at, 0.4);
+        state.update_active_holds(&[false; MAX_COLS], at);
+        assert!(state.hold_runtime.active_holds[0].is_none());
+        assert_eq!(state.chart_runtime.notes[0].hold.as_ref().unwrap().result, Some(HoldResult::LetGo),
+            "an audio stall does not stop native roll-life decay");
+        assert_eq!(state.display.hold_feedback.hold_judgments[0].unwrap().result, HoldResult::LetGo);
+    }
+
+    #[test]
     fn autoplay_roll_threshold_is_strict_and_manual_taps_are_unthrottled() {
         for (autoplay, life, refilled) in [
             (true, 0.5, false),

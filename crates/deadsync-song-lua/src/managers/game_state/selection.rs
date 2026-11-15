@@ -8,7 +8,7 @@ const KNOWN: usize = 8;
 #[derive(Clone)]
 struct Selection {
     write: bool,
-    enabled: [bool; crate::LUA_PLAYERS],
+    roster: Arc<Roster>,
     metadata: Arc<[crate::SongLuaStep]>,
     #[cfg(feature = "test-support")]
     observations: crate::observations::Observations,
@@ -21,6 +21,7 @@ pub(super) fn install(
     slots: TableId,
     context: &crate::SongLuaCompileContext,
     messages: Value,
+    roster: Arc<Roster>,
 ) -> Result<(), Error> {
     #[cfg(feature = "test-support")]
     let observations = call
@@ -87,7 +88,7 @@ pub(super) fn install(
             &captures,
             Selection {
                 write,
-                enabled: context.players.each_ref().map(|p| p.enabled),
+                roster: roster.clone(),
                 metadata: metadata.clone(),
                 #[cfg(feature = "test-support")]
                 observations: observations.clone(),
@@ -150,7 +151,7 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
         .clone();
     if !data.write {
         let mut easiest: Option<crate::SongLuaDifficulty> = None;
-        for (index, enabled) in data.enabled.iter().enumerate() {
+        for (index, enabled) in data.roster.enabled().iter().enumerate() {
             if !enabled {
                 continue;
             }
@@ -224,7 +225,7 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
     if main != Value::Nil {
         let main_data =
             metadata(call, &data, main).ok_or_else(|| call.error(b"Unknown selected Steps"))?;
-        for (other, enabled) in data.enabled.iter().enumerate() {
+        for (other, enabled) in data.roster.enabled().iter().enumerate() {
             if !enabled {
                 continue;
             }

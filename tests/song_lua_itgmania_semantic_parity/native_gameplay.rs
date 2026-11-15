@@ -229,19 +229,21 @@ fn compare_calls(
         return Ok(calls);
     }
     let mut native_handles = BTreeMap::new();
-    let native: Vec<Value> = trace["events"]
+    let events = trace["events"]
         .as_array()
-        .ok_or("missing native events")?
+        .ok_or("missing native events")?;
+    let native: Vec<usize> = events
         .iter()
-        .filter(|event| {
+        .enumerate()
+        .filter(|(_, event)| {
             event
                 .pointer("/caller/source")
                 .unwrap_or(&event["source"])
                 .as_str()
                 .is_some_and(|source| source.starts_with("song:/"))
         })
-        .filter(|event| compared_call_operation(event))
-        .filter(|event| {
+        .filter(|(_, event)| compared_call_operation(event))
+        .filter(|(_, event)| {
             !matches!(
                 event["operation"].as_str(),
                 Some("Actor.sleep" | "Actor.queuecommand")
@@ -250,7 +252,7 @@ fn compare_calls(
                     .as_str()
                     .is_some_and(|actor| actor.starts_with("def-"))
         })
-        .filter(|event| {
+        .filter(|(_, event)| {
             scope == Scope::Full
                 || event["scene"].as_u64().is_some_and(|at| {
                     at < scene
@@ -260,40 +262,41 @@ fn compare_calls(
                                 .is_some_and(|time| time <= seconds + 1e-6)
                 })
         })
-        .map(|event| {
-            let mut value = event.clone();
-            let scene = value["scene"].as_u64().unwrap_or(0);
-            normalize_query_handles(&mut value["args"], &mut native_handles, scene);
-            if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
-                value["results"] = event["detail"]["results"].clone();
-                normalize_query_handles(&mut value["results"], &mut native_handles, scene);
-            }
-            if event["kind"] != "command" {
-                if let Some(caller) = event.get("caller") {
-                    value["source"] = caller["source"].clone();
-                    value["line"] = caller["line"].clone();
-                }
-            }
-            if event["kind"] == "call" {
-                value["tween_time_left"] = event["detail"]["native_tween_time_left"].clone();
-            }
-            value
-        })
+        .map(|(index, _)| index)
         .collect();
     if actual.len() != native.len() {
         mismatches.push(
             json!({"field":"command_query_count","native":native.len(),"deadsync":actual.len()}),
         );
     }
-    for (native, actual) in native.iter().zip(&actual) {
-        if !same_call_event(trace, native, actual)? {
+    // Normalize one expected event at a time. The archive already retains the
+    // complete native trace; a second owned copy can add gigabytes on long songs.
+    for (index, actual) in native.iter().zip(&actual) {
+        let event = &events[*index];
+        let mut value = event.clone();
+        let scene = value["scene"].as_u64().unwrap_or(0);
+        normalize_query_handles(&mut value["args"], &mut native_handles, scene);
+        if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
+            value["results"] = event["detail"]["results"].clone();
+            normalize_query_handles(&mut value["results"], &mut native_handles, scene);
+        }
+        if event["kind"] != "command" {
+            if let Some(caller) = event.get("caller") {
+                value["source"] = caller["source"].clone();
+                value["line"] = caller["line"].clone();
+            }
+        }
+        if event["kind"] == "call" {
+            value["tween_time_left"] = event["detail"]["native_tween_time_left"].clone();
+        }
+        if !same_call_event(trace, &value, actual)? {
             mismatches
-                .push(json!({"field":"command_query_event","native":native,"deadsync":actual}));
+                .push(json!({"field":"command_query_event","native":value,"deadsync":actual}));
         }
     }
     let mut calls = json!({"compared":true,"native_count":native.len(),"actual_count":actual.len()});
     calls["actual"] = Value::Array(actual);
-    calls["native"] = Value::Array(native);
+    calls["native_event_indices"] = json!(native);
     calls["uncompared_actual"] = Value::Array(uncompared_actual);
     Ok(calls)
 }
@@ -663,6 +666,8 @@ return Def.ActorFrame {{
             let report = super::compare_calls(&trace, std::path::Path::new("control/control.ssc"),
                 1, 0.0, super::Scope::Full, &mut mismatches).unwrap();
             assert_eq!(report["native_count"], 1);
+            assert_eq!(report["native_event_indices"], json!([1]));
+            assert!(report.get("native").is_none(), "native events remain in the archive without a second report copy");
             assert_eq!(report["actual_count"], 1);
             assert_eq!(report["uncompared_actual"], json!([outside]));
             assert_eq!(mismatches.len(), usize::from(wrong_value), "compared getter values still fail");
@@ -1525,6 +1530,20 @@ end }}
             "events": [{"seq": 1, "kind": "call"}], "stage_samples": [{}]
         });
         super::validate_capture(&complete).expect("complete executable observations");
+        let mut observed_errors = complete.clone();
+        observed_errors["script_errors"] = serde_json::json!([]);
+        observed_errors["dropped_script_errors"] = serde_json::json!(0);
+        super::validate_capture(&observed_errors).expect("complete native error observation");
+        for (errors, dropped) in [
+            (serde_json::json!([{"message":"syntax error before song construction"}]), serde_json::json!(0)),
+            (serde_json::json!([]), serde_json::json!(1)),
+            (serde_json::json!([]), serde_json::Value::Null),
+            (serde_json::Value::Null, serde_json::json!(0)),
+        ] {
+            observed_errors["script_errors"] = errors;
+            observed_errors["dropped_script_errors"] = dropped;
+            assert!(super::validate_capture(&observed_errors).is_err(), "native script failure cannot become an accepted archive");
+        }
         assert_eq!(super::native_random_seed(&complete).expect("legacy seed"), 1);
         let mut seeded = complete.clone();
         seeded["capabilities"]["native_random_seed"] = serde_json::json!(true);
@@ -2797,6 +2816,9 @@ assert(GAMESTATE:GetCurrentStyle():GetName() == 'single')
 assert(ArrowEffects.GetXPos(ps, 1, 0) == -96)
 GAMESTATE:SetCurrentStyle('double')
 assert(ArrowEffects.GetXPos(ps, 8, 0) == 224)
+assert(GAMESTATE:GetCurrentStyle():GetName() == 'double')
+GAMESTATE:GetCurrentStyle().GetName = function() return 'authored' end
+assert(GAMESTATE:GetCurrentStyle():GetName() == 'authored')
 return Def.Actor {}
 "#).expect("style control");
         let mut context = SongLuaCompileContext::new(&dir, "owned style");
@@ -2807,12 +2829,18 @@ return Def.Actor {}
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let queries: Vec<_> = events.iter().filter(|event|
             event["operation"] == "GameState.GetCurrentStyle").collect();
-        assert_eq!(queries.len(), 1, "internal engine reads must not emit Lua queries: {events:?}");
+        assert_eq!(queries.len(), 4, "internal engine reads must not emit Lua queries: {events:?}");
         assert_eq!(queries[0]["line"], 0, "native constructor query line");
         assert_eq!(queries[0]["phase"], "construction");
         assert!(queries[0]["source"].as_str().expect("authored query source")
             .ends_with("default.lua"));
         assert_eq!(queries[0]["results"][0]["name"], "single");
+        for query in &queries[1..] {
+            assert_eq!(query["results"][0]["name"], "double");
+        }
+        let names: Vec<_> = events.iter().filter(|event| event["operation"] == "Style.GetName").collect();
+        assert_eq!(names.len(), 2, "observe the new native style, preserving the authored replacement");
+        assert_eq!(names[1]["results"], serde_json::json!(["double"]));
     }
 
     fn dynamic_command_observations(enabled: bool) -> Vec<serde_json::Value> {
@@ -3081,6 +3109,7 @@ local options = state:GetPlayerOptions('ModsLevel_Song')
 local amount, approach = options:Reverse()
 assert(amount == 0 and approach == 1)
 return Def.ActorFrame{Name='Control', InitCommand=function(self)
+    assert(self:aux(4):getaux()==4)
     self:x(12):y(24):SetUpdateFunction(function(self)
         local beat = GAMESTATE:GetSongBeat()
         assert(beat == 0 or beat == 0.25)
@@ -3151,6 +3180,10 @@ end}
             assert_eq!(event["phase"], "construction");
             assert!(super::same_value(&event["results"], &results));
         }
+        let aux = events.iter().find(|event| event["operation"] == "Actor.getaux")
+            .expect("lowercase getter observation");
+        assert_eq!(aux["kind"], "query");
+        assert_eq!(aux["results"], serde_json::json!([4]));
         let beats: Vec<_> = events
             .iter()
             .filter(|event| event["operation"] == "GameState.GetSongBeat")
@@ -3389,7 +3422,7 @@ end}
     }
 
     #[test]
-    fn instantiated_background_effect_maps_its_authored_child() {
+    fn instantiated_background_effect_keeps_wrapper_in_subscriber_paths() {
         use serde_json::json;
         let trace = json!({
             "capabilities":{"native_actor_creation":true}, "roots":["effect","fg"],
@@ -3413,7 +3446,7 @@ end}
                 {"actor":"sprite-a","definition_id":"sprite","parent":"entry-a","pointer_hex":"20","ordinal":4,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
                 {"actor":"fg-a","definition_id":"fg","parent":"fg-parent","pointer_hex":"10","ordinal":5,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"}]
         });
-        let expected = vec![("1".into(),64),("1/1".into(),48),("1/2".into(),32),("2".into(),16)];
+        let expected = vec![("1".into(),80),("1/1".into(),64),("1/1/1".into(),48),("1/1/2".into(),32),("2".into(),16)];
         assert_eq!(super::native_creation_order_for_entries(&trace,1,1)
             .expect("instantiated effect ownership"), expected);
         for effect in ["Centered", "StretchNoLoop", "StretchRewind"] {
@@ -3428,7 +3461,7 @@ end}
         background_only["actor_creation_inputs"].as_array_mut().unwrap().pop();
         background_only["runtime_actors"].as_array_mut().unwrap().remove(4);
         assert_eq!(super::native_creation_order_for_entries(&background_only,1,1)
-            .expect("background-only scene"), expected[..3]);
+            .expect("background-only scene"), expected[..4]);
         let mut changed_results = trace.clone();
         changed_results["events"] = json!([{"operation":"message","detail":{"results":["unrelated"]}}]);
         assert_eq!(super::native_creation_order_for_entries(&changed_results,1,1)
@@ -3704,6 +3737,12 @@ pub(crate) enum Scope {
 }
 
 pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
+    if (trace.get("script_errors").is_some() || trace.get("dropped_script_errors").is_some())
+        && (!trace["script_errors"].as_array().is_some_and(Vec::is_empty)
+            || trace["dropped_script_errors"].as_u64() != Some(0))
+    {
+        return Err("native script loading/execution failed or its diagnostics are incomplete".into());
+    }
     native_random_seed(trace)?;
     if trace["capabilities"]["native_random_seed"] == true
         && (!trace["random_reseeds"].is_array() || trace["dropped_random_reseeds"] != 0)
@@ -3846,12 +3885,12 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
     let mut background_roots = BTreeMap::new();
-    let mut background_effects = BTreeSet::new();
     if background_entries > 0 {
         // Older captures observe children loaded directly onto an external
         // background frame. A composed ActorDef can instead expose the full
         // instantiated UpperLeft/Centered effect and its LoadActor(File1)
-        // child. That child is the authored entry; the effect is theme-owned.
+        // child. The production loader retains that wrapper as the entry root,
+        // so its authored child and descendants need the extra path component.
         let mut background_owners = Vec::new();
         for input in inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)) {
             let parent = input["parent"].as_str();
@@ -3870,9 +3909,8 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
                 if children.len() != 1 {
                     return Err("native background effect does not own one authored entry".into());
                 }
-                let entry = children[0]["actor"].as_str().ok_or("invalid native background entry identity")?;
-                background_effects.insert(actor);
-                background_owners.push((entry, true));
+                children[0]["actor"].as_str().ok_or("invalid native background entry identity")?;
+                background_owners.push((actor, true));
             } else if let Some(parent) = parent {
                 if !background_owners.iter().any(|&(owner, _)| owner == parent) {
                     background_owners.push((parent, false));
@@ -3929,7 +3967,6 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
         }
         if input["scene"].as_u64() != Some(scene) { continue; }
         if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
-        if background_effects.contains(actor) { continue; }
         if !foreground_roots.is_empty() && !foreground_roots.contains_key(actor)
             && !background_roots.contains_key(actor)
             && input["parent"].as_str().is_none_or(|parent| !paths.contains_key(parent))
@@ -4507,6 +4544,9 @@ fn replay_mode(
     let mut errors = startup.errors;
     let mut runtime_coverage: BTreeSet<String> = startup.coverage_gaps.into_iter().collect();
     runtime_coverage.extend(factory_coverage);
+    if trace.get("script_errors").is_none() {
+        runtime_coverage.insert("legacy capture has no native script-error observation".into());
+    }
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()

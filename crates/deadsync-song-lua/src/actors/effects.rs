@@ -35,7 +35,7 @@ pub(super) const METHODS: &[&str] = &[
 
 #[derive(Clone, Copy, Default)]
 pub(super) struct State {
-    // None preserves getters' runtime-clock fallback before the first update.
+    // Native Actor initializes both accumulators to zero before its first update.
     motion: Option<Motion>,
     clock_visible: bool,
     spin_seen: bool,
@@ -247,10 +247,10 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
     let mut fields = smallvec::SmallVec::<[Target; 8]>::new();
     match name {
         "GetSecsIntoEffect" | "GetEffectDelta" => {
-            let (state, clock) = {
+            let state = {
                 let store = call.store();
                 let actor = &store.actors[&actor];
-                (actor.effects, actor.state.render.effect_clock)
+                actor.effects
             };
             let delta = name == "GetEffectDelta";
             let value = match state.motion {
@@ -258,7 +258,7 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                 Some(motion) => motion
                     .units
                     .ok_or_else(|| call.error(b"effect clock has no units"))?,
-                None => values(call, delta)?[usize::from(clock == EffectClock::Time)],
+                None => 0.0,
             };
             return call.push(Value::Number(value as f64));
         }

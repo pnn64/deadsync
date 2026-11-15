@@ -62,11 +62,19 @@ pub(super) fn binding(call: &mut HostCall<'_>, name: &str, meta: &Metadata) -> R
             };
             call.push(result)
         }
-        "GetNotefieldX" => call.push(
-            player(call, arg(call, 0))
-                .map(|i| Value::Number(meta.screen_x[i] as f64))
-                .unwrap_or(Value::Nil),
-        ),
+        "GetNotefieldX" => {
+            let style = super::super::player_options::current_style(call);
+            let positions = if matches!(crate::song_lua_style_info(&style).name, "versus" | "couple")
+                && meta.roster.enabled().into_iter().all(|enabled| enabled)
+            {
+                meta.versus_player_screen_x.unwrap_or(meta.screen_x)
+            } else {
+                meta.screen_x
+            };
+            call.push(player(call, arg(call, 0))
+                .map(|i| Value::Number(positions[i] as f64))
+                .unwrap_or(Value::Nil))
+        }
         "GetNotefieldWidth" => {
             let style = super::super::player_options::current_style(call);
             call.push(Value::Number(

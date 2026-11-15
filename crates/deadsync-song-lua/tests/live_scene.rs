@@ -448,6 +448,43 @@ fn original_startup_request_fixture_retains_the_native_reload_limit() {
 }
 
 #[test]
+fn startup_join_reloads_both_player_trees_in_the_same_vm() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(&path, r#"
+        loads=(loads or 0)+1
+        return Def.Actor {
+            PlayerJoinedMessageCommand=function(self,params)
+                assert(params.Player==PLAYER_2); joined=true
+            end,
+            OnCommand=function(self)
+                if not GAMESTATE:IsSideJoined(PLAYER_2) then
+                    GAMESTATE:JoinPlayer(PLAYER_2)
+                    assert(joined)
+                    SCREENMAN:SetNewScreen('ScreenGameplay')
+                else
+                    assert(loads==2 and #GAMESTATE:GetEnabledPlayers()==2)
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP1'))
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP2'))
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetX()==160)
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP2'):GetX()==480)
+                    assert(GetNotefieldX(PLAYER_1)==160 and GetNotefieldX(PLAYER_2)==480)
+                end
+            end
+        }
+    "#).unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "join and reload");
+    context.live = true;
+    context.players[1].enabled = false;
+    context.versus_player_screen_x = Some([160.0, 480.0]);
+    let output = song::compile_song_lua_layers(
+        &[&path], 0, &context, Default::default(), slots, layer, |_, _| None,
+    ).unwrap();
+    assert_eq!(output[0].loaded_players, Some([true, true]));
+    assert_eq!(output[0].loaded_style.as_deref(), Some("versus"));
+}
+
+#[test]
 fn immediate_draw_submissions_and_normal_draw_frames_keep_their_live_boundaries() {
     let mut p = Pair::new(&[SOURCE], |_| {});
     p.run("Q:x(17):Draw(); ROOT:SetDrawFunction(function(self)Q:x(Q:GetX()+1):Draw()end)");
