@@ -620,6 +620,7 @@ pub fn push_actors(
         OptionsView::Submenu(kind) => submenu_title(kind),
     };
     actors.push(top_bar_actor(state, title_text, visual_policy));
+    search::push_hint(actors, state);
 
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
@@ -1426,6 +1427,12 @@ pub fn push_actors(
     push_twitch_channel_entry(actors, state);
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
+    }
+    // The search overlay stays opaque while the page under it fades.
+    let search_start = actors.len();
+    search::push_overlay(actors, state);
+    for actor in &mut actors[search_start..] {
+        actor.mul_alpha(alpha_multiplier);
     }
 
     crate::screens::components::shared::update_overlay::push(

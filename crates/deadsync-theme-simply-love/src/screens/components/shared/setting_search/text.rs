@@ -6,13 +6,13 @@ use std::sync::Arc;
 /// One instance belongs to one match in one query's result list. Rebuilding
 /// that list replaces both cells, including cached absent completions/help.
 #[derive(Clone, Debug, Default)]
-pub(super) struct SearchResultText {
+pub(crate) struct SearchResultText {
     prefix: OnceCell<Option<Arc<str>>>,
     help: OnceCell<Option<Arc<str>>>,
 }
 
 impl SearchResultText {
-    pub(super) fn completion(&self, query: &str, label: &Arc<str>) -> Option<(Arc<str>, Arc<str>)> {
+    pub(crate) fn completion(&self, query: &str, label: &Arc<str>) -> Option<(Arc<str>, Arc<str>)> {
         if query.is_empty() {
             return None;
         }
@@ -28,7 +28,7 @@ impl SearchResultText {
             .map(|prefix| (Arc::clone(label), Arc::clone(prefix)))
     }
 
-    pub(super) fn help<'a>(
+    pub(crate) fn help<'a>(
         &self,
         lines: impl Iterator<Item = &'a Arc<str>> + Clone,
     ) -> Option<Arc<str>> {
