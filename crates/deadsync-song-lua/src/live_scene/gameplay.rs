@@ -232,16 +232,25 @@ impl SongLiveScene {
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
-        let options = runtime
-            .gameplay_player_options(std::array::from_fn(|player| {
-                deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
-            }))?
-            .map(Some);
+        runtime.refresh_gameplay_options(std::array::from_fn(|player| {
+            deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
+        }))?;
         for player in 0..LUA_PLAYERS {
             game.mods.song_lua_fail_types[player] = runtime.gameplay_fail_type(player)?;
         }
-        let changed = game.mods.song_lua_player_options != options;
-        game.mods.song_lua_player_options = options;
+        // Compare in place and copy only a player whose options changed.
+        let mut changed = false;
+        for (published, options) in game
+            .mods
+            .song_lua_player_options
+            .iter_mut()
+            .zip(runtime.gameplay_options())
+        {
+            if published.as_ref() != Some(options) {
+                *published = Some(*options);
+                changed = true;
+            }
+        }
         drop(runtime);
         if changed {
             // Current setters in Update/Input/Draw can change speed and reverse

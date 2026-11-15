@@ -18,10 +18,13 @@ struct Snapshot {
 pub(crate) struct OptionSnapshots([Option<Snapshot>; LUA_PLAYERS]);
 
 impl SongRuntime {
-    pub(crate) fn gameplay_player_options(
+    /// Bring each player's snapshot up to date with Current, reading it again
+    /// only where it may have changed. [`Self::gameplay_options`] lends the
+    /// result.
+    pub(crate) fn refresh_gameplay_options(
         &mut self,
         appearance: [AppearanceEffects; LUA_PLAYERS],
-    ) -> Result<[SongLuaPlayerOptions; LUA_PLAYERS], Error> {
+    ) -> Result<(), Error> {
         let catalog = self.vm.rooted(self.catalog)?;
         let snapshots = &mut self.option_snapshots;
         self.vm.with_native_stack(|stack| {
@@ -29,8 +32,7 @@ impl SongRuntime {
             stack.push(catalog)?;
             read(stack, stack.top(), "player_options", true)?;
             let players = stack.top();
-            let mut output = [SongLuaPlayerOptions::default(); LUA_PLAYERS];
-            for (player, options) in output.iter_mut().enumerate() {
+            for player in 0..LUA_PLAYERS {
                 index(stack, players, player + 1)?;
                 // ModsGroup's fourth owner is Current; the global compiler
                 // aliases refer to Song and would bypass native approach.
@@ -52,13 +54,13 @@ impl SongRuntime {
                     Some(state) => Some((state, stack.raw_fields_version(state)?)),
                     None => None,
                 };
-                let remembered = snapshots.0[player].filter(|s| {
+                let remembered = snapshots.0[player].as_ref().filter(|s| {
                     s.current == current_key
                         && s.state == state_key
                         && s.appearance == appearance[player]
                 });
-                *options = match remembered {
-                    Some(snapshot) if !cfg!(debug_assertions) => snapshot.options,
+                match remembered {
+                    Some(_) if !cfg!(debug_assertions) => {}
                     remembered => {
                         let walked = walk(stack, current, appearance[player])?;
                         if let Some(snapshot) = remembered {
@@ -70,14 +72,35 @@ impl SongRuntime {
                             appearance: appearance[player],
                             options: walked,
                         });
-                        walked
                     }
-                };
+                }
                 stack.set_top(players)?;
             }
             stack.set_top(base)?;
-            Ok(output)
+            Ok(())
         })
+    }
+
+    /// Each player's options as of the last successful refresh.
+    ///
+    /// # Panics
+    /// Before the first successful [`Self::refresh_gameplay_options`].
+    pub(crate) fn gameplay_options(&self) -> [&SongLuaPlayerOptions; LUA_PLAYERS] {
+        std::array::from_fn(|player| {
+            &self.option_snapshots.0[player]
+                .as_ref()
+                .expect("options are refreshed before they are read")
+                .options
+        })
+    }
+
+    #[cfg(test)]
+    fn gameplay_player_options(
+        &mut self,
+        appearance: [AppearanceEffects; LUA_PLAYERS],
+    ) -> Result<[SongLuaPlayerOptions; LUA_PLAYERS], Error> {
+        self.refresh_gameplay_options(appearance)?;
+        Ok(self.gameplay_options().map(|options| *options))
     }
 }
 
