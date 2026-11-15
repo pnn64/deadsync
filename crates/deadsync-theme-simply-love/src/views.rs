@@ -677,7 +677,6 @@ pub enum MusicWheelSlotRuntimeRequest<'a> {
         song: &'a Arc<deadsync_chart::SongData>,
         chart_hashes: [Option<&'a str>; 2],
         golf_pars: [Option<f64>; 2],
-        lua_submit_allowed: [bool; 2],
         has_edit: bool,
         is_srpg_event: bool,
         is_itl_event: bool,
@@ -732,7 +731,6 @@ pub struct MusicWheelSideRuntimeView {
 pub struct MusicWheelSlotRuntimeView {
     pub golf_pars: [Option<f64>; 2],
     pub sides: [MusicWheelSideRuntimeView; 2],
-    pub lua_submit_allowed: [bool; 2],
     pub has_edit: bool,
     pub is_srpg_event: bool,
     pub sync_pref: deadsync_chart::SyncPref,
@@ -743,7 +741,6 @@ impl Default for MusicWheelSlotRuntimeView {
         Self {
             sides: Default::default(),
             golf_pars: [None; 2],
-            lua_submit_allowed: [false; 2],
             has_edit: false,
             is_srpg_event: false,
             sync_pref: deadsync_chart::SyncPref::Default,

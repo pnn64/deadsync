@@ -3682,14 +3682,12 @@ impl App {
                     song,
                     chart_hashes,
                     golf_pars,
-                    lua_submit_allowed,
                     has_edit,
                     is_srpg_event,
                     is_itl_event,
                     unlock_song_dir,
                     sync_pref,
                 } => {
-                    view.lua_submit_allowed = lua_submit_allowed;
                     view.has_edit = has_edit;
                     view.is_srpg_event = is_srpg_event;
                     view.sync_pref = sync_pref;
