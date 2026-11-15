@@ -166,8 +166,14 @@ pub(super) fn write(
     actor: TableId,
     state: &SongLuaOverlayState,
 ) -> Result<TableId, Error> {
-    validate_keys(call, actor)?;
-    let snapshot = copy_validated(call, actor)?;
+    // A native copy has checked every string key; the helper checks none.
+    let snapshot = match copy_native(call, actor, false)? {
+        Some(snapshot) => snapshot,
+        None => {
+            validate_keys(call, actor)?;
+            copy_with_helper(call, actor, false)?
+        }
+    };
     let value = Value::Table(snapshot);
     let live = call
         .store()
@@ -189,8 +195,8 @@ pub(super) fn write(
             let value = crate::perframe::overlay_state_update_value(state, target);
             let overrides = live && live_override(target);
             if !overrides
-                && (get_static(call, snapshot, key.as_bytes())? != Value::Nil
-                    || value == crate::perframe::overlay_state_update_value(&default, target))
+                && (value == crate::perframe::overlay_state_update_value(&default, target)
+                    || get_static(call, snapshot, key.as_bytes())? != Value::Nil)
             {
                 continue;
             }
@@ -256,9 +262,6 @@ fn copy_selected(call: &mut HostCall<'_>, actor: TableId, mutable: bool) -> Resu
     )?;
     call.call(validate, &[])?;
     copy(call, actor, mutable)
-}
-fn copy_validated(call: &mut HostCall<'_>, actor: TableId) -> Result<TableId, Error> {
-    copy(call, actor, false)
 }
 
 /// The snapshot fields of `actor`, copied as the `manual_state_snapshot`
