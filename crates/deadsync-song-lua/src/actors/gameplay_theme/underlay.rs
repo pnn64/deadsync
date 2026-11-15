@@ -209,6 +209,19 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                 };
                 let child = named(call, screen, &format!("PlayerOptionsP{}", player + 1))?;
                 let game = member(call, globals, "GAMESTATE")?;
+                // ScreenGameplay::LoadNextSong initializes this hidden text
+                // from the selected Steps, including non-Edit descriptions.
+                let steps = invoke(call, game, "GetCurrentSteps", &[value])?;
+                if steps != Value::Nil {
+                    call.with_roots(&[steps], |call| {
+                        let text = invoke(call, table(call, steps)?, "GetDescription", &[])?;
+                        call.with_roots(&[text], |call| {
+                            let description =
+                                named(call, screen, &format!("StepsDescriptionP{}", player + 1))?;
+                            set(call, description, "Text", text)
+                        })
+                    })?;
+                }
                 let state = invoke(call, game, "GetPlayerState", &[value])?;
                 call.with_roots(&[state], |call| {
                     let level = call.intern_static(b"ModsLevel_Current")?;

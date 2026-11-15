@@ -360,12 +360,7 @@ pub(super) fn install_metatable(vm: &mut Vm, methods: TableId) -> Result<(), Err
 
 fn stringify(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, arg(call, 0))?;
-    // A native class that behaves as its actor type but is registered under
-    // another Lua name, such as the player's Combo frame.
-    let value = match get_static(call, actor, b"__songlua_lua_class")? {
-        Value::Nil => get_static(call, actor, b"__songlua_actor_type")?,
-        class => class,
-    };
+    let value = get_static(call, actor, b"__songlua_actor_type")?;
     let kind = if value == Value::Nil {
         "Actor".to_owned()
     } else {

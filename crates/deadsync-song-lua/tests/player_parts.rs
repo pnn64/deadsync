@@ -102,8 +102,8 @@ fn player_init_owns_ordered_children_and_shared_named_aliases() {
                     end
                     assert(unnamed:GetChild('HoldJudgment')==holds[count][1])
                     assert(combo:GetChild('Number')==combo[1] and combo[1]:GetParent()==combo)
-                    -- Native's combo is an ActorFrame registered as Combo.
-                    assert(tostring(combo):find('^Combo %(') and combo.__songlua_actor_type=='ActorFrame')
+                    -- Player retains the theme's ActorFrame Lua type.
+                    assert(tostring(combo):find('^ActorFrame %(') and combo.__songlua_actor_type=='ActorFrame')
                     assert(combo.GetNumChildren and tostring(combo[1]):find('^BitmapText %('))
                     assert(judgment:GetChild('JudgmentWithOffsets')==judgment[1])
                     assert(judgment[1].__songlua_judgment_sprite_player==pi-1)

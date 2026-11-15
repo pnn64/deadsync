@@ -783,6 +783,8 @@ impl Actors {
         )?;
         let cropto = vm.execute(&cropto)?[0];
         super::put(vm, methods, "CropToHelper", cropto)?;
+        let group_forward = vm.new_host_function(native_children::group_forward, &[])?;
+        super::put(vm, methods, "ChildGroupForward", group_forward)?;
         let setup = compile_named(
             include_bytes!("actors.lua"),
             b"=DeadSync actor instance bindings",

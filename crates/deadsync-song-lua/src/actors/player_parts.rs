@@ -127,11 +127,8 @@ fn combo(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, E
                         Ok(actor)
                     } else {
                         let frame = dummy(call, scene, "ActorFrame", "Combo", None)?;
-                        // Native Player::Init's combo is a Combo, an ActorFrame
-                        // registered under its own Lua class: it behaves as a
-                        // frame, but tostring names it Combo.
-                        let class = call.intern_static(b"Combo")?;
-                        set(call, frame, "__songlua_lua_class", class)?;
+                        // Player loads the theme's Def.ActorFrame unchanged;
+                        // "Combo" is its child name, not a registered Lua type.
                         let number = dummy(call, scene, "BitmapText", "Number", Some(frame))?;
                         append(call, frame, number)?;
                         native_children::insert(call, frame, "Number", Value::Table(number))?;

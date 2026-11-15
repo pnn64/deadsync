@@ -2231,7 +2231,18 @@ return Def.ActorFrame {
 fn live_steps_display_owns_native_children_resources_and_step_lifecycle() {
     let mut compiled = compile_with_context(
         "native-gameplay-steps-display",
-        "return Def.Actor {}",
+        r#"return Def.Actor { OnCommand=function()
+            local screen=SCREENMAN:GetTopScreen()
+            for index,pn in ipairs{PLAYER_1,PLAYER_2} do
+                local description=screen:GetChild('StepsDescriptionP'..index)
+                assert(description:GetText()==(index==1 and 'P1 chart' or 'Fixture edit'),
+                    'LoadNextSong initializes each hidden chart description before authored On')
+                assert(description:GetText()==GAMESTATE:GetCurrentSteps(pn):GetDescription())
+                assert(description:GetTweenTimeLeft()==math.huge)
+                description:diffusealpha(0.5)
+                assert(description:GetTweenTimeLeft()==math.huge)
+            end
+        end }"#,
         |context| {
             context.defer_initial_live_update = true;
             context.players[0].enabled = true;
@@ -4816,9 +4827,8 @@ return Def.Actor { OnCommand = function()
         local combo = player:GetChild('Combo')
         assert(combo:GetParent() == player and combo:GetName() == 'Combo')
         if $POPULATED then
-            -- Native's populated combo is a Combo: an ActorFrame registered
-            -- under its own Lua class name.
-            assert(tostring(combo):find('^Combo %(') and combo.__songlua_actor_type == 'ActorFrame')
+            -- Native Player retains the theme's ActorFrame Lua type.
+            assert(tostring(combo):find('^ActorFrame %(') and combo.__songlua_actor_type == 'ActorFrame')
             local number = combo:GetChild('Number')
             assert(tostring(number):find('BitmapText', 1, true))
             assert(number:GetParent() == combo and combo:GetNumChildren() == 3)

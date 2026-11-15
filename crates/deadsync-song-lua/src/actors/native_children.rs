@@ -2,6 +2,22 @@
 use super::*;
 use sprites::set;
 
+// Match IdenticalChildrenSingleApplier in ActorFrame.cpp. Keeping this bridge
+// native also preserves the authored caller seen by the command observer.
+pub(super) fn group_forward(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let function = call.new_host_function(apply_group, &[arg(call, 0)])?;
+    call.push(function)
+}
+
+fn apply_group(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let group = table(call, arg(call, 0))?;
+    let last = call.raw_table_len(group)?;
+    let actor = call.raw_table_get(group, Value::Number(last as f64))?;
+    let mut args = call.arguments().to_vec();
+    args[0] = actor;
+    call.call_and_return(call.captures()[0], &args)
+}
+
 pub(super) fn install_helpers(vm: &mut Vm, actor: TableId, helpers: TableId) -> Result<(), Error> {
     let setup = compile_named(
         include_bytes!("native_children.lua"),

@@ -36,9 +36,9 @@ enum Observation {
     Bytes(Vec<u8>),
 }
 
-// Run the same declaration and probe through the actual production constructor
-// and the Rust adapter. Assertions inside probes must pass on both engines;
-// the returned observations also catch otherwise unnoticed ordering changes.
+// Run declarations and probes through the Rust adapter against fixed regression
+// observations. The shared native-actor-parity control separately records the
+// duplicate-group assertions executed by the pinned ITGmania engine.
 fn compare_scene(definition: &str, probe: &str) {
     let mut rust = runtime();
     instantiate(&mut rust, definition);
@@ -600,7 +600,7 @@ fn named_children_commands_use_each_childs_handler_and_include_empty_frames_as_l
 }
 
 #[test]
-fn duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results() {
+fn duplicate_child_groups_capture_class_methods_and_forward_open_results() {
     let mut r = runtime();
     instantiate(
         &mut r,
@@ -608,18 +608,11 @@ fn duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results() 
     );
     execute(
         &mut r,
-        r#"
-        local g=root:GetChild('same'); assert(#g==2 and g~=root:GetChild('same'))
-        assert(g:x(17)==g[2] and g[1]:GetX()==0 and g[2]:GetX()==17)
-        local getx=g.GetX; g[3]=g[1]; assert(getx(g)==0 and g['3']==nil)
-        g[2].GetX=function()return 999 end
-        assert(root:GetChild('same'):GetX()==999)
-        Actor.multi=function(self,...)return self,... end
-        local t={}; local a,b,c,d=root:GetChildren().same:multi(t,nil,42)
-        assert(a==g[2] and b==t and c==nil and d==42)
-        assert(select('#',root:GetChild('same'):multi(nil))==2)
-        g[1]:name('changed');assert(root:GetChild('changed')==g[1] and root:GetChild('same')==g[2])
-    "#,
+        concat!(
+            "local probe=(function() ",
+            include_str!("../../../tests/fixtures/regression-expectations/song-lua/duplicate-child-forwarding.lua"),
+            " end)(); probe(root)"
+        ),
     );
     assert_clean(&mut r);
 }
@@ -803,7 +796,7 @@ fn production_child_groups_class_hooks_and_visibility_coercions() {
         local log={}
         assert(g:x(17)==g[2] and g[1]:GetX()==0 and g[2]:GetX()==17)
         local getx=g.GetX;g[3]=g[1];assert(getx(g)==0 and g['3']==nil)
-        g[2].GetX=function()return 999 end;assert(root:GetChild('same'):GetX()==999)
+        g[2].GetX=function()return 999 end;assert(root:GetChild('same'):GetX()==17)
         Actor.multi=function(self,...)return self,...end
         local t={};local a,b,c,d=root:GetChildren().same:multi(t,nil,42)
         assert(a==g[2] and b==t and c==nil and d==42)
