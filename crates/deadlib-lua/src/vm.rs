@@ -1038,6 +1038,17 @@ impl Vm {
         Ok(self.tables[slot_index(table.0)].get(key))
     }
 
+    /// [`HostCall::raw_fields_version`](crate::HostCall::raw_fields_version)
+    /// outside a host call.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.validate_value(Value::Table(table))?;
+        Ok(self.tables[slot_index(table.0)].fields_version())
+    }
+
     /// Return Lua's raw sequence boundary for a live table.
     pub fn raw_table_len(&self, table: TableId) -> Result<usize, Error> {
         self.validate_value(Value::Table(table))?;

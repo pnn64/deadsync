@@ -477,6 +477,30 @@ return direct_error == pushed_error, direct_error
 }
 
 #[test]
+fn the_vm_reads_the_same_fields_version_as_a_host_call() {
+    fn version(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let Value::Table(table) = call.arguments()[0] else {
+            return Err(call.error(b"table expected"));
+        };
+        let version = call.raw_fields_version(table)?;
+        call.push(Value::Number(f64::from(version)))
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let Value::Table(table) = execute(&mut vm, b"T = {name = 1}; return T")[0] else {
+        panic!("expected table");
+    };
+    let from_call = |vm: &mut Vm| execute(vm, b"return version(T)")[0];
+    let first = vm.raw_fields_version(table).unwrap();
+    assert_eq!(from_call(&mut vm), Value::Number(f64::from(first)));
+    execute(&mut vm, b"T.name = 2");
+    let second = vm.raw_fields_version(table).unwrap();
+    assert_ne!(second, first);
+    assert_eq!(from_call(&mut vm), Value::Number(f64::from(second)));
+}
+
+#[test]
 fn the_native_stack_reads_the_same_fields_version_as_a_host_call() {
     fn versions(call: &mut HostCall<'_>) -> Result<(), Error> {
         let Value::Table(table) = call.arguments()[0] else {
