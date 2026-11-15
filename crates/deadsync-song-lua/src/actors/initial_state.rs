@@ -26,7 +26,7 @@ pub(super) fn read_live(
     Ok(state)
 }
 
-#[inline]
+#[inline(always)]
 fn get(call: &mut HostCall<'_>, r: &mut Reader, key: Field, live: bool) -> Result<Value, Error> {
     // During playback the live pose owns these properties; the raw fields
     // are the preparation representation and are not consulted.
@@ -53,7 +53,7 @@ fn read_with_metadata(
     metadata: bool,
     live: bool,
 ) -> Result<SongLuaOverlayState, Error> {
-    let mut reader = Reader::new(call, actor);
+    let mut reader = Reader::new(call, actor)?;
     let state = read_fields(call, actor, &mut reader, metadata, live);
     reader.finish(call);
     state
@@ -171,7 +171,10 @@ fn read_fields(
         .as_deref()
         .is_some_and(|class| class.eq_ignore_ascii_case("Sprite"))
     {
+        // These lookups may run an authored `__index`, so the reader asks
+        // the table's version again after each.
         let texture = sprites::field(call, actor, "Texture")?;
+        r.refresh(call)?;
         let has_texture = value_text(call, texture)?.is_some();
         let capture = if has_texture {
             None
@@ -185,6 +188,7 @@ fn read_fields(
             value_text(call, value)?
         };
         state.sprite_texture = has_texture || capture.is_some();
+        r.refresh(call)?;
     }
     if let Some(value) = number(call, r, Field::STATE_X, live)? {
         state.x = value;
@@ -462,7 +466,9 @@ fn read_fields(
         state.stretch_rect = Some(value);
     }
     if let Some(colors) = optional_table(call, r, Field::STATE_VERTEX_COLORS, live)? {
-        if let Some(out) = vertex_colors(call, colors)? {
+        let colors = vertex_colors(call, colors)?;
+        r.refresh(call)?;
+        if let Some(out) = colors {
             state.vertex_colors = Some(out);
         }
     }
@@ -498,18 +504,34 @@ fn read_fields(
     }
     Ok(state)
 }
+// A field's value as a number. Anything but a number goes through `tonumber`,
+// which runs a debug hook if one is set, so the reader asks the version again.
+#[inline(always)]
+fn to_number(call: &mut HostCall<'_>, r: &mut Reader, value: Value) -> Result<f64, Error> {
+    match value {
+        Value::Number(value) => Ok(value),
+        value => converted(call, r, value),
+    }
+}
+#[inline(never)]
+fn converted(call: &mut HostCall<'_>, r: &mut Reader, value: Value) -> Result<f64, Error> {
+    let value = sprites::number(call, value)?;
+    r.refresh(call)?;
+    Ok(value)
+}
+#[inline(always)]
 fn number(
     call: &mut HostCall<'_>,
     r: &mut Reader,
     key: Field,
     live: bool,
 ) -> Result<Option<f32>, Error> {
-    let value = get(call, r, key, live)?;
-    if value == Value::Nil {
-        return Ok(None);
+    match get(call, r, key, live)? {
+        Value::Nil => Ok(None),
+        value => to_number(call, r, value).map(|value| Some(value as f32)),
     }
-    sprites::number(call, value).map(|value| Some(value as f32))
 }
+#[inline]
 fn integer(
     call: &mut HostCall<'_>,
     r: &mut Reader,
@@ -522,12 +544,13 @@ fn integer(
     if value == Value::Nil {
         return Ok(None);
     }
-    let value = sprites::number(call, value)?.trunc();
+    let value = to_number(call, r, value)?.trunc();
     if !(min..=max).contains(&value) {
         return Err(call.error(format!("{}: integer out of range", key.name()).as_bytes()));
     }
     Ok(Some(value as i64))
 }
+#[inline(always)]
 fn flag(
     call: &mut HostCall<'_>,
     r: &mut Reader,
@@ -574,6 +597,7 @@ impl std::ops::Deref for StateText {
         std::str::from_utf8(&self.0).expect("validated actor state text")
     }
 }
+#[inline(always)]
 fn optional_table(
     call: &mut HostCall<'_>,
     r: &mut Reader,
@@ -586,6 +610,7 @@ fn optional_table(
     }
     table(call, value).map(Some)
 }
+#[inline(always)]
 fn vector<const N: usize>(
     call: &mut HostCall<'_>,
     r: &mut Reader,
@@ -593,7 +618,12 @@ fn vector<const N: usize>(
     live: bool,
 ) -> Result<Option<[f32; N]>, Error> {
     match optional_table(call, r, key, live)? {
-        Some(t) => components(call, t),
+        Some(t) => {
+            // A component that is not a number goes through `tonumber`.
+            let value = components(call, t)?;
+            r.refresh(call)?;
+            Ok(value)
+        }
         None => Ok(None),
     }
 }

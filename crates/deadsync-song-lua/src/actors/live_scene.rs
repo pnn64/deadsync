@@ -100,15 +100,18 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
     let batch = table(call, call.captures()[2])?;
     match data.phase {
         Phase::States => {
+            let mut output = Vec::new();
             for slot in [2., 3.] {
                 let list = call.raw_table_get(batch, Value::Number(slot))?;
                 let list = table(call, list)?;
-                for i in 1..=call.raw_table_len(list)? {
+                let len = call.raw_table_len(list)?;
+                output.reserve(len);
+                for i in 1..=len {
                     let actor = table(call, call.raw_table_get(list, Value::Number(i as f64))?)?;
-                    let state = initial_state::read_live(call, actor)?;
-                    data.output.lock().unwrap().push(state);
+                    output.push(initial_state::read_live(call, actor)?);
                 }
             }
+            *data.output.lock().unwrap() = output;
         }
         Phase::ClearHistory => {
             let globals = table(call, helper(call, 5)?)?;

@@ -169,6 +169,7 @@ impl Known {
         }
         self
     }
+    #[inline]
     fn find(&self, field: Field) -> Option<Value> {
         let (word, bit) = field.bit();
         if self.read[word] & bit == 0 {
@@ -264,34 +265,60 @@ pub(super) fn get_all<const N: usize>(
 /// Many reads of one table's fields. What the actor knows of its table is
 /// held here meanwhile, so each read is `get` without finding the actor
 /// again; `finish` hands it back.
+///
+/// The table's version is asked when the reader is made and again by
+/// `refresh`. In between, the caller must not run Lua or write to the table,
+/// so that a field read at that version is still what the table holds.
 pub(super) struct Reader {
     table: TableId,
     // `None` for a table that is not an owned actor.
     known: Option<Known>,
+    version: u32,
 }
 impl Reader {
-    pub(super) fn new(call: &mut HostCall<'_>, table: TableId) -> Self {
+    pub(super) fn new(call: &mut HostCall<'_>, table: TableId) -> Result<Self, Error> {
         let known = call
             .store()
             .actors
             .get_mut(&table)
             .map(|actor| std::mem::take(&mut actor.known));
-        Self { table, known }
-    }
-    #[inline]
-    pub(super) fn get(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
-        let Some(known) = &mut self.known else {
-            return call.raw_table_get_static(self.table, field.name().as_bytes());
+        let mut reader = Self {
+            table,
+            known,
+            version: 0,
         };
-        // Asked again for every read: a write in between is seen like any other.
-        let version = call.raw_fields_version(self.table)?;
-        let known = known.at(self.table, version);
-        if let Some(value) = known.find(field) {
+        reader.refresh(call)?;
+        Ok(reader)
+    }
+    /// Ask the table's version again, after something that may have run Lua.
+    pub(super) fn refresh(&mut self, call: &mut HostCall<'_>) -> Result<(), Error> {
+        if self.known.is_some() {
+            self.version = call.raw_fields_version(self.table)?;
+        }
+        Ok(())
+    }
+    /// A field already read at the version is answered inline; any other is
+    /// read from the table.
+    #[inline(always)]
+    pub(super) fn get(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
+        if let Some(known) = &self.known
+            && known.table == Some(self.table)
+            && known.version == self.version
+            && let Some(value) = known.find(field)
+        {
             check(call, self.table, field, value)?;
             return Ok(value);
         }
+        self.read(call, field)
+    }
+    #[inline(never)]
+    fn read(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
         let value = call.raw_table_get_static(self.table, field.name().as_bytes())?;
-        known.record(field, value);
+        if let Some(known) = &mut self.known {
+            // The read ran no Lua, so the version still describes the table.
+            self.version = call.raw_fields_version(self.table)?;
+            known.at(self.table, self.version).record(field, value);
+        }
         Ok(value)
     }
     /// Give the actor back what it knows. Without this the actor merely
