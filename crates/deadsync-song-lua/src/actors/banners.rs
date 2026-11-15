@@ -39,7 +39,7 @@ fn truthy(value: Value) -> bool {
 }
 
 fn query(call: &mut HostCall<'_>, object: TableId, name: &str) -> Result<Value, Error> {
-    let function = field(call, object, name)?;
+    let function = sprites::field_named(call, object, name)?;
     if function == Value::Nil {
         return Ok(Value::Nil);
     }

@@ -226,7 +226,11 @@ pub(super) fn source(call: &mut HostCall<'_>, value: Value) -> Result<Option<Vec
     }
 }
 
-fn range_value(call: &mut HostCall<'_>, state: TableId, key: &str) -> Result<Option<i32>, Error> {
+fn range_value(
+    call: &mut HostCall<'_>,
+    state: TableId,
+    key: &'static str,
+) -> Result<Option<i32>, Error> {
     match field(call, state, key) {
         Ok(value) => Ok(integer_scalar(call, value)),
         // Production ignores ordinary authored errors in First/Num getters.

@@ -1,7 +1,7 @@
 //! Getters on saved actors after their previous native playback owner is gone.
 use super::*;
 fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<f32>, Error> {
-    let value = sprites::field(call, actor, key)?;
+    let value = sprites::field_named(call, actor, key)?;
     if value == Value::Nil {
         Ok(None)
     } else {

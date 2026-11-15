@@ -50,7 +50,7 @@ impl Access {
     }
     pub fn player(&self, vm: &mut Vm, actor: Value) -> Result<Player, Error> {
         self.read(vm, actor, |call, actor| {
-            let number = |call: &mut HostCall<'_>, key: &str, index: usize| {
+            let number = |call: &mut HostCall<'_>, key: &'static str, index: usize| {
                 let raw = number(call, actor, key)?;
                 let native = call.store().actors.get(&actor).and_then(|a| {
                     let mask = a.capture.as_ref().map_or(0, |c| c.transform_fields);
@@ -162,7 +162,11 @@ pub(super) fn is_player(call: &mut HostCall<'_>, actor: TableId) -> Result<bool,
     let value = call.raw_table_get(actor, key)?;
     Ok(initial_state::value_text(call, value)?.is_none())
 }
-fn number(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<f32>, Error> {
+fn number(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Option<f32>, Error> {
     let value = sprites::field(call, actor, key)?;
     if value == Value::Nil {
         return Ok(None);

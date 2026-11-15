@@ -69,7 +69,7 @@ fn optional_function(call: &HostCall<'_>, value: Value) -> Result<Option<Value>,
     }
 }
 fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
-    sprites::field(call, actor, key)
+    sprites::field_named(call, actor, key)
 }
 fn getupvalue(call: &mut HostCall<'_>) -> Result<Option<Value>, Error> {
     let debug = super::super::field(call, helper(call, 5)?, "debug")?;

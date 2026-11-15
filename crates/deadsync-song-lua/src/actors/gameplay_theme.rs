@@ -76,7 +76,7 @@ fn load(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn field(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
     call.with_roots(&[Value::Table(actor)], |call| {
-        sprites::field(call, actor, name)
+        sprites::field_named(call, actor, name)
     })
 }
 

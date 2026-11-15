@@ -66,7 +66,7 @@ fn invoke(
     args: &[Value],
 ) -> Result<Value, Error> {
     call.with_roots(args, |call| {
-        let function = sprites::field(call, actor, name)?;
+        let function = sprites::field_named(call, actor, name)?;
         if !matches!(function, Value::Function(_) | Value::Native(_)) {
             return Err(call.error(format!("{name} function expected").as_bytes()));
         }

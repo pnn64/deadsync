@@ -175,12 +175,12 @@ fn start_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn global_table(call: &mut HostCall<'_>, name: &str) -> Result<TableId, Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let value = field(call, globals, name)?;
+    let value = sprites::field_named(call, globals, name)?;
     table(call, value)
 }
 fn global_call(call: &mut HostCall<'_>, name: &str, args: &[Value]) -> Result<Value, Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let function = field(call, globals, name)?;
+    let function = sprites::field_named(call, globals, name)?;
     function_call(call, function, args)
 }
 fn function_call(call: &mut HostCall<'_>, function: Value, args: &[Value]) -> Result<Value, Error> {

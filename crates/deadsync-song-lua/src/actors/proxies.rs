@@ -30,7 +30,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> R
 fn optional_integer(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<i64>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {

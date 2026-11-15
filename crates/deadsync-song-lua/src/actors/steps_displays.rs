@@ -95,7 +95,7 @@ fn value_call(
     method: &str,
     arguments: &[Value],
 ) -> Result<Value, Error> {
-    let function = field(call, receiver, method)?;
+    let function = sprites::field_named(call, receiver, method)?;
     if !matches!(function, Value::Function(_) | Value::Native(_)) {
         return Err(call.error(b"function expected"));
     }

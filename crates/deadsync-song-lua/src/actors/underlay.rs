@@ -62,7 +62,7 @@ fn source(call: &mut HostCall<'_>, name: &str, args: &[Value]) -> Result<Value, 
 
 fn field(call: &mut HostCall<'_>, owner: TableId, name: &str) -> Result<Value, Error> {
     call.with_roots(&[Value::Table(owner)], |call| {
-        sprites::field(call, owner, name)
+        sprites::field_named(call, owner, name)
     })
 }
 

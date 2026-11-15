@@ -41,7 +41,20 @@ pub(super) const SPRITE_METHODS: &[&str] = &[
     "set_use_effect_clock_for_texcoords",
 ];
 
-pub(super) fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
+pub(super) fn field(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Value, Error> {
+    let key = call.intern_static(key.as_bytes())?;
+    call.table_get(Value::Table(actor), key)
+}
+// `field` for a name built at run time.
+pub(super) fn field_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &str,
+) -> Result<Value, Error> {
     let key = call.try_intern(key.as_bytes())?;
     call.table_get(Value::Table(actor), key)
 }
@@ -70,7 +83,7 @@ pub(super) fn number(call: &mut HostCall<'_>, value: Value) -> Result<f64, Error
 fn optional_number(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<f32>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {
@@ -87,7 +100,11 @@ fn uint(call: &mut HostCall<'_>, value: Value) -> Result<u32, Error> {
         Err(call.error(b"unsigned integer out of range"))
     }
 }
-fn optional_uint(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<u32>, Error> {
+fn optional_uint(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Option<u32>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {
         Ok(None)
@@ -565,10 +582,17 @@ pub(super) fn visit_states(
         })?;
     } else {
         for i in 0i32.. {
-            let Some(frame) = optional_uint(call, actor, &format!("Frame{i:04}"))? else {
+            let frame = field_named(call, actor, &format!("Frame{i:04}"))?;
+            if frame == Value::Nil {
                 break;
+            }
+            let frame = uint(call, frame)?;
+            let delay = field_named(call, actor, &format!("Delay{i:04}"))?;
+            let delay = if delay == Value::Nil {
+                0.1
+            } else {
+                number(call, delay)? as f32
             };
-            let delay = optional_number(call, actor, &format!("Delay{i:04}"))?.unwrap_or(0.1);
             visit(crate::SongLuaSpriteState { frame, delay });
         }
     }

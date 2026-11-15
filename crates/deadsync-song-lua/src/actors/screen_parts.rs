@@ -259,7 +259,7 @@ pub(super) fn invoke(
     name: &str,
     args: &[Value],
 ) -> Result<(), Error> {
-    let function = field(call, actor, name)?;
+    let function = sprites::field_named(call, actor, name)?;
     if !matches!(function, Value::Function(_) | Value::Native(_)) {
         return Err(call.error(b"actor function expected"));
     }

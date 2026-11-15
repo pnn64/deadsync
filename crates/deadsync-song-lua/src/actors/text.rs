@@ -117,7 +117,7 @@ fn colors(
 
 fn first(call: &mut HostCall<'_>, params: TableId, keys: &[&str]) -> Result<Value, Error> {
     for key in keys {
-        let value = field(call, params, key)?;
+        let value = sprites::field_named(call, params, key)?;
         if value != Value::Nil {
             return Ok(value);
         }
@@ -638,7 +638,7 @@ pub(super) fn captured_position(
         return Ok(None);
     };
     call.with_roots(&[value], |call| {
-        let value = field(call, block, axis)?;
+        let value = sprites::field_named(call, block, axis)?;
         if value == Value::Nil {
             Ok(None)
         } else {

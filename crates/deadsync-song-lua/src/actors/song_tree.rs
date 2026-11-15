@@ -85,7 +85,11 @@ impl Tree {
             .any(|r| Value::Table(r.actor) == actor)
     }
 }
-fn text(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<String>, Error> {
+fn text(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Option<String>, Error> {
     let value = sprites::field(call, actor, key)?;
     initial_state::value_text(call, value)
 }

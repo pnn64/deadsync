@@ -188,7 +188,7 @@ fn global(call: &mut HostCall<'_>, name: &str) -> Result<Value, Error> {
     call.table_get(helper(call, 5)?, key)
 }
 fn field(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
-    sprites::field(call, actor, name)
+    sprites::field_named(call, actor, name)
 }
 fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, Error> {
     if value == Value::Nil {

@@ -67,7 +67,7 @@ pub(super) fn initialize(call: &mut HostCall<'_>, actor: TableId) -> Result<(), 
     set(call, actor, "__songlua_aft_capture_name", name)
 }
 
-fn flag(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<bool, Error> {
+fn flag(call: &mut HostCall<'_>, actor: TableId, key: &'static str) -> Result<bool, Error> {
     Ok(!matches!(
         field(call, actor, key)?,
         Value::Nil | Value::Boolean(false)

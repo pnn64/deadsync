@@ -113,7 +113,7 @@ fn combo(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, E
     call.with_roots(&[Value::Table(fonts)], |call| {
         let sl = field(call, globals, "SL")?;
         call.with_roots(&[sl], |call| {
-            let player = field(call, table(call, sl)?, &format!("P{}", index + 1))?;
+            let player = sprites::field_named(call, table(call, sl)?, &format!("P{}", index + 1))?;
             call.with_roots(&[player], |call| {
                 let mods = field(call, table(call, player)?, "ActiveModifiers")?;
                 call.with_roots(&[mods], |call| {

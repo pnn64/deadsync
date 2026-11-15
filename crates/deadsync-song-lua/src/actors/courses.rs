@@ -293,7 +293,7 @@ pub(super) fn publish_raw_flag(
 fn boolean(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<bool, Error> {
     // Lua's bool conversion uses truthiness; nil is the optional default.
     Ok(!matches!(
-        field(call, actor, key)?,
+        sprites::field_named(call, actor, key)?,
         Value::Nil | Value::Boolean(false)
     ))
 }
@@ -301,7 +301,7 @@ fn put(call: &mut HostCall<'_>, actor: TableId, key: &str, value: Value) -> Resu
     set(call, actor, &format!("__songlua_scroller_{key}"), value)
 }
 fn float(call: &mut HostCall<'_>, actor: TableId, key: &str, default: f32) -> Result<f32, Error> {
-    let value = field(call, actor, &format!("__songlua_scroller_{key}"))?;
+    let value = sprites::field_named(call, actor, &format!("__songlua_scroller_{key}"))?;
     if value == Value::Nil {
         Ok(default)
     } else {
@@ -353,7 +353,8 @@ fn position(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             )?;
         } else {
             for (key, axis) in [("item_height", "Y"), ("item_width", "X")] {
-                let value = field(call, actor, &format!("__songlua_scroller_{key}"))?;
+                let value =
+                    sprites::field_named(call, actor, &format!("__songlua_scroller_{key}"))?;
                 if value != Value::Nil {
                     let offset = 0.0_f32 * sprites::number(call, value)? as f32;
                     set(call, display, axis, Value::Number(offset as f64))?;
@@ -373,7 +374,7 @@ fn call_method(
     call.with_roots(
         &[Value::Table(object), extra.unwrap_or(Value::Nil)],
         |call| {
-            let method = field(call, object, name)?;
+            let method = sprites::field_named(call, object, name)?;
             let Some(method) = function(call, method)? else {
                 return Ok(Value::Nil);
             };

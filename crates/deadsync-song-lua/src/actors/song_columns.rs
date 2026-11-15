@@ -75,7 +75,7 @@ pub(super) fn numeric(call: &mut HostCall<'_>, value: Value, mode: Numeric) -> R
     };
     Ok(value)
 }
-fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
+fn field(call: &mut HostCall<'_>, actor: TableId, key: &'static str) -> Result<Value, Error> {
     sprites::field(call, actor, key)
 }
 pub(super) fn text(call: &mut HostCall<'_>, value: Value, optional: bool) -> Result<String, Error> {
@@ -142,7 +142,7 @@ fn spline_size(call: &mut HostCall<'_>, spline: TableId) -> Result<usize, Error>
 fn uniform(
     call: &mut HostCall<'_>,
     column: TableId,
-    key: &str,
+    key: &'static str,
     component: usize,
     baseline: f32,
 ) -> Result<Option<f32>, Error> {
