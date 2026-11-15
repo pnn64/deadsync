@@ -99,6 +99,7 @@ pub(crate) mod chronological;
 mod wrappers;
 use deadlib_lua::{Error, ErrorKind, HostCall, Root, TableId, Value, Vm, compile_named};
 use lifecycle::{Lifecycle, TweenStep};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, Mutex},
@@ -316,8 +317,8 @@ struct Store {
     next: u64,
     actors: registry::Registry<Actor>,
     actor_order: Vec<TableId>,
-    scenes: HashMap<u64, Scene>,
-    retired_scenes: HashMap<u64, TableId>,
+    scenes: FxHashMap<u64, Scene>,
+    retired_scenes: FxHashMap<u64, TableId>,
     retired_subscriptions: HashSet<TableId>,
     collected_scenes: retirement::Collected,
     constructor_scenes: HashSet<u64>,
@@ -349,10 +350,10 @@ struct Store {
     framebuffer_output: Option<FrameTexture>,
     draw_capture: Option<crate::draw_commands::Capture>,
     multitap_plan: Option<Arc<song_multitap::Plan>>,
-    update_plans: HashMap<TableId, Arc<lifecycle::Plan>>,
+    update_plans: FxHashMap<TableId, Arc<lifecycle::Plan>>,
     scalar_methods: scalar_methods::Methods,
     #[cfg(feature = "test-support")]
-    message_ranks: HashMap<TableId, usize>,
+    message_ranks: FxHashMap<TableId, usize>,
     #[cfg(feature = "test-support")]
     message_paths: HashMap<String, usize>,
     #[cfg(feature = "test-support")]

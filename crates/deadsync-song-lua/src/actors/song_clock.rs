@@ -33,11 +33,11 @@ pub(super) struct State {
     actor_frames: Option<Vec<[f32; 2]>>,
     pub frame: usize,
     epoch: usize,
-    native: HashSet<TableId>,
-    clocks: HashMap<TableId, Queue>,
-    timing: HashMap<TableId, (f32, f32)>,
-    recurring_frames: HashMap<TableId, usize>,
-    pub orders: Arc<HashMap<TableId, usize>>,
+    native: FxHashSet<TableId>,
+    clocks: FxHashMap<TableId, Queue>,
+    timing: FxHashMap<TableId, (f32, f32)>,
+    recurring_frames: FxHashMap<TableId, usize>,
+    pub orders: Arc<FxHashMap<TableId, usize>>,
     pub phase: Option<Phase>,
     pub dispatch: Option<Dispatch>,
 }
@@ -49,7 +49,7 @@ impl State {
     pub fn new(
         frames: &[(f64, f64)],
         actor_frames: Option<&[[f32; 2]]>,
-        native: HashSet<TableId>,
+        native: FxHashSet<TableId>,
     ) -> Self {
         let mut seconds = 0.;
         Self {
@@ -64,9 +64,9 @@ impl State {
             frame: 0,
             epoch: 0,
             native,
-            clocks: HashMap::new(),
-            timing: HashMap::new(),
-            recurring_frames: HashMap::new(),
+            clocks: FxHashMap::default(),
+            timing: FxHashMap::default(),
+            recurring_frames: FxHashMap::default(),
             orders: Arc::default(),
             phase: None,
             dispatch: None,

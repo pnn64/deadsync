@@ -643,7 +643,7 @@ pub(super) struct FrameNode {
 pub(super) struct Plan {
     roots: TableId,
     node: FrameNode,
-    orders: Arc<HashMap<TableId, usize>>,
+    orders: Arc<FxHashMap<TableId, usize>>,
 }
 pub(super) fn invalidate_plans(call: &mut HostCall<'_>) -> Result<(), Error> {
     let plans = std::mem::take(&mut call.store().update_plans);
@@ -759,7 +759,11 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
     result
 }
 
-fn assign_orders(node: &mut FrameNode, counter: &mut usize, orders: &mut HashMap<TableId, usize>) {
+fn assign_orders(
+    node: &mut FrameNode,
+    counter: &mut usize,
+    orders: &mut FxHashMap<TableId, usize>,
+) {
     for wrapper in &mut node.wrappers {
         assign_orders(wrapper, counter, orders);
     }
@@ -941,7 +945,7 @@ pub(super) fn retained_plan(call: &mut HostCall<'_>, actor: TableId) -> Result<A
         let roots = call.try_new_table()?;
         let plan = call.with_roots(&[Value::Table(roots)], |call| {
             let mut node = plan(call, actor, roots, true)?;
-            let mut orders = HashMap::new();
+            let mut orders = FxHashMap::default();
             assign_orders(&mut node, &mut 0, &mut orders);
             let registry = table(call, call.captures()[0])?;
             call.raw_table_set(registry, Value::Table(roots), Value::Boolean(true))?;

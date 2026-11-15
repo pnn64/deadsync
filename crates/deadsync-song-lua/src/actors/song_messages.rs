@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct Capture {
     // Identities are owned by this song session's scene, never by this map.
-    pub(super) indices: HashMap<TableId, usize>,
+    pub(super) indices: FxHashMap<TableId, usize>,
     pub(super) immediate: song_immediate::Capture,
     writes: BTreeMap<String, Vec<SongLuaStatefulMessageWrite>>,
     #[cfg(feature = "test-support")]

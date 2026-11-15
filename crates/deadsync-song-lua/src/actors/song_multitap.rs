@@ -21,7 +21,7 @@ enum DeltaSource {
 pub(super) struct Plan {
     pub(super) roots: TableId,
     jobs: Vec<Job>,
-    orders: Arc<HashMap<TableId, usize>>,
+    orders: Arc<FxHashMap<TableId, usize>>,
     counter: usize,
     slots: Vec<(usize, Option<usize>)>,
     actor_count: usize,
@@ -595,7 +595,7 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
         let mut plan = Plan {
             roots,
             jobs: Vec::new(),
-            orders: Arc::new(HashMap::new()),
+            orders: Arc::new(FxHashMap::default()),
             counter: 0,
             slots: Vec::new(),
             actor_count: 0,
