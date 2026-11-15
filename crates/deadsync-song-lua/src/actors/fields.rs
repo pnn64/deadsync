@@ -274,6 +274,8 @@ pub(super) struct Reader {
     // `None` for a table that is not an owned actor.
     known: Option<Known>,
     version: u32,
+    // The fields known not to be in the table at `version`.
+    absent: [u64; WORDS],
 }
 impl Reader {
     pub(super) fn new(call: &mut HostCall<'_>, table: TableId) -> Result<Self, Error> {
@@ -286,6 +288,7 @@ impl Reader {
             table,
             known,
             version: 0,
+            absent: [0; WORDS],
         };
         reader.refresh(call)?;
         Ok(reader)
@@ -295,12 +298,30 @@ impl Reader {
         if self.known.is_some() {
             self.version = call.raw_fields_version(self.table)?;
         }
+        self.note_absent();
         Ok(())
     }
-    /// A field already read at the version is answered inline; any other is
-    /// read from the table.
+    fn note_absent(&mut self) {
+        self.absent = match &self.known {
+            Some(known) if known.table == Some(self.table) && known.version == self.version => {
+                std::array::from_fn(|word| known.read[word] & !known.present[word])
+            }
+            _ => [0; WORDS],
+        };
+    }
+    /// A field known to be absent is answered inline; any other is answered
+    /// from what is known or read from the table.
     #[inline(always)]
     pub(super) fn get(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
+        let (word, bit) = field.bit();
+        if self.absent[word] & bit != 0 {
+            check(call, self.table, field, Value::Nil)?;
+            return Ok(Value::Nil);
+        }
+        self.lookup(call, field)
+    }
+    #[inline(never)]
+    fn lookup(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
         if let Some(known) = &self.known
             && known.table == Some(self.table)
             && known.version == self.version
@@ -309,16 +330,13 @@ impl Reader {
             check(call, self.table, field, value)?;
             return Ok(value);
         }
-        self.read(call, field)
-    }
-    #[inline(never)]
-    fn read(&mut self, call: &mut HostCall<'_>, field: Field) -> Result<Value, Error> {
         let value = call.raw_table_get_static(self.table, field.name().as_bytes())?;
         if let Some(known) = &mut self.known {
             // The read ran no Lua, so the version still describes the table.
             self.version = call.raw_fields_version(self.table)?;
             known.at(self.table, self.version).record(field, value);
         }
+        self.note_absent();
         Ok(value)
     }
     /// Give the actor back what it knows. Without this the actor merely
