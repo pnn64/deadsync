@@ -5416,7 +5416,14 @@ return Def.ActorFrame{
         .map(|event| (event.beat, event.message.as_str()))
         .collect::<Vec<_>>();
     let first_beat = crate::song_beat_at_elapsed_seconds(1.0 / 60.0, &context);
-    assert_eq!(events, [(first_beat, "Startup"), (first_beat, "Ready")]);
+    assert_eq!(
+        events,
+        [
+            (0., "Immediate"),
+            (first_beat, "Startup"),
+            (first_beat, "Ready")
+        ]
+    );
     let quad = compiled
         .overlays
         .iter()
@@ -7330,8 +7337,14 @@ return Def.ActorFrame{
     let mut context = SongLuaCompileContext::new(&song_dir, "Save Your Tears Compat");
     context.song_steps = test_song_steps();
     let compiled = test_compile_song_lua(&entry, &context).unwrap();
-    assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "6:NoHideLights, 1x, Overhead");
+    assert_eq!(
+        compiled
+            .messages
+            .iter()
+            .map(|m| m.message.as_str())
+            .collect::<Vec<_>>(),
+        ["CurrentStepsP1Changed", "6:NoHideLights, 1x, Overhead"],
+    );
 }
 
 #[test]
@@ -7914,8 +7927,14 @@ return Def.ActorFrame{
     context.players[1].difficulty = SongLuaDifficulty::Hard;
     let compiled = test_compile_song_lua(&entry, &context).unwrap();
 
-    assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "Challenge:Easy:120:180:Hard");
+    assert_eq!(
+        compiled
+            .messages
+            .iter()
+            .map(|m| m.message.as_str())
+            .collect::<Vec<_>>(),
+        ["CurrentStepsP1Changed", "Challenge:Easy:120:180:Hard"],
+    );
 }
 
 #[test]
@@ -8092,8 +8111,14 @@ return Def.ActorFrame{
         &SongLuaCompileContext::new(&song_dir, "Screen Transition"),
     )
     .unwrap();
-    assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "ok");
+    assert_eq!(
+        compiled
+            .messages
+            .iter()
+            .map(|m| m.message.as_str())
+            .collect::<Vec<_>>(),
+        ["SystemMessage", "ok"],
+    );
 }
 
 #[test]
@@ -11894,6 +11919,45 @@ return Def.ActorFrame{
 }
 
 #[test]
+fn screen_child_iteration_matches_native_simply_love() {
+    let song_dir = test_dir("native-screen-child-order");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame{OnCommand=function(self)
+    local names = {}
+    local children = SCREENMAN:GetTopScreen():GetChildren()
+    assert(#children[""] == 5)
+    for name in pairs(children) do
+        if name ~= "" then names[#names + 1] = name end
+    end
+    mod_actions = {{1, table.concat(names, ","), true}}
+end}
+"#,
+    )
+    .unwrap();
+    // Captured using RunCommandsOnChildren and pairs(GetChildren()) in the
+    // pinned native engine, with Simply Love and one / two enabled players.
+    for (two_players, expected) in [
+        (
+            false,
+            "SongOptions,Cancel,SongForeground,OniGameOverP1,ScoreP1,LyricDisplay,ActiveAttackListP2,PlayerP1,Debug,LifeP1,Out,In,ActiveAttackListP1,Underlay,StepsDisplayP1,Overlay,Header,Footer,StepsDescriptionP1,PlayerOptionsP1,SongBackground",
+        ),
+        (
+            true,
+            "Cancel,SongForeground,OniGameOverP1,ScoreP1,Out,In,LifeP2,Debug,ScoreP2,Overlay,ActiveAttackListP2,PlayerOptionsP1,LyricDisplay,PlayerP1,PlayerOptionsP2,LifeP1,ActiveAttackListP1,SongOptions,StepsDescriptionP2,Underlay,StepsDisplayP1,SongBackground,Header,Footer,StepsDescriptionP1,PlayerP2,OniGameOverP2,StepsDisplayP2",
+        ),
+    ] {
+        let mut context = SongLuaCompileContext::new(&song_dir, "Native Screen Child Order");
+        context.players[1].enabled = two_players;
+        let compiled = test_compile_song_lua(&entry, &context).unwrap();
+        assert_eq!(compiled.messages.len(), 1);
+        assert_eq!(compiled.messages[0].message, expected);
+    }
+}
+
+#[test]
 fn compile_song_lua_matches_native_child_tables() {
     let song_dir = test_dir("native-child-table");
     let entry = song_dir.join("default.lua");
@@ -12209,6 +12273,41 @@ return Def.ActorFrame {{
             ]
         );
     }
+}
+
+#[test]
+fn custom_draws_keep_initial_mutations_without_submitting_the_child() {
+    let song_dir = test_dir("draw-initial-mutations");
+    let entry = song_dir.join("default.lua");
+    fs::write(
+        &entry,
+        r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        local quad = self:GetChild('Quad')
+        self:SetDrawFunction(function()
+            quad:xy(427,240):zoomto(854,480):diffuse(0,0,0,1)
+            if GAMESTATE:GetSongBeat() >= 1 then quad:Draw() end
+        end)
+    end,
+    Def.Quad {Name='Quad'},
+}
+"#,
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(&song_dir, "Draw Initial");
+    context.song_display_bpms = [60., 60.];
+    context.music_length_seconds = 2.;
+    let compiled = test_compile_song_lua(&entry, &context).unwrap();
+    let quad = compiled
+        .overlays
+        .iter()
+        .find(|a| a.name.as_deref() == Some("Quad"))
+        .unwrap();
+    assert_eq!([quad.initial_state.x, quad.initial_state.y], [427., 240.]);
+    assert_eq!(quad.initial_state.diffuse, [0., 0., 0., 1.]);
+    assert!(compiled.draw_frames[0].ops.is_empty());
+    assert!(!compiled.draw_frames[60].ops.is_empty());
 }
 
 #[test]
@@ -19247,8 +19346,16 @@ fn song_steps_match_native() {
     context.player_step_indices = [Some(0); LUA_PLAYERS];
     let compiled = test_compile_song_lua(&entry, &context).expect("native event-mode branch");
     assert_eq!(
-        compiled.messages[0].message,
-        "Difficulty_Easy:Difficulty_Edit"
+        compiled
+            .messages
+            .iter()
+            .map(|m| m.message.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "CurrentStepsP1Changed",
+            "CurrentStepsP2Changed",
+            "Difficulty_Easy:Difficulty_Edit"
+        ],
     );
     #[cfg(feature = "test-support")]
     assert_eq!(

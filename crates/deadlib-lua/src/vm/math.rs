@@ -98,7 +98,7 @@ impl Vm {
         .enumerate()
         {
             let key = self.try_intern(name)?;
-            self.tables[slot_index(table.0)].set(key, Value::Native(MATH_FIRST + i as u64))?;
+            self.raw_set(table, key, Value::Native(MATH_FIRST + i as u64))?;
         }
         for (name, value) in [
             (b"mod".as_slice(), Value::Native(45)),
@@ -106,7 +106,7 @@ impl Vm {
             (b"huge", Value::Number(f64::INFINITY)),
         ] {
             let key = self.try_intern(name)?;
-            self.tables[slot_index(table.0)].set(key, value)?;
+            self.raw_set(table, key, value)?;
         }
         self.set_global(b"math", Value::Table(table))?;
         Ok(())

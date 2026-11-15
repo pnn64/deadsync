@@ -238,7 +238,7 @@ pub(super) fn lower(data: &ProgramData, p: &Prototype) -> Result<Lowered, Error>
             }
             Op::NewTable => {
                 out.reg(a)?;
-                out.abc(10, a, 0, 0)?;
+                out.abc(10, a, i.b, i.c)?;
             }
             Op::GetTable
             | Op::SetTable

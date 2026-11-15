@@ -1,5 +1,6 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
+mod native51;
 pub(crate) mod sort;
 use crate::memory::{Buffer, Memory};
 use crate::{
@@ -9,6 +10,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Clone, Copy, Debug)]
 enum Key {
+    Vacant,
     Boolean(bool),
     Number(u64),
     String(StringId),
@@ -23,6 +25,7 @@ enum Key {
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
         match (*self, *other) {
+            (Self::Vacant, Self::Vacant) => true,
             (Self::Boolean(a), Self::Boolean(b)) => a == b,
             (Self::Number(a), Self::Number(b)) => a == b || (a << 1 == 0 && b << 1 == 0),
             (Self::String(a), Self::String(b)) => a == b,
@@ -58,6 +61,7 @@ impl Key {
     }
     fn value(self) -> Value {
         match self {
+            Self::Vacant => Value::Nil,
             Self::Boolean(v) => Value::Boolean(v),
             Self::Number(v) => Value::Number(f64::from_bits(v)),
             Self::String(v) => Value::String(v),
@@ -72,6 +76,7 @@ impl Key {
     }
     fn identity(self) -> (u64, u64) {
         match self {
+            Self::Vacant => (0, 0),
             Self::Boolean(v) => (u64::from(v), 1),
             Self::Number(v) => (if v << 1 == 0 { 0 } else { v }, 2),
             Self::String(v) => (v.0, 3),
@@ -111,10 +116,13 @@ fn array_index(value: Value) -> Option<usize> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 struct Entry {
     key: Key,
     value: Value,
+    // Lua 5.1 collision chains are separate from the identity lookup index.
+    native_hash: u32,
+    next: u32,
 }
 
 // A slot word holds a one-based entry index. While the slot array is small
@@ -133,6 +141,8 @@ pub(crate) struct Table {
     array: Buffer<Value>,
     entries: Buffer<Entry>,
     slots: Buffer<u32>,
+    native51: bool,
+    last_free: usize,
     // Two one-based hash entry indices, packed into one atomic word. Always
     // compare keys before reuse: mutations can move or remove entries.
     next_hash_hint: AtomicU64,
@@ -160,6 +170,8 @@ impl Table {
             array: Buffer::new_in(memory.clone()),
             entries: Buffer::new_in(memory.clone()),
             slots: Buffer::new_in(memory),
+            native51: false,
+            last_free: 0,
             next_hash_hint: AtomicU64::new(0),
             metatable: 0,
             host_state: 0,
@@ -500,7 +512,18 @@ impl Table {
         );
     }
     pub fn set(&mut self, key: Value, value: Value) -> Result<(), Error> {
+        self.set_hashed(key, value, None)
+    }
+    pub(crate) fn set_hashed(
+        &mut self,
+        key: Value,
+        value: Value,
+        string_hash: Option<u32>,
+    ) -> Result<(), Error> {
         let k = Self::checked_key(key)?;
+        if self.native51 {
+            return self.native_set(k, value, string_hash);
+        }
         if let Some(i) = array_index(key) {
             if i < self.array.len() {
                 self.array[i] = value;
@@ -580,7 +603,12 @@ impl Table {
             vacant.expect("nonempty table has a vacant hash slot")
         };
         self.slots[slot] = index | Self::slot_tag(self.slots.len(), k.hash()).0;
-        self.entries.push(Entry { key: k, value });
+        self.entries.push(Entry {
+            key: k,
+            value,
+            native_hash: 0,
+            next: 0,
+        });
         self.touch_fields();
         if matches!(k, Key::String(_)) {
             self.remember_hash_entry(index);
@@ -595,6 +623,9 @@ impl Table {
         let first = self.array.len();
         if end <= first {
             return Ok(());
+        }
+        if self.native51 {
+            return self.native_resize(end, self.entries.len());
         }
         // SETLIST includes nil fields in its array extent. Reserve before
         // changing traversal positions or moving any existing hash values.
@@ -625,6 +656,29 @@ impl Table {
                 }
             }
             return lo;
+        }
+        if self.native51 && !self.entries.is_empty() {
+            // luaH_getn searches past the array part when its last slot is live.
+            let mut upper = hi + 1;
+            while self.get(Value::Number(upper as f64)) != Value::Nil {
+                hi = upper;
+                if upper > i32::MAX as usize / 2 {
+                    let mut index = 1;
+                    while self.get(Value::Number(index as f64)) != Value::Nil {
+                        index += 1;
+                    }
+                    return index - 1;
+                }
+                upper *= 2;
+            }
+            while upper - hi > 1 {
+                let middle = (hi + upper) / 2;
+                if self.get(Value::Number(middle as f64)) == Value::Nil {
+                    upper = middle;
+                } else {
+                    hi = middle;
+                }
+            }
         }
         hi
     }

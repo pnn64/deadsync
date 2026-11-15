@@ -72,7 +72,7 @@ impl Vm {
         .enumerate()
         {
             let name = self.try_intern(name)?;
-            self.tables[slot_index(table.0)].set(name, Value::Native(TAB_FIRST + i as u64))?;
+            self.raw_set(table, name, Value::Native(TAB_FIRST + i as u64))?;
         }
         self.set_global(b"table", Value::Table(table))?;
         Ok(())

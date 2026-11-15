@@ -530,7 +530,12 @@ impl Prototype {
                         return Err(fail(pc, "invalid initial nil marker"));
                     }
                 }
-                Op::NewTable => reg(u32::from(i.a))?,
+                Op::NewTable => {
+                    reg(u32::from(i.a))?;
+                    if i.b > 511 || i.c > 511 {
+                        return Err(fail(pc, "invalid table size hint"));
+                    }
+                }
                 Op::SetList => {
                     reg(u32::from(i.a))?;
                     if i.b != OPEN_ARGS {

@@ -311,6 +311,8 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         let order = match name.as_str() {
             "SongBackground" => -200,
             "Underlay" => -100,
+            // Simply Love's Graphics/_footer.lua sets this before hibernation.
+            "Footer" => 90,
             "Overlay" => 100,
             "SongForeground" => 101,
             "Debug" => 199,

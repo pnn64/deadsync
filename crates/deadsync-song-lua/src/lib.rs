@@ -278,7 +278,7 @@ impl SongRuntime {
     ) -> Result<Self, Error> {
         #[cfg(feature = "test-support")]
         let observations = observations::Observations::default();
-        let mut vm = Vm::new();
+        let mut vm = Vm::try_new_with_lua51_table_order()?;
         #[cfg(feature = "test-support")]
         if context.initial_lua_gc_stopped {
             vm.with_native_stack(|stack| stack.gc(deadlib_lua::GcOperation::Stop).map(|_| ()))?;

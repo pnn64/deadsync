@@ -506,6 +506,7 @@ const _: () = assert!(std::mem::size_of::<Frame>() == 72);
 /// with [`Self::pin`] when the host needs them across executions or collections.
 #[derive(Debug)]
 pub struct Vm {
+    lua51_table_order: bool,
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
@@ -604,6 +605,25 @@ impl Vm {
         Ok(vm)
     }
 
+    /// Open a state whose table traversal follows Lua 5.1's node placement.
+    ///
+    /// Useful for existing scripts that build ordered side effects with `pairs`.
+    /// String/number/boolean keys follow the reference hash and resize rules;
+    /// object-key ordering uses VM identities instead of native pointer addresses.
+    /// Ordinary states retain the compact insertion-ordered representation.
+    pub fn try_new_with_lua51_table_order() -> Result<Self, Error> {
+        let mut vm = Self::try_new_bare()?;
+        vm.lua51_table_order = true;
+        for id in [vm.globals, vm.registry] {
+            vm.tables[slot_index(id.0)] =
+                Table::with_native51_capacity(0, 0, vm.tables.memory().clone())?;
+        }
+        vm.initializing = true;
+        vm.open_libraries().map_err(Error::without_vm_values)?;
+        vm.initializing = false;
+        Ok(vm)
+    }
+
     /// Create a state without standard libraries, returning allocation errors.
     ///
     /// # Errors
@@ -624,6 +644,7 @@ impl Vm {
         builtin_envs.try_reserve_exact(CONT_RAW as usize)?;
         builtin_envs.resize(CONT_RAW as usize, None);
         let mut vm = Self {
+            lua51_table_order: false,
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
@@ -769,7 +790,7 @@ impl Vm {
             (debug::CONSOLE, b"debug"),
         ] {
             let key = self.try_intern(name)?;
-            self.tables[slot_index(debug.0)].set(key, Value::Native(id))?;
+            self.raw_set(debug, key, Value::Native(id))?;
         }
         self.set_global(b"debug", Value::Table(debug))?;
         self.set_global(b"_G", Value::Table(globals))?;
@@ -1111,9 +1132,19 @@ impl Vm {
         }
         Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
         self.reserve_gc_table_write(id, key, value)?;
+        let string_hash = if self.lua51_table_order {
+            match key {
+                Value::String(id) => Some(Table::native_string_hash(
+                    &self.strings.bytes[slot_index(id.0)],
+                )),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        let result = table.set(key, value);
+        let result = table.set_hashed(key, value, string_hash);
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
@@ -1191,15 +1222,18 @@ impl Vm {
         self.try_table_with_capacity(0, 0)
     }
     fn try_table_with_capacity(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
-        let table = Table::with_capacity_in(array, records, self.tables.memory().clone()).map_err(
-            |error| {
-                if error.kind() == ErrorKind::Memory {
-                    self.memory_failure()
-                } else {
-                    error
-                }
-            },
-        )?;
+        let create = if self.lua51_table_order {
+            Table::with_native51_capacity
+        } else {
+            Table::with_capacity_in
+        };
+        let table = create(array, records, self.tables.memory().clone()).map_err(|error| {
+            if error.kind() == ErrorKind::Memory {
+                self.memory_failure()
+            } else {
+                error
+            }
+        })?;
         self.reserve_gc_new_value()?;
         let bytes = table.heap_bytes();
         let id = TableId(
@@ -2001,7 +2035,21 @@ impl Vm {
                         }
                     }
                     Op::NewTable => {
-                        let id = self.try_new_table()?;
+                        let id = if self.lua51_table_order {
+                            let size = |hint: u32| -> Result<usize, Error> {
+                                if hint < 8 {
+                                    return Ok(hint as usize);
+                                }
+                                1usize
+                                    .checked_shl((hint >> 3) - 1)
+                                    .and_then(|scale| scale.checked_mul((hint & 7) as usize + 8))
+                                    .filter(|&size| size <= 1 << 26)
+                                    .ok_or_else(|| Error::runtime_static("table overflow"))
+                            };
+                            self.try_table_with_capacity(size(u32::from(i.b))?, size(i.c)?)?
+                        } else {
+                            self.try_new_table()?
+                        };
                         self.registers[a] = Value::Table(id);
                         self.maybe_gc()?;
                     }
