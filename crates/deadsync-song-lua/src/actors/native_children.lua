@@ -1,6 +1,6 @@
 -- Named native children are separate from the authored array. Preserve aliases,
 -- duplicate groups and their creation order when exporting a lookup snapshot.
-local type, next, rawget, rawset = type, next, rawget, rawset
+local type, next, rawget, rawset, tonumber = type, next, rawget, rawset, tonumber
 local getmetatable, setmetatable, error = getmetatable, setmetatable, error
 return function(group, getname)
     local function istable(t)
@@ -27,7 +27,23 @@ return function(group, getname)
         for i=1,#t do if rawget(t,i)==value then return end end
         rawset(t,#t+1,value)
     end
-    local function named(actor)
+    -- Internal lifecycle snapshots read instance state and authored callbacks.
+    -- Exported GetChild/GetChildren groups keep their native class-method lookup.
+    local function host_group(actors)
+        return setmetatable(actors, {__songlua_child_group=true, __index=function(t, key)
+            if tonumber(key) then return rawget(t, key) end
+            local actor = rawget(t, #t)
+            if not actor then return nil end
+            local member = actor[key]
+            if type(member)~='function' then return member end
+            return function(self, ...)
+                local last=self[#self]
+                return last[key](last, ...)
+            end
+        end})
+    end
+    local function named(actor, host)
+        local make_group=host and host_group or group
         local result={}
         local source
         if not rawget(actor,'__songlua_owned_child_lookup') then source=registry(actor) end
@@ -39,7 +55,7 @@ return function(group, getname)
                 while rawget(value,i)~=nil do
                     push_once(values,istable(rawget(value,i)));i=i+1
                 end
-                value=#values==1 and values[1] or group(values)
+                value=#values==1 and values[1] or make_group(values)
             end
             rawset(result,key,value)
         end
@@ -61,7 +77,7 @@ return function(group, getname)
                 local old=rawget(result,name)
                 if type(old)=='table' and isgroup(old) then push_once(old,child)
                 elseif type(old)=='table' then
-                    if old~=child then rawset(result,name,group({old,child})) end
+                    if old~=child then rawset(result,name,make_group({old,child})) end
                 else rawset(result,name,child) end
             end
         end

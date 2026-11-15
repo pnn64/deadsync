@@ -71,6 +71,21 @@ pub(super) fn named_child(
     call.with_roots(&[children], |call| get(call, table(call, children)?, name))
 }
 
+/// A host-owned lookup snapshot whose duplicate groups retain instance fields.
+/// Public lookups continue to use `named_child` and `named_children`.
+pub(super) fn host_child(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    name: &[u8],
+) -> Result<Value, Error> {
+    if let Some(child) = find_named(call, actor, name)? {
+        return Ok(child);
+    }
+    let function = helper_function(call, b"native_named_children")?;
+    let children = call.call(function, &[Value::Table(actor), Value::Boolean(true)])?[0];
+    call.with_roots(&[children], |call| get(call, table(call, children)?, name))
+}
+
 // Whether the helper's `isgroup` holds for a table, or `None` when a
 // `__metatable` field or a metatable of the metatable takes part in its answer.
 fn is_group(call: &mut HostCall<'_>, value: TableId) -> Result<Option<bool>, Error> {

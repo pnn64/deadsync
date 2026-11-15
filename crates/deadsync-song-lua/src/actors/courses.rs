@@ -327,7 +327,7 @@ fn function(call: &HostCall<'_>, value: Value) -> Result<Option<Value>, Error> {
     }
 }
 fn display(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let value = native_children::named_child(call, actor, b"Display")?;
+    let value = native_children::host_child(call, actor, b"Display")?;
     if value == Value::Nil {
         Ok(None)
     } else {

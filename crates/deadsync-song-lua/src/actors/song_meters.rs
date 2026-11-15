@@ -92,7 +92,7 @@ pub(super) fn stream(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<T
     {
         return Ok(None);
     }
-    let stream = native_children::named_child(call, actor, b"Stream")?;
+    let stream = native_children::host_child(call, actor, b"Stream")?;
     if stream == Value::Nil {
         return Ok(None);
     }
