@@ -183,7 +183,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
             if let Value::Table(root) = value {
                 call.store().startup_queues = Some(Vec::new());
                 let globals = table(call, helper(call, 5)?)?;
-                let key = call.try_intern(b"__songlua_top_screen")?;
+                let key = call.intern_static(b"__songlua_top_screen")?;
                 call.raw_table_set(globals, key, Value::Nil)?;
                 let result = end_children(call, root);
                 call.store().startup_queues = None;

@@ -283,7 +283,7 @@ fn player(
     Ok(None)
 }
 fn speed_fields(call: &mut HostCall<'_>, owner: TableId) -> Result<[[f32; 2]; 4], Error> {
-    let key = call.try_intern(b"__songlua_player_option_speeds")?;
+    let key = call.intern_static(b"__songlua_player_option_speeds")?;
     let speeds = call.raw_table_get(owner, key)?;
     let speeds = if speeds == Value::Nil {
         let speeds = call.try_new_table()?;

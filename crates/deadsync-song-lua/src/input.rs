@@ -15,7 +15,7 @@ impl Input {
         let Value::Table(owner) = vm.rooted(self.root).ok()? else {
             return None;
         };
-        let key = vm.try_intern(b"functions").ok()?;
+        let key = vm.intern_static(b"functions").ok()?;
         if !matches!(vm.raw_table_get(owner, key).ok()?, Value::Table(_)) {
             return None;
         }
@@ -176,7 +176,7 @@ fn function(call: &HostCall<'_>, value: Value) -> Result<Value, Error> {
     }
 }
 fn map(call: &mut HostCall<'_>, owner: Value) -> Result<TableId, Error> {
-    let key = call.try_intern(b"functions")?;
+    let key = call.intern_static(b"functions")?;
     let value = call.raw_table_get(table(call, owner)?, key)?;
     table(call, value)
 }

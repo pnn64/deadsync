@@ -94,7 +94,7 @@ pub(crate) fn context(
     catalog: TableId,
     context: &crate::SongLuaCompileContext,
 ) -> Result<crate::SongLuaCompileContext, Error> {
-    let key = vm.try_intern(b"scene_selection")?;
+    let key = vm.intern_static(b"scene_selection")?;
     let read = vm.raw_table_get(catalog, key)?;
     let values = vm.call(read, &[])?.to_vec();
     let mut selected = context.clone();
@@ -133,7 +133,7 @@ pub(crate) fn initialize(
     catalog: TableId,
     context: &crate::SongLuaCompileContext,
 ) -> Result<(), Error> {
-    let key = vm.try_intern(b"initialize_gameplay_selection")?;
+    let key = vm.intern_static(b"initialize_gameplay_selection")?;
     let seed = vm.raw_table_get(catalog, key)?;
     let enabled = context
         .players

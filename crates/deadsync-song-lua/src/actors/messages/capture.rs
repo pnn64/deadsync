@@ -342,7 +342,7 @@ impl Actors {
                         Failure::Changed => format!("{label}.{name} changes cross-actor targets or effects between runs"),
                     };
                     let helpers = table(call, call.captures()[1])?;
-                    let key = call.try_intern(b"deferred_message_actors")?;
+                    let key = call.intern_static(b"deferred_message_actors")?;
                     let roots = match call.raw_table_get(helpers, key)? {
                         Value::Nil => {
                             let roots = call.try_new_table()?;
@@ -410,7 +410,7 @@ impl Actors {
     #[cfg(feature = "test-support")]
     pub(crate) fn clear_deferred_message_states(&self, vm: &mut Vm) -> Result<(), Error> {
         vm.store().deferred_messages.clear();
-        let key = vm.try_intern(b"deferred_message_actors")?;
+        let key = vm.intern_static(b"deferred_message_actors")?;
         vm.raw_table_set(self.helpers, key, Value::Nil)
     }
 }

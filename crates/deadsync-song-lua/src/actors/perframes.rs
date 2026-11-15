@@ -152,13 +152,13 @@ impl Access {
     }
 }
 pub(super) fn is_player(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
-    let key = call.try_intern(b"__songlua_player_index")?;
+    let key = call.intern_static(b"__songlua_player_index")?;
     let value = call.raw_table_get(actor, key)?;
     if value == Value::Nil {
         return Ok(false);
     }
     song_columns::numeric(call, value, song_columns::Numeric::Integer)?;
-    let key = call.try_intern(b"__songlua_player_child_name")?;
+    let key = call.intern_static(b"__songlua_player_child_name")?;
     let value = call.raw_table_get(actor, key)?;
     Ok(initial_state::value_text(call, value)?.is_none())
 }

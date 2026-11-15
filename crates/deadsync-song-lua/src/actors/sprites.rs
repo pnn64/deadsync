@@ -154,7 +154,7 @@ fn put_vector(
     call.with_roots(&[value], |call| set(call, actor, key, value))
 }
 pub(super) fn default_texture(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
-    let key = call.try_intern(b"__songlua_default_texture")?;
+    let key = call.intern_static(b"__songlua_default_texture")?;
     Ok(!matches!(
         call.raw_table_get(actor, key)?,
         Value::Nil | Value::Boolean(false)
@@ -309,7 +309,7 @@ pub(super) fn initialize(
     actor: TableId,
     template: bool,
 ) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_theme_path_actor")?;
+    let key = call.intern_static(b"__songlua_theme_path_actor")?;
     let theme_actor = call.raw_table_get(actor, key)? == Value::Boolean(true);
     // create_theme_path_actor fills Texture after constructing the empty
     // Sprite. It leaves the decoder field and movie metadata unset; its getter
@@ -340,7 +340,7 @@ pub(super) fn set_texture(
     {
         let retained = match value {
             Value::Table(texture) => {
-                let key = call.try_intern(b"__songlua_native_type")?;
+                let key = call.intern_static(b"__songlua_native_type")?;
                 let kind = call.raw_table_get(texture, key)?;
                 if kind == Value::Nil {
                     None
@@ -552,14 +552,14 @@ pub(super) fn visit_states(
     actor: TableId,
     mut visit: impl FnMut(crate::SongLuaSpriteState),
 ) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_state_sprite_default_states")?;
+    let key = call.intern_static(b"__songlua_state_sprite_default_states")?;
     if !matches!(
         call.raw_table_get(actor, key)?,
         Value::Nil | Value::Boolean(false)
     ) {
         return Ok(());
     }
-    let key = call.try_intern(b"Frames")?;
+    let key = call.intern_static(b"Frames")?;
     let frames = call.raw_table_get(actor, key)?;
     if frames != Value::Nil {
         let frames_table = table(call, frames)?;
@@ -649,7 +649,7 @@ fn capture(
         let second = effects::values(call, false)?[1];
         let states = states(call, actor)?;
         let epoch = optional_number(call, actor, "__songlua_state_sprite_texture_epoch")?;
-        let key = call.try_intern(b"__songlua_state_sprite_frame_sheet")?;
+        let key = call.intern_static(b"__songlua_state_sprite_frame_sheet")?;
         let value = call.raw_table_get(actor, key)?;
         let frame_sheet = if value == Value::Nil {
             None
@@ -703,7 +703,7 @@ pub(super) fn load(
     action_capture::prepare(call, actor)?;
     let previous = assets::texture_path(call, actor)?;
     if preserve {
-        let key = call.try_intern(b"__songlua_state_sprite_frame_sheet")?;
+        let key = call.intern_static(b"__songlua_state_sprite_frame_sheet")?;
         let existing = call.raw_table_get(actor, key)?;
         if existing == Value::Nil {
             store_sheet(call, actor)?;

@@ -404,11 +404,11 @@ pub(super) fn note_field(call: &mut HostCall<'_>, index: usize) -> Result<Option
         let Some(player) = player else {
             return Ok(None);
         };
-        let key = call.try_intern(b"__songlua_children")?;
+        let key = call.intern_static(b"__songlua_children")?;
         let children = call.raw_table_get(player, key)?;
         if call.raw_table_len(player)? == 0 && children != Value::Nil {
             return with_table(call, children, |call, children| {
-                let key = call.try_intern(b"NoteField")?;
+                let key = call.intern_static(b"NoteField")?;
                 let value = call.raw_table_get(children.unwrap(), key)?;
                 if value == Value::Nil {
                     Ok(None)

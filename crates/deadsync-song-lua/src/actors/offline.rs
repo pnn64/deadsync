@@ -408,7 +408,7 @@ pub(super) fn prepare_init(call: &mut HostCall<'_>, actor: TableId) -> Result<()
         None
     };
     call.store().actors.get_mut(&actor).unwrap().load_name = name;
-    let empty = call.try_intern(b"")?;
+    let empty = call.intern_static(b"")?;
     for key in ["__songlua_native_name", "__songlua_load_name"] {
         sprites::set(call, actor, key, empty)?;
     }

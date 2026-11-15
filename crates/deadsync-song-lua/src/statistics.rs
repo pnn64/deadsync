@@ -45,7 +45,7 @@ impl SongRuntime {
             let Value::Table(catalog) = self.vm.rooted(self.catalog)? else {
                 unreachable!()
             };
-            let key = self.vm.try_intern(b"statistics_phase")?;
+            let key = self.vm.intern_static(b"statistics_phase")?;
             let callback = self.vm.raw_table_get(catalog, key)?;
             self.vm.call(callback, &[]).map(|_| ())
         })();

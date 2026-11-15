@@ -66,7 +66,7 @@ pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) ->
     let display = table(call, display)?;
     let name = field(call, display, "Name")?;
     if name == Value::Nil {
-        let name = call.try_intern(b"Display")?;
+        let name = call.intern_static(b"Display")?;
         set(call, display, "Name", name)?;
     } else {
         assets::text(call, name)?;
@@ -223,7 +223,7 @@ pub(super) fn prepare_raw_init(call: &mut HostCall<'_>, actor: TableId) -> Resul
         None
     };
     call.store().actors.get_mut(&actor).unwrap().load_name = name;
-    let empty = call.try_intern(b"")?;
+    let empty = call.intern_static(b"")?;
     for name in [b"__songlua_native_name".as_slice(), b"__songlua_load_name"] {
         let key = call.try_intern(name)?;
         call.raw_table_set(actor, key, empty)?;
@@ -264,13 +264,13 @@ pub(super) fn publish_raw_name(
         } else {
             original
         };
-        let key = call.try_intern(b"__songlua_native_name")?;
+        let key = call.intern_static(b"__songlua_native_name")?;
         call.raw_table_set(actor, key, value)?;
         if original != Value::Nil {
-            let key = call.try_intern(b"Name")?;
+            let key = call.intern_static(b"Name")?;
             call.raw_table_set(actor, key, original)?;
         }
-        let key = call.try_intern(b"__songlua_load_name")?;
+        let key = call.intern_static(b"__songlua_load_name")?;
         call.raw_table_set(actor, key, Value::Nil)?;
     }
     Ok(())

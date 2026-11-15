@@ -227,7 +227,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             if !seconds.is_finite() || !(0.0..=60.0).contains(&seconds) {
                 return Err(call.error(b"music lead-in must be between 0 and 60 seconds"));
             }
-            let key = call.try_intern(b"__songlua_min_seconds_to_music")?;
+            let key = call.intern_static(b"__songlua_min_seconds_to_music")?;
             call.raw_table_set(receiver, key, Value::Number(seconds as f64))?;
             return call.push(Value::Table(receiver));
         }

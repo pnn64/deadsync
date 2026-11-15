@@ -88,7 +88,7 @@ fn with_directory(
         return action(call);
     };
     let globals = helper(call, 5)?;
-    let key = call.try_intern(b"__songlua_script_dir")?;
+    let key = call.intern_static(b"__songlua_script_dir")?;
     let previous = call.table_get(globals, key)?;
     call.with_roots(&[key, previous], |call| {
         let directory = call.try_intern(directory.to_string_lossy().as_bytes())?;

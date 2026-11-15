@@ -33,7 +33,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Err
     } else {
         call.raw_table_set(registry, Value::Table(actor), Value::Table(sound))?;
     }
-    let key = call.try_intern(b"__songlua_bound_methods")?;
+    let key = call.intern_static(b"__songlua_bound_methods")?;
     call.raw_table_set(actor, key, Value::Table(methods))?;
     for name in [b"__songlua_volume".as_slice(), b"__songlua_pitch"] {
         let key = call.try_intern(name)?;
@@ -63,15 +63,15 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Err
             call.raw_table_set(target, key, function)?;
         }
     }
-    let load = call.try_intern(b"Load")?;
+    let load = call.intern_static(b"Load")?;
     let load = call.raw_table_get(methods, load)?;
-    let key = call.try_intern(b"load")?;
+    let key = call.intern_static(b"load")?;
     call.raw_table_set(methods, key, load)?;
     // The actor's compatibility volume method is a chain operation; actual
     // RageSound parameters remain on the independently retained get() handle.
     let volume =
         call.new_host_function(|call| call.push(call.captures()[0]), &[Value::Table(actor)])?;
-    let key = call.try_intern(b"volume")?;
+    let key = call.intern_static(b"volume")?;
     call.raw_table_set(methods, key, volume)?;
     call.store().actors.get_mut(&actor).unwrap().sound = Some(sound);
     Ok(())
@@ -236,7 +236,7 @@ fn bound(call: &mut HostCall<'_>) -> Result<(), Error> {
                         if value != Value::Nil {
                             assets::text(call, value)?;
                         }
-                        let key = call.try_intern(b"File")?;
+                        let key = call.intern_static(b"File")?;
                         call.table_set(Value::Table(actor), key, value)?;
                     }
                     call.push(Value::Table(actor))

@@ -117,7 +117,7 @@ fn record(call: &mut HostCall<'_>) -> Result<(), Error> {
         return Ok(());
     };
     let catalog = table(call, call.captures()[0])?;
-    let key = call.try_intern(b"scene_step_indices")?;
+    let key = call.intern_static(b"scene_step_indices")?;
     let selected = call.raw_table_get(catalog, key)?;
     let values = call.call(selected, &[])?.to_vec();
     let player_step_indices = std::array::from_fn(|i| match values[i] {

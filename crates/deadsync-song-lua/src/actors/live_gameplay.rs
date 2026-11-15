@@ -120,7 +120,7 @@ impl Actors {
                     Some(v) => v,
                     None => {
                         let g = table(call, helper(call, 5)?)?;
-                        let key = call.try_intern(b"__songlua_top_screen")?;
+                        let key = call.intern_static(b"__songlua_top_screen")?;
                         call.raw_table_get(g, key)?
                     }
                 };
@@ -149,7 +149,7 @@ impl Actors {
 }
 fn fields(call: &mut HostCall<'_>) -> Result<(), Error> {
     let globals = helper(call, 5)?;
-    let key = call.try_intern(b"__songlua_top_screen")?;
+    let key = call.intern_static(b"__songlua_top_screen")?;
     let screen = call.table_get(globals, key)?;
     let children = native_children::named_children(call, table(call, screen)?)?;
     call.with_roots(&[children], |call| {
@@ -163,7 +163,7 @@ fn fields(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 let nested = native_children::named_children(call, table(call, child)?)?;
                 call.with_roots(&[nested], |call| {
-                    let key = call.try_intern(b"NoteField")?;
+                    let key = call.intern_static(b"NoteField")?;
                     let field = call.table_get(nested, key)?;
                     if field != Value::Nil {
                         table(call, field)?;

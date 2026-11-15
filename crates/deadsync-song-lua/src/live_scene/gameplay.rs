@@ -161,7 +161,9 @@ impl SongLiveScene {
                 return tap;
             }
             let result = (|| {
-                let key = runtime.vm.try_intern(b"__songlua_did_tap_note_callback")?;
+                let key = runtime
+                    .vm
+                    .intern_static(b"__songlua_did_tap_note_callback")?;
                 let Value::Table(t) = field else {
                     unreachable!()
                 };

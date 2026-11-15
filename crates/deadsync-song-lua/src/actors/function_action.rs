@@ -284,7 +284,7 @@ fn snapshot_columns(call: &mut HostCall<'_>, scope: &Scope) -> Result<Vec<Column
         let Some(player) = optional_table(call, value)? else {
             continue;
         };
-        let key = call.try_intern(b"__songlua_children")?;
+        let key = call.intern_static(b"__songlua_children")?;
         let children = call.raw_table_get(player, key)?;
         let children = if call.raw_table_len(player)? == 0 {
             optional_table(call, children)?
@@ -292,7 +292,7 @@ fn snapshot_columns(call: &mut HostCall<'_>, scope: &Scope) -> Result<Vec<Column
             None
         };
         let value = if let Some(children) = children {
-            let key = call.try_intern(b"NoteField")?;
+            let key = call.intern_static(b"NoteField")?;
             call.raw_table_get(children, key)?
         } else {
             native_children::named_child(call, player, b"NoteField")?
@@ -377,7 +377,7 @@ fn restore_columns(call: &mut HostCall<'_>, columns: Vec<ColumnSnapshot>) -> Res
         let registry = native_children::helper_function(call, b"native_registry")?;
         let children = call.call(registry, &[Value::Table(saved.player)])?[0];
         call.with_roots(&[children], |call| {
-            let key = call.try_intern(b"NoteField")?;
+            let key = call.intern_static(b"NoteField")?;
             call.table_set(children, key, saved.field.map_or(Value::Nil, Value::Table))?;
             if let Some(field) = saved.field {
                 sprites::set(

@@ -130,7 +130,7 @@ pub(super) fn texture_path(
     call: &mut HostCall<'_>,
     actor: TableId,
 ) -> Result<Option<PathBuf>, Error> {
-    let key = call.try_intern(b"__songlua_default_texture")?;
+    let key = call.intern_static(b"__songlua_default_texture")?;
     if !matches!(
         call.raw_table_get(actor, key)?,
         Value::Nil | Value::Boolean(false)

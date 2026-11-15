@@ -206,9 +206,9 @@ pub(super) fn set_getter(
             | Target::SkewX
             | Target::SkewY
     ) {
-        let key = call.try_intern(b"__songlua_player_index")?;
+        let key = call.intern_static(b"__songlua_player_index")?;
         let player = call.raw_table_get(id, key)?;
-        let key = call.try_intern(b"__songlua_player_child_name")?;
+        let key = call.intern_static(b"__songlua_player_child_name")?;
         let child = call.raw_table_get(id, key)?;
         if player != Value::Nil && child == Value::Nil {
             return Ok(());

@@ -262,7 +262,7 @@ pub fn top_screen_controls(
         let player = gameplay_player(runtime, context, index)?;
         scenes.push(player);
         players[index] = runtime.actor_scene_root(player).unwrap();
-        let key = runtime.vm.try_intern(b"__songlua_life_meter")?;
+        let key = runtime.vm.intern_static(b"__songlua_life_meter")?;
         let Value::Table(table) = players[index] else {
             unreachable!()
         };

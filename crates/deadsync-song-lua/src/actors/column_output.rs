@@ -86,11 +86,11 @@ impl Actors {
 }
 fn player_field(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
     if call.raw_table_len(actor)? == 0 {
-        let key = call.try_intern(b"__songlua_children")?;
+        let key = call.intern_static(b"__songlua_children")?;
         let children = call.raw_table_get(actor, key)?;
         if children != Value::Nil {
             return with_table(call, children, |call, children| {
-                let key = call.try_intern(b"NoteField")?;
+                let key = call.intern_static(b"NoteField")?;
                 call.raw_table_get(children.unwrap(), key)
             });
         }

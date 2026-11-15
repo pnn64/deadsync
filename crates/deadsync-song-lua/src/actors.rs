@@ -1882,7 +1882,7 @@ fn build(
     )?[0];
     let actor = table(call, actor)?;
     if matches!(class, "Quad" | "ActorMultiVertex") && template.is_none() {
-        let key = call.try_intern(b"__songlua_default_texture")?;
+        let key = call.intern_static(b"__songlua_default_texture")?;
         call.raw_table_set(actor, key, Value::Boolean(true))?;
     }
     let mut name = get_static(call, attrs, b"Name")?;
@@ -2233,7 +2233,7 @@ fn initialize_body(call: &mut HostCall<'_>, actor: TableId, original: Value) -> 
             // The native subscriber identity is tied to this definition's
             // authored child index. Init will sort the parent's numeric slots
             // by draworder, so retain the index before that mutation.
-            let key = call.try_intern(b"__songlua_message_authored_index")?;
+            let key = call.intern_static(b"__songlua_message_authored_index")?;
             call.raw_table_set(child, key, Value::Number((index + 1) as f64))?;
         }
         #[cfg(not(feature = "test-support"))]
@@ -2250,7 +2250,7 @@ fn initialize_body(call: &mut HostCall<'_>, actor: TableId, original: Value) -> 
         }
     }
     if original != Value::Nil {
-        let key = call.try_intern(b"Name")?;
+        let key = call.intern_static(b"Name")?;
         call.raw_table_set(actor, key, original)?;
     }
     courses::publish_raw_name(call, actor, original)?;
@@ -2487,7 +2487,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         let id = materialize(call, declaration, Materialization::Template)?;
         let actor = call.store().scenes[&id].root.expect("actor template");
-        let key = call.try_intern(b"Class")?;
+        let key = call.intern_static(b"Class")?;
         call.raw_table_set(actor, key, Value::Nil)?;
         return call.push(Value::Table(actor));
     }
@@ -2647,11 +2647,11 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             };
             if publish {
                 let value = call.try_intern(&name)?;
-                let key = call.try_intern(b"__songlua_load_name")?;
+                let key = call.intern_static(b"__songlua_load_name")?;
                 if call.raw_table_get(actor, key)? != Value::Nil {
                     call.raw_table_set(actor, key, value)?;
                 }
-                let key = call.try_intern(b"__songlua_native_name")?;
+                let key = call.intern_static(b"__songlua_native_name")?;
                 call.raw_table_set(actor, key, value)?;
             }
             call.store().actors.get_mut(&actor).unwrap().state.name = name;
@@ -2754,7 +2754,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 let commands = match get_static(call, actor, b"__songlua_dynamic_commands")? {
                     Value::Nil => {
                         let commands = call.try_new_table()?;
-                        let field = call.try_intern(b"__songlua_dynamic_commands")?;
+                        let field = call.intern_static(b"__songlua_dynamic_commands")?;
                         call.raw_table_set(actor, field, Value::Table(commands))?;
                         commands
                     }
@@ -2861,7 +2861,7 @@ fn set_scalar(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(),
                 .unwrap()
                 .state
                 .draw_order = value;
-            let key = call.try_intern(b"__songlua_state_draw_order")?;
+            let key = call.intern_static(b"__songlua_state_draw_order")?;
             call.raw_table_set(actor, key, Value::Number(value as f64))?;
             capture::property(call, actor, name);
             song_properties::record(
@@ -2941,7 +2941,7 @@ fn set_scalar(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(),
         };
         if let Some(size) = size {
             let value = sprites::vector_value(call, &size)?;
-            let key = call.try_intern(b"__songlua_state_size")?;
+            let key = call.intern_static(b"__songlua_state_size")?;
             call.raw_table_set(actor, key, value)?;
         }
     }

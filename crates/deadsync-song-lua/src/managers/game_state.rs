@@ -175,7 +175,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             let current = slot(call, values)?;
             set(slots, key, current, call)?;
         }
-        let name = call.try_intern(b"SortOrder_Group")?;
+        let name = call.intern_static(b"SortOrder_Group")?;
         let current = slot(call, [name])?;
         set(slots, "sort", current, call)
     })?;
@@ -400,13 +400,13 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
                 call,
                 call.arguments().first().copied().unwrap_or(Value::Nil),
             ) else {
-                let empty = call.try_intern(b"")?;
+                let empty = call.intern_static(b"")?;
                 return call.push(empty);
             };
             let state = call.captures()[index + 4];
             let method = get(call, state, "GetPlayerOptionsString")?;
             let method = function(call, method)?;
-            let level = call.try_intern(b"ModsLevel_Preferred")?;
+            let level = call.intern_static(b"ModsLevel_Preferred")?;
             let result = call
                 .call(method, &[state, level])?
                 .first()

@@ -121,7 +121,7 @@ fn combo(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, E
                     let hide = !matches!(hide, Value::Nil | Value::Boolean(false));
                     if hide || call.raw_table_len(fonts)? == 0 {
                         let actor = dummy(call, scene, "Actor", "Combo", None)?;
-                        let key = call.try_intern(b"__songlua_visible")?;
+                        let key = call.intern_static(b"__songlua_visible")?;
                         call.raw_table_set(actor, key, Value::Boolean(false))?;
                         call.store().actors.get_mut(&actor).unwrap().state.visible = false;
                         Ok(actor)
@@ -130,7 +130,7 @@ fn combo(call: &mut HostCall<'_>, scene: u64, index: usize) -> Result<TableId, E
                         // Native Player::Init's combo is a Combo, an ActorFrame
                         // registered under its own Lua class: it behaves as a
                         // frame, but tostring names it Combo.
-                        let class = call.try_intern(b"Combo")?;
+                        let class = call.intern_static(b"Combo")?;
                         set(call, frame, "__songlua_lua_class", class)?;
                         let number = dummy(call, scene, "BitmapText", "Number", Some(frame))?;
                         append(call, frame, number)?;
@@ -192,7 +192,7 @@ fn hold_judgments(
                     if !matches!(function, Value::Function(_) | Value::Native(_)) {
                         return Err(call.error(b"THEME.GetPathG function expected"));
                     }
-                    let empty = call.try_intern(b"")?;
+                    let empty = call.intern_static(b"")?;
                     let path = call.try_intern(format!("_HoldJudgments/{label}").as_bytes())?;
                     let value = call
                         .call(function, &[theme, empty, path])?
@@ -230,7 +230,7 @@ fn hold_judgments(
                 append(call, player, frame)?;
             }
             native_children::insert(call, player, "", Value::Table(unnamed))?;
-            let key = call.try_intern(b"__songlua_hold_judgments")?;
+            let key = call.intern_static(b"__songlua_hold_judgments")?;
             call.raw_table_set(player, key, Value::Table(frames))
         })
     })

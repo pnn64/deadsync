@@ -401,7 +401,7 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
             super::action_capture::prepare(call, actor)?;
             if value == Value::Nil {
                 sprites::set_texture(call, actor, value, true)?;
-                let key = call.try_intern(b"__songlua_default_texture")?;
+                let key = call.intern_static(b"__songlua_default_texture")?;
                 call.raw_table_set(actor, key, Value::Boolean(true))?;
             } else {
                 let path = call

@@ -220,7 +220,7 @@ fn install_enum(
             call.with_roots(&[f], |call| set(out, "Reverse", f, call))
         })?;
         if timer {
-            let value = call.try_intern(b"ModTimerType")?;
+            let value = call.intern_static(b"ModTimerType")?;
             let f = call.new_host_function(super::super::constant, &[value])?;
             call.with_roots(&[f], |call| set(out, "GetName", f, call))?;
         }

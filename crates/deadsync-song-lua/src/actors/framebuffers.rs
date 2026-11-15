@@ -99,7 +99,7 @@ pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<FrameTextu
 
 pub(super) fn report(call: &mut HostCall<'_>, message: &str) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let key = call.try_intern(b"__songlua_reporting_script_error")?;
+    let key = call.intern_static(b"__songlua_reporting_script_error")?;
     if !matches!(
         call.raw_table_get(globals, key)?,
         Value::Nil | Value::Boolean(false)
@@ -208,7 +208,7 @@ fn create(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             let value = flag(call, actor, key)?;
             set(call, allocation, key, Value::Boolean(value))?;
         }
-        let key = call.try_intern(b"__songlua_aft_allocation")?;
+        let key = call.intern_static(b"__songlua_aft_allocation")?;
         call.raw_table_set(actor, key, Value::Table(allocation))?;
         messages::side_effect(call)?;
         immediate(call, actor, true, true)
@@ -234,7 +234,7 @@ fn texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     }
     let texture = call.try_new_table()?;
     call.with_roots(&[Value::Table(texture)], |call| {
-        let kind = call.try_intern(b"RageTexture")?;
+        let kind = call.intern_static(b"RageTexture")?;
         set(call, texture, "__songlua_native_type", kind)?;
         if let Some(name) = capture_name(call, actor)? {
             let name = call.try_intern(name.as_bytes())?;
@@ -247,7 +247,7 @@ fn texture(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             call.with_roots(&[Value::Table(meta)], |call| {
                 let equal = call.new_host_function(equal, &[])?;
                 set(call, meta, "__eq", equal)?;
-                let key = call.try_intern(b"__songlua_aft_texture_meta")?;
+                let key = call.intern_static(b"__songlua_aft_texture_meta")?;
                 call.raw_table_set(globals, key, Value::Table(meta))?;
                 Ok(meta)
             })?

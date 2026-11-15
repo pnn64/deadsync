@@ -11,12 +11,12 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
 fn variable(call: &mut HostCall<'_>) -> Result<(), Error> {
     let value = call.arguments().first().copied().unwrap_or(Value::Nil);
     let Value::String(id) = value else {
-        let empty = call.try_intern(b"")?;
+        let empty = call.intern_static(b"")?;
         return call.push(empty);
     };
     let name = call.string_bytes(id).expect("live variable name");
     if std::str::from_utf8(name).is_err() {
-        let empty = call.try_intern(b"")?;
+        let empty = call.intern_static(b"")?;
         return call.push(empty);
     }
     if name != b"GameCommand" {
@@ -41,7 +41,7 @@ fn variable(call: &mut HostCall<'_>) -> Result<(), Error> {
             "GetPreferredModifiers",
             "GetStageModifiers",
         ] {
-            let empty = call.try_intern(b"")?;
+            let empty = call.intern_static(b"")?;
             value_method(call, owner, name, empty)?;
         }
         for (name, value) in [
@@ -106,7 +106,7 @@ fn current(call: &mut HostCall<'_>) -> Result<(), Error> {
             if let Some(method) = optional_function(call, method)? {
                 let mut args = vec![state];
                 if player {
-                    args.push(call.try_intern(b"PlayerNumber_P1")?);
+                    args.push(call.intern_static(b"PlayerNumber_P1")?);
                 }
                 Ok(call
                     .call(method, &args)?
@@ -135,11 +135,11 @@ fn current(call: &mut HostCall<'_>) -> Result<(), Error> {
                     std::str::from_utf8(bytes).map_err(|e| call.error(e.to_string().as_bytes()))?;
                     Ok(Value::String(id))
                 } else {
-                    call.try_intern(b"")
+                    call.intern_static(b"")
                 }
             })?
         } else {
-            call.try_intern(b"")?
+            call.intern_static(b"")?
         }
     } else {
         value

@@ -298,11 +298,11 @@ fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), 
         set(call, visuals, name, function)?;
     }
     if reload {
-        let name = call.try_intern(b"Hide")?;
+        let name = call.intern_static(b"Hide")?;
         return invoke(call, visuals, "playcommand", &[name]);
     }
     invoke(call, visuals, "sleep", &[Value::Number(2.)])?;
-    let name = call.try_intern(b"Hide")?;
+    let name = call.intern_static(b"Hide")?;
     invoke(call, visuals, "queuecommand", &[name])?;
     let factory = native_children::helper_function(call, b"transition_in_commands")?;
     let handlers = call.call(factory, &[])?[0];
@@ -310,7 +310,7 @@ fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), 
         let handlers = table(call, handlers)?;
         let prefs = global_table(call, "ThemePrefs")?;
         let getter = field(call, prefs, "Get")?;
-        let key = call.try_intern(b"VisualStyle")?;
+        let key = call.intern_static(b"VisualStyle")?;
         let style = function_call(call, getter, &[key])?;
         let style = assets::text(call, style)?;
         let spooky = global_call(call, "IsSpooky", &[])?;

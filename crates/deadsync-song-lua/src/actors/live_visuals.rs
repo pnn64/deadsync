@@ -327,7 +327,7 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
         }
         let parent = table(call, parent)?;
         let mut component = None;
-        let index_key = call.try_intern(b"__songlua_message_authored_index")?;
+        let index_key = call.intern_static(b"__songlua_message_authored_index")?;
         let authored = call.raw_table_get(current, index_key)?;
         if authored != Value::Nil {
             let Value::Number(index) = authored else {

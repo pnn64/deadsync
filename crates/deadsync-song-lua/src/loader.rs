@@ -38,7 +38,7 @@ pub(super) fn install(vm: &mut Vm, song_dir: &Path) -> Result<Root, Error> {
     let Value::Table(debug) = vm.get_global(b"debug")? else {
         unreachable!("fresh debug library")
     };
-    let key = vm.try_intern(b"setfenv")?;
+    let key = vm.intern_static(b"setfenv")?;
     let setfenv = vm.raw_table_get(debug, key)?;
     let setmetatable = vm.get_global(b"setmetatable")?;
     let registry = Value::Table(vm.try_new_table()?);
@@ -58,7 +58,7 @@ pub(super) fn install(vm: &mut Vm, song_dir: &Path) -> Result<Root, Error> {
         // Environment retargeting must not keep discarded loader closures alive.
         // Lua owns a saved wrapper through ordinary references and captures.
         let mt = vm.try_new_table()?;
-        let mode = vm.try_intern(b"k")?;
+        let mode = vm.intern_static(b"k")?;
         super::put(vm, mt, "__mode", mode)?;
         vm.call(setmetatable, &[registry, Value::Table(mt)])?;
         for (name, kind) in [

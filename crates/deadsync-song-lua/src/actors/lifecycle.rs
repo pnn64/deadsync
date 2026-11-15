@@ -369,11 +369,11 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, op: Lifecycle) -> 
             queue(call, actor, 0.0, "linear", None)?;
         }
         Lifecycle::Hibernate => {
-            let key = call.try_intern(b"__songlua_theme_hibernating")?;
+            let key = call.intern_static(b"__songlua_theme_hibernating")?;
             call.raw_table_set(actor, key, Value::Boolean(false))?;
             let duration = float_scalar(call, arg(call, 1), true).unwrap_or(0.0);
             call.store().actors.get_mut(&actor).unwrap().hibernate = duration;
-            let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+            let key = call.intern_static(b"__songlua_hibernate_seconds")?;
             call.raw_table_set(actor, key, Value::Number(duration as f64))?;
             action_capture::prepare_write(call, actor)?;
             capture::write(
@@ -455,7 +455,7 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, op: Lifecycle) -> 
             if !matches!(function, Value::Nil | Value::Function(_) | Value::Native(_)) {
                 return Err(call.error(b"SetUpdateFunction requires a function or nil"));
             }
-            let key = call.try_intern(b"__songlua_update_function")?;
+            let key = call.intern_static(b"__songlua_update_function")?;
             call.table_set(Value::Table(actor), key, function)?;
             invalidate_plans(call)?;
         }
@@ -488,7 +488,7 @@ pub(super) fn start(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error
 
 pub(super) fn end(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let key = call.try_intern(b"__songlua_top_screen")?;
+    let key = call.intern_static(b"__songlua_top_screen")?;
     call.raw_table_set(globals, key, Value::Nil)?;
     // The production live scene owns a synthetic root. End walks its ordinary
     // descendants in their current order, excluding that root and wrappers.
@@ -802,7 +802,7 @@ fn advance_node(
         if actor.hibernate > 0.0 {
             let left = actor.hibernate - delta;
             actor.hibernate = left.max(0.0);
-            let key = call.try_intern(b"__songlua_hibernate_seconds")?;
+            let key = call.intern_static(b"__songlua_hibernate_seconds")?;
             call.raw_table_set(node.actor, key, Value::Number(left.max(0.0) as f64))?;
             if left <= 0.0 {
                 song_immediate::record(

@@ -95,9 +95,9 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
     let Value::Table(string) = vm.get_global(b"string")? else {
         unreachable!()
     };
-    let key = vm.try_intern(b"gfind")?;
+    let key = vm.intern_static(b"gfind")?;
     if vm.raw_table_get(string, key)? == Value::Nil {
-        let gmatch = vm.try_intern(b"gmatch")?;
+        let gmatch = vm.intern_static(b"gmatch")?;
         let value = vm.raw_table_get(string, gmatch)?;
         member(vm, string, "gfind", value)?;
     }
@@ -213,11 +213,11 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
             };
             let form = text(call, arg(call, 1));
             let globals = call.captures()[0];
-            let key = call.try_intern(b"string")?;
+            let key = call.intern_static(b"string")?;
             let library = call.table_get(globals, key)?;
             let library = table(call, library)?;
             let format = call.with_roots(&[Value::Table(library)], |call| {
-                let key = call.try_intern(b"format")?;
+                let key = call.intern_static(b"format")?;
                 call.table_get(Value::Table(library), key)
             })?;
             if !matches!(format, Value::Function(_) | Value::Native(_)) {

@@ -7,7 +7,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> R
     let methods = get_static(call, actor, b"__songlua_bound_methods")?;
     let methods = if methods == Value::Nil {
         let methods = call.try_new_table()?;
-        let key = call.try_intern(b"__songlua_bound_methods")?;
+        let key = call.intern_static(b"__songlua_bound_methods")?;
         call.raw_table_set(actor, key, Value::Table(methods))?;
         methods
     } else {
@@ -17,11 +17,11 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> R
     // it through the class table. Captures keep the owner and its target alive.
     let captures = [Value::Table(actor), call.captures()[1]];
     let setter = call.new_host_function(set_target, &captures)?;
-    let key = call.try_intern(b"SetTarget")?;
+    let key = call.intern_static(b"SetTarget")?;
     call.raw_table_set(methods, key, setter)?;
     if proxy {
         let getter = call.new_host_function(get_target, &captures)?;
-        let key = call.try_intern(b"GetTarget")?;
+        let key = call.intern_static(b"GetTarget")?;
         call.raw_table_set(methods, key, getter)?;
     }
     Ok(())

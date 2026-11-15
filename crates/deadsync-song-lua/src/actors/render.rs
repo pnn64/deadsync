@@ -90,7 +90,7 @@ pub(super) const ACTOR_METHODS: &[&str] = &[
 pub(super) const FRAME_METHODS: &[&str] = &["fov", "vanishpoint", "SetDrawByZPosition"];
 
 pub(super) fn initialize(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    let key = call.try_intern(b"FOV")?;
+    let key = call.intern_static(b"FOV")?;
     let value = call.raw_table_get(actor, key)?;
     if value != Value::Nil {
         let number = super::sprites::number(call, value)? as f32;

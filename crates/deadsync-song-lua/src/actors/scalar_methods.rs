@@ -305,7 +305,7 @@ pub(super) fn install_metatable(vm: &mut Vm, methods: TableId) -> Result<(), Err
     let pin = vm.pin(Value::Table(symbols))?;
     let result = (|| {
         vm.raw_table_set(symbols, Value::Number(1.), Value::Table(methods))?;
-        let actor_type = vm.try_intern(b"__songlua_actor_type")?;
+        let actor_type = vm.intern_static(b"__songlua_actor_type")?;
         vm.raw_table_set(symbols, Value::Number(2.), actor_type)?;
         let mut classes = [Value::Nil; CLASS_KEYS.len()];
         for (index, class) in CLASS_KEYS.iter().enumerate() {
@@ -413,7 +413,7 @@ pub(super) fn bind(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error>
     let bound = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => {
             let bound = call.try_new_table()?;
-            let key = call.try_intern(b"__songlua_bound_methods")?;
+            let key = call.intern_static(b"__songlua_bound_methods")?;
             call.raw_table_set(actor, key, Value::Table(bound))?;
             bound
         }

@@ -67,7 +67,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             table(call, stats)?;
             call.raw_table_set(batch, Value::Number((i + 2) as f64), stats)?;
         }
-        let selected = call.try_intern(b"live_statistics")?;
+        let selected = call.intern_static(b"live_statistics")?;
         call.raw_table_set(catalog, selected, Value::Table(batch))?;
         {
             let status = call
@@ -87,7 +87,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                 if meter != Value::Nil {
                     table(call, meter)?;
                     let stats = call.raw_table_get(batch, Value::Number((i + 2) as f64))?;
-                    let key = call.try_intern(b"__songlua_life_meter")?;
+                    let key = call.intern_static(b"__songlua_life_meter")?;
                     call.raw_table_set(table(call, stats)?, key, meter)?;
                 }
             }

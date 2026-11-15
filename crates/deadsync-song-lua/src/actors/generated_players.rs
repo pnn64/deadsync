@@ -436,10 +436,10 @@ fn change_life(
         }
     }
     let catalog = table(call, call.captures()[2])?;
-    let key = call.try_intern(b"live_statistics")?;
+    let key = call.intern_static(b"live_statistics")?;
     let selected = call.raw_table_get(catalog, key)?;
     let stats = if selected == Value::Nil {
-        let key = call.try_intern(b"statistics_players")?;
+        let key = call.intern_static(b"statistics_players")?;
         let players = table(call, call.raw_table_get(catalog, key)?)?;
         table(
             call,
@@ -470,7 +470,7 @@ fn change_life(
                 life,
             });
     }
-    let key = call.try_intern(b"__songlua_life_meter")?;
+    let key = call.intern_static(b"__songlua_life_meter")?;
     let meter = table(call, call.raw_table_get(actor, key)?)?;
     raw_set(call, meter, b"__songlua_life", Value::Number(life as f64))?;
     let params = call.try_new_table()?;

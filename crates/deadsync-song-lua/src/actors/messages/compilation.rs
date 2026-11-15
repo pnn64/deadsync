@@ -86,7 +86,7 @@ impl Actors {
         })
     }
     pub(crate) fn take_deferred_messages(&self, vm: &mut Vm) -> Result<DeferredBatch, Error> {
-        let key = vm.try_intern(b"deferred_message_actors")?;
+        let key = vm.intern_static(b"deferred_message_actors")?;
         let roots = vm.raw_table_get(self.helpers, key)?;
         // Native removes its app data before retrying. Keep the removed actors
         // independently rooted, including actors already retired from a scene.

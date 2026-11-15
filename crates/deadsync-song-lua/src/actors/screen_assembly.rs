@@ -318,7 +318,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
             _ if matches!(role.as_deref(), Some("NextSong" | "Failed")) => 199,
             _ => 0,
         };
-        let key = call.try_intern(b"__songlua_state_draw_order")?;
+        let key = call.intern_static(b"__songlua_state_draw_order")?;
         call.raw_table_set(actor, key, Value::Number(order as f64))?;
         call.store()
             .actors

@@ -184,7 +184,7 @@ impl Actors {
         let Value::Table(debug) = vm.get_global(b"debug")? else {
             return vm.with_native_stack(|stack| Err(stack.error(b"debug table expected")));
         };
-        let key = vm.try_intern(b"getupvalue")?;
+        let key = vm.intern_static(b"getupvalue")?;
         let getupvalue = vm.raw_table_get(debug, key)?;
         let output = vm.try_new_table()?;
         let pin = vm.pin(Value::Table(output))?;

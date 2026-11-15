@@ -23,7 +23,7 @@ pub(super) fn install_getter(call: &mut HostCall<'_>, actor: TableId) -> Result<
     // Native instances own this getter even when their public class hides it.
     // Internal screen kinds expose it through the existing bound-method fallback.
     let getter = call.new_host_function(bound_getter, &captures)?;
-    let key = call.try_intern(b"GetTexture")?;
+    let key = call.intern_static(b"GetTexture")?;
     call.raw_table_set(methods, key, getter)
 }
 
@@ -63,7 +63,7 @@ pub(super) fn collapse(name: &str) -> String {
     out
 }
 pub(super) fn get(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_amv_texture_handle")?;
+    let key = call.intern_static(b"__songlua_amv_texture_handle")?;
     let retained = call.raw_table_get(actor, key)?;
     if retained != Value::Nil {
         table(call, retained)?;
@@ -77,7 +77,7 @@ pub(super) fn get(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> 
     // must not make its getters observe later loads or authored field changes.
     let texture = call.try_new_table()?;
     call.with_roots(&[Value::Table(texture)], |call| {
-        let kind = call.try_intern(b"RageTexture")?;
+        let kind = call.intern_static(b"RageTexture")?;
         sprites::set(call, texture, "__songlua_native_type", kind)?;
         let (info, sheet) = if default {
             sprites::set(

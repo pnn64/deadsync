@@ -9,7 +9,7 @@ pub(super) fn install_helpers(vm: &mut Vm, actor: TableId, helpers: TableId) -> 
     )?;
     let setup = vm.execute(&setup)?[0];
     let root = vm.pin(setup)?;
-    let key = vm.try_intern(b"GetName")?;
+    let key = vm.intern_static(b"GetName")?;
     let get_name = vm.raw_table_get(actor, key)?;
     let group = vm.raw_table_get(helpers, Value::Number(3.0))?;
     let functions = vm.call(setup, &[group, get_name])?.to_vec();
@@ -316,13 +316,13 @@ pub(super) fn adopt_declared(
     actor: TableId,
     parent: TableId,
 ) -> Result<(), Error> {
-    let kind = call.try_intern(b"__songlua_actor_type")?;
+    let kind = call.intern_static(b"__songlua_actor_type")?;
     let value = call.raw_table_get(parent, kind)?;
     if value == Value::Nil {
         return Ok(());
     }
     assets::text(call, value)?;
-    let key = call.try_intern(b"__songlua_parent")?;
+    let key = call.intern_static(b"__songlua_parent")?;
     call.raw_table_set(actor, key, Value::Table(parent))?;
     if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(parent);

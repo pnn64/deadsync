@@ -74,8 +74,8 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
             action_capture::prepare(call, actor)?;
             let scene = call.store().actors[&actor].scene;
             let attrs = call.try_new_table()?;
-            let key = call.try_intern(b"Class")?;
-            let kind = call.try_intern(b"WrapperState")?;
+            let key = call.intern_static(b"Class")?;
+            let kind = call.intern_static(b"WrapperState")?;
             call.raw_table_set(attrs, key, kind)?;
             let wrapper = call.with_roots(&[Value::Table(attrs)], |call| {
                 // Native dummy actors inherit the current scope, which may

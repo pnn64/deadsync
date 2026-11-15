@@ -173,7 +173,7 @@ fn default(call: &mut HostCall<'_>, defaults: &Defaults, key: &str) -> Result<Va
         "lastseenvideodriver" => return call.try_intern(defaults.driver.as_bytes()),
         "eventmode" => Value::Boolean(true),
         "visualdelayseconds" => Value::Number(0.),
-        "backgroundfitmode" => return call.try_intern(b"BackgroundFitMode_CoverPreserve"),
+        "backgroundfitmode" => return call.intern_static(b"BackgroundFitMode_CoverPreserve"),
         "bgbrightness" => Value::Number(0.7),
         "timingwindowscale" => Value::Number(1.),
         "timingwindowadd" => Value::Number(0.0015),
@@ -203,15 +203,15 @@ fn default(call: &mut HostCall<'_>, defaults: &Defaults, key: &str) -> Result<Va
         | "mintnstoscorenotes"
         | "musicwheelswitchspeed"
         | "regencomboaftermiss" => Value::Number(0.),
-        "coinmode" => return call.try_intern(b"CoinMode_Free"),
-        "displaymode" => return call.try_intern(b"Windowed"),
-        "displayresolution" => return call.try_intern(b"1920x1080"),
-        "editornoteskinp1" | "editornoteskinp2" => return call.try_intern(b"default"),
-        "fullscreentype" => return call.try_intern(b"Borderless"),
-        "premium" => return call.try_intern(b"Premium_Off"),
-        "defaultmodifiers" | "httpallowhosts" => return call.try_intern(b""),
+        "coinmode" => return call.intern_static(b"CoinMode_Free"),
+        "displaymode" => return call.intern_static(b"Windowed"),
+        "displayresolution" => return call.intern_static(b"1920x1080"),
+        "editornoteskinp1" | "editornoteskinp2" => return call.intern_static(b"default"),
+        "fullscreentype" => return call.intern_static(b"Borderless"),
+        "premium" => return call.intern_static(b"Premium_Off"),
+        "defaultmodifiers" | "httpallowhosts" => return call.intern_static(b""),
         "theme" => return call.try_intern(crate::SONG_LUA_THEME_NAME.as_bytes()),
-        key if key.starts_with("defaultlocalprofileid") => return call.try_intern(b""),
+        key if key.starts_with("defaultlocalprofileid") => return call.intern_static(b""),
         _ => Value::Nil,
     };
     Ok(value)

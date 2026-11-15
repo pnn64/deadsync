@@ -604,7 +604,7 @@ pub(super) fn load_font(call: &mut HostCall<'_>) -> Result<(), Error> {
     }
     let declaration = call.try_new_table()?;
     call.with_roots(&[Value::Table(declaration)], |call| {
-        let class = call.try_intern(b"BitmapText")?;
+        let class = call.intern_static(b"BitmapText")?;
         set(call, declaration, "Class", class)?;
         let globals = table(call, helper(call, 5)?)?;
         for key in ["__songlua_script_dir", "__songlua_song_dir"] {
@@ -615,7 +615,7 @@ pub(super) fn load_font(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         let id = super::materialize(call, declaration, super::Materialization::Template)?;
         let actor = call.store().scenes[&id].root.expect("font template");
-        let key = call.try_intern(b"Class")?;
+        let key = call.intern_static(b"Class")?;
         call.raw_table_set(actor, key, Value::Nil)?;
         let value = call.try_intern(font.as_bytes())?;
         set(call, actor, "Font", value)?;

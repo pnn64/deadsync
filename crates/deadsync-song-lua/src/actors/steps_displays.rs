@@ -36,7 +36,7 @@ impl Actors {
 }
 
 pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error> {
-    let key = vm.try_intern(b"steps_display_commands")?;
+    let key = vm.intern_static(b"steps_display_commands")?;
     if vm.raw_table_get(helpers, key)? == Value::Nil {
         let code = compile_named(COMMANDS, b"@theme:/metrics.ini:StepsDisplayGameplay")?;
         let factory = vm.execute(&code)?[0];
@@ -68,9 +68,9 @@ pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<
         if kind == "Sprite" {
             screen_parts::blank_texture(call, child)?;
         } else {
-            let font = call.try_intern(b"Common Normal")?;
+            let font = call.intern_static(b"Common Normal")?;
             raw(call, child, "Font", font)?;
-            let empty = call.try_intern(b"")?;
+            let empty = call.intern_static(b"")?;
             raw(call, child, "Text", empty)?;
         }
         screen_parts::append(call, actor, child)?;

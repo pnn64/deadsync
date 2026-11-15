@@ -43,7 +43,7 @@ pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) ->
     let stream = table(call, stream)?;
     if call.store().actors[&actor].offline_instance {
         courses::attach(call, scene, stream)?;
-        let name = call.try_intern(b"Stream")?;
+        let name = call.intern_static(b"Stream")?;
         set(call, stream, "Name", name)?;
         native_children::adopt(call, stream, actor)?;
         return native_children::insert(call, actor, "Stream", Value::Table(stream));
@@ -76,7 +76,7 @@ pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) ->
         stream.load_name = Some(b"Stream".to_vec());
         stream.state.name = b"Stream".to_vec();
     }
-    let name = call.try_intern(b"Stream")?;
+    let name = call.intern_static(b"Stream")?;
     set(call, stream, "Name", name)?;
     native_children::adopt(call, stream, actor)?;
     set(call, actor, "Stream", Value::Table(stream))?;

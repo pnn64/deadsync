@@ -282,7 +282,7 @@ fn lyrics(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Er
         let commands = table(call, commands)?;
         for (name, side) in [("LyricBack", "Back"), ("LyricFront", "Front")] {
             let child = text(call, scene, name, "")?;
-            let font = call.try_intern(b"Common Normal")?;
+            let font = call.intern_static(b"Common Normal")?;
             set(call, child, "Font", font)?;
             let changed = get(call, commands, side.as_bytes())?;
             set(call, child, "ChangedCommand", changed)?;
@@ -341,7 +341,7 @@ fn background(call: &mut HostCall<'_>, scene: u64) -> Result<TableId, Error> {
             if !matches!(function, Value::Function(_) | Value::Native(_)) {
                 return Err(call.error(b"preference function expected"));
             }
-            let key = call.try_intern(b"BGBrightness")?;
+            let key = call.intern_static(b"BGBrightness")?;
             let value = call
                 .call(function, &[prefs, key])?
                 .first()

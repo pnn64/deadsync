@@ -182,7 +182,7 @@ pub(super) fn create(
 ) -> Result<TableId, Error> {
     let underlay = dummy(call, scene, "ActorFrame", "Underlay", None)?;
     copy_tags(call, parent, underlay)?;
-    let name = call.try_intern(b"Underlay")?;
+    let name = call.intern_static(b"Underlay")?;
     set(call, underlay, "__songlua_top_screen_child_name", name)?;
     let mut unnamed_parts = Vec::new();
     for &name in crate::UNDERLAY_THEME_CHILD_NAMES {
@@ -352,7 +352,7 @@ fn difficulty(
         run(call, frame, "InitCommand")?;
         let quad = dummy(call, scene, "Quad", "", None)?;
         let text = screen_parts::text(call, scene, "", "")?;
-        let font = call.try_intern(b"Common Bold")?;
+        let font = call.intern_static(b"Common Bold")?;
         set(call, text, "Font", font)?;
         for (i, actor) in [quad, text].into_iter().enumerate() {
             let part = call.raw_table_get(definition, Value::Number((i + 1) as f64))?;
@@ -578,11 +578,11 @@ fn bpm_node(
 
 pub(super) fn set_name(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = call.try_intern(name.as_bytes())?;
-    let key = call.try_intern(b"__songlua_load_name")?;
+    let key = call.intern_static(b"__songlua_load_name")?;
     if call.raw_table_get(actor, key)? != Value::Nil {
         call.raw_table_set(actor, key, value)?;
     }
-    let key = call.try_intern(b"__songlua_native_name")?;
+    let key = call.intern_static(b"__songlua_native_name")?;
     call.raw_table_set(actor, key, value)?;
     set(call, actor, "Name", value)?;
     call.store().actors.get_mut(&actor).unwrap().state.name = name.as_bytes().to_vec();

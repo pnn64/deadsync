@@ -211,7 +211,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                 let game = member(call, globals, "GAMESTATE")?;
                 let state = invoke(call, game, "GetPlayerState", &[value])?;
                 call.with_roots(&[state], |call| {
-                    let level = call.try_intern(b"ModsLevel_Current")?;
+                    let level = call.intern_static(b"ModsLevel_Current")?;
                     let text = invoke(
                         call,
                         table(call, state)?,

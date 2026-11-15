@@ -184,7 +184,7 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 fn top(call: &mut HostCall<'_>) -> Result<TableId, Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let key = call.try_intern(b"__songlua_top_screen")?;
+    let key = call.intern_static(b"__songlua_top_screen")?;
     table(call, call.raw_table_get(globals, key)?)
 }
 

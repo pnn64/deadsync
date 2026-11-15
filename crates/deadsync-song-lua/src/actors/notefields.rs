@@ -102,7 +102,7 @@ pub(super) fn create(
     )?;
     let style = call.try_intern(style.as_bytes())?;
     set(call, actor, "__songlua_style_name", style)?;
-    let kind = call.try_intern(b"NoteField")?;
+    let kind = call.intern_static(b"NoteField")?;
     set(call, actor, "__songlua_player_child_name", kind)?;
     set(call, actor, "__songlua_beat_bars", Value::Boolean(false))?;
     let alpha = call.try_new_table()?;
@@ -162,10 +162,10 @@ fn tolerate<T>(result: Result<T, Error>) -> Result<Option<T>, Error> {
 fn current_style(call: &mut HostCall<'_>) -> Result<String, Error> {
     let globals = helper(call, 5)?;
     let selected = tolerate((|| {
-        let key = call.try_intern(b"GAMESTATE")?;
+        let key = call.intern_static(b"GAMESTATE")?;
         let state = call.table_get(globals, key)?;
         call.with_roots(&[state], |call| {
-            let key = call.try_intern(b"__songlua_current_style")?;
+            let key = call.intern_static(b"__songlua_current_style")?;
             let slots = table(call, call.raw_table_get(table(call, state)?, key)?)?;
             call.raw_table_get(slots, Value::Number(1.))
         })
@@ -174,7 +174,7 @@ fn current_style(call: &mut HostCall<'_>) -> Result<String, Error> {
         Some(selected)
     } else {
         tolerate((|| {
-            let key = call.try_intern(b"GAMESTATE")?;
+            let key = call.intern_static(b"GAMESTATE")?;
             let state = call.table_get(globals, key)?;
             call.with_roots(&[state], |call| {
                 let function = field(call, table(call, state)?, "GetCurrentStyle")?;
@@ -193,7 +193,7 @@ fn current_style(call: &mut HostCall<'_>) -> Result<String, Error> {
         return Ok("single".into());
     };
     call.with_roots(&[Value::Table(style)], |call| {
-        let key = call.try_intern(b"__songlua_style_key")?;
+        let key = call.intern_static(b"__songlua_style_key")?;
         if let Some(key) = tolerate(text(call, call.raw_table_get(style, key)?))? {
             return Ok(key);
         }
@@ -453,7 +453,7 @@ pub(super) fn update_columns(
     call: &mut HostCall<'_>,
     actor: TableId,
 ) -> Result<Vec<TableId>, Error> {
-    let key = call.try_intern(b"__songlua_note_columns")?;
+    let key = call.intern_static(b"__songlua_note_columns")?;
     let columns = call.raw_table_get(actor, key)?;
     if columns == Value::Nil {
         return Ok(Vec::new());

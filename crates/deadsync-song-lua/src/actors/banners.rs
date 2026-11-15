@@ -61,9 +61,9 @@ fn set_path(call: &mut HostCall<'_>, actor: TableId, path: &str) -> Result<bool,
     let value = call.try_intern(path.as_bytes())?;
     set(call, actor, "Texture", value)?;
     // Preserve publication order even when an authored setter reenters Lua.
-    let key = call.try_intern(b"__songlua_amv_texture_handle")?;
+    let key = call.intern_static(b"__songlua_amv_texture_handle")?;
     call.raw_table_set(actor, key, Value::Nil)?;
-    let key = call.try_intern(b"__songlua_default_texture")?;
+    let key = call.intern_static(b"__songlua_default_texture")?;
     call.raw_table_set(actor, key, Value::Boolean(false))?;
     set(call, actor, "__songlua_aft_capture_name", Value::Nil)?;
     let video = sprites::is_video(call, actor)?;

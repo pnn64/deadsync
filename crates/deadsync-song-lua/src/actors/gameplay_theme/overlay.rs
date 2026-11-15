@@ -85,7 +85,7 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load, capture_probe: bool) ->
             set(call, table(call, children)?, "", Value::Table(actor))?;
         } else {
             parent(call, actor, screen)?;
-            let name = call.try_intern(b"Overlay")?;
+            let name = call.intern_static(b"Overlay")?;
             call.with_roots(&[name], |call| {
                 if get_static(call, actor, b"__songlua_load_name")? != Value::Nil {
                     set(call, actor, "__songlua_load_name", name)?;

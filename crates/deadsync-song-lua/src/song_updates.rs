@@ -419,7 +419,7 @@ impl SongRuntime {
                         .vm
                         .try_intern(text.as_bytes())
                         .map_err(|e| e.to_string())?;
-                    let key = self.vm.try_intern(b"Text").map_err(|e| e.to_string())?;
+                    let key = self.vm.intern_static(b"Text").map_err(|e| e.to_string())?;
                     self.vm
                         .raw_table_set(id, key, value)
                         .map_err(|e| e.to_string())?;
@@ -1062,7 +1062,7 @@ impl SongRuntime {
                 };
                 let key = self
                     .vm
-                    .try_intern(b"__songlua_parent")
+                    .intern_static(b"__songlua_parent")
                     .map_err(|e| e.to_string())?;
                 let mut raw = self
                     .vm
