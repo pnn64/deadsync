@@ -77,7 +77,12 @@ impl Service {
         self.active_jobs += 1;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let Some(dir) = rfd::FileDialog::new().set_title(title).pick_folder() else {
+            let selection =
+                deadlib_platform::folder_dialog::pick_folder(&title).unwrap_or_else(|error| {
+                    log::warn!("Could not browse for an ITGmania directory: {error}");
+                    None
+                });
+            let Some(dir) = selection else {
                 let _ = tx.send(WorkerEvent::View(
                     SimplyLoveProfileImportEvent::BrowseCanceled,
                 ));

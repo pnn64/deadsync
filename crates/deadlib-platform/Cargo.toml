@@ -20,9 +20,16 @@ windows = { version = "0.62.2", features = [
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_Console",
+    "Win32_System_Com",
     "Win32_System_Performance",
     "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
 ] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
+dbus = "0.9.12"
+url = "2.5.8"
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 raw-window-handle = "0.6.2"
@@ -30,6 +37,7 @@ smithay-client-toolkit = { version = "0.21.1", default-features = false }
 xcb = { version = "1.7.1", features = ["dpms", "randr", "screensaver"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+dispatch2 = "0.3.1"
 objc2 = { version = "0.6.5", features = ["relax-sign-encoding"] }
 objc2-app-kit = "0.3.2"
 objc2-core-foundation = "0.3.2"

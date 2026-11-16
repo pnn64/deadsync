@@ -128,8 +128,14 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 
 ### BSD build dependencies (FreeBSD)
 ```bash
-pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
+pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi dbus
 ```
+
+Native folder browsing on Linux and FreeBSD uses the desktop's XDG FileChooser
+portal, with `zenity` as a fallback when the portal is unavailable. FreeBSD
+installations also need the `dbus` runtime package. To smoke-test selection and
+cancellation independently of profile importing, run
+`cargo run -p deadlib-platform --example pick_folder` on a desktop session.
 
 ## Test fixtures
 

@@ -1623,6 +1623,7 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
         "std::thread::spawn",
         "std::fs::canonicalize",
         "rfd::FileDialog",
+        "folder_dialog::pick_folder",
         "profile::scan_local_profiles",
         "profile::create_local_profile",
         "profile::rename_local_profile",
@@ -1676,7 +1677,7 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
             && shell_service.contains("detect_itg_local_profiles")
             && shell_service.contains("detect_itg_profiles_from_game_dir")
             && shell_service.contains("import_itg_profile_dir")
-            && shell_service.contains("rfd::FileDialog")
+            && shell_service.contains("deadlib_platform::folder_dialog::pick_folder")
             && shell_app.contains("self.profile_import.poll()")
             && shell_app.contains("manage_local_profiles::apply_import_events")
             && shell_profiles.contains("pub fn view() -> ManageLocalProfilesView")
@@ -3035,6 +3036,7 @@ fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
             "deadsync_updater",
             "deadlib_video",
             "rfd::FileDialog",
+            "folder_dialog::pick_folder",
             "open_path::reveal",
             "std::fs::create_dir_all",
         ] {
@@ -3054,12 +3056,13 @@ fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
 
     let shell_manifest = read_source(root.join("crates/deadsync-shell/Cargo.toml"))
         .expect("shell manifest should be readable");
-    for dependency in ["deadsync-updater", "deadlib-video", "rfd ="] {
+    for dependency in ["deadsync-updater", "deadlib-video", "deadlib-platform ="] {
         assert!(
             shell_manifest.contains(dependency),
             "shell is missing runtime dependency {dependency}"
         );
     }
+    assert!(!shell_manifest.contains("rfd ="));
 }
 
 #[test]

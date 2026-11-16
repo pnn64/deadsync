@@ -143,10 +143,6 @@ zstd = "0.14.4"
 # Win7-compatible overlapped wait sequence.
 hidapi = { path = "vendor/hidapi-win7" }
 dirs-sys = { path = "vendor/dirs-sys-win7" }
-# rfd 0.18.0's Windows backend imports CoTaskMemFree from combase.dll through
-# windows-sys 0.61. Windows 7 only provides that API from ole32.dll, so the
-# local patch resolves it at runtime.
-rfd = { path = "vendor/rfd-win7" }
 # Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
 opusic-sys = { path = "vendor/opusic-sys" }
 
