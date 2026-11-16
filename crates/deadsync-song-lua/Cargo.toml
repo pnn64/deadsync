@@ -15,7 +15,7 @@ deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
-glam = "0.34.1"
+glam = "0.34.3"
 twox-hash = "2.1.5"
 deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
@@ -23,12 +23,12 @@ deadlib-video = { path = "../deadlib-video" }
 deadsync-rules = { path = "../deadsync-rules" }
 chrono = "0.4.45"
 image = "0.25.10"
-itoa = "1.0.18"
+itoa = "1.0.19"
 log = "0.4.35"
 memchr = "2.8.3"
 rustc-hash = "2.1.3"
-serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
-smallvec = "1.16.4"
+serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
+smallvec = "1.16.5"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -13,7 +13,7 @@ image = "0.25.10"
 log = "0.4.35"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json.workspace = true
-smallvec = "1.16.4"
+smallvec = "1.16.5"
 twox-hash = "2.1.5"
 
 [lints.clippy]
