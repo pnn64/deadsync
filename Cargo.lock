@@ -1463,6 +1463,7 @@ dependencies = [
  "fs_extra",
  "image",
  "log",
+ "memmap2",
  "serde",
  "serde_json",
  "sha2",

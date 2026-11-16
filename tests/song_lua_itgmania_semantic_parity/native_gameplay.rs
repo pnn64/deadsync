@@ -236,8 +236,7 @@ fn compare_calls(
         .iter()
         .enumerate()
         .filter(|(_, event)| {
-            event
-                .pointer("/caller/source")
+            caller_source(event)
                 .unwrap_or(&event["source"])
                 .as_str()
                 .is_some_and(|source| source.starts_with("song:/"))
@@ -299,6 +298,12 @@ fn compare_calls(
     calls["native_event_indices"] = json!(native);
     calls["uncompared_actual"] = Value::Array(uncompared_actual);
     Ok(calls)
+}
+
+// Preserve the distinction between a missing source and an explicit null:
+// only a missing caller/source falls back to the event's own source.
+fn caller_source(event: &Value) -> Option<&Value> {
+    event.get("caller")?.get("source")
 }
 
 fn compared_call_operation(event: &Value) -> bool {
@@ -444,19 +449,31 @@ fn same_value(native: &Value, actual: &Value) -> bool {
 }
 
 fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: usize) -> Value {
-    let observed: BTreeSet<&str> = trace["events"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|event| {
-            event
-                .pointer("/caller/source")
-                .unwrap_or(&event["source"])
-                .as_str()
-                .is_some_and(|source| source.starts_with("song:/"))
-        })
-        .filter_map(|event| event["operation"].as_str())
-        .collect();
+    let mut observed = BTreeSet::new();
+    let mut theme = BTreeSet::new();
+    let mut tail_call = false;
+    let mut modifier = false;
+    // Decode provenance once per event. JSON pointers allocate decoded path
+    // components; these fixed keys can be borrowed directly instead.
+    for event in trace["events"].as_array().into_iter().flatten() {
+        let source = event["source"].as_str();
+        let caller = caller_source(event);
+        let song_source = source.is_some_and(|source| source.starts_with("song:/"));
+        let song_caller = caller.unwrap_or(&event["source"])
+            .as_str().is_some_and(|source| source.starts_with("song:/"));
+        if let Some(operation) = event["operation"].as_str() {
+            if song_caller { observed.insert(operation); }
+            if song_source && caller.and_then(Value::as_str)
+                .is_some_and(|source| !source.starts_with("song:/"))
+            {
+                theme.insert(operation);
+            }
+        }
+        tail_call |= song_source && (caller.is_some_and(|source| source == "=(tail call)")
+            || event.get("caller").and_then(|caller| caller.get("tail_call"))
+                .and_then(Value::as_bool) == Some(true));
+        modifier |= song_caller && event["kind"] == "modifier";
+    }
     let compared: BTreeSet<_> = CALL_OPERATIONS
         .iter()
         .copied()
@@ -466,34 +483,11 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
             "MessageManager.Broadcast",
         ])
         .collect();
-    let theme: BTreeSet<&str> = trace["events"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|event| {
-            event["source"]
-                .as_str()
-                .is_some_and(|source| source.starts_with("song:/"))
-                && event
-                    .pointer("/caller/source")
-                    .and_then(Value::as_str)
-                    .is_some_and(|source| !source.starts_with("song:/"))
-        })
-        .filter_map(|event| event["operation"].as_str())
-        .collect();
     let mut pending = Vec::new();
-    if trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
-        (event.pointer("/caller/source").is_some_and(|source| source == "=(tail call)")
-            || event.pointer("/caller/tail_call").and_then(Value::as_bool) == Some(true))
-        && event["source"].as_str().is_some_and(|source| source.starts_with("song:/"))))
-    {
+    if tail_call {
         pending.push("native tail-call provenance is unavailable".to_owned());
     }
-    if trace["capabilities"]["native_modifier_results"] != true
-        && trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
-            event["kind"] == "modifier" && event.pointer("/caller/source").unwrap_or(&event["source"])
-                .as_str().is_some_and(|source| source.starts_with("song:/"))))
-    {
+    if trace["capabilities"]["native_modifier_results"] != true && modifier {
         pending.push("native modifier return values are not captured".to_owned());
     }
     if scope != Scope::Full || replayed != total {
@@ -3537,6 +3531,35 @@ end}
             let mut event = serde_json::json!({"source":source});
             assert!(!super::normalize_call_source(&mut event, "/tmp/song/"));
         }
+    }
+
+    #[test]
+    fn coverage_preserves_missing_null_theme_and_tail_call_provenance() {
+        use super::{Scope, coverage};
+        use serde_json::json;
+        let trace = json!({
+            "capabilities":{"native_call_sources":true,"native_constructor_queries":true},
+            "actor_definitions":[{"class":"ActorFrame"}],
+            "events":[
+                {"source":"song:/a.lua","operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{},"operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{"source":null},"operation":"NullCaller"},
+                {"source":"song:/a.lua","caller":{"source":42},"operation":"NumberCaller"},
+                {"source":"song:/a.lua","caller":{"source":"theme:/a.lua"},"operation":"ThemeCall"},
+                {"source":"theme:/a.lua","caller":{"source":"song:/a.lua"},"operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{"source":"=(tail call)"},"operation":"TailCall"},
+                {"source":"song:/a.lua","caller":{"source":null,"tail_call":true}},
+                {"source":"song:/a.lua","kind":"modifier"}
+            ]
+        });
+        let value = coverage(&trace, Scope::Full, &json!({"compared":true}), 2, 2);
+        assert_eq!(value["observed_song_operations"], json!(["Actor.sleep"]));
+        assert_eq!(value["nested_theme_operations"], json!(["TailCall","ThemeCall"]));
+        assert_eq!(value["uncompared_song_operations"], json!([]));
+        assert_eq!(value["pending"], json!([
+            "native tail-call provenance is unavailable",
+            "native modifier return values are not captured"
+        ]));
     }
 
     #[test]

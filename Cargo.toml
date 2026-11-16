@@ -129,6 +129,7 @@ deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-song-lua = { path = "crates/deadsync-song-lua", features = ["test-support"] }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
+memmap2 = "0.9.12"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
