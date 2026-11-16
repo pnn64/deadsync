@@ -1568,6 +1568,24 @@ end }}
             {"player": "PlayerNumber_P1", "options_string": "NoHideLights, PlayerAutoPlay, Overhead"}
         ]});
         super::validate_capture(&initial).expect("recorded native startup inputs");
+        let mut both = initial.clone();
+        both["capabilities"]["native_inactive_player_options"] = serde_json::json!(true);
+        assert!(super::validate_capture(&both).is_err());
+        both["input"]["gameplay_preferences"]["players"] = serde_json::json!([
+            {"player":"PlayerNumber_P1", "enabled":true, "options_string":"PlayerAutoPlay"},
+            {"player":"PlayerNumber_P2", "enabled":false, "options_string":"PlayerAutoPlay"}
+        ]);
+        super::validate_capture(&both).expect("initial inactive side remains available for authored join");
+        for (path, value) in [
+            ("/input/gameplay_preferences/players/1/enabled", serde_json::Value::Null),
+            ("/input/gameplay_preferences/players/1/player", serde_json::json!("PlayerNumber_P1")),
+            ("/input/gameplay_preferences/players/1/options_string", serde_json::Value::Null),
+            ("/input/gameplay_preferences/players/0/enabled", serde_json::json!(false)),
+        ] {
+            let mut invalid = both.clone();
+            *invalid.pointer_mut(path).unwrap() = value;
+            assert!(super::validate_capture(&invalid).is_err(), "accepted incomplete roster: {path}");
+        }
         for ratio in [serde_json::json!(0), serde_json::json!(4.0 / 3.0)] {
             initial["input"]["preferences"]["display_aspect_ratio"] = ratio;
             super::validate_capture(&initial).expect("native configured display ratio");
@@ -3713,9 +3731,15 @@ fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType
     }
     let players = preferences["players"].as_array().filter(|p| !p.is_empty() && p.len() <= 2)
         .ok_or("native gameplay inputs must contain one or two players")?;
-    let player = &players[0];
-    if players.iter().enumerate().any(|(index,p)| p["player"] != format!("PlayerNumber_P{}",index+1)
-        || p["disabled_timing_windows"] != json!([]) || p["min_tns_to_hide_notes"] != "TapNoteScore_W3"
+    // New captures retain both sides' initial options, including the side a
+    // song may join later. Inactive players have not received the theme's
+    // enabled-player fail/timing initialization yet.
+    let active: Vec<_> = players.iter().filter(|player|
+        trace["capabilities"]["native_inactive_player_options"] != true || player["enabled"] == true).collect();
+    let player = active.first().ok_or("native gameplay has no enabled player")?;
+    if players.iter().enumerate().any(|(index,p)| p["player"] != format!("PlayerNumber_P{}",index+1))
+        || active.iter().any(|p|
+        p["disabled_timing_windows"] != json!([]) || p["min_tns_to_hide_notes"] != "TapNoteScore_W3"
         || p["fail_setting"] != player["fail_setting"]) {
         return Err("native player timing or fail modifiers differ; this context remains pending".into());
     }
@@ -3783,6 +3807,15 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         })
     {
         return Err("declared native initial player options are incomplete".into());
+    }
+    if trace["capabilities"]["native_inactive_player_options"] == true
+        && !trace["input"]["gameplay_preferences"]["players"].as_array().is_some_and(|players|
+            players.len() == 2 && players.iter().enumerate().all(|(index, player)|
+                player["player"] == format!("PlayerNumber_P{}", index + 1)
+                    && player["enabled"].is_boolean() && player["options_string"].is_string())
+                && players.iter().any(|player| player["enabled"] == true))
+    {
+        return Err("declared native active/inactive player options are incomplete".into());
     }
     for (field, sequence) in [("update_frames", "sequence"), ("events", "seq")] {
         let values = trace[field].as_array().ok_or_else(|| format!("native {field} are missing"))?;
@@ -4417,6 +4450,12 @@ fn replay_mode(
     }
     for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {
         player.timing_windows = windows;
+        if trace["capabilities"]["native_inactive_player_options"] == true {
+            // This harness generation applies its declared autoplay input to
+            // both preferred PlayerOptions before song Lua runs, so a later
+            // JoinPlayer keeps that input. The enabled roster is unchanged.
+            player.autoplay = f32::from(autoplay);
+        }
     }
     // Optional input comes from retained machine configuration or the native
     // input snapshot. Query observations remain expectations only.
