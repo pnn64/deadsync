@@ -1377,9 +1377,9 @@ end }
 "#).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
         let session = super::native_gameplay_session(&json!({"style":"double"})).unwrap();
-        let selected = super::native_starting_chart(&song, &session, Some("Challenge")).unwrap();
+        let selected = super::native_starting_chart(&song, &session, &json!({"input":{"requested_difficulty":"Challenge"}})).unwrap();
         assert_eq!(selected, 1, "same-difficulty single chart is not the double chart");
-        assert!(super::native_starting_chart(&song, &session, Some("Hard")).is_err());
+        assert!(super::native_starting_chart(&song, &session, &json!({"input":{"requested_difficulty":"Hard"}})).is_err());
         let chart = Arc::new(song.charts[selected].clone());
         let charts = [chart.clone(), chart];
         let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[selected], -0.008).unwrap().remove(0));
@@ -1404,6 +1404,62 @@ end }
                 screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert!(output.broadcasts.iter().any(|(_, name, _)| name == "DoubleSceneReady"), "double On executed");
+    }
+
+    #[test]
+    fn native_starting_chart_checks_identity_and_maps_catalog_to_payload() {
+        paths::init();
+        let directory = std::env::temp_dir().join(format!("deadsync-native-chart-selector-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        for extension in ["sm", "ssc"] {
+            let simfile = directory.join(format!("control.{extension}"));
+            let mut source = "#VERSION:0.83;#TITLE:Chart selector;#BPMS:0=120;\n".to_owned();
+            for (kind, description, notes) in [
+                ("dance-solo", "Solo", "000001\n000000\n000000\n000000"),
+                ("dance-single", "First", "1000\n0000\n0000\n0000"),
+                ("dance-single", "Second", "0100\n0000\n0000\n0000"),
+            ] {
+                if extension == "sm" {
+                    source.push_str(&format!("#NOTES:{kind}:{description}:Edit:1:0,0,0,0,0:\n{notes}\n;\n"));
+                } else {
+                    source.push_str(&format!("#NOTEDATA:;#STEPSTYPE:{kind};#DESCRIPTION:{description};#CHARTNAME:{description};#DIFFICULTY:Edit;#METER:1;#NOTES:\n{notes}\n;\n"));
+                }
+            }
+            std::fs::write(&simfile, source).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap();
+            assert_eq!(song.charts.len(), 2, "unsupported solo is catalogued without a playable payload");
+            let catalog: Vec<_> = [("Solo", "StepsType_Dance_Solo"), ("First", "StepsType_Dance_Single"),
+                ("Second", "StepsType_Dance_Single")].into_iter().enumerate().map(|(i,(description, kind))|
+                    json!({"index":i+1,"description":description,"chart_name":description,
+                        "steps_type":kind,"difficulty":"Difficulty_Edit","meter":1,"is_autogen":false})).collect();
+            let mut trace = json!({"input":{"game":"dance","style":"single","requested_difficulty":"Edit",
+                "requested_chart_index":3,"starting_chart":catalog[2],"chart_catalog":catalog}});
+            let session = super::native_gameplay_session(&trace).unwrap();
+            assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), 1);
+            // Final observed fields may describe a later authored chart switch.
+            trace["difficulty"] = json!("Difficulty_Hard");
+            trace["description"] = json!("First");
+            assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), 1);
+            for (pointer, value) in [
+                ("/input/starting_chart/index", json!(0)),
+                ("/input/requested_chart_index", json!(2)),
+                ("/input/chart_catalog/0/description", json!("Reordered")),
+                ("/input/chart_catalog/1/meter", json!(2)),
+                ("/input/requested_difficulty", json!("Hard")),
+            ] {
+                let mut bad = trace.clone();
+                *bad.pointer_mut(pointer).unwrap() = value;
+                assert!(super::native_starting_chart(&song, &session, &bad).is_err(), "accepted {pointer}");
+            }
+            let mut missing = trace.clone();
+            missing["input"].as_object_mut().unwrap().remove("starting_chart");
+            assert!(super::native_starting_chart(&song, &session, &missing).is_err());
+            missing["input"].as_object_mut().unwrap().remove("requested_chart_index");
+            assert_eq!(super::native_starting_chart(&song, &session, &missing).unwrap(), 0,
+                "older traces retain the first matching chart behavior");
+            trace["input"]["game"] = json!("pump");
+            assert!(super::native_gameplay_session(&trace).is_err(), "pump must not replay as dance");
+        }
     }
 
     #[test]
@@ -4221,6 +4277,10 @@ fn compare_stage_sample(
 
 fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
     use deadsync_gameplay::GameplayInputPlayStyle;
+    if trace["input"]["game"].as_str().or_else(|| trace["game"].as_str())
+        .is_some_and(|game| game != "dance") {
+        return Err("live replay currently requires the dance game; other games remain pending".into());
+    }
     // GameState::SetCurrentStyle can change the final observed style during a
     // gameplay reload. Replay must begin with the captured launch input.
     let play_style = match trace["input"]["style"].as_str().or_else(|| trace["style"].as_str()) {
@@ -4233,9 +4293,64 @@ fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
 }
 
 fn native_starting_chart(
-    song: &deadsync_chart::SongData, session: &GameplaySession, difficulty: Option<&str>,
+    song: &deadsync_chart::SongData, session: &GameplaySession, trace: &Value,
 ) -> Result<usize, String> {
     let steps_type = if session.play_style.is_double() { "dance-double" } else { "dance-single" };
+    let difficulty = trace["input"]["requested_difficulty"].as_str();
+    let input = &trace["input"];
+    if let Some(selected) = input.get("starting_chart") {
+        let catalog = input["chart_catalog"].as_array().ok_or("native starting chart requires its catalog")?;
+        let index = selected["index"].as_u64().and_then(|index| usize::try_from(index).ok())
+            .and_then(|index| index.checked_sub(1)).ok_or("native starting chart index is invalid")?;
+        if catalog.get(index) != Some(selected) {
+            return Err("native starting chart does not match its catalog entry".into());
+        }
+        if let Some(requested) = input.get("requested_chart_index") {
+            if requested.as_u64() != Some(index as u64 + 1) {
+                return Err("native starting chart does not match the requested index".into());
+            }
+        }
+        // Native indices include unplayable chart types and autogens. Resolve
+        // through the independently parsed catalog, verifying its authored
+        // entries before using its playable payload mapping. Native tidy-up may
+        // remove duplicates or change metadata: fail explicitly in that case.
+        let parsed = deadsync_simfile::song::load_native_step_metadata(song)?;
+        let mut authored = 0;
+        let mut playable = None;
+        for (native_index, native) in catalog.iter().enumerate() {
+            if native["index"].as_u64() != Some(native_index as u64 + 1) {
+                return Err("native chart catalog indices are not contiguous".into());
+            }
+            match native["is_autogen"].as_bool() {
+                Some(true) => continue,
+                Some(false) => (),
+                None => return Err("native chart catalog is missing its autogen flag".into()),
+            }
+            let chart = parsed.get(authored).ok_or("native chart catalog exceeds parsed authored charts")?;
+            let kind = native["steps_type"].as_str().and_then(|kind| kind.strip_prefix("StepsType_"))
+                .map(|kind| kind.replace('_', "-").to_ascii_lowercase());
+            let native_difficulty = native["difficulty"].as_str().and_then(|d| d.strip_prefix("Difficulty_"));
+            if kind.as_deref() != Some(chart.chart_type.as_str())
+                || !native_difficulty.is_some_and(|d| d.eq_ignore_ascii_case(&chart.difficulty))
+                || native["description"].as_str() != Some(chart.description.as_str())
+                || native["chart_name"].as_str() != Some(chart.chart_name.as_str())
+                || native["meter"].as_u64() != Some(u64::from(chart.meter)) {
+                return Err(format!("native chart catalog identity differs at index {}", native_index + 1));
+            }
+            if native_index == index { playable = chart.playable_index; }
+            authored += 1;
+        }
+        if authored != parsed.len() { return Err("native chart catalog is missing authored charts".into()); }
+        let playable = playable.ok_or("selected native chart is autogenerated or not playable")?;
+        let chart = &song.charts[playable];
+        if chart.chart_type != steps_type || !difficulty.is_none_or(|d| chart.difficulty.eq_ignore_ascii_case(d)) {
+            return Err("selected native chart does not match the requested style/difficulty".into());
+        }
+        return Ok(playable);
+    }
+    if input.get("requested_chart_index").is_some() {
+        return Err("an explicit native chart index requires starting chart identity".into());
+    }
     song.charts.iter().position(|chart| chart.chart_type == steps_type
         && difficulty.is_none_or(|wanted| chart.difficulty.eq_ignore_ascii_case(wanted)))
         .ok_or_else(|| "requested native starting chart is absent".into())
@@ -4371,7 +4486,6 @@ fn replay_mode(
         .as_array()
         .ok_or("missing native stage observations")?;
     let progress_observer_frames = native_progress_observer_frames(samples, frames)?;
-    let difficulty = trace["input"]["requested_difficulty"].as_str();
     let preferences = &trace["input"]["preferences"];
     let sync = match preferences["default_sync_offset"].as_str() {
         Some("SyncOffset_NULL") => deadsync_chart::SyncPref::Null,
@@ -4395,7 +4509,7 @@ fn replay_mode(
         simfile,
         config.global_offset_seconds,
     )?);
-    let initial = native_starting_chart(&song, &session, difficulty)?;
+    let initial = native_starting_chart(&song, &session, &trace)?;
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
@@ -5031,7 +5145,6 @@ pub(super) fn compile_generated(
     validate_capture(trace)?;
     let autoplay = native_autoplay(trace)?;
     let session = native_gameplay_session(trace)?;
-    let difficulty = trace["input"]["requested_difficulty"].as_str();
     let preferences = &trace["input"]["preferences"];
     let sync = match preferences["default_sync_offset"].as_str() {
         Some("SyncOffset_NULL") => deadsync_chart::SyncPref::Null,
@@ -5051,7 +5164,7 @@ pub(super) fn compile_generated(
         simfile,
         config.global_offset_seconds,
     )?);
-    let initial = native_starting_chart(&song, &session, difficulty)?;
+    let initial = native_starting_chart(&song, &session, trace)?;
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
