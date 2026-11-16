@@ -20,7 +20,7 @@ macro_rules! fields {
         }
         static NAMES: [&str; Index::COUNT as usize] = [$($name,)*];
         // Properties the live pose owns during playback.
-        static NATIVE: [bool; Index::COUNT as usize] = [$(fields!(@native $kind),)*];
+        const NATIVE: [bool; Index::COUNT as usize] = [$(fields!(@native $kind),)*];
     };
     (@native native) => { true };
     (@native plain) => { false };
@@ -128,12 +128,25 @@ fields! {
     plain UPDATE_PENDING = "__songlua_update_pending",
     plain UPDATE_PREVIOUS = "__songlua_update_previous",
     plain UPDATE_FUNCTION = "__songlua_update_function",
+    plain STATE_SPIN = "__songlua_state_spin",
 }
 
 const WORDS: usize = 2;
 const _: () = assert!(Index::COUNT as usize <= WORDS * 64);
 
 impl Field {
+    /// Fields consulted in an inclusive section of the state reader.
+    pub(super) const fn mask(first: Self, last: Self, live: bool) -> [u64; WORDS] {
+        let mut mask = [0; WORDS];
+        let mut index = first.0 as usize;
+        while index <= last.0 as usize {
+            if !live || !NATIVE[index] {
+                mask[index / 64] |= 1 << (index % 64);
+            }
+            index += 1;
+        }
+        mask
+    }
     pub(super) fn name(self) -> &'static str {
         NAMES[self.0 as usize]
     }
@@ -308,6 +321,26 @@ impl Reader {
             }
             _ => [0; WORDS],
         };
+    }
+    /// Skip a section only after every field it reads was found absent at
+    /// this version. Unknown fields and any present value keep the full read.
+    #[inline]
+    pub(super) fn all_absent(
+        &self,
+        call: &mut HostCall<'_>,
+        mask: [u64; WORDS],
+    ) -> Result<bool, Error> {
+        let absent = (0..WORDS).all(|word| self.absent[word] & mask[word] == mask[word]);
+        if cfg!(debug_assertions) && absent {
+            for index in 0..Index::COUNT as u8 {
+                let field = Field(index);
+                let (word, bit) = field.bit();
+                if mask[word] & bit != 0 {
+                    check(call, self.table, field, Value::Nil)?;
+                }
+            }
+        }
+        Ok(absent)
     }
     /// A field known to be absent is answered inline; any other is answered
     /// from what is known or read from the table.

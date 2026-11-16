@@ -531,7 +531,7 @@ pub(super) fn render_spin(
                 ]
             })
     };
-    let value = get_static(call, actor, b"__songlua_state_spin")?;
+    let value = fields::get(call, actor, fields::Field::STATE_SPIN)?;
     let Some(pose) = optional_table(call, value)? else {
         return Ok(fallback);
     };

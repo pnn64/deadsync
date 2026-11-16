@@ -275,6 +275,129 @@ fn frame(t: f64) -> SongLuaLiveFrame {
 }
 
 #[test]
+fn live_state_cache_observes_raw_additions_removals_and_nested_mutations() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "return Def.Quad{InitCommand=function(self) Q=self; self:x(701) end}",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "raw state cache fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    let run = |scene: &mut SongLiveScene, source: &str| {
+        scene
+            .runtime_mut()
+            .vm_mut()
+            .execute(&compile_named(source.as_bytes(), b"=raw state mutation").unwrap())
+            .unwrap();
+    };
+    let mut tick = 0;
+    let mut read = |scene: &mut SongLiveScene| {
+        tick += 1;
+        scene.update(frame(tick as f64 * 0.1)).unwrap();
+        *scene.states().iter().find(|state| state.x == 701.).unwrap()
+    };
+    let original = read(&mut scene);
+    for _ in 0..3 {
+        assert_eq!(read(&mut scene), original);
+    }
+    run(&mut scene, "Q.__songlua_state_z_bias=7");
+    assert_eq!(read(&mut scene).z_bias, 7.);
+    run(&mut scene, "Q.__songlua_state_z_bias=nil");
+    assert_eq!(read(&mut scene).z_bias, original.z_bias);
+    run(&mut scene, "Q.__songlua_state_shadow_len={2,3}");
+    assert_eq!(read(&mut scene).shadow_len, [2., 3.]);
+    run(&mut scene, "Q.__songlua_state_shadow_len[2]=9");
+    assert_eq!(read(&mut scene).shadow_len, [2., 9.]);
+    run(
+        &mut scene,
+        "Q.__songlua_state_shadow_len=nil; Q.__songlua_state_spin={baked=true,rotation={1,2,3}}",
+    );
+    assert!(read(&mut scene).spin_baked);
+    run(&mut scene, "Q.__songlua_state_spin.baked=false");
+    assert!(!read(&mut scene).spin_baked);
+    // The cached outer table must still run its nested authored lookups.
+    run(
+        &mut scene,
+        "spin_reads=0; Q.__songlua_state_spin=setmetatable({}, {__index=function(_,k) if k=='baked' then spin_reads=spin_reads+1; return true end; return {4,5,6} end})",
+    );
+    assert!(read(&mut scene).spin_baked);
+    run(&mut scene, "assert(spin_reads>0); spin_reads=0");
+    assert!(read(&mut scene).spin_baked);
+    run(
+        &mut scene,
+        "assert(spin_reads>0); Q.__songlua_state_spin=nil",
+    );
+    assert!(!read(&mut scene).spin_baked);
+    // An earlier Sprite lookup can introduce an override in the same read.
+    run(
+        &mut scene,
+        "old_meta=getmetatable(Q); Q.__songlua_actor_type='Sprite'; Q.__songlua_state_sprite_texture=nil; setmetatable(Q,{__index=function(self,k) if k=='Texture' then rawset(self,'__songlua_state_z_bias',11); return nil end; local index=old_meta.__index; if type(index)=='function' then return index(self,k) end; return index[k] end})",
+    );
+    assert_eq!(read(&mut scene).z_bias, 11.);
+    run(
+        &mut scene,
+        "setmetatable(Q,old_meta); Q.__songlua_actor_type='Quad'; Q.__songlua_state_z_bias=nil",
+    );
+    assert_eq!(read(&mut scene).z_bias, original.z_bias);
+    run(&mut scene, "Q.__songlua_state_z_bias={}");
+    assert!(scene.update(frame(2.)).is_err());
+    run(
+        &mut scene,
+        "Q.__songlua_state_z_bias=nil; Q.__songlua_state_spin=false",
+    );
+    assert!(scene.update(frame(2.1)).is_err());
+    run(&mut scene, "Q.__songlua_state_spin=nil");
+    scene.update(frame(2.2)).unwrap();
+    assert_eq!(
+        scene
+            .states()
+            .iter()
+            .find(|state| state.x == 701.)
+            .unwrap()
+            .z_bias,
+        original.z_bias
+    );
+    scene.end().unwrap();
+}
+
+#[test]
+#[ignore = "actor snapshot benchmark; run alone in release with --nocapture"]
+fn benchmark_live_actor_snapshots() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "local t=Def.ActorFrame{}; for i=1,512 do t[#t+1]=Def.Quad{} end; return t",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot benchmark");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    let mut tick = 0;
+    let mut update = || {
+        tick += 1;
+        std::hint::black_box(scene.update(frame(tick as f64 / 60.)).unwrap());
+    };
+    for _ in 0..8 {
+        update();
+    }
+    for round in 0..5 {
+        let start = std::time::Instant::now();
+        for _ in 0..300 {
+            update();
+        }
+        println!(
+            "snapshot benchmark,{round},{}",
+            start.elapsed().as_secs_f64()
+        );
+    }
+    scene.end().unwrap();
+}
+
+#[test]
 fn steady_state_updates_reuse_actor_snapshot_storage() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("default.lua");

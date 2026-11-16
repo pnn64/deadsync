@@ -190,6 +190,16 @@ fn read_fields(
         state.sprite_texture = has_texture || capture.is_some();
         r.refresh(call)?;
     }
+    // The common live actor has no raw overrides left after promotion. Once
+    // these reads are known to be nil, keep its native state without testing
+    // every property separately. Present tables still take the full path:
+    // their components can change without changing the actor table's version.
+    const LIVE_TAIL: [u64; 2] = Field::mask(Field::STATE_X, Field::STATE_EFFECT_MODE, true);
+    if live && r.all_absent(call, LIVE_TAIL)? {
+        // The FOV read also normalizes the retained native value.
+        state.fov = state.fov.filter(|value| *value != -1.);
+        return Ok(state);
+    }
     if let Some(value) = number(call, r, Field::STATE_X, live)? {
         state.x = value;
     }
