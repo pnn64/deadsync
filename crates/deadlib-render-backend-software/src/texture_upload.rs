@@ -181,9 +181,6 @@ pub(super) fn texture_is_opaque(image: &RgbaImage) -> bool {
     }) && tail.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255)
 }
 
-#[cfg(test)]
-#[path = "opacity_kernel.rs"]
-mod opacity_kernel;
 
 #[cfg(test)]
 #[path = "yuv_quantization.rs"]

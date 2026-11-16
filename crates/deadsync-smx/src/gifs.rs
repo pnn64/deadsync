@@ -2268,7 +2268,3 @@ mod tests {
         assert!(Arc::ptr_eq(&got, &bg_fallback));
     }
 }
-
-#[cfg(test)]
-#[path = "gifs_perf.rs"]
-pub(crate) mod perf_tests;

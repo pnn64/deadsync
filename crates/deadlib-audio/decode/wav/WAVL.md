@@ -124,82 +124,6 @@ The wrapper's private constructor passes a descriptor already validated by
 Spec::header, avoiding a second full parse. Public raw-format constructors always
 validate the supplied descriptor. No production unsafe code or dependency is added.
 
-Five tests bring the full suite to 83, passing on x64 debug/release and i686 debug,
-with denied-warning Clippy (`validation/wavl-mux-checks*`). They independently
-construct RIFF/RIFX/RF64/BW64 bytes for odd opaque descriptors, vendor GUIDs,
-metadata/data pads, embedded forms, split records and both finalization paths.
-Microsoft/3-bit/4-bit IMA and extensible IMA descriptors retain their encoded bytes.
-Tests also check native wrapper equality, u64 fact promotion, a >4 GiB declared
-LIST header, literal BW64 limits, reserved IDs, malformed formats, declared counts
-and partial-write poisoning. The existing allocator probe now checks both public
-muxer constructors with caller storage across all four containers: zero requested
-allocations and bytes.
-
-`wavl-mux-native-replay.json` passes all 708 retained native fixture gates, 4484
-descriptor/read/range checks and 1912 full encoded-output comparisons under the
-previously declared BW64 dummy-byte rule. All 1580 earlier corpus inputs, two
-million checked mutations and 100000 fresh ASan executions pass; FUZZING.md
-records the expanded properties and preserved corpus. This is retained sample
-truth and byte parity, not a new external reader comparison. As documented below,
-the reference drivers do not directly support wavl here.
-
-Generic encoded serialization is implemented; borrowed compressed decoding is
-described below. Segment-aware cached file seeking is now implemented too;
-forward ADPCM routing is described below as well. The measured
-native writer slowdown is retained as an outstanding optimization issue in
-PERFORMANCE.md. This milestone does not claim completion of those requirements.
-
-## Native fixture evidence
-
-`validation/wavl-references.{json,build.log,corpus.zip}` records 248 independent
-fixtures: 240 canonical padding profiles and eight explicit nonzero-pad
-compatibility cases. They cover all six native formats, RIFF/RIFX/RF64/BW64,
-1/2/6/33 channels, masks and reduced valid bits, leading/held/zero silence, empty
-data, odd unknown children, empty audio and leading/trailing fact. The independent
-generator packs both the segmented form and a logically equivalent flat waveform
-from integer sample/IEEE words. It does not call a production writer or decoder.
-
-All 1736 applicable descriptor/complete-read/range checks and 992 writer cases
-pass. Both wavl writer finalization modes preserve child IDs/payloads and emit
-identical output; both ordinary writer modes flatten to independently expected
-native bytes and also agree. Encoded physical audio is checked directly in Python
-before relying on a decoder. Original and generated fixtures are archived with
-hashes, source/binary fingerprints, compiler versions and every reference outcome.
-
-None of the four pinned reference drivers decodes this wavl corpus directly.
-dr_wav exits during initialization; libsndfile reports missing/unsupported data;
-Symphonia errors (with its previously observed 33-channel debug panic in six cases);
-FFmpeg returns unsupported/missing-data errors. Direct failures are retained.
-The 24 predeclared nonempty full-precision mono/stereo RIFF cases do match all four
-readers when independently flattened and when flattened by this crate. Wider flat
-reference limitations remain visible; this is not direct external wavl parity.
-
-Nine integration tests add fixed raw truth, every truncation prefix, malformed
-counts/boundaries/pads, shared chunk budgets, metadata between reads, I/O failure
-recovery, typed frames larger than stack scratch and RF64 promotion. Real u64
-addressing is exercised with a virtual physical extent above 4 GiB, including a
-held-frame load above that boundary, on both x64 and i686. Separate tiny RF64/BW64
-fixtures seek within over eight billion logical silence frames. All 69 crate tests
-pass on x64 debug/release and i686 debug, and Clippy with denied warnings passes.
-The earlier 204 Microsoft/IMA real-file/range cases retain their decoded hashes.
-
-Two million checked mutations and 100000 fresh ASan executions pass with the new
-segmented reader/writer properties, as do 2507 unique retained earlier corpus
-inputs. FUZZING.md gives campaign bounds, hashes and archives. Ordinary flat PCM
-reference/benchmark regression evidence is recorded in PCM.md and PERFORMANCE.md.
-
-Reproduce from the workspace root, choosing fresh report stems:
-
-```sh
-cargo test --locked -p deadlib-audio-decode-wav --tests --target-dir target/wav
-python crates/deadlib-audio/decode/wav/tests/reference_wavl.py --output target/wav/new-wavl.json
-```
-
-Borrowed, file-backed and forward ADPCM implementations below decode segmented
-data. Broader extensible compressed
-mappings, reference support, comparative segmented
-throughput/RSS and application-profile/metadata semantic certification remain open.
-
 ## Borrowed compressed sequences
 
 `AdpcmWavl::new(&wave)` supports Microsoft mono/stereo and 3/4-bit IMA, including
@@ -235,37 +159,6 @@ without decoding headers. Malformed block predictors/indices fail when requested
 audio or a held frame depends on them; output can contain a decoded prefix.
 The borrowed view remains reusable for independent ranges after an error.
 Tiny files with u64 silence never allocate or iterate over that logical duration.
-
-The added index stores 16 bytes per inventoried child on x64/i686, in one fallible
-Vec allocation (small capacities can round up). It borrows the container's larger
-inventory. An eight-child allocator probe requests one allocation/128 bytes for
-construction and zero allocations/bytes for reads. Caller scratch/output, Wave's
-existing inventory and process RSS are outside those counts. PERFORMANCE.md
-records object sizes and the resident throughput/seek measurements.
-
-`validation/adpcm-wavl-references-final.*` records 216 independently packed
-fixtures, all passing 1296 full/range checks. The generator's scalar Microsoft
-and IMA arithmetic does not call production code. Cases cover 1/2/6/33 channels
-where applicable, both IMA headers, all four containers, short and repeated
-blocks, leading/held/zero silence, empty children, odd metadata, trailing fact,
-empty duration and final truncation. Every external driver rejects the direct
-segmented fixtures. Ten predeclared RIFF mono/stereo flat block components pass:
-Microsoft against FFmpeg, 4-bit IMA against dr_wav/libsndfile, 3-bit IMA against
-FFmpeg's alternate combined rounding. These are component checks, not direct
-external wavl parity. Every outcome, fixture and truth hash is retained.
-The initial matching report predates the benchmark manifest entry; its exact
-Cargo snapshot is retained. Both fixture archives are byte-identical.
-
-Four new tests bring the suite to 87, passing x64 debug/release and i686 debug
-with denied-warning Clippy. Fixed scalar vectors check every frame position and
-buffer split, malformed geometry/lazy headers, repeatable post-error access,
-RF64 silence above u32 and BW64's literal fact/dummy-word distinction. The native
-replay retains all 708 gates, 4484 descriptor/read/range checks and 1912 complete
-writer outputs under the existing BW64 rule. Two million checked mutations,
-1581 prior corpus inputs and 100000 ASan executions pass; FUZZING.md retains the
-new 1827-file corpus and budgets. Initial check logs retain a corrected Clippy
-test-style failure and an i686 incremental-cache missing-object error; final
-checks disable incremental compilation and pass, with exact source snapshots.
 
 ```sh
 python crates/deadlib-audio/decode/wav/tests/reference_adpcm_wavl.py --output target/wav/new-adpcm-wavl.json
@@ -319,16 +212,6 @@ and exposes u64 silence; all requested samples are exact with fewer than 512
 physical bytes read. This is virtual-offset evidence, not a physical sparse-file
 or sequential disk-throughput claim.
 
-`validation/adpcm-wavl-reader-references-final.*` passes all 216 independent
-fixture gates and 2592 borrowed/file/full/range checks. The ten paired flat block
-gates and every direct four-reference rejection remain visible under the earlier
-policy. All 204 retained real-file flat ADPCM range checks pass, as do the 708
-native gates/4484 sample-descriptor-range checks/1912 writer outputs. The full
-89-test suite passes x64 debug/release and i686 debug, with Clippy, two million
-checked mutations, 1827 prior corpus inputs and 100000 ASan executions. FUZZING.md
-records the 1857-file new corpus; PERFORMANCE.md retains the standalone paired
-flat regression candidates and cached-seek/resident-streaming measurements.
-
 The initial external campaign was interrupted when overlapping Cargo builds
 replaced a shared executable path. Its partial archive/build log are retained.
 The final campaign uses private binary snapshots, and the flat regression tool
@@ -376,13 +259,6 @@ O(children). It does not decode deliberately unread compressed block headers.
 Finishing can therefore accept an unread bad step/predictor whose requested
 samples would fail decoding; it still rejects bad geometry or inconsistent fact.
 
-The added inline state grows the x64 wrapper from 360 to 384 bytes; i686 measures
-280 bytes. With a preopened eight-child stereo source, wrapper construction still
-requests two allocations/52 bytes for block buffers, then reads and finish request
-zero. This excludes the underlying format/ds64 storage and caller buffers, and
-does not measure process RSS. PERFORMANCE.md records paired flat timings and the
-narrow current segmented benchmark without claiming an overall speed change.
-
 Three new tests bring the suite to 92, passing x64 debug/release and i686 debug
 with Clippy. The fixed scalar matrix now checks all three APIs, both byte orders,
 all container spellings, applicable 1/2/6/33 channels, exact fact limits and short
@@ -391,13 +267,3 @@ trailing metadata, callback/I/O poisoning, form-boundary preservation, unknown o
 contradictory duration, deferred geometry failures and intentionally unread bad
 headers. Tiny RF64/BW64 files declare up to 8589934591 silence/data frames and
 finish after fewer than 512 physical bytes, without materializing that duration.
-
-`validation/adpcm-wavl-forward-references.*` passes 216 independent fixture gates
-and 3024 borrowed/file/forward/range checks. The two forward adapters use frame
-buffers 7/127 and physical widths 1/17, with explicit counts for trailing fact.
-The existing ten flat component gates and direct four-reader rejections retain
-their scope. All 432 earlier real-file forward ADPCM cases and the 708 native
-fixture gates/1912 writer outputs retain their expected hashes. FUZZING.md
-records two million checked mutations, 1857 prior corpus inputs and the fresh
-ASan campaign. The whole requested WAV goal remains unproven pending broader
-performance/RSS, profile/format audits and the recorded optimization work.

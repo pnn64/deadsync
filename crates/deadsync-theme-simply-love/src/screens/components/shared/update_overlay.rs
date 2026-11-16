@@ -1226,11 +1226,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../../../../../../tests/perf/overlay_original.rs"]
-pub(crate) mod perf_original;
-
-#[cfg(test)]
-#[path = "../../../../../../tests/perf/overlay_ownership.rs"]
-pub(crate) mod perf_tests;

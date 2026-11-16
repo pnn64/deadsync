@@ -532,8 +532,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod frame_kernels {
-    include!("frame_kernels.rs");
-}

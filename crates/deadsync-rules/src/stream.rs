@@ -923,11 +923,3 @@ mod tests {
 #[cfg(test)]
 #[path = "stream_perf.rs"]
 mod stream_perf;
-
-#[cfg(test)]
-#[path = "density_kernel.rs"]
-mod density_kernel;
-
-#[cfg(test)]
-#[path = "stream_scans_performance.rs"]
-mod stream_scans_performance;

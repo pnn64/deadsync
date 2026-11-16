@@ -57,8 +57,7 @@ ID3v2 headers, payloads and footers are preserved byte for byte with their
 original offsets. Large tags read directly into their retained metadata buffer;
 audio sync is never searched inside their declared payloads. ID3v1 is available
 after its trailer is read. The cumulative encoded ID3 bytes are bounded by
-`limits.metadata_bytes`. Unknown/compressed/encrypted payload interpretation
-retains the limitations documented in COVERAGE.md.
+`limits.metadata_bytes`. Unknown, compressed and encrypted metadata payloads remain opaque.
 
 Sync searches are bounded by `limits.sync_bytes` between packets. Leading and
 trailing junk is counted. A gap between audio packets is an error in strict
@@ -91,36 +90,3 @@ byte count. Incomplete or malformed recognized ID3 metadata still errors in
 either mode. Errors are terminal until reset; EOF is stable across repeated
 calls. Reset replaces the source, clears metadata/counters and resets reservoir
 and DSP history while retaining the packet buffer's allocation.
-
-## Verification, 2026-10-28
-
-The 32 integration tests include seven new streaming tests. They cover all 2,612
-single-cut read boundaries of a tagged stream; every incomplete-final-frame
-prefix under both truncation policies; tiny reads, interrupted reads and IO
-errors; cumulative metadata/frame/sync limits; false header candidates; explicit
-and inferred free format; CRC policy; recovery that retains reservoir payload;
-reset, EOF and raw format changes. A 300,000-byte ID3 payload exceeds the packet
-buffer limit and is retained without scanning its embedded false audio headers.
-Recovery tests include a 511-byte back-pointer spanning an earlier valid packet
-and a damaged packet, both before reservoir consumption (CRC failure) and after
-consumption (entropy failure). Recovered PCM must exactly match the expected
-fresh DSP reconstruction, detecting history loss and duplicated payload bytes.
-
-The 84 pinned LAME files are decoded under nine read schedules: direct File IO
-and maximum reads of 1, 2, 3, 7, 31, 127, 1,024 and 8,192 bytes. All 756 runs
-must produce byte-identical framed f32 PCM to the prior raw decoder gate, exact
-libmad-verified physical byte offsets and exact accumulated sample positions.
-Retained Xing/Info frame counts and encoder delay/padding must also match the
-prior structural evidence. The corpus covers all nine rates, mono/stereo,
-CBR/VBR, protection on/off and MPEG-1 free format.
-
-All 18 pinned legacy Layer III fixture/PCM pairs also pass through the streaming
-decoder with one-byte reads, explicit recovery and final-frame discard. They use
-the unchanged numerical and fixture-alignment criteria in RAW_PCM.md. This is
-additional evidence for buffering, metadata and state composition, not a claim
-of complete ISO conformance. Reports, command logs, binary hashes and source
-hashes are retained in tests/validation/2026-10-28-streaming.
-
-No streaming performance claim is made yet. The documented 8 kHz mixed-block
-disagreement, extended malformed/fuzz
-campaigns, native encoding and measured optimization remain required.

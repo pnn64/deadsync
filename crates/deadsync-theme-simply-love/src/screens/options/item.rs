@@ -94,6 +94,8 @@ pub enum ItemId {
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    #[cfg(target_os = "linux")]
+    InpAxisFix,
     InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,
@@ -158,6 +160,7 @@ pub enum ItemId {
     GpBgBrightness,
     GpCenteredP1,
     GpNoteScrollClock,
+    GpSongLuaMode,
     GpAnimatedBanners,
     GpZmodRatingBox,
     GpBpmDecimal,
@@ -227,7 +230,6 @@ pub enum ItemId {
     SmStageDisplay,
     SmShowRivals,
     SmScoreboxPlacement,
-    SmScoreboxCycle,
     SmScoreboxEventsFirst,
 
     // Course Options submenu
@@ -248,6 +250,7 @@ pub enum ItemId {
 
     // GrooveStats Options submenu
     GsEnable,
+    GsScoreboxBoards,
     GsShowSrpgShop,
     GsSrpgShopFolder,
     GsEnableBoogie,
@@ -258,6 +261,8 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcRegularBoards,
+    AcEventBoards,
     AcGolf,
     AcSubmitFails,
     AcResultDialogs,
@@ -480,6 +485,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BGBrightness")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "CenteredP1Notefield")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "NoteScrollClock")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "SongLua")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "AnimatedBanners")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),

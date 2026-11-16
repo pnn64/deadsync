@@ -1513,7 +1513,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "model_affine_performance.rs"]
-mod affine_performance;

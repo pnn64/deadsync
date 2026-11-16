@@ -95,9 +95,14 @@ impl NativeStack<'_, '_> {
         let result = loop {
             match pending {
                 Ok(Some(count)) if self.call.vm.thread != owner => {
-                    self.call
+                    if let Err(error) = self
+                        .call
                         .vm
-                        .finish_thread(0, count, false, false, &mut line);
+                        .finish_thread(0, count, false, false, &mut line)
+                    {
+                        pending = Err(error);
+                        continue;
+                    }
                 }
                 Ok(_) => {}
                 Err(error) if error.catchable() => {
@@ -109,7 +114,11 @@ impl NativeStack<'_, '_> {
                     }
                     match self.call.vm.catch_error(&error) {
                         Ok(true) => {}
-                        Ok(false) => self.call.vm.fail_thread(&error, &mut line),
+                        Ok(false) => {
+                            if let Err(error) = self.call.vm.fail_thread(&error, &mut line) {
+                                break Err(error);
+                            }
+                        }
                         Err(error) => break Err(error),
                     }
                 }
@@ -183,25 +192,6 @@ impl NativeStack<'_, '_> {
     /// Rejects an invalid result count or a metamethod/C-call boundary.
     pub fn yield_results(mut self, count: usize) -> Result<(), Error> {
         self.request_yield(count)
-    }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn prepare_c_yield(&mut self, count: usize) -> Result<(), Error> {
-        // A C hook can keep using the API after lua_yield returns. Its visible
-        // base and status change immediately, before hook return restores top.
-        if self.call.hook.is_some() {
-            self.request_yield(count)?;
-        }
-        Ok(())
-    }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn finish_c_yield(mut self, count: usize) -> Result<(), Error> {
-        // Do not choose the base again after the hook's subsequent API writes.
-        if self.call.hook.is_some() && self.call.vm.hooks.yielding {
-            self.finished = true;
-            Ok(())
-        } else {
-            self.request_yield(count)
-        }
     }
     pub(super) fn request_yield(&mut self, count: usize) -> Result<(), Error> {
         if let Err(error) = self.check_yield(count) {

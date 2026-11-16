@@ -282,8 +282,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod parse_perf {
-    include!("tags_parse_perf.rs");
-}

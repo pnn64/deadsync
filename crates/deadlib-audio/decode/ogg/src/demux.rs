@@ -100,8 +100,15 @@ impl Demuxer {
             compatibility: CompatibilityStats::default(),
         }
     }
+    /// Discard logical streams and terminal state, retaining stream-list capacity.
     pub fn reset(&mut self) {
-        *self = Self::with_validation(self.limits, self.validation);
+        self.streams.clear();
+        self.active = 0;
+        self.chain = 0;
+        self.bos_phase = true;
+        self.pending = 0;
+        self.failed = false;
+        self.compatibility = CompatibilityStats::default();
     }
     pub fn compatibility(&self) -> CompatibilityStats {
         self.compatibility

@@ -92,13 +92,6 @@ fn collect_row_choices<T: ChoiceText>(
         }];
     }
     if let Some(row) = rows.get(row_idx)
-        && kind == SubmenuKind::SelectMusic
-        && row.id == SubRowId::GsBoxLeaderboards
-        && !golf_features_enabled(state)
-    {
-        return choice_texts(&row.choices[..4]);
-    }
-    if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Gameplay)
         && row.id == SubRowId::DefaultJudgmentPalette
     {
@@ -903,7 +896,6 @@ fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> 
         SubRowId::BreakdownStyle => SubRowId::ShowBreakdown,
         SubRowId::LoopMusic => SubRowId::MusicPreviews,
         SubRowId::GsBoxPlacement => SubRowId::ShowGsBox,
-        SubRowId::GsBoxLeaderboards => SubRowId::ShowGsBox,
         SubRowId::GsBoxEventsFirst => SubRowId::ShowGsBox,
         _ => return None,
     };
@@ -998,7 +990,3 @@ pub(super) fn update_select_music_row_tweens(state: &mut State, s: f32, list_y: 
         dt,
     );
 }
-
-#[cfg(test)]
-#[path = "layout_pipelines_original.rs"]
-pub(super) mod pipelines_original;

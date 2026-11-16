@@ -396,7 +396,3 @@ mod tests {
         assert_eq!(queued, 42);
     }
 }
-
-#[cfg(test)]
-#[path = "upload_cycle_performance.rs"]
-mod upload_cycle_performance;

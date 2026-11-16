@@ -19,8 +19,7 @@ use deadsync_theme_simply_love::views::{
     GameplayScoreRuntimeView, PracticeRuntimeView, SimplyLoveLobbyRuntimeView,
 };
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
-use std::time::Instant;
+use std::sync::Arc;
 
 const GAMEPLAY_SCOREBOX_ENTRIES: usize = 5;
 
@@ -67,13 +66,6 @@ impl ScoreRuntimeCursor {
     }
 }
 
-fn smx_profile_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        std::env::var("DEADSYNC_SMX_PROFILE").is_ok_and(|value| !value.is_empty() && value != "0")
-    })
-}
-
 fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
     GameplayPolicyView {
         translated_titles: config.translated_titles,
@@ -86,15 +78,7 @@ fn policy_view(config: &config::app_config::Config) -> GameplayPolicyView {
         show_bpm_decimal: config.show_bpm_decimal,
         bpm_position: config.gameplay_bpm_position,
         machine_font: config.machine_font,
-        scorebox_pane_filter: deadsync_score::SelectMusicScoreboxFilter {
-            itg: config.select_music_scorebox_cycle_itg,
-            ex: config.select_music_scorebox_cycle_ex,
-            hard_ex: config.select_music_scorebox_cycle_hard_ex,
-            tournaments: config.select_music_scorebox_cycle_tournaments,
-            golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
-            events_first: config.select_music_scorebox_events_first,
-        },
-        smx_profile_enabled: smx_profile_enabled(),
+        scorebox_pane_filter: crate::app::scorebox_pane_filter(config),
     }
 }
 
@@ -506,10 +490,8 @@ fn enter_smx_sensors(state: &mut gameplay::State, smx_input: bool) {
 
 fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: bool) {
     if !gameplay::smx_sensor_refresh_due(state, delta_time) {
-        gameplay::report_smx_sensor_profile(state);
         return;
     }
-    let profile_started = gameplay::smx_sensor_profile_enabled(state).then(Instant::now);
     let plan = gameplay::smx_sensor_pad_plan(state, smx_input);
     for (store_idx, sdk_pad) in plan.into_iter().flatten() {
         let data = deadsync_smx::get_test_data(sdk_pad);
@@ -522,10 +504,6 @@ fn refresh_smx_sensors(state: &mut gameplay::State, delta_time: f32, smx_input: 
         };
         gameplay::set_smx_sensor_pad_view(state, store_idx, view);
     }
-    if let Some(started) = profile_started {
-        gameplay::record_smx_sensor_read_ns(state, started.elapsed().as_nanos() as u64);
-    }
-    gameplay::report_smx_sensor_profile(state);
 }
 
 pub(crate) fn exit(state: &mut gameplay::State) {
@@ -582,6 +560,7 @@ pub(crate) fn drain_core(
             GameplayAudioCommand::StopMusic => {
                 audio.stop_music();
             }
+            GameplayAudioCommand::PauseMusic(paused) => audio.pause_music(paused),
             GameplayAudioCommand::SetMusicRate(rate) => {
                 audio.set_music_rate(rate);
             }

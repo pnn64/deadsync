@@ -1557,7 +1557,3 @@ mod tests {
         assert!(result.download.is_none());
     }
 }
-
-#[cfg(test)]
-#[path = "srpg_shop_perf.rs"]
-mod perf_tests;

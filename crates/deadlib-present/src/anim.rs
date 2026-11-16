@@ -988,6 +988,10 @@ impl RuntimeSegment {
         }
     }
 
+    #[allow(
+        unsafe_code,
+        reason = "runtime FMA detection guards the specialized call"
+    )]
     fn update(&mut self, s: &mut TweenState, dt: f32) -> bool {
         // returns true if finished
         if self.dur == 0.0 {
@@ -1007,13 +1011,35 @@ impl RuntimeSegment {
             return false;
         }
 
-        let a = ease_apply(self.ease, self.elapsed / self.dur);
+        // Several properties or weighted easing can amortize feature dispatch.
+        // Weighted easing runs a Bezier solver even for a single property.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if (self.prepared.len() >= 4
+            || matches!(self.ease, Ease::EaseInOut { bias }
+                if bias > -100.0 && bias < 100.0 && bias != 0.0))
+            && std::arch::is_x86_feature_detected!("fma")
+        {
+            // SAFETY: runtime detection checks CPU and OS support for FMA.
+            unsafe { self.apply_current_fma(s) };
+            return false;
+        }
+        self.apply_current(s);
+        false
+    }
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[target_feature(enable = "fma")]
+    #[allow(unsafe_code, reason = "entered only after runtime FMA detection")]
+    unsafe fn apply_current_fma(&self, s: &mut TweenState) {
+        self.apply_current(s);
+    }
+
+    #[inline(always)]
+    fn apply_current(&self, s: &mut TweenState) {
+        let a = ease_apply(self.ease, self.elapsed / self.dur);
         for p in &self.prepared {
             p.apply_lerp(s, a);
         }
-
-        false
     }
 }
 
@@ -1482,6 +1508,7 @@ impl TweenSeq {
         }
     }
 }
+
 
 #[cfg(test)]
 mod tests {

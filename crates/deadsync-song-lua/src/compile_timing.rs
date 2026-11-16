@@ -22,9 +22,6 @@ impl SongLuaCompileTimer {
     pub fn push_stage(&mut self, stage: &'static str) {
         let elapsed_ms = self.stage_started.elapsed().as_secs_f64() * 1000.0;
         self.stage_times.push((stage, elapsed_ms));
-        if std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some() {
-            eprintln!("Song lua compile stage: {stage} elapsed_ms={elapsed_ms:.3}");
-        }
         self.stage_started = Instant::now();
     }
 
@@ -64,12 +61,6 @@ pub fn log_song_lua_compile_timing(entry_path: &Path, compile_timer: &SongLuaCom
     }
     let elapsed_ms = compile_timer.elapsed_ms();
     let stages = compile_timer.stage_summary();
-    if std::env::var_os("DEADSYNC_SONG_LUA_TIMING_STDERR").is_some() {
-        eprintln!(
-            "Song lua compile timing: entry='{}' elapsed_ms={elapsed_ms:.3} {stages}",
-            entry_path.display()
-        );
-    }
     info!(
         "Song lua compile timing: entry='{}' elapsed_ms={elapsed_ms:.3} {}",
         entry_path.display(),

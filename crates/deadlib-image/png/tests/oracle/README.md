@@ -42,8 +42,8 @@ cHRM uses white/red/green/blue x/y order; sBIT uses native channel order (RGB
 for indexed); pHYs is x/y/unit; tIME is year/month/day/hour/minute/second.
 No image/sample/color transforms are enabled.
 
-Build the updated helper in a fresh directory to retain earlier reference
-binaries, then run:
+Build the helper in `target/deadlib-image-reference/oracle-scalar-fields-build`,
+then run:
 
 ```powershell
 $env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-scalar-fields-build/Release/deadlib_png_oracle.exe).Path
@@ -53,10 +53,8 @@ cargo test -p deadlib-image-png --release --test scalar_fields libpng_scalar_int
 The pinned run checks 440 representative files: 408 exact field comparisons and
 32 hIST drops. The library's ordering table places hIST before PLTE, while PNG
 Table 7 requires the reverse. Those drops are checked explicitly, including the
-warning and retained PLTE; they are not counted as exact hIST matches. A retained
-wire fixture and source/binary hashes are in
-`../../experiments/scalar-hist-reference.json`. A future reference that returns
-the expected hIST values passes the exact comparison instead.
+warning and retained PLTE; they are not counted as exact hIST matches. A reference
+that returns the expected hIST values passes the exact comparison instead.
 
 `--metadata FILE.png` emits ICC length and Exif length (two big-endian u32s),
 followed by the exact uncompressed profile and Exif bytes retained by libpng.
@@ -64,13 +62,6 @@ The profiles test checks 480 encodings across eight pinned independent ICC v2/v4
 profiles, all 15 native PNG formats, both interlace settings, both native writers
 and both Exif byte orders. This supplements the existing 1,061 native-sample
 comparisons; it does not introduce any C linkage into the production library.
-
-`libpng_external_corpus` is a separate ignored test requiring
-`DEADLIB_PNG_CORPUS` as well as the C executable. The hash-pinned external RGB8
-inputs are fetched into ignored build storage; acquisition and commands are in
-[BENCHMARKS.md](../../BENCHMARKS.md#external-rgb8-corpus). Its 24 original images
-and eight reencodings each add 216 exact native-sample comparisons, covering
-both writers, Stored/Fast compression and plain/Adam7 output.
 
 `--zlib-batch FILE` cross-checks independent raw compression fixtures in one
 process. Each input record contains a big-endian u32 compressed length, a
@@ -95,12 +86,6 @@ $env:DEADLIB_ZLIB_STRICT_WINDOW = '1'
 cargo test -p deadlib-image-png --release --test zlib_headers c_zlib_header_and_history_oracle -- --ignored --nocapture
 Remove-Item Env:DEADLIB_ZLIB_STRICT_WINDOW
 ```
-
-The flag enables zlib's existing `INFLATE_STRICT` checks in the reference library;
-the production Rust crate has no C dependency. Its source remains unchanged.
-Default and strict results, tool versions, active reference features and hashes
-are retained in [zlib-conformance.log](../../zlib-conformance.log) and
-[zlib-conformance.json](../../zlib-conformance.json).
 
 These fixtures follow [RFC 1950 sections 2.2/2.3](https://www.rfc-editor.org/rfc/rfc1950)
 and [RFC 1951 section 3.2.3](https://www.rfc-editor.org/rfc/rfc1951).
@@ -172,7 +157,6 @@ Both native parsers reject all 719 invalid permutations. Reference recovery
 does not override those assertions. Counts, commands and source/binary hashes
 are retained in `chunks-validation.log` and `chunks-validation.json`.
 
-
 ## Named metadata values
 
 `--named-metadata file.png` emits a version-1 record stream: version and record
@@ -202,7 +186,6 @@ also checks independent big-endian values across the full normal test matrix.
 counts and hashes, including compatibility checks of the original pixel and
 ICC/Exif oracle modes.
 
-
 ## Latin-1 text-body boundary
 
 ```powershell
@@ -218,7 +201,6 @@ native encoders reject the control/NUL inputs before output. Recovery behavior
 is recorded separately from encoder conformance. `text-body-validation.log`
 and `.json` retain results and hashes; `text-body-before.log` and `.json` show
 the final regression test failing against the isolated pre-fix source.
-
 
 ## APNG static recovery
 

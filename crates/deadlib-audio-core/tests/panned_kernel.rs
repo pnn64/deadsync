@@ -1,10 +1,8 @@
 use deadlib_audio_core::{ActiveSfx, MixBus, MixControls, QueuedSfx, SfxPan, mix_active_sfx};
-use std::{hint::black_box, sync::Arc};
+use std::sync::Arc;
 
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 fn voice(data: Arc<[i16]>, pan: SfxPan) -> ActiveSfx {
@@ -93,40 +91,6 @@ fn panning_matches_fused_reference_bits_and_voice_progress() {
                     expected.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
                     "{pan:?}, gain={gain}, initial={initial}"
                 );
-            }
-        }
-    }
-}
-
-#[test]
-#[ignore = "release CPU and allocation benchmark"]
-fn benchmark_panned_mix() {
-    let controls = MixControls::new();
-    for pan in [SfxPan::Left, SfxPan::Right, SfxPan::Center] {
-        for gain in [0.0, 1.0, 0.5, 0.125, 2.0, 0.375] {
-            controls.set_bus_gain(MixBus::new(0), gain);
-            for frames in [256usize, 4096] {
-                let data: Arc<[i16]> = (0..frames * 2 + 2)
-                    .map(|i| i.wrapping_mul(71) as i16)
-                    .collect();
-                let mut active = vec![voice(data, pan)];
-                let mut output = vec![0.0; frames * 2];
-                let label = format!("pan/{pan:?}/gain={gain}/frames={frames}");
-                let mut work = || {
-                    active[0].cursor = 0;
-                    output.fill(0.0);
-                    black_box(mix_active_sfx(
-                        black_box(&mut active),
-                        black_box(&mut output),
-                        0,
-                        2,
-                        black_box(&controls),
-                    ));
-                    black_box(&output);
-                };
-                let (_, counts) = perf::measure(&mut work);
-                println!("{label}: allocation {counts:?}");
-                bench::measure(&label, 2_000_000 / frames, &mut work);
             }
         }
     }

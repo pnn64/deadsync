@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -22,6 +21,7 @@ impl Fixture {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
+        reference_test::register_path(&path);
         std::fs::write(&path, bytes).unwrap();
         Self(path)
     }
@@ -374,145 +374,69 @@ fn standard_input_loading_shares_buffers_and_ignores_io_input_redirection() {
     ];
     if let Ok(index) = std::env::var("DEADLIB_LUA_STDIN_CASE") {
         let index: usize = index.parse().unwrap();
-        let reference = std::env::var("DEADLIB_LUA_STDIN_REFERENCE").unwrap() == "1";
-        println!("OBS\t{:?}", observe(cases[index].0.as_bytes(), reference));
+        let actual = observe(cases[index].0.as_bytes());
+        reference_test::assert_debug(
+            &format!("tests/file_loading.rs::observe::stdin{index}"),
+            &actual,
+        );
         return;
     }
     use std::io::Write;
     for (index, (_, input)) in cases.iter().enumerate() {
-        let mut observations = Vec::new();
-        for reference in ["0", "1"] {
-            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "standard_input_loading_shares_buffers_and_ignores_io_input_redirection",
-                    "--nocapture",
-                    "--test-threads=1",
-                ])
-                .env("DEADLIB_LUA_STDIN_CASE", index.to_string())
-                .env("DEADLIB_LUA_STDIN_REFERENCE", reference)
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-                .unwrap();
-            child.stdin.take().unwrap().write_all(input).unwrap();
-            let output = child.wait_with_output().unwrap();
-            assert!(
-                output.status.success(),
-                "case {index}, engine {reference}: {} {}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            let stdout = String::from_utf8(output.stdout).unwrap();
-            let at = stdout.find("OBS\t").expect("worker observation");
-            observations.push(stdout[at..].lines().next().unwrap().to_owned());
-        }
-        assert_eq!(observations[0], observations[1], "stdin case {index}");
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "standard_input_loading_shares_buffers_and_ignores_io_input_redirection",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("DEADLIB_LUA_STDIN_CASE", index.to_string())
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        child.stdin.take().unwrap().write_all(input).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "stdin case {index}: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }
 
-fn observe(source: &[u8], reference: bool) -> Vec<Scalar> {
-    if !reference {
-        let mut vm = Vm::new();
-        vm.set_instruction_limit(Some(10_000_000));
-        vm.set_output_capture(true);
-        let program = compile(source).unwrap();
-        let values = vm
-            .execute(&program)
-            .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(source)))
-            .to_vec();
-        let actual: Vec<_> = values
-            .into_iter()
-            .map(|v| match v {
-                Value::Nil => Scalar::Nil,
-                Value::Boolean(b) => Scalar::Boolean(b),
-                Value::Number(n) => Scalar::Number(n.to_bits()),
-                Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
-                v => panic!(
-                    "return scalar observations, got {v:?}: {}",
-                    String::from_utf8_lossy(source)
-                ),
-            })
-            .collect();
-        return actual;
-    }
-    // SAFETY: fixed local programs need the development oracle's debug library.
-    let lua = unsafe { Lua::unsafe_new() };
-    // Use a plain protected entry with no host error-handler value below it.
-    // The normal mlua eval wrapper leaves that C function on the base stack,
-    // which Lua 5.1 can expose through negative/lost-tail local queries.
-    let reference: MultiValue = lua.exec_raw_lua(|raw| unsafe {
-        use lua_reference::{FromLuaMulti, ffi};
-        let state = raw.state();
-        let start = ffi::lua_gettop(state);
-        let mut status = ffi::luaL_loadbuffer(
-            state,
-            source.as_ptr().cast(),
-            source.len(),
-            c"=(deadlib-lua)".as_ptr(),
-        );
-        if status == 0 {
-            status = ffi::lua_pcall(state, 0, ffi::LUA_MULTRET, 0);
-        }
-        if status != 0 {
-            let mut len = 0;
-            let text = ffi::lua_tolstring(state, -1, &mut len);
-            let message = if text.is_null() {
-                "non-string error".into()
-            } else {
-                String::from_utf8_lossy(std::slice::from_raw_parts(text.cast(), len)).into_owned()
-            };
-            ffi::lua_settop(state, start);
-            panic!("reference: {message}: {}", String::from_utf8_lossy(source));
-        }
-        assert_ne!(
-            ffi::lua_checkstack(state, 32),
-            0,
-            "oracle result conversion stack"
-        );
-        let values = MultiValue::from_stack_multi(ffi::lua_gettop(state) - start, raw).unwrap();
-        ffi::lua_settop(state, start);
-        values
-    });
-    let expected: Vec<_> = reference
+fn observe(source: &[u8]) -> Vec<Scalar> {
+    let mut vm = Vm::new();
+    vm.set_instruction_limit(Some(10_000_000));
+    vm.set_output_capture(true);
+    let program = compile(source).unwrap();
+    let values = vm
+        .execute(&program)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(source)))
+        .to_vec();
+    let actual: Vec<_> = values
         .into_iter()
         .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalar observations"),
+            Value::Nil => Scalar::Nil,
+            Value::Boolean(b) => Scalar::Boolean(b),
+            Value::Number(n) => Scalar::Number(n.to_bits()),
+            Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
+            v => panic!(
+                "return scalar observations, got {v:?}: {}",
+                String::from_utf8_lossy(source)
+            ),
         })
         .collect();
-    expected
+    return actual;
 }
 
 fn compare(source: &[u8]) {
-    let actual = observe(source, false);
-    let expected = observe(source, true);
-    if actual != expected {
-        for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
-            if a != b && !matches!((a, b), (Scalar::Bytes(_), Scalar::Bytes(_))) {
-                panic!("observation {index}: rust={a:?}, reference={b:?}");
-            }
-            if let (Scalar::Bytes(a), Scalar::Bytes(b)) = (a, b)
-                && a != b
-            {
-                let at = a
-                    .iter()
-                    .zip(b)
-                    .position(|(a, b)| a != b)
-                    .unwrap_or(a.len().min(b.len()));
-                panic!(
-                    "observation {index}, bytes differ at {at}: rust={:?}, reference={:?}: {}",
-                    String::from_utf8_lossy(&a[at.saturating_sub(40)..(at + 80).min(a.len())]),
-                    String::from_utf8_lossy(&b[at.saturating_sub(40)..(at + 80).min(b.len())]),
-                    String::from_utf8_lossy(source)
-                );
-            }
-        }
-        assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
-    }
+    let actual = observe(source);
+    reference_test::assert_debug("tests/file_loading.rs::observe::expected", &actual);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

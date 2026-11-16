@@ -7516,6 +7516,8 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
         Actor::ReusableTexturedMesh {
             vertices: glow_vertices,
             blend: glow_blend,
+            tint: glow_tint,
+            glow: glow_color,
             ..
         },
     ] = glowing.as_slice()
@@ -7523,11 +7525,13 @@ fn song_lua_actor_multi_vertex_builds_textured_mesh_overlay() {
         panic!("expected reusable base and glow meshes, got {glowing:?}");
     };
     assert_eq!(*glow_blend, BlendMode::Alpha);
+    assert_eq!(*glow_tint, [1.0, 1.0, 1.0, 0.0]);
+    assert_eq!(*glow_color, [0.2, 0.4, 0.8, 0.75]);
     assert_ne!(Arc::as_ptr(base_vertices), Arc::as_ptr(glow_vertices));
     for (source, glow_vertex) in vertices.iter().zip(glow_vertices.iter()) {
         assert_eq!(glow_vertex.pos, source.pos);
         assert_eq!(glow_vertex.uv, source.uv);
-        assert_eq!(glow_vertex.color, [1.0, 1.0, 1.0, source.color[3]]);
+        assert_eq!(glow_vertex.color, [1.0; 4]);
     }
     let base_ptr = Arc::as_ptr(base_vertices);
     let glow_ptr = Arc::as_ptr(glow_vertices);
@@ -10076,7 +10080,11 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
     for width in [40, 80] {
         assets.queue_texture_upload(key.into(), image::RgbaImage::new(width, 20));
         for _ in 0..3 {
-            match draw(&assets).expect_actor("prepared sprite must render") {
+            // Other tests can invalidate the shared metadata registry during draw.
+            let generation_before = assets.texture_context().revision();
+            let actor = draw(&assets).expect_actor("prepared sprite must render");
+            let generation_after = assets.texture_context().revision();
+            match actor {
                 Actor::Sprite {
                     source:
                         SpriteSource::TextureHandle {
@@ -10087,7 +10095,10 @@ fn song_lua_bound_sprite_draw_refreshes_identity_size_and_uv() {
                     ..
                 } => {
                     assert_eq!(handle, assets.texture_context().texture_handle(key));
-                    assert_eq!(generation, assets.texture_context().revision());
+                    assert!(
+                        (generation_before..=generation_after).contains(&generation),
+                        "sprite generation {generation} is outside draw revisions {generation_before}..={generation_after}",
+                    );
                     assert!(
                         matches!(size, [SizeSpec::Px(w), SizeSpec::Px(h)] if w == width as f32 / 4.0 && h == 10.0)
                     );

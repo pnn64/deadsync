@@ -317,12 +317,11 @@ end
 #[test]
 fn native_parser_level_changes_cover_text_binary_and_protected_recovery() {
     let mut vm = vm();
-    let lua = lua_reference::Lua::new();
-    let binary = lua
-        .load("return function(a)return function(b)return a,b end end")
-        .into_function()
-        .unwrap()
-        .dump(false);
+
+    let binary = reference_test::native_chunk(
+        "tests/native_thread_stacks.rs::native_parser_level_changes_cover_text_binary_and_protected_recovery::chunk0",
+        &("return function(a)return function(b)return a,b end end"),
+    );
     let bytes = vm.intern(&binary);
     vm.set_global(b"wire", bytes).unwrap();
     run(&mut vm, br#"
@@ -712,3 +711,7 @@ api(1,co,function()return 42 end);assert(not coroutine.resume(co))
     vm.set_global(b"check_status", f).unwrap();
     run(&mut vm,b"local co=coroutine.create(function()error(17)end);assert(not coroutine.resume(co));check_status(co)");
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

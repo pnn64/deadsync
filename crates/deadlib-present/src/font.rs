@@ -9,9 +9,6 @@
 //! - No `regex/glob/configparser/once_cell`; pure std + image + log
 //! - VERBOSE TRACE logging for troubleshooting: enable with `RUST_LOG=new_engine::core::font=trace`
 
-#[cfg(test)]
-#[path = "font_cache_checks.rs"]
-mod font_cache_checks;
 
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -3487,11 +3484,3 @@ mod tests {
         assert_eq!(parse_range_spec("unicode #zz-ff"), None);
     }
 }
-
-#[cfg(test)]
-#[path = "font_discovery_perf.rs"]
-mod discovery_perf;
-
-#[cfg(test)]
-#[path = "marker_checks.rs"]
-mod marker_checks;

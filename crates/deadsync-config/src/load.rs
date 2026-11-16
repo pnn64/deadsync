@@ -255,6 +255,11 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
     cfg.enable_golf = loaded.enable_golf;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
+    cfg.groovestats_scorebox_itg = loaded.groovestats_scorebox_itg;
+    cfg.groovestats_scorebox_ex = loaded.groovestats_scorebox_ex;
+    cfg.groovestats_scorebox_events = loaded.groovestats_scorebox_events;
+    cfg.arrowcloud_regular_boards = loaded.arrowcloud_regular_boards;
+    cfg.arrowcloud_event_boards = loaded.arrowcloud_event_boards;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
     cfg.show_arrowcloud_result_dialogs = loaded.show_arrowcloud_result_dialogs;
     cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
@@ -267,6 +272,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.frame_stats_overlay_style = loaded.frame_stats_overlay_style;
     cfg.translated_titles = loaded.translated_titles;
     cfg.bg_brightness = loaded.bg_brightness;
+    cfg.song_lua_mode = loaded.song_lua_mode;
     cfg.center_1player_notefield = loaded.center_1player_notefield;
     cfg.center_image_translate_x = loaded.center_image_translate_x;
     cfg.center_image_translate_y = loaded.center_image_translate_y;
@@ -382,11 +388,6 @@ const fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_step_artist_box_mode = loaded.step_artist_box_mode;
     cfg.show_select_music_scorebox = loaded.show_scorebox;
     cfg.select_music_scorebox_placement = loaded.scorebox_placement;
-    cfg.select_music_scorebox_cycle_itg = loaded.scorebox_cycle_itg;
-    cfg.select_music_scorebox_cycle_ex = loaded.scorebox_cycle_ex;
-    cfg.select_music_scorebox_cycle_hard_ex = loaded.scorebox_cycle_hard_ex;
-    cfg.select_music_scorebox_cycle_tournaments = loaded.scorebox_cycle_tournaments;
-    cfg.select_music_scorebox_cycle_golf = loaded.scorebox_cycle_golf;
     cfg.select_music_scorebox_events_first = loaded.scorebox_events_first;
     cfg.select_music_show_golf_pars = loaded.show_golf_pars;
     cfg.select_music_chart_info_peak_nps = loaded.chart_info_peak_nps;
@@ -410,6 +411,7 @@ const fn apply_runtime_opts(
     cfg.song_parsing_threads = loaded.song_parsing_threads;
     cfg.smooth_histogram = loaded.smooth_histogram;
     cfg.shade_scatterplot_judgments = loaded.shade_scatterplot_judgments;
+    cfg.axis_fix = loaded.axis_fix;
     cfg.arcade_options_navigation = loaded.arcade_options_navigation;
     cfg.delayed_back = loaded.delayed_back;
     cfg.three_key_navigation = loaded.three_key_navigation;

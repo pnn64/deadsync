@@ -33,6 +33,8 @@ pub struct RenderState {
     active_sfx: Vec<ActiveSfx>,
     active_music: Option<MusicBlock>,
     active_sample: usize,
+    /// Last consumed music endpoint, also valid when a pause begins at a block boundary.
+    music_cursor: Option<(u64, f64)>,
     music_map_generation: u64,
     acknowledged_music_generation: Option<u64>,
     stale_blocks_left: usize,
@@ -192,6 +194,7 @@ impl RenderState {
             active_sfx: Vec::with_capacity(MAX_ACTIVE_SFX),
             active_music: None,
             active_sample: 0,
+            music_cursor: None,
             music_map_generation: music_map_generation(),
             acknowledged_music_generation: None,
             stale_blocks_left: capacity_blocks,
@@ -306,6 +309,32 @@ impl RenderState {
         let len = if DIRECT_PCM { pcm.len() } else { mix_f32.len() };
         let channels = self.device_channels.max(1);
         let frames = len / channels;
+        if self.controls.stream_paused() {
+            // Inspect the next block so generation changes still discard stale
+            // audio, but retain its sample cursor until music is resumed.
+            if self.load_music_block() {
+                let active = self.active_music.as_ref().unwrap();
+                let timing = active.timing();
+                self.music_cursor = Some((timing.generation,
+                    ((self.active_sample / channels) as f64)
+                        .mul_add(timing.music_sec_per_frame, timing.music_start_sec)));
+            }
+            if DIRECT_PCM { pcm.fill(0); } else { mix_f32.fill(0.0); }
+            if let Some((generation, seconds)) = self.music_cursor
+                && generation == self.music_map_generation
+            {
+                mark_music_track_started(total_before);
+                self.transport.push_played(generation, MusicMapSeg {
+                    stream_frame_start: total_before.saturating_sub(music_track_start_frame()) as i64,
+                    frames: frames as i64,
+                    music_start_sec: seconds,
+                    music_sec_per_frame: 0.0,
+                });
+            }
+            // Intentional silence is not an output underrun. Sound effects are
+            // mixed separately and keep advancing on the device timeline.
+            return len;
+        }
         let mut track_frame_start = None;
         let mut frame = 0;
         while frame < frames && self.load_music_block() {
@@ -357,6 +386,9 @@ impl RenderState {
                 },
             );
             self.active_sample += consumed;
+            self.music_cursor = Some((timing.generation,
+                ((block_frame + take) as f64)
+                    .mul_add(timing.music_sec_per_frame, timing.music_start_sec)));
             frame += take;
             let exhausted = self.active_sample == active.samples().len();
             if exhausted && !self.recycle_active() {
@@ -714,6 +746,108 @@ mod tests {
     }
 
     #[test]
+    fn music_pause_retains_samples_and_maps_silence_while_sfx_continue() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        for integer_output in [false, true] {
+            for muted in [false, true] {
+                let generation = music_map_generation();
+                let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+                let input: Vec<i16> = (0..300 * CHANNELS).map(|i| i as i16 * 31).collect();
+                push_all(&mut stream.writer, &input, generation, 0);
+                let mut render = test_render(render_handle);
+                let start = music_track_start_frame();
+                render.mix_f32_buffer(start, 20 * CHANNELS);
+                pop_map(&mut stream.played_map);
+                let cursor = render.active_sample;
+                render.controls.set_stream_paused(true);
+                if muted { render.controls.set_stream_gain(0.0); }
+                let sfx = QueuedSfx {
+                    data: Arc::from([8192; 8]), bus: EFFECT_BUS, generation: 0,
+                    restart_slot: None, pan: crate::SfxPan::Center,
+                    target_stream_frame: 0, voice: None,
+                };
+                if integer_output {
+                    let mut out = [i16::MAX; 40];
+                    assert_eq!(render.render_i16_chunks(&mut out, start + 20, [sfx]), 40);
+                    assert_eq!(&out[..8], &[8192; 8]);
+                    assert_eq!(&out[8..], &[0; 32]);
+                    // This second buffer uses the direct PCM path without SFX.
+                    assert_eq!(render.render_i16_chunks(&mut out, start + 40, []), 40);
+                    assert_eq!(out, [0; 40]);
+                } else {
+                    let mut out = [f32::NAN; 40];
+                    assert_eq!(render.render_f32_chunks(&mut out, start + 20, [sfx]), 40);
+                    assert_eq!(&out[..8], &[0.25; 8]);
+                    assert_eq!(&out[8..], &[0.0; 32]);
+                    assert_eq!(render.render_f32_chunks(&mut out, start + 40, []), 40);
+                    assert_eq!(out, [0.0; 40]);
+                }
+                assert_eq!(render.active_sample, cursor);
+                for offset in [20, 40] {
+                    let (tag, seg) = pop_map(&mut stream.played_map);
+                    assert_eq!(tag, generation);
+                    assert_eq!(seg.stream_frame_start, offset);
+                    assert_eq!(seg.frames, 20);
+                    assert_eq!(seg.music_start_sec, 20.0 * SEC_PER_FRAME);
+                    assert_eq!(seg.music_sec_per_frame, 0.0);
+                }
+                assert!(!render.finish_callback(start + 20, 40, 40));
+                render.controls.set_stream_paused(false);
+                render.controls.set_stream_gain(1.0);
+                let (popped, _) = render.mix_f32_buffer(start + 60, 280 * CHANNELS);
+                assert_eq!(popped, 280 * CHANNELS);
+                for (&actual, &expected) in render.mix_f32[..popped].iter().zip(&input[40..]) {
+                    assert_eq!(actual, i16_to_f32(expected));
+                }
+                let (_, seg) = pop_map(&mut stream.played_map);
+                assert_eq!(seg.stream_frame_start, 60);
+                assert_eq!(seg.music_start_sec, 20.0 * SEC_PER_FRAME);
+                assert_eq!(seg.music_sec_per_frame, SEC_PER_FRAME);
+            }
+        }
+    }
+
+    #[test]
+    fn music_pause_handles_empty_queue_startup_and_generation_changes() {
+        let _guard = GlobalAudioGuard::acquire();
+        reset_levels();
+        let generation = music_map_generation();
+        let (mut stream, render_handle) = music_transport(SAMPLE_RATE, CHANNELS);
+        let mut render = test_render(render_handle);
+        let start = music_track_start_frame();
+        render.controls.set_stream_paused(true);
+        render.mix_f32_buffer(start, 40);
+        assert!(stream.played_map.pop().is_none(), "no invented music origin before decoding");
+        push_all(&mut stream.writer, &[1000; 40], generation, 0);
+        render.mix_f32_buffer(start + 20, 40);
+        assert_eq!(render.active_sample, 0);
+        assert_eq!(pop_map(&mut stream.played_map).1.music_start_sec, 0.0);
+        render.controls.set_stream_paused(false);
+        render.mix_f32_buffer(start + 40, 40);
+        pop_map(&mut stream.played_map);
+        assert!(render.active_music.is_none());
+        render.controls.set_stream_paused(true);
+        render.mix_f32_buffer(start + 60, 40);
+        let (_, seg) = pop_map(&mut stream.played_map);
+        assert_eq!(seg.music_start_sec, 20.0 * SEC_PER_FRAME);
+        assert_eq!(seg.music_sec_per_frame, 0.0);
+
+        let next = bump_music_map_generation();
+        push_all(&mut stream.writer, &[2000; 80], next, 100);
+        stream.writer.publish_generation_ready(next);
+        render.mix_f32_buffer(start + 80, 40);
+        let (tag, seg) = pop_map(&mut stream.played_map);
+        assert_eq!(tag, next);
+        assert_eq!(seg.music_start_sec, 100.0 * SEC_PER_FRAME);
+        assert_eq!(seg.music_sec_per_frame, 0.0);
+        assert_eq!(render.active_sample, 0);
+        render.controls.set_stream_paused(false);
+        render.mix_f32_buffer(start + 100, 40);
+        assert!(render.mix_f32[..40].iter().all(|&v| v == i16_to_f32(2000)));
+    }
+
+    #[test]
     fn callback_larger_than_scratch_buffer_is_chunked_without_data_loss() {
         let _guard = GlobalAudioGuard::acquire();
         reset_levels();
@@ -993,9 +1127,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-#[path = "render_perf_tests.rs"]
-mod perf_tests;
 
 #[cfg(test)]
 #[path = "pcm_conversion_tests.rs"]

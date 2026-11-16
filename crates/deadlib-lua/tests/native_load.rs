@@ -159,12 +159,11 @@ fn imported_binary_upvalues_start_nil_for_every_reader_block_size() {
         assert_eq!(status, NativeLoadStatus::Ok);
         stack.finish(1)
     }
-    let reference = lua_reference::Lua::new();
-    let function: lua_reference::Function = reference
-        .load("local captured=17;return function()return captured,42 end")
-        .eval()
-        .unwrap();
-    let bytes = function.dump(false);
+
+    let bytes = reference_test::native_chunk(
+        "tests/native_load.rs::imported_binary_upvalues_start_nil_for_every_reader_block_size::chunk0",
+        &("local captured=17;return function()return captured,42 end"),
+    );
     let mut vm = Vm::new();
     install(&mut vm, callback);
     let source = vm.intern(&bytes);
@@ -283,14 +282,9 @@ a=nil;collectgarbage();assert(next(weak)==nil)
 
 #[test]
 fn binary_reader_prototypes_survive_fragmentation_and_collections() {
-    let reference = lua_reference::Lua::new();
-    let f: lua_reference::Function = reference
-        .load("return function(a)return function(b)return a+b end end")
-        .into_function()
-        .unwrap();
     let mut vm = Vm::new();
     install(&mut vm, observing_reader);
-    let binary = vm.intern(&f.dump(false));
+    let binary = vm.intern(&reference_test::native_chunk("tests/native_load.rs::binary_reader_prototypes_survive_fragmentation_and_collections::chunk0", &("return function(a)return function(b)return a+b end end")));
     vm.set_global(b"binary", binary).unwrap();
     run(
         &mut vm,
@@ -358,3 +352,7 @@ fn parser_root_stack_overflow_restores_the_loader_scope() {
     vm.collect_garbage().unwrap();
     assert_eq!(vm.heap_stats().parser_prototypes, 0);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

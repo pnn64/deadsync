@@ -1,5 +1,6 @@
 //! Structural checking of all 38 Lua 5.1 opcodes without executing a chunk.
-use super::{Chunk, Constant};
+use super::{Chunk, Constant, invalid};
+use crate::{Error, memory::fallible};
 
 // Independent format/operand descriptors: ABC, ABx, AsBx; none, unsigned,
 // register, register-or-constant. Test instructions consume a following jump.
@@ -56,9 +57,9 @@ fn open(word: u32) -> bool {
     matches!(op(word), 28 | 29 | 30 | 34) && b(word) == 0
 }
 
-pub(super) fn verify(chunk: &Chunk, id: usize) -> Result<(), &'static str> {
+pub(super) fn verify(chunk: &Chunk, id: usize) -> Result<(), Error> {
     let p = &chunk.prototypes[id];
-    let fail = || Err("bad code");
+    let fail = || Err(invalid("bad code"));
     let n = p.code.len();
     let stack = usize::from(p.stack);
     if stack == 0
@@ -73,7 +74,7 @@ pub(super) fn verify(chunk: &Chunk, id: usize) -> Result<(), &'static str> {
     }
     // A single linear pass identifies SETLIST payloads. Their raw count can
     // itself resemble SETLIST; treating it as another opcode would be wrong.
-    let mut payload = vec![false; n];
+    let mut payload = fallible::repeat(false, n)?;
     let mut pc = 0;
     while pc < n {
         let word = p.code[pc];

@@ -1034,6 +1034,7 @@ impl GameplayExitInputState {
 
 #[derive(Clone, Debug)]
 pub struct GameplayControlRuntimeState {
+    pub paused: bool,
     pub exit_input: GameplayExitInputState,
     pub offset_adjust_hold: GameplayOffsetAdjustHoldState,
     pub input_state: GameplayInputState,

@@ -2709,9 +2709,6 @@ mod dynamic_sudden_tests {
     }
 }
 
-#[cfg(test)]
-#[path = "mesh_capture_performance.rs"]
-mod capture_performance;
 
 // Ownership is independent of pad position: Routine partners may cross sides.
 fn routine_note_tint(owner: u8, alpha: f32) -> [f32; 4] {

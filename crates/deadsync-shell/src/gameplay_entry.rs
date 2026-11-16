@@ -196,6 +196,11 @@ pub fn apply_song_lua_reload(
 ) -> Result<bool, String> {
     let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
     let mut selected_session = session.clone();
+    if let Some(players) = prepared.loaded_players() {
+        selected_session.joined_sides = if session.p2_runtime_player() {
+            [players[1], players[0]]
+        } else { players };
+    }
     if let Some(style) = prepared.loaded_style() {
         use deadsync_gameplay::GameplayInputPlayStyle as Style;
         selected_session.play_style = match (session.play_style.is_pump(), style) {
@@ -204,16 +209,18 @@ pub fn apply_song_lua_reload(
             (false, "versus") => Style::Versus,
             (false, "couple") => Style::Couple,
             (false, "routine") => Style::Routine,
-            (true, "single") => Style::PumpSingle,
-            (true, "double") => Style::PumpDouble,
-            (true, "versus") => Style::PumpVersus,
-            (true, "couple") => Style::PumpCouple,
-            (true, "routine") => Style::PumpRoutine,
+            // Compiled scenes retain the game-qualified key so their column
+            // metadata survives projection; Lua styles also expose bare names.
+            (true, "single" | "pump-single") => Style::PumpSingle,
+            (true, "double" | "pump-double") => Style::PumpDouble,
+            (true, "versus" | "pump-versus") => Style::PumpVersus,
+            (true, "couple" | "pump-couple") => Style::PumpCouple,
+            (true, "routine" | "pump-routine") => Style::PumpRoutine,
             _ => return Err(format!("Lua reload selected unsupported style {style}")),
         };
-        // GameState::SetCurrentStyle preserves joined sides and rejects styles
-        // that require a different number of them.
-        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+        // Authored JoinPlayer mutations belong to the retained
+        // session; validate the selected style against the newly loaded roster.
+        if selected_session.play_style.player_count() != selected_session.joined_sides.iter().filter(|joined| **joined).count() {
             return Err(format!("Lua reload style {style} is incompatible with joined sides"));
         }
     }
@@ -262,6 +269,9 @@ pub fn song_lua_context(
     );
     context.random_seed = random_seed;
     context.live = live;
+    context.theme_combo_font_directory = Some(deadsync_assets::resolve_asset_path(
+        "assets/fonts/_combo",
+    ));
     // The screen owns the first clocked Update(0), after audio is initialized.
     context.defer_initial_live_update = live;
     context.screen_loading = live;
@@ -343,8 +353,8 @@ pub fn song_lua_context(
     Ok(context)
 }
 
-/// Prepare compiled song playback on the load worker, retaining authored Lua
-/// when input callbacks require runtime execution.
+/// Prepare baked or runtime song playback on the load worker, retaining authored
+/// Lua when input callbacks require runtime execution even in baked mode.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
@@ -360,23 +370,31 @@ pub fn prepare_song_lua(
     config: &deadsync_gameplay::GameplayConfig,
     video_renderer: &str,
     random_seed: u32,
+    mode: deadsync_config::options::SongLuaMode,
+    bake_progress: Option<deadsync_song_lua::SongLuaBakeProgress>,
 ) -> PreparedGameplaySongLua {
     if song.background_lua_changes.is_empty() && song.foreground_lua_changes.is_empty() {
         return PreparedGameplaySongLua::default();
     }
-    let context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
+    let live = mode == deadsync_config::options::SongLuaMode::Runtime;
+    let mut context = match song_lua_context(song, charts, timing, player_profiles, scroll_speed,
         music_rate, viewport, display_size, display_aspect_ratio, autoplay, session,
-        config, video_renderer, random_seed, false) {
+        config, video_renderer, random_seed, live) {
         Ok(context) => context,
         Err(error) => {
             warn!("Cannot load Lua chart timing for '{}': {error}", song.title);
             return PreparedGameplaySongLua::default();
         }
     };
-    deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
+    context.bake_progress = bake_progress.clone().filter(|_| !live);
+    let prepared = deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
         song, &context, deadsync_assets::song_lua::compile_song_lua,
         deadsync_assets::song_lua::compile_song_lua_layers,
-    )
+    );
+    if !live && let Some(progress) = bake_progress {
+        progress.complete();
+    }
+    prepared
 }
 
 #[cfg(test)]
@@ -465,6 +483,142 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_mode_selects_execution_and_reports_bake_progress() {
+        use deadsync_config::options::SongLuaMode;
+
+        crate::tests::init_paths();
+        let dir = tempfile::tempdir().unwrap();
+        let simfile = dir.path().join("mode.ssc");
+        let source = dir.path().join("main.lua");
+        std::fs::write(
+            &simfile,
+            "#TITLE:Lua mode;\n#BPMS:0=120;\n\
+            #FGCHANGES:0=main.lua=1=0=0=0=StretchNoLoop====;\n\
+            #NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Easy;\n\
+            #METER:1;\n#NOTES:\n1000\n0000\n0010\n0000\n;\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &source,
+            "return Def.Quad { OnCommand = function(self) self:linear(1):x(100) end }",
+        )
+        .unwrap();
+        let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
+        let chart = Arc::new(song.charts[0].clone());
+        let charts = [chart.clone(), chart];
+        let loaded = deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap();
+        let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+        let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+        let session = deadsync_gameplay::GameplaySession::default();
+        let config = deadsync_gameplay::GameplayConfig {
+            global_offset_seconds: 0.0,
+            ..Default::default()
+        };
+        let prepare = |song: &SongData, mode, progress| {
+            prepare_song_lua(
+                song,
+                &charts,
+                [&loaded[0].timing; MAX_PLAYERS],
+                &profiles,
+                &scroll,
+                1.0,
+                deadsync_gameplay::GameplayViewport::design(),
+                (1280, 720),
+                16.0 / 9.0,
+                0.0,
+                &session,
+                &config,
+                "Software",
+                1,
+                mode,
+                progress,
+            )
+        };
+        for (mode, live) in [(SongLuaMode::Baked, false), (SongLuaMode::Runtime, true)] {
+            let progress = deadsync_song_lua::SongLuaBakeProgress::default();
+            let mut prepared = prepare(&song, mode, Some(progress.clone()));
+            assert_eq!(progress.fraction(), if live { 0.0 } else { 1.0 });
+            assert!(prepared.compile_succeeded(), "{mode:?} compilation");
+            assert!(
+                prepared
+                    .compiled_layers()
+                    .any(|layer| !layer.overlays.is_empty()),
+                "{mode:?} actors"
+            );
+            assert_eq!(
+                prepared.take_live_scene().unwrap().is_some(),
+                live,
+                "{mode:?}"
+            );
+        }
+
+        std::fs::write(&source, "SCREENMAN:GetTopScreen():AddInputCallback(function(event) return false end)\nreturn Def.Actor {}").unwrap();
+        let mut interactive = prepare(&song, SongLuaMode::Baked, None);
+        assert!(interactive.compile_succeeded());
+        assert!(
+            interactive.take_live_scene().unwrap().is_some(),
+            "input callbacks need runtime in baked mode"
+        );
+
+        let mut ordinary = song;
+        ordinary.foreground_lua_changes.clear();
+        ordinary.has_lua = false;
+        for mode in [SongLuaMode::Baked, SongLuaMode::Runtime] {
+            let mut prepared = prepare(&ordinary, mode, None);
+            assert!(prepared.compiled_layers().next().is_none());
+            assert!(
+                prepared.take_live_scene().unwrap().is_none(),
+                "ordinary song in {mode:?} mode"
+            );
+        }
+    }
+
+    #[test]
+    fn pump_preparation_applies_its_retained_game_qualified_style() {
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        crate::tests::init_paths();
+        let dir = tempfile::tempdir().unwrap();
+        let simfile = dir.path().join("pump.ssc");
+        std::fs::write(dir.path().join("main.lua"), "return Def.ActorFrame {}").unwrap();
+        for (style, kind, notes) in [
+            (Style::PumpSingle, "single", "10000\n00000\n00100\n00000"),
+            (Style::PumpVersus, "single", "10000\n00000\n00100\n00000"),
+            (Style::PumpDouble, "double", "1000000000\n0000000000\n0000000010\n0000000000"),
+            (Style::PumpCouple, "couple", "1000000000\n0000000000\n0000000010\n0000000000"),
+            (Style::PumpRoutine, "routine", "1000000000\n0000000000\n0000000000\n0000000000\n&\n0000000000\n0000000000\n0000000010\n0000000000"),
+        ] {
+            std::fs::write(&simfile, format!(
+                "#TITLE:Pump preparation;#BPMS:0=120;#FGCHANGES:0=main.lua=1=0=0=1;\n\
+                 #NOTEDATA:;#STEPSTYPE:pump-{kind};#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{notes}\n;"
+            )).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
+            let mut session = deadsync_gameplay::GameplaySession {
+                play_style: style,
+                joined_sides: [true, style.player_count() == 2],
+                ..Default::default()
+            };
+            let mut charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+            let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+            let mut payloads = [payload.clone(), payload];
+            let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+            let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+            let config = deadsync_gameplay::GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
+            let prepared = prepare_song_lua(&song, &charts,
+                std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0,
+                deadsync_gameplay::GameplayViewport::design(), (1280, 720), 16.0 / 9.0,
+                1.0, &session, &config, "Software", 1,
+                deadsync_config::options::SongLuaMode::Runtime, None);
+            assert!(prepared.compile_succeeded(), "{style:?} compilation");
+            assert!(prepared.loaded_style().unwrap().starts_with("pump-"));
+            assert!(apply_song_lua_reload(&song, &mut charts, &mut payloads, &prepared,
+                &mut session, 0.0).unwrap(), "{style:?} selection was applied");
+            assert_eq!(session.play_style, style);
+            assert_eq!(session.joined_sides, [true, style.player_count() == 2]);
+            assert!(charts.iter().all(|chart| chart.chart_type == format!("pump-{kind}")));
+        }
+    }
+
+    #[test]
     fn reload_maps_lua_p1_to_single_p2_payloads() {
         let session = deadsync_gameplay::GameplaySession {
             player_side: deadsync_gameplay::GameplayInputPlayerSide::P2,
@@ -545,7 +699,3 @@ mod tests {
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/perf/owned_charts.rs"]
-mod owned_pipeline_tests;

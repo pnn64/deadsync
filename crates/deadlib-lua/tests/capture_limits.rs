@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::Lua;
 
 const WRAPPER: &[u8] = br#"local calls=0;local at=0
 local ok,f,e=pcall(function()
@@ -14,17 +13,16 @@ end)
 if not ok then e=f;f=nil end
 return ok,f~=nil,e,calls"#;
 
-struct Oracle {
+struct Harness {
     vm: Vm,
-    lua: Lua,
+
     wrapper: deadlib_lua::Program,
 }
-impl Oracle {
+impl Harness {
     fn new() -> Self {
         Self {
             vm: Vm::new(),
-            // SAFETY: fixed developer text exercises the protected official loader.
-            lua: unsafe { Lua::unsafe_new() },
+
             wrapper: compile(WRAPPER).unwrap(),
         }
     }
@@ -33,16 +31,11 @@ impl Oracle {
         for (key, bytes) in [("source", source.as_bytes()), ("name", name.as_slice())] {
             let value = self.vm.intern(bytes);
             self.vm.set_global(key.as_bytes(), value).unwrap();
-            self.lua
-                .globals()
-                .set(key, self.lua.create_string(bytes).unwrap())
-                .unwrap();
         }
         for (key, number) in [("width", width), ("fault", fault)] {
             self.vm
                 .set_global(key.as_bytes(), Value::Number(number as f64))
                 .unwrap();
-            self.lua.globals().set(key, number).unwrap();
         }
         let values = self.vm.execute(&self.wrapper).unwrap().to_vec();
         let [
@@ -60,16 +53,10 @@ impl Oracle {
             other => panic!("unexpected diagnostic: {other:?}"),
         };
         let actual = (*ok, *loaded, error, *calls as usize);
-        let (ok, loaded, error, calls): (bool, bool, Option<lua_reference::LuaString>, usize) =
-            self.lua.load(WRAPPER).eval().unwrap();
-        let expected = (ok, loaded, error.map(|s| s.as_bytes().to_vec()), calls);
-        assert_eq!(
-            actual, expected,
-            "width={width}, fault={fault}, source={source}"
-        );
+        reference_test::assert_debug("tests/capture_limits.rs::check::expected", &actual);
     }
     fn valid(&mut self, source: &str) {
-        self.lua.load(source).into_function().expect(source);
+        deadlib_lua::compile(source.as_bytes()).expect(source);
         self.check(source, 0, 0);
     }
 }
@@ -93,7 +80,7 @@ fn direct(count: usize, closed: bool) -> String {
 
 #[test]
 fn capture_boundaries_match_for_complete_and_unfinished_functions() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [1, 58, 59, 60, 61, 62, 70] {
         for closed in [false, true] {
             oracle.check(&direct(count, closed), 0, 0);
@@ -104,7 +91,7 @@ fn capture_boundaries_match_for_complete_and_unfinished_functions() {
 
 #[test]
 fn descendant_captures_report_the_first_overflowing_ancestor() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [8, 12, 59, 60, 61, 70] {
         let mut source = format!("function foo()\nlocal {},b\n", names(count));
         for i in 1..=count {
@@ -118,7 +105,7 @@ fn descendant_captures_report_the_first_overflowing_ancestor() {
 
 #[test]
 fn capture_checks_wait_for_the_next_lexical_token() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let prefix = format!(
         "local {}\nlocal function f()\n{}a61",
         names(61),
@@ -143,7 +130,7 @@ fn capture_checks_wait_for_the_next_lexical_token() {
 
 #[test]
 fn reader_failures_at_the_capture_boundary_keep_consumption_and_precedence() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let source = direct(61, false);
     for width in [1, 3, 7, 64] {
         let boundary = source.find("a61=1").unwrap();
@@ -155,7 +142,7 @@ fn reader_failures_at_the_capture_boundary_keep_consumption_and_precedence() {
 
 #[test]
 fn globals_fields_methods_and_record_keys_do_not_consume_captures() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let fields = (1..=70)
         .map(|i| format!("t.a{i}=t:a{i}({{a{i}=1}})\n"))
         .collect::<String>();
@@ -168,7 +155,7 @@ fn globals_fields_methods_and_record_keys_do_not_consume_captures() {
 
 #[test]
 fn local_activation_and_shadowed_initializers_preserve_outer_bindings() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [59, 60, 61] {
         let initializers = (1..=count)
             .map(|i| format!("do local a{i}=a{i} end\n"))
@@ -193,7 +180,7 @@ fn local_activation_and_shadowed_initializers_preserve_outer_bindings() {
 
 #[test]
 fn loop_variables_parameters_method_self_and_vararg_arg_have_function_scope() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [59, 60] {
         let decl = names(count);
         let refs = assignments(count);
@@ -232,7 +219,7 @@ fn loop_variables_parameters_method_self_and_vararg_arg_have_function_scope() {
 
 #[test]
 fn repeat_body_locals_remain_visible_in_the_until_condition() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [59, 60, 61] {
         let source = format!(
             "repeat local {} until (function()\n{}return true end)()",
@@ -246,7 +233,7 @@ fn repeat_body_locals_remain_visible_in_the_until_condition() {
 
 #[test]
 fn sequential_function_scopes_reuse_capture_storage_without_losing_parent_captures() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let mut source = format!("local {}\nlocal function outer()\na1=1\n", names(61));
     for _ in 0..100 {
         source.push_str(&format!(
@@ -263,7 +250,7 @@ fn sequential_function_scopes_reuse_capture_storage_without_losing_parent_captur
 
 #[test]
 fn generated_lexical_layouts_preserve_capture_identity_and_error_order() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let mut seed = 0x51_ca_70_u32;
     for case in 0..256 {
         let mut next = || {
@@ -294,3 +281,7 @@ fn generated_lexical_layouts_preserve_capture_identity_and_error_order() {
         }
     }
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -3,6 +3,7 @@ use crate::app_update as config_update;
 use crate::audio::NoteScrollClock;
 use crate::coin::CoinMode;
 use crate::null_or_die::GraphOrigin;
+use crate::options::SongLuaMode;
 use crate::runtime::{RUNTIME_CONFIG, get, save_without_keymaps};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
@@ -101,6 +102,7 @@ update_config_fn!(pub fn update_hide_mouse_cursor(enabled: bool) => set_hide_mou
 update_config_fn!(pub fn update_global_offset(offset: f32) => set_global_offset_seconds);
 update_config_fn!(pub fn update_visual_delay_seconds(delay: f32) => set_visual_delay_seconds);
 update_config_fn!(pub fn update_note_scroll_clock(clock: NoteScrollClock) => set_note_scroll_clock);
+update_config_fn!(pub fn update_song_lua_mode(mode: SongLuaMode) => set_song_lua_mode);
 update_config_fn!(pub fn update_vsync(enabled: bool) => set_vsync);
 update_config_fn!(pub fn update_max_fps(max_fps: u16) => set_max_fps);
 update_config_fn!(pub fn update_present_mode_policy(mode: PresentModePolicy) => set_present_mode_policy);
@@ -117,6 +119,7 @@ update_config_fn!(pub fn update_cache_songs(enabled: bool) => set_cache_songs);
 update_config_fn!(pub fn update_fastload(enabled: bool) => set_fastload);
 update_config_fn!(pub fn update_allow_song_deletion(enabled: bool) => set_allow_song_deletion);
 
+update_config_fn!(pub fn update_axis_fix(enabled: bool) => set_axis_fix);
 update_config_fn!(pub fn update_arcade_options_navigation(enabled: bool) => set_arcade_options_navigation);
 update_config_fn!(pub fn update_coin_mode(mode: CoinMode) => set_coin_mode);
 update_config_fn!(pub fn update_coins_per_credit(coins: u8) => set_coins_per_credit);
@@ -217,10 +220,9 @@ update_config_fn!(pub fn update_show_select_music_gameplay_timer(enabled: bool) 
 update_config_fn!(pub fn update_show_select_music_stage_display(enabled: bool) => set_show_select_music_stage_display);
 update_config_fn!(pub fn update_show_select_music_scorebox(enabled: bool) => set_show_select_music_scorebox);
 update_config_fn!(pub fn update_select_music_scorebox_placement(mode: SelectMusicScoreboxPlacement) => set_select_music_scorebox_placement);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_itg(enabled: bool) => set_select_music_scorebox_cycle_itg);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_ex(enabled: bool) => set_select_music_scorebox_cycle_ex);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_hard_ex(enabled: bool) => set_select_music_scorebox_cycle_hard_ex);
-update_config_fn!(pub fn update_select_music_scorebox_cycle_tournaments(enabled: bool) => set_select_music_scorebox_cycle_tournaments);
+update_config_fn!(pub fn update_groovestats_scorebox_boards(mask: u8) => set_groovestats_scorebox_boards);
+update_config_fn!(pub fn update_arrowcloud_regular_boards(enabled: bool) => set_arrowcloud_regular_boards);
+update_config_fn!(pub fn update_arrowcloud_event_boards(enabled: bool) => set_arrowcloud_event_boards);
 update_config_fn!(pub fn update_select_music_chart_info_peak_nps(enabled: bool) => set_select_music_chart_info_peak_nps);
 update_config_fn!(pub fn update_select_music_chart_info_effective_bpm(enabled: bool) => set_select_music_chart_info_effective_bpm);
 update_config_fn!(pub fn update_select_music_chart_info_matrix_rating(enabled: bool) => set_select_music_chart_info_matrix_rating);
@@ -401,6 +403,5 @@ pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_h
     }
 }
 
-update_config_fn!(pub fn update_select_music_scorebox_cycle_golf(enabled: bool) => set_select_music_scorebox_cycle_golf);
 update_config_fn!(pub fn update_select_music_scorebox_events_first(enabled: bool) => set_select_music_scorebox_events_first);
 update_config_fn!(pub fn update_select_music_show_golf_pars(enabled: bool) => set_select_music_show_golf_pars);

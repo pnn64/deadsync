@@ -22,5 +22,4 @@ RUSTFLAGS='-Cdebuginfo=1 -Cpasses=sancov-module -Cllvm-args=-sanitizer-coverage-
 
 Seed decode with `../tests/fixtures/image-gif` and encoder-generated files.
 `cargo run -p deadlib-image-gif --example seed_fuzz -- <directory>` generates
-deterministic GIF and LZW seeds. Recorded smoke logs are in `reports/`; a bounded
-run is evidence of exercised paths, not an exhaustive security guarantee.
+deterministic GIF and LZW seeds. Keep generated corpora and logs under `target/`.

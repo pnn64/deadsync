@@ -35,10 +35,6 @@ storage overhead), graphics, frame count and block count. Dimensions are checked
 before allocating pixels. Erroring streaming decoders and writers stay failed.
 No RGBA quantization or implicit lossy conversion is included.
 
-See [COVERAGE.md](COVERAGE.md) for standards and validation evidence,
-[BENCHMARKS.md](BENCHMARKS.md) for measured performance, and [PLAN.md](PLAN.md)
-for the implementation milestones.
-
 `Compositor::new(&gif.header)` uses the specification's logical-screen background
 color. `CompositeOptions` can select a transparent canvas or a supplied RGBA
 background instead. `render` borrows the reusable RGBA8 canvas until the next

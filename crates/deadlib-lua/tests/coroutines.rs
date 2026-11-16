@@ -1,5 +1,4 @@
 use deadlib_lua::{ErrorKind, Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 
 #[test]
 fn generic_for_iterators_keep_native_yield_and_depth_boundaries() {
@@ -33,25 +32,7 @@ fn compare(source: &[u8]) {
             _ => panic!("return scalar observations"),
         })
         .collect();
-    // SAFETY: the development oracle runs only the fixed, local test programs;
-    // its unrestricted standard libraries are required for debug environment APIs.
-    let lua = unsafe { Lua::unsafe_new() };
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalars"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/coroutines.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -254,3 +235,7 @@ fn suspended_threads_persist_across_host_executions_and_quota_abort_restores_mai
         &[Value::Number(42.0)]
     );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

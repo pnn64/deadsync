@@ -179,28 +179,3 @@ PowerShell campaign runner and its retained measurements are Windows-specific.
 Coverage counters/features are libFuzzer feedback values, not source-line
 coverage percentages. A bounded campaign supplements conformance/differential
 tests and does not establish absence of bugs or completion of fuzz validation.
-
-## Recorded initial campaign (2026-10-26)
-
-Windows x86-64, rustc 1.101.0-nightly (07e526db9), LLVM 23.1.4, cargo-fuzz 0.13.2,
-libfuzzer-sys 0.4.13, MSVC 14.44.35207. Four targets ran concurrently with a
-300-second budget each, seeds 1337..1340, and the pinned floor-zero file enabled.
-All exited zero, with no artifacts, assertion failures, sanitizer reports,
-timeouts or RSS-limit failures. Total: **183,746 executions**.
-
-| Target | Executions | Coverage counters | Features | Peak sanitizer RSS (MiB) |
-| --- | ---: | ---: | ---: | ---: |
-| Ogg container | 48,516 | 732 | 2,748 | 495 |
-| Vorbis headers | 127,539 | 1,563 | 3,322 | 464 |
-| Raw packets | 3,777 | 1,517 | 3,072 | 136 |
-| Streaming/seeking | 3,914 | 2,864 | 8,230 | 472 |
-
-[Statistics](validation/2026-10-26-asan.tsv),
-[provenance/source hashes](validation/2026-10-26-provenance.json),
-[initial corpus hashes](validation/2026-10-26-initial-corpus.sha256.json), and
-[binary hashes/arguments](validation/2026-10-26-results.json) preserve this
-measurement. These include the uncommitted fuzz harness's source hashes at run
-time; the parent Git revision also contains unrelated ongoing work. Fuzz/source
-hashes describe checkout bytes on Windows, including line endings. Logs and the
-evolving corpus remain in ignored scratch storage. A separate resume smoke run
-loaded a previous header corpus and completed successfully.

@@ -58,19 +58,26 @@ impl PlanarAccum {
         }
         if channels == 1 {
             if let [channel] = self.channels.as_mut_slice() {
-                channel.extend(
-                    interleaved
-                        .iter()
-                        .map(|sample| f32::from(*sample) / 32768.0),
-                );
+                #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+                if interleaved.len() >= 64 && std::arch::is_x86_feature_detected!("avx2") {
+                    // SAFETY: runtime detection checks CPU and OS support for AVX2.
+                    unsafe { append_planar_mono_avx2(interleaved, channel) };
+                    return;
+                }
+                append_planar_mono(interleaved, channel);
                 return;
             }
         } else if channels == 2
             && let [left, right] = self.channels.as_mut_slice()
         {
-            let frames = interleaved.as_chunks::<2>().0;
-            left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
-            right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
+            // Stereo needs larger packets to amortize its strided conversions.
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            if interleaved.len() >= 256 * 2 && std::arch::is_x86_feature_detected!("avx2") {
+                // SAFETY: runtime detection checks CPU and OS support for AVX2.
+                unsafe { append_planar_stereo_avx2(interleaved, left, right) };
+                return;
+            }
+            append_planar_stereo(interleaved, left, right);
             return;
         }
         let complete = &interleaved[..frames * channels];
@@ -108,6 +115,34 @@ impl PlanarAccum {
             channel.clear();
         }
     }
+}
+
+#[inline(always)]
+fn append_planar_mono(input: &[i16], output: &mut Vec<f32>) {
+    output.extend(input.iter().map(|sample| f32::from(*sample) / 32768.0));
+}
+
+#[inline(always)]
+fn append_planar_stereo(input: &[i16], left: &mut Vec<f32>, right: &mut Vec<f32>) {
+    let frames = input.as_chunks::<2>().0;
+    left.extend(frames.iter().map(|frame| f32::from(frame[0]) / 32768.0));
+    right.extend(frames.iter().map(|frame| f32::from(frame[1]) / 32768.0));
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 before entering.
+unsafe fn append_planar_mono_avx2(input: &[i16], output: &mut Vec<f32>) {
+    append_planar_mono(input, output);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "avx2")]
+/// # Safety
+/// The caller must establish CPU and OS support for AVX2 before entering.
+unsafe fn append_planar_stereo_avx2(input: &[i16], left: &mut Vec<f32>, right: &mut Vec<f32>) {
+    append_planar_stereo(input, left, right);
 }
 
 // Fixed strides expose packed loads/shuffles to the vectorizer. Other channel
@@ -421,6 +456,46 @@ pub fn apply_fade_envelope(
         return;
     }
     let frames_f = frames as f32;
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if frames >= 4 && std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: CPU and OS support for FMA is established before entry.
+        unsafe { fade_samples_fma(samples, channels, frames_f, start_volume, end_volume) };
+        return;
+    }
+    fade_samples(samples, channels, frames_f, start_volume, end_volume);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn fade_samples_fma(
+    samples: &mut [i16],
+    channels: usize,
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    fade_samples(samples, channels, frames_f, start_volume, end_volume);
+}
+
+// The entry point supplies finite endpoints in [0, 1] and nonzero frame/channel counts.
+#[inline(always)]
+fn fade_samples(
+    samples: &mut [i16],
+    channels: usize,
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    // Keep skipping near-unity frames when most of a buffer may be unchanged.
+    // Otherwise fixed layouts let LLVM interpolate several frames together.
+    if channels == 1 && start_volume.max(end_volume) <= 0.9999 {
+        fade_fixed::<1>(samples, frames_f, start_volume, end_volume);
+        return;
+    }
+    if channels == 2 && start_volume.max(end_volume) <= 0.9999 {
+        fade_fixed::<2>(samples, frames_f, start_volume, end_volume);
+        return;
+    }
     // Both endpoints and t are in [0, 1], so the fused interpolation stays in
     // that range without another clamp for every frame.
     for (frame, samples) in samples.chunks_exact_mut(channels).enumerate() {
@@ -433,7 +508,38 @@ pub fn apply_fade_envelope(
             // Widen the original f32 product before adding the half bias so
             // values just below a rounding boundary cannot cross it early.
             let scaled = f64::from(f32::from(*sample) * volume);
-            *sample = (scaled + 0.5f64.copysign(scaled)) as i16;
+            // SAFETY: volume is finite in [0, 1], so the biased i16 product
+            // is finite in [-32768.5, 32767.5], well within the i32 range.
+            *sample = unsafe { (scaled + 0.5f64.copysign(scaled)).to_int_unchecked::<i32>() } as i16;
+        }
+    }
+}
+
+#[inline(always)]
+fn fade_fixed<const CHANNELS: usize>(
+    samples: &mut [i16],
+    frames_f: f32,
+    start_volume: f32,
+    end_volume: f32,
+) {
+    // Both endpoints and t are in [0, 1], so the fused interpolation stays in
+    // that range without another clamp for every frame.
+    for (frame, samples) in samples.as_chunks_mut::<CHANNELS>().0.iter_mut().enumerate() {
+        let t = frame as f32 / frames_f;
+        let volume = (end_volume - start_volume).mul_add(t, start_volume);
+        // Unit gain leaves every i16 unchanged, including the rounding step.
+        let volume = if (volume - 1.0).abs() < 0.0001 {
+            1.0
+        } else {
+            volume
+        };
+        for sample in samples {
+            // Widen the original f32 product before adding the half bias so
+            // values just below a rounding boundary cannot cross it early.
+            let scaled = f64::from(f32::from(*sample) * volume);
+            // SAFETY: volume is finite in [0, 1], so the biased i16 product
+            // is finite in [-32768.5, 32767.5], well within the i32 range.
+            *sample = unsafe { (scaled + 0.5f64.copysign(scaled)).to_int_unchecked::<i32>() } as i16;
         }
     }
 }
@@ -601,18 +707,6 @@ mod tests {
         assert_eq!(samples, [3, 4, 5]);
     }
 
-    #[test]
-    fn drop_front_samples_handles_boundaries() {
-        let original = (0..64).collect::<Vec<i16>>();
-        for drop_samples in [0, 1, 17, 63, 64] {
-            let expected = original[drop_samples..].to_vec();
-            let mut actual = original.clone();
-
-            drop_front_samples(&mut actual, drop_samples);
-
-            assert_eq!(actual, expected);
-        }
-    }
 
     #[test]
     fn seek_scratch_take_preserves_allocation_and_clears_samples() {
@@ -646,12 +740,21 @@ mod tests {
         assert!(samples[0].abs() <= 25);
         assert_eq!(samples[47], 0);
     }
+
+    #[test]
+    fn drop_front_samples_handles_boundaries() {
+        let original = (0..64).collect::<Vec<i16>>();
+        for drop_samples in [0, 1, 17, 63, 64] {
+            let expected = original[drop_samples..].to_vec();
+            let mut actual = original.clone();
+
+            drop_front_samples(&mut actual, drop_samples);
+
+            assert_eq!(actual, expected);
+        }
+    }
 }
 
 #[cfg(test)]
 #[path = "resample_perf_tests.rs"]
 mod perf_tests;
-
-#[cfg(test)]
-#[path = "resample_conversion_tests.rs"]
-mod conversion_tests;

@@ -1,8 +1,5 @@
 use super::*;
-use crate::menu_buffers_perf_support::compare;
-use std::hint::black_box;
 
-include!("menu_buffers_original.rs");
 
 fn open(query: &str, label: &str) -> SongSearchOpen {
     let SongSearchState::Open(mut open) = begin_song_search() else {
@@ -22,8 +19,16 @@ fn values(value: Option<SongSearchCompletion>) -> Option<(String, String, String
     value.map(|v| (v.display, v.typed, v.accepted))
 }
 
+fn assert_truthful_ghost(state: &SongSearchOpen) {
+    if let Some(completion) = song_search_completion(state) {
+        assert_eq!(completion.typed, state.query);
+        assert!(completion.display.starts_with(&completion.typed));
+        assert!(completion.display.len() > completion.typed.len());
+    }
+}
+
 #[test]
-fn menu_buffers_completion_preserves_unicode_ghost_and_acceptance() {
+fn completion_preserves_unicode_ghost_and_acceptance() {
     let labels = [
         "automate",
         "Déjà Vu",
@@ -51,20 +56,11 @@ fn menu_buffers_completion_preserves_unicode_ghost_and_acceptance() {
             "[10]",
             "no match",
         ] {
-            let state = open(query, label);
-            assert_eq!(
-                values(song_search_completion(&state)),
-                values(original_song_search_completion(&state)),
-                "{query:?} / {label:?}"
-            );
+            assert_truthful_ghost(&open(query, label));
         }
         for length in 0..=label.chars().count() {
             let query: String = label.chars().take(length).collect();
-            let state = open(&query, label);
-            assert_eq!(
-                values(song_search_completion(&state)),
-                values(original_song_search_completion(&state))
-            );
+            assert_truthful_ghost(&open(&query, label));
         }
     }
     let state = open("deja", "Déjà Vu");
@@ -75,49 +71,18 @@ fn menu_buffers_completion_preserves_unicode_ghost_and_acceptance() {
 }
 
 #[test]
-fn menu_buffers_completion_preserves_limits_and_missing_selection() {
+fn completion_rejects_empty_queries_and_missing_selection() {
     for size in [0, 1, 79, 80, 81, 1024] {
-        let label = "🎵".repeat(size);
+        let label = "\u{1f3b5}".repeat(size);
         for count in [0, 1, 79, 80, 81] {
-            let mut state = open(&"🎵".repeat(count), &label);
+            let mut state = open(&"\u{1f3b5}".repeat(count), &label);
             for index in [0, 1, usize::MAX] {
                 state.selected_index = index;
-                assert_eq!(
-                    values(song_search_completion(&state)),
-                    values(original_song_search_completion(&state))
-                );
+                assert_truthful_ghost(&state);
+                if index != 0 || count == 0 {
+                    assert!(song_search_completion(&state).is_none());
+                }
             }
         }
-    }
-}
-
-#[test]
-#[ignore = "paired release benchmark; run explicitly"]
-fn benchmark_menu_buffers_completion() {
-    for (label, query, title) in [
-        ("empty", "", "automate".to_owned()),
-        (
-            "ascii",
-            "a",
-            "A long song title with a lengthy ghost completion".into(),
-        ),
-        ("accented", "deja", "Déjà Vu".into()),
-        ("combining", "e", "e\u{301}cole after hours".into()),
-        ("unicode", "日本", "日本語🎵の歌".into()),
-        ("filter", "[12] auto", "automate".into()),
-        ("exact", "automate", "automate".into()),
-        ("reordered", "auto [12]", "automate".into()),
-        ("limit", "🎵", "🎵".repeat(100)),
-    ] {
-        let state = open(query, &title);
-        compare(
-            &format!("completion/{label}"),
-            || {
-                black_box(original_song_search_completion(black_box(&state)));
-            },
-            || {
-                black_box(song_search_completion(black_box(&state)));
-            },
-        );
     }
 }

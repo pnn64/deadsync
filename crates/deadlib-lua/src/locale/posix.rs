@@ -3,7 +3,12 @@
 //! https://sourceware.org/glibc/manual/latest/html_node/Setting-the-Locale.html
 //! Engine VMs share one selection. Native calls borrow it under CURRENT's lock;
 //! no locale pointer, C string or native ownership escapes this module's guards.
+use crate::{
+    Error,
+    memory::fallible::{SliceExt, VecExt},
+};
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     ffi::{CStr, c_char, c_void},
     ptr::{self, NonNull},
@@ -50,8 +55,8 @@ unsafe extern "C" {
 
 struct Locale(NonNull<c_void>);
 // SAFETY: these owned locale_t objects may be read/freed on any thread. They
-// are never installed in a thread or mutated after publication; CURRENT's
-// mutex keeps native users alive and excludes replacement until they finish.
+// are never mutated after publication. CURRENT's mutex pins native users,
+// including temporary thread-local installation, until they finish.
 unsafe impl Send for Locale {}
 impl Drop for Locale {
     fn drop(&mut self) {
@@ -67,12 +72,13 @@ impl Locale {
         let handle = unsafe { newlocale(ALL_MASK, c"C".as_ptr(), ptr::null_mut()) };
         Self(NonNull::new(handle).expect("glibc provides the C locale"))
     }
-    fn changed(&self, name: &[u8], category: usize) -> Option<Self> {
-        let mut text = name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())].to_vec();
-        text.push(0);
+    fn changed(&self, name: &[u8], category: usize) -> Result<Option<Self>, Error> {
+        let text =
+            super::terminated(&name[..name.iter().position(|&b| b == 0).unwrap_or(name.len())])?;
         // SAFETY: self owns a live locale, locked against replacement. The
         // duplicate is private; newlocale may consume only that duplicate.
-        let candidate = Self(NonNull::new(unsafe { duplocale(self.0.as_ptr()) })?);
+        let candidate =
+            Self(NonNull::new(unsafe { duplocale(self.0.as_ptr()) }).ok_or_else(Error::memory)?);
         let mask = if category == ALL {
             ALL_MASK
         } else {
@@ -80,38 +86,43 @@ impl Locale {
         };
         // SAFETY: the mask and string are valid; candidate owns its base.
         // Failure leaves that base valid; success transfers its ownership.
-        let handle =
-            NonNull::new(unsafe { newlocale(mask, text.as_ptr().cast(), candidate.0.as_ptr()) })?;
+        let Some(handle) =
+            NonNull::new(unsafe { newlocale(mask, text.as_ptr().cast(), candidate.0.as_ptr()) })
+        else {
+            return Ok(None);
+        };
         std::mem::forget(candidate);
-        Some(Self(handle))
+        Ok(Some(Self(handle)))
     }
-    fn text(&self, item: i32) -> Vec<u8> {
+    fn text(&self, item: i32) -> &[u8] {
         // SAFETY: all callers pass glibc-defined items. Their terminated
         // strings belong to this live locale; copy before releasing its guard.
-        unsafe { CStr::from_ptr(nl_langinfo_l(item, self.0.as_ptr())) }
-            .to_bytes()
-            .to_vec()
+        unsafe { CStr::from_ptr(nl_langinfo_l(item, self.0.as_ptr())) }.to_bytes()
     }
 }
 
 struct State {
     locale: Locale,
-    names: [Vec<u8>; 13],
+    names: [Cow<'static, [u8]>; 13],
 }
 impl State {
-    fn new(locale: Locale) -> Self {
-        let names = std::array::from_fn(|i| {
-            if i == ALL {
-                Vec::new()
-            } else {
-                locale.text(((i as i32) << 16) | 0xffff)
+    fn new(locale: Locale) -> Result<Self, Error> {
+        let mut names = std::array::from_fn(|_| Cow::Borrowed(b"".as_slice()));
+        for (i, name) in names.iter_mut().enumerate() {
+            if i != ALL {
+                let text = locale.text(((i as i32) << 16) | 0xffff);
+                *name = if text == b"C" {
+                    Cow::Borrowed(b"C")
+                } else {
+                    Cow::Owned(text.try_to_vec()?)
+                };
             }
-        });
-        Self { locale, names }
+        }
+        Ok(Self { locale, names })
     }
-    fn name(&self, category: usize) -> Vec<u8> {
+    fn name(&self, category: usize) -> Result<Vec<u8>, Error> {
         if category != ALL {
-            return self.names[category].clone();
+            return self.names[category].try_to_vec();
         }
         if self
             .names
@@ -119,7 +130,7 @@ impl State {
             .enumerate()
             .all(|(i, name)| i == ALL || name == &self.names[0])
         {
-            return self.names[0].clone();
+            return self.names[0].try_to_vec();
         }
         let mut text = Vec::new();
         for (i, name) in self.names.iter().enumerate() {
@@ -127,17 +138,29 @@ impl State {
                 continue;
             }
             if !text.is_empty() {
-                text.push(b';');
+                text.try_push(b';')?;
             }
-            text.extend_from_slice(NAMES[i]);
-            text.push(b'=');
-            text.extend_from_slice(name);
+            text.try_extend_from_slice(NAMES[i])?;
+            text.try_push(b'=')?;
+            text.try_extend_from_slice(name)?;
         }
-        text
+        Ok(text)
     }
 }
-static CURRENT: LazyLock<Mutex<State>> =
-    LazyLock::new(|| Mutex::new(State::new(Locale::initial())));
+// The initial locale is always C, whose category names are static. In
+// particular, reporting the first OS error must not allocate these names.
+static CURRENT: LazyLock<Mutex<State>> = LazyLock::new(|| {
+    Mutex::new(State {
+        locale: Locale::initial(),
+        names: std::array::from_fn(|i| {
+            Cow::Borrowed(if i == ALL {
+                b"".as_slice()
+            } else {
+                b"C".as_slice()
+            })
+        }),
+    })
+});
 
 pub(crate) struct Guard(MutexGuard<'static, State>);
 impl Guard {
@@ -154,24 +177,31 @@ pub(crate) fn current() -> Guard {
             .unwrap_or_else(std::sync::PoisonError::into_inner),
     )
 }
+
 pub(super) struct Cache {
-    pub decimal: Option<Vec<u8>>,
+    pub decimal: Option<super::Decimal>,
     pub ctype: Option<([u32; 256], bool)>,
     pub collate_c: Option<bool>,
 }
 pub(super) struct Change {
-    pub result: Vec<u8>,
+    pub result: Result<Vec<u8>, Error>,
     pub cache: Option<Cache>,
 }
-pub(super) fn set(name: Option<&[u8]>, category: usize) -> Option<Change> {
+pub(super) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Change>, Error> {
     let native_category = CATEGORIES[category];
     let mut state = current();
-    let cache = if let Some(name) = name {
-        let next = State::new(state.0.locale.changed(name, native_category)?);
-        let decimal = matches!(category, 0 | 4).then(|| next.locale.text(1 << 16));
-        let collate_c = matches!(category, 0 | 1).then(|| next.names[3] == b"C");
+    if let Some(name) = name {
+        let Some(locale) = state.0.locale.changed(name, native_category)? else {
+            return Ok(None);
+        };
+        let next = State::new(locale)?;
+        let result = next.name(native_category)?;
+        let decimal = matches!(category, 0 | 4)
+            .then(|| super::Decimal::try_new(next.locale.text(1 << 16)))
+            .transpose()?;
+        let collate_c = matches!(category, 0 | 1).then(|| next.names[3].as_ref() == b"C");
         let ctype = matches!(category, 0 | 2).then(|| {
-            let is_c = next.names[0] == b"C";
+            let is_c = next.names[0].as_ref() == b"C";
             let mut values = [0; 256];
             if !is_c {
                 for (byte, slot) in values.iter_mut().enumerate() {
@@ -197,25 +227,25 @@ pub(super) fn set(name: Option<&[u8]>, category: usize) -> Option<Change> {
             (values, is_c)
         });
         *state.0 = next;
-        Some(Cache {
-            decimal,
-            ctype,
-            collate_c,
-        })
+        Ok(Some(Change {
+            result: Ok(result),
+            cache: Some(Cache {
+                decimal,
+                ctype,
+                collate_c,
+            }),
+        }))
     } else {
-        None
-    };
-    Some(Change {
-        result: state.0.name(native_category),
-        cache,
-    })
+        Ok(Some(Change {
+            result: state.0.name(native_category),
+            cache: None,
+        }))
+    }
 }
 
-pub(super) fn compare(left: &[u8], right: &[u8]) -> Ordering {
-    let mut a = left.to_vec();
-    a.push(0);
-    let mut b = right.to_vec();
-    b.push(0);
+pub(super) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
+    let a = super::terminated(left)?;
+    let b = super::terminated(right)?;
     let locale = current();
     let (mut x, mut y) = (0, 0);
     loop {
@@ -229,35 +259,35 @@ pub(super) fn compare(left: &[u8], right: &[u8]) -> Ordering {
             )
         };
         if result != 0 {
-            return result.cmp(&0);
+            return Ok(result.cmp(&0));
         }
         let length = a[x..].iter().position(|&c| c == 0).unwrap();
         if length == right.len().saturating_sub(y) {
-            return if length == left.len() - x {
+            return Ok(if length == left.len() - x {
                 Ordering::Equal
             } else {
                 Ordering::Greater
-            };
+            });
         }
         if length == left.len() - x {
-            return Ordering::Less;
+            return Ok(Ordering::Less);
         }
         x += length + 1;
         y += length + 1;
         if y > right.len() {
-            return Ordering::Greater;
+            return Ok(Ordering::Greater);
         }
     }
 }
-pub(crate) fn error_message(code: i32) -> Vec<u8> {
+pub(crate) fn error_message(code: i32) -> Result<Vec<u8>, Error> {
     let locale = current();
     // SAFETY: strerror_l accepts any errno and a live owned locale. Its
     // locale-owned/thread-local string is copied before another native call.
     let text = unsafe { strerror_l(code, locale.as_ptr()) };
     if text.is_null() {
-        return b"Unknown error".to_vec();
+        return b"Unknown error".try_to_vec();
     }
     // SAFETY: a nonnull strerror_l result is NUL-terminated and remains valid
     // through this copy; no other call occurs on the same native thread.
-    unsafe { CStr::from_ptr(text) }.to_bytes().to_vec()
+    unsafe { CStr::from_ptr(text) }.to_bytes().try_to_vec()
 }

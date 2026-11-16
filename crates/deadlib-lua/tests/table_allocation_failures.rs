@@ -245,7 +245,7 @@ fn selected_raw_and_integer_writes_retain_their_inputs_when_allocation_fails() {
 }
 #[test]
 fn a_native_write_failure_returns_status_four_without_calling_the_error_handler() {
-    thread_local! {static LAST:Cell<Allocations>=const{Cell::new(Allocations{attempts:0,rejected:0,deny_from:0,enabled:false})};}
+    thread_local! {static LAST:Cell<Allocations>=const{Cell::new(Allocations{attempts:0,rejected:0,deny_from:0,enabled:false,allocated_bytes:0,freed_bytes:0})};}
     fn write(call: &mut deadlib_lua::HostCall<'_>) -> Result<(), Error> {
         let (key, nth) = *call.function_data::<(i32, usize)>().unwrap();
         let mut s = call.native_stack()?;

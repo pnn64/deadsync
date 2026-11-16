@@ -1,10 +1,14 @@
 //! Translate verified native words once, then use the shared register VM.
-use super::{Chunk, Prototype as Native};
+use super::{Chunk, Prototype as Native, invalid};
 use crate::bytecode::{
     ClosureBinding, Constant, DebugCall, DebugInfo, DebugLocal, Instruction, NameKind, NativeDebug,
     OPEN, OPEN_ARGS, Op, Program, Prototype, Upvalue,
 };
-use std::collections::HashMap;
+use crate::memory::fallible::Map as HashMap;
+use crate::{
+    Error, ErrorKind,
+    memory::fallible::{self, SliceExt, VecExt},
+};
 
 fn fields(word: u32) -> (usize, u8, u16, u16) {
     (
@@ -18,34 +22,51 @@ fn target(pc: usize, word: u32) -> usize {
     (pc as i64 + 1 + i64::from(word >> 14) - 131071) as usize
 }
 
-pub(super) fn program(mut chunk: Chunk) -> Result<Program, &'static str> {
-    let name = chunk.prototypes[0]
-        .source
-        .take()
-        .unwrap_or_else(|| Box::from(b"=?".as_slice()));
-    let mut sources = HashMap::from([(name.clone(), 0u32)]);
-    let mut source_ids = vec![0; chunk.prototypes.len()];
-    let counts: Vec<_> = chunk.prototypes.iter().map(|p| p.nups).collect();
-    let mut prototypes = Vec::with_capacity(chunk.prototypes.len());
+pub(super) fn program(mut chunk: Chunk) -> Result<Program, Error> {
+    let name = chunk.prototypes[0].source.take();
+    let name = match name {
+        Some(name) => name,
+        None => b"=?".try_boxed()?,
+    };
+    let mut sources = HashMap::new();
+    sources.try_reserve(1).map_err(|_| Error::memory())?;
+    sources.insert(name.try_boxed()?, 0u32);
+    let mut source_ids = fallible::repeat(0, chunk.prototypes.len())?;
+    let mut counts = fallible::with_capacity(chunk.prototypes.len())?;
+    counts.try_extend(chunk.prototypes.iter().map(|p| p.nups))?;
+    let mut prototypes = fallible::with_capacity(chunk.prototypes.len())?;
     for (id, p) in chunk.prototypes.into_iter().enumerate() {
         if let Some(source) = p.source.as_ref() {
             let next = sources.len() as u32;
-            source_ids[id] = *sources.entry(source.clone()).or_insert(next);
+            source_ids[id] = if let Some(&existing) = sources.get(source.as_ref()) {
+                existing
+            } else {
+                sources.try_reserve(1).map_err(|_| Error::memory())?;
+                sources.insert(source.try_boxed()?, next);
+                next
+            };
         }
         for &child in &p.children {
             source_ids[child] = source_ids[id];
         }
-        prototypes.push(translate(p, &counts, source_ids[id])?);
+        prototypes.try_push(translate(p, &counts, source_ids[id])?)?;
     }
-    let mut pool = vec![Box::<[u8]>::default(); sources.len() - 1];
+    let mut pool = fallible::with_capacity(sources.len() - 1)?;
+    pool.resize_with(sources.len() - 1, Box::<[u8]>::default);
     for (source, id) in sources {
         if id != 0 {
             pool[id as usize - 1] = source;
         }
     }
-    let mut program = Program::new(prototypes, 0, &name);
-    std::sync::Arc::get_mut(&mut program.data).unwrap().sources = pool.into_boxed_slice();
-    program.verify().map_err(|_| "bad code")?;
+    let program = Program::try_from_data(crate::bytecode::ProgramData {
+        prototypes: prototypes.try_into_boxed_slice()?,
+        entry: 0,
+        name,
+        sources: pool.try_into_boxed_slice()?,
+    })?;
+    program
+        .verify()
+        .map_err(|_| Error::new_static(ErrorKind::Syntax, 0, "bad code"))?;
     Ok(program)
 }
 
@@ -58,59 +79,64 @@ struct Builder {
     line: u32,
 }
 impl Builder {
-    fn emit(&mut self, op: Op, a: u8, b: u16, c: u32) -> usize {
+    fn emit(&mut self, op: Op, a: u8, b: u16, c: u32) -> Result<usize, Error> {
         let pc = self.code.len();
-        self.code.push(Instruction { op, a, b, c });
-        self.lines.push(self.line);
-        self.hooks.push(0);
-        pc
+        self.code.try_push(Instruction { op, a, b, c })?;
+        self.lines.try_push(self.line)?;
+        self.hooks.try_push(0)?;
+        Ok(pc)
     }
-    fn jump(&mut self, op: Op, a: u8, target: usize) {
-        let pc = self.emit(op, a, 0, 0);
-        self.patches.push((pc, target));
+    fn jump(&mut self, op: Op, a: u8, target: usize) -> Result<(), Error> {
+        let pc = self.emit(op, a, 0, 0)?;
+        self.patches.try_push((pc, target))?;
+        Ok(())
     }
-    fn constant(&mut self, value: Constant) -> u32 {
+    fn constant(&mut self, value: Constant) -> Result<u32, Error> {
         let index = self.constants.len() as u32;
-        self.constants.push(value);
-        index
+        self.constants.try_push(value)?;
+        Ok(index)
     }
 }
 
-fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'static str> {
+fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, Error> {
     let n = p.code.len();
     let scratch = p.stack;
     let registers = u16::from(p.stack) + 2;
     let constant_count = p.constants.len();
     let name_count = p.names.len();
-    let local_bounds = p.locals.iter().map(|l| [l.start, l.end]).collect();
-    let mut local_registers = Vec::with_capacity(p.locals.len());
+    let mut local_bounds = fallible::with_capacity(p.locals.len())?;
+    local_bounds.try_extend(p.locals.iter().map(|l| [l.start, l.end]))?;
+    let local_bounds = local_bounds.try_into_boxed_slice()?;
+    let mut local_registers = fallible::with_capacity(p.locals.len())?;
     let mut slots: Vec<Vec<usize>> = Vec::new();
     let mut ends = Vec::new();
     let mut previous = 0;
     for (index, local) in p.locals.iter().enumerate() {
         if local.start < previous || local.start > local.end || local.end as usize > n {
-            return Err("bad code");
+            return Err(invalid("bad code"));
         }
         previous = local.start;
         ends.retain(|&end| end > local.start);
         let register = ends.len();
         if register >= usize::from(p.stack) {
-            return Err("bad code");
+            return Err(invalid("bad code"));
         }
-        ends.push(local.end);
+        ends.try_push(local.end)?;
+        let additional = (register + 1).saturating_sub(slots.len());
+        fallible::reserve(&mut slots, additional)?;
         slots.resize_with(slots.len().max(register + 1), Vec::new);
-        slots[register].push(index);
-        local_registers.push(register as u16);
+        slots[register].try_push(index)?;
+        local_registers.try_push(register as u16)?;
     }
     let mut out = Builder {
-        code: Vec::with_capacity(n),
-        lines: Vec::with_capacity(n),
-        hooks: Vec::with_capacity(n),
+        code: fallible::with_capacity(n)?,
+        lines: fallible::with_capacity(n)?,
+        hooks: fallible::with_capacity(n)?,
         patches: Vec::new(),
         constants: std::mem::take(&mut p.constants),
         line: 0,
     };
-    let mut map = vec![0u32; n + 1];
+    let mut map = fallible::repeat(0u32, n + 1)?;
     let mut bindings = Vec::new();
     let mut calls = Vec::new();
     let mut temporaries = Vec::new();
@@ -126,22 +152,22 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
         let (op, a, b, c) = fields(word);
         match op {
             0 => {
-                out.emit(Op::Move, a, b, 0);
+                out.emit(Op::Move, a, b, 0)?;
             }
             1 => {
-                out.emit(Op::Load, a, 0, word >> 14);
+                out.emit(Op::Load, a, 0, word >> 14)?;
             }
             2 => {
-                let k = out.constant(Constant::Boolean(b != 0));
-                out.emit(Op::Load, a, 0, k);
+                let k = out.constant(Constant::Boolean(b != 0))?;
+                out.emit(Op::Load, a, 0, k)?;
                 if c != 0 {
-                    out.jump(Op::Jump, 0, pc + 2);
+                    out.jump(Op::Jump, 0, pc + 2)?;
                 }
             }
             3 => {
-                let k = out.constant(Constant::Nil);
+                let k = out.constant(Constant::Nil)?;
                 for r in u16::from(a)..=b {
-                    out.emit(Op::Load, r as u8, 0, k);
+                    out.emit(Op::Load, r as u8, 0, k)?;
                 }
             }
             4 | 8 => {
@@ -154,7 +180,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     0,
                     u32::from(b),
-                );
+                )?;
             }
             5 | 7 => {
                 out.emit(
@@ -166,24 +192,24 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     0,
                     word >> 14,
-                );
+                )?;
             }
             6 => {
                 let key = c;
-                out.emit(Op::GetTable, a, b, u32::from(key));
+                out.emit(Op::GetTable, a, b, u32::from(key))?;
             }
             9 => {
                 let key = b;
                 let value = c;
-                out.emit(Op::SetTable, a, key, u32::from(value));
+                out.emit(Op::SetTable, a, key, u32::from(value))?;
             }
             10 => {
-                out.emit(Op::NewTable, a, b, u32::from(c));
+                out.emit(Op::NewTable, a, b, u32::from(c))?;
             }
             11 => {
-                out.emit(Op::Move, a + 1, b, 0);
+                out.emit(Op::Move, a + 1, b, 0)?;
                 let key = c;
-                out.emit(Op::GetTable, a, b, u32::from(key));
+                out.emit(Op::GetTable, a, b, u32::from(key))?;
             }
             12..=17 => {
                 let left = b;
@@ -193,16 +219,16 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     left,
                     u32::from(right),
-                );
+                )?;
             }
             18..=20 => {
-                out.emit([Op::Neg, Op::Not, Op::Len][op - 18], a, b, 0);
+                out.emit([Op::Neg, Op::Not, Op::Len][op - 18], a, b, 0)?;
             }
             21 => {
-                out.emit(Op::ConcatRange, a, b, u32::from(c));
+                out.emit(Op::ConcatRange, a, b, u32::from(c))?;
             }
             22 => {
-                out.jump(Op::Jump, 0, target(pc, word));
+                out.jump(Op::Jump, 0, target(pc, word))?;
             }
             23..=25 => {
                 let left = b;
@@ -212,21 +238,21 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     scratch,
                     left,
                     u32::from(right),
-                );
+                )?;
                 out.jump(
                     if a == 0 { Op::JumpFalse } else { Op::JumpTrue },
                     scratch,
                     target(pc + 1, p.code[pc + 1]),
-                );
-                out.jump(Op::Jump, 0, pc + 2);
+                )?;
+                out.jump(Op::Jump, 0, pc + 2)?;
             }
             26 => {
                 out.jump(
                     if c == 0 { Op::JumpFalse } else { Op::JumpTrue },
                     a,
                     target(pc + 1, p.code[pc + 1]),
-                );
-                out.jump(Op::Jump, 0, pc + 2);
+                )?;
+                out.jump(Op::Jump, 0, pc + 2)?;
             }
             27 => {
                 // A matching test copies B before taking its embedded jump.
@@ -235,11 +261,11 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     b as u8,
                     0,
                     0,
-                );
-                out.emit(Op::Move, a, b, 0);
-                out.jump(Op::Jump, 0, target(pc + 1, p.code[pc + 1]));
+                )?;
+                out.emit(Op::Move, a, b, 0)?;
+                out.jump(Op::Jump, 0, target(pc + 1, p.code[pc + 1]))?;
                 out.code[skip].c = out.code.len() as u32;
-                out.jump(Op::Jump, 0, pc + 2);
+                out.jump(Op::Jump, 0, pc + 2)?;
             }
             28 | 29 => {
                 let call = out.emit(
@@ -247,7 +273,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     if b == 0 { OPEN_ARGS } else { b - 1 },
                     if c == 0 { OPEN } else { u32::from(c - 1) },
-                );
+                )?;
                 call_info(
                     &p,
                     &slots,
@@ -256,7 +282,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     call,
                     a,
                     (&mut calls, &mut temporaries),
-                );
+                )?;
             }
             30 => {
                 out.emit(
@@ -264,20 +290,20 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     0,
                     if b == 0 { OPEN } else { u32::from(b - 1) },
-                );
+                )?;
             }
             31 | 32 => {
                 out.jump(
                     if op == 31 { Op::ForLoop } else { Op::ForPrep },
                     a,
                     target(pc, word),
-                );
+                )?;
             }
             33 => {
                 for offset in 0..3 {
-                    out.emit(Op::Move, a + 3 + offset, u16::from(a + offset), 0);
+                    out.emit(Op::Move, a + 3 + offset, u16::from(a + offset), 0)?;
                 }
-                let call = out.emit(Op::CallIter, a + 3, 2, u32::from(c));
+                let call = out.emit(Op::CallIter, a + 3, 2, u32::from(c))?;
                 call_info(
                     &p,
                     &slots,
@@ -286,13 +312,13 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     call,
                     a + 3,
                     (&mut calls, &mut temporaries),
-                );
-                let k = out.constant(Constant::Nil);
-                out.emit(Op::Load, scratch + 1, 0, k);
-                out.emit(Op::Eq, scratch, u16::from(a + 3), u32::from(scratch + 1));
-                out.jump(Op::JumpTrue, scratch, pc + 2);
-                out.emit(Op::Move, a + 2, u16::from(a + 3), 0);
-                out.jump(Op::Jump, 0, target(pc + 1, p.code[pc + 1]));
+                )?;
+                let k = out.constant(Constant::Nil)?;
+                out.emit(Op::Load, scratch + 1, 0, k)?;
+                out.emit(Op::Eq, scratch, u16::from(a + 3), u32::from(scratch + 1))?;
+                out.jump(Op::JumpTrue, scratch, pc + 2)?;
+                out.emit(Op::Move, a + 2, u16::from(a + 3), 0)?;
+                out.jump(Op::Jump, 0, target(pc + 1, p.code[pc + 1]))?;
             }
             34 => {
                 let block = if c == 0 {
@@ -305,34 +331,34 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     .checked_sub(1)
                     .and_then(|b| b.checked_mul(50))
                     .and_then(|b| b.checked_add(1))
-                    .ok_or("bad code")?;
-                out.emit(Op::SetList, a, if b == 0 { OPEN_ARGS } else { b }, start);
+                    .ok_or_else(|| invalid("bad code"))?;
+                out.emit(Op::SetList, a, if b == 0 { OPEN_ARGS } else { b }, start)?;
             }
             35 => {
-                out.emit(Op::Close, a, 0, 0);
+                out.emit(Op::Close, a, 0, 0)?;
             }
             36 => {
                 let child = p.children[(word >> 14) as usize];
                 let nups = usize::from(counts[child]);
-                let captures = p.code[pc + 1..pc + 1 + nups]
-                    .iter()
-                    .map(|&w| {
-                        let (op, _, b, _) = fields(w);
-                        if op == 0 {
-                            Upvalue::Local(b as u8)
-                        } else {
-                            Upvalue::Outer(b)
-                        }
-                    })
-                    .collect();
+                let captures_iter = p.code[pc + 1..pc + 1 + nups].iter().map(|&w| {
+                    let (op, _, b, _) = fields(w);
+                    if op == 0 {
+                        Upvalue::Local(b as u8)
+                    } else {
+                        Upvalue::Outer(b)
+                    }
+                });
+                let mut captures = fallible::with_capacity(nups)?;
+                captures.try_extend(captures_iter)?;
+                let captures = captures.try_into_boxed_slice()?;
                 let binding = bindings.len() as u32;
-                bindings.push(ClosureBinding {
+                bindings.try_push(ClosureBinding {
                     prototype: child as u32,
                     upvalues: captures,
-                });
-                out.emit(Op::Closure, a, 1, binding);
+                })?;
+                out.emit(Op::Closure, a, 1, binding)?;
                 if nups != 0 {
-                    out.jump(Op::Jump, 0, pc + 1 + nups);
+                    out.jump(Op::Jump, 0, pc + 1 + nups)?;
                 }
             }
             37 => {
@@ -341,9 +367,9 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                     a,
                     0,
                     if b == 0 { OPEN } else { u32::from(b - 1) },
-                );
+                )?;
             }
-            _ => return Err("bad code"),
+            _ => return Err(invalid("bad code")),
         }
         // Native dispatch counts once, even when an instruction consumes a
         // following jump, binding words or an extended SETLIST count.
@@ -351,21 +377,24 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
     }
     map[n] = out.code.len() as u32;
     for (pc, native) in out.patches {
-        out.code[pc].c = *map.get(native).ok_or("bad code")?;
+        out.code[pc].c = *map.get(native).ok_or_else(|| invalid("bad code"))?;
     }
-    let mut locals: Vec<DebugLocal> = Vec::with_capacity(p.locals.len());
+    let mut locals: Vec<DebugLocal> = fallible::with_capacity(p.locals.len())?;
     for (local, register) in p.locals.into_iter().zip(local_registers) {
         let start = map[local.start as usize];
-        locals.push(DebugLocal {
+        locals.try_push(DebugLocal {
             name: local.name.unwrap_or_default(),
             start,
             end: map[local.end as usize],
             register,
-        });
+        })?;
     }
-    let mut names: Vec<_> = p.names.into_iter().map(Option::unwrap_or_default).collect();
-    names.resize_with(usize::from(p.nups), || Box::from(b"?".as_slice()));
-    let mut active_lines = p.lines.clone();
+    let mut names = fallible::with_capacity(usize::from(p.nups))?;
+    names.try_extend(p.names.into_iter().map(Option::unwrap_or_default))?;
+    while names.len() < usize::from(p.nups) {
+        names.try_push(b"?".try_boxed()?)?;
+    }
+    let mut active_lines = p.lines.try_to_vec()?;
     active_lines.retain(|&l| l != 0);
     active_lines.sort_unstable();
     active_lines.dedup();
@@ -382,8 +411,8 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
             }
         }
     }
-    let mut gc_live = vec![0u32; out.code.len()];
-    let mut masks = masks.to_vec();
+    let mut gc_live = fallible::repeat(0u32, out.code.len())?;
+    let mut masks = masks.try_to_vec()?;
     let mut call_masks = [None; 256];
     for range in map.windows(2) {
         let mut live = 0;
@@ -396,15 +425,18 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
                 // Lua callees occupy the argument slots in the native stack.
                 // Our separate window roots those values through the callee;
                 // retaining caller copies would keep overwritten values alive.
-                *call_masks[usize::from(instruction.a)].get_or_insert_with(|| {
+                if let Some(index) = call_masks[usize::from(instruction.a)] {
+                    index
+                } else {
                     let mut mask = [0u64; 4];
                     for r in 0..=usize::from(instruction.a) {
                         mask[r / 64] |= 1u64 << (r % 64);
                     }
                     let index = masks.len() as u16;
-                    masks.push(mask);
+                    masks.try_push(mask)?;
+                    call_masks[usize::from(instruction.a)] = Some(index);
                     index
-                })
+                }
             } else {
                 u16::from(live)
             };
@@ -412,40 +444,41 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
         }
     }
     Ok(Prototype {
-        gc_live: gc_live.into_boxed_slice(),
-        gc_maps: masks.into_boxed_slice(),
-        code: out.code.into_boxed_slice(),
-        lines: out.lines.into_boxed_slice(),
-        constants: out.constants.into_boxed_slice(),
+        gc_live: gc_live.try_into_boxed_slice()?,
+        gc_maps: masks.try_into_boxed_slice()?,
+        code: out.code.try_into_boxed_slice()?,
+        lines: out.lines.try_into_boxed_slice()?,
+        constants: out.constants.try_into_boxed_slice()?,
         registers,
         params: u16::from(p.params),
         vararg: p.vararg & 2 != 0,
         compat_arg: p.vararg & 4 != 0,
-        upvalues: vec![Upvalue::Outer(0); usize::from(p.nups)].into_boxed_slice(),
-        bindings: bindings.into_boxed_slice(),
+        upvalues: fallible::repeat(Upvalue::Outer(0), usize::from(p.nups))?
+            .try_into_boxed_slice()?,
+        bindings: bindings.try_into_boxed_slice()?,
         debug: DebugInfo {
             stack: 0,
-            native: Some(Box::new(NativeDebug {
+            native: Some(fallible::boxed(NativeDebug {
                 source,
                 stack: u16::from(p.stack),
                 has_lines: !p.lines.is_empty(),
                 wire: super::Wire {
-                    code: p.code.into_boxed_slice(),
-                    lines: p.lines.into_boxed_slice(),
+                    code: p.code.try_into_boxed_slice()?,
+                    lines: p.lines.try_into_boxed_slice()?,
                     locals: local_bounds,
-                    children: p.children.into_boxed_slice(),
+                    children: p.children.try_into_boxed_slice()?,
                     constants: constant_count,
                     names: name_count,
                     vararg: p.vararg,
                 },
-            })),
+            })?),
             defined: p.defined,
-            upvalues: names.into_boxed_slice(),
-            locals: locals.into_boxed_slice(),
-            calls: calls.into_boxed_slice(),
-            active_lines: active_lines.into_boxed_slice(),
-            hook_lines: out.hooks.into_boxed_slice(),
-            temporaries: temporaries.into_boxed_slice(),
+            upvalues: names.try_into_boxed_slice()?,
+            locals: locals.try_into_boxed_slice()?,
+            calls: calls.try_into_boxed_slice()?,
+            active_lines: active_lines.try_into_boxed_slice()?,
+            hook_lines: out.hooks.try_into_boxed_slice()?,
+            temporaries: temporaries.try_into_boxed_slice()?,
         },
     })
 }
@@ -503,7 +536,7 @@ fn call_info(
     call: usize,
     register: u8,
     output: (&mut Vec<DebugCall>, &mut Vec<u8>),
-) {
+) -> Result<(), Error> {
     let (calls, temporaries) = output;
     let (name, kind) = if fields(p.code[pc]).0 == 33 {
         (b"(for generator)".as_slice(), NameKind::Local)
@@ -515,13 +548,14 @@ fn call_info(
         .iter()
         .take_while(|slot| local_at(p, slot, pc).is_some())
         .count();
-    temporaries.extend((named as u8..register).filter(|&r| r < p.stack));
-    calls.push(DebugCall {
+    temporaries.try_extend((named as u8..register).filter(|&r| r < p.stack))?;
+    calls.try_push(DebugCall {
         pc: call as u32,
-        name: name.into(),
+        name: name.try_boxed()?,
         kind,
         temporaries: start..temporaries.len() as u32,
-    });
+    })?;
+    Ok(())
 }
 
 fn object_name<'a>(

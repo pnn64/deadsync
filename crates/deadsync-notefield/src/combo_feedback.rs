@@ -515,8 +515,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-mod combo_kernel_perf {
-    include!("combo_kernel_perf.rs");
-}

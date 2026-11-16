@@ -1,0 +1,569 @@
+//! Custom draw traversal and render-target scopes over the Rust host API.
+use super::*;
+use crate::draw_commands::{
+    Capture, Context, DRAW_INSTALLED_KEY, MAX_BYTES, MAX_OPS, RawCall, RawFrame, RawOp,
+    partially_opaque,
+};
+use sprites::{field, set};
+
+const ACTIVE: &str = "__songlua_draw_callback_active";
+const FUNCTION: &[u8] = b"__songlua_draw_function";
+
+fn live(store: &mut Store) -> bool {
+    store.clock.live.load(std::sync::atomic::Ordering::Relaxed)
+}
+fn pointer(call: &mut HostCall<'_>, actor: TableId) -> usize {
+    call.object_pointer(Value::Table(actor))
+        .expect("rooted actor identity")
+}
+fn truthy(value: Value) -> bool {
+    !matches!(value, Value::Nil | Value::Boolean(false))
+}
+fn raw_text(call: &mut HostCall<'_>, actor: TableId, key: &[u8]) -> Result<Option<String>, Error> {
+    let value = get(call, actor, key)?;
+    if value == Value::Nil {
+        Ok(None)
+    } else {
+        assets::text(call, value).map(Some)
+    }
+}
+fn raw_bytes(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &[u8],
+) -> Result<Option<Vec<u8>>, Error> {
+    let value = get(call, actor, key)?;
+    if value == Value::Nil {
+        Ok(None)
+    } else {
+        bytes(call, value).map(Some)
+    }
+}
+fn function(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
+    let value = get(call, actor, FUNCTION)?;
+    if matches!(value, Value::Nil | Value::Function(_) | Value::Native(_)) {
+        Ok(value)
+    } else {
+        Err(call.error(b"actor draw function must be a function"))
+    }
+}
+fn budget(call: &HostCall<'_>) -> Error {
+    call.error(b"custom draw capture exceeds its song budget")
+}
+fn push(call: &mut HostCall<'_>, op: RawOp) -> Result<(), Error> {
+    let live = live(call.store());
+    let store = call.store();
+    let Some(capture) = &mut store.draw_capture else {
+        return Ok(());
+    };
+    let Some(context) = &capture.context else {
+        return Ok(());
+    };
+    let owner = context.owner;
+    let extra = match &op {
+        RawOp::Draw(_, _, context, vertices) => {
+            context.parents.len() * size_of::<crate::SongLuaOverlayState>()
+                + vertices.as_ref().map_or(0, |vertices| {
+                    vertices.len() * size_of::<crate::SongLuaOverlayMeshVertex>()
+                })
+        }
+        _ => 0,
+    };
+    let bytes = size_of::<RawCall>() + extra;
+    if (!live && capture.frame_ops >= MAX_OPS) || capture.bytes.saturating_add(bytes) > MAX_BYTES {
+        return Err(budget(call));
+    }
+    capture.bytes += bytes;
+    capture.frame_ops += 1;
+    capture.calls.push(RawCall { owner, op });
+    Ok(())
+}
+pub(super) fn begin(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> Result<(), Error> {
+    let pointer = pointer(call, actor);
+    push(call, RawOp::Begin(pointer, preserve))?;
+    if let Some(capture) = &mut call.store().draw_capture
+        && let Some(prior) = capture.context.take()
+    {
+        let owner = prior.owner;
+        capture.targets.push((pointer, prior));
+        capture.context = Some(Context {
+            owner,
+            ..Context::default()
+        });
+    }
+    Ok(())
+}
+pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let pointer = pointer(call, actor);
+    if let Some(capture) = &call.store().draw_capture
+        && capture.context.is_some()
+        && capture
+            .targets
+            .last()
+            .is_none_or(|(target, _)| *target != pointer)
+    {
+        return Err(call.error(b"FinishRenderingTo does not match the active target"));
+    }
+    push(call, RawOp::Finish(pointer))?;
+    if let Some(capture) = &mut call.store().draw_capture
+        && let Some((_, prior)) = capture.targets.pop()
+    {
+        capture.context = Some(prior);
+    }
+    Ok(())
+}
+fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverlayState, Error> {
+    // The native preparation reader resolves an uninitialized Sprite's
+    // Texture/AFT getter before reading later scalar fields. Keep this read
+    // at draw time; snapshotting raw semantic state must not invoke it early.
+    if !live(call.store()) {
+        let kind = get_static(call, actor, b"__songlua_actor_type")?;
+        let sprite = matches!(kind,Value::String(id)if call.string_bytes(id).is_some_and(|s|s.eq_ignore_ascii_case(b"Sprite")));
+        if sprite && get_static(call, actor, b"__songlua_state_sprite_texture")? == Value::Nil {
+            return initial_state::read(call, actor);
+        }
+    }
+    let store = call.store_ref();
+    let live = store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
+    let actor = store
+        .actors
+        .get(&actor)
+        .ok_or_else(|| call.error(b"draw actor has been released"))?;
+    let mut state = actor.state.render;
+    // The existing preparation reader exports authored destination fields.
+    // Live drawing reads the native current tween pose and its baked spin flag.
+    // Keep that distinction at this boundary, without changing queue state.
+    if live {
+        actor.current.write_to(&mut state);
+    } else {
+        actor.destination().write_to(&mut state);
+        // Spin updates its native pose without publishing the preparation
+        // reader's rotation fields until a setter/queue synchronization does.
+        [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = actor.state.rotation;
+    }
+    state.visible = actor.state.visible;
+    state.draw_order = actor.state.draw_order;
+    state.hibernating = actor.hibernate > 0.0;
+    state.spin_baked = live && actor.effects.spin_baked;
+    Ok(state)
+}
+fn scoped_context(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    prior: &Context,
+) -> Result<Option<Context>, Error> {
+    let transition = get_static(call, actor, b"__songlua_transition_state")?;
+    if transition != Value::Nil {
+        let transition = sprites::number(call, transition)?.trunc();
+        if !(0.0..256.0).contains(&transition) {
+            return Err(call.error(b"transition state out of range"));
+        }
+        if transition == 0.0 {
+            return Ok(None);
+        }
+    }
+    if truthy(get_static(call, actor, b"__songlua_theme_hibernating")?) {
+        return Ok(None);
+    }
+    let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
+    if kind.eq_ignore_ascii_case("ActorFrameTexture") {
+        let allocation = get_static(call, actor, b"__songlua_aft_allocation")?;
+        if allocation == Value::Nil {
+            return Ok(None);
+        }
+        table(call, allocation)?;
+    }
+    let (wrappers, live) = {
+        let store = call.store_ref();
+        let native = store
+            .actors
+            .get(&actor)
+            .ok_or_else(|| call.error(b"draw actor has been released"))?;
+        (
+            native.wrappers.clone(),
+            store.clock.live.load(std::sync::atomic::Ordering::Relaxed),
+        )
+    };
+    let mut parents = Vec::with_capacity(prior.parents.len() + wrappers.len() + 1);
+    parents.extend_from_slice(&prior.parents);
+    for wrapper in wrappers.into_iter().rev() {
+        let wrapper = state(call, wrapper)?;
+        if !wrapper.draw_visible() || (live && !partially_opaque(wrapper, &parents)) {
+            return Ok(None);
+        }
+        parents.push(wrapper);
+    }
+    let state = state(call, actor)?;
+    if !state.draw_visible() || (live && !partially_opaque(state, &parents)) {
+        return Ok(None);
+    }
+    parents.push(state);
+    Ok(Some(Context {
+        owner: prior.owner,
+        parents: parents.into(),
+        camera: if state.fov.is_some() {
+            Some(state)
+        } else {
+            prior.camera
+        },
+    }))
+}
+fn children_each(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    mut action: impl FnMut(&mut HostCall<'_>, TableId) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let mut index = 1;
+    loop {
+        let value = call.raw_table_get(actor, Value::Number(index as f64))?;
+        if value == Value::Nil {
+            return Ok(());
+        }
+        let child = table(call, value)?;
+        call.with_roots(&[value], |call| action(call, child))?;
+        index += 1;
+    }
+}
+fn report(call: &mut HostCall<'_>, actor: TableId, error: Error) -> Result<(), Error> {
+    diagnostics::report(call, actor, diagnostics::Callback::Draw, error)
+}
+fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let prior = call
+        .store()
+        .draw_capture
+        .as_ref()
+        .and_then(|capture| capture.context.clone());
+    let Some(prior) = prior else {
+        return immediate(call, actor);
+    };
+    let Some(context) = scoped_context(call, actor, &prior)? else {
+        return Ok(());
+    };
+    call.store().draw_capture.as_mut().unwrap().context = Some(context.clone());
+    let result = (|| {
+        let kind = assets::field(call, actor, b"__songlua_actor_type")?.unwrap_or_default();
+        let target = kind.eq_ignore_ascii_case("ActorFrameTexture");
+        if target {
+            let preserve = truthy(field(call, actor, "__songlua_state_aft_preserve")?);
+            begin(call, actor, preserve)?;
+        }
+        let result = (|| {
+            let callback = function(call, actor)?;
+            if callback != Value::Nil {
+                let result = call.with_roots(&[callback], |call| {
+                    let sources = call.store().live_sources.is_some();
+                    let observed = sources && !theme_callback(call, callback)?;
+                    if observed {
+                        call.store().song_callback_depth += 1;
+                    }
+                    let result = run_scoped(call, actor, callback, None);
+                    if observed {
+                        call.store().song_callback_depth -= 1;
+                    }
+                    result
+                });
+                return if live(call.store()) {
+                    result.or_else(|error| report(call, actor, error))
+                } else {
+                    // Owned actors already use tween replay in preparation as
+                    // well as live playback. Like the native replay path, Draw
+                    // does not dispatch their queued commands before Update.
+                    result
+                };
+            }
+            let screen = raw_text(call, actor, b"__songlua_top_screen_child_name")?;
+            let player = raw_text(call, actor, b"__songlua_player_child_name")?;
+            let external = matches!(
+                screen.as_deref(),
+                Some("Underlay" | "Overlay" | "SongBackground" | "SongForeground" | "In")
+            ) || matches!(player.as_deref(), Some("Judgment" | "Combo"));
+            if kind.eq_ignore_ascii_case("Actor") {
+                return Ok(());
+            }
+            if kind.eq_ignore_ascii_case("BitmapText")
+                && raw_bytes(call, actor, b"Text")?.is_none_or(|text| text.is_empty())
+            {
+                return Ok(());
+            }
+            let local = *context
+                .parents
+                .last()
+                .expect("actor included in draw context");
+            if kind.eq_ignore_ascii_case("Sprite")
+                && raw_bytes(call, actor, b"Texture")?.as_deref()
+                    == Some(crate::blank_texture::NATIVE_BLANK_TEXTURE_PATH.as_bytes())
+                && local.blend == crate::SongLuaOverlayBlendMode::Alpha
+                && !local.depth_write
+                && !local.mask_source
+                && !local.mask_dest
+            {
+                return Ok(());
+            }
+            if !external && kind.eq_ignore_ascii_case("ActorProxy") {
+                let target = get_static(call, actor, b"__songlua_proxy_target_actor")?;
+                if target == Value::Nil {
+                    return Ok(());
+                }
+                table(call, target)?;
+            }
+            if !external
+                && (kind.eq_ignore_ascii_case("ActorFrame")
+                    || kind.eq_ignore_ascii_case("ActorFrameTexture"))
+            {
+                return children_each(call, actor, draw);
+            }
+            let pointer = pointer(call, actor);
+            let missing = !call
+                .store()
+                .draw_capture
+                .as_ref()
+                .unwrap()
+                .labels
+                .contains_key(&pointer);
+            if missing {
+                let name = raw_text(call, actor, b"Name")?.unwrap_or_default();
+                let label = format!(
+                    "{kind} '{name}' (screen child '{}')",
+                    screen.unwrap_or_default()
+                );
+                let bytes = label.len() + size_of::<(usize, String)>();
+                let store = call.store();
+                let capture = store.draw_capture.as_mut().unwrap();
+                if capture.bytes.saturating_add(bytes) > MAX_BYTES {
+                    return Err(budget(call));
+                }
+                capture.bytes += bytes;
+                capture.labels.insert(pointer, label);
+            }
+            let vertices = meshes::read(call, actor)?.map(|mesh| mesh.vertices);
+            let parents = Arc::from(&context.parents[..context.parents.len() - 1]);
+            push(
+                call,
+                RawOp::Draw(pointer, local, Context { parents, ..context }, vertices),
+            )
+        })();
+        if target {
+            finish(call, actor)?;
+        }
+        result
+    })();
+    call.store().draw_capture.as_mut().unwrap().context = Some(prior);
+    result
+}
+fn second(call: &mut HostCall<'_>) -> Result<f32, Error> {
+    let globals = table(call, helper(call, 5)?)?;
+    let runtime = field(call, globals, crate::SONG_LUA_RUNTIME_KEY)?;
+    let table = table(call, runtime)?;
+    call.with_roots(&[runtime], |call| {
+        let value = field(call, table, crate::SONG_LUA_RUNTIME_SECONDS_KEY)?;
+        let elapsed = sprites::number(call, value)? as f32;
+        let value = field(call, table, crate::SONG_LUA_RUNTIME_RATE_KEY)?;
+        let rate = sprites::number(call, value)? as f32;
+        let origin = call
+            .store()
+            .clock
+            .timing
+            .as_ref()
+            .map_or(0.0, |clock| clock.get_time_for_beat_exact(0.0));
+        Ok(elapsed * rate + origin)
+    })
+}
+fn immediate(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let second = second(call)?;
+    let owner = pointer(call, actor);
+    let start = {
+        let store = call.store();
+        let capture = store.draw_capture.get_or_insert_with(Capture::default);
+        capture.context = Some(Context {
+            owner,
+            ..Context::default()
+        });
+        capture.calls.len()
+    };
+    let result = draw(call, actor);
+    let store = call.store();
+    let capture = store.draw_capture.as_mut().unwrap();
+    capture.context = None;
+    let calls = capture.calls.split_off(start);
+    if !calls.is_empty() {
+        let bytes = size_of::<RawFrame>() + size_of::<usize>();
+        if capture.bytes.saturating_add(bytes) > MAX_BYTES {
+            return Err(budget(call));
+        }
+        capture.bytes += bytes;
+        capture.frames.push(RawFrame {
+            second,
+            immediate: true,
+            owners: vec![owner],
+            calls,
+        });
+    }
+    result
+}
+fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(), Error> {
+    if live(call.store()) && truthy(get_static(call, actor, b"__songlua_live_inactive")?) {
+        return Ok(());
+    }
+    if function(call, actor)? != Value::Nil {
+        let owner = pointer(call, actor);
+        {
+            let store = call.store();
+            let capture = store.draw_capture.get_or_insert_with(Capture::default);
+            capture.owners.push(owner);
+            capture.context = Some(Context {
+                owner,
+                ..prior.clone()
+            });
+        }
+        let result = draw(call, actor);
+        let store = call.store();
+        let capture = store.draw_capture.as_mut().unwrap();
+        capture.context = None;
+        if !capture.targets.is_empty() {
+            capture.targets.clear();
+            return Err(call.error(b"draw callback left a render target active"));
+        }
+        return result;
+    }
+    if !call.store().actors.contains_key(&actor)
+        && get_static(call, actor, b"__songlua_actor_type")? == Value::Nil
+    {
+        let state = initial_state::read(call, actor)?;
+        let mut parents = prior.parents.to_vec();
+        parents.push(state);
+        let context = Context {
+            owner: prior.owner,
+            parents: parents.into(),
+            camera: if state.fov.is_some() {
+                Some(state)
+            } else {
+                prior.camera
+            },
+        };
+        return children_each(call, actor, |call, child| visit(call, child, &context));
+    }
+    let Some(context) = scoped_context(call, actor, prior)? else {
+        return Ok(());
+    };
+    children_each(call, actor, |call, child| visit(call, child, &context))
+}
+fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
+    if live(call.store())
+        && let Some(capture) = &mut call.store().draw_capture
+    {
+        capture.context = None;
+        capture.targets.clear();
+        capture.calls.clear();
+        capture.owners.clear();
+        capture.frames.retain(|frame| frame.immediate);
+        if capture.frames.is_empty() {
+            capture.labels.clear();
+            capture.bytes = 0;
+        }
+        capture.frame_ops = 0;
+    }
+    let globals = table(call, helper(call, 5)?)?;
+    if !truthy(get(call, globals, DRAW_INSTALLED_KEY.as_bytes())?) {
+        if let Some(capture) = &mut call.store().draw_capture {
+            capture.frame_ops = 0;
+        }
+        return Ok(());
+    }
+    let screen = get_static(call, globals, b"__songlua_top_screen")?;
+    let screen = if screen == Value::Nil {
+        None
+    } else {
+        Some(state(call, table(call, screen)?)?)
+    };
+    let parents = screen.as_ref().map_or_else(
+        || Arc::from([]),
+        |state| Arc::from(std::slice::from_ref(state)),
+    );
+    let result = visit(
+        call,
+        root,
+        &Context {
+            parents,
+            camera: screen.filter(|state| state.fov.is_some()),
+            ..Context::default()
+        },
+    );
+    let second = second(call)?;
+    if let Some(capture) = &mut call.store().draw_capture {
+        let bytes = size_of::<RawFrame>() + capture.owners.len() * size_of::<usize>();
+        if capture.bytes.saturating_add(bytes) > MAX_BYTES {
+            capture.calls.clear();
+            capture.owners.clear();
+            return Err(budget(call));
+        }
+        capture.bytes += bytes;
+        let calls = std::mem::take(&mut capture.calls);
+        let owners = std::mem::take(&mut capture.owners);
+        capture.frames.push(RawFrame {
+            second,
+            immediate: false,
+            owners,
+            calls,
+        });
+        capture.frame_ops = 0;
+    }
+    result
+}
+pub(super) fn scene(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
+    let globals = table(call, helper(call, 5)?)?;
+    let key = call.try_intern(ACTIVE.as_bytes())?;
+    let prior = call.raw_table_get(globals, key)?;
+    call.with_roots(&[key, prior], |call| {
+        call.raw_table_set(globals, key, Value::Boolean(true))?;
+        let result = run(call, root);
+        call.raw_table_set(globals, key, prior)?;
+        result
+    })
+}
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
+    match name {
+        "SetDrawFunction" => {
+            let function = arg(call, 1);
+            if !matches!(function, Value::Nil | Value::Function(_) | Value::Native(_)) {
+                return Err(call.error(b"SetDrawFunction requires a function or nil"));
+            }
+            if function != Value::Nil {
+                let globals = table(call, helper(call, 5)?)?;
+                let key = call.try_intern(DRAW_INSTALLED_KEY.as_bytes())?;
+                call.raw_table_set(globals, key, Value::Boolean(true))?;
+            }
+            set(call, actor, "__songlua_draw_function", function)?;
+        }
+        "GetDrawFunction" => {
+            let value = field(call, actor, "__songlua_draw_function")?;
+            if !matches!(value, Value::Nil | Value::Function(_) | Value::Native(_)) {
+                return Err(call.error(b"actor draw function must be a function"));
+            }
+            return call.push(value);
+        }
+        "Draw" => {
+            let value = field(call, actor, "__songlua_visible")?;
+            if value == Value::Nil || truthy(value) {
+                let globals = table(call, helper(call, 5)?)?;
+                let active = field(call, globals, ACTIVE)?;
+                let screen = assets::field(call, actor, b"__songlua_top_screen_child_name")?;
+                let player = screen
+                    .as_deref()
+                    .is_some_and(|name| matches!(name, "PlayerP1" | "PlayerP2"));
+                if truthy(active) && !player {
+                    let state = native_children::state(call, actor)?;
+                    let snapshot = state_snapshot::write(call, actor, &state)?;
+                    song_replay::raw_set(
+                        call,
+                        actor,
+                        "__songlua_manual_draw_state",
+                        Value::Table(snapshot),
+                    )?;
+                }
+                draw(call, actor)?;
+            }
+        }
+        _ => unreachable!(),
+    }
+    call.push(Value::Table(actor))
+}

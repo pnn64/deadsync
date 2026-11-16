@@ -1,5 +1,4 @@
 use deadlib_lua::{Program, Value, Vm, compile};
-use lua_reference::Lua;
 
 const WRAPPER: &[u8]=br#"local f,e;local calls=0
 if width==0 then f,e=loadstring(source,name)
@@ -7,18 +6,16 @@ elseif width<0 then f,e=loadfile(source)
 else local at=0;f,e=load(function()calls=calls+1;if at>=#source then return nil end;local part=string.sub(source,at+1,at+width);at=at+width;return part end,name)end
 return f~=nil,e,calls"#;
 
-struct Oracle {
+struct Harness {
     vm: Vm,
-    lua: Lua,
+
     wrapper: Program,
 }
-impl Oracle {
+impl Harness {
     fn new() -> Self {
-        // SAFETY: fixed developer inputs use the unmodified official loader.
-        let lua = unsafe { Lua::unsafe_new() };
         Self {
             vm: Vm::new(),
-            lua,
+
             wrapper: compile(WRAPPER).unwrap(),
         }
     }
@@ -29,7 +26,7 @@ impl Oracle {
         self.vm
             .set_global(b"width", Value::Number(width as f64))
             .unwrap();
-        self.lua.globals().set("width", width).unwrap();
+
         let source_value = self.vm.intern(source);
         let name_value = self.vm.intern(name);
         self.vm.set_global(b"source", source_value).unwrap();
@@ -44,26 +41,7 @@ impl Oracle {
             ),
             v => panic!("loader results: {v:?}"),
         };
-        self.lua
-            .globals()
-            .set("source", self.lua.create_string(source).unwrap())
-            .unwrap();
-        self.lua
-            .globals()
-            .set("name", self.lua.create_string(name).unwrap())
-            .unwrap();
-        let (ok, error, calls): (bool, Option<lua_reference::LuaString>, i64) =
-            self.lua.load(WRAPPER).eval().unwrap();
-        let expected = (ok, error.map(|s| s.as_bytes().to_vec()), calls);
-        if actual != expected {
-            panic!(
-                "source={source:?}, name={name:?}, width={width}, calls={}/{}\nRust: {:?}\nC: {:?}",
-                actual.2,
-                expected.2,
-                actual.1.as_deref().map(String::from_utf8_lossy),
-                expected.1.as_deref().map(String::from_utf8_lossy)
-            );
-        }
+        reference_test::assert_debug("tests/syntax.rs::check_mode::expected", &actual);
     }
     fn cases(&mut self, cases: &[&[u8]]) {
         for source in cases {
@@ -74,7 +52,7 @@ impl Oracle {
 
 #[test]
 fn expected_tokens_and_expression_statement_errors_match_reference() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"local",
         b"local = 1",
         b"local a,=1",
@@ -107,7 +85,7 @@ fn expected_tokens_and_expression_statement_errors_match_reference() {
 
 #[test]
 fn closing_diagnostics_retain_opening_symbols_and_lines() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"do",
         b"do\n",
         b"while true do\n",
@@ -131,7 +109,7 @@ fn closing_diagnostics_retain_opening_symbols_and_lines() {
 
 #[test]
 fn quoted_strings_preserve_decoded_bytes_and_lexical_failure_context() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"return '",
         b"return 'a",
         b"return 'a\n",
@@ -152,7 +130,7 @@ fn quoted_strings_preserve_decoded_bytes_and_lexical_failure_context() {
 
 #[test]
 fn long_string_delimiters_comments_and_newlines_match_reference() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"return [=x",
         b"return [==x",
         b"return [[a",
@@ -170,7 +148,7 @@ fn long_string_delimiters_comments_and_newlines_match_reference() {
 
 #[test]
 fn malformed_numbers_and_nearby_numeral_lexemes_match_reference() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"return 1e",
         b"return 1e+",
         b"return 0x",
@@ -192,7 +170,7 @@ fn malformed_numbers_and_nearby_numeral_lexemes_match_reference() {
 
 #[test]
 fn arbitrary_byte_tokens_preserve_control_labels_and_non_utf8_messages() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for byte in 0..=255u8 {
         for prefix in [b"return ".as_slice(), b"local a=1; ", b"local "] {
             let mut source = prefix.to_vec();
@@ -205,7 +183,7 @@ fn arbitrary_byte_tokens_preserve_control_labels_and_non_utf8_messages() {
 
 #[test]
 fn names_and_lookahead_keep_the_active_scanner_buffer() {
-    Oracle::new().cases(&[
+    Harness::new().cases(&[
         b"return {a b}",
         b"return {a if}",
         b"return {a 17}",
@@ -224,7 +202,7 @@ fn names_and_lookahead_keep_the_active_scanner_buffer() {
 
 #[test]
 fn source_names_keep_lexer_truncation_and_binary_prefixes() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for length in [0, 1, 40, 60, 70, 79, 80, 81, 120] {
         for prefix in [b"".as_slice(), b"=", b"@"] {
             let mut name = prefix.to_vec();
@@ -246,7 +224,7 @@ fn host_diagnostics_retain_raw_bytes_with_readable_utf8_display() {
 
 #[test]
 fn generated_truncations_and_token_mutations_keep_full_diagnostics() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     let programs=[
   b"local function f(a,...) if a then return {x=a,[a]=f(a-1,...)} else return 'x' end end;return f(3)".as_slice(),
   b"local t={};for k,v in pairs(t)do while v do repeat t[k]=v until true;break end end;return t.x",
@@ -271,7 +249,7 @@ fn generated_truncations_and_token_mutations_keep_full_diagnostics() {
 
 #[test]
 fn source_local_and_assignment_limits_identify_the_owning_function() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for count in [198, 199, 200, 201, 205] {
         let names = (0..count)
             .map(|n| format!("a{n}"))
@@ -296,7 +274,7 @@ fn source_local_and_assignment_limits_identify_the_owning_function() {
 
 #[test]
 fn reader_chunk_boundaries_keep_diagnostic_bytes_and_request_counts() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for source in [
         b"local a={4\n\n".as_slice(),
         b"return '\xff\n",
@@ -327,7 +305,7 @@ fn reader_chunk_boundaries_keep_diagnostic_bytes_and_request_counts() {
 
 #[test]
 fn long_token_word_scans_preserve_byte_lanes_and_diagnostic_lines() {
-    let mut oracle = Oracle::new();
+    let mut oracle = Harness::new();
     for equals in [b"".as_slice(), b"="] {
         for comment in [false, true] {
             for byte in 0..=255 {
@@ -363,7 +341,8 @@ fn file_diagnostics_preserve_binary_bytes_headers_and_text_line_numbers() {
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    let mut oracle = Oracle::new();
+    reference_test::register_path(&path);
+    let mut oracle = Harness::new();
     for source in [
         b"#!/usr/bin/lua\r\nlocal a={4\r\n\r\n".as_slice(),
         b"return '\xff\n",
@@ -381,7 +360,6 @@ fn file_diagnostics_preserve_binary_bytes_headers_and_text_line_numbers() {
 #[test]
 fn embedded_nul_scanner_quirks_preserve_executable_values() {
     let mut vm = Vm::new();
-    let lua = unsafe { Lua::unsafe_new() };
     let wrapper = compile(b"return assert(loadstring(source))()").unwrap();
     for source in [
         b"return 1\0abc".as_slice(),
@@ -392,29 +370,13 @@ fn embedded_nul_scanner_quirks_preserve_executable_values() {
         let value = vm.intern(source);
         vm.set_global(b"source", value).unwrap();
         let actual = vm.execute(&wrapper).unwrap().to_vec();
-        lua.globals()
-            .set("source", lua.create_string(source).unwrap())
-            .unwrap();
-        let expected: lua_reference::MultiValue = lua
-            .load("return assert(loadstring(source))()")
-            .eval()
-            .unwrap();
-        let expected: Vec<_> = expected
-            .into_iter()
-            .map(|v| match v {
-                lua_reference::Value::Number(n) => Value::Number(n),
-                lua_reference::Value::Integer(n) => Value::Number(n as f64),
-                _ => panic!("scalar result"),
-            })
-            .collect();
-        assert_eq!(actual, expected, "{source:?}");
+        reference_test::assert_debug("tests/syntax.rs::embedded_nul::expected", &actual);
     }
 }
 
 #[test]
 fn reader_runtime_errors_precede_pending_lexical_faults() {
     let mut vm = Vm::new();
-    let lua = unsafe { Lua::unsafe_new() };
     for prefix in ["return [[a[[", "return 1e", "return @", "return 'a\\256"] {
         let source = format!(
             r#"return pcall(function()local tag={{}};local calls=0;local f,e=load(function()calls=calls+1;if calls==1 then return {prefix:?} end;error(tag,0)end,'=pending');return f==nil,e==tag,calls end)"#
@@ -423,16 +385,22 @@ fn reader_runtime_errors_precede_pending_lexical_faults() {
             .execute(&compile(source.as_bytes()).unwrap())
             .unwrap()
             .to_vec();
-        let expected: (bool, bool, bool, i64) = lua.load(source.as_bytes()).eval().unwrap();
-        assert_eq!(
-            values,
-            vec![
-                Value::Boolean(expected.0),
-                Value::Boolean(expected.1),
-                Value::Boolean(expected.2),
-                Value::Number(expected.3 as f64)
-            ],
-            "{prefix:?}"
+        let actual = match values.as_slice() {
+            [
+                Value::Boolean(ok),
+                Value::Boolean(missing),
+                Value::Boolean(identity),
+                Value::Number(calls),
+            ] => (*ok, *missing, *identity, *calls as i64),
+            other => panic!("unexpected reader results for {prefix:?}: {other:?}"),
+        };
+        reference_test::assert_debug(
+            "tests/syntax.rs::reader_error_precedence::expected",
+            &actual,
         );
     }
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

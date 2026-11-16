@@ -62,7 +62,27 @@ impl NativeStack<'_, '_> {
         let entry_level = self.call.vm.thread_call_level(thread);
         let owner = self.thread_id();
         let owner_status = self.call.vm.threads[slot_index(owner.0)].status;
-        let root = self.call.vm.pin(Value::Thread(owner))?;
+        let root = match self.call.vm.pin(Value::Thread(owner)) {
+            Ok(root) => root,
+            Err(error) if error.kind() == ErrorKind::Memory => {
+                // Protection includes retaining the caller before switching
+                // threads. The existing function slot can hold the fixed
+                // diagnostic without allocating or activating the target.
+                self.call.vm.defer_gc_until_allocation();
+                let diagnostic = Value::String(self.call.vm.memory_error);
+                let state = &mut self.call.vm.threads[slot_index(thread.0)];
+                let end = base + prefix + 1;
+                state.registers[base + prefix] = diagnostic;
+                state.top = end;
+                state.api_stack = restored_base..end;
+                if let Some(frame) = frame {
+                    state.frames[frame].vararg_start = restored_base;
+                    state.frames[frame].vararg_count = (end - restored_base) as u32;
+                }
+                return Ok(NativeCallStatus::MemoryError);
+            }
+            Err(error) => return Err(error),
+        };
         self.call.vm.threads[slot_index(thread.0)].abandoned = false;
         if let Some(frame) = frame {
             self.call.vm.threads[slot_index(thread.0)].frames[frame].vararg_count = prefix as u32;

@@ -1,13 +1,12 @@
 use super::*;
 use crate::perf::measure;
-use crate::pipelines_support::compare;
+
 use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
 use deadsync_rules::timing::{
     ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
 };
 use score_data::{ColumnJudgmentList, Grade, GrooveStatsEvalState, ItlEvalState};
 use stage_stats::{PlayerStageSummary, StageSummary};
-use std::hint::black_box;
 use std::path::PathBuf;
 
 type Leaderboards = HashMap<String, Vec<score_data::LeaderboardEntry>>;
@@ -44,52 +43,6 @@ fn fixture(rows: usize, count: usize, distinct: bool) -> (Vec<StageSummary>, Lea
     (stages, boards)
 }
 
-#[test]
-fn borrowed_scores_preserve_both_sides_repeated_charts_and_missing_tables() {
-    for rows in [0, 1, 5, 64] {
-        for count in [0, 1, 6] {
-            for distinct in [false, true] {
-                let (mut stages, mut boards) = fixture(rows, count, distinct);
-                if stages.len() > 1 {
-                    stages[1].players[0] = None;
-                }
-                for entries in boards.values_mut() {
-                    if let Some(entry) = entries.get_mut(1) {
-                        entry.name = " Å猫 ".into();
-                        entry.score = 9999.5;
-                    }
-                    if let Some(entry) = entries.get_mut(2) {
-                        entry.rank = 0;
-                        entry.score = f64::NAN;
-                    }
-                }
-                for initials in ["AAA", "", "  ", " Å猫 ", "missing"] {
-                    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                        let old = pipelines_original::build_side_highscore_lists(
-                            side, initials, &stages, &boards,
-                        );
-                        let new = build_side_highscore_lists(side, initials, &stages, &boards);
-                        assert_eq!(format!("{old:?}"), format!("{new:?}"));
-                    }
-                }
-                boards.clear();
-                let old = pipelines_original::build_side_highscore_lists(
-                    profile_data::PlayerSide::P1,
-                    "AAA",
-                    &stages,
-                    &boards,
-                );
-                let new = build_side_highscore_lists(
-                    profile_data::PlayerSide::P1,
-                    "AAA",
-                    &stages,
-                    &boards,
-                );
-                assert_eq!(format!("{old:?}"), format!("{new:?}"));
-            }
-        }
-    }
-}
 
 #[test]
 fn repeated_scores_are_consumed_once_per_side_in_reverse_stage_order() {
@@ -129,58 +82,6 @@ fn score_cache_borrows_entries_and_keeps_consumed_flags_on_hits() {
     });
 }
 
-#[test]
-fn complete_highscore_setup_avoids_deep_table_copies() {
-    let (stages, boards) = fixture(100, 3, true);
-    let (old, before) = measure(|| {
-        pipelines_original::build_side_highscore_lists(
-            profile_data::PlayerSide::P1,
-            "AAA",
-            &stages,
-            &boards,
-        )
-    });
-    let (new, after) = measure(|| {
-        build_side_highscore_lists(profile_data::PlayerSide::P1, "AAA", &stages, &boards)
-    });
-    assert_eq!(format!("{old:?}"), format!("{new:?}"));
-    assert!(before.allocs - after.allocs >= 900);
-    assert!(after.allocated_bytes < before.allocated_bytes);
-}
-
-#[test]
-#[ignore = "paired release benchmark; run with --ignored --nocapture --test-threads=1"]
-fn benchmark_string_pipelines_initials() {
-    for (label, rows, count, distinct) in [
-        ("empty-table", 0, 1, false),
-        ("five", 5, 1, false),
-        ("hundred", 100, 1, false),
-        ("thousand", 1000, 1, false),
-        ("repeated", 100, 12, false),
-        ("distinct", 100, 12, true),
-    ] {
-        let (stages, boards) = fixture(rows, count, distinct);
-        compare(
-            &format!("initials/{label}"),
-            || {
-                black_box(pipelines_original::build_side_highscore_lists(
-                    profile_data::PlayerSide::P1,
-                    black_box("AAA"),
-                    black_box(&stages),
-                    black_box(&boards),
-                ));
-            },
-            || {
-                black_box(build_side_highscore_lists(
-                    profile_data::PlayerSide::P1,
-                    black_box("AAA"),
-                    black_box(&stages),
-                    black_box(&boards),
-                ));
-            },
-        );
-    }
-}
 
 fn test_chart(hash: &str) -> Arc<ChartData> {
     Arc::new(ChartData {

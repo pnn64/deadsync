@@ -974,6 +974,31 @@ SmxP1Serial= pad-1\n"),
     }
 
     #[test]
+    fn axis_fix_updates_publish_only_changed_snapshots() {
+        let store = RuntimeConfigStore::new();
+        let (mut generation, cfg) = store.config_snapshot();
+        assert!(!cfg.axis_fix);
+
+        for enabled in [false, true, true, false, false] {
+            let changed = store.config().axis_fix != enabled;
+            assert_eq!(
+                store.update_config(|cfg| config_update::set_axis_fix(cfg, enabled)),
+                changed,
+            );
+            assert_eq!(store.config().axis_fix, enabled);
+            if changed {
+                let (next_generation, cfg) = store
+                    .config_if_changed(generation)
+                    .expect("axis fix changes must publish a new snapshot");
+                assert_eq!(cfg.axis_fix, enabled);
+                generation = next_generation;
+            } else {
+                assert!(store.config_if_changed(generation).is_none());
+            }
+        }
+    }
+
+    #[test]
     fn runtime_config_snapshot_only_refreshes_after_a_real_change() {
         let store = RuntimeConfigStore::new();
         let (generation, config) = store.config_snapshot();

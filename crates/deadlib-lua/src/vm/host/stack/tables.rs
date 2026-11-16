@@ -82,6 +82,7 @@ impl NativeStack<'_, '_> {
         let key = self.indexed_value(-1)?;
         let destination = self.end() - 1;
         let (value, yielded) = self.read_table(target, key, raw)?;
+        self.call.vm.reserve_gc_value(value)?;
         self.call.vm.registers[destination] = value;
         self.call.vm.gc_new_value(value);
         if let Some(yielded) = yielded {
@@ -103,10 +104,11 @@ impl NativeStack<'_, '_> {
             return Err(self.error(b"native stack overflow"));
         }
         let target = self.indexed_value(index)?;
-        let key = self.intern(name);
+        let key = self.try_intern(name)?;
         let destination = self.end();
         let (value, yielded) = self.read_table(target, key, false)?;
         if let Some(yielded) = yielded {
+            self.call.vm.reserve_gc_value(value)?;
             self.call.vm.registers[destination] = value;
             self.call.vm.gc_new_value(value);
             self.base = yielded.start;
@@ -144,7 +146,7 @@ impl NativeStack<'_, '_> {
         self.check_error()?;
         let target = self.indexed_value(index)?;
         let value = self.indexed_value(-1)?;
-        let key = self.intern(name);
+        let key = self.try_intern(name)?;
         if let Some(yielded) = self.write_table(target, key, value, false)? {
             self.base = yielded.start;
             self.set_window_end(yielded.end - 1);
@@ -153,6 +155,35 @@ impl NativeStack<'_, '_> {
         } else {
             self.set_top(self.top() - 1)
         }
+    }
+    /// Assign `value` to the field a literal names in the indexed table,
+    /// without invoking metamethods. This is the assignment a raw
+    /// [`Self::set_table`] makes for a pushed name and value, without moving
+    /// either through the stack. The name is found as [`Vm::intern_static`]
+    /// finds it.
+    ///
+    /// # Errors
+    /// Rejects a pending error, an invalid value or index, and a target that
+    /// is not a table.
+    pub fn raw_set_static(
+        &mut self,
+        index: isize,
+        name: &'static [u8],
+        value: Value,
+    ) -> Result<(), Error> {
+        self.check_error()?;
+        let key = self.call.vm.intern_static(name)?;
+        self.call.vm.validate_value(value)?;
+        let target = self.indexed_value(index)?;
+        self.write_table(target, key, value, true).map(|_| ())
+    }
+    /// A counter that changes whenever a string-keyed entry of the table is
+    /// added, replaced or removed. See [`HostCall::raw_fields_version`].
+    ///
+    /// # Errors
+    /// Rejects an invalid or collected table handle.
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.call.raw_fields_version(table)
     }
     /// Push a raw integer-key lookup.
     ///
@@ -201,7 +232,7 @@ impl NativeStack<'_, '_> {
             Value::Table(table) => Some(table),
             _ => return Err(self.error(b"native metatable must be a table or nil")),
         };
-        self.call.vm.set_metatable(value, table);
+        self.call.vm.set_metatable(value, table)?;
         self.set_top(self.top() - 1)
     }
     /// Replace a traversal key with the next key/value pair, or pop it at the end.

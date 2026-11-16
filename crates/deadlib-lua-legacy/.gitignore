@@ -1,7 +1,0 @@
-target/
-**/*.rs.bk
-Cargo.lock
-
-.vscode/
-.DS_Store
-.stignore

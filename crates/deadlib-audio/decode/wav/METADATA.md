@@ -40,33 +40,6 @@ Primary format references consulted 2026-10-28:
 - [EBU Tech 3306 v1.1](https://tech.ebu.ch/files/live/sites/tech/files/shared/tech/tech3306v1_1.pdf), RF64 marker rows.
 - [ITU-R BS.2088-2, 2025](https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.2088-2-202511-I!!PDF-E.pdf), BW64 channel assignments and XML envelopes.
 
-## Validation evidence
-
-Ten new integration tests bring the total to 41. Fixtures are assembled
-independently of the serializers. They cover exact byte layouts, both RIFF byte
-orders, BWF versions and reserved fields, legacy text bytes, odd padding,
-truncation, invalid counts, output atomicity, XML envelope packing, CHNA reserved
-slots/shared tracks, 64-bit fields and exact ancillary payloads around unchanged
-PCM. A dedicated allocator probe measures zero allocation calls and zero requested
-heap bytes while parsing, iterating and serializing all supported metadata families
-with caller-owned buffers. This excludes those caller buffers, stack and process
-working set; it is not a peak-RSS measurement.
-
-```sh
-cargo test -p deadlib-audio-decode-wav --locked --target-dir target/wav
-python crates/deadlib-audio/decode/wav/tests/reference_metadata.py --output target/wav/metadata-report.json
-```
-
-The reference script independently assembles 12 RIFF/RF64 fixtures: three BWF
-versions, leading/trailing metadata and both containers. All fields match the
-independent fixture truth. Nine fixture sets also match the pinned dr_wav metadata
-reader exactly. On the three RF64 fixtures with metadata following data, dr_wav
-returns no metadata. Both outputs and the independent expected fields are retained
-in `validation/metadata-references.json`; the initial raw differential run is
-retained in `validation/metadata-dr-wav.json`. The oracle uses the same pinned
-header as ADPCM validation and a separate small C driver. No reference codec is
-linked into production.
-
 ## Boundaries and remaining work
 
 These APIs handle container metadata, not ADM rendering, XML schema validation,
@@ -76,12 +49,3 @@ SXML alignment offsets are exposed and can be looked up with `subchunk_at`; full
 alignment/timestamp semantics are not certified. Broadcast metadata views use
 little-endian field layouts; dispatch rejects unsupported broadcast interpretation
 inside RIFX while raw payloads remain accessible.
-
-The RF64 2009 listing names the two intra-sample words High/Low but comments them
-as low/high. `Marker::intra_sample_words` preserves physical DWORD order and makes
-no unverified combined-integer interpretation. Its sample and byte positions have
-unambiguous 64-bit access. Full BWF/BW64 application profile validation remains
-open, as do broader metadata throughput and RSS measurements. The first resident
-cue/INFO comparison is recorded in PERFORMANCE.md, including slower retained-view
-walks and the measured safe native-word string-scan optimization. Bounded metadata
-mutation and coverage-guided/AddressSanitizer evidence is recorded in FUZZING.md.

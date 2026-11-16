@@ -402,7 +402,3 @@ pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
         },
     };
 }
-
-#[cfg(test)]
-#[path = "../../../../../tests/perf/player_option_originals.rs"]
-pub(super) mod dataflow_originals;

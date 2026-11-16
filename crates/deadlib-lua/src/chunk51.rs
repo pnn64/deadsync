@@ -1,6 +1,14 @@
 //! Bounded, resumable decoding of native Lua 5.1 precompiled chunks.
 //! Prototypes and continuations are flat; input prefixes are never replayed.
-use crate::{Error, ErrorKind, bytecode::Constant};
+use crate::{
+    Error, ErrorKind,
+    bytecode::Constant,
+    memory::fallible::{self, SliceExt, VecExt},
+};
+
+fn invalid(why: &'static str) -> Error {
+    Error::new_static(ErrorKind::Syntax, 0, why)
+}
 
 const DEPTH_LIMIT: usize = 200;
 pub(crate) const HEADER_SIZE: usize = 12;
@@ -108,15 +116,15 @@ pub(crate) struct Decoder {
     native_events: Option<Vec<crate::parser::NativeRootEvent>>,
 }
 impl Decoder {
-    pub(crate) fn new(base_depth: usize) -> Self {
-        Self {
+    pub(crate) fn try_new(base_depth: usize) -> Result<Self, Error> {
+        Ok(Self {
             chunk: Chunk::default(),
-            tasks: vec![Task::Function(None), Task::Header],
+            tasks: fallible::vec([Task::Function(None), Task::Header])?,
             position: 0,
             depth: 0,
             base_depth,
             native_events: None,
-        }
+        })
     }
     pub(crate) fn nesting(&self) -> usize {
         self.depth
@@ -170,22 +178,22 @@ impl Decoder {
         input: &'a [u8],
         count: usize,
         closed: bool,
-    ) -> Result<Option<&'a [u8]>, &'static str> {
+    ) -> Result<Option<&'a [u8]>, Error> {
         let Some(end) = self.position.checked_add(count) else {
-            return Err("unexpected end");
+            return Err(invalid("unexpected end"));
         };
         match input.get(self.position..end) {
             Some(bytes) => {
                 self.position = end;
                 Ok(Some(bytes))
             }
-            None if closed => Err("unexpected end"),
+            None if closed => Err(invalid("unexpected end")),
             None => Ok(None),
         }
     }
     /// `input` retains its prefix between calls; true means the root ended.
     /// The caller may leave trailing input unread, as Lua's binary loader does.
-    pub(crate) fn resume(&mut self, input: &[u8], closed: bool) -> Result<bool, &'static str> {
+    pub(crate) fn resume(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         macro_rules! read {
             ($n:expr) => {
                 match self.read(input, $n, closed)? {
@@ -198,7 +206,7 @@ impl Decoder {
             () => {{
                 let n = i32::from_ne_bytes(read!(4).try_into().unwrap());
                 if n < 0 {
-                    return Err("bad integer");
+                    return Err(invalid("bad integer"));
                 }
                 n as usize
             }};
@@ -207,7 +215,7 @@ impl Decoder {
             match task {
                 Task::Header => {
                     if read!(HEADER_SIZE) != header() {
-                        return Err("bad header");
+                        return Err(invalid("bad header"));
                     }
                     self.tasks.pop();
                 }
@@ -217,19 +225,19 @@ impl Decoder {
                         .wrapping_add(1)
                         > DEPTH_LIMIT as u16
                     {
-                        return Err("code too deep");
+                        return Err(invalid("code too deep"));
                     }
                     self.depth += 1;
                     if let Some(events) = &mut self.native_events {
-                        events.push(crate::parser::NativeRootEvent::Open);
+                        events.try_push(crate::parser::NativeRootEvent::Open)?;
                     }
                     self.tasks.pop();
                     let id = self.chunk.prototypes.len();
-                    self.chunk.prototypes.push(Prototype::default());
+                    self.chunk.prototypes.try_push(Prototype::default())?;
                     if let Some(parent) = parent {
-                        self.chunk.prototypes[parent].children.push(id);
+                        self.chunk.prototypes[parent].children.try_push(id)?;
                     }
-                    self.tasks.extend([
+                    self.tasks.try_extend([
                         Task::Verify(id),
                         Task::NamesCount(id),
                         Task::LocalsCount(id),
@@ -241,7 +249,7 @@ impl Decoder {
                         Task::Defined(id, true),
                         Task::Defined(id, false),
                         Task::String(StringTarget::Source(id), None),
-                    ]);
+                    ])?;
                 }
                 Task::Defined(id, last) => {
                     let line = count!() as u32;
@@ -283,7 +291,7 @@ impl Decoder {
                 }
                 Task::Code(id, n) => {
                     let word = u32::from_ne_bytes(read!(4).try_into().unwrap());
-                    self.chunk.prototypes[id].code.push(word);
+                    self.chunk.prototypes[id].code.try_push(word)?;
                     *self.tasks.last_mut().unwrap() = Task::Code(id, n - 1);
                 }
                 Task::Constants(id, n) => {
@@ -291,17 +299,20 @@ impl Decoder {
                     *self.tasks.last_mut().unwrap() = Task::Constants(id, n - 1);
                     match kind {
                         0 => {
-                            self.chunk.prototypes[id].constants.push(Constant::Nil);
+                            self.chunk.prototypes[id]
+                                .constants
+                                .try_push(Constant::Nil)?;
                             if let Some(events) = &mut self.native_events {
-                                events
-                                    .push(crate::parser::NativeRootEvent::Constant(Constant::Nil));
+                                events.try_push(crate::parser::NativeRootEvent::Constant(
+                                    Constant::Nil,
+                                ))?;
                             }
                         }
-                        1 | 3 => self.tasks.push(Task::Constant(id, kind)),
+                        1 | 3 => self.tasks.try_push(Task::Constant(id, kind))?,
                         4 => self
                             .tasks
-                            .push(Task::String(StringTarget::Constant(id), None)),
-                        _ => return Err("bad constant"),
+                            .try_push(Task::String(StringTarget::Constant(id), None))?,
+                        _ => return Err(invalid("bad constant")),
                     }
                 }
                 Task::Constant(id, kind) => {
@@ -311,27 +322,29 @@ impl Decoder {
                         Constant::Number(f64::from_ne_bytes(read!(8).try_into().unwrap()))
                     };
                     if let Some(events) = &mut self.native_events {
-                        events.push(crate::parser::NativeRootEvent::Constant(value.clone()));
+                        events.try_push(crate::parser::NativeRootEvent::Constant(value.clone()))?;
                     }
-                    self.chunk.prototypes[id].constants.push(value);
+                    self.chunk.prototypes[id].constants.try_push(value)?;
                     self.tasks.pop();
                 }
                 Task::Children(id, n) => {
                     *self.tasks.last_mut().unwrap() = Task::Children(id, n - 1);
-                    self.tasks.push(Task::Function(Some(id)));
+                    self.tasks.try_push(Task::Function(Some(id)))?;
                 }
                 Task::Lines(id, n) => {
                     let line = u32::from_ne_bytes(read!(4).try_into().unwrap());
-                    self.chunk.prototypes[id].lines.push(line);
+                    self.chunk.prototypes[id].lines.try_push(line)?;
                     *self.tasks.last_mut().unwrap() = Task::Lines(id, n - 1);
                 }
                 Task::Locals(id, n) => {
-                    self.chunk.prototypes[id].locals.push(Local::default());
+                    self.chunk.prototypes[id]
+                        .locals
+                        .try_push(Local::default())?;
                     *self.tasks.last_mut().unwrap() = Task::Locals(id, n - 1);
-                    self.tasks.extend([
+                    self.tasks.try_extend([
                         Task::LocalBounds(id),
                         Task::String(StringTarget::Local(id), None),
-                    ]);
+                    ])?;
                 }
                 Task::LocalBounds(id) => {
                     // Keep each integer separate so a negative first bound is
@@ -348,7 +361,7 @@ impl Decoder {
                 Task::Names(id, n) => {
                     *self.tasks.last_mut().unwrap() = Task::Names(id, n - 1);
                     self.tasks
-                        .push(Task::String(StringTarget::Upvalue(id), None));
+                        .try_push(Task::String(StringTarget::Upvalue(id), None))?;
                 }
                 Task::String(target, None) => {
                     let size = usize::from_ne_bytes(
@@ -360,29 +373,35 @@ impl Decoder {
                     let value: Option<Box<[u8]>> = if size == 0 {
                         None
                     } else {
-                        Some(read!(size)[..size - 1].into())
+                        Some(read!(size)[..size - 1].try_boxed()?)
                     };
                     if let Some(bytes) = &value
                         && let Some(events) = &mut self.native_events
                     {
                         use crate::parser::NativeRootEvent;
-                        events.push(match target {
-                            StringTarget::Source(_) => NativeRootEvent::Source(bytes.clone()),
+                        events.try_push(match target {
+                            StringTarget::Source(_) => NativeRootEvent::Source(bytes.try_boxed()?),
                             StringTarget::Constant(_) => {
-                                NativeRootEvent::Constant(Constant::String(bytes.clone()))
+                                NativeRootEvent::Constant(Constant::String(bytes.try_boxed()?))
                             }
-                            _ => NativeRootEvent::DebugString(bytes.clone()),
-                        });
+                            _ => {
+                                NativeRootEvent::DebugString(crate::memory::text::Text::new(bytes)?)
+                            }
+                        })?;
                     }
                     match target {
                         StringTarget::Source(id) => self.chunk.prototypes[id].source = value,
                         StringTarget::Constant(id) => self.chunk.prototypes[id]
                             .constants
-                            .push(Constant::String(value.ok_or("bad constant")?)),
+                            .try_push(Constant::String(
+                                value.ok_or_else(|| invalid("bad constant"))?,
+                            ))?,
                         StringTarget::Local(id) => {
                             self.chunk.prototypes[id].locals.last_mut().unwrap().name = value
                         }
-                        StringTarget::Upvalue(id) => self.chunk.prototypes[id].names.push(value),
+                        StringTarget::Upvalue(id) => {
+                            self.chunk.prototypes[id].names.try_push(value)?
+                        }
                     }
                     self.tasks.pop();
                 }
@@ -391,7 +410,7 @@ impl Decoder {
                     self.tasks.pop();
                     self.depth -= 1;
                     if let Some(events) = &mut self.native_events {
-                        events.push(crate::parser::NativeRootEvent::Close);
+                        events.try_push(crate::parser::NativeRootEvent::Close)?;
                     }
                 }
             }
@@ -409,23 +428,26 @@ pub(crate) fn diagnostic(name: &[u8], why: &str) -> Error {
     } else {
         name
     };
-    let mut message = name.to_vec();
-    message.extend_from_slice(b": ");
-    message.extend_from_slice(why.as_bytes());
-    message.extend_from_slice(b" in precompiled chunk");
-    Error::from_bytes(ErrorKind::Syntax, 0, message)
+    let build = || -> Result<Error, Error> {
+        let mut message = name.try_to_vec()?;
+        message.try_extend_from_slice(b": ")?;
+        message.try_extend_from_slice(why.as_bytes())?;
+        message.try_extend_from_slice(b" in precompiled chunk")?;
+        Ok(Error::try_from_bytes(ErrorKind::Syntax, 0, message))
+    };
+    build().unwrap_or_else(|error| error)
 }
 impl Decoder {
     pub fn program(&mut self, name: &[u8]) -> Result<crate::Program, Error> {
         let chunk = std::mem::take(&mut self.chunk);
-        translate::program(chunk).map_err(|why| diagnostic(name, why))
+        translate::program(chunk).map_err(|error| named_error(name, error))
     }
 }
 pub(crate) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<crate::Program, Error> {
-    let mut decoder = Decoder::new(depth);
+    let mut decoder = Decoder::try_new(depth)?;
     decoder
         .resume(source, true)
-        .map_err(|why| diagnostic(name, why))?;
+        .map_err(|error| named_error(name, error))?;
     decoder.program(name)
 }
 
@@ -438,3 +460,11 @@ use verify::verify;
 
 #[cfg(test)]
 mod tests;
+
+pub(crate) fn named_error(name: &[u8], error: Error) -> Error {
+    if error.kind() == ErrorKind::Memory {
+        error
+    } else {
+        diagnostic(name, error.message())
+    }
+}

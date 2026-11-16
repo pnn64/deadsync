@@ -431,52 +431,6 @@ exact device behavior offline.
 
 > Leave `SMX_CAPTURE_DIR` unset for normal play; it's purely a debugging aid.
 
-### Performance profiling (`DEADSYNC_SMX_PROFILE`)
-
-If the in-gameplay FSR sensor overlay seems to cost frame rate (most noticeable
-with vsync off, where the per-frame budget is tiny), this opt-in profiler shows
-where the time goes. Launch DeadSync with the env var set:
-
-```sh
-# Linux / macOS
-DEADSYNC_SMX_PROFILE=1 ./deadsync
-```
-
-```powershell
-# Windows (PowerShell)
-$env:DEADSYNC_SMX_PROFILE = '1'
-.\deadsync.exe
-```
-
-```cmd
-# Windows (Command Prompt / cmd.exe)
-set DEADSYNC_SMX_PROFILE=1
-deadsync.exe
-```
-
-Then play a song with the FSR sensor overlay enabled. Once a second, the log
-prints a `smx-profile:` line timing the overlay's two per-frame costs, in
-microseconds:
-
-```
-smx-profile: read avg=4.6us max=29.9us n=60 | draw avg=15.1us max=42.5us n=60
-```
-
-- **read**: fetching the latest pad sensor values each frame.
-- **draw**: building the on-screen sensor bars and value text.
-- **avg / max**: the average and the worst single sample over the last second.
-- **n**: how many samples fell in that second (read is sampled at a fixed rate,
-  draw tracks the frame rate).
-
-The line logs at `warn`, so it shows at the default log level without raising it
-to Trace, and it only prints while you are in a song with the overlay active. If
-you are reporting an overlay performance issue, a few seconds of these lines is
-the data to send.
-
-> Leave `DEADSYNC_SMX_PROFILE` unset for normal play; it's purely a diagnostic.
-
----
-
 ## 10. Troubleshooting cheatsheet
 
 | Symptom | Likely cause / what to check |

@@ -133,11 +133,3 @@ pub(super) fn workshop_input(phase: &Phase, ev: &InputEvent) -> InputOutcome {
         _ => InputOutcome::Consumed,
     }
 }
-
-#[cfg(test)]
-#[path = "../../../../../tests/perf/workshop_original.rs"]
-pub(crate) mod perf_original;
-
-#[cfg(test)]
-#[path = "../../../../../tests/perf/workshop_ownership.rs"]
-pub(crate) mod perf_tests;

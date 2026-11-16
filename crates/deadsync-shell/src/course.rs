@@ -565,9 +565,6 @@ pub fn build_course_graph_stages(
     out
 }
 
-#[cfg(test)]
-#[path = "../../../tests/perf/course_updates.rs"]
-mod update_tests;
 
 #[cfg(test)]
 mod partner_tests;

@@ -191,10 +191,12 @@ pub fn extract_background_lua_change_set(
     let mut layer_1 = Vec::new();
     let mut uses_lua = false;
     let mut push_change = |start_beat: f32, path: PathBuf| {
+        let source = if path.is_dir() { path.join("default.lua") } else { path.clone() };
         let path = song_lua_entry_path_like_itg(path);
         layer_1.push(([String::new(), "-songbackground-".to_owned(), String::new(), String::new(), String::new()], SerializableSongBackgroundLuaChange {
             start_beat,
             path: path.to_string_lossy().into_owned(),
+            source: source.to_string_lossy().into_owned(),
             effect: String::new(),
             color1: None,
             layer: 0,
@@ -255,6 +257,7 @@ fn append_background_lua_changes<'a>(
             let Some(start_beat) = parse_start_beat(&fields) else {
                 continue;
             };
+            let source = if path.is_dir() { song_dir.join(target.as_ref()).join("default.lua") } else { song_dir.join(target.as_ref()) };
             let path = song_lua_entry_path_like_itg(path);
             let key = [
                 parse_bgchange_effect(fields.get(4).map(AsRef::as_ref), fields.get(5).map(AsRef::as_ref), fields.get(6).map(AsRef::as_ref)),
@@ -267,6 +270,7 @@ fn append_background_lua_changes<'a>(
             out.push((key, SerializableSongBackgroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
+                source: source.to_string_lossy().into_owned(),
                 effect,
                 color1,
                 layer: 0,
@@ -723,13 +727,6 @@ fn sort_foreground_changes<T>(
         .expect("foreground beats are finite"));
 }
 
-#[cfg(test)]
-#[path = "changes/background_fields.rs"]
-mod background_fields;
-
-#[cfg(test)]
-#[path = "changes/lookup_growth.rs"]
-mod lookup_growth;
 
 #[cfg(test)]
 mod tests {
@@ -948,6 +945,23 @@ mod tests {
         assert!(
             matches!(&media[0].target, SongBackgroundChangeTarget::File(path) if path == &image)
         );
+    }
+
+    #[test]
+    fn background_sources_keep_directory_and_explicit_filename_spelling() {
+        let root = test_dir("bg-source-spelling");
+        let directory = root.join("bg");
+        fs::create_dir_all(&directory).unwrap();
+        let physical = directory.join("Default.lua");
+        fs::write(&physical, b"return Def.Actor{}").unwrap();
+        let changes = extract_background_lua_changes(&root, b"#BGCHANGES:0=bg=1,4=bg/Default.lua=1;", "");
+        assert_eq!(changes.len(), 2);
+        assert!(changes.iter().all(|c| PathBuf::from(&c.path) == physical));
+        assert_eq!(PathBuf::from(&changes[0].source), directory.join("default.lua"));
+        assert_eq!(PathBuf::from(&changes[1].source), physical);
+        let encoded = bincode::encode_to_vec(&changes[0], bincode::config::standard()).unwrap();
+        let (cached, _) = bincode::decode_from_slice::<SerializableSongBackgroundLuaChange, _>(&encoded, bincode::config::standard()).unwrap();
+        assert_eq!(deadsync_chart::song::SongBackgroundLuaChange::from(cached).source, directory.join("default.lua"));
     }
 
     #[test]

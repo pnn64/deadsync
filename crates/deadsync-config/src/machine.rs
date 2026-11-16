@@ -169,8 +169,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-mod audio_kernel_perf {
-    include!("audio_kernel_perf.rs");
-}

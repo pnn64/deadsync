@@ -1,5 +1,4 @@
 use deadlib_lua::{ErrorKind, Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as ReferenceValue};
 
 #[derive(Debug, PartialEq)]
 enum Observed {
@@ -38,41 +37,20 @@ fn rust(vm: &mut Vm, source: &[u8]) -> Vec<Observed> {
         .collect()
 }
 
-fn official(lua: &Lua, source: &[u8]) -> Vec<Observed> {
-    lua.load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            ReferenceValue::Nil => Observed::Nil,
-            ReferenceValue::Boolean(b) => Observed::Boolean(b),
-            ReferenceValue::Integer(n) => number(n as f64),
-            ReferenceValue::Number(n) => number(n),
-            ReferenceValue::String(s) => Observed::String(s.as_bytes().to_vec()),
-            _ => panic!("test must return scalar observations"),
-        })
-        .collect()
-}
-
 fn check(source: &[u8]) {
-    assert_eq!(
-        rust(&mut Vm::new(), source),
-        official(&Lua::new(), source),
-        "{}",
-        String::from_utf8_lossy(source)
+    reference_test::assert_debug(
+        "tests/lua51.rs::official::expected",
+        &(rust(&mut Vm::new(), source)),
     );
 }
 
 fn check_debug(source: &[u8]) {
     // SAFETY: these fixed oracle programs only use the debug metatable functions;
     // they never load native modules or expose unsafe host pointers.
-    let lua = unsafe { Lua::unsafe_new() };
-    assert_eq!(
-        rust(&mut Vm::new(), source),
-        official(&lua, source),
-        "{}",
-        String::from_utf8_lossy(source)
+
+    reference_test::assert_debug(
+        "tests/lua51.rs::official::expected",
+        &(rust(&mut Vm::new(), source)),
     );
 }
 
@@ -159,23 +137,15 @@ fn named_chunks_and_error_levels_match_reference_locations() {
         let program = deadlib_lua::compile_named(source, name.as_bytes()).unwrap();
         let mut vm = Vm::new();
         let values = vm.execute(&program).unwrap().to_vec();
-        let lua = Lua::new();
-        let reference = lua
-            .load(source)
-            .set_name(name.clone())
-            .eval::<MultiValue>()
-            .unwrap();
+
         assert_eq!(values[0], Value::Boolean(false));
         let Value::String(id) = values[1] else {
             panic!("string error expected");
         };
-        let ReferenceValue::String(expected) = &reference[1] else {
-            panic!("reference string error expected");
-        };
-        assert_eq!(
-            vm.string_bytes(id).unwrap(),
-            expected.as_bytes().as_ref(),
-            "{name}"
+
+        reference_test::assert_debug(
+            "tests/lua51.rs::named_error::expected",
+            &(vm.string_bytes(id).unwrap()),
         );
     }
 }
@@ -200,6 +170,38 @@ fn metatable_indexing_protection_and_calls() {
         "local out={}; setmetatable(_G,{__newindex=out}); unknown=7; return out.unknown,rawget(_G,'unknown')",
     ] {
         check(source.as_bytes());
+    }
+}
+
+#[test]
+fn existing_metatable_keys_skip_newindex_and_invalid_keys_still_fail() {
+    let source = br#"
+local called = 0
+local t = setmetatable({x=1}, {__newindex=function(self,key,value)
+  called = called + 1
+  rawset(self,key,value)
+end})
+t.x = 2
+t.x = nil
+t.x = 3
+local nil_ok = pcall(function() t[nil] = 4 end)
+local nan_ok = pcall(function() t[0/0] = 5 end)
+return called, t.x, nil_ok, nan_ok
+"#;
+    for observed in [false, true] {
+        let mut vm = Vm::new();
+        if observed {
+            vm.set_instruction_limit(Some(100_000));
+        }
+        assert_eq!(
+            rust(&mut vm, source),
+            [
+                Observed::Number(1.0f64.to_bits()),
+                Observed::Number(3.0f64.to_bits()),
+                Observed::Boolean(false),
+                Observed::Boolean(false),
+            ]
+        );
     }
 }
 
@@ -283,7 +285,7 @@ fn generated_metamethod_dispatch_preserves_order_and_identity() {
         (" >= ", "__le"),
     ];
     let handlers = ["nil", "h", "g", "false", "proxy"];
-    let lua = Lua::new();
+
     let mut vm = Vm::new();
     for (op, event) in operators {
         for left in handlers {
@@ -300,10 +302,9 @@ fn generated_metamethod_dispatch_preserves_order_and_identity() {
                     return ok,type(value),scalar and value or nil,rawequal(value,a),rawequal(value,b),log
                 "#
                 );
-                assert_eq!(
-                    rust(&mut vm, source.as_bytes()),
-                    official(&lua, source.as_bytes()),
-                    "{event}: {left}, {right}"
+                reference_test::assert_debug(
+                    "tests/lua51.rs::official::expected",
+                    &(rust(&mut vm, source.as_bytes())),
                 );
             }
         }
@@ -481,8 +482,6 @@ fn malformed_source_matches_official_acceptance() {
         "return 2 & 1",
         "goto label",
     ] {
-        let reference = Lua::new().load(source).into_function().is_ok();
-        assert!(!reference, "fixture unexpectedly accepted: {source}");
         assert!(
             compile(source.as_bytes()).is_err(),
             "accepted invalid source: {source}"
@@ -566,14 +565,13 @@ fn deterministic_expression_differential_fuzz() {
         )
     }
     let mut state = 0x87ac24e51298ab91;
-    let lua = Lua::new();
+
     let mut vm = Vm::new();
     for _ in 0..1000 {
         let source = format!("return {}", expression(&mut state, 3));
-        assert_eq!(
-            rust(&mut vm, source.as_bytes()),
-            official(&lua, source.as_bytes()),
-            "{source}"
+        reference_test::assert_debug(
+            "tests/lua51.rs::official::expected",
+            &(rust(&mut vm, source.as_bytes())),
         );
     }
 }
@@ -591,9 +589,9 @@ fn adversarial_input_has_bounded_nesting() {
         );
     }
     let chain = format!("local x=1;return {}1", "x+".repeat(10000));
-    assert_eq!(
-        rust(&mut Vm::new(), chain.as_bytes()),
-        official(&Lua::new(), chain.as_bytes())
+    reference_test::assert_debug(
+        "tests/lua51.rs::official::expected",
+        &(rust(&mut Vm::new(), chain.as_bytes())),
     );
     assert!(compile(chain.as_bytes()).unwrap().register_count() <= 4);
     let folded = format!("return {}1", "1+".repeat(10000));
@@ -655,3 +653,7 @@ return unpack(observations)
 "#,
     );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

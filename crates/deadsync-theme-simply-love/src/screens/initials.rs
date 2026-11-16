@@ -1559,8 +1559,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "initials_pipelines_original.rs"]
-mod pipelines_original;
-#[cfg(test)]
 #[path = "initials_pipelines_perf.rs"]
 mod pipelines_perf;

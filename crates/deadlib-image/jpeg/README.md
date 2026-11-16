@@ -1,10 +1,5 @@
 # deadlib-image-jpeg
 
-Independent, pure-Rust JPEG-1 codec under active development. The sole
-production dependency is the shared `deadlib-image` crate. No DeadSync loader
-uses this package. The full requested decoder/encoder scope remains in PLAN.md;
-COVERAGE.md records the outstanding standards and performance work.
-
 Currently implemented: native marker parsing, canonical Huffman decoding with
 a nine-bit lookup, sequential SOF0/SOF1 and progressive SOF2 coefficient
 reconstruction, 8/12-bit
@@ -22,18 +17,6 @@ JPEG without changing its coefficients when the coefficients fit the target
 Huffman process's magnitude categories. Arithmetic decisions use the full
 signed 16-bit model at either sample precision.
 
-`decode_lossless(&jpeg, limits)` decodes predictive Huffman SOF3 or arithmetic SOF11 into
-native unsigned sample planes at every precision from 2 through 16 bits.
-All seven predictors, per-scan point transforms, whole-row restart intervals,
-interleaved/separate scans, subsampling and up to 255 frame components are
-supported. At Pt=0 the samples are exact source integers; Pt>0 reconstructs
-`(source >> Pt) << Pt`. The `coding` records retain each component's predictor
-and Pt. APPn/COM and ICC views use the same borrowed metadata representation.
-`LosslessImage::into_planar` moves its buffers into the common color interface
-without copying samples. Shared output keeps 8-bit values and scales other
-precisions to 16-bit storage; use the native planes for exact original values.
-See LOSSLESS-VALIDATION.md for reference gates and remaining lossless work.
-
 `encode_lossless(&shared_image, LosslessOptions::default())` preserves shared
 gray/RGB integers at their original 2..16-bit precision. The native
 `encode_lossless_samples` API also accepts interleaved YCbCr, CMYK and YCCK.
@@ -49,32 +32,6 @@ each individual scan follows frame order. Generated scans pack legal MCUs and
 split larger layouts automatically. The metadata variants preserve APPn/COM,
 add segments, and preserve/remove/replace ICC bytes through the same writer.
 
-`LosslessOptions::entropy_coding = EntropyCoding::Arithmetic` writes SOF11
-using the native Annex H two-dimensional model. DAC L/U bounds use
-`arithmetic_conditioning`; the AC split is unused. Four decoder destinations,
-158 bins per table and left/above difference classes are supported. The class
-history is bounded to one row per vertical sampling phase. Arithmetic scans
-share the same precision, sampling, scripts, metadata and restart controls.
-The JPEG XT reference gate and its documented setup/output limitations are in
-LOSSLESS-VALIDATION.md.
-
-`decode_hierarchical(&jpeg, limits)` parses DHP/EXP and all six differential
-JPEG-1 frame processes. It preserves every original frame's coefficients,
-quantizers or native sample differences and global metadata/scan positions.
-`reconstruct_reference()` composes raw modulo-65536 component planes with the
-ordered Annex J expansion filter; `reconstruct()` provides the shared planar
-color interface. Initial frames may use any supported ordinary process.
-`HierarchicalImage::from_frames` constructs a validated native hierarchy without
-decoding a JPEG. `encode(HierarchicalOptions::default())` writes its frames into
-one bounded output buffer, preserving native values and each frame's entropy
-family and sequential/progressive choice. Per-frame `HierarchicalFrameOptions`
-select Huffman/arithmetic, fixed/optimized tables, generated/custom scans,
-refinement, signed residual Pt and restarts. Metadata/ICC controls use
-`encode_with_metadata`. Sequential DCT and lossless frames support 255
-components; progressive DCT frames retain the standard's four-component limit.
-Exact independent frame-data gates and the reference's raster limitations are
-documented in HIERARCHICAL-VALIDATION.md.
-
 `build_hierarchical_planes` and `build_hierarchical_samples` construct source
 pyramids with matching reconstructed references. `PyramidOptions::new(&levels)`
 borrows per-frame `PyramidLevel::dct(expansion, quality, coding)` or
@@ -85,26 +42,6 @@ or vertical expansion are supported. DCT stages may end with a same-resolution
 lossless correction; Pt=0 reproduces the sampled source exactly with this
 codec's matching IDCT. Pure lossless Pt=0 preserves source integers directly.
 
-The `encode_hierarchical_planes`, `encode_hierarchical_samples` and shared
-`encode_hierarchical_image` conveniences use the same bounded frame writer;
-their metadata variants add APPn/COM and preserve/remove/replace ICC profiles.
-`PyramidRasterOptions::default()` keeps source precision, color space and
-component integers with 4:4:4 sampling. Precision scaling, RGB-to-YCbCr,
-CMYK-to-YCCK and subsampling require explicit selection. Unchanged CMYK values
-retain the declared polarity. No hierarchical output is labeled as JFIF.
-See HIERARCHICAL-VALIDATION.md for the chosen reduction filter, progressive/Pt
-reference handling, memory behavior and independent source-encoding evidence.
-
-All frame decoders support first-scan DNL, including initially zero or
-provisional SOF heights. Models return resolved dimensions; `MarkerReader`
-exposes the original declarations unchanged. Hierarchies can also omit the
-completed DHP height, which is inferred from full-resolution components.
-Set `height_declaration: HeightDeclaration::Dnl { initial_height: 0 }` in
-`CodingOptions` or `LosslessOptions` to emit DNL. Per-frame hierarchy and pyramid
-controls share these options; `omit_dhp_height` selects zero-height DHP.
-Defaults retain ordinary SOF/DHP output. DNL-VALIDATION.md records all-process
-checks, independent C-authored inputs and explicit reference limitations.
-
 `Tables` owns persistent quantization and Huffman destinations for T.81 B.4/B.5
 abbreviated streams. Load a table-only stream with `tables.load(bytes, limits)`,
 then call its `decode_coefficients`, `decode_lossless` or `decode_hierarchical`
@@ -112,18 +49,6 @@ methods for successive images. Definitions in images update the same cache.
 `consumed` stops at EOI, allowing concatenated streams. Arithmetic conditioning
 and restart intervals reset at every SOI. Table-stream APPn/COM metadata is
 returned separately and does not become metadata of later images.
-
-`AbbreviatedEncoder` supplies matching stateful encoding for coefficients,
-native/shared samples, predictive lossless frames, hierarchies and source
-pyramids. Its methods return `AbbreviatedImage { tables, image }`; deliver both
-vectors to the same receiver in that order for every successful call. Unchanged
-definitions are omitted. An empty table packet is the valid four-byte SOI/EOI
-stream. Later scan/frame redefinitions remain at their original image position.
-Both vectors count toward the output byte budget; `max_table_bytes` separately
-bounds the companion packet. Metadata and ICC remain in the image. Call `clear`
-when the receiver loses its cache or a successful pair is discarded. Write
-errors clear the encoder's table state. See ABBREVIATED-VALIDATION.md for state,
-error semantics, external checks and reproducible commands.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
@@ -148,13 +73,6 @@ DAC tables, configurable `ArithmeticConditioning` and the same restart,
 metadata, precision and sampling controls. `optimize_huffman` applies to
 Huffman output. The arithmetic writer does not collect a Huffman histogram or
 allocate a separate entropy buffer.
-
-`CoefficientImage::from_components(frame, components, metadata, limits)` accepts
-native padded coefficient grids without decoding or copying them. Arbitrary
-component IDs, sampling and per-component quantizers remain available through
-the coefficient, abbreviated and hierarchical writers. Generic source-plane
-pyramids also support the full sequential range. COMPONENT-VALIDATION.md records
-the IJG/Turbo/JPEG XT gates, retained expectations and reference limitations.
 
 MOZJPEG-VALIDATION.md records the pinned mozjpeg source/rewrite comparisons
 against all three ordinary-process C references, exact coefficient checks,
@@ -203,31 +121,6 @@ scales 12-bit samples to the full 16-bit range. ICC profiles can be borrowed,
 assembled or replaced; their original bytes are exposed for caller color
 management. Metadata bytes are preserved without modification by default.
 
-Typed `jfif`, `adobe`, `exif`, `icc_profile` and segment-level `jfxx` views are
-available. The `encode_*_with_metadata` functions accept borrowed APPn/COM
-additions and ICC preserve/remove/replace controls. Profiles up to 255 chunks
-are supported. See METADATA-VALIDATION.md for APIs, bounds and reference gates.
-
-`StreamEncoder::new(writer)` writes interchange JPEGs directly to any
-`std::io::Write`. Its coefficient, raster, predictive lossless, hierarchy and
-source-pyramid methods use the same controls and bytes as the `Vec` APIs.
-`encode_tables` writes table-only streams. A reusable 8 KiB staging window is
-reduced by the remaining memory budget; `with_buffer_size` selects another
-window, including zero for direct writes. Encoded byte limits apply to the whole
-stream independently of staging storage. Source models and raster preparation
-remain in memory. Calls drain their own staging on success, return bytes written,
-and leave flushing to the caller. `WriteError::Io` retains the original I/O
-error; failures can leave a prefix and discard staged bytes. The codec never
-drains staging on Drop; the destination retains its own destructor behavior.
-See STREAM-ENCODER-VALIDATION.md for error semantics, bounds and all-process
-reference checks. `AbbreviatedStreamEncoder::new(table_writer, image_writer)`
-adds paired output through separate logical destinations, direct table writes
-and the same bounded image staging. It returns byte counts for both outputs,
-clears cache knowledge on failures, and preserves the failing destination and
-original I/O error. Writes can interleave; deliver each completed table stream
-before its image to the same receiver cache. See PAIRED-STREAM-VALIDATION.md.
-Incremental input and single-channel table-first paired transmission remain open.
-
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
@@ -241,20 +134,3 @@ Run `cargo test -p deadlib-image-jpeg` and
 `cargo clippy -p deadlib-image-jpeg --all-targets -- -D warnings`.
 The checked-in sequential and progressive oracle fixtures run without a C compiler or reference
 library. To regenerate them, see tests/oracle/README.md.
-
-The current correctness-first IDCT uses separable Q20 cosine factors with i64
-accumulators, four fractional bits between passes, explicit sample clipping,
-and a DC-only shortcut. The pinned corpus differs by at most one native sample
-level from libjpeg-turbo's float IDCT across 50 fixtures; this observed bound is
-not yet a general
-conformance bound for all legal quantizers/blocks. Pixel/color conversion,
-broader conformance, libjpeg/mozjpeg parity and performance characterization
-remain open. No throughput claim is made yet.
-See ENCODER-VALIDATION.md for external encoder checks and measured size/quality
-results, including their numerical bounds and limits.
-COLOR-VALIDATION.md describes CMYK/YCCK conversion, exact rational chroma
-siting, profile/polarity policies and the 486-case color reference gate.
-CMYK-ENCODER-VALIDATION.md covers source-polarity and CMYK-to-YCCK encoding.
-ARITHMETIC-VALIDATION.md covers sequential/progressive arithmetic decoding and reference gates.
-PROGRESSIVE-ENCODER-VALIDATION.md covers refinement/custom scan generation and
-the external scan-script matrix.

@@ -462,14 +462,14 @@ mod tests {
             enable_arrowcloud: false,
             auto_populate_gs_scores: true,
             smooth_histogram: true,
-            select_music_scorebox_cycle_itg: false,
+            groovestats_scorebox_itg: false,
             ..Default::default()
         };
         let policy = EvaluationFramePolicy::from_config(&config);
 
         assert_eq!(policy.profile_policy(), (true, false, true));
         assert!(policy.context.smooth_histogram);
-        assert!(!policy.pane_filter.itg);
+        assert!(!policy.pane_filter.groovestats_itg);
         assert_eq!(
             policy.groovestats_service,
             SimplyLoveGrooveStatsService::BoogieStats

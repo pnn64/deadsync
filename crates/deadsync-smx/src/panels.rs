@@ -1638,7 +1638,3 @@ mod tests {
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
     }
 }
-
-#[cfg(test)]
-#[path = "effects_performance.rs"]
-mod effects_performance;

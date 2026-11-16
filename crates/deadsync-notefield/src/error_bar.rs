@@ -1653,9 +1653,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[allow(clippy::approx_constant, reason="Fixture colors are authored RGB values.")]
-mod feedback_kernel_perf {
-    include!("feedback_kernel_perf.rs");
-}

@@ -978,6 +978,7 @@ impl Default for GameplayMusicCut {
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameplayAudioCommand {
     StopMusic,
+    PauseMusic(bool),
     SetMusicRate(f32),
     PlayMusic {
         path: PathBuf,

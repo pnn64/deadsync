@@ -1452,7 +1452,3 @@ mod tests {
         assert!(state.button(Player::P1, ButtonLight::Start));
     }
 }
-
-#[cfg(test)]
-#[path = "protocol_performance.rs"]
-mod protocol_performance;

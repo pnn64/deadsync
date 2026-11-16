@@ -34,8 +34,12 @@ def main():
     parser = argparse.ArgumentParser()
     for name in ("native", "ijg", "reference", "out"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--source-report", required=True, type=Path,
+                        help="Current reference_stream_encode.py report containing source sessions")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
+    prior = args.source_report.resolve()
+    sessions = json.loads(prior.read_text(encoding="utf-8"))["sources"]
     args.out.mkdir(parents=True, exist_ok=True)
     tools = args.out / "tools"
     tools.mkdir(exist_ok=True)
@@ -49,8 +53,6 @@ def main():
         assert hashes[name] == sha(source.read_bytes())
         setattr(args, name, target.resolve())
     test_root = Path(__file__).resolve().parent
-    prior = test_root / "reports/stream-encode.json"
-    sessions = json.loads(prior.read_text())["sources"]
     for source in sessions:
         for file, expected in zip(source["files"], source["sha256"], strict=True):
             assert sha((test_root / "fixtures" / file).read_bytes()) == expected

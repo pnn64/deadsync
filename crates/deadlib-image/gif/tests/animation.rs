@@ -1,6 +1,6 @@
 use deadlib_image_gif::*;
 
-#[path = "../../../../tests/support/perf.rs"]
+#[path = "../../../../tests/support/allocations.rs"]
 mod alloc;
 
 fn header() -> Header {

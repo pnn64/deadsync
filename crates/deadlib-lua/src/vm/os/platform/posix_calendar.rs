@@ -101,9 +101,14 @@ pub(super) fn make_time(parts: Calendar) -> Option<i64> {
 pub(super) fn date_parts(value: i64, utc: bool) -> Option<Calendar> {
     converted(value, utc).map(|date| date.parts)
 }
-pub(super) fn format_date(value: i64, utc: bool, format: &[u8], output: &mut Vec<u8>) -> bool {
+pub(super) fn format_date(
+    value: i64,
+    utc: bool,
+    format: &[u8],
+    output: &mut impl crate::memory::bytes::ByteOutput,
+) -> Result<bool, crate::Error> {
     let Some(date) = converted(value, utc) else {
-        return false;
+        return Ok(false);
     };
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
     let locale = crate::locale::posix::current();
@@ -132,6 +137,6 @@ pub(super) fn format_date(value: i64, utc: bool, format: &[u8], output: &mut Vec
                 &date,
             )
         }
-    });
-    true
+    })?;
+    Ok(true)
 }

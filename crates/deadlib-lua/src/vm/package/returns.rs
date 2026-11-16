@@ -1,8 +1,8 @@
-//! Package routines retain their Lua C stack independently of scheduler slots.
+//! Package routines retain Lua-visible callback values independently of scheduler slots.
 use super::*;
 
 impl Vm {
-    /// Map live C temporaries while a package operation awaits a callback.
+    /// Map Lua-visible temporaries while a package operation awaits a callback.
     pub(in crate::vm) fn package_local_slot(
         &self,
         code: u64,
@@ -18,8 +18,7 @@ impl Vm {
                 _ => return None,
             },
             PRELOAD if frame.pc == 2 => 1,
-            LUA | C | CROOT if matches!(frame.pc, 1..=3) => {
-                let root = usize::from(code == CROOT);
+            LUA if matches!(frame.pc, 1..=3) => {
                 let size = match frame.pc {
                     1 => 1,
                     2 => 3,
@@ -27,19 +26,17 @@ impl Vm {
                 };
                 return Some(if n < arguments {
                     Some(frame.vararg_start + n)
-                } else if n < arguments + root + size {
+                } else if n < arguments + size {
                     let at = n - arguments;
-                    Some(if root != 0 && at == 0 {
-                        frame.base + 10
-                    } else {
+                    Some(
                         frame.base
-                            + match at - root {
+                            + match at {
                                 0 => 1,
                                 1 => 2,
                                 2 => 3,
                                 _ => 5,
-                            }
-                    })
+                            },
+                    )
                 } else {
                     None
                 });
@@ -65,23 +62,16 @@ impl Vm {
         frame: Frame,
         source: usize,
         count: usize,
-    ) -> Option<Vec<Value>> {
-        if frame.pc >= 100 && matches!(code, LOADLIB | C | CROOT) {
-            return Some(
-                self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec(),
-            );
-        }
-        if code == LIB_GC {
-            let stack =
-                self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec();
-            return Some(stack);
-        }
-        if !(REQUIRE..=CROOT).contains(&code) {
-            return None;
+    ) -> Result<Option<Buffer<Value>>, Error> {
+        if !(REQUIRE..=LUA).contains(&code) {
+            return Ok(None);
         }
         let base = frame.base;
-        let mut stack =
-            self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec();
+        // Reserve the largest retained package window plus its result suffix.
+        let mut stack = self.return_scratch(
+            &self.registers[frame.vararg_start..frame.vararg_start + frame.argc()],
+            count + 5,
+        )?;
         let results = &self.registers[source..source + count];
         match code {
             REQUIRE | SEEALL => {} // The driver maintains the complete live C window.
@@ -97,10 +87,7 @@ impl Vm {
                 }
                 stack.extend_from_slice(results);
             }
-            LUA | C | CROOT if count != 0 => {
-                if code == CROOT {
-                    stack.push(self.registers[base + 10]);
-                }
+            LUA if count != 0 => {
                 stack.extend_from_slice(&self.registers[base + 1..base + 4]);
                 if frame.pc == 3 {
                     stack.push(self.registers[base + 5]);
@@ -109,6 +96,6 @@ impl Vm {
             }
             _ => {}
         }
-        Some(stack)
+        Ok(Some(stack))
     }
 }

@@ -315,7 +315,3 @@ mod tests {
         const { assert!(MAX_READS_PER_WALK <= 120, "and not the whole ranking") };
     }
 }
-
-#[cfg(test)]
-#[path = "beginner_verdict_perf.rs"]
-mod verdict_perf_tests;

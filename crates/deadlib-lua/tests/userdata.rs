@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,
@@ -29,24 +28,7 @@ fn compare(source: &[u8]) {
             ),
         })
         .collect();
-    // SAFETY: fixed local programs need the development oracle's debug library.
-    let lua = unsafe { Lua::unsafe_new() };
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalar observations"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/userdata.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -287,3 +269,7 @@ fn instruction_abort_preserves_pending_finalizers_and_recovers_the_vm() {
     vm.set_instruction_limit(Some(0));
     drop(vm);
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

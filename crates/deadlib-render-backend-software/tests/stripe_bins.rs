@@ -1,5 +1,5 @@
 //! Exercise and measure the production stripe builder without a window.
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 #[allow(dead_code)]
 mod perf;
 

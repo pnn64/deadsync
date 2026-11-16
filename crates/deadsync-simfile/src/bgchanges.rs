@@ -423,10 +423,6 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-mod parse_perf {
-    include!("bgchanges_parse_perf.rs");
-}
 
 #[cfg(test)]
 mod delimiter_perf;

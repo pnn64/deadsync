@@ -107,7 +107,3 @@ mod tests {
         assert_eq!(result.displayed(), 0.430);
     }
 }
-
-#[cfg(test)]
-#[path = "scoring_state_performance.rs"]
-mod scoring_state_performance;

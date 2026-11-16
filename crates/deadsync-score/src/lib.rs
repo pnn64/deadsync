@@ -8062,71 +8062,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn score_cache_snapshots_remain_stable_after_later_mutations() {
-        let original = score_cache_snapshot_score(0);
-        let replacement = score_cache_snapshot_score(1);
-
-        let mut gs = GsScoreCacheState::default();
-        gs.insert_loaded_profile("profile", HashMap::from([("chart".to_string(), original)]));
-        let gs_first = gs
-            .set_profile_score("profile", "chart".to_string(), original)
-            .unwrap();
-        let gs_second = gs
-            .set_profile_score("profile", "chart".to_string(), replacement)
-            .unwrap();
-        assert!(!Arc::ptr_eq(&gs_first, &gs_second));
-        assert_eq!(gs_first["chart"], fix_gs_cached_score(original));
-        assert_eq!(gs_second["chart"], fix_gs_cached_score(replacement));
-
-        let mut ac = AcScoreCacheState::default();
-        ac.insert_loaded_profile(
-            "profile",
-            HashMap::from([("chart".to_string(), ArrowCloudScores::default())]),
-        );
-        let ac_first = ac
-            .set_profile_scores_bulk(
-                "profile",
-                [("chart".to_string(), ArrowCloudScores::default())],
-            )
-            .unwrap();
-        let replacement_ac = ArrowCloudScores {
-            itg: arrowcloud_score_from_submit_percent(
-                98.5,
-                false,
-                Utc.timestamp_opt(1, 0).unwrap(),
-            ),
-            ..ArrowCloudScores::default()
-        };
-        let ac_second = ac
-            .set_profile_scores_bulk("profile", [("chart".to_string(), replacement_ac)])
-            .unwrap();
-        assert!(!Arc::ptr_eq(&ac_first, &ac_second));
-        assert_eq!(ac_first["chart"], ArrowCloudScores::default());
-        assert_eq!(ac_second["chart"], replacement_ac);
-
-        let mut initial = LocalScoreIndex::default();
-        let first_header = score_cache_snapshot_header(0);
-        update_local_score_index(&mut initial, "chart", &first_header);
-        let mut local = LocalScoreCacheState::default();
-        local.insert_loaded_profile("profile", initial);
-        let local_first = local
-            .update_loaded_profile_index("profile", "chart", &first_header)
-            .unwrap();
-        let replacement_header = score_cache_snapshot_header(1_999);
-        let local_second = local
-            .update_loaded_profile_index("profile", "chart", &replacement_header)
-            .unwrap();
-        assert!(!Arc::ptr_eq(&local_first, &local_second));
-        assert_eq!(
-            local_first.best_itg["chart"],
-            cached_score_from_local_header(&first_header)
-        );
-        assert_eq!(
-            local_second.best_itg["chart"],
-            cached_score_from_local_header(&replacement_header)
-        );
-    }
 
     #[test]
     fn load_gs_score_index_or_scan_normalizes_existing_index() {
@@ -10123,20 +10058,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn arrowcloud_score_bincode_round_trip_preserves_date() {
-        let original = ArrowCloudScore {
-            score_percent: 0.9989,
-            server_grade: Some(ArrowCloudServerGrade::Tristar),
-            played_at: Some(Utc.timestamp_millis_opt(1_777_835_417_504).unwrap()),
-            play_id: Some(12345),
-            is_fail: false,
-        };
-        let cfg = bincode::config::standard();
-        let bytes = bincode::encode_to_vec(original, cfg).unwrap();
-        let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
-        assert_eq!(decoded, original);
-    }
 
     fn ac_score(percent_0_1: f64, is_fail: bool) -> ArrowCloudScore {
         ArrowCloudScore {
@@ -11685,16 +11606,94 @@ mod tests {
         assert!(error.data.is_none());
         assert_eq!(error.error.as_deref(), Some("offline"));
     }
+
+    #[test]
+    fn arrowcloud_score_bincode_round_trip_preserves_date() {
+        let original = ArrowCloudScore {
+            score_percent: 0.9989,
+            server_grade: Some(ArrowCloudServerGrade::Tristar),
+            played_at: Some(Utc.timestamp_millis_opt(1_777_835_417_504).unwrap()),
+            play_id: Some(12345),
+            is_fail: false,
+        };
+        let cfg = bincode::config::standard();
+        let bytes = bincode::encode_to_vec(original, cfg).unwrap();
+        let (decoded, _): (ArrowCloudScore, _) = bincode::decode_from_slice(&bytes, cfg).unwrap();
+        assert_eq!(decoded, original);
+    }
+
+    #[test]
+    fn score_cache_snapshots_remain_stable_after_later_mutations() {
+        let original = score_cache_snapshot_score(0);
+        let replacement = score_cache_snapshot_score(1);
+
+        let mut gs = GsScoreCacheState::default();
+        gs.insert_loaded_profile("profile", HashMap::from([("chart".to_string(), original)]));
+        let gs_first = gs
+            .set_profile_score("profile", "chart".to_string(), original)
+            .unwrap();
+        let gs_second = gs
+            .set_profile_score("profile", "chart".to_string(), replacement)
+            .unwrap();
+        assert!(!Arc::ptr_eq(&gs_first, &gs_second));
+        assert_eq!(gs_first["chart"], fix_gs_cached_score(original));
+        assert_eq!(gs_second["chart"], fix_gs_cached_score(replacement));
+
+        let mut ac = AcScoreCacheState::default();
+        ac.insert_loaded_profile(
+            "profile",
+            HashMap::from([("chart".to_string(), ArrowCloudScores::default())]),
+        );
+        let ac_first = ac
+            .set_profile_scores_bulk(
+                "profile",
+                [("chart".to_string(), ArrowCloudScores::default())],
+            )
+            .unwrap();
+        let replacement_ac = ArrowCloudScores {
+            itg: arrowcloud_score_from_submit_percent(
+                98.5,
+                false,
+                Utc.timestamp_opt(1, 0).unwrap(),
+            ),
+            ..ArrowCloudScores::default()
+        };
+        let ac_second = ac
+            .set_profile_scores_bulk("profile", [("chart".to_string(), replacement_ac)])
+            .unwrap();
+        assert!(!Arc::ptr_eq(&ac_first, &ac_second));
+        assert_eq!(ac_first["chart"], ArrowCloudScores::default());
+        assert_eq!(ac_second["chart"], replacement_ac);
+
+        let mut initial = LocalScoreIndex::default();
+        let first_header = score_cache_snapshot_header(0);
+        update_local_score_index(&mut initial, "chart", &first_header);
+        let mut local = LocalScoreCacheState::default();
+        local.insert_loaded_profile("profile", initial);
+        let local_first = local
+            .update_loaded_profile_index("profile", "chart", &first_header)
+            .unwrap();
+        let replacement_header = score_cache_snapshot_header(1_999);
+        let local_second = local
+            .update_loaded_profile_index("profile", "chart", &replacement_header)
+            .unwrap();
+        assert!(!Arc::ptr_eq(&local_first, &local_second));
+        assert_eq!(
+            local_first.best_itg["chart"],
+            cached_score_from_local_header(&first_header)
+        );
+        assert_eq!(
+            local_second.best_itg["chart"],
+            cached_score_from_local_header(&replacement_header)
+        );
+    }
 }
 
 #[cfg(test)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 #[allow(dead_code)]
 mod perf;
 
-#[cfg(test)]
-#[path = "../../../tests/support/paired_bench.rs"]
-mod paired_bench;
 
 #[cfg(test)]
 mod performance_state_flows;

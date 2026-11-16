@@ -1,3 +1,7 @@
+#[expect(
+    dead_code,
+    reason = "this harness uses a subset of the shared fixture preparation API"
+)]
 #[path = "support/song_fixture.rs"]
 mod song_fixture;
 

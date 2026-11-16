@@ -47,20 +47,3 @@ than treating that prefix as a successfully completed file. Seekable callers
 can use `IndexedDecoder` to validate those counts during opening. Empty byte
 streams are ordinary streaming EOF; the seekable constructor still rejects a
 file containing no Layer III frames.
-
-## Evidence
-
-Five new integration tests exercise all MPEG versions, mono/stereo, zero/short
-padding and maximum 4,095-sample trim fields, tiny/interrupted reads, unknown
-encoders, tagless changes, malformed counts, empty input, IO errors, recovery, reset and
-raw/audible coordinates. A 10,000-frame source returns its first PCM after fewer
-than 8,192 encoded bytes, proving the API does not require EOF or seeking.
-
-`tests/reference_gapless.py` compares every emitted PCM bit and exact count with
-the retained independently verified indexed output: 84 foundation files, 36
-longer LAME files and 30 FFmpeg/LAME/Shine/Media Foundation files under five
-read schedules, plus both complete historical music files under three schedules.
-This is 152 files / 756 runs. The sanitizer stream target also compares complete
-gapless output/error/coordinate traces across read sizes and its ordered PCM
-signature/count against indexed decoding. Reports and source/binary hashes are
-retained in `tests/validation/2026-10-28-gapless-stream`.

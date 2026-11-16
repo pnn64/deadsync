@@ -8,14 +8,14 @@ impl Vm {
         lines: bool,
         frame: Frame,
         source: usize,
-        stack: &mut Vec<Value>,
+        stack: &mut Buffer<Value>,
         results: &[Value],
-    ) -> bool {
+    ) -> Result<bool, Error> {
         if !(FIRST..=LAST).contains(&code) && !lines {
-            return false;
+            return Ok(false);
         }
         if frame.pc == STACK_READY || frame.pc == threads::HOST_YIELDED {
-            return true;
+            return Ok(true);
         }
         if lines {
             if results.is_empty() {
@@ -35,12 +35,12 @@ impl Vm {
                     };
                     stack.extend_from_slice(&self.registers[source..source + count]);
                 } else {
-                    stack.push(self.intern(b""));
+                    stack.push(self.try_intern(b"")?);
                 }
             } else {
                 stack.extend_from_slice(results);
             }
-            return true;
+            return Ok(true);
         }
         match code {
             TYPE => {
@@ -90,9 +90,9 @@ impl Vm {
             _ => {}
         }
         stack.extend_from_slice(results);
-        true
+        Ok(true)
     }
-    fn io_close_temporaries(&self, file: Value, stack: &mut Vec<Value>) -> Value {
+    fn io_close_temporaries(&self, file: Value, stack: &mut Buffer<Value>) -> Value {
         let Value::Userdata(id) = file else {
             unreachable!("validated file")
         };

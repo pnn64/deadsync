@@ -1,9 +1,8 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 use std::sync::Mutex;
 
-// PUC os.date reads libc's shared gmtime/localtime buffer while building its
-// result. Independent oracle states must not execute those reads concurrently.
+// Calendar formatting uses process-wide locale and time-zone state. Serialize
+// the related probes while exercising their complete results and diagnostics.
 static CALENDAR: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, PartialEq)]
@@ -30,59 +29,7 @@ fn compare(source: &[u8]) {
             v => panic!("scalar observation: {v:?}"),
         })
         .collect();
-    // SAFETY: fixed local calendar probes need the development oracle's debug
-    // library; they load no third-party native code. Use a plain protected entry.
-    let lua = unsafe { Lua::unsafe_new() };
-    let values: MultiValue = lua.exec_raw_lua(|raw| unsafe {
-        use lua_reference::{FromLuaMulti, ffi};
-        let state = raw.state();
-        let start = ffi::lua_gettop(state);
-        let mut status = ffi::luaL_loadbuffer(
-            state,
-            source.as_ptr().cast(),
-            source.len(),
-            c"=calendar-test".as_ptr(),
-        );
-        if status == 0 {
-            status = ffi::lua_pcall(state, 0, ffi::LUA_MULTRET, 0);
-        }
-        if status != 0 {
-            let mut len = 0;
-            let bytes = ffi::lua_tolstring(state, -1, &mut len);
-            let message = if bytes.is_null() {
-                "non-string error".into()
-            } else {
-                String::from_utf8_lossy(std::slice::from_raw_parts(bytes.cast(), len)).into_owned()
-            };
-            panic!("reference: {message}");
-        }
-        assert_ne!(ffi::lua_checkstack(state, 32), 0);
-        let values = MultiValue::from_stack_multi(ffi::lua_gettop(state) - start, raw).unwrap();
-        ffi::lua_settop(state, start);
-        values
-    });
-    let expected: Vec<_> = values
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            v => panic!("reference scalar: {v:?}"),
-        })
-        .collect();
-    assert_eq!(actual.len(), expected.len());
-    for (index, (a, b)) in actual.iter().zip(&expected).enumerate() {
-        if let (Scalar::Bytes(a), Scalar::Bytes(b)) = (a, b) {
-            assert_eq!(
-                String::from_utf8_lossy(a),
-                String::from_utf8_lossy(b),
-                "observation {index}"
-            );
-        }
-        assert_eq!(a, b, "observation {index}");
-    }
+    reference_test::assert_debug("tests/calendar.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -203,14 +150,18 @@ fn date_literals_nul_boundaries_numeric_formats_and_single_percent_match_lua51()
 
 #[test]
 fn time_current_readings_are_inside_the_official_second_brackets() {
-    let lua = Lua::new();
-    let reference = lua.load("return os.time()").into_function().unwrap();
     let mut vm = Vm::new();
     let program = compile(b"return os.time(nil,false),os.time()").unwrap();
     for _ in 0..128 {
-        let before: f64 = reference.call(()).unwrap();
+        let before = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as f64;
         let values = vm.execute(&program).unwrap();
-        let after: f64 = reference.call(()).unwrap();
+        let after = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as f64;
         for value in values {
             let Value::Number(actual) = value else {
                 panic!("time result")
@@ -324,3 +275,7 @@ fn date_result_tables_preserve_mutation_traversal_and_collection_after_hash_grow
     "#,
     );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -1,4 +1,4 @@
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 use deadsync_rules::timing::{TimingData, TimingSegments};

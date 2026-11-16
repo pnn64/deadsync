@@ -1,5 +1,4 @@
-//! Shared logical stdout buffering, independent of Rust's line-buffered stdout.
-use std::io::{IsTerminal, Write};
+//! Shared fallible Lua stdout buffering over borrowed process handles.
 use std::sync::{LazyLock, Mutex};
 
 struct Output {
@@ -11,8 +10,16 @@ struct Output {
 static OUTPUT: LazyLock<Mutex<Output>> = LazyLock::new(|| {
     Mutex::new(Output {
         bytes: Vec::new(),
-        size: if cfg!(windows) { 4096 } else { 8192 },
-        mode: if std::io::stdout().is_terminal() {
+        size: if GLIBC {
+            0
+        } else if cfg!(windows) {
+            4096
+        } else {
+            8192
+        },
+        mode: if GLIBC {
+            3
+        } else if super::stdio::is_terminal(1) {
             if cfg!(windows) { 0 } else { 2 }
         } else {
             1
@@ -21,23 +28,28 @@ static OUTPUT: LazyLock<Mutex<Output>> = LazyLock::new(|| {
     })
 });
 
+const GLIBC: bool = cfg!(all(
+    target_os = "linux",
+    target_env = "gnu",
+    any(target_arch = "x86", target_arch = "x86_64")
+));
+
 impl Output {
     fn emit(bytes: &[u8]) -> std::io::Result<()> {
-        let mut stdout = std::io::stdout().lock();
         if cfg!(windows) {
             let mut start = 0;
             for (at, &byte) in bytes.iter().enumerate() {
                 if byte == b'\n' {
-                    stdout.write_all(&bytes[start..at])?;
-                    stdout.write_all(b"\r\n")?;
+                    super::stdio::write_all(1, &bytes[start..at])?;
+                    super::stdio::write_all(1, b"\r\n")?;
                     start = at + 1;
                 }
             }
-            stdout.write_all(&bytes[start..])?;
+            super::stdio::write_all(1, &bytes[start..])?;
         } else {
-            stdout.write_all(bytes)?;
+            super::stdio::write_all(1, bytes)?;
         }
-        stdout.flush()
+        Ok(())
     }
     fn flush(&mut self) -> std::io::Result<()> {
         Self::emit(&self.bytes)?;
@@ -45,6 +57,25 @@ impl Output {
         Ok(())
     }
     fn write(&mut self, mut bytes: &[u8]) -> std::io::Result<()> {
+        if bytes.is_empty() {
+            return Ok(());
+        }
+        #[cfg(all(
+            target_os = "linux",
+            target_env = "gnu",
+            any(target_arch = "x86", target_arch = "x86_64")
+        ))]
+        {
+            if self.mode == 3 {
+                self.mode = if super::stdio::is_terminal(1) { 2 } else { 1 };
+            }
+            if self.size == 0 {
+                self.size = super::stdio::output_buffer_size();
+            }
+            if self.mode != 0 {
+                return self.write_glibc(bytes);
+            }
+        }
         if self.mode == 0 {
             return Self::emit(bytes);
         }
@@ -61,7 +92,6 @@ impl Output {
                 bytes = &bytes[count..];
                 continue;
             }
-            self.allocated = true;
             let available = self.size - self.bytes.len();
             let mut count = available.min(bytes.len());
             if !cfg!(windows)
@@ -73,12 +103,66 @@ impl Output {
             self.bytes
                 .try_reserve(count)
                 .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+            self.allocated = true;
             self.bytes.extend_from_slice(&bytes[..count]);
             bytes = &bytes[count..];
             if !cfg!(windows) && self.mode == 2 && self.bytes.last() == Some(&b'\n') {
                 self.flush()?;
             }
         }
+        Ok(())
+    }
+
+    #[cfg(all(
+        target_os = "linux",
+        target_env = "gnu",
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
+    fn write_glibc(&mut self, mut input: &[u8]) -> std::io::Result<()> {
+        if input.is_empty() {
+            return Ok(());
+        }
+        if self.allocated {
+            let available = self.size - self.bytes.len();
+            let mut count = available.min(input.len());
+            let mut line_end = false;
+            if self.mode == 2
+                && input.len() <= available
+                && let Some(at) = input.iter().rposition(|&b| b == b'\n')
+            {
+                count = at + 1;
+                line_end = true;
+            }
+            self.bytes
+                .try_reserve(count)
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+            self.bytes.extend_from_slice(&input[..count]);
+            input = &input[count..];
+            if input.is_empty() && !line_end {
+                return Ok(());
+            }
+            self.flush()?;
+        }
+        self.allocated = true;
+        // After entering write mode or exhausting the pending buffer, glibc
+        // emits complete blocks directly and retains only the final remainder.
+        let direct = if self.size >= 128 {
+            input.len() / self.size * self.size
+        } else {
+            input.len()
+        };
+        Self::emit(&input[..direct])?;
+        let mut tail = &input[direct..];
+        if self.mode == 2
+            && let Some(at) = tail.iter().rposition(|&b| b == b'\n')
+        {
+            Self::emit(&tail[..at + 1])?;
+            tail = &tail[at + 1..];
+        }
+        self.bytes
+            .try_reserve(tail.len())
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+        self.bytes.extend_from_slice(tail);
         Ok(())
     }
 }
@@ -100,15 +184,49 @@ pub(super) fn configure(mode: u8, size: usize) -> std::io::Result<()> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     output.flush()?;
-    output.mode = mode;
-    output.size = size.max(1);
-    if mode != 0 {
-        let additional = output.size;
-        output
-            .bytes
-            .try_reserve(additional)
-            .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+    #[cfg(all(
+        target_os = "linux",
+        target_env = "gnu",
+        any(target_arch = "x86", target_arch = "x86_64")
+    ))]
+    {
+        // Lua supplies a null buffer to setvbuf. glibc ignores the requested
+        // size and retains/allocates its native-sized buffer (or short buffer).
+        let _ = size;
+        if mode == 0 {
+            output.size = 1;
+            output.allocated = false;
+        } else {
+            if output.size == 0 {
+                output.size = super::stdio::output_buffer_size();
+            }
+            if mode == 1 {
+                let size = output.size;
+                output
+                    .bytes
+                    .try_reserve(size)
+                    .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+            }
+        }
+        output.mode = mode;
+        Ok(())
     }
-    output.allocated = mode != 0;
-    Ok(())
+    #[cfg(not(all(
+        target_os = "linux",
+        target_env = "gnu",
+        any(target_arch = "x86", target_arch = "x86_64")
+    )))]
+    {
+        let size = size.max(1);
+        if mode != 0 {
+            output
+                .bytes
+                .try_reserve(size)
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::OutOfMemory))?;
+        }
+        output.mode = mode;
+        output.size = size;
+        output.allocated = mode != 0;
+        Ok(())
+    }
 }

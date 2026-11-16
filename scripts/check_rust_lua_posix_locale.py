@@ -21,17 +21,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--run-root', required=True, type=Path)
+    parser.add_argument('--rust-binary', type=Path,
+                        help='Use an already-built interpreter (for example a no-C build).')
     args = parser.parse_args()
     if not sys.platform.startswith('linux'):
         raise SystemExit('This oracle matrix requires Linux/glibc and localedef data.')
     root = Path(__file__).resolve().parents[1]
-    sources = list((root/'crates/deadlib-lua').rglob('*.rs'))
-    sources += [root/'crates/deadlib-lua/Cargo.toml', Path(__file__).resolve(), root/'scripts/build_lua_cli_reference.py']
+    sources = [p for p in (root/'crates/deadlib-lua').rglob('*')
+               if p.is_file() and (p.suffix in {'.rs','.c','.h'} or p.name == 'Cargo.toml')]
+    sources += [root/'Cargo.toml', root/'Cargo.lock', root/'.cargo/config.toml', Path(__file__).resolve(), root/'scripts/build_lua_cli_reference.py']
     def hashes():
         return {p.relative_to(root).as_posix(): sha(p) for p in sorted(sources)}
     before = hashes()
     target = Path(os.environ.get('CARGO_TARGET_DIR', str(root/'target'))).resolve()
-    subprocess.run(['cargo','build','--release','-p','deadlib-lua','--bin','deadlua'],cwd=root,check=True)
+    if args.rust_binary is None:
+        subprocess.run(['cargo','build','--release','-p','deadlib-lua','--bin','deadlua'],cwd=root,check=True)
+    rust_binary = args.rust_binary.resolve() if args.rust_binary else target/'release/deadlua'
     reference, metadata = build(root)
     directory = args.run_root.resolve()/str(time.time_ns())
     directory.mkdir(parents=True)
@@ -75,7 +80,7 @@ int main(void) {
             locale_inputs[str(p)] = sha(p)
     locale_data = {str(p):sha(p) for p in sorted(locale_root.rglob('*')) if p.is_file()}
     executables = {}
-    for engine, source in [('reference', reference), ('rust', target/'release/deadlua')]:
+    for engine, source in [('reference', reference), ('rust', rust_binary)]:
         binary = directory/engine/'bin/lua'
         binary.parent.mkdir(parents=True)
         shutil.copyfile(source, binary)

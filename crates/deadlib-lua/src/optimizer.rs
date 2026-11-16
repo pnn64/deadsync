@@ -5,9 +5,11 @@ use crate::{
     parser::{Ast, Expr},
 };
 
-pub(crate) fn literals(ast: &Ast) -> Vec<Option<f64>> {
+/// Fold every node into `folded`, replacing its contents.
+pub(crate) fn literals_into(ast: &Ast, folded: &mut Vec<Option<f64>>) -> Result<(), crate::Error> {
     // Children precede parents in the flat arena, so no recursive walk is needed.
-    let mut folded = Vec::with_capacity(ast.exprs.len());
+    folded.clear();
+    crate::memory::fallible::reserve(folded, ast.exprs.len())?;
     for (expr, _) in &ast.exprs {
         let result = match expr {
             Expr::Number(n) => Some(*n),
@@ -30,5 +32,5 @@ pub(crate) fn literals(ast: &Ast) -> Vec<Option<f64>> {
         };
         folded.push(result.filter(|n| !n.is_nan()));
     }
-    folded
+    Ok(())
 }

@@ -11,17 +11,17 @@ const ALIGNMENT: usize = if align_of::<usize>() > align_of::<f64>() {
 };
 
 #[derive(Debug)]
-pub(super) struct Bytes(Box<[u8]>);
+pub(super) struct Bytes(Buffer<u8>);
 impl Bytes {
-    fn new(size: usize) -> Result<Self, Error> {
+    fn new(size: usize, memory: Memory) -> Result<Self, Error> {
         let failed = Error::memory;
         // Keep even a zero-sized payload address inside its own allocation,
         // so it cannot coincide with the next allocation's first address.
         let total = size.checked_add(ALIGNMENT).ok_or_else(failed)?;
-        let mut bytes = Vec::new();
+        let mut bytes = Buffer::new_in(memory);
         bytes.try_reserve_exact(total).map_err(|_| failed())?;
         bytes.resize(total, 0);
-        Ok(Self(bytes.into_boxed_slice()))
+        Ok(Self(bytes))
     }
     fn offset(&self) -> usize {
         (self.0.as_ptr() as usize).wrapping_neg() & (ALIGNMENT - 1)
@@ -33,7 +33,7 @@ impl Bytes {
         self.payload_len()
     }
     pub(super) fn storage_bytes(&self) -> usize {
-        self.0.len()
+        self.0.capacity()
     }
 }
 impl AsRef<[u8]> for Bytes {
@@ -52,9 +52,7 @@ impl AsMut<[u8]> for Bytes {
 
 #[derive(Debug)]
 pub(super) struct Userdata {
-    pub library: Option<Arc<dyn package::NativeLibrary>>,
     pub file: Option<std::num::NonZeroU64>,
-    pub native_file: bool,
     pub env: TableId,
     pub metatable: Option<TableId>,
     pub bytes: Bytes,
@@ -63,6 +61,26 @@ pub(super) struct Userdata {
 }
 
 impl Vm {
+    fn reserve_finalizer_storage(&mut self) -> Result<(), Error> {
+        let total = self
+            .userdata
+            .live_len()
+            .checked_add(1)
+            .ok_or_else(|| self.memory_failure())?;
+        let before = self.gc.candidates.capacity() * size_of::<(u64, UserdataId)>()
+            + self.gc.finalizers.capacity() * size_of::<UserdataId>();
+        let result = (|| {
+            self.gc
+                .candidates
+                .try_reserve(total.saturating_sub(self.gc.candidates.len()))?;
+            self.gc.finalizers.try_reserve_total(total)
+        })();
+        let after = self.gc.candidates.capacity() * size_of::<(u64, UserdataId)>()
+            + self.gc.finalizers.capacity() * size_of::<UserdataId>();
+        self.gc_note_control(after - before);
+        result.map_err(|_| self.memory_failure())
+    }
+
     pub(super) fn separate_userdata(&mut self, all: bool) {
         let mut candidates = std::mem::take(&mut self.gc.candidates);
         candidates.clear();
@@ -79,15 +97,18 @@ impl Vm {
             }
         }
         candidates.sort_unstable_by_key(|a| std::cmp::Reverse(a.0));
-        self.gc
-            .finalizers
-            .extend(candidates.drain(..).map(|(_, id)| id));
+        for &(_, id) in &candidates {
+            self.gc.finalizers.push_back(id);
+        }
+        candidates.clear();
         self.gc.candidates = candidates;
     }
 
-    pub(super) fn push_finalizers(&mut self, host: bool) {
+    pub(super) fn push_finalizers(&mut self, host: bool) -> Result<(), Error> {
         let base = self.registers.len();
         let top = self.top;
+        self.reserve_registers(base + 3)?;
+        self.reserve_frames(1)?;
         self.resize_registers(base + 3);
         self.push_record(Frame {
             function: FrameKind::Native(CONT_GC),
@@ -104,6 +125,7 @@ impl Vm {
         });
         self.gc.running += 1;
         self.hooks.finalizers += 1;
+        Ok(())
     }
 
     pub(super) fn discard_finalizers(&mut self, first: usize) {
@@ -125,7 +147,7 @@ impl Vm {
         }
         // A tag method can start another cycle with an explicit step. Finish
         // its sweep before dispatching the newly separated tag methods.
-        self.prepare_gc_finalizers();
+        self.prepare_gc_finalizers()?;
         while let Some(id) = self.gc.finalizers.pop_front() {
             let value = Value::Userdata(id);
             let finalizer = self.metafield(value, Meta::Gc);
@@ -161,7 +183,7 @@ impl Vm {
             let dispatch = self.gc_native(COLLECT_GARBAGE, frame.base, frame.argc())?;
             self.frames[index].pc = 1;
             if dispatch && !self.gc.finalizers.is_empty() {
-                self.push_finalizers(false);
+                self.push_finalizers(false)?;
             }
             return Ok(None);
         }
@@ -177,17 +199,22 @@ impl Vm {
         {
             self.registers[pushed] = self.registers[frame.base];
         }
-        Ok(self.return_frame(frame, frame.base, 1))
+        self.return_frame(frame, frame.base, 1)
     }
 
     fn run_host_finalizers(&mut self) -> Result<(), Error> {
         self.reset_budget();
         let len = self.registers.len();
         let top = self.top;
-        if self.standalone != 0 && self.frames.is_empty() {
+        let standalone = self.standalone != 0 && self.frames.is_empty();
+        // Reserve both parked-main and dispatcher storage before installing
+        // either frame. An allocation failure leaves the idle host VM usable.
+        self.reserve_registers(len + 3 + usize::from(standalone))?;
+        self.reserve_frames(1 + usize::from(standalone))?;
+        if standalone {
             self.standalone_main(self.standalone, 0);
         }
-        self.push_finalizers(true);
+        self.push_finalizers(true)?;
         let result = self.drive();
         self.close_upvalues(len);
         self.discard_finalizers(0);
@@ -211,7 +238,7 @@ impl Vm {
     /// Returns a finalizer's Lua error or an instruction-limit error. Remaining
     /// finalizers stay pending for a later collection or VM destruction.
     pub fn collect_garbage(&mut self) -> Result<HeapStats, Error> {
-        self.collect_cycle();
+        self.collect_cycle()?;
         self.finish_gc_cycle();
         if !self.gc.finalizers.is_empty() {
             self.run_host_finalizers()?;
@@ -224,7 +251,13 @@ impl Vm {
         self.budget = self.budget.map(|n| n.max(1));
         self.separate_userdata(true);
         while !self.gc.finalizers.is_empty() {
-            let _ = self.run_host_finalizers();
+            let first = self.gc.finalizers.front().copied();
+            if self.run_host_finalizers().is_err() && self.gc.finalizers.front().copied() == first {
+                // An error before the dispatcher was installed cannot consume
+                // its first callback. Closing still advances after that error,
+                // including when every further allocation is rejected.
+                self.gc.finalizers.pop_front();
+            }
         }
     }
 
@@ -249,19 +282,19 @@ impl Vm {
                 "memory allocation error: block too big",
             ));
         }
-        let bytes = Bytes::new(size).map_err(|_| self.memory_failure())?;
+        self.reserve_finalizer_storage()?;
+        let bytes =
+            Bytes::new(size, self.userdata.memory().clone()).map_err(|_| self.memory_failure())?;
         let order = self
             .userdata_order
             .checked_add(1)
             .expect("userdata creation order exhausted");
-        self.reserve_gc_new_value()?;
         let storage = bytes.storage_bytes();
         let id = UserdataId(
             self.userdata
                 .try_insert(Userdata {
-                    library: None,
                     file: None,
-                    native_file: false,
+
                     env,
                     metatable: None,
                     bytes,
@@ -272,7 +305,10 @@ impl Vm {
         );
         self.userdata_order = order;
         self.userdata.note_alloc(storage);
-        self.gc_new_value(Value::Userdata(id));
+        // PUC luaC_link creates a white object during marking. Keep a fresh
+        // userdata eligible for this cycle if it becomes unreachable before
+        // the atomic root refresh. Root insertion and mutation barriers retain
+        // it when published; the arena protects new allocations during sweep.
         Ok(id)
     }
 
@@ -286,7 +322,7 @@ impl Vm {
     /// Store or pin the result before executing Lua or collecting.
     ///
     /// # Errors
-    /// Returns a memory error if payload, arena or collector queue allocation
+    /// Returns a memory error if payload or arena allocation
     /// fails. Requests beyond Lua 5.1's block-size guard return a runtime error.
     pub fn try_new_userdata(&mut self, size: usize) -> Result<Value, Error> {
         self.try_allocate_userdata(size, self.globals)
@@ -311,18 +347,14 @@ impl Vm {
     ) -> Result<usize, Error> {
         let arg = self.argument(base, count, 0);
         let env = self.native_environment(closure);
-        let id = self.allocate_userdata(0, env);
+        let id = self.try_allocate_userdata(0, env)?;
         let metatable = if !arg.is_truthy() {
             None
         } else if arg == Value::Boolean(true) {
-            let table = self.new_table();
+            let table = self.try_new_table()?;
             let valid = self.native_closures[slot_index(closure)].captures[0];
             let Value::Table(valid) = valid else {
-                return Err(Error::new(
-                    ErrorKind::Runtime,
-                    0,
-                    "invalid newproxy capture",
-                ));
+                return Err(Error::runtime_static("invalid newproxy capture"));
             };
             self.raw_set(valid, Value::Table(table), Value::Boolean(true))?;
             Some(table)
@@ -340,7 +372,7 @@ impl Vm {
                     .ok_or_else(|| self.argument_error(0, b"boolean or proxy expected"))?,
             )
         };
-        self.set_metatable(Value::Userdata(id), metatable);
+        self.set_metatable(Value::Userdata(id), metatable)?;
         self.registers[base] = Value::Userdata(id);
         Ok(1)
     }
@@ -348,6 +380,9 @@ impl Vm {
 
 impl Drop for Vm {
     fn drop(&mut self) {
+        if self.initializing {
+            return;
+        }
         if !self.gc.closing {
             self.finalize_on_close();
         }
@@ -366,7 +401,7 @@ mod allocation_tests {
         let live = vm.userdata.live_len();
         let order = vm.userdata_order;
         for _ in 0..3 {
-            vm.collect_cycle();
+            vm.collect_cycle().unwrap();
             let error = vm
                 .try_allocate_userdata(usize::MAX - 255, vm.globals)
                 .unwrap_err();

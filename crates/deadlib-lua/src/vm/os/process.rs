@@ -1,91 +1,40 @@
 //! System-shell execution. Lua receives the platform's raw 5.1 status code.
-#[cfg(not(windows))]
-use std::process::Command;
-
 #[cfg(windows)]
-fn shell_path(path: &std::path::Path) -> Result<std::path::PathBuf, i32> {
-    if path.as_os_str().is_empty() {
-        return Err(22);
+#[allow(unsafe_code)]
+mod windows;
+#[cfg(windows)]
+pub(super) use windows::execute;
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+pub(super) fn execute(command: Option<&[u8]>) -> Result<Result<i32, i32>, crate::Error> {
+    use crate::memory::fallible::{SliceExt, VecExt};
+    use std::{ffi::c_char, ptr};
+    unsafe extern "C" {
+        #[link_name = "system"]
+        fn system_command(command: *const c_char) -> i32;
     }
-    // A non-PATH spawn resolves a bare filename in the current directory.
-    let path = if path.components().count() == 1 {
-        std::path::Path::new(".").join(path)
+    let command = command
+        .map(|bytes| {
+            let mut terminated = bytes.try_to_vec()?;
+            terminated.try_push(0)?;
+            Ok::<_, crate::Error>(terminated)
+        })
+        .transpose()?;
+    // SAFETY: a null command queries availability; otherwise storage is NUL
+    // terminated and lives through the synchronous call. Native system owns
+    // signal masking/disposition, spawning and reaping, returning a wait status.
+    // As with getenv/spawn, the host must not concurrently mutate POSIX environ.
+    let status =
+        unsafe { system_command(command.as_ref().map_or(ptr::null(), |v| v.as_ptr().cast())) };
+    Ok(if status == -1 {
+        Err(super::io::errno(std::io::Error::last_os_error()))
     } else {
-        path.to_path_buf()
-    };
-    if path.extension().is_some() {
-        path.metadata().map_err(super::io::errno)?;
-        return Ok(path);
-    }
-    for extension in ["com", "exe", "bat", "cmd"] {
-        let candidate = path.with_extension(extension);
-        if candidate.try_exists().map_err(super::io::errno)? {
-            return Ok(candidate);
-        }
-    }
-    Err(2)
+        Ok(status)
+    })
 }
 
-#[cfg(windows)]
-pub(super) fn execute(command: Option<&[u8]>) -> Result<i32, i32> {
-    let comspec = std::env::var_os("COMSPEC");
-    if comspec.as_ref().is_some_and(|path| path.is_empty()) {
-        // The pinned CRT invokes its fatal invalid-parameter handler for an
-        // explicitly empty COMSPEC, including shell-availability queries.
-        std::process::abort();
-    }
-    let Some(command) = command else {
-        return Ok(i32::from(
-            comspec.is_some_and(|path| std::path::Path::new(&path).exists()),
-        ));
-    };
-    if let Some(path) = comspec {
-        match shell_path(std::path::Path::new(&path))
-            .and_then(|executable| super::platform::spawn(&executable, &path, command))
-        {
-            Ok(status) => return Ok(status),
-            Err(2 | 13) => {}
-            Err(code) => return Err(code),
-        }
-    }
-    // Match the CRT's explicit current-directory/PATH fallback. Letting Rust
-    // search also includes OS system directories that the CRT does not search.
-    let name = std::ffi::OsStr::new("cmd.exe");
-    match shell_path(std::path::Path::new(name))
-        .and_then(|path| super::platform::spawn(&path, name, command))
-    {
-        Ok(status) => return Ok(status),
-        Err(2) => {}
-        Err(code) => return Err(code),
-    }
-    let Some(paths) = std::env::var_os("PATH") else {
-        return Err(2);
-    };
-    for directory in std::env::split_paths(&paths) {
-        if directory.as_os_str().is_empty() {
-            continue;
-        }
-        let path = directory.join("cmd.exe");
-        match shell_path(&path).and_then(|path| super::platform::spawn(&path, name, command)) {
-            Ok(status) => return Ok(status),
-            Err(2) => {}
-            Err(code) => return Err(code),
-        }
-    }
-    Err(2)
-}
-
-#[cfg(not(windows))]
-pub(super) fn execute(command: Option<&[u8]>) -> Result<i32, i32> {
-    use std::os::unix::{ffi::OsStrExt, process::ExitStatusExt};
-    let status = Command::new("/bin/sh")
-        .arg("-c")
-        .arg(std::ffi::OsStr::from_bytes(command.unwrap_or(b"exit 0")))
-        .status();
-    if command.is_none() {
-        return Ok(i32::from(status.is_ok_and(|status| status.success())));
-    }
-    status
-        .map(ExitStatusExt::into_raw)
-        .map_err(super::io::errno)
+#[cfg(not(any(unix, windows)))]
+pub(super) fn execute(_: Option<&[u8]>) -> Result<Result<i32, i32>, crate::Error> {
+    Ok(Err(38))
 }

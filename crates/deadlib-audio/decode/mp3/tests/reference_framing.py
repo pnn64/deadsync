@@ -10,7 +10,7 @@ def main():
     parser=argparse.ArgumentParser()
     for name in ['native','oracle','output']:parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--scalefactors',action='store_true')
-    args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=False)
+    args=parser.parse_args();args.output=args.output.resolve();args.output.mkdir(parents=True,exist_ok=False)
     records=[];rng=random.Random(9639)
     for rate in [8000,11025,12000,16000,22050,24000,32000,44100,48000]:
         for channels in [1,2]:

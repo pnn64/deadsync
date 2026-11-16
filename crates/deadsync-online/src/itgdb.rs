@@ -312,11 +312,3 @@ mod tests {
         assert!(parse_dedicated("<html><body>nothing</body></html>").is_empty());
     }
 }
-
-#[cfg(test)]
-#[path = "itgdb_names_original.rs"]
-mod names_original;
-
-#[cfg(test)]
-#[path = "itgdb_names_perf.rs"]
-mod names_perf_tests;

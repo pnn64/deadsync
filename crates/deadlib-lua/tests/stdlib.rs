@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -71,23 +70,7 @@ fn compare(source: &[u8]) {
             _ => panic!("return scalar observations"),
         })
         .collect();
-    let lua = Lua::new();
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Bool(b),
-            Ref::Integer(n) => number(n as f64),
-            Ref::Number(n) => number(n),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalars"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/stdlib.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -102,6 +85,25 @@ fn byte_string_primitives_and_methods() {
     ] {
         compare(source.as_bytes());
     }
+}
+
+#[test]
+fn repeated_binary_strings_copy_complete_source_at_all_boundaries() {
+    let source = br#"
+        local piece=string.char(0,255,65,66,0,67,68)
+        for _,count in ipairs({0,1,2,3,7,19,20001}) do
+            local result=string.rep(piece,count)
+            assert(#result==count*#piece)
+            for i=1,count do
+                local at=(i-1)*#piece+1
+                assert(string.sub(result,at,at+#piece-1)==piece)
+            end
+        end
+        return 42
+    "#;
+    let mut vm = Vm::new();
+    let program = compile(source).unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(42.0)]);
 }
 
 #[test]
@@ -315,6 +317,32 @@ fn patterns_captures_backtracking_and_boundaries() {
             "return string.match('abc abc','(%a+)%s+%1'),pcall(string.match,'abc abc','(%a+)%s+%2')");
         compare(source.as_bytes());
     }
+}
+
+#[test]
+fn plain_find_handles_overlap_offsets_binary_and_repeated_prefixes() {
+    let source = br#"
+local a,b=string.find('aaaaab','aab',1,true)
+assert(a==4 and b==6)
+assert(string.find('aaaaab','aab',5,true)==nil)
+assert(string.find('aaa','aaaa',1,true)==nil)
+a,b=string.find('x\0ab','\0a',1,true)
+assert(a==2 and b==3)
+a,b=string.find('abc','',100,true)
+assert(a==4 and b==3)
+local s=string.rep('a',1200)..'Z'
+a,b=string.find(s,'aaaaZ',1,true)
+assert(a==1197 and b==1201)
+assert(string.find(s,string.rep('a',1500),1,true)==nil)
+assert(string.find(s,'aaaaZ',1200,true)==nil)
+s=string.rep('abccddff',200)..'Za'
+a,b=string.find(s,'Za',1,true)
+assert(a==1601 and b==1602)
+return 42
+"#;
+    let mut vm = Vm::new();
+    let program = compile(source).unwrap();
+    assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(42.0)]);
 }
 
 #[test]
@@ -695,15 +723,16 @@ fn random_state_is_shared_between_vms_on_the_same_os_thread() {
         b.execute(&program).unwrap()[0],
         a.execute(&program).unwrap()[0],
     ];
-    let a = Lua::new();
-    let b = Lua::new();
-    a.load("math.randomseed(123)").exec().unwrap();
-    let expected = [
-        a.load(source).eval::<f64>().unwrap(),
-        b.load(source).eval::<f64>().unwrap(),
-        a.load(source).eval::<f64>().unwrap(),
-    ];
-    for (actual, expected) in actual.into_iter().zip(expected) {
-        assert_eq!(actual, Value::Number(expected));
-    }
+    let actual = actual.map(|value| match value {
+        Value::Number(number) => number,
+        other => panic!("random result must be numeric: {other:?}"),
+    });
+    reference_test::assert_debug(
+        "tests/stdlib.rs::random_state_is_shared_between_vms_on_the_same_os_thread::expected",
+        &actual,
+    );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

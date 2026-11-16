@@ -42,6 +42,15 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::SongLuaMode,
+        label: lookup_key("OptionsGameplay", "SongLua"),
+        choices: &[
+            localized_choice("OptionsGameplay", "SongLuaBaked"),
+            localized_choice("OptionsGameplay", "SongLuaRuntime"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::AnimatedBanners,
         label: lookup_key("OptionsGameplay", "AnimatedBanners"),
         choices: &[
@@ -136,6 +145,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "NoteScrollClockHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpSongLuaMode,
+        name: lookup_key("OptionsGameplay", "SongLua"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "SongLuaHelp",
         ))],
     },
     Item {

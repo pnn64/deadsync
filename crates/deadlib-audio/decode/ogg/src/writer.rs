@@ -118,7 +118,18 @@ impl<W: Write> PacketWriter<W> {
             if self.body.is_empty() && flush {
                 self.emit(page_eos, payload)?;
             } else {
-                reserve(&mut self.body, len)?;
+                if len > self.body.capacity() - self.body.len() {
+                    // Reserve around the soft target for packets that fit a page.
+                    let additional = if self.body.capacity() == 0 && data.len() < 255 * 255 {
+                        self.options
+                            .target_page_body
+                            .saturating_add(len)
+                            .min(255 * 255)
+                    } else {
+                        len
+                    };
+                    reserve(&mut self.body, additional)?;
+                }
                 self.body.extend_from_slice(payload);
                 if flush {
                     self.emit(page_eos, &[])?;

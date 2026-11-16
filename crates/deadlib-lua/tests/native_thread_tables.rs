@@ -151,7 +151,7 @@ fn selected_tag_yields_preserve_physical_tops_values_and_repeated_resumptions() 
     }
     vm.set_global(b"table_yields_portable", Value::Boolean(true))
         .unwrap();
-    let mut source = include_bytes!("native-boundary/table-yields.lua").to_vec();
+    let mut source = include_bytes!("host-fixtures/table-yields.lua").to_vec();
     source.extend_from_slice(b";return 42");
     assert_eq!(
         vm.execute(&compile(&source).unwrap()).unwrap(),
@@ -169,7 +169,7 @@ fn selected_table_methods_preserve_context_and_restore_completed_call_bases() {
         let function = vm.new_host_function(function, &[]).unwrap();
         vm.set_global(name, function).unwrap();
     }
-    let corpus = include_bytes!("native-boundary/thread-tables.lua");
+    let corpus = include_bytes!("host-fixtures/thread-tables.lua");
     let end = corpus
         .windows(b"local function token".len())
         .position(|part| part == b"local function token")

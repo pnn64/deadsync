@@ -2010,7 +2010,3 @@ mod tests {
         assert!(SongInstallsSnapshot::default().installs.is_empty());
     }
 }
-
-#[cfg(test)]
-#[path = "smo_extensions_perf.rs"]
-mod extension_perf_tests;

@@ -39,23 +39,3 @@ the complete file and complete PCM are never retained. Repeated seeks reuse
 buffer capacity; measured allocation and throughput results remain future work.
 The borrowed-input `Decoder` remains useful for existing slices and uses its
 original lazy sequential index rather than SEEKTABLE hints.
-
-## Evidence
-
-Four local tests exercise fixed/variable numbering, every sample position
-backwards and forwards, 17-byte source reads, seek tables and no tables, nonzero
-file origins, unknown totals, empty input, EOF, MD5 reset, index limits and error
-recovery. Corrupted hints include offset overflow, an offset to the wrong valid
-frame, a non-frame boundary, zero block size and a wrong block size. All return
-the exact expected PCM through fallback. A 50,000-sample case verifies that a
-working table reads less than one quarter of the source for a near-EOF seek;
-disabling table use reads through the entire source.
-
-The official conformance test now also opens each of the 73 native files through
-`std::fs::File`, checks the same 21 positions per file as the borrowed-input
-decoder, and compares exact rate/depth/channels/PCM against libFLAC. All 1,533
-file-backed positions pass, including variable block lengths, property changes,
-maximum blocks, old numbering and metadata extremes. See
-[validation/native-seeking.tsv](validation/native-seeking.tsv) for per-file
-seek counts and table diagnostics. Reproduce with the conformance command and
-`DEADLIB_FLAC_SEEK_REPORT` variable in [COVERAGE.md](COVERAGE.md).

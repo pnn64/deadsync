@@ -15,6 +15,7 @@ use deadsync_theme::FontRole;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 const OVERLAY_Z: i16 = 1496;
 const VIEW_ROWS_RUNNING: usize = 7;
@@ -147,8 +148,16 @@ pub struct OverlayStateData {
     owner: crate::SimplyLoveSyncOwner,
     current_row: Option<usize>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
+    nav_hold: Option<NavHold>,
     presentation_revision: u64,
     presentation: RefCell<Option<PackSyncPresentation>>,
+}
+
+struct NavHold {
+    action: VirtualAction,
+    delta: isize,
+    held_for: Duration,
+    next_repeat_at: Duration,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -852,6 +861,7 @@ pub fn begin(
         owner,
         current_row: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        nav_hold: None,
         presentation_revision: 0,
         presentation: RefCell::new(None),
     }));
@@ -864,6 +874,30 @@ pub fn begin(
 
 pub const fn poll(state: &OverlayState) -> bool {
     matches!(state, OverlayState::Visible(_))
+}
+
+/// Advance held navigation, returning whether the list moved.
+pub fn update(state: &mut OverlayState, dt: f32) -> bool {
+    let OverlayState::Visible(overlay) = state else {
+        return false;
+    };
+    let Some(hold) = overlay.nav_hold.as_mut() else {
+        return false;
+    };
+    if !screen_input::advance_hold_repeat(
+        &mut hold.held_for,
+        &mut hold.next_repeat_at,
+        screen_input::OVERLAY_NAV_REPEAT_INTERVAL,
+        dt,
+    ) {
+        return false;
+    }
+    let delta = hold.delta;
+    if !shift(overlay, delta) {
+        return false;
+    }
+    overlay.invalidate_presentation();
+    true
 }
 
 pub fn handle_input(
@@ -880,6 +914,14 @@ pub fn handle_input(
         let OverlayState::Visible(overlay) = state else {
             return;
         };
+        if !ev.pressed
+            && overlay
+                .nav_hold
+                .as_ref()
+                .is_some_and(|hold| hold.action == ev.action)
+        {
+            overlay.nav_hold = None;
+        }
         screen_input::three_key_menu_action_enabled(
             &mut overlay.menu_lr_chord,
             ev,
@@ -906,12 +948,12 @@ pub fn handle_input(
             match overlay.phase {
                 OverlayPhase::Running => match nav {
                     screen_input::ThreeKeyMenuAction::Prev => {
-                        if shift(overlay, -1) {
+                        if shift_on_press(overlay, ev, -1) {
                             play_change = true;
                         }
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
-                        if shift(overlay, 1) {
+                        if shift_on_press(overlay, ev, 1) {
                             play_change = true;
                         }
                     }
@@ -948,12 +990,12 @@ pub fn handle_input(
                 OverlayPhase::Saving => {}
                 OverlayPhase::Result => match nav {
                     screen_input::ThreeKeyMenuAction::Prev => {
-                        if shift(overlay, -1) {
+                        if shift_on_press(overlay, ev, -1) {
                             play_change = true;
                         }
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
-                        if shift(overlay, 1) {
+                        if shift_on_press(overlay, ev, 1) {
                             play_change = true;
                         }
                     }
@@ -975,7 +1017,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_up
                     | VirtualAction::p2_up
                     | VirtualAction::p2_menu_up => {
-                        if shift(overlay, -1) {
+                        if shift_on_press(overlay, ev, -1) {
                             play_change = true;
                         }
                     }
@@ -983,7 +1025,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_down
                     | VirtualAction::p2_down
                     | VirtualAction::p2_menu_down => {
-                        if shift(overlay, 1) {
+                        if shift_on_press(overlay, ev, 1) {
                             play_change = true;
                         }
                     }
@@ -991,7 +1033,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_left
                     | VirtualAction::p2_left
                     | VirtualAction::p2_menu_left => {
-                        if shift(overlay, -page_delta) {
+                        if shift_on_press(overlay, ev, -page_delta) {
                             play_change = true;
                         }
                     }
@@ -999,7 +1041,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_right
                     | VirtualAction::p2_right
                     | VirtualAction::p2_menu_right => {
-                        if shift(overlay, page_delta) {
+                        if shift_on_press(overlay, ev, page_delta) {
                             play_change = true;
                         }
                     }
@@ -1027,7 +1069,7 @@ pub fn handle_input(
                             | VirtualAction::p1_menu_up
                             | VirtualAction::p2_up
                             | VirtualAction::p2_menu_up => {
-                                if shift(overlay, -1) {
+                                if shift_on_press(overlay, ev, -1) {
                                     play_change = true;
                                 }
                             }
@@ -1035,17 +1077,17 @@ pub fn handle_input(
                             | VirtualAction::p1_menu_down
                             | VirtualAction::p2_down
                             | VirtualAction::p2_menu_down => {
-                                if shift(overlay, 1) {
+                                if shift_on_press(overlay, ev, 1) {
                                     play_change = true;
                                 }
                             }
                             VirtualAction::p1_menu_left | VirtualAction::p2_menu_left => {
-                                if shift(overlay, -page_delta) {
+                                if shift_on_press(overlay, ev, -page_delta) {
                                     play_change = true;
                                 }
                             }
                             VirtualAction::p1_menu_right | VirtualAction::p2_menu_right => {
-                                if shift(overlay, page_delta) {
+                                if shift_on_press(overlay, ev, page_delta) {
                                     play_change = true;
                                 }
                             }
@@ -1074,7 +1116,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_up
                     | VirtualAction::p2_up
                     | VirtualAction::p2_menu_up => {
-                        if shift(overlay, -1) {
+                        if shift_on_press(overlay, ev, -1) {
                             play_change = true;
                         }
                     }
@@ -1082,7 +1124,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_down
                     | VirtualAction::p2_down
                     | VirtualAction::p2_menu_down => {
-                        if shift(overlay, 1) {
+                        if shift_on_press(overlay, ev, 1) {
                             play_change = true;
                         }
                     }
@@ -1090,7 +1132,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_left
                     | VirtualAction::p2_left
                     | VirtualAction::p2_menu_left => {
-                        if shift(overlay, -page_delta) {
+                        if shift_on_press(overlay, ev, -page_delta) {
                             play_change = true;
                         }
                     }
@@ -1098,7 +1140,7 @@ pub fn handle_input(
                     | VirtualAction::p1_menu_right
                     | VirtualAction::p2_right
                     | VirtualAction::p2_menu_right => {
-                        if shift(overlay, page_delta) {
+                        if shift_on_press(overlay, ev, page_delta) {
                             play_change = true;
                         }
                     }
@@ -1333,6 +1375,7 @@ fn prepare_save(
         return None;
     }
     overlay.phase = OverlayPhase::Saving;
+    overlay.nav_hold = None;
     overlay.current_row = None;
     overlay.auto_follow = false;
     overlay.scroll_index = overlay
@@ -1513,6 +1556,16 @@ const fn follow_row(overlay: &mut OverlayStateData, row_index: usize) {
     }
 }
 
+fn shift_on_press(overlay: &mut OverlayStateData, ev: &InputEvent, delta: isize) -> bool {
+    overlay.nav_hold = Some(NavHold {
+        action: ev.action,
+        delta,
+        held_for: Duration::ZERO,
+        next_repeat_at: screen_input::OVERLAY_NAV_INITIAL_HOLD_DELAY,
+    });
+    shift(overlay, delta)
+}
+
 fn shift(overlay: &mut OverlayStateData, delta: isize) -> bool {
     let limit = scroll_limit(overlay.rows.len(), view_rows(overlay));
     let next = (overlay.scroll_index as isize + delta).clamp(0, limit as isize) as usize;
@@ -1687,6 +1740,9 @@ pub fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) 
         follow_row(overlay, index);
     }
     let phase_changed = overlay.phase != previous_phase;
+    if phase_changed {
+        overlay.nav_hold = None;
+    }
     if summary_changed {
         refresh_counts_text(overlay);
     }
@@ -1756,6 +1812,7 @@ mod tests {
             owner: crate::SimplyLoveSyncOwner::SelectMusicPack,
             current_row: None,
             menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
+            nav_hold: None,
             presentation_revision: 0,
             presentation: RefCell::new(None),
         }))
@@ -1764,6 +1821,176 @@ mod tests {
     fn press(action: VirtualAction) -> InputEvent {
         let now = Instant::now();
         InputEvent::new(action, 0, true, InputSource::Keyboard, now, 0, now, now)
+    }
+
+    fn scrollable_overlay(phase: OverlayPhase) -> OverlayState {
+        let mut state = overlay(phase);
+        let OverlayState::Visible(data) = &mut state else {
+            unreachable!();
+        };
+        data.rows = (0..20).map(|_| pack_row(12.5, 0.87)).collect();
+        data.summary.total = data.rows.len();
+        data.scroll_index = 5;
+        super::refresh_pagination_text(data);
+        state
+    }
+
+    fn scroll_index(state: &OverlayState) -> usize {
+        let OverlayState::Visible(data) = state else {
+            panic!("overlay must remain visible");
+        };
+        data.scroll_index
+    }
+
+    #[test]
+    fn pack_sync_held_navigation_uses_overlay_timing_and_stops_on_release() {
+        for phase in [
+            OverlayPhase::Running,
+            OverlayPhase::Review,
+            OverlayPhase::Result,
+        ] {
+            for (action, delta) in [
+                (VirtualAction::p1_up, -1),
+                (VirtualAction::p1_menu_up, -1),
+                (VirtualAction::p2_up, -1),
+                (VirtualAction::p2_menu_up, -1),
+                (VirtualAction::p1_down, 1),
+                (VirtualAction::p1_menu_down, 1),
+                (VirtualAction::p2_down, 1),
+                (VirtualAction::p2_menu_down, 1),
+            ] {
+                let mut state = scrollable_overlay(phase);
+                let mut effects = Vec::new();
+                let event = press(action);
+                super::handle_input(
+                    &mut state,
+                    &event,
+                    NavigationPolicy::default(),
+                    &mut effects,
+                );
+                assert_eq!(scroll_index(&state) as isize, 5 + delta);
+                assert_eq!(effects.len(), 1);
+                assert!(!super::update(&mut state, 0.374));
+                assert!(super::update(&mut state, 0.002));
+                assert_eq!(scroll_index(&state) as isize, 5 + 2 * delta);
+                assert!(!super::update(&mut state, 0.123));
+                assert!(super::update(&mut state, 0.002));
+                assert_eq!(scroll_index(&state) as isize, 5 + 3 * delta);
+                let OverlayState::Visible(data) = &state else {
+                    unreachable!()
+                };
+                assert_eq!(data.presentation_revision, 3);
+                assert_eq!(
+                    data.text.pagination.as_deref(),
+                    super::pagination_text(
+                        data.rows.len(),
+                        data.scroll_index,
+                        super::view_rows(data)
+                    )
+                    .as_deref()
+                );
+
+                super::handle_input(
+                    &mut state,
+                    &InputEvent {
+                        pressed: false,
+                        ..event
+                    },
+                    NavigationPolicy::default(),
+                    &mut effects,
+                );
+                assert!(!super::update(&mut state, 1.0));
+                assert_eq!(scroll_index(&state) as isize, 5 + 3 * delta);
+            }
+        }
+    }
+
+    #[test]
+    fn pack_sync_held_navigation_reverses_and_clamps_at_list_edges() {
+        let mut state = scrollable_overlay(OverlayPhase::Review);
+        let mut effects = Vec::new();
+        let navigation = NavigationPolicy::default();
+        let down = press(VirtualAction::p1_menu_down);
+        super::handle_input(&mut state, &down, navigation, &mut effects);
+        assert!(super::update(&mut state, 0.376));
+        assert_eq!(scroll_index(&state), 7);
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p2_menu_up),
+            navigation,
+            &mut effects,
+        );
+        super::handle_input(
+            &mut state,
+            &InputEvent {
+                pressed: false,
+                ..down
+            },
+            navigation,
+            &mut effects,
+        );
+        assert!(!super::update(&mut state, 0.374));
+        assert!(super::update(&mut state, 0.002));
+        assert_eq!(scroll_index(&state), 5);
+        for _ in 0..5 {
+            assert!(super::update(&mut state, 0.125));
+        }
+        assert_eq!(scroll_index(&state), 0);
+        assert!(!super::update(&mut state, 1.0));
+        super::handle_input(&mut state, &down, navigation, &mut effects);
+        // A slow frame still advances only one row, just like other menus.
+        assert!(super::update(&mut state, 10.0));
+        assert_eq!(scroll_index(&state), 2);
+        for _ in 0..20 {
+            super::update(&mut state, 0.126);
+        }
+        assert_eq!(scroll_index(&state), 20 - super::VIEW_ROWS_REVIEW);
+        assert!(!super::update(&mut state, 0.125));
+    }
+
+    #[test]
+    fn pack_sync_held_navigation_respects_menu_policy_and_phase_changes() {
+        let mut state = scrollable_overlay(OverlayPhase::Running);
+        let mut effects = Vec::new();
+        let navigation = NavigationPolicy {
+            only_dedicated_menu_buttons: true,
+            three_key_navigation: true,
+        };
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p1_down),
+            navigation,
+            &mut effects,
+        );
+        assert!(!super::update(&mut state, 1.0));
+        assert_eq!(scroll_index(&state), 5);
+        let right = press(VirtualAction::p1_menu_right);
+        super::handle_input(&mut state, &right, navigation, &mut effects);
+        assert!(super::update(&mut state, 0.376));
+        assert_eq!(scroll_index(&state), 7);
+        super::apply_event(&mut state, crate::SimplyLoveSyncEvent::Finished);
+        assert!(!super::update(&mut state, 1.0));
+        super::handle_input(&mut state, &right, navigation, &mut effects);
+        assert!(!super::update(&mut state, 1.0));
+        let OverlayState::Visible(data) = &state else {
+            unreachable!()
+        };
+        assert!(!data.yes_selected);
+        assert_eq!(data.scroll_index, 7);
+
+        super::handle_input(
+            &mut state,
+            &press(VirtualAction::p1_menu_down),
+            navigation,
+            &mut effects,
+        );
+        let OverlayState::Visible(data) = &mut state else {
+            unreachable!()
+        };
+        assert!(super::prepare_save(data, false).is_some());
+        assert!(!super::update(&mut state, 1.0));
+        let _ = super::hide(&mut state);
+        assert!(!super::update(&mut state, 1.0));
     }
 
     #[test]

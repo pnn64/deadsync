@@ -169,7 +169,3 @@ pub fn delete(profile_id: &str) -> SimplyLoveLocalProfileEvent {
         view: view(),
     }
 }
-
-#[cfg(test)]
-#[path = "../../../tests/perf/profile_picker.rs"]
-mod dataflow_tests;

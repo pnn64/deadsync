@@ -482,11 +482,3 @@ mod tests {
         assert!(!pac_drive_pid(0x1508));
     }
 }
-
-#[cfg(test)]
-pub(super) const fn performance_report(
-    state: &State,
-    ordering: PacDriveLightOrdering,
-) -> [u8; REPORT_SIZE] {
-    build_report(state, ordering)
-}

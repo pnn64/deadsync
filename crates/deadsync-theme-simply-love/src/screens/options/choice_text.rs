@@ -76,11 +76,3 @@ pub(super) fn choice_texts<T: ChoiceText>(choices: &[Choice]) -> Vec<T> {
 pub(super) fn string_choice_texts<T: ChoiceText>(choices: &[String]) -> Vec<T> {
     choices.iter().map(|text| T::borrowed(text)).collect()
 }
-
-#[cfg(test)]
-#[path = "choice_text_original.rs"]
-mod choice_text_original;
-
-#[cfg(test)]
-#[path = "choice_text_perf.rs"]
-mod choice_text_perf_tests;

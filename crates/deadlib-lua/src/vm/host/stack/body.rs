@@ -5,14 +5,14 @@ use super::*;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NativeBuiltinBody(u64);
 impl NativeBuiltinBody {
-    /// Opaque implementation code for native ABI adapters in this crate version.
+    /// Opaque implementation code for Rust host callbacks in this crate version.
     pub fn implementation_code(self) -> u64 {
         self.0
     }
-    /// Decode an implementation code supplied by this version's native adapter.
+    /// Decode an implementation code from this version's Rust host interface.
     /// This does not create or retain a Lua closure.
     pub fn from_implementation_code(code: u64) -> Option<Self> {
-        matches!(code, 0..=59 | 64..=78 | 80..=85 | 96..=104 | 112..=122 | 128..=170 | MATCH..=TRACEBACK)
+        matches!(code, 0..=59 | 64..=78 | 80..=85 | 96..=104 | 112..=122 | 128..=169 | MATCH..=TRACEBACK)
             .then_some(Self(match code { 21 => 9, 139 => 128, _ => code }))
     }
 }
@@ -97,21 +97,21 @@ impl Vm {
         frame: Frame,
         source: usize,
         count: usize,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         let index = self.frames.len() - 1;
         let Some(body) = self
             .native_bodies
             .last()
             .filter(|b| b.thread == self.thread && b.owner == index)
         else {
-            return false;
+            return Ok(false);
         };
         let code = body.code;
         let mut frame = frame;
-        let source = self.native_return_stack(code, &mut frame, source, count);
+        let source = self.native_return_stack(code, &mut frame, source, count)?;
         self.frames[index] = frame;
         self.native_bodies.last_mut().unwrap().complete = Some((source, count));
-        true
+        Ok(true)
     }
     pub(in crate::vm) fn suspend_native_body(&mut self, index: usize) -> bool {
         let Some(threads::Transition::Yield { source, count }) = self.transition else {
@@ -247,6 +247,25 @@ impl NativeStack<'_, '_> {
         let vm = &mut self.call.vm;
         let original = vm.frames[self.frame];
         let workspace = vm.registers.len();
+        let arguments_len = if self.call.hook.is_none() {
+            self.call
+                .results
+                .checked_add(1)
+                .ok_or_else(|| vm.memory_failure())?
+        } else {
+            0
+        };
+        let end = workspace
+            .checked_add(arguments_len)
+            .and_then(|n| n.checked_add(self.call.results.max(2)))
+            .and_then(|n| n.checked_add(4))
+            .ok_or_else(|| vm.memory_failure())?;
+        vm.reserve_registers(end)?;
+        let capacity = vm.native_bodies.capacity();
+        vm.native_bodies
+            .try_reserve(1)
+            .map_err(|_| vm.memory_failure())?;
+        vm.gc_note_control((vm.native_bodies.capacity() - capacity) * size_of::<Body>());
         let arguments = if self.call.hook.is_none() {
             vm.registers.push(closure);
             vm.registers
@@ -268,7 +287,6 @@ impl NativeStack<'_, '_> {
             pc: 0,
             ..original
         };
-        let capacity = vm.native_bodies.capacity();
         vm.native_bodies.push(Body {
             thread: vm.thread,
             owner: self.frame,
@@ -279,26 +297,32 @@ impl NativeStack<'_, '_> {
             complete: None,
             yielded: None,
         });
-        vm.gc_note_control((vm.native_bodies.capacity() - capacity) * size_of::<Body>());
         let owner = vm.thread;
         let depth = self.frame;
         let top = vm.top;
         let mut line = 0;
+        let mut pending = None;
         let result = loop {
-            let result = vm.run(&mut line);
+            let result = pending.take().map_or_else(|| vm.run(&mut line), Err);
             let context = vm.native_bodies.last().unwrap();
             if context.complete.is_some() || context.yielded.is_some() {
                 break Ok(());
             }
             match result {
                 Ok(count) if vm.thread != owner => {
-                    vm.finish_thread(0, count, false, false, &mut line);
+                    if let Err(error) = vm.finish_thread(0, count, false, false, &mut line) {
+                        pending = Some(error);
+                    }
                 }
                 Err(error) if error.catchable() => {
                     let floor = if vm.thread == owner { depth } else { 0 };
                     match vm.catch_error_from(&error, floor) {
                         Ok(true) => {}
-                        Ok(false) if vm.thread != owner => vm.fail_thread(&error, &mut line),
+                        Ok(false) if vm.thread != owner => {
+                            if let Err(error) = vm.fail_thread(&error, &mut line) {
+                                pending = Some(error);
+                            }
+                        }
                         Ok(false) => break Err(error.at_line(line)),
                         Err(error) => break Err(error.at_line(line)),
                     }

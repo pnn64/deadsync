@@ -1068,6 +1068,13 @@ where
             combo_carry[p],
             caps,
         );
+        if play_style.is_routine() {
+            // Player::Load seeds history only for an individual LifeMeter.
+            // CombinedLifeMeterShared changes a separate inner meter; native
+            // Player::ChangeLifeRecord still reads GameState's initial tug life.
+            player.life_record_source = LifeRecordSource::Combined(0.5);
+            player.life_history.clear();
+        }
         let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
         let possible = target.score_type.possible_points(
             possible_grade_points[p],
@@ -1212,6 +1219,7 @@ where
         ),
         players_runtime: GameplayPlayersRuntimeState {
             players,
+            routine: play_style.is_routine().then(RoutineStageStats::default),
             column_judgments_active: [true; MAX_PLAYERS],
         },
         display: GameplayDisplayRuntimeState {
@@ -1298,6 +1306,7 @@ where
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             song_lua_fail_types: [None; MAX_PLAYERS],
+            song_lua_player_options: [None; MAX_PLAYERS],
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
@@ -1310,6 +1319,7 @@ where
             },
         },
         control: GameplayControlRuntimeState {
+            paused: false,
             exit_input: GameplayExitInputState::default(),
             offset_adjust_hold: GameplayOffsetAdjustHoldState::default(),
             input_state: GameplayInputState::default(),

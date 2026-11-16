@@ -926,8 +926,3 @@ Panel0.FsrLow=1 2 3 4
         assert!(is_default_for(&list[0], "S2"));
     }
 }
-
-#[cfg(test)]
-mod mutation_performance {
-    include!("pad_mutation_performance.rs");
-}

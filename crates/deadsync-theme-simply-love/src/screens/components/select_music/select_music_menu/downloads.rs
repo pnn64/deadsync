@@ -432,11 +432,3 @@ mod tests {
         assert_eq!(overlay.scroll_index, 0);
     }
 }
-
-#[cfg(test)]
-mod preview_dataflows {
-    include!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/perf/preview_downloads.rs"
-    ));
-}

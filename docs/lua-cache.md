@@ -7,6 +7,15 @@ Programs retain the normal host-clone, VM-binding and garbage-collection rules.
 The cache contains code and immutable metadata; every VM builds its own runtime
 strings, closures, environments and other objects.
 
+This is the compiled-program stage of the
+[Lua architecture contract](lua-architecture.md). It does not cache a baked
+scene or native machine code. The target architecture prefers scene baking for
+eligible gameplay work, with live/hybrid execution for dynamic behavior. Scene
+artifacts need their own dependency identity, host/baker version and stateful
+callback reconstruction; a valid ProgramCache entry alone cannot establish that
+a scene is reusable. Those artifact classes are planned separately and must not
+be described as implemented by this cache.
+
 ~~~rust
 use deadlib_lua::{ProgramCache, Vm};
 
@@ -80,13 +89,6 @@ values for constant indices plus 256 on arithmetic, comparison and table
 instructions. Version 1 entries are rejected and rebuilt from source. The
 source-derived build identity separately invalidates compiler/runtime changes.
 
-The checksum advances through eight-byte blocks using one compile-time 8 KiB
-lookup table and a scalar tail. Safe byte-array loads support unaligned input;
-no CPU-specific instructions or runtime table allocation are required. The
-polynomial, initial/final complements and stored CRC32C bytes remain those of
-schema version 1. [Paired measurements](performance/2026-10-26-rust-lua-cache-crc.md)
-record the speed/memory tradeoff against the earlier one-byte implementation.
-
 The reader checks wire lengths against remaining input and charges object and
 payload allocation sizes before reserving arrays or copying strings. It then
 runs Program::verify; native re-export ranges and tree edges receive additional
@@ -94,9 +96,3 @@ checks. Defaults are 64 MiB per file and 256 MiB of decoded object/payload stora
 Allocator metadata and the input-file buffer are separate from the decoded
 budget. These limits govern cache use, not the compiler's normal resource limits.
 A cache produced by a trusted compiler is still executable code, not a sandbox.
-
-Cache reloads trade filesystem work, validation and decoding against parsing and
-compilation. They are useful for some large source programs; tiny programs and
-already compiled native chunks can reload more slowly. The
-[measurements](performance/2026-10-26-rust-lua-constant-pool.md) include both
-profitable and unprofitable cases, allocation counts and process CPU counters.

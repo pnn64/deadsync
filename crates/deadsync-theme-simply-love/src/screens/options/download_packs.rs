@@ -17,8 +17,8 @@ const ROW_H: f32 = 37.0;
 const VIEW_ROWS: usize = 7;
 const QUERY_MAX_CHARS: usize = 96;
 const CURSOR_PERIOD: f32 = 0.8;
-const BROWSER_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
-const BROWSER_NAV_REPEAT_INTERVAL: Duration = Duration::from_millis(125);
+const BROWSER_NAV_INITIAL_HOLD_DELAY: Duration = screen_input::OVERLAY_NAV_INITIAL_HOLD_DELAY;
+const BROWSER_NAV_REPEAT_INTERVAL: Duration = screen_input::OVERLAY_NAV_REPEAT_INTERVAL;
 const BROWSER_TAB_SCROLL_DIVISOR: u32 = 4;
 
 #[derive(Clone, Debug)]
@@ -2023,10 +2023,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "download_packs_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "download_packs_buffers_perf.rs"]
-mod buffers_perf;

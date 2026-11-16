@@ -8,6 +8,17 @@ pub struct StringId(pub(crate) u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TableId(pub(crate) u64);
 
+impl TableId {
+    /// Return the reusable arena slot for a host-side indexed store.
+    ///
+    /// A collected table's slot may be reused by a later generation. Host
+    /// stores must compare the complete [`TableId`] before returning a value.
+    /// Slot indices are meaningful only within the originating VM.
+    pub const fn slot(self) -> u32 {
+        self.0 as u32
+    }
+}
+
 /// The identity of a Lua closure in its originating VM.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FunctionId(pub(crate) u64);

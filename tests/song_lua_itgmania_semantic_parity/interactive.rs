@@ -48,6 +48,12 @@ pub(super) fn validate(trace: &Value) -> Result<(), String> {
             {
                 return Err("invalid native input event or frame anchor".into());
             }
+            if trace["capabilities"]["native_input_step_clocks"] == true {
+                let clocks = event["step_clock_inputs"].as_array().ok_or("missing native input step clocks")?;
+                if clocks.len() > 2 || (event["event"]["type"] == "InputEventType_Repeat" && !clocks.is_empty()) {
+                    return Err("invalid native input step clock count".into());
+                }
+            }
             previous = at;
         }
         if injected {
@@ -163,7 +169,104 @@ pub(super) fn validate(trace: &Value) -> Result<(), String> {
     Ok(())
 }
 
-pub(super) fn dispatch(state: &mut gameplay::State, event: &Value) -> Result<(), String> {
+pub(super) struct InputReplay {
+    slots: BTreeMap<(String, String), u32>,
+    origin: std::time::Instant,
+}
+
+impl Default for InputReplay {
+    fn default() -> Self { Self { slots: BTreeMap::new(), origin: std::time::Instant::now() } }
+}
+
+impl InputReplay {
+    fn gameplay(
+        &mut self, state: &mut gameplay::State, input: &SongLuaInputEvent<'_>,
+        clocks: &Value, snapshot: deadsync_gameplay::GameplayAudioSnapshot,
+    ) -> Result<(), String> {
+        use deadsync_input::{InputEvent, VirtualAction as A};
+        use deadsync_gameplay::{GameplayInputPlayerSide, current_song_clock_snapshot, handle_core_input, process_input_edges};
+        use std::time::Duration;
+        // Native ScreenGameplay sends only first presses and releases to Step.
+        // Recorded repeat events already exist and must not enter held timers.
+        let no_step = || {
+            if clocks.as_array().is_some_and(|clocks| !clocks.is_empty()) {
+                Err("native stepped an input that has no DeadSync gameplay route".into())
+            } else { Ok(()) }
+        };
+        if input.kind == SongLuaInputType::Repeat { return no_step(); }
+        let Some(controller) = input.controller else { return no_step(); };
+        let pump = state.gameplay.setup.session.play_style.is_pump();
+        let pair = match input.button {
+            "Left" if !pump => [A::p1_left, A::p2_left],
+            "Down" if !pump => [A::p1_down, A::p2_down],
+            "Up" if !pump => [A::p1_up, A::p2_up],
+            "Right" if !pump => [A::p1_right, A::p2_right],
+            "DownLeft" if pump => [A::p1_left, A::p2_left],
+            "UpLeft" if pump => [A::p1_down, A::p2_down],
+            "Center" if pump => [A::p1_center, A::p2_center],
+            "UpRight" if pump => [A::p1_up, A::p2_up],
+            "DownRight" if pump => [A::p1_right, A::p2_right],
+            "Start" => [A::p1_start, A::p2_start],
+            "Back" => [A::p1_back, A::p2_back],
+            "Select" => [A::p1_select, A::p2_select],
+            "MenuLeft" => [A::p1_menu_left, A::p2_menu_left],
+            "MenuRight" => [A::p1_menu_right, A::p2_menu_right],
+            "MenuUp" => [A::p1_menu_up, A::p2_menu_up],
+            "MenuDown" => [A::p1_menu_down, A::p2_menu_down],
+            _ => return no_step(),
+        };
+        let next_slot = self.slots.len() as u32;
+        let slot = *self.slots.entry((input.device.into(), input.device_button.into())).or_insert(next_slot);
+        let host = snapshot.stream_clock.valid_at_host_nanos;
+        let ago = Duration::try_from_secs_f64(input.ago).map_err(|_| "invalid native input age")?;
+        let timestamp = self.origin.checked_add(Duration::from_nanos(host)).and_then(|t| t.checked_sub(ago))
+            .ok_or("native input timestamp out of range")?;
+        let event = InputEvent {
+            action: pair[controller], input_slot: slot, pressed: input.kind == SongLuaInputType::FirstPress,
+            source: if input.is_joystick { deadsync_core::input::InputSource::Gamepad } else { deadsync_core::input::InputSource::Keyboard },
+            timestamp, timestamp_host_nanos: host.saturating_sub(ago.as_nanos().min(u64::MAX as u128) as u64),
+            stored_at: timestamp, emitted_at: timestamp,
+        };
+        if !state.gameplay.pending_input_is_empty() { return Err("recorded input phase has undelivered gameplay edges".into()); }
+        handle_core_input(&mut state.gameplay, &event);
+        let mut edges = std::mem::take(&mut state.gameplay.pending_input.edges);
+        if !edges.is_empty() || clocks.is_array() {
+            let clocks = clocks.as_array().ok_or("manual gameplay input requires native step clock observations; recapture with harness 0.1.103 or newer")?;
+            if clocks.len() != edges.len() {
+                return Err(format!("input routing differs: DeadSync queued {} lanes; native stepped {} players", edges.len(), clocks.len()));
+            }
+            for (edge, clock) in edges.iter_mut().zip(clocks) {
+                let player = state.gameplay.player_for_col(edge.lane.index());
+                let native_player = usize::from(state.gameplay.runtime_player_side(player) == GameplayInputPlayerSide::P2);
+                let column = edge.lane.index() - player * state.gameplay.cols_per_player();
+                if clock["player"].as_u64() != Some(native_player as u64) || clock["column"].as_u64() != Some(column as u64) {
+                    return Err(format!("input routing differs for player {native_player}, column {column}: {clock}"));
+                }
+                let number = |key: &str| clock[key].as_f64().filter(|n| n.is_finite() && (*n as f32).is_finite())
+                    .map(|n| n as f32).ok_or_else(|| format!("missing native input clock {key}"));
+                let rate = number("music_rate")?;
+                if rate <= 0. { return Err("invalid native input music rate".into()); }
+                // Player::Step's f32 arithmetic, using only raw clock inputs.
+                // Native player/column observations above check our routing;
+                // they never select a lane, note, judgment, or score for us.
+                let current = number("music_seconds")? + number("last_beat_update_ago")? * rate;
+                edge.event_music_time_ns = deadsync_core::song_time::song_time_ns_from_seconds(current - number("step_ago")? * rate);
+                edge.record_replay = false;
+            }
+        }
+        state.gameplay.pending_input.edges = edges;
+        let clock = current_song_clock_snapshot(snapshot, state.gameplay.music_rate(), 0.);
+        process_input_edges(&mut state.gameplay, false, &mut Default::default(), clock);
+        Ok(())
+    }
+}
+
+impl InputReplay {
+pub(super) fn dispatch(
+    &mut self, state: &mut gameplay::State, record: &Value,
+    snapshot: deadsync_gameplay::GameplayAudioSnapshot,
+) -> Result<(), String> {
+    let event = &record["event"];
     let text = |key| event[key].as_str().unwrap_or("");
     let device = &event["DeviceInput"];
     let input = SongLuaInputEvent {
@@ -194,8 +297,10 @@ pub(super) fn dispatch(state: &mut gameplay::State, event: &Value) -> Result<(),
         is_joystick: device["is_joystick"].as_bool().unwrap_or(false),
         is_mouse: device["is_mouse"].as_bool().unwrap_or(false),
     };
+    self.gameplay(state, &input, &record["step_clock_inputs"], snapshot)?;
     gameplay::handle_song_lua_input(state, &input);
     Ok(())
+}
 }
 
 #[derive(Default)]

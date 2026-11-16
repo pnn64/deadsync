@@ -103,7 +103,7 @@ fn installed_workshop_resolves_and_loads_customized_skins() {
                 .flatten()
                 .next()
                 .expect("custom mine");
-            assert!(mine.model.is_some(), "mine remains a model");
+            assert!(mine.model.is_some(), "mine remains a model for {raw}: {}", mine.texture_key());
             mine_widths.push(mine.model.as_ref().unwrap().size()[0]);
             assert!(
                 mine.source.texture_key().contains("Customizations/Mines/"),

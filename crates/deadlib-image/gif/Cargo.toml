@@ -15,9 +15,5 @@ gif = "0.14.2"
 gif-dispose = "6.0.0"
 weezl = "0.2.1"
 
-[[bench]]
-name = "pipeline"
-harness = false
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

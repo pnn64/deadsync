@@ -95,6 +95,19 @@ struct DepthRows<'a> {
 }
 
 impl DepthRows<'_> {
+    #[inline(always)]
+    fn quantize(&self, z: f32) -> f32 {
+        if self.unorm16 {
+            // Valid depths are nonnegative; widen before the half bias to
+            // retain values just below a tie. Restore negative zero's sign.
+            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
+            (rounded as f32 / 65535.0).copysign(z)
+        } else {
+            z
+        }
+    }
+
+    #[inline(always)]
     fn test(&mut self, index: usize, z: f32) -> bool {
         if !(0.0..=1.0).contains(&z) {
             return false;
@@ -102,14 +115,7 @@ impl DepthRows<'_> {
         if self.pixels.is_empty() {
             return true;
         }
-        let z = if self.unorm16 {
-            // Valid depths are nonnegative; widen before the half bias to
-            // retain values just below a tie. Restore negative zero's sign.
-            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
-            (rounded as f32 / 65535.0).copysign(z)
-        } else {
-            z
-        };
+        let z = self.quantize(z);
         if self.mode.tests()
             && if self.mode.on_fail() {
                 z <= self.pixels[index]
@@ -120,7 +126,80 @@ impl DepthRows<'_> {
             return false;
         }
         if self.mode.writes() {
-        self.pixels[index] = z;
+            self.pixels[index] = z;
+        }
+        true
+    }
+
+    #[inline(always)]
+    fn rejects_triangle(
+        &self,
+        vertices: [&ScreenVertexTexColor; 3],
+        width: usize,
+        bounds: (i32, i32, i32, i32, i32),
+    ) -> bool {
+        if !self.mode.tests() || self.pixels.is_empty() {
+            return false;
+        }
+        let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
+        if min_x < 0 || min_y < stripe_start || max_x < min_x || max_y < min_y {
+            return false;
+        }
+        // Small bounds have too little shading work to justify a depth scan.
+        if max_x - min_x < 7 || max_y - min_y < 7 {
+            return false;
+        }
+        let Some(last_index) = max_y
+            .checked_sub(stripe_start)
+            .and_then(|row| (row as usize).checked_mul(width))
+            .and_then(|row| row.checked_add(max_x as usize))
+        else {
+            return false;
+        };
+        if last_index >= self.pixels.len() {
+            // Preserve the late bounds behavior for short depth attachments.
+            return false;
+        }
+        let z = vertices.map(|v| v.z);
+        if !z.into_iter().all(|z| (0.0..=1.0).contains(&z)) {
+            return false;
+        }
+        // Covered weights sum to one within subtraction-rounding error. This
+        // margin also covers the product and two fused interpolation roundings.
+        let margin = 8.0 * f32::EPSILON;
+        let bound = if self.mode.on_fail() {
+            ((z[0].max(z[1]).max(z[2]) + margin).next_up()).min(1.0)
+        } else {
+            ((z[0].min(z[1]).min(z[2]) - margin).next_down()).max(0.0)
+        };
+        // Quantization is monotonic, so outward bounds remain conservative.
+        let bound = self.quantize(bound);
+        let rejects = {
+            #[inline(always)]
+            |stored: f32| {
+                if self.mode.on_fail() {
+                    bound <= stored
+                } else {
+                    bound > stored
+                }
+            }
+        };
+        let center_x = min_x + (max_x - min_x) / 2;
+        let center_y = min_y + (max_y - min_y) / 2;
+        if !rejects(self.pixels[(center_y - stripe_start) as usize * width + center_x as usize]) {
+            return false;
+        }
+        // Probe the far corner before scanning mostly occluded bounds that
+        // contain a passing region near the end of the row traversal.
+        if !rejects(self.pixels[last_index]) {
+            return false;
+        }
+        for y in min_y..=max_y {
+            let start = (y - stripe_start) as usize * width + min_x as usize;
+            let end = (y - stripe_start) as usize * width + max_x as usize + 1;
+            if !self.pixels[start..end].iter().copied().all(rejects) {
+                return false;
+            }
         }
         true
     }
@@ -1827,6 +1906,84 @@ fn prepare_sprite_vertices(
     if width == 0 || height == 0 {
         return None;
     }
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe {
+            prepare_sprite_vertices_fma(
+                proj,
+                center,
+                size,
+                rot_sin_cos,
+                uv_scale,
+                uv_offset,
+                local_offset,
+                local_offset_rot_sin_cos,
+                width,
+                height,
+            )
+        };
+    }
+    prepare_sprite_vertices_impl(
+        proj,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        width,
+        height,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn prepare_sprite_vertices_fma(
+    proj: &Matrix4,
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    width: usize,
+    height: usize,
+) -> Option<[ScreenVertex; 4]> {
+    prepare_sprite_vertices_impl(
+        proj,
+        center,
+        size,
+        rot_sin_cos,
+        uv_scale,
+        uv_offset,
+        local_offset,
+        local_offset_rot_sin_cos,
+        width,
+        height,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn prepare_sprite_vertices_impl(
+    proj: &Matrix4,
+    center: [f32; 4],
+    size: [f32; 2],
+    rot_sin_cos: [f32; 2],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    local_offset: [f32; 2],
+    local_offset_rot_sin_cos: [f32; 2],
+    width: usize,
+    height: usize,
+) -> Option<[ScreenVertex; 4]> {
+    if width == 0 || height == 0 {
+        return None;
+    }
 
     let mut adjusted_center = center;
     if local_offset[0] != 0.0 || local_offset[1] != 0.0 {
@@ -1956,7 +2113,7 @@ fn prepare_mesh_triangles(
 
 /// Clips one triangle against OpenGL's homogeneous near plane (`z >= -w`).
 /// A single plane produces at most four vertices, all kept on the stack.
-#[inline]
+#[inline(always)]
 fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
     let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
     if distances
@@ -2003,6 +2160,76 @@ fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4
 
 #[allow(clippy::too_many_arguments)]
 fn project_tmesh_polygon(
+    mvp: &Matrix4,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    cull_mode: f32,
+) -> Option<([ScreenVertexTexColor; 4], usize)> {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if std::arch::is_x86_feature_detected!("fma") {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        return unsafe {
+            project_tmesh_polygon_fma(
+                mvp,
+                tint,
+                uv_scale,
+                uv_offset,
+                uv_tex_shift,
+                vertices,
+                width,
+                height,
+                cull_mode,
+            )
+        };
+    }
+    project_tmesh_polygon_impl(
+        mvp,
+        tint,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        vertices,
+        width,
+        height,
+        cull_mode,
+    )
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn project_tmesh_polygon_fma(
+    mvp: &Matrix4,
+    tint: [f32; 4],
+    uv_scale: [f32; 2],
+    uv_offset: [f32; 2],
+    uv_tex_shift: [f32; 2],
+    vertices: &[deadlib_render_core::TexturedMeshVertex],
+    width: usize,
+    height: usize,
+    cull_mode: f32,
+) -> Option<([ScreenVertexTexColor; 4], usize)> {
+    project_tmesh_polygon_impl(
+        mvp,
+        tint,
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        vertices,
+        width,
+        height,
+        cull_mode,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn project_tmesh_polygon_impl(
     mvp: &Matrix4,
     tint: [f32; 4],
     uv_scale: [f32; 2],
@@ -2401,96 +2628,195 @@ fn rasterize_environment(
             let Some(setup) = triangle_setup(p.map(|v| v.x), p.map(|v| v.y), width, height) else {
                 continue;
             };
-            let Some((min_x, max_x, min_y, max_y, start)) =
-                setup.stripe_bounds(stripe_y_start, stripe_y_end)
-            else {
+            let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
                 continue;
             };
-            let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
-                let image = texture.texels();
-                if sampler.filter == SamplerFilter::Linear {
-                    sample_tex_linear::<false, 4>(
-                        image,
-                        image.width,
-                        image.height,
-                        uv[0],
-                        uv[1],
-                        sampler,
-                    )
-                } else {
-                    sample_tex_nearest::<false, 4>(
-                        image,
-                        image.width,
-                        image.height,
-                        uv[0],
-                        uv[1],
-                        sampler,
-                    )
+            let reflection = triangle[0].normal[3] as u8 & 4 != 0;
+            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+            // Positive normal inverse-W and bounded shading keep perspective
+            // interpolation finite; exceptional inputs retain portable math.
+            if std::arch::is_x86_feature_detected!("fma")
+                && primary.half_pixels.is_empty()
+                && additive.is_none_or(|texture| texture.half_pixels.is_empty())
+                && p.iter().all(|v| {
+                    v.inv_w >= f32::MIN_POSITIVE
+                        && v.inv_w <= f32::MAX / 4.0
+                        && v.color
+                            .into_iter()
+                            .chain([v.u, v.v, v.z])
+                            .all(|value| value.abs() <= f32::MAX / 4.0)
+                })
+                && q.iter()
+                    .all(|v| v.u.abs() <= f32::MAX / 4.0 && v.v.abs() <= f32::MAX / 4.0)
+            {
+                // SAFETY: runtime detection checks CPU and OS support for FMA.
+                unsafe {
+                    rasterize_environment_triangle_fma(
+                        &p,
+                        &q,
+                        setup,
+                        bounds,
+                        instance.texture_mask,
+                        reflection,
+                        primary,
+                        primary_sampler,
+                        additive,
+                        width,
+                        blend,
+                        buffer,
+                        depth,
+                    );
                 }
-                .unwrap_or([0.0; 4])
-            };
-            let edges = [
-                owns_edge(p[1].x, p[1].y, p[2].x, p[2].y, setup.inv_denom),
-                owns_edge(p[2].x, p[2].y, p[0].x, p[0].y, setup.inv_denom),
-                owns_edge(p[0].x, p[0].y, p[1].x, p[1].y, setup.inv_denom),
-            ];
-            for y in min_y..=max_y {
-                for x in min_x..=max_x {
-                    let px = x as f32 + 0.5;
-                    let py = y as f32 + 0.5;
-                    let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
-                    let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
-                    let c = 1.0 - a - b;
-                    if !covered([a, b, c], edges) {
-                        continue;
-                    }
-                    let z = a * p[0].z + b * p[1].z + c * p[2].z;
-                    let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
-                    let w = [
-                        a * p[0].inv_w / sum,
-                        b * p[1].inv_w / sum,
-                        c * p[2].inv_w / sum,
-                    ];
-                    let uv = |v: &[ScreenVertexTexColor; 3]| {
-                        [
-                            w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
-                            w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
-                        ]
-                    };
-                    let texel = sample(primary, primary_sampler, uv(&p));
-                    let tint: [f32; 4] = std::array::from_fn(|i| {
-                        w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
-                    });
-                    let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
-                    if instance.texture_mask > 0.5 {
-                        color[..3].copy_from_slice(&tint[..3]);
-                    } else if triangle[0].normal[3] as u8 & 4 != 0 {
-                        let reflection = sample(
-                            additive.unwrap_or(primary),
-                            SamplerDesc {
-                                wrap: SamplerWrap::Repeat,
-                                ..additive.unwrap_or(primary).sampler
-                            },
-                            uv(&q),
-                        );
-                        for i in 0..3 {
-                            color[i] = (color[i] + reflection[i]).min(1.0);
-                        }
-                        color[3] *= reflection[3];
-                    }
-                    if color[3] <= 1.0 / 256.0 {
-                        continue;
-                    }
-                    let index = (y - start) as usize * width + x as usize;
-                    if !depth.test(index, z) {
-                        continue;
-                    }
-                    buffer(index, color, blend);
-                }
+                continue;
             }
+            rasterize_environment_triangle_impl::<false>(
+                &p,
+                &q,
+                setup,
+                bounds,
+                instance.texture_mask,
+                reflection,
+                primary,
+                primary_sampler,
+                additive,
+                width,
+                blend,
+                buffer,
+                depth,
+            );
         }
     }
     count
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_environment_triangle_fma(
+    p: &[ScreenVertexTexColor; 3],
+    q: &[ScreenVertexTexColor; 3],
+    setup: RasterSetup,
+    bounds: (i32, i32, i32, i32, i32),
+    texture_mask: f32,
+    reflection: bool,
+    primary: &Texture,
+    primary_sampler: SamplerDesc,
+    additive: Option<&Texture>,
+    width: usize,
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    depth: &mut DepthRows<'_>,
+) {
+    rasterize_environment_triangle_impl::<true>(
+        p,
+        q,
+        setup,
+        bounds,
+        texture_mask,
+        reflection,
+        primary,
+        primary_sampler,
+        additive,
+        width,
+        blend,
+        buffer,
+        depth,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_environment_triangle_impl<const PACKED: bool>(
+    p: &[ScreenVertexTexColor; 3],
+    q: &[ScreenVertexTexColor; 3],
+    setup: RasterSetup,
+    bounds: (i32, i32, i32, i32, i32),
+    texture_mask: f32,
+    reflection: bool,
+    primary: &Texture,
+    primary_sampler: SamplerDesc,
+    additive: Option<&Texture>,
+    width: usize,
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    depth: &mut DepthRows<'_>,
+) {
+    let (min_x, max_x, min_y, max_y, start) = bounds;
+    #[inline(always)]
+    fn sample(texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]) -> [f32; 4] {
+        let image = texture.texels();
+        if sampler.filter == SamplerFilter::Linear {
+            sample_tex_linear::<false, 4>(image, image.width, image.height, uv[0], uv[1], sampler)
+        } else {
+            sample_tex_nearest::<false, 4>(image, image.width, image.height, uv[0], uv[1], sampler)
+        }
+        .unwrap_or([0.0; 4])
+    }
+    let edges = [
+        owns_edge(p[1].x, p[1].y, p[2].x, p[2].y, setup.inv_denom),
+        owns_edge(p[2].x, p[2].y, p[0].x, p[0].y, setup.inv_denom),
+        owns_edge(p[0].x, p[0].y, p[1].x, p[1].y, setup.inv_denom),
+    ];
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let a = edge_function(p[1].x, p[1].y, p[2].x, p[2].y, px, py) * setup.inv_denom;
+            let b = edge_function(p[2].x, p[2].y, p[0].x, p[0].y, px, py) * setup.inv_denom;
+            let c = 1.0 - a - b;
+            if !covered([a, b, c], edges) {
+                continue;
+            }
+            let z = a * p[0].z + b * p[1].z + c * p[2].z;
+            let sum = a * p[0].inv_w + b * p[1].inv_w + c * p[2].inv_w;
+            let w = if PACKED {
+                let numerators = Vector4::new(a * p[0].inv_w, b * p[1].inv_w, c * p[2].inv_w, 0.0);
+                let w = (numerators / sum).to_array();
+                [w[0], w[1], w[2]]
+            } else {
+                [
+                    a * p[0].inv_w / sum,
+                    b * p[1].inv_w / sum,
+                    c * p[2].inv_w / sum,
+                ]
+            };
+            let uv = |v: &[ScreenVertexTexColor; 3]| {
+                [
+                    w[0] * v[0].u + w[1] * v[1].u + w[2] * v[2].u,
+                    w[0] * v[0].v + w[1] * v[1].v + w[2] * v[2].v,
+                ]
+            };
+            let texel = sample(primary, primary_sampler, uv(p));
+            let tint: [f32; 4] = std::array::from_fn(|i| {
+                w[0] * p[0].color[i] + w[1] * p[1].color[i] + w[2] * p[2].color[i]
+            });
+            let mut color: [f32; 4] = std::array::from_fn(|i| texel[i] * tint[i]);
+            if texture_mask > 0.5 {
+                color[..3].copy_from_slice(&tint[..3]);
+            } else if reflection {
+                let reflection = sample(
+                    additive.unwrap_or(primary),
+                    SamplerDesc {
+                        wrap: SamplerWrap::Repeat,
+                        ..additive.unwrap_or(primary).sampler
+                    },
+                    uv(q),
+                );
+                for i in 0..3 {
+                    color[i] = (color[i] + reflection[i]).min(1.0);
+                }
+                color[3] *= reflection[3];
+            }
+            if color[3] <= 1.0 / 256.0 {
+                continue;
+            }
+            let index = (y - start) as usize * width + x as usize;
+            if !depth.test(index, z) {
+                continue;
+            }
+            buffer(index, color, blend);
+        }
+    }
 }
 
 fn rasterize_textured_mesh_triangles(
@@ -2908,18 +3234,37 @@ fn rasterize_triangle_color_prepared(
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
     width: usize,
 ) {
-    let [v0, v1, v2] = vertices;
-    rasterize_triangle_color_impl(
-        v0,
-        v1,
-        v2,
-        setup,
-        width,
-        stripe_y_start,
-        stripe_y_end,
-        blend,
-        buffer,
-    );
+    let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
+        return;
+    };
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Float16 attachments preserve NaN signs. Keep nonfinite color arithmetic
+    // on the portable path so selecting FMA cannot change those stored bits.
+    if std::arch::is_x86_feature_detected!("fma")
+        && vertices
+            .iter()
+            .all(|vertex| vertex.color.into_iter().all(f32::is_finite))
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_color_fma(vertices, setup.inv_denom, bounds, blend, buffer, width)
+        };
+        return;
+    }
+    rasterize_triangle_color_impl(vertices, setup.inv_denom, bounds, width, blend, buffer);
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_color_fma(
+    vertices: &[ScreenVertexColor; 3],
+    inv_denom: f32,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+    width: usize,
+) {
+    rasterize_triangle_color_impl(vertices, inv_denom, bounds, width, blend, buffer);
 }
 
 #[inline(always)]
@@ -3108,6 +3453,7 @@ impl Texels<'_> {
 
 // IEEE binary16 conversion, round to nearest with ties to even. Every
 // attachment write is rounded, so chained captures retain GPU precision.
+#[inline(always)]
 fn encode_half(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
@@ -3169,11 +3515,15 @@ fn half_to_byte(bits: u16) -> u8 {
     }
 }
 
+#[inline(always)]
 fn pack_half(color: [f32; 4]) -> u64 {
-    let [r, g, b, a] = color.map(encode_half).map(u64::from);
-    r | (g << 16) | (b << 32) | (a << 48)
+    u64::from(encode_half(color[0]))
+        | (u64::from(encode_half(color[1])) << 16)
+        | (u64::from(encode_half(color[2])) << 32)
+        | (u64::from(encode_half(color[3])) << 48)
 }
 
+#[inline(always)]
 fn unpack_half(pixel: u64) -> [f32; 4] {
     std::array::from_fn(|i| decode_half((pixel >> (i * 16)) as u16))
 }
@@ -3199,6 +3549,8 @@ fn blend_color(dst: [f32; 4], src: [f32; 4], mode: BlendMode) -> [f32; 4] {
 }
 
 fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    // Keep blending and quantization inside the caller's CPU-feature context.
+    #[inline(always)]
     move |index, color, mode| {
         if mode == BlendMode::Alpha && color[3] >= 1.0 {
             buffer[index] = pack_rgba([color[0], color[1], color[2], 1.0]);
@@ -3222,6 +3574,8 @@ fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '
 }
 
 fn half_writer(buffer: &mut [u64], alpha: bool) -> impl FnMut(usize, [f32; 4], BlendMode) + '_ {
+    // Keep half-attachment blending inside the caller's CPU-feature context.
+    #[inline(always)]
     move |index, color, mode| {
         let mut color = blend_color(unpack_half(buffer[index]), color, mode);
         if !alpha {
@@ -3349,7 +3703,7 @@ fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: b
     blend: BlendMode,
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) = raster_bounds(
+    let Some(bounds) = raster_bounds(
         v0.x.min(v1.x).min(v2.x),
         v0.x.max(v1.x).max(v2.x),
         v0.y.min(v1.y).min(v2.y),
@@ -3362,6 +3716,66 @@ fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: b
         return;
     };
 
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Keep potentially nonfinite filtering on the portable path to preserve
+    // float16 NaN encodings. This UV bound also prevents interpolation overflow.
+    if image.half.is_empty()
+        && std::arch::is_x86_feature_detected!("fma")
+        && tint.into_iter().all(f32::is_finite)
+        && [v0, v1, v2]
+            .into_iter()
+            .all(|v| v.u.abs() <= f32::MAX / 4.0 && v.v.abs() <= f32::MAX / 4.0)
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_fma::<LINEAR, MASK, OPAQUE>(
+                v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+            );
+        }
+        return;
+    }
+    rasterize_triangle_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+    );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_fma<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertex,
+    v1: &ScreenVertex,
+    v2: &ScreenVertex,
+    inv_denom: f32,
+    tint: [f32; 4],
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+) {
+    rasterize_triangle_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, inv_denom, tint, image, sampler, width, bounds, blend, buffer,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_pixels_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: bool>(
+    v0: &ScreenVertex,
+    v1: &ScreenVertex,
+    v2: &ScreenVertex,
+    inv_denom: f32,
+    tint: [f32; 4],
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+) {
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
     let tex_w = image.width.max(1);
     let tex_h = image.height.max(1);
     let tex_data = image;
@@ -3438,11 +3852,81 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
 
     depth: &mut DepthRows<'_>,
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
-        setup.stripe_bounds(stripe_y_start, stripe_y_end)
-    else {
+    let Some(bounds) = setup.stripe_bounds(stripe_y_start, stripe_y_end) else {
         return;
     };
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    // Bound interpolated inputs to avoid overflow and NaN-sensitive FMA.
+    // Half textures and exceptional shading keep the portable pixel loop.
+    if image.half.is_empty()
+        && std::arch::is_x86_feature_detected!("fma")
+        && [v0, v1, v2].into_iter().all(|v| {
+            v.color
+                .into_iter()
+                .chain([v.u, v.v, v.z])
+                .all(|value| value.abs() <= f32::MAX / 4.0)
+        })
+    {
+        // SAFETY: runtime detection checks CPU and OS support for FMA.
+        unsafe {
+            rasterize_triangle_tex_color_fma::<LINEAR, MASK, OPAQUE>(
+                v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+            );
+        }
+        return;
+    }
+    rasterize_triangle_tex_color_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+    );
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+#[target_feature(enable = "fma")]
+unsafe fn rasterize_triangle_tex_color_fma<
+    const LINEAR: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
+) {
+    rasterize_triangle_tex_color_pixels_impl::<LINEAR, MASK, OPAQUE>(
+        v0, v1, v2, setup, image, sampler, width, bounds, blend, buffer, depth,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+#[inline(always)]
+fn rasterize_triangle_tex_color_pixels_impl<
+    const LINEAR: bool,
+    const MASK: bool,
+    const OPAQUE: bool,
+>(
+    v0: &ScreenVertexTexColor,
+    v1: &ScreenVertexTexColor,
+    v2: &ScreenVertexTexColor,
+    setup: RasterSetup,
+    image: Texels<'_>,
+    sampler: SamplerDesc,
+    width: usize,
+    bounds: (i32, i32, i32, i32, i32),
+    blend: BlendMode,
+    buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
+
+    depth: &mut DepthRows<'_>,
+) {
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
     let inv_denom = setup.inv_denom;
     let tex_w = image.width.max(1);
     let tex_h = image.height.max(1);
@@ -3453,6 +3937,9 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
         owns_edge(v2.x, v2.y, v0.x, v0.y, inv_denom),
         owns_edge(v0.x, v0.y, v1.x, v1.y, inv_denom),
     ];
+    if depth.rejects_triangle([v0, v1, v2], width, bounds) {
+        return;
+    }
     for y in min_y..=max_y {
         let py = y as f32 + 0.5;
         let row = (y - stripe_start) as usize;
@@ -3515,22 +4002,15 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
 
 #[inline(always)]
 fn rasterize_triangle_color_impl(
-    v0: &ScreenVertexColor,
-    v1: &ScreenVertexColor,
-    v2: &ScreenVertexColor,
-    setup: RasterSetup,
+    vertices: &[ScreenVertexColor; 3],
+    inv_denom: f32,
+    bounds: (i32, i32, i32, i32, i32),
     width: usize,
-    stripe_y_start: usize,
-    stripe_y_end: usize,
     blend: BlendMode,
     buffer: &mut impl FnMut(usize, [f32; 4], BlendMode),
 ) {
-    let Some((min_x, max_x, min_y, max_y, stripe_start)) =
-        setup.stripe_bounds(stripe_y_start, stripe_y_end)
-    else {
-        return;
-    };
-    let inv_denom = setup.inv_denom;
+    let [v0, v1, v2] = vertices;
+    let (min_x, max_x, min_y, max_y, stripe_start) = bounds;
 
     let edges = [
         owns_edge(v1.x, v1.y, v2.x, v2.y, inv_denom),
@@ -4572,6 +5052,46 @@ mod tests {
     }
 
     #[test]
+    fn half_attachment_blends_preserve_hdr_and_alpha_policy() {
+        let vertex = |x, y| ScreenVertexColor {
+            x,
+            y,
+            color: [0.25, 0.5, 2.0, 0.5],
+        };
+        let vertices = [vertex(0.0, 0.0), vertex(4.0, 0.0), vertex(0.0, 4.0)];
+        // The first sample has exact binary weights. Expected RGBA16F encodings
+        // include values above one and below zero, without normalized clamping.
+        for (blend, expected) in [
+            (BlendMode::Alpha, 0x3c00_3d00_3600_3200_u64),
+            (BlendMode::Add, 0x3c00_3e00_3800_3400),
+            (BlendMode::Multiply, 0x3c00_3c00_3000_2800),
+            (BlendMode::Subtract, 0x0000_ba00_b000_ac00),
+            (BlendMode::NoEffect, 0x3c00_3800_3400_3000),
+        ] {
+            for alpha in [false, true] {
+                let mut pixels = [0x3c00_3800_3400_3000; 16];
+                rasterize_triangle_color(
+                    &vertices[0],
+                    &vertices[1],
+                    &vertices[2],
+                    blend,
+                    4,
+                    4,
+                    0,
+                    4,
+                    &mut half_writer(&mut pixels, alpha),
+                );
+                let expected = if alpha {
+                    expected
+                } else {
+                    (expected & 0x0000_ffff_ffff_ffff) | 0x3c00_0000_0000_0000
+                };
+                assert_eq!(pixels[0], expected, "{blend:?}, alpha={alpha}");
+            }
+        }
+    }
+
+    #[test]
     fn repeat_wrap_matches_euclidean_modulo_for_all_texture_sizes() {
         for max in 1usize..=513 {
             for index in -2_052i32..=2_052 {
@@ -4889,6 +5409,190 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn transparent_foreground_preserves_visible_background_depth() {
+        use deadlib_render_core::DepthMode;
+
+        let transparent = RgbaImage::from_pixel(1, 1, image::Rgba([91, 39, 77, 0]));
+        let blue = RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 255, 255]));
+        let draw = |z, image: &RgbaImage, mode, unorm, pixels: &mut [u32], depth: &mut [f32]| {
+            let vertex = |x, y| ScreenVertexTexColor {
+                inv_w: 1.0,
+                z,
+                x,
+                y,
+                u: 0.5,
+                v: 0.5,
+                color: [1.0; 4],
+            };
+            let vertices = [vertex(0.0, 0.0), vertex(16.0, 0.0), vertex(0.0, 16.0)];
+            rasterize_triangle_tex_color(
+                &vertices[0],
+                &vertices[1],
+                &vertices[2],
+                BlendMode::Alpha,
+                false,
+                image.into(),
+                SamplerDesc {
+                    filter: SamplerFilter::Nearest,
+                    wrap: SamplerWrap::Clamp,
+                    mipmaps: false,
+                },
+                false,
+                16,
+                16,
+                0,
+                16,
+                &mut byte_writer(pixels),
+                &mut DepthRows {
+                    pixels: depth,
+                    unorm16: unorm,
+                    mode,
+                },
+            );
+        };
+        for unorm in [false, true] {
+            for mode in DepthMode::ALL {
+                let initial = if mode.on_fail() { 0.0_f32 } else { 1.0 };
+                let (front, back) = if mode.on_fail() {
+                    (0.75, 0.25)
+                } else {
+                    (0.25, 0.75)
+                };
+                let mut pixels = [0x9f3f_5f7f; 256];
+                let mut depth = [initial; 256];
+                draw(front, &transparent, mode, unorm, &mut pixels, &mut depth);
+                assert_eq!(pixels, [0x9f3f_5f7f; 256]);
+                assert_eq!(depth.map(f32::to_bits), [initial.to_bits(); 256]);
+
+                draw(back, &blue, mode, unorm, &mut pixels, &mut depth);
+                assert_eq!(pixels[0], 0xff00_00ff, "{mode:?}, unorm={unorm}");
+                let expected = if !mode.writes() {
+                    initial
+                } else if unorm {
+                    if mode.on_fail() {
+                        16384.0 / 65535.0
+                    } else {
+                        49151.0 / 65535.0
+                    }
+                } else {
+                    back
+                };
+                assert_eq!(
+                    depth[0].to_bits(),
+                    expected.to_bits(),
+                    "{mode:?}, unorm={unorm}"
+                );
+            }
+        }
+
+        // Transparent fragments retain the late bounds behavior for short slices.
+        for mut depth in [Vec::new(), vec![1.0]] {
+            let expected = depth.clone();
+            draw(
+                0.25,
+                &transparent,
+                DepthMode::TestWrite,
+                true,
+                &mut [0; 256],
+                &mut depth,
+            );
+            assert_eq!(depth, expected);
+        }
+    }
+
+    #[test]
+    fn coarse_depth_rejection_preserves_passing_samples() {
+        use deadlib_render_core::DepthMode;
+
+        const SIZE: usize = 17;
+        let mut seed = 0x1937_4682_u32;
+        let mut next = || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            seed
+        };
+        let mut checked = 0;
+        for case in 0..2048 {
+            let mode = DepthMode::ALL[case % 6];
+            let unorm16 = case % 7 < 3;
+            let stored = match (case / 6) % 8 {
+                0 => 0.0,
+                1 => 1.0,
+                2 => 0.5,
+                3 => 0.5_f32.next_down(),
+                4 => 0.5_f32.next_up(),
+                5 => 32768.0 / 65535.0,
+                6 => f32::NAN,
+                _ => f32::NEG_INFINITY,
+            };
+            let vertices = std::array::from_fn(|i| {
+                let z = match (case / 3) % 5 {
+                    0 => f32::from_bits(0x3f00_0000 + next() % 32),
+                    1 => f32::from_bits(0x3f00_0000 - next() % 32),
+                    2 => [0.0, 0.5, 1.0][i],
+                    3 => [0.0, f32::from_bits(1), f32::MIN_POSITIVE][i],
+                    _ => [1.0, 1.0_f32.next_down(), 1.0][i],
+                };
+                let [x, y] = match i {
+                    0 => [-4.0, -4.0],
+                    1 => [21.0 + (next() % 8) as f32, -2.0],
+                    _ => [0.0, 21.0 + (next() % 8) as f32],
+                };
+                ScreenVertexTexColor {
+                    inv_w: 1.0,
+                    z,
+                    x,
+                    y,
+                    u: 0.0,
+                    v: 0.0,
+                    color: [1.0; 4],
+                }
+            });
+            let setup = triangle_setup(vertices.map(|v| v.x), vertices.map(|v| v.y), SIZE, SIZE)
+                .expect("nondegenerate test triangle");
+            let bounds = setup.stripe_bounds(0, SIZE).unwrap();
+            let mut pixels = [stored; SIZE * SIZE];
+            let mut depth = DepthRows {
+                pixels: &mut pixels,
+                unorm16,
+                mode,
+            };
+            if !depth.rejects_triangle([&vertices[0], &vertices[1], &vertices[2]], SIZE, bounds) {
+                continue;
+            }
+            assert!(mode.tests());
+            let [a, b, c] = vertices;
+            let edges = [
+                owns_edge(b.x, b.y, c.x, c.y, setup.inv_denom),
+                owns_edge(c.x, c.y, a.x, a.y, setup.inv_denom),
+                owns_edge(a.x, a.y, b.x, b.y, setup.inv_denom),
+            ];
+            for y in setup.min_y..=setup.max_y {
+                for x in setup.min_x..=setup.max_x {
+                    let px = x as f32 + 0.5;
+                    let py = y as f32 + 0.5;
+                    let w0 = edge_function(b.x, b.y, c.x, c.y, px, py) * setup.inv_denom;
+                    let w1 = edge_function(c.x, c.y, a.x, a.y, px, py) * setup.inv_denom;
+                    let w2 = 1.0 - w0 - w1;
+                    if covered([w0, w1, w2], edges) {
+                        let z = c.z.mul_add(w2, a.z.mul_add(w0, b.z * w1));
+                        assert!(
+                            !depth.test(y as usize * SIZE + x as usize, z),
+                            "case {case}"
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        assert!(
+            checked > 1000,
+            "exercise covered samples behind the depth bound"
+        );
     }
 
     #[test]
@@ -5602,6 +6306,84 @@ mod tests {
     }
 
     #[test]
+    fn textured_mesh_projection_preserves_perspective_division_bits() {
+        let positions = [
+            [0.0, -0.0],
+            [-0.0, 0.0],
+            [f32::from_bits(1), -f32::from_bits(1)],
+            [f32::MIN_POSITIVE, -f32::MIN_POSITIVE],
+            [0.3, -0.7],
+            [f32::MAX, -f32::MAX],
+        ];
+        for w in [
+            0.0,
+            -0.0,
+            1.0,
+            -1.0,
+            3.0,
+            -3.0,
+            f32::from_bits(1),
+            -f32::from_bits(1),
+            f32::MIN_POSITIVE,
+            -f32::MIN_POSITIVE,
+            f32::MAX,
+            -f32::MAX,
+            f32::INFINITY,
+            f32::NAN,
+        ] {
+            let projection = Matrix4::from_cols(
+                Vector4::X,
+                Vector4::Y,
+                Vector4::Z,
+                Vector4::new(0.0, 0.0, 0.0, w),
+            );
+            for [x, y] in positions {
+                for width in [0, 1, 127, usize::MAX] {
+                    // Keep finite vertices inside the near plane for either W sign.
+                    let z = if w < 0.0 { w.abs() } else { 1.0 };
+                    let vertices = [textured_vertex([x, y, z], [0.5; 2]); 3];
+                    let clip = projection * Vector4::new(x, y, z, 1.0);
+                    let actual = project_tmesh_polygon(
+                        &projection,
+                        [1.0; 4],
+                        [1.0; 2],
+                        [0.0; 2],
+                        [0.0; 2],
+                        &vertices,
+                        width,
+                        73,
+                        0.0,
+                    );
+                    if !clip.is_finite()
+                        || clip.w == 0.0
+                        || !(clip.x / clip.w).is_finite()
+                        || !(clip.y / clip.w).is_finite()
+                    {
+                        assert!(actual.is_none());
+                        continue;
+                    }
+                    let (projected, len) = actual.expect("finite projected X/Y survive");
+                    assert_eq!(len, 3);
+                    let expected = [
+                        clip.w.recip(),
+                        (clip.z / clip.w + 1.0) * 0.5,
+                        f32::midpoint(clip.x / clip.w, 1.0) * width as f32,
+                        ((1.0 - clip.y / clip.w) * 0.5) * 73.0,
+                    ]
+                    .map(f32::to_bits);
+                    for vertex in &projected[..len] {
+                        assert_eq!(
+                            [vertex.inv_w, vertex.z, vertex.x, vertex.y].map(f32::to_bits),
+                            expected,
+                            "position={x:?},{y:?},{z:?}, W={w:?}, width={width}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn near_clipped_background_model_matches_retained_and_direct_paths() {
         let textures = test_textures();
         let vertices = [
@@ -6138,8 +6920,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod offscreen_perf_tests;
+mod environment_raster_performance;
 
 #[cfg(test)]
-#[path = "environment_performance.rs"]
-mod environment_performance;
+mod sprite_prepare_performance;

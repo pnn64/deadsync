@@ -416,9 +416,3 @@ fn fill_heat_row(pixels: &mut [[u8; 4]], samples: usize, mut color: impl FnMut(u
         }
     }
 }
-
-#[cfg(test)]
-mod direct_scan_perf {
-    use super::*;
-    include!("../../../../../tests/perf/graph_range.rs");
-}

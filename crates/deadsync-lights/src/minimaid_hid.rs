@@ -211,8 +211,3 @@ mod tests {
         bits & (1u32 << bit) != 0
     }
 }
-
-#[cfg(test)]
-pub(super) fn performance_report(state: &State) -> [u8; REPORT_SIZE] {
-    build_report(state)
-}

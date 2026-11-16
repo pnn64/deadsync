@@ -2787,11 +2787,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "numeric_performance.rs"]
-pub(crate) mod numeric_performance;
-
-#[cfg(test)]
-#[path = "appearance_performance.rs"]
-mod appearance_performance;

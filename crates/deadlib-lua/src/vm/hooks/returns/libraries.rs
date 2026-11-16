@@ -9,7 +9,7 @@ impl Vm {
         frame: Frame,
         source: usize,
         count: usize,
-    ) -> Option<Vec<Value>> {
+    ) -> Result<Option<Buffer<Value>>, Error> {
         let supported = (tables::TAB_FIRST..=tables::TAB_SORT).contains(&code)
             || matches!(
                 code,
@@ -28,13 +28,16 @@ impl Vm {
             )
             || lines;
         if !supported {
-            return None;
+            return Ok(None);
         }
-        let mut stack =
-            self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec();
-        let results = self.registers[source..source + count].to_vec();
-        if self.io_return_stack(code, lines, frame, source, &mut stack, &results) {
-            return Some(stack);
+        // I/O close can retain six values, including its implicit file argument.
+        let mut stack = self.return_scratch(
+            &self.registers[frame.vararg_start..frame.vararg_start + frame.argc()],
+            count + 6,
+        )?;
+        let results = self.return_scratch(&self.registers[source..source + count], 0)?;
+        if self.io_return_stack(code, lines, frame, source, &mut stack, &results)? {
+            return Ok(Some(stack));
         }
         match code {
             threads::CO_RUNNING if self.thread == self.main => {
@@ -60,13 +63,17 @@ impl Vm {
                 let arg = usize::from(matches!(stack.first(), Some(Value::Thread(_))));
                 if matches!(stack.get(arg), Some(Value::Function(_) | Value::Native(_))) {
                     let options = stack.get(arg + 1).copied().unwrap_or(Value::Nil);
-                    let mut text = vec![b'>'];
-                    if let Value::String(id) = options {
-                        text.extend_from_slice(io::c_bytes(&self.strings.bytes[slot_index(id.0)]));
+                    let options = if let Value::String(id) = options {
+                        io::c_bytes(&self.strings.bytes[slot_index(id.0)])
                     } else {
-                        text.extend_from_slice(b"flnSu");
-                    }
-                    stack.push(self.intern(&text));
+                        b"flnSu"
+                    };
+                    let mut text = Buffer::new_in(self.registers.memory().clone());
+                    text.try_reserve_exact(options.len() + 1)
+                        .map_err(|_| self.memory_failure())?;
+                    text.push(b'>');
+                    text.extend_from_slice(options);
+                    stack.push(self.try_intern(&text)?);
                 }
                 stack.extend_from_slice(&results);
             }
@@ -95,6 +102,6 @@ impl Vm {
             debug::TRACEBACK => {}
             _ => stack.extend_from_slice(&results),
         }
-        Some(stack)
+        Ok(Some(stack))
     }
 }

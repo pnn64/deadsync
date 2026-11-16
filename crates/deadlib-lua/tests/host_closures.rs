@@ -48,11 +48,12 @@ fn private_binding_data_is_typed_and_does_not_occupy_lua_upvalues() {
 #[test]
 fn closure_data_survives_live_capture_cycles_and_drops_when_the_cycle_collects() {
     fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-        let owner = call.function_data::<Owner>().unwrap().0.clone();
-        assert_eq!(owner.load(Relaxed), 0);
+        assert_eq!(call.function_data::<Owner>().unwrap().0.load(Relaxed), 0);
         let collect = call.captures()[1];
         call.call(collect, &[])?;
-        assert_eq!(owner.load(Relaxed), 0);
+        // The running closure stays alive through nested Lua and collection.
+        // Its private binding can be reborrowed without cloning it on entry.
+        assert_eq!(call.function_data::<Owner>().unwrap().0.load(Relaxed), 0);
         call.push(call.captures()[0])
     }
     let drops = Arc::new(AtomicUsize::new(0));
@@ -79,6 +80,36 @@ fn closure_data_survives_live_capture_cycles_and_drops_when_the_cycle_collects()
     vm.collect_garbage().unwrap();
     assert_eq!(drops.load(Relaxed), 1);
     drop(vm);
+    assert_eq!(drops.load(Relaxed), 1);
+}
+
+#[test]
+fn private_data_survives_reentrant_gc_and_error_after_losing_its_global() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        assert_eq!(call.function_data::<Owner>().unwrap().0.load(Relaxed), 0);
+        let collector = call.captures()[0];
+        assert!(call.call(collector, &[]).is_err());
+        // The protected Lua error returned control to this Rust callback even
+        // after the global owner was removed and a full GC was requested.
+        assert_eq!(call.function_data::<Owner>().unwrap().0.load(Relaxed), 0);
+        call.push(Value::Boolean(true))
+    }
+
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut vm = Vm::new();
+    let collector = execute(
+        &mut vm,
+        b"return function() host=nil; collectgarbage('collect'); error('nested') end",
+    )[0];
+    let collector_root = vm.pin(collector).unwrap();
+    let host = vm
+        .new_host_function_with_data(callback, &[collector], Owner(drops.clone()))
+        .unwrap();
+    vm.set_global(b"host", host).unwrap();
+    vm.unpin(collector_root).unwrap();
+    assert_eq!(execute(&mut vm, b"return host()"), [Value::Boolean(true)]);
+    assert_eq!(drops.load(Relaxed), 0);
+    vm.collect_garbage().unwrap();
     assert_eq!(drops.load(Relaxed), 1);
 }
 

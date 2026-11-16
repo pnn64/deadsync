@@ -1005,7 +1005,3 @@ mod lookup_tests {
         assert_eq!(std::mem::size_of::<BrokenRunSpan>(), 8);
     }
 }
-
-#[cfg(test)]
-#[path = "mini_indicator_performance.rs"]
-mod mini_indicator_performance;

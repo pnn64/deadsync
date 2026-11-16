@@ -8,19 +8,9 @@ use deadlib_input_native::uuid_from_bytes;
 use deadlib_input_native::{
     BackendHost, GpSystemEvent, PadBackend, PadOrderBackend, emit_dir_edges,
 };
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
-use std::hint::black_box;
-
-fn probe(label: &str, iterations: usize, mut work: impl FnMut()) {
-    let (_, churn) = perf::measure(&mut work);
-    assert_eq!(churn, perf::Churn::default());
-    println!("native/{label}: allocation {churn:?}");
-    bench::measure(&format!("native/{label}"), iterations, work);
-}
 
 fn reference_uuid(bytes: &[u8]) -> [u8; 16] {
     let hash = |offset| {
@@ -48,20 +38,6 @@ fn uuid_preserves_persisted_identity_bytes() {
     }
 }
 
-#[test]
-#[ignore = "release CPU-cycle and allocation benchmark"]
-fn benchmark_uuid() {
-    for len in [0, 8, 32, 96, 256, 1024] {
-        let inputs: Vec<Vec<u8>> = (0..64)
-            .map(|n| (0..len).map(|i| (i * 73 + n * 19) as u8).collect())
-            .collect();
-        probe(&format!("uuid/len={len}"), 1000, || {
-            for bytes in &inputs {
-                black_box(uuid_from_bytes(black_box(bytes)));
-            }
-        });
-    }
-}
 
 #[cfg(all(windows, not(target_vendor = "win7")))]
 mod wgi {
@@ -69,7 +45,7 @@ mod wgi {
 
     mod kernels {
         use super::*;
-        use crate::black_box;
+
 
         #[test]
         fn mapped_edges_preserve_order_and_ignore_unmapped_bits() {
@@ -98,36 +74,6 @@ mod wgi {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_wgi_edges() {
-            for kind in ["unchanged", "dpad", "single", "pair", "dense"] {
-                let readings: Vec<_> = (0..256)
-                    .map(|n| {
-                        let previous = (n as u32).wrapping_mul(0x9e3779b9);
-                        let mask = match kind {
-                            "unchanged" => 0,
-                            "dpad" => 0x3c0,
-                            "single" => BTN_MAP[n % 10].0.0,
-                            "pair" => BTN_MAP[n % 10].0.0 | BTN_MAP[(n + 3) % 10].0.0,
-                            _ => 0x3c3f,
-                        };
-                        (GamepadButtons(previous), GamepadButtons(previous ^ mask))
-                    })
-                    .collect();
-                crate::probe(&format!("wgi/{kind}"), 1000, || {
-                    for &(previous, current) in &readings {
-                        gamepad_button_edges(
-                            black_box(previous),
-                            black_box(current),
-                            |code, pressed| {
-                                black_box((code, pressed));
-                            },
-                        );
-                    }
-                });
-            }
-        }
 
         #[test]
         fn axis_scaling_matches_floating_clamp_at_quantization_boundaries() {
@@ -177,46 +123,6 @@ mod wgi {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_axes() {
-            for kind in ["unit", "clipped", "nonfinite", "zero", "tiny", "bits"] {
-                let mut seed = 83u64;
-                let input: Vec<_> = (0..512)
-                    .map(|n| {
-                        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                        let unit = (seed >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0;
-                        match kind {
-                            "unit" => unit,
-                            "clipped" => unit * 4.0,
-                            "nonfinite" => [f64::INFINITY, f64::NEG_INFINITY, f64::NAN][n % 3],
-                            "zero" => {
-                                if n % 2 == 0 {
-                                    0.0
-                                } else {
-                                    -0.0
-                                }
-                            }
-                            "tiny" => f64::from_bits(seed & 0x800fffffffffffff),
-                            _ => f64::from_bits(seed),
-                        }
-                    })
-                    .collect();
-                for trigger in [false, true] {
-                    let name = if trigger { "trigger" } else { "stick" };
-                    crate::probe(&format!("axes/{name}/{kind}"), 2000, || {
-                        for &value in &input {
-                            let value = black_box(value);
-                            black_box(if trigger {
-                                scale_trigger(value)
-                            } else {
-                                scale_axis(value)
-                            });
-                        }
-                    });
-                }
-            }
-        }
     }
 }
 
@@ -226,7 +132,7 @@ mod rawinput {
 
     mod kernels {
         use super::*;
-        use crate::black_box;
+
 
         fn device(previous: &[u16]) -> Dev {
             Dev {
@@ -333,86 +239,6 @@ mod rawinput {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_hid_diff() {
-            let timestamp = Instant::now();
-            for len in [0, 1, 4, 16, 64] {
-                let previous: Vec<_> = (0..len as u16).map(|n| n * 2).collect();
-                let dev = device(&previous);
-                for kind in ["same", "last", "all", "release"] {
-                    let mut current = previous.clone();
-                    match kind {
-                        "last" => {
-                            if let Some(last) = current.last_mut() {
-                                *last += 1;
-                            }
-                        }
-                        "all" => {
-                            for c in &mut current {
-                                *c += 1;
-                            }
-                        }
-                        "release" => current.clear(),
-                        _ => (),
-                    }
-                    crate::probe(&format!("hid/{kind}/len={len}"), 1000, || {
-                        for _ in 0..256 {
-                            emit_button_diff(
-                                &mut |event| {
-                                    black_box(event);
-                                },
-                                black_box(&dev),
-                                timestamp,
-                                71,
-                                black_box(&current),
-                            );
-                        }
-                    });
-                }
-            }
-        }
-
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_dispatch() {
-            let timestamp = Instant::now();
-            for len in [0, 1, 4, 16, 64] {
-                let previous: Vec<_> = (0..len as u16).map(|n| n * 2).collect();
-                let dev = device(&previous);
-                for kind in ["same", "last", "all", "release"] {
-                    let mut current = previous.clone();
-                    match kind {
-                        "last" => {
-                            if let Some(last) = current.last_mut() {
-                                *last += 1;
-                            }
-                        }
-                        "all" => {
-                            for c in &mut current {
-                                *c += 1;
-                            }
-                        }
-                        "release" => current.clear(),
-                        _ => (),
-                    }
-                    let mut emit: Box<dyn FnMut(PadEvent) + Send> = Box::new(|event| {
-                        black_box(event);
-                    });
-                    crate::probe(&format!("dispatch/{kind}/len={len}"), 1000, || {
-                        for _ in 0..256 {
-                            emit_button_diff(
-                                black_box(&mut emit),
-                                black_box(&dev),
-                                timestamp,
-                                71,
-                                black_box(&current),
-                            );
-                        }
-                    });
-                }
-            }
-        }
 
         #[test]
         fn uuid_hex_preserves_leading_zeroes_and_lowercase() {
@@ -428,27 +254,6 @@ mod rawinput {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_hex() {
-            let input: Vec<_> = (0..64u32)
-                .map(|n| crate::uuid_from_bytes(&n.to_le_bytes()))
-                .collect();
-            let mut work = || {
-                for uuid in &input {
-                    black_box(uuid_hex(black_box(uuid)));
-                }
-            };
-            let (_, churn) = crate::perf::measure(work);
-            assert_eq!(churn.allocs, 64);
-            assert_eq!(churn.frees, 64);
-            assert_eq!(churn.reallocs, 0);
-            assert_eq!(churn.allocated_bytes, 2048);
-            assert_eq!(churn.freed_bytes, 2048);
-            assert_eq!(churn.peak_bytes, 32);
-            println!("native/hex/uuid: allocation {churn:?}");
-            crate::bench::measure("native/hex/uuid", 1000, &mut work);
-        }
 
         #[test]
         fn serial_identity_preserves_formatted_bytes_for_all_vendor_values() {
@@ -467,35 +272,5 @@ mod rawinput {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU-cycle and allocation benchmark"]
-        fn benchmark_serial() {
-            for kind in ["none", "empty", "short", "medium", "long", "unicode"] {
-                let serials: Vec<_> = (0..64)
-                    .map(|n| match kind {
-                        "none" | "empty" => String::new(),
-                        "short" => format!("{n:08x}"),
-                        "medium" => format!("{n:032x}"),
-                        "long" => format!("{n:0256x}"),
-                        _ => format!("é🔔\0空{n:08x}"),
-                    })
-                    .collect();
-                let mut work = || {
-                    for (n, serial) in serials.iter().enumerate() {
-                        black_box(rawinput_uuid(
-                            black_box(n as u16 * 997),
-                            black_box(0xfade),
-                            black_box((kind != "none").then_some(serial.as_str())),
-                            black_box("device-path"),
-                        ));
-                    }
-                };
-                let (_, churn) = crate::perf::measure(work);
-                assert_eq!(churn.allocated_bytes, churn.freed_bytes);
-                let label = format!("native/serial/{kind}");
-                println!("{label}: allocation {churn:?}");
-                crate::bench::measure(&label, 1000, &mut work);
-            }
-        }
     }
 }

@@ -746,7 +746,19 @@ fn nanos_to_frames(sample_rate_hz: u32, nanos: u64) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{frames_to_nanos, nanos_to_frames};
+    use super::{frames_to_nanos, nanos_to_frames, scale_mach_time};
+
+    #[test]
+    #[should_panic]
+    fn zero_timebase_denominator_panics() {
+        scale_mach_time(1, 1, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn zero_timebase_numerator_and_denominator_panics() {
+        scale_mach_time(1, 0, 0);
+    }
 
     #[test]
     fn device_latency_keeps_its_own_sample_rate() {

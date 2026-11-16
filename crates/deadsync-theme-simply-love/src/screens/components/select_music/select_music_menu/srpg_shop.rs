@@ -1192,10 +1192,3 @@ mod tests {
         assert!(!page_srpg_shop_selection(&mut state, &snapshot, -1));
     }
 }
-
-#[cfg(test)]
-#[path = "srpg_shop_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
-#[path = "srpg_shop_buffers_perf.rs"]
-mod buffers_perf;

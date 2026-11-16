@@ -136,18 +136,6 @@ impl NativeStack<'_, '_> {
     ) -> Result<bool, Error> {
         self.with_thread_stack(thread, |stack| stack.less_than(left, right))
     }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn concatenate_primitives_thread(
-        &mut self,
-        thread: ThreadId,
-        count: usize,
-    ) -> Result<(), Error> {
-        self.with_thread_stack(thread, |stack| stack.concatenate_primitives(count))
-    }
-    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn check_thread_gc(&mut self, thread: ThreadId) -> Result<(), Error> {
-        self.with_thread_stack(thread, |stack| stack.check_gc())
-    }
     pub(super) fn with_thread_stack<R>(
         &mut self,
         thread: ThreadId,
@@ -302,7 +290,7 @@ impl NativeStack<'_, '_> {
     }
 }
 
-#[cfg(all(test, feature = "native-c-api", any(windows, target_os = "linux")))]
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]
@@ -314,7 +302,7 @@ mod tests {
             for _ in 0..limits::MAX_CSTACK {
                 s.thread_stack(target)?.push(Value::Number(17.))?;
             }
-            s.check_thread_gc(target)?;
+            s.with_thread_stack(target, |stack| stack.check_gc())?;
             assert_eq!(s.thread_id(), owner);
             assert_eq!(s.top(), 1);
             assert_eq!(s.thread_stack(target)?.top(), limits::MAX_CSTACK);

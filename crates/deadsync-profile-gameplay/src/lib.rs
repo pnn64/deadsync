@@ -541,6 +541,13 @@ pub fn song_lua_compile_context(
     context.confusion_offset_available = true;
     context.confusion_available = true;
     context.amod_available = false;
+    context.versus_player_screen_x = Some(std::array::from_fn(|player| {
+        song_lua_compile_player_screen_x(
+            2, player, &player_profiles[player], viewport,
+            deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            player_side, false,
+        )
+    }));
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
         autoplay: 0.0,
@@ -562,6 +569,11 @@ pub fn song_lua_compile_context(
         mini: if player < num_players {
             player_profiles[player].mini_percent as f32 / 100.0
         } else { 0.0 },
+        scroll: if player < num_players {
+            scroll_effects_from_option(player_profiles[player].scroll_option)
+        } else {
+            deadsync_gameplay::ScrollEffects::default()
+        },
         noteskin_name: if player < num_players {
             player_profiles[player].noteskin.to_string()
         } else {

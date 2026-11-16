@@ -4,7 +4,6 @@ use deadlib_present::actors::TextAttribute;
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
-    compile_song_lua_layers_with_default_host, compile_song_lua_with_default_host,
     overlay_model_layers_from_slots, song_lua_human_player_count, song_lua_style_info,
 };
 
@@ -54,7 +53,7 @@ pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
-    compile_song_lua_with_default_host(
+    deadsync_song_lua::compile_song_lua(
         entry_path,
         context,
         song_lua_noteskin_resolver(),
@@ -69,7 +68,7 @@ pub fn compile_song_lua_layers(
     primary_index: usize,
     context: &SongLuaCompileContext,
 ) -> Result<Vec<CompiledSongLua>, String> {
-    compile_song_lua_layers_with_default_host(
+    deadsync_song_lua::compile_song_lua_layers(
         entry_paths,
         primary_index,
         context,
@@ -94,13 +93,16 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
 pub fn reload_song_lua(
     scene: deadsync_song_lua::SongLuaLiveScene,
 ) -> Result<Vec<CompiledSongLua>, String> {
-    deadsync_song_lua::reload_song_lua_with_default_host(
-        scene, crate::noteskin::load_itg_model_slots, model_layer_from_slot,
-        |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
+    deadsync_song_lua::reload_song_lua(
+        scene,
+        crate::noteskin::load_itg_model_slots,
+        model_layer_from_slot,
     )
 }
 
-pub fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
+pub fn model_layer_from_slot(
+    slot: &crate::noteskin::SpriteSlot,
+) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }
 

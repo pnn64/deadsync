@@ -792,9 +792,6 @@ pub(crate) fn runtime_slot_requests<'a>(
                     song,
                     golf_pars: charts.map(|chart| wheel_golf_par(song, target_chart_type, chart)),
                     chart_hashes,
-                    lua_submit_allowed: chart_hashes.map(|chart_hash| {
-                        chart_hash.is_some_and(score_data::lua_chart_submit_allowed)
-                    }),
                     has_edit: song_meta.map_or_else(
                         || {
                             song.charts.iter().any(|chart| {
@@ -854,23 +851,6 @@ pub struct MusicWheelParams<'a> {
     pub new_pack_names: Option<&'a FxHashSet<String>>,
     pub default_sync_offset: DefaultSyncOffset,
     pub runtime: &'a MusicWheelRuntimeView,
-}
-
-#[inline(always)]
-fn lua_badge_submit_allowed(
-    song_has_lua: bool,
-    joined: [bool; 2],
-    chart_submit_allowed: [bool; 2],
-) -> bool {
-    song_has_lua
-        && if joined == [false, false] {
-            chart_submit_allowed[0]
-        } else {
-            joined
-                .into_iter()
-                .zip(chart_submit_allowed)
-                .any(|(side_joined, submit_allowed)| side_joined && submit_allowed)
-        }
 }
 
 pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
@@ -1200,11 +1180,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     let golf_title_max_w = if golf_visible { (golf_badge_right - GOLF_PAR_MAX_WIDTH - 8.0 - title_x_local).max(0.0) } else { f32::INFINITY };
                     let title_max_w = (title_max_w_local * 0.85).min(score_title_max_w).min(golf_title_max_w);
                     let subtitle_max_w = (title_max_w_local * 0.7).min(score_title_max_w).min(golf_title_max_w);
-                    let lua_submit_allowed = lua_badge_submit_allowed(
-                        has_lua,
-                        [p1_joined, p2_joined],
-                        runtime_slot.lua_submit_allowed,
-                    );
                     actors.push(act!(quad:
                         align(0.0, 0.5):
                         xy(highlight_left_world, y_center_item):
@@ -1297,14 +1272,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         } else {
                             badge_right_x_local
                         };
-                        if lua_submit_allowed {
-                            actors.push(act!(sprite("GrooveStats.png"):
-                                align(1.0, 0.5):
-                                xy(highlight_left_world + lua_x, y_center_item):
-                                zoom(WHEEL_BADGE_ZOOM):
-                                z(53)
-                            ));
-                        }
                         actors.push(act!(sprite("has_lua.png"):
                             align(1.0, 0.5):
                             xy(highlight_left_world + lua_x, y_center_item):
@@ -1691,10 +1658,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        chart_for_difficulty, itl_fetch_flags, itl_rank_color, lua_badge_submit_allowed,
-        pack_header_color, pack_header_text_x, runtime_slot_requests, song_select_bg_path,
-        srpg_rate_color, visible_song_select_bg_paths, visible_song_select_bg_paths_match,
-        wheel_bg_layout, wheel_score_color, wheel_song_meta,
+        chart_for_difficulty, itl_fetch_flags, itl_rank_color, pack_header_color, pack_header_text_x,
+        runtime_slot_requests, song_select_bg_path, srpg_rate_color, visible_song_select_bg_paths,
+        visible_song_select_bg_paths_match, wheel_bg_layout, wheel_score_color, wheel_song_meta,
     };
     use crate::color;
     use crate::screens::select_music::MusicWheelEntry;
@@ -2046,29 +2012,6 @@ mod tests {
             ),
             1
         );
-    }
-
-    #[test]
-    fn lua_badge_handoff_preserves_joined_side_behavior() {
-        for song_has_lua in [false, true] {
-            for joined_mask in 0_u8..4 {
-                let joined = [joined_mask & 1 != 0, joined_mask & 2 != 0];
-                for allowed_mask in 0_u8..4 {
-                    let allowed = [allowed_mask & 1 != 0, allowed_mask & 2 != 0];
-                    let expected = song_has_lua
-                        && if joined == [false, false] {
-                            allowed[0]
-                        } else {
-                            (joined[0] && allowed[0]) || (joined[1] && allowed[1])
-                        };
-                    assert_eq!(
-                        lua_badge_submit_allowed(song_has_lua, joined, allowed),
-                        expected,
-                        "song_has_lua={song_has_lua} joined={joined:?} allowed={allowed:?}"
-                    );
-                }
-            }
-        }
     }
 
     #[test]
@@ -2613,8 +2556,5 @@ mod tests {
             SelectMusicSongSelectBgMode::Off,
             &[],
         ));
-    }
-    mod direct_scan_perf {
-        include!("../../../../../../tests/perf/wheel_meters.rs");
     }
 }

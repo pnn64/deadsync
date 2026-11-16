@@ -1,5 +1,11 @@
 use super::super::*;
 
+pub(in crate::screens::options) use deadsync_config::options::{
+    GROOVESTATS_SCOREBOX_NUM_CHOICES, arrowcloud_regular_boards_shown,
+    groovestats_scorebox_bit_from_choice, groovestats_scorebox_cursor_index,
+    groovestats_scorebox_mask,
+};
+
 pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::EnableGrooveStats,
@@ -7,6 +13,16 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("Common", "No"),
             localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::GrooveStatsScoreboxBoards,
+        label: lookup_key("OptionsGrooveStats", "ScoreboxBoards"),
+        choices: &[
+            localized_choice("OptionsGrooveStats", "ScoreboxBoardsITG"),
+            localized_choice("OptionsGrooveStats", "ScoreboxBoardsEX"),
+            localized_choice("OptionsGrooveStats", "ScoreboxBoardsEvents"),
         ],
         inline: true,
     },
@@ -81,6 +97,24 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::EnableArrowCloud,
         label: lookup_key("OptionsGrooveStats", "EnableArrowCloud"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::ArrowCloudRegularBoards,
+        label: lookup_key("OptionsGrooveStats", "ArrowCloudRegularBoards"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::ArrowCloudEventBoards,
+        label: lookup_key("OptionsGrooveStats", "ArrowCloudEventBoards"),
         choices: &[
             localized_choice("Common", "No"),
             localized_choice("Common", "Yes"),
@@ -166,6 +200,14 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
     Item {
+        id: ItemId::GsScoreboxBoards,
+        name: lookup_key("OptionsGrooveStats", "ScoreboxBoards"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ScoreboxBoardsHelp",
+        ))],
+    },
+    Item {
         id: ItemId::GsShowSrpgShop,
         name: lookup_key("OptionsGrooveStats", "ShowSRPGShop"),
         help: &[HelpEntry::Paragraph(lookup_key(
@@ -239,6 +281,22 @@ pub(in crate::screens::options) const ARROWCLOUD_OPTIONS_ITEMS: &[Item] = &[
             "OptionsGrooveStatsHelp",
             "EnableArrowCloudHelp",
         ))],
+    },
+    Item {
+        id: ItemId::AcRegularBoards,
+        name: lookup_key("OptionsGrooveStats", "ArrowCloudRegularBoards"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ArrowCloudRegularBoardsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::AcEventBoards,
+        name: lookup_key("OptionsGrooveStats", "ArrowCloudEventBoards"),
+        help: &[
+            HelpEntry::Paragraph(lookup_key("OptionsGrooveStatsHelp", "ArrowCloudEventBoardsHelp")),
+            HelpEntry::Paragraph(lookup_key("OptionsGrooveStatsHelp", "GolfLeaderboardHelp")),
+        ],
     },
     Item {
         id: ItemId::AcGolf,
@@ -324,3 +382,44 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
+
+#[inline(always)]
+pub(in crate::screens::options) const fn groovestats_scorebox_mask_from_config(
+    cfg: &config::app_config::Config,
+) -> u8 {
+    groovestats_scorebox_mask(
+        cfg.groovestats_scorebox_itg,
+        cfg.groovestats_scorebox_ex,
+        cfg.groovestats_scorebox_events,
+    )
+}
+
+pub(in crate::screens::options) fn toggle_groovestats_scorebox_board(
+    state: &mut State,
+    choice_idx: usize,
+) -> ThemeEffect {
+    let bit = groovestats_scorebox_bit_from_choice(choice_idx);
+    if bit == 0 {
+        return ThemeEffect::None;
+    }
+    let mask = state.groovestats_scorebox_mask ^ bit;
+    state.groovestats_scorebox_mask = mask;
+
+    let sub = &mut state.sub[SubmenuKind::GrooveStats];
+    for indices in [&mut sub.choice_indices, &mut sub.cursor_indices] {
+        if let Some(slot) = get_choice_by_id_mut(
+            indices,
+            GROOVESTATS_OPTIONS_ROWS,
+            SubRowId::GrooveStatsScoreboxBoards,
+        ) {
+            *slot = choice_idx;
+        }
+    }
+    queue_sfx(state, "assets/sounds/change_value.ogg");
+    online_config_effect(crate::SimplyLoveOnlineConfigRequest::GrooveStatsScoreboxBoards(mask))
+}
+
+#[inline(always)]
+pub(in crate::screens::options) const fn groovestats_scorebox_enabled_mask(state: &State) -> u8 {
+    state.groovestats_scorebox_mask
+}

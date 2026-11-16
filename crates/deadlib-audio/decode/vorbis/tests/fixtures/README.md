@@ -34,8 +34,8 @@ tools; Symphonia 0.6.1 has an explicitly tested forward-coupling discrepancy.
 an empty packet. All other packets stay in order. It checks empty/non-audio
 recovery without C tools. SHA-256:
 `4dcfe5c6f93fa8a05bef655ccf779b2fb16558166cd8800ffe692185b0a7c965`.
-The [capture provenance](../../validation/2026-10-27-concealment-golden-capture.json)
-retains input/oracle hashes; see [the parity ledger](../../PARITY.md).
+The capture provenance
+retains input/oracle hashes; see the parity ledger.
 
 Regenerate only through the external oracle (from the repository root):
 
@@ -75,7 +75,7 @@ Regenerate explicitly with the oracle configured:
 cargo test -p deadlib-audio-decode-vorbis --release --test configuration_parity regenerate_synthetic_setup_golden -- --ignored
 ```
 
-Ordinary tests only read this golden. [Configuration validation](../../CONFIGURATION_PARITY.md)
+Ordinary tests only read this golden. Configuration validation
 records capture and source provenance.
 
 `residue-layout-v1.libvorbis-pcm` contains four C responses for unaligned type-two
@@ -92,7 +92,7 @@ the pinned oracle configured:
 cargo test -p deadlib-audio-decode-vorbis --release --test residue_geometry regenerate_residue_geometry_golden -- --ignored
 ```
 
-See [residue geometry](../../RESIDUE_GEOMETRY.md) for the normative/reference
+See residue geometry for the normative/reference
 distinction and validation scope.
 
 `degenerate-books-v1.libvorbis-pcm` contains eleven independent C setup responses
@@ -109,7 +109,7 @@ Regenerate with the pinned oracle configured:
 cargo test -p deadlib-audio-decode-vorbis --release --test codebook_compatibility regenerate_degenerate_book_golden -- --ignored
 ```
 
-See [degenerate books](../../DEGENERATE_BOOKS.md) for policy distinctions and evidence.
+See degenerate books for policy distinctions and evidence.
 
 `codebook-extents-v1.libvorbis-headers` retains the pinned C header-unpack results
 for 475 procedural scalar/mapped declarations around the extent guard: 289
@@ -125,7 +125,7 @@ policy; complete setup/initialization checks are separate external tests.
 cargo test -p deadlib-audio-decode-vorbis --release --test book_limits regenerate_codebook_extent_golden -- --ignored
 ```
 
-See [codebook limits](../../CODEBOOK_LIMITS.md) for reference protocol, policies
+See codebook limits for reference protocol, policies
 and exact reader-position evidence.
 
 The floor-zero parameter fixtures contain only procedural synthetic C responses:
@@ -140,7 +140,7 @@ The floor-zero parameter fixtures contain only procedural synthetic C responses:
 `regressions` in `tests/floor_zero_parameters.rs` define the inputs independently
 of the native encoder. Normal tests compare finite values within the original
 bounds and nonfinite classes/signs per position. Manual generators are documented
-in [floor-zero parameters](../../FLOOR0_PARAMETERS.md).
+in floor-zero parameters.
 
 The codebook value/bounds fixtures contain procedural C responses:
 
@@ -153,7 +153,7 @@ The codebook value/bounds fixtures contain procedural C responses:
 `tests/codebook_float_packets.rs` define the inputs independently of the native
 encoder. The first fixture includes all 20,480 custom-float probes and 83,968
 byte-bound/initialization probes across every starting bit alignment. Manual
-regeneration is documented in [codebook values and bounds](../../CODEBOOK_VALUES.md).
+regeneration is documented in codebook values and bounds.
 
 `unknown-nil-eos-v1.ogg` contains the existing generated stereo fixture's
 unchanged header/audio packets, repacketized under serial 999 with one audio
@@ -161,4 +161,4 @@ packet per page. Each completed audio page carries its untrimmed raw synthesis
 endpoint; an appended empty EOS page carries unknown granule `-1`. It contains
 4,672 frames per channel and is 5,112 bytes; SHA-256:
 `dd260ef1c699e2cd42a701001d23f75fd34a9531b861c5885acb26abc7f131b4`.
-See [untimed EOS](../../UNTIMED_EOS.md) for independent PCM/duration/seek checks.
+See untimed EOS for independent PCM/duration/seek checks.

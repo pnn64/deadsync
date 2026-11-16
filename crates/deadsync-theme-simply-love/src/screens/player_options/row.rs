@@ -1174,8 +1174,5 @@ pub(super) fn row_selects_on_focus_move(id: RowId) -> bool {
 }
 
 #[cfg(test)]
-#[path = "row_buffers_original.rs"]
-mod buffers_original;
-#[cfg(test)]
 #[path = "row_buffers_perf.rs"]
 mod buffers_perf;

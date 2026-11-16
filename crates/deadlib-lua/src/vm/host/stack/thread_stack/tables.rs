@@ -88,7 +88,7 @@ impl NativeThreadStack<'_> {
             Value::Table(table) => Some(table),
             _ => return Err(self.error(b"native metatable must be a table or nil")),
         };
-        self.vm.set_metatable(value, table);
+        self.vm.set_metatable(value, table)?;
         self.set_top(self.top - 1)
     }
     /// Replace a traversal key with the next key/value pair, or pop it at the end.

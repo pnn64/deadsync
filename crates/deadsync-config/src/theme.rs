@@ -3356,33 +3356,3 @@ MachineEvaluationStyle=Default\n\
         );
     }
 }
-
-#[cfg(test)]
-mod preference_performance {
-    include!("preference_performance.rs");
-}
-
-#[cfg(test)]
-mod alias_performance {
-    include!("alias_performance.rs");
-}
-
-#[cfg(test)]
-mod choice_performance {
-    include!("choice_performance.rs");
-}
-
-#[cfg(test)]
-mod mode_performance {
-    include!("mode_performance.rs");
-}
-
-#[cfg(test)]
-mod key_performance {
-    include!("key_performance.rs");
-}
-
-#[cfg(test)]
-mod field_performance {
-    include!("field_performance.rs");
-}

@@ -269,7 +269,5 @@ mod tests {
         assert_eq!(gameplay_event_intro_text(&song).as_ref(), "EVENT");
     }
 
-    mod ownership_perf {
-        include!("event_intro_ownership_perf.rs");
-    }
+
 }

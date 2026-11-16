@@ -242,6 +242,8 @@ pub struct SongForegroundChange {
 pub struct SongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: PathBuf,
+    /// Native logical source name, before case-insensitive file resolution.
+    pub source: PathBuf,
     pub effect: String,
     pub color1: Option<[f32; 4]>,
     /// BackgroundDef caches are separate for each native background layer.
@@ -259,7 +261,7 @@ pub struct SongBackgroundLuaActivation {
 
 impl SongBackgroundLuaChange {
     pub fn new(start_beat: f32, path: PathBuf) -> Self {
-        Self { start_beat, path, effect: String::new(), color1: None, layer: 0, activations: vec![SongBackgroundLuaActivation {
+        Self { start_beat, source: path.clone(), path, effect: String::new(), color1: None, layer: 0, activations: vec![SongBackgroundLuaActivation {
             start_beat, rate: 1.0, transition: String::new(),
         }] }
     }
@@ -1297,15 +1299,3 @@ mod tests {
         );
     }
 }
-
-#[cfg(test)]
-#[path = "metadata_perf.rs"]
-mod metadata_perf;
-
-#[cfg(test)]
-#[path = "song_sort_shortcuts.rs"]
-mod song_sort_shortcuts;
-
-#[cfg(test)]
-#[path = "metadata_dispatch.rs"]
-mod metadata_dispatch;

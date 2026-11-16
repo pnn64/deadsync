@@ -2213,7 +2213,15 @@ mod tests {
                 let expected = &sample["colors"][name];
                 for sampled in [
                     model_draw_at(draw, &timeline, effect, 0.0, &[], time, beat),
-                    model_draw_at_cursor(draw, &timeline, effect, 0.0, &[], [time, beat], &mut cursor),
+                    model_draw_at_cursor(
+                        draw,
+                        &timeline,
+                        effect,
+                        0.0,
+                        &[],
+                        [time, beat],
+                        &mut cursor,
+                    ),
                 ] {
                     for (channel, actual) in sampled.tint.into_iter().enumerate() {
                         let expected = expected[channel].as_f64().unwrap() as f32;

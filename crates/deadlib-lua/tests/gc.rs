@@ -1,5 +1,4 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,
@@ -29,24 +28,7 @@ fn compare(source: &[u8]) {
             ),
         })
         .collect();
-    // SAFETY: fixed local programs need the development oracle's debug library.
-    let lua = unsafe { Lua::unsafe_new() };
-    let expected: Vec<_> = lua
-        .load(source)
-        .set_name("=(deadlib-lua)")
-        .eval::<MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            _ => panic!("return reference scalar observations"),
-        })
-        .collect();
-    assert_eq!(actual, expected, "{}", String::from_utf8_lossy(source));
+    reference_test::assert_debug("tests/gc.rs::compare::expected", &actual);
 }
 
 #[test]
@@ -77,6 +59,35 @@ fn collected_threads_close_surviving_cells_and_preserve_identity() {
     ] {
         compare(source.as_bytes());
     }
+}
+
+#[test]
+fn wide_weak_tables_keep_live_array_and_hash_entries_after_batched_cleanup() {
+    compare(
+        br#"
+collectgarbage('stop')
+local w=setmetatable({},{__mode='kv'})
+local keep={}
+for i=1,259 do
+  local v={i};w[i]=v
+  if i%11==0 then keep[#keep+1]=v elseif i%13==0 then w[i]=nil end
+end
+for i=1,193 do
+  local k,v={i},{i};w[k]=v
+  if i%11==0 then keep[#keep+1]=k;keep[#keep+1]=v elseif i%13==0 then w[k]=nil end
+end
+w['strings remain strong']='strings remain strong'
+collectgarbage()
+local n,keys,values=0,0,0
+for k,v in pairs(w)do
+  n=n+1
+  if type(k)=='table'then keys=keys+k[1]end
+  if type(v)=='table'then values=values+v[1]end
+end
+keep=nil;collectgarbage()
+return n,keys,values,next(w)=='strings remain strong'
+"#,
+    );
 }
 
 #[test]
@@ -387,17 +398,12 @@ fn host_full_collection_uses_the_reference_restart_and_finalizer_controls() {
         let mut vm = Vm::new();
         vm.execute(&compile(setup.as_bytes()).unwrap()).unwrap();
         let actual_error = vm.collect_garbage().is_err();
-        let lua = Lua::new();
-        lua.load(setup.as_bytes()).exec().unwrap();
-        let reference_error = lua.gc_collect().is_err();
-        assert_eq!(actual_error, reference_error, "{setup}");
         let source = b"return pressure()";
-        let expected: bool = lua.load(source.as_slice()).eval().unwrap();
-        assert_eq!(
-            vm.execute(&compile(source).unwrap()).unwrap(),
-            &[Value::Boolean(expected)],
-            "{setup}"
-        );
+        let actual = match vm.execute(&compile(source).unwrap()).unwrap() {
+            [Value::Boolean(pressure)] => (actual_error, *pressure),
+            other => panic!("unexpected pressure result for {setup}: {other:?}"),
+        };
+        reference_test::assert_debug("tests/gc.rs::host_full_collection::expected", &actual);
     }
 }
 
@@ -519,3 +525,7 @@ fn deep_graphs_and_high_register_roots_survive_collection() {
     source.push_str("return sum");
     compare(source.as_bytes());
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

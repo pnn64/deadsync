@@ -51,12 +51,12 @@ fn indexed_pool_matches_append_ordered_linear_numeric_and_binary_pooling() {
             id
         };
         let got = match &value {
-            Constant::String(bytes) if i % 2 == 0 => actual.string(bytes),
-            _ => actual.intern(value),
+            Constant::String(bytes) if i % 2 == 0 => actual.string(bytes).unwrap(),
+            _ => actual.intern(value).unwrap(),
         };
         assert_eq!(got, Some(id));
     }
-    let values = actual.finish();
+    let values = actual.finish().unwrap();
     assert_eq!(values.len(), expected.len());
     assert!(values.iter().zip(&expected).all(|(a, b)| same_bits(a, b)));
 }
@@ -70,17 +70,18 @@ fn collided_wrapped_clusters_keep_full_equality_and_stable_ids_after_growth() {
         .collect();
     let mut pool = Constants::default();
     for (i, key) in keys.iter().enumerate() {
-        assert_eq!(pool.string(key), Some(i as u32));
+        assert_eq!(pool.string(key).unwrap(), Some(i as u32));
     }
     assert_ne!(pool.slots[0], 0);
     assert_ne!(*pool.slots.last().unwrap(), 0);
     for (i, key) in keys.iter().enumerate().rev() {
         assert_eq!(
-            pool.intern(Constant::String(key.clone().into_boxed_slice())),
+            pool.intern(Constant::String(key.clone().into_boxed_slice()))
+                .unwrap(),
             Some(i as u32)
         );
     }
-    let values = pool.finish();
+    let values = pool.finish().unwrap();
     assert_eq!(values.len(), keys.len());
     assert!(
         values
@@ -95,19 +96,22 @@ fn borrowed_literals_copy_only_new_values_and_own_their_bytes() {
     let mut pool = Constants::default();
     let original = vec![255; 4097];
     let mut caller = original.clone();
-    assert_eq!(pool.string(&caller), Some(0));
+    assert_eq!(pool.string(&caller).unwrap(), Some(0));
     caller[2048] = 0;
-    assert_eq!(pool.string(&caller), Some(1));
-    assert_eq!(pool.string(&original), Some(0));
+    assert_eq!(pool.string(&caller).unwrap(), Some(1));
+    assert_eq!(pool.string(&original).unwrap(), Some(0));
     caller[0] = 17;
     for i in 0..256 {
-        assert_eq!(pool.string(format!("extra-{i}").as_bytes()), Some(i + 2));
+        assert_eq!(
+            pool.string(format!("extra-{i}").as_bytes()).unwrap(),
+            Some(i + 2)
+        );
     }
-    assert_eq!(pool.string(&original), Some(0));
+    assert_eq!(pool.string(&original).unwrap(), Some(0));
     let mut changed = original.clone();
     changed[2048] = 0;
-    assert_eq!(pool.string(&changed), Some(1));
-    let values = pool.finish();
+    assert_eq!(pool.string(&changed).unwrap(), Some(1));
+    let values = pool.finish().unwrap();
     assert!(matches!(&values[0],Constant::String(s)if s.as_ref()==original));
     assert!(matches!(&values[1],Constant::String(s)if s.as_ref()==changed));
 }

@@ -1,22 +1,26 @@
-//! Isolated process oracle for scripts which may call os.exit.
+//! Isolated Rust process runner for scripts which may call os.exit.
 use std::{env, fs, io::Write, process::ExitCode};
 
 fn main() -> ExitCode {
     let args: Vec<_> = env::args().skip(1).collect();
     let [engine, path] = args.as_slice() else {
-        eprintln!("usage: os_process rust|rust-cache|reference script.lua");
+        eprintln!("usage: os_process rust|rust-cache|dump script.lua");
         return ExitCode::FAILURE;
     };
     let source = fs::read(path).expect("read fixed process probe");
     if engine == "dump" {
-        let lua = lua_reference::Lua::new();
-        let function = lua
-            .load(source)
-            .set_name("=(native process)")
-            .into_function()
+        let program = deadlib_lua::compile_named(&source, b"=(native process)")
             .expect("compile fixed binary fixture");
+        let mut vm = deadlib_lua::Vm::new();
+        let function = vm.load_program(&program);
+        vm.set_global(b"fixture", deadlib_lua::Value::Function(function))
+            .unwrap();
+        let dump = deadlib_lua::compile(b"return string.dump(fixture)").unwrap();
+        let deadlib_lua::Value::String(bytes) = vm.execute(&dump).unwrap()[0] else {
+            panic!("string.dump must return a string");
+        };
         std::io::stdout()
-            .write_all(&function.dump(false))
+            .write_all(vm.string_bytes(bytes).unwrap())
             .expect("write native fixture");
         return ExitCode::SUCCESS;
     }
@@ -43,14 +47,6 @@ fn main() -> ExitCode {
         };
         program
             .and_then(|program| vm.execute(&program).map(|_| ()))
-            .map_err(|error| error.to_string())
-    } else if engine == "reference" {
-        // SAFETY: the differential runner executes fixed local process probes
-        // in an isolated child with no third-party native modules.
-        let lua = unsafe { lua_reference::Lua::unsafe_new() };
-        lua.load(source)
-            .set_name(name)
-            .exec()
             .map_err(|error| error.to_string())
     } else {
         panic!("unknown engine");

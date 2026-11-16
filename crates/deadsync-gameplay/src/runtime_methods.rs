@@ -12,7 +12,8 @@ where
         let old = runtime.life;
         runtime.life = life.clamp(0.0, 1.0);
         deadsync_rules::life::record_life_change(
-            &mut runtime.life_history, seconds, old, runtime.life);
+            &mut runtime.life_history, seconds,
+            runtime.life_record_source.value(old), runtime.life_record_source.value(runtime.life));
         self.display.density_graph.life_dirty[player] = true;
         self.share_routine_life(player);
     }
@@ -20,7 +21,12 @@ where
     pub fn mark_player_stage_failed_from_script(&mut self, player: usize) {
         if player < self.setup.num_players.min(MAX_PLAYERS) {
             self.players_runtime.players[player].stage_failed = true;
-            self.share_routine_life(player);
+        }
+    }
+
+    pub fn mark_routine_stage_failed_from_script(&mut self) {
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.stats.stage_failed = true;
         }
     }
 
@@ -33,7 +39,6 @@ where
         let before = runtime.life_history.last().map_or(runtime.life, |&(_, life)| life);
         deadsync_rules::life::record_life_change(&mut runtime.life_history, seconds, before, life);
         self.display.density_graph.life_dirty[player] = true;
-        self.share_routine_life(player);
     }
 
     /// Routine has one CombinedLifeMeterShared fed by both Players. Both
@@ -56,19 +61,10 @@ where
         target.combo_after_miss = source.combo_after_miss;
         target.is_failing = source.is_failing;
         target.fail_time = source.fail_time;
-        target.stage_failed = source.stage_failed;
         target.course_life = source.course_life;
         target.course_submit_life = source.course_submit_life;
-        // record_life_change rewrites at most the last two samples.
-        let keep = target
-            .life_history
-            .len()
-            .min(source.life_history.len())
-            .saturating_sub(2);
-        target.life_history.truncate(keep);
-        target
-            .life_history
-            .extend_from_slice(&source.life_history[keep..]);
+        // Each PlayerStageStats owns its own history. Sharing a physical
+        // meter neither records life for the other participant nor aliases it.
         self.display.density_graph.life_dirty[to] |= self.display.density_graph.life_dirty[from];
         if fails_now {
             self.capture_failed_ex_score_inputs(to, self.player_blue_window_ms(to));
@@ -159,7 +155,8 @@ where
     fn live_notefield_refresh_needed(&self, current_bpm: f32) -> bool {
         let dynamic_motion = self.mods.attacks.cleared_for_outro
             || (0..self.setup.num_players).any(|player| {
-                !self.mods.attacks.mask_windows[player].is_empty()
+                self.mods.song_lua_player_options[player].is_some()
+                    || !self.mods.attacks.mask_windows[player].is_empty()
                     || !self.mods.attacks.song_lua_ease_windows[player].is_empty()
             });
         self.display
@@ -460,6 +457,9 @@ where
                     combo_milestones_enabled,
                 );
 
+                if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+                    routine.mine_hit();
+                }
                 self.display.receptor_feedback.clear_lift_glow(column);
                 self.trigger_mine_explosion(column);
                 self.set_last_mine_judgment(player, column, MineResult::Hit);
@@ -623,6 +623,9 @@ where
         let player_update =
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.hold(note_type, update.result);
+        }
         if update.effects.show_judgment {
             self.mark_autoplay_judged(player);
             self.display.hold_feedback.set_hold_judgment(
@@ -691,6 +694,9 @@ where
             scoring_blocked,
         );
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.hold(note_type, update.result);
+        }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
             apply_course_life_event(
@@ -747,6 +753,14 @@ where
         let mut stats = hold_result_stats_state(&self.players_runtime.players[player]);
         apply_hold_result_stats_update(&mut stats, stats_update);
         set_hold_result_stats_state(&mut self.players_runtime.players[player], stats);
+        if !self.autoplay_blocks_scoring()
+            && let Some(routine) = self.players_runtime.routine.as_mut()
+        {
+            routine.hold(
+                self.chart_runtime.notes[note_index].note_type,
+                HoldResult::Missed,
+            );
+        }
         self.record_ghost_judgment(player);
         self.display.hold_feedback.set_hold_judgment(
             column,
@@ -915,6 +929,54 @@ where
         }
     }
 
+    fn autoplay_roll_frame_notes(&self) -> [Option<usize>; MAX_COLS] {
+        let mut notes = [None; MAX_COLS];
+        let mut mask = self.hold_runtime.active_roll_mask();
+        while mask != 0 {
+            let column = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            notes[column] = self.hold_runtime.active_holds[column].as_ref().map(|hold| hold.note_index);
+        }
+        notes
+    }
+
+    fn advance_autoplay_roll_frame(
+        &mut self,
+        previous_roll_notes: &[Option<usize>; MAX_COLS],
+        music_time_ns: SongTimeNs,
+        delta_time: f32,
+    ) {
+        if !self.live_autoplay_enabled() || self.setup.session.play_style.is_pump() {
+            return;
+        }
+        let mut mask = self.hold_runtime.active_roll_mask();
+        while mask != 0 {
+            let column = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            let Some(active) = self.hold_runtime.active_holds[column].as_mut() else { continue; };
+            let note = &mut self.chart_runtime.notes[active.note_index];
+            let Some(hold) = note.hold.as_mut() else { continue; };
+            // CrossedRows starts new rolls after UpdateHoldNotes. Identify an
+            // already-judged head by note identity: the audio clock can move
+            // backward across its timestamp without making it a new head.
+            if previous_roll_notes[column] == Some(active.note_index) && !active.let_go {
+                let player = player_index_for_column(self.setup.num_players, self.setup.cols_per_player, column);
+                let timing = &self.timing_runtime.timing_players[player];
+                let beat = timing.get_beat_for_time(song_time_ns_to_seconds(music_time_ns));
+                // Native hold logic is bounded by the current rounded row,
+                // including when a clock correction crosses the head again.
+                if beat_to_note_row(beat) >= beat_to_note_row(note.beat) {
+                    advance_hold_last_held(hold, timing, beat, note.row_index, note.beat);
+                    active.life = (active.life - delta_time / deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL).max(0.0);
+                    hold.life = active.life;
+                }
+            }
+            // The ordinary hold pass still resolves the tail or LetGo, but
+            // must not subtract a second interval from the music clock.
+            active.last_update_time_ns = music_time_ns.max(active.start_time_ns);
+        }
+    }
+
     fn update_pump_active_hold(
         &mut self,
         column: usize,
@@ -1040,7 +1102,7 @@ where
                 self.trigger_hold_explosion(column);
             }
         }
-        if self.autoplay_blocks_scoring() || self.player_score_is_blocked(player) {
+        if self.autoplay_blocks_scoring() {
             return;
         }
 
@@ -1050,6 +1112,12 @@ where
             &self.source.gameplay_charts[player].timing_segments.combos,
             checkpoint_beat,
         );
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.checkpoint(held, missed, combo_multiplier, miss_combo_multiplier);
+        }
+        if self.player_score_is_blocked(player) {
+            return;
+        }
         let grade = if checkpoint_hit {
             JudgeGrade::Fantastic
         } else {
@@ -1088,6 +1156,8 @@ where
             },
         );
         apply_combo_update(player_runtime, combo_update, combo_milestones_enabled);
+        player_runtime.recorded_max_combo =
+            player_runtime.recorded_max_combo.max(player_runtime.combo);
         self.share_routine_life(player);
         if !checkpoint_hit {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
@@ -1836,6 +1906,15 @@ where
             if update.update_grade_totals {
                 update_itg_grade_totals(p);
             }
+            if let Some(routine) = self.players_runtime.routine.as_mut() {
+                routine.tap_row(
+                    &final_judgment,
+                    plan.note_count,
+                    self.setup.session.play_style.is_pump(),
+                    combo_multiplier,
+                    miss_combo_multiplier,
+                );
+            }
             if plan.apply_life_change {
                 apply_course_life_event(
                     p,
@@ -1845,6 +1924,7 @@ where
                 );
             }
             apply_combo_update(p, update.combo_update, combo_milestones_enabled);
+            p.recorded_max_combo = p.recorded_max_combo.max(p.combo);
             self.share_routine_life(player);
         }
         if plan.show_final_visual {
@@ -2020,15 +2100,21 @@ where
             // Player::Update taps autoplay rolls only below half life, before
             // UpdateHoldNotes drains this frame. Keep last_update_time_ns so
             // the refill does not skip that drain or shift the next pulse.
-            if active.life >= 0.5
-                || now_music_time_ns < active.start_time_ns
-                || now_music_time_ns > active.end_time_ns
-            {
+            if active.life >= 0.5 {
                 continue;
             }
-            let Some(hold) = self.chart_runtime.notes[active.note_index].hold.as_mut() else {
+            let player = player_index_for_column(self.setup.num_players, self.setup.cols_per_player, col);
+            let row = beat_to_note_row(self.timing_runtime.timing_players[player]
+                .get_beat_for_time(song_time_ns_to_seconds(now_music_time_ns)));
+            let note = &mut self.chart_runtime.notes[active.note_index];
+            let Some(hold) = note.hold.as_mut() else {
                 continue;
             };
+            // IsHoldNoteAtRow and the head fallback use the same rounded row
+            // as UpdateHoldNotes, rather than exact start/end timestamps.
+            if row < beat_to_note_row(note.beat) || row > beat_to_note_row(hold.end_beat) {
+                continue;
+            }
             active.life = MAX_HOLD_LIFE;
             hold.life = MAX_HOLD_LIFE;
             // Native Step also presses the receptor; it does not rescore the
@@ -2092,8 +2178,8 @@ where
             display_music_time_ns,
             visual_scroll_music_time_ns,
         );
-        match self.control.tick_mode {
-            GameplayTimingTickMode::Assist => {
+        match (self.control.paused, self.control.tick_mode) {
+            (false, GameplayTimingTickMode::Assist) => {
                 self.control
                     .beat_tick
                     .note_disabled(assist_sfx_generation);
@@ -2109,7 +2195,7 @@ where
                 );
             }
 
-            GameplayTimingTickMode::Beat => {
+            (false, GameplayTimingTickMode::Beat) => {
                 self.control
                     .assist_clap
                     .note_disabled(assist_sfx_generation);
@@ -2122,7 +2208,7 @@ where
                 );
             }
 
-            GameplayTimingTickMode::Off | GameplayTimingTickMode::Hit => {
+            _ => {
                 self.control
                     .assist_clap
                     .note_disabled(assist_sfx_generation);
@@ -2134,10 +2220,16 @@ where
         }
         refresh_active_attack_masks(self, delta_time);
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            let expand_period = self
+                .effective_accel_effects_for_player_with_mask(
+                    player,
+                    self.profiles_runtime.profiles[player].accel_mask_bits(),
+                )
+                .expand_period;
             self.mods.expand_seconds[player] = advance_expand_phase(
                 self.mods.expand_seconds[player],
                 delta_time,
-                self.mods.attacks.accel[player].expand_period.unwrap_or(0.0),
+                expand_period,
                 self.is_in_freeze(),
                 self.is_in_delay(),
             );
@@ -2152,6 +2244,7 @@ where
     pub fn run_post_input_gameplay_phases(
         &mut self,
         previous_music_time_ns: SongTimeNs,
+        previous_roll_notes: &[Option<usize>; MAX_COLS],
         music_time_ns: SongTimeNs,
         music_time_sec: f32,
         delta_time: f32,
@@ -2174,6 +2267,7 @@ where
         } else {
             None
         };
+        self.advance_autoplay_roll_frame(previous_roll_notes, music_time_ns, delta_time);
         self.update_active_holds(&current_inputs, music_time_ns);
         if let Some(started) = active_holds_started {
             phase_timings.active_holds_us = elapsed_us_since(started);

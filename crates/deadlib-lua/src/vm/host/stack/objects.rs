@@ -65,21 +65,23 @@ impl NativeStack<'_, '_> {
         };
         let supported = match target {
             Value::Function(id) => {
+                self.call.vm.reserve_gc_barrier(target, Value::Table(env))?;
                 self.call.vm.functions[slot_index(id.0)].env = env;
                 self.call.vm.gc_barrier(target, Value::Table(env));
                 true
             }
             Value::Native(id) => {
-                self.call.vm.set_native_environment(id, env);
+                self.call.vm.set_native_environment(id, env)?;
                 true
             }
             Value::Userdata(id) => {
+                self.call.vm.reserve_gc_barrier(target, Value::Table(env))?;
                 self.call.vm.userdata[slot_index(id.0)].env = env;
                 self.call.vm.gc_barrier(target, Value::Table(env));
                 true
             }
             Value::Thread(id) => {
-                self.call.vm.set_thread_environment(id, env);
+                self.call.vm.set_thread_environment(id, env)?;
                 true
             }
             _ => false,
@@ -112,7 +114,7 @@ impl NativeStack<'_, '_> {
         let id = match value {
             Some(Value::String(id)) => id,
             Some(Value::Number(number)) => {
-                let value = self.intern(&native::format_number(number));
+                let value = self.call.vm.intern_number(number)?;
                 self.set(index, value)?;
                 let Value::String(id) = value else {
                     unreachable!()

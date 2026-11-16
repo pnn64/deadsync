@@ -1,51 +1,149 @@
-use mlua::{Lua, Value};
-
-use crate::{SongLuaSpeedMod, read_boolish, read_f32};
-
 // PlayerOptions::FromOneModString checks these branches before NoteSkinManager.
 // Later branches only block its final whole-name fallback (skins with spaces).
 pub(crate) fn option_blocks_skin(key: &str, level: f32, whole: bool) -> bool {
     let family = [
-        "modtimer", "drawsize", "lights", "wave",
-        "expand", "drunk", "shrink",
-        "pulse", "dizzy", "confusion", "bounce",
-        "tiny", "tornado",
-        "tipsy", "bumpy", "beat", "digital",
-        "zigzag", "sawtooth", "square", "parabola",
-        "attenuate", "stealth", "reverse", "dark",
-    ].iter().any(|family| key.contains(family));
-    let early = matches!(key,
-        "alternate" | "attackmines" | "backwards" | "bar" |
-        "battery" | "big" | "blind" | "blink" | "bmrize" |
-        "boomerang" | "boost" | "brake" | "centered" |
-        "clearall" | "cover" | "cross" | "death" |
-        "distant" | "echo" | "flip" | "floored" |
-        "hallway" | "hidden" | "hiddenoffset" | "holdrolls" | "hypershuffle" | "incoming" |
-        "invert" | "land" | "left" | "life" |
-        "lifetime" | "little" | "lives" | "lrmirror" |
-        "mines" | "mini" | "mirror" | "noattacks" |
-        "nofakes" | "nohands" | "noholds" | "nojumps" |
-        "nolifts" | "nomines" | "noquads" | "norecover" |
-        "normal-drain" | "norolls" | "nostretch" | "overhead" |
-        "passmark" | "planted" | "playerautoplay" | "power-drop" | "quick" |
-        "randomattacks" | "randomvanish" | "resetspeed" | "right" |
-        "roll" | "shuffle" | "skippy" | "softshuffle" | "space" |
-        "split" | "stomp" | "sudden" | "suddendeath" |
-        "suddenoffset" | "supershuffle" | "twirl" |
-        "twister" | "udmirror" | "wide" | "xmode"
+        "modtimer",
+        "drawsize",
+        "lights",
+        "wave",
+        "expand",
+        "drunk",
+        "shrink",
+        "pulse",
+        "dizzy",
+        "confusion",
+        "bounce",
+        "tiny",
+        "tornado",
+        "tipsy",
+        "bumpy",
+        "beat",
+        "digital",
+        "zigzag",
+        "sawtooth",
+        "square",
+        "parabola",
+        "attenuate",
+        "stealth",
+        "reverse",
+        "dark",
+    ]
+    .iter()
+    .any(|family| key.contains(family));
+    let early = matches!(
+        key,
+        "alternate"
+            | "attackmines"
+            | "backwards"
+            | "bar"
+            | "battery"
+            | "big"
+            | "blind"
+            | "blink"
+            | "bmrize"
+            | "boomerang"
+            | "boost"
+            | "brake"
+            | "centered"
+            | "clearall"
+            | "cover"
+            | "cross"
+            | "death"
+            | "distant"
+            | "echo"
+            | "flip"
+            | "floored"
+            | "hallway"
+            | "hidden"
+            | "hiddenoffset"
+            | "holdrolls"
+            | "hypershuffle"
+            | "incoming"
+            | "invert"
+            | "land"
+            | "left"
+            | "life"
+            | "lifetime"
+            | "little"
+            | "lives"
+            | "lrmirror"
+            | "mines"
+            | "mini"
+            | "mirror"
+            | "noattacks"
+            | "nofakes"
+            | "nohands"
+            | "noholds"
+            | "nojumps"
+            | "nolifts"
+            | "nomines"
+            | "noquads"
+            | "norecover"
+            | "normal-drain"
+            | "norolls"
+            | "nostretch"
+            | "overhead"
+            | "passmark"
+            | "planted"
+            | "playerautoplay"
+            | "power-drop"
+            | "quick"
+            | "randomattacks"
+            | "randomvanish"
+            | "resetspeed"
+            | "right"
+            | "roll"
+            | "shuffle"
+            | "skippy"
+            | "softshuffle"
+            | "space"
+            | "split"
+            | "stomp"
+            | "sudden"
+            | "suddendeath"
+            | "suddenoffset"
+            | "supershuffle"
+            | "twirl"
+            | "twister"
+            | "udmirror"
+            | "wide"
+            | "xmode"
     );
-    let speed = key.strip_prefix('c').or_else(|| key.strip_prefix('m'))
+    let speed = key
+        .strip_prefix('c')
+        .or_else(|| key.strip_prefix('m'))
         .is_some_and(|amount| parse_option_float(amount).is_some());
-    family || early || speed || (key == "turn" && level <= 0.5) || (whole && (
-        key.contains("move") || matches!(key,
-            "converge" | "cosecant" | "failarcade" | "failatend" |
-            "faildefault" | "failendofsong" | "failimmediate" | "failimmediatecontinue" |
-            "failoff" | "muteonerror" | "random" |
-            "randomspeed" | "skew" | "tilt" | "visualdelay" |
-            "zbuffer"
-        ) || (key == "noteskin" && level <= 0.5) || (level == 0.0 && key.as_bytes().windows(2)
-            .any(|pair| pair[0] == b'w' && (b'1'..=b'5').contains(&pair[1])))
-    ))
+    family
+        || early
+        || speed
+        || (key == "turn" && level <= 0.5)
+        || (whole
+            && (key.contains("move")
+                || matches!(
+                    key,
+                    "converge"
+                        | "cosecant"
+                        | "failarcade"
+                        | "failatend"
+                        | "faildefault"
+                        | "failendofsong"
+                        | "failimmediate"
+                        | "failimmediatecontinue"
+                        | "failoff"
+                        | "muteonerror"
+                        | "random"
+                        | "randomspeed"
+                        | "skew"
+                        | "tilt"
+                        | "visualdelay"
+                        | "zbuffer"
+                )
+                || (key == "noteskin" && level <= 0.5)
+                || (level == 0.0
+                    && key
+                        .as_bytes()
+                        .windows(2)
+                        .any(|pair| pair[0] == b'w' && (b'1'..=b'5').contains(&pair[1])))))
 }
 
 pub const MOD_TIMER_NAMES: [&str; 4] = [
@@ -441,47 +539,6 @@ fn parse_compact_player_speed_option(text: &str) -> Option<(&'static str, f32)> 
 }
 
 #[inline(always)]
-pub fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlua::Result<Value> {
-    if player_option_uses_bool(name) {
-        return Ok(Value::Boolean(read_boolish(value).unwrap_or(false)));
-    }
-    if player_option_default_string(name).is_some() {
-        return Ok(match value {
-            Value::String(_) => value,
-            _ => default_player_option_value(lua, name)?,
-        });
-    }
-    Ok(Value::Number(f64::from(read_f32(value).unwrap_or(0.0))))
-}
-
-#[inline(always)]
-pub fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value> {
-    if name == "failsetting" {
-        return Ok(Value::Integer(0));
-    }
-    if player_option_uses_bool(name) {
-        return Ok(Value::Boolean(false));
-    }
-    if let Some(value) = player_option_default_string(name) {
-        return Ok(Value::String(lua.create_string(value)?));
-    }
-    Ok(Value::Number(0.0))
-}
-
-pub fn song_lua_speedmod_value(
-    speedmod: SongLuaSpeedMod,
-    ctor: fn(f32) -> SongLuaSpeedMod,
-) -> Value {
-    match (speedmod, ctor(0.0)) {
-        (SongLuaSpeedMod::X(value), SongLuaSpeedMod::X(_))
-        | (SongLuaSpeedMod::C(value), SongLuaSpeedMod::C(_))
-        | (SongLuaSpeedMod::M(value), SongLuaSpeedMod::M(_))
-        | (SongLuaSpeedMod::A(value), SongLuaSpeedMod::A(_)) => Value::Number(f64::from(value)),
-        _ => Value::Nil,
-    }
-}
-
-#[inline(always)]
 #[must_use]
 pub fn player_option_default_string(name: &str) -> Option<&'static str> {
     Some(match name {
@@ -546,14 +603,10 @@ pub fn player_option_uses_bool(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use mlua::{Lua, Value};
-
-    use crate::SongLuaSpeedMod;
 
     use super::{
-        default_player_option_value, is_player_option_method_name, normalize_player_option_key,
-        normalize_player_option_value, parse_player_option_amount, parse_player_speed_option,
-        player_option_default_string, player_option_uses_bool, song_lua_speedmod_value,
+        is_player_option_method_name, normalize_player_option_key, parse_player_option_amount,
+        parse_player_speed_option, player_option_default_string, player_option_uses_bool,
         strip_player_option_prefix,
     };
 
@@ -610,35 +663,6 @@ mod tests {
         assert_eq!(parse_player_speed_option("650m"), Some(("mmod", 650.0)));
         assert_eq!(parse_player_speed_option("CA250"), Some(("camod", 250.0)));
         assert_eq!(parse_player_speed_option("Reverse"), None);
-    }
-
-    #[test]
-    fn normalizes_player_option_values() {
-        let lua = Lua::new();
-        assert_eq!(
-            normalize_player_option_value(&lua, "nomines", Value::Integer(1)).unwrap(),
-            Value::Boolean(true)
-        );
-        assert_eq!(
-            default_player_option_value(&lua, "failsetting").unwrap(),
-            Value::Integer(0)
-        );
-        assert_eq!(
-            normalize_player_option_value(&lua, "reverse", Value::Number(0.5)).unwrap(),
-            Value::Number(0.5)
-        );
-    }
-
-    #[test]
-    fn speedmod_value_matches_requested_variant() {
-        assert_eq!(
-            song_lua_speedmod_value(SongLuaSpeedMod::C(400.0), SongLuaSpeedMod::C),
-            Value::Number(400.0)
-        );
-        assert_eq!(
-            song_lua_speedmod_value(SongLuaSpeedMod::X(1.5), SongLuaSpeedMod::C),
-            Value::Nil
-        );
     }
 }
 

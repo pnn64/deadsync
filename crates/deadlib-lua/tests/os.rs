@@ -1,5 +1,20 @@
 use deadlib_lua::{Value, Vm, compile};
-use lua_reference::{Lua, MultiValue, Value as Ref};
+
+#[cfg(target_vendor = "apple")]
+type ClockTicks = std::ffi::c_ulong;
+#[cfg(not(target_vendor = "apple"))]
+type ClockTicks = std::ffi::c_long;
+unsafe extern "C" {
+    #[link_name = "clock"]
+    fn system_clock_ticks() -> ClockTicks;
+}
+
+fn system_clock() -> f64 {
+    let divisor = if cfg!(windows) { 1000.0 } else { 1_000_000.0 };
+    // SAFETY: the system clock has no parameters or borrowed memory. Reading it
+    // independently checks the Lua builtin's scale, epoch and result placement.
+    unsafe { system_clock_ticks() as f64 / divisor }
+}
 
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -9,55 +24,27 @@ enum Scalar {
     Bytes(Vec<u8>),
 }
 
-fn observe(source: &[u8], reference: bool) -> Vec<Scalar> {
-    if !reference {
-        let mut vm = Vm::new();
-        let program = compile(source).unwrap();
-        return vm
-            .execute(&program)
-            .unwrap()
-            .to_vec()
-            .into_iter()
-            .map(|v| match v {
-                Value::Nil => Scalar::Nil,
-                Value::Boolean(b) => Scalar::Boolean(b),
-                Value::Number(n) => Scalar::Number(n.to_bits()),
-                Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
-                v => panic!("expected a scalar, got {v:?}"),
-            })
-            .collect();
-    }
-    // SAFETY: fixed local compatibility probes use the development oracle's
-    // standard libraries; they never load third-party native modules.
-    let lua = unsafe { Lua::unsafe_new() };
-    let values: MultiValue = lua.load(source).set_name("=(deadlib-lua)").eval().unwrap();
-    values
+fn observe(source: &[u8]) -> Vec<Scalar> {
+    let mut vm = Vm::new();
+    let program = compile(source).unwrap();
+    return vm
+        .execute(&program)
+        .unwrap()
+        .to_vec()
         .into_iter()
         .map(|v| match v {
-            Ref::Nil => Scalar::Nil,
-            Ref::Boolean(b) => Scalar::Boolean(b),
-            Ref::Number(n) => Scalar::Number(n.to_bits()),
-            Ref::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            Ref::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            v => panic!("expected a reference scalar, got {v:?}"),
+            Value::Nil => Scalar::Nil,
+            Value::Boolean(b) => Scalar::Boolean(b),
+            Value::Number(n) => Scalar::Number(n.to_bits()),
+            Value::String(id) => Scalar::Bytes(vm.string_bytes(id).unwrap().to_vec()),
+            v => panic!("expected a scalar, got {v:?}"),
         })
-        .collect()
+        .collect();
 }
 
 fn compare(source: &[u8]) {
-    let actual = observe(source, false);
-    let expected = observe(source, true);
-    assert_eq!(actual.len(), expected.len());
-    for (index, (actual, expected)) in actual.iter().zip(&expected).enumerate() {
-        if let (Scalar::Bytes(actual), Scalar::Bytes(expected)) = (actual, expected) {
-            assert_eq!(
-                String::from_utf8_lossy(actual),
-                String::from_utf8_lossy(expected),
-                "observation {index}"
-            );
-        }
-        assert_eq!(actual, expected, "observation {index}");
-    }
+    let actual = observe(source);
+    reference_test::assert_debug("tests/os.rs::observe::expected", &actual);
 }
 
 #[test]
@@ -116,7 +103,7 @@ fn process_argument_errors_and_aliases_use_lua51_types_and_native_environments()
 
 #[test]
 fn environment_names_use_c_string_boundaries_numeric_coercion_and_missing_nil() {
-    compare(
+    let actual = observe(
         br#"
         return os.getenv('DEADSYNC_LUA_UNSET_7F189225')==nil,
           os.getenv('')==nil,os.getenv('=')==nil,os.getenv('PATH=ignored')==nil,
@@ -126,6 +113,15 @@ fn environment_names_use_c_string_boundaries_numeric_coercion_and_missing_nil() 
           select('#',os.getenv('DEADSYNC_LUA_UNSET_7F189225'))
     "#,
     );
+    let mut expected: Vec<_> = (0..6).map(|_| Scalar::Boolean(true)).collect();
+    for name in ["PATH", "TEMP", "TMP", "COMSPEC"] {
+        expected.push(match std::env::var_os(name) {
+            Some(value) => Scalar::Bytes(value.to_string_lossy().as_bytes().to_vec()),
+            None => Scalar::Nil,
+        });
+    }
+    expected.push(Scalar::Number(1f64.to_bits()));
+    assert_eq!(actual, expected);
 }
 
 struct Fixture(std::path::PathBuf);
@@ -143,7 +139,10 @@ impl Fixture {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             match std::fs::create_dir(&path) {
-                Ok(()) => return Self(path),
+                Ok(()) => {
+                    reference_test::register_path(&path);
+                    return Self(path);
+                }
                 Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
                 Err(error) => panic!("create owned fixture: {error}"),
             }
@@ -182,17 +181,15 @@ fn clock_returns_one_number_and_ignores_arguments_environments_and_method_self()
 
 #[test]
 fn clock_readings_are_bracketed_by_the_official_clock_in_the_same_process() {
-    let lua = Lua::new();
-    let reference = lua.load("return os.clock()").into_function().unwrap();
     let program = compile(b"return os.clock(false,nil,42)").unwrap();
     let mut vm = Vm::new();
     let mut same_tick = 0;
     for _ in 0..512 {
-        let before: f64 = reference.call(()).unwrap();
+        let before = system_clock();
         let Value::Number(actual) = vm.execute(&program).unwrap()[0] else {
             panic!("clock result")
         };
-        let after: f64 = reference.call(()).unwrap();
+        let after = system_clock();
         assert!(
             before <= actual && actual <= after,
             "reference bracket {before}..={after}, Rust {actual}"
@@ -213,11 +210,9 @@ fn clock_readings_are_bracketed_by_the_official_clock_in_the_same_process() {
 #[test]
 #[cfg(windows)]
 fn clock_epoch_precedes_vm_creation_and_is_shared_with_other_os_threads() {
-    let lua = Lua::new();
-    let clock = lua.load("return os.clock()").into_function().unwrap();
-    let start: f64 = clock.call(()).unwrap();
+    let start = system_clock();
     std::thread::sleep(std::time::Duration::from_millis(30));
-    let before: f64 = clock.call(()).unwrap();
+    let before = system_clock();
     assert!(
         before - start >= 0.020,
         "the MSVC clock includes idle wall time"
@@ -232,7 +227,7 @@ fn clock_epoch_precedes_vm_creation_and_is_shared_with_other_os_threads() {
     })
     .join()
     .unwrap();
-    let after: f64 = clock.call(()).unwrap();
+    let after = system_clock();
     assert!(
         before <= actual && actual <= after,
         "clock epoch must not restart with a VM or thread"
@@ -328,16 +323,7 @@ fn rename_and_exclusive_creation_cannot_overwrite_each_others_winner() {
     vm.set_global(b"from_path", name).unwrap();
     let name = vm.intern(to.to_str().unwrap().as_bytes());
     vm.set_global(b"to_path", name).unwrap();
-    let lua = Lua::new();
-    lua.globals()
-        .set("from_path", from.to_str().unwrap())
-        .unwrap();
-    lua.globals().set("to_path", to.to_str().unwrap()).unwrap();
-    let reference = lua
-        .load("return os.rename(from_path,to_path)")
-        .into_function()
-        .unwrap();
-    for oracle in [false, true] {
+    for _round in 0..2 {
         for _ in 0..64 {
             std::fs::write(&from, b"source").unwrap();
             let gate = Arc::new(Barrier::new(2));
@@ -352,12 +338,7 @@ fn rename_and_exclusive_creation_cannot_overwrite_each_others_winner() {
                     .and_then(|mut f| f.write_all(b"target"))
             });
             gate.wait();
-            let renamed = if oracle {
-                let values: MultiValue = reference.call(()).unwrap();
-                matches!(values.front(), Some(Ref::Boolean(true)))
-            } else {
-                vm.execute(&program).unwrap()[0] == Value::Boolean(true)
-            };
+            let renamed = vm.execute(&program).unwrap()[0] == Value::Boolean(true);
             let created = worker.join().unwrap();
             match (renamed, created) {
                 (true, Err(error)) => {
@@ -491,3 +472,7 @@ fn os_module_identity_and_native_environments_survive_registry_mutations() {
     "#,
     );
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

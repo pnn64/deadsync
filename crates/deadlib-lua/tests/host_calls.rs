@@ -136,12 +136,7 @@ fn host_file_loading_keeps_the_native_loader_after_global_mutation() {
 
 #[test]
 fn native_chunk_parameters_and_old_varargs_use_the_shared_host_entry() {
-    let lua = lua_reference::Lua::new();
-    let function: lua_reference::Function = lua
-        .load("return function(a,...)return a,arg.n,arg[1],arg[2]end")
-        .eval()
-        .unwrap();
-    let program = compile(&function.dump(false)).unwrap();
+    let program = compile(&reference_test::native_chunk("tests/host_calls.rs::native_chunk_parameters_and_old_varargs_use_the_shared_host_entry::chunk0", &("return function(a,...)return a,arg.n,arg[1],arg[2]end"))).unwrap();
     let mut vm = Vm::new();
     assert_eq!(
         vm.execute_with_args(
@@ -251,3 +246,7 @@ fn host_sort_padding_does_not_overlap_native_comparison_storage() {
         vm.end_standalone().unwrap();
     }
 }
+
+#[allow(dead_code)]
+#[path = "../src/reference_test.rs"]
+mod reference_test;

@@ -10,6 +10,38 @@ DeadSync, as in "dead on sync", is a StepMania/ITG engine with Vulkan/OpenGL bac
 </div>
 <hr>
 
+## 🎮 Just want to play? Download it, no building required
+
+**You do not need to build anything.** Download the ready-to-run game for your
+platform from either of these:
+
+- **[deadsync.dance](https://deadsync.dance)**
+- **[The latest GitHub release](https://github.com/pnn64/deadsync/releases/latest)** (under "Assets")
+
+Then extract it, add your
+songs (see [Song directories](#song-directories)), and run it.
+
+### Staying up to date
+
+DeadSync has a built-in updater, so you only need to download it once:
+
+- When a new version is out, the main menu shows it next to your current
+  version number, marked "Available".
+- To update, go to **Options > Downloads / Check for Updates > Check for Updates**
+  and confirm. DeadSync downloads, verifies, and installs the new version for you.
+- Something broke? **Roll Back Version** on the same screen reinstalls an
+  earlier release.
+- You can also update without opening the game: run `deadsync --update` from
+  the install folder (see [Updating without starting the game](#updating-without-starting-the-game)).
+
+Your settings, profiles, and scores are stored outside the install folder (see
+[Data Directories](#data-directories)), so updating never touches them.
+
+---
+
+> **Everything below this point is for developers** who want to build DeadSync
+> from source or contribute. Players can stop here.
+
 ## Prerequisites
 
 Before building, ensure you have the following installed on your system:
@@ -78,7 +110,7 @@ are required on either Apple Silicon (`/opt/homebrew`) or Intel (`/usr/local`):
 ```bash
 cargo run                       # fast dev build
 cargo run --profile local       # optimized, but faster to link than full release
-cargo build --release           # fully optimized (LTO) build for benchmarking/play
+cargo build --release           # fully optimized (LTO) build
 ```
 
 Before the first run, grant **Input Monitoring** to your terminal (see the
@@ -103,7 +135,7 @@ pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers
 
 Test fixtures live in [deadsync-tests](https://github.com/pnn64/deadsync-tests),
 mounted as a Git submodule at `tests/fixtures`. Initialize the pinned fixture
-revision before compiling or running tests, examples, or benchmarks (Python
+revision before compiling or running tests or examples (Python
 3.11 or newer is required to restore split archives):
 
 ```sh
@@ -117,9 +149,25 @@ Archives over 50 MB are stored as parts of at most 48,000,000 bytes. The Python
 command verifies each part and restores the exact archives locally; restored
 files are ignored by Git. Run both commands again after fixture updates.
 
+Lua regression snapshots live in `tests/fixtures/regression-expectations`, grouped
+by crate. Snapshots of 50 MB or more are stored as gzip files and restored by the
+same setup command. Use `python scripts/prepare_test_fixtures.py --split` to prepare
+new oversized archives or snapshots before committing fixture changes.
+
 When updating fixtures, commit and push changes in `tests/fixtures` first, then
 commit the updated submodule pointer in this repository. Test runners and fixture
 maintenance scripts stay in this repository; their existing paths still work.
+
+## Performance changes
+
+Keep performance experiments in ignored `target/` output or a temporary
+checkout. Commit the selected production implementation and useful correctness
+tests. Remove timing harnesses, superseded implementations and measurement
+reports before merging; recreate a benchmark when a new investigation needs it.
+
+The official Lua 5.1 suite and its runner in `crates/deadlib-lua/benches/` are
+retained for repeatable interpreter benchmarks. Comparator runtimes and timing
+reports remain temporary output.
 
 ## Full song Lua tests
 
@@ -247,6 +295,12 @@ P1_Back=PadCode[0x00030031]@0
 
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
+#### Axis Fix (Linux)
+
+For dance pad adapters that report directional buttons as X/Y axes, enable **Axis Fix** in **Input Options**, then restart DeadSync and configure the directions through the mapping screen. This uses ITGmania's Axis Fix interpretation, including simultaneous Left+Right and Up+Down presses on compatible adapters.
+
+The option defaults to **Off**. It can also be set with `AxisFix=1` in the `[Options]` section of `deadsync.ini`; use `AxisFix=0` to disable it. Leave it off for ordinary analog controllers.
+
 #### Debug shortcuts
 
 | Key | Action |
@@ -268,6 +322,24 @@ A `save` directory is created inside the data directory to store your personal d
 
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
+
+### Scorebox leaderboards
+
+Each online service chooses its own scorebox boards under
+**Options > Online Score Services**:
+
+- **GrooveStats Options > Scorebox Boards** toggles the GrooveStats ITG, EX and
+  event (ITL, SRPG) boards. All three are on by default.
+- **ArrowCloud Options > Regular Boards** turns ArrowCloud's ITG/EX/H.EX boards
+  on or off. Which of them appear is set in your board preferences on the
+  ArrowCloud website. Its default is set when ArrowCloud is enabled: off if
+  GrooveStats was already enabled, so GrooveStats' ITG and EX boards aren't
+  duplicated, and on otherwise. Enabling GrooveStats later keeps it on.
+- **ArrowCloud Options > Event Boards** turns ArrowCloud event boards such as
+  Golf on or off. On by default.
+
+**Select Music Options** keeps the display settings: Show GS Box, its
+placement, and Lead With Event Boards.
 
 ### Lua chart score submission
 
@@ -298,8 +370,8 @@ player and Select Music choices.
 - **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
   Turning the master switch on also turns this on, so pars appear right away;
   switch it off here if you would rather not see them.
-- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
-  shows the online event board alongside the other selectable leaderboards,
+- **Options > Online Score Services > ArrowCloud Options > Event Boards** (on
+  by default) shows the online golf board alongside the other leaderboards,
   framed in fairway green over the In The Golf course pattern.
   ArrowCloud sends it with the chart's other boards in the same request, so
   turning it on or off takes effect immediately.

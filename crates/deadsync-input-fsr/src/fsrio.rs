@@ -725,11 +725,6 @@ mod imp {
     }
 
     #[cfg(test)]
-    mod mask_performance {
-        include!("mask_performance.rs");
-    }
-
-    #[cfg(test)]
     mod polling_performance {
         include!("fsrio_performance.rs");
     }

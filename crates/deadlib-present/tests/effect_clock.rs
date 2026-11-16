@@ -1,6 +1,6 @@
 use deadlib_present::{anim::EffectClock, dsl::__dsl_parse_effect_clock};
 
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 #[test]

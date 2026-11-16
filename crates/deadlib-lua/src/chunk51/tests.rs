@@ -1,14 +1,46 @@
 use super::*;
-use lua_reference::{Function, Lua};
+
+#[test]
+fn incremental_import_releases_roots_and_distinct_source_names_on_allocation_failure() {
+    let bytes = dump(b"local x='text'; return function(y) return x,y end", false);
+    let mut decoder = decoded(&bytes);
+    decoder.chunk.prototypes[1].source = Some(b"@child\xff.lua".as_slice().into());
+    let bytes = encode(&decoder.chunk);
+    drop(decoder);
+    let outcome = || {
+        let run = || -> Result<(), Error> {
+            let mut decoder = Decoder::try_new(0)?;
+            decoder.enable_native_roots();
+            for end in 0..bytes.len() {
+                assert!(!decoder.resume(&bytes[..end], false)?);
+                drop(decoder.take_native_events());
+            }
+            assert!(decoder.resume(&bytes, true)?);
+            drop(decoder.program(b"=incremental-import")?);
+            Ok(())
+        };
+        run().map_err(|error| error.kind())
+    };
+    let (healthy, count) = crate::allocation_probe::probe(0, outcome);
+    assert_eq!(healthy, Ok(()));
+    assert_eq!(count.allocated_bytes, count.freed_bytes);
+    for nth in 1..=count.attempts {
+        eprintln!("incremental import allocation nth={nth}");
+        let (result, stats) = crate::allocation_probe::probe(nth, outcome);
+        assert_eq!(result, Err(ErrorKind::Memory));
+        assert!(stats.rejected > 0);
+        assert_eq!(stats.allocated_bytes, stats.freed_bytes);
+    }
+    assert_eq!(outcome(), Ok(()));
+    eprintln!(
+        "incremental import recovered {} allocation failures",
+        count.attempts
+    );
+}
 
 fn dump(source: &[u8], stripped: bool) -> Vec<u8> {
-    let lua = Lua::new();
-    let bytes = lua
-        .load(source)
-        .set_name("=(binary codec)")
-        .into_function()
-        .unwrap()
-        .dump(false);
+    let bytes =
+        crate::reference_test::native_chunk("src/chunk51/tests.rs::dump::chunk0", &(source));
     if !stripped {
         return bytes;
     }
@@ -24,7 +56,7 @@ fn dump(source: &[u8], stripped: bool) -> Vec<u8> {
     encode(&decoder.chunk)
 }
 fn decoded(bytes: &[u8]) -> Decoder {
-    let mut decoder = Decoder::new(0);
+    let mut decoder = Decoder::try_new(0).unwrap();
     assert!(decoder.resume(bytes, true).unwrap());
     decoder
 }
@@ -201,12 +233,12 @@ fn official_dumps_round_trip_across_every_stream_boundary() {
                 .unwrap();
             assert_eq!(encode(&decoded(&bytes).chunk), bytes);
             for split in 0..=bytes.len() {
-                let mut decoder = Decoder::new(0);
+                let mut decoder = Decoder::try_new(0).unwrap();
                 let _ = decoder.resume(&bytes[..split], false).unwrap();
                 assert!(decoder.resume(&bytes, true).unwrap());
                 assert_eq!(encode(&decoder.chunk), bytes);
             }
-            let mut decoder = Decoder::new(0);
+            let mut decoder = Decoder::try_new(0).unwrap();
             for end in 0..bytes.len() {
                 assert!(!decoder.resume(&bytes[..end], false).unwrap());
             }
@@ -219,28 +251,29 @@ fn official_dumps_round_trip_across_every_stream_boundary() {
 #[test]
 fn truncated_and_incompatible_headers_match_official_rejections() {
     let bytes = dump(b"return 7", false);
-    let lua = Lua::new();
     for end in 1..bytes.len() {
-        let error = Decoder::new(0).resume(&bytes[..end], true).unwrap_err();
-        let native = lua
-            .load(&bytes[..end])
-            .set_name("=probe")
-            .into_function()
+        let error = Decoder::try_new(0)
+            .unwrap()
+            .resume(&bytes[..end], true)
+            .unwrap_err();
+        let public_error = crate::compile_named(&bytes[..end], b"=probe")
             .unwrap_err()
             .to_string();
-        assert_eq!(error, "unexpected end");
+        assert_eq!(error.message(), "unexpected end");
         assert!(
-            native.contains("probe: unexpected end in precompiled chunk"),
-            "{end}: {native}"
+            public_error.contains("probe: unexpected end in precompiled chunk"),
+            "{end}: {public_error}"
         );
     }
     for index in 1..HEADER_SIZE {
         let mut bad = bytes.clone();
         bad[index] ^= 1;
-        assert_eq!(Decoder::new(0).resume(&bad, true), Err("bad header"));
+        assert_eq!(
+            Decoder::try_new(0).unwrap().resume(&bad, true),
+            Err(invalid("bad header"))
+        );
         assert!(
-            lua.load(&bad)
-                .into_function()
+            crate::compile(&bad)
                 .unwrap_err()
                 .to_string()
                 .contains("bad header")
@@ -259,7 +292,9 @@ fn all_instruction_bits_are_checked_without_native_execution() {
         for bit in 0..32 {
             let mut decoder = decoded(&bytes);
             decoder.chunk.prototypes[0].code[pc] ^= 1 << bit;
-            let result = Decoder::new(0).resume(&encode(&decoder.chunk), true);
+            let result = Decoder::try_new(0)
+                .unwrap()
+                .resume(&encode(&decoder.chunk), true);
             if result.is_err() {
                 changed += 1;
             }
@@ -268,24 +303,25 @@ fn all_instruction_bits_are_checked_without_native_execution() {
     assert!(changed > 100);
     let mut decoder = decoded(&bytes);
     decoder.chunk.prototypes[0].code[0] = 63;
-    let error = Decoder::new(0)
+    let error = Decoder::try_new(0)
+        .unwrap()
         .resume(&encode(&decoder.chunk), true)
         .unwrap_err();
-    assert_eq!(error, "bad code");
+    assert_eq!(error.message(), "bad code");
 }
 
 #[test]
 fn oversized_counts_and_deep_trees_do_not_reserve_declared_storage() {
     let mut bytes = header().to_vec();
     bytes.extend_from_slice(&usize::MAX.to_ne_bytes());
-    let mut decoder = Decoder::new(0);
-    assert_eq!(decoder.resume(&bytes, true), Err("unexpected end"));
+    let mut decoder = Decoder::try_new(0).unwrap();
+    assert_eq!(decoder.resume(&bytes, true), Err(invalid("unexpected end")));
     assert!(decoder.heap_bytes() < 4096);
     let mut bytes = dump(b"return 1", true);
     let code_count = HEADER_SIZE + std::mem::size_of::<usize>() + 12;
     bytes[code_count..code_count + 4].copy_from_slice(&i32::MAX.to_ne_bytes());
-    let mut decoder = Decoder::new(0);
-    assert_eq!(decoder.resume(&bytes, true), Err("unexpected end"));
+    let mut decoder = Decoder::try_new(0).unwrap();
+    assert_eq!(decoder.resume(&bytes, true), Err(invalid("unexpected end")));
     assert!(decoder.heap_bytes() < 8192);
     let template = decoded(&dump(b"return", true)).chunk;
     let mut chunk = Chunk::default();
@@ -301,7 +337,10 @@ fn oversized_counts_and_deep_trees_do_not_reserve_declared_storage() {
         chunk.prototypes.push(p);
     }
     let bytes = encode(&chunk);
-    assert_eq!(Decoder::new(0).resume(&bytes, true), Err("code too deep"));
+    assert_eq!(
+        Decoder::try_new(0).unwrap().resume(&bytes, true),
+        Err(invalid("code too deep"))
+    );
 }
 
 #[test]
@@ -316,7 +355,7 @@ fn generated_bytes_and_trailing_data_are_bounded_and_deterministic() {
                 seed ^= seed << 5;
                 bytes.push(seed as u8);
             }
-            let mut decoder = Decoder::new(0);
+            let mut decoder = Decoder::try_new(0).unwrap();
             let _ = decoder.resume(&bytes, true);
             assert!(decoder.heap_bytes() < 100_000);
         }
@@ -326,9 +365,11 @@ fn generated_bytes_and_trailing_data_are_bounded_and_deterministic() {
     bytes.extend_from_slice(b"trailing bytes");
     let decoder = decoded(&bytes);
     assert_eq!(decoder.position, end);
-    let lua = Lua::new();
-    let function: Function = lua.load(&bytes).into_function().unwrap();
-    assert_eq!(function.call::<i32>(()).unwrap(), 4);
+    let mut vm = crate::Vm::new();
+    assert_eq!(
+        vm.execute(&crate::compile(&bytes).unwrap()).unwrap(),
+        &[crate::Value::Number(4.)]
+    );
 }
 
 #[test]
@@ -396,24 +437,11 @@ fn compare_execution_against(bytes: &[u8], expected_source: &[u8]) {
             v => panic!("return scalar observations: {v:?}"),
         })
         .collect();
-    // SAFETY: only the fixed valid official dumps in these tests are executed.
-    let lua = unsafe { Lua::unsafe_new() };
-    let expected: Vec<_> = lua
-        .load(expected_source)
-        .set_name("=(binary codec)")
-        .eval::<lua_reference::MultiValue>()
-        .unwrap()
-        .into_iter()
-        .map(|v| match v {
-            lua_reference::Value::Nil => Scalar::Nil,
-            lua_reference::Value::Boolean(b) => Scalar::Boolean(b),
-            lua_reference::Value::Number(n) => Scalar::Number(n.to_bits()),
-            lua_reference::Value::Integer(n) => Scalar::Number((n as f64).to_bits()),
-            lua_reference::Value::String(s) => Scalar::Bytes(s.as_bytes().to_vec()),
-            v => panic!("return reference scalar observations: {v:?}"),
-        })
-        .collect();
-    assert_eq!(actual, expected);
+    crate::reference_test::assert_source_debug(
+        "src/chunk51/tests.rs::compare_execution_against::expected",
+        expected_source,
+        &actual,
+    );
 }
 
 #[test]
@@ -590,7 +618,6 @@ fn source_dumps_execute_in_the_native_reference_and_shared_vm() {
 
 #[test]
 fn source_dump_register_pressure_reaches_native_limits() {
-    let lua = Lua::new();
     for width in [10, 100, 200, 240, 245, 246, 247, 248, 249] {
         let ones = vec!["1"; width].join(",");
         let vars = (0..width.min(195))
@@ -604,7 +631,10 @@ fn source_dump_register_pressure_reaches_native_limits() {
             format!("local t={{{ones}}};return #t"),
         ];
         for source in sources {
-            if lua.load(source.as_bytes()).into_function().is_err() {
+            if crate::reference_test::rejected_source(
+                "src/chunk51/tests.rs::source_dump_register_pressure_reaches_native_limits::rejected",
+                source.as_bytes(),
+            ) {
                 continue;
             }
             let program = crate::compile(source.as_bytes()).unwrap();
@@ -682,7 +712,6 @@ local a,b,c={inputs};debug.sethook();return a,b,c,table.concat(out,'|')"#
 
 #[test]
 fn official_native_dumps_reexport_like_the_c_writer() {
-    let lua = Lua::new();
     let cases: &[&[u8]]=&[
         b"global=3;local a,b=...;local t={x=a};t.x=b;t:method(a);return a+b,a-b,a*b,a/b,a%b,a^b,-a,#b,not a,a..b,a==b,a~=b,a<b,a<=b,a>b,a>=b,a and b or a,true,false,nil",
         b"local f;do local x=1;f=function()x=x+1;return function()return x end end end;return f(...)",
@@ -698,7 +727,10 @@ fn official_native_dumps_reexport_like_the_c_writer() {
             let bytes = dump(source, stripped);
             let program = crate::compile(&bytes).unwrap();
             let actual = super::dump(&program.data, program.data.entry as usize).unwrap();
-            let expected = lua.load(&bytes).into_function().unwrap().dump(false);
+            let expected = crate::reference_test::native_chunk(
+                "src/chunk51/tests.rs::official_native_dumps_reexport_like_the_c_writer::chunk0",
+                &(&bytes),
+            );
             assert_eq!(actual, expected);
         }
     }
@@ -721,7 +753,6 @@ fn generated_source_dump_round_trips_keep_control_flow_and_captures() {
 
 #[test]
 fn source_dump_long_control_flow_survives_native_instruction_expansion() {
-    let lua = Lua::new();
     for count in [80_000, 120_000] {
         let body = "x=x+1\n".repeat(count);
         let sources = [
@@ -735,7 +766,6 @@ fn source_dump_long_control_flow_survives_native_instruction_expansion() {
             format!("local x=0\nrepeat\n{body}until x>={};return x", 2 * count),
         ];
         for source in sources {
-            lua.load(source.as_bytes()).into_function().unwrap();
             let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
             let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
             compare_execution_against(&bytes, source.as_bytes());
@@ -756,8 +786,6 @@ fn long_dump_relays_preserve_capture_bindings_and_setlist_payloads() {
         vec!["0"; 27_000].join(","),
         "x=x+1\n".repeat(50_000)
     );
-    let lua = Lua::new();
-    lua.load(source.as_bytes()).into_function().unwrap();
     let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
     let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
     compare_execution_against(&bytes, source.as_bytes());
@@ -776,8 +804,6 @@ fn long_dump_relays_keep_open_varargs_adjacent_to_their_consumer() {
         "x=x+1\n".repeat(32_763),
         "x=x+1\n".repeat(50_000)
     );
-    let lua = Lua::new();
-    lua.load(source.as_bytes()).into_function().unwrap();
     let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
     let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
     compare_execution_against(&bytes, source.as_bytes());
@@ -796,12 +822,11 @@ fn long_dump_relays_do_not_reserve_additional_registers() {
         "x=x+1\n".repeat(80_000),
         vec!["1"; 52].join(",")
     );
-    let lua = Lua::new();
-    let reference = lua
-        .load(source.as_bytes())
-        .into_function()
-        .unwrap()
-        .dump(false);
+
+    let reference = crate::reference_test::native_chunk(
+        "src/chunk51/tests.rs::long_dump_relays_do_not_reserve_additional_registers::chunk0",
+        &(source.as_bytes()),
+    );
     let program = crate::compile_named(source.as_bytes(), b"=(binary codec)").unwrap();
     let bytes = super::dump(&program.data, program.data.entry as usize).unwrap();
     let actual = decoded(&bytes).chunk.prototypes[0].stack;

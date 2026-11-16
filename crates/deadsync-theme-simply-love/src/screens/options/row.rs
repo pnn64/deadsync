@@ -76,6 +76,8 @@ pub enum SubRowId {
     InputOptions,
     // Input Backend Options
     GamepadBackend,
+    #[cfg(target_os = "linux")]
+    AxisFix,
     SmxInput,
     UseFsrs,
     DebugFsrDump,
@@ -137,6 +139,7 @@ pub enum SubRowId {
     BgBrightness,
     CenteredP1Notefield,
     NoteScrollClock,
+    SongLuaMode,
     AnimatedBanners,
     ZmodRatingBox,
     BpmDecimal,
@@ -186,7 +189,6 @@ pub enum SubRowId {
     ShowStageDisplay,
     ShowGsBox,
     GsBoxPlacement,
-    GsBoxLeaderboards,
     GsBoxEventsFirst,
     // Course Options
     ShowRandomCourses,
@@ -204,6 +206,7 @@ pub enum SubRowId {
     AllowSongDeletion,
     // GrooveStats Options
     EnableGrooveStats,
+    GrooveStatsScoreboxBoards,
     ShowSrpgShop,
     SrpgShopFolder,
     EnableBoogieStats,
@@ -213,6 +216,8 @@ pub enum SubRowId {
     GrooveStatsQrLogin,
     // ArrowCloud Options
     EnableArrowCloud,
+    ArrowCloudRegularBoards,
+    ArrowCloudEventBoards,
     EnableGolf,
     ArrowCloudSubmitFails,
     ArrowCloudResultDialogs,

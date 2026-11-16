@@ -970,11 +970,3 @@ mod tests {
         assert_eq!(data.p1.panes[0].entries[0].name, "AAA");
     }
 }
-
-#[cfg(test)]
-#[path = "leaderboard/borrowed_state_original.rs"]
-mod borrowed_state_original;
-
-#[cfg(test)]
-#[path = "leaderboard/borrowed_state_perf.rs"]
-mod borrowed_state_perf;

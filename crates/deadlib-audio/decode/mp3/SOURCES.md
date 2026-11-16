@@ -35,14 +35,6 @@ of the second edition in 1998. Its SHA-256 is
 The LSF syntax/partition and table inspections recorded in earlier milestones
 refer to that accessed document, not a complete 1998 published copy.
 
-The [Sieler/Sperschneider Layer3 description, issue 1.2, 4 March 1997](https://mp3guessenc.sourceforge.io/MPEG%20Layer3%20Bitstream%20Syntax%20and%20Decoding.pdf)
-provides an explicit combined interpretation of MPEG-1/2 and the unofficial
-MPEG-2.5 extension. Its own scope gives the ISO texts precedence. Ambiguous
-mixed geometry, Huffman regions and stereo edges are therefore identified as
-specific selected rules and independently tested; see [REGIONS.md](REGIONS.md),
-[MPEG25.md](MPEG25.md) and [STEREO.md](STEREO.md). Decoder disagreement is
-preserved rather than resolved by majority vote.
-
 ## Numeric tables, algorithms and independent references
 
 `tests/data/{huffman,bands,dsp}.json` pin the factual numeric sources and hashes.

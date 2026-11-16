@@ -30,7 +30,7 @@ pub fn fetch_player_leaderboards(
     show_ex_score: bool,
     max_entries: usize,
 ) -> Result<groovestats::FetchedPlayerLeaderboards, Box<dyn Error + Send + Sync>> {
-    let mut combined = groovestats::fetch_validated_combined_player_leaderboards(
+    let combined = groovestats::fetch_validated_combined_player_leaderboards(
         service,
         api_key,
         username,
@@ -431,7 +431,3 @@ pub fn cached_itl_tournament_overall_ranks_for_profile_from_app_runtime(
         song_cache.as_slice(),
     )
 }
-
-#[cfg(test)]
-#[path = "player_leaderboards/completion_tests.rs"]
-mod completion_tests;

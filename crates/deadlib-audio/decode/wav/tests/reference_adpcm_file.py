@@ -1,4 +1,4 @@
-"""Real-file sequential/range checks against the retained four-reference corpus."""
+"""Real-file sequential/range checks against a supplied reference corpus."""
 import argparse
 import hashlib
 import json
@@ -15,12 +15,13 @@ def sha(b):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--output',type=Path,required=True)
-    ap.add_argument('--reference',type=Path)
+    ap.add_argument('--reference',type=Path,required=True,help='current reference_adpcm_encode.py manifest')
+    ap.add_argument('--corpus',type=Path,required=True,help='encoded fixture directory')
     args=ap.parse_args()
     root=Path(__file__).resolve().parents[1]
     workspace=root.parents[3]
-    reference=args.reference or root/'validation/adpcm-encoding-references.json'
-    report=json.loads(reference.read_text())
+    reference=args.reference.resolve()
+    report=json.loads(reference.read_text(encoding='utf-8'))
     if args.output.exists() or Path(str(args.output)+'-bin').exists():ap.error('preserve evidence; choose a new output stem')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     command=['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_file','--example','adpcm','--target-dir','target/wav']
@@ -34,7 +35,7 @@ def main():
     binary=binaries/f'adpcm_file{suffix}';borrowed=binaries/f'adpcm{suffix}'
     results=[]
     for case in report['cases']:
-        path=workspace/'target/wav/encoded-adpcm'/f"{case['name']}.wav"
+        path=args.corpus/f"{case['name']}.wav"
         if sha(path.read_bytes())!=case['fixture_sha256']:
             raise RuntimeError('corpus differs from retained reference validation: '+str(path))
         process=subprocess.run([str(binary),str(path)],capture_output=True,check=True)

@@ -47,7 +47,7 @@ impl Vm {
     fn write_native_capture(&mut self, capture: Capture, value: Value) -> Result<(), Error> {
         match capture {
             Capture::Lua { cell, .. } => {
-                self.set_cell(cell, value);
+                self.set_cell(cell, value)?;
                 Ok(())
             }
             Capture::Native { function, index } => self.set_native_capture(function, index, value),

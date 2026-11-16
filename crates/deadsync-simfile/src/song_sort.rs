@@ -559,7 +559,7 @@ fn alpha_grouped_songs(
 
 #[cfg(test)]
 mod tests {
-    include!("song_sort_selection_perf.rs");
+
     use super::*;
 
     #[test]

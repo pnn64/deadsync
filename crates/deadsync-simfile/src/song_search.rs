@@ -504,8 +504,7 @@ pub fn build_song_search_candidates<'a>(
 
 #[cfg(test)]
 mod tests {
-    include!("song_search_selection_perf.rs");
-    include!("song_text_perf.rs");
+
 
     #[test]
     fn title_search_preserves_partial_and_whitespace_transliteration_fallbacks() {

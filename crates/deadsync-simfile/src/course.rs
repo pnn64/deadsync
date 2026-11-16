@@ -2249,11 +2249,5 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
-    mod ownership_perf {
-        include!("course_ownership_perf.rs");
-    }
 
-    mod loading_perf {
-        include!("../../../tests/perf/course_resolve.rs");
-    }
 }

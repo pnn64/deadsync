@@ -76,26 +76,3 @@ assert_eq!(decoder.read_next()?.unwrap().pcm.plane(0), &[1, 2, 3]);
 
 See [ENCODING.md](ENCODING.md) for encoder options, streaming finalization and
 independent roundtrip evidence.
-
-Validation: 33 local integration tests plus three documentation examples; external
-gates compare all 75 valid official corpus files exactly with libFLAC, check
-1,533 seek positions and exercise all 11 faulty files. Symphonia 0.6.1 matches 72
-files; three explicitly recorded reference differences remain. Another 696
-generated encoder cases pass exact bidirectional libFLAC validation; Symphonia
-matches 694, with two named 32-bit stereo reference differences. See
-[COVERAGE.md](COVERAGE.md) for exact scope, commands, provenance and limitations.
-Ogg adds another 696 bidirectional libFLAC cases, all exact with Symphonia's Ogg
-demuxer and FLAC decoder, plus 73 official-file remuxes and 1,533 exact seeks.
-See [OGG.md](OGG.md) for mapping behavior and reproducible evidence.
-FFmpeg 9.0.2 additionally matches 74 official files and 72 Ogg remuxes; its one
-bit-depth-change rejection is pinned. Another 1,279 explicit wire cases and
-2,162 accepted fuzz-generated frames match both libFLAC and FFmpeg exactly.
-See [PARITY.md](PARITY.md) for the decode contract, reports and reproduction.
-
-See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Fuzz
-targets now have recorded ASan campaigns; see [fuzz/README.md](fuzz/README.md).
-Decode performance is competitive on the measured Intel x86-64 host: Windows raw
-decoding leads 26 of 27 classes, and Linux/WSL raw decoding takes a median 0.912x
-the fastest CRC-checking reference's time. See [PERFORMANCE.md](PERFORMANCE.md)
-for streaming, startup, seek and memory measurements, remaining Linux gaps,
-first-seek index costs and the limits of these comparisons.

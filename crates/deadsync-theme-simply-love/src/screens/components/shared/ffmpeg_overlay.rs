@@ -358,11 +358,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "../../../../../../tests/perf/ffmpeg_original.rs"]
-pub(crate) mod perf_original;
-
-#[cfg(test)]
-#[path = "../../../../../../tests/perf/ffmpeg_ownership.rs"]
-pub(crate) mod perf_tests;

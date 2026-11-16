@@ -2658,7 +2658,5 @@ mod tests {
         assert_eq!(fmt_scan_time(Duration::from_millis(61_200)), "1m1.2s");
     }
 
-    mod perf {
-        include!("scan_perf.rs");
-    }
+
 }

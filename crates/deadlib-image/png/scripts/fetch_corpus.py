@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch pinned, external PNG benchmark inputs without redistributing images."""
+"""Fetch pinned, external PNG test inputs without redistributing images."""
 import argparse
 import hashlib
 import json

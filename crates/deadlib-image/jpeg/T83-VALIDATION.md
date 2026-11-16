@@ -107,19 +107,14 @@ mutations, including every B1 prefix. Large streams use sparse boundaries rather
 than claiming exhaustive truncation of every byte. Pixel, storage and scan
 ceilings apply during mutations. Coverage-guided fuzzing remains open.
 
-All 153 tests pass in release and isolated debug builds. rustfmt, all-target
-Clippy and rustdoc with warnings denied pass, as do Python driver compilation
-and original/observed artifact hash audits. Production codec algorithms are
-unchanged by this validation milestone.
-
 ## Reproduction and limits
 
-From the package directory, using the existing reference builds:
+From the workspace root, using the existing reference builds:
 
 ```text
-python tests/fetch_t83.py --work experiments/t83 --fixtures tests/fixtures/t83
-python tests/reference_t83.py --native ABBREVIATED --ijg IJG --turbo TURBO --moz8 MOZ8 --moz12 MOZ12 --reference JPEGXT --out experiments/t83-gate --fixtures tests/fixtures/t83
-python tests/reference_t83_encode.py --rewrite REWRITE --ijg IJG --turbo TURBO --moz8 MOZ8 --moz12 MOZ12 --decoded experiments/t83-gate --out experiments/t83-encode --fixtures tests/fixtures/t83
+python crates/deadlib-image/jpeg/tests/fetch_t83.py --work target/jpeg-reference/t83 --fixtures crates/deadlib-image/jpeg/tests/fixtures/t83
+python crates/deadlib-image/jpeg/tests/reference_t83.py --native ABBREVIATED --ijg IJG --turbo TURBO --moz8 MOZ8 --moz12 MOZ12 --reference JPEGXT --out target/jpeg-reference/t83-gate --fixtures crates/deadlib-image/jpeg/tests/fixtures/t83
+python crates/deadlib-image/jpeg/tests/reference_t83_encode.py --rewrite REWRITE --ijg IJG --turbo TURBO --moz8 MOZ8 --moz12 MOZ12 --decoded target/jpeg-reference/t83-gate --out target/jpeg-reference/t83-encode --fixtures crates/deadlib-image/jpeg/tests/fixtures/t83
 cargo test -p deadlib-image-jpeg t83_transform -- --nocapture
 cargo test -p deadlib-image-jpeg --test t83 -- --nocapture
 ```

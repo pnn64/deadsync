@@ -7,9 +7,6 @@ use crate::{
 };
 use std::{boxed::Box, string::String, vec::Vec};
 
-#[cfg(test)]
-#[path = "../bulk_kernels.rs"]
-mod bulk_kernels;
 
 /// Return the number of bytes required to encode a value.
 pub fn encoded_size<E: Encode, C: Config>(val: E, config: C) -> Result<usize, EncodeError> {

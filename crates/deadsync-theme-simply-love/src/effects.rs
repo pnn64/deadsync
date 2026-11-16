@@ -610,7 +610,6 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     ShowStageDisplay(bool),
     ShowScorebox(bool),
     ScoreboxPlacement(SelectMusicScoreboxPlacement),
-    ScoreboxCycleMask(u8),
     ScoreboxEventsFirst(bool),
     ChartInfoMask(u8),
 }
@@ -710,6 +709,7 @@ pub enum SimplyLoveGameplayConfigRequest {
     BackgroundBrightnessTenths(u8),
     CenterPlayerOneNotefield(bool),
     NoteScrollClock(NoteScrollClock),
+    SongLuaMode(deadsync_config::options::SongLuaMode),
     BannerMode(GameplayBannerMode),
     ZmodRatingBoxText(bool),
     ShowBpmDecimal(bool),
@@ -738,6 +738,7 @@ pub enum SimplyLoveOptionsConfigRequest {
     GfxDebug(bool),
     #[cfg(target_os = "windows")]
     WindowsPadBackend(WindowsPadBackend),
+    AxisFix(bool),
     UseFsrs(bool),
     ThreeKeyNavigation(bool),
     ArcadeOptionsNavigation(bool),
@@ -847,8 +848,12 @@ pub enum SimplyLoveOnlineConfigRequest {
     AutoDownloadUnlocks(bool),
     SeparateUnlocksByPlayer(bool),
     GrooveStatsQrLogin(SimplyLoveQrLoginPolicy),
+    /// `GrooveStats` scorebox boards: ITG (bit 0), EX (bit 1), events (bit 2).
+    GrooveStatsScoreboxBoards(u8),
     EnableArrowCloud(bool),
     EnableGolf(bool),
+    ArrowCloudRegularBoards(bool),
+    ArrowCloudEventBoards(bool),
     SubmitArrowCloudFails(bool),
     ShowArrowCloudResultDialogs(bool),
     ArrowCloudQrLogin(SimplyLoveQrLoginPolicy),

@@ -229,7 +229,7 @@ pub(super) fn build_description_layout(
 
     let mut blocks = Vec::new();
 
-    let help = if item.id == ItemId::SmScoreboxCycle && !golf_enabled {
+    let help = if item.id == ItemId::AcEventBoards && !golf_enabled {
         &item.help[..1]
     } else {
         item.help
@@ -620,6 +620,7 @@ pub fn push_actors(
         OptionsView::Submenu(kind) => submenu_title(kind),
     };
     actors.push(top_bar_actor(state, title_text, visual_policy));
+    search::push_hint(actors, state);
 
     /* --------------------------- MAIN CONTENT UI -------------------------- */
 
@@ -1049,22 +1050,22 @@ pub fn push_actors(
                                 .min(layout.texts.len().saturating_sub(1));
                             let is_chart_info_row = matches!(kind, SubmenuKind::SelectMusic)
                                 && row.id == SubRowId::ChartInfo;
-                            let is_scorebox_cycle_row = matches!(kind, SubmenuKind::SelectMusic)
-                                && row.id == SubRowId::GsBoxLeaderboards;
+                            let is_scorebox_boards_row = matches!(kind, SubmenuKind::GrooveStats)
+                                && row.id == SubRowId::GrooveStatsScoreboxBoards;
                             let is_auto_screenshot_row = matches!(kind, SubmenuKind::Gameplay)
                                 && row.id == SubRowId::AutoScreenshot;
                             let is_color_choice_row = matches!(kind, SubmenuKind::Machine)
                                 && row.id == SubRowId::PreferredColor;
                             let is_multi_toggle_row = is_chart_info_row
-                                || is_scorebox_cycle_row
+                                || is_scorebox_boards_row
                                 || is_auto_screenshot_row;
                             let chart_info_enabled_mask = if is_chart_info_row {
                                 select_music_chart_info_enabled_mask(state)
                             } else {
                                 0
                             };
-                            let scorebox_enabled_mask = if is_scorebox_cycle_row {
-                                select_music_scorebox_cycle_enabled_mask(state)
+                            let scorebox_enabled_mask = if is_scorebox_boards_row {
+                                groovestats_scorebox_enabled_mask(state)
                             } else {
                                 0
                             };
@@ -1089,9 +1090,9 @@ pub fn push_actors(
                                         (chart_info_enabled_mask
                                             & select_music_chart_info_bit_from_choice(idx))
                                             != 0
-                                    } else if is_scorebox_cycle_row {
+                                    } else if is_scorebox_boards_row {
                                         (scorebox_enabled_mask
-                                            & scorebox_cycle_bit_from_choice(idx))
+                                            & groovestats_scorebox_bit_from_choice(idx))
                                             != 0
                                     } else if is_auto_screenshot_row {
                                         (auto_screenshot_mask
@@ -1186,8 +1187,8 @@ pub fn push_actors(
                                     let enabled = if is_chart_info_row {
                                         let bit = select_music_chart_info_bit_from_choice(idx);
                                         bit != 0 && (chart_info_enabled_mask & bit) != 0
-                                    } else if is_scorebox_cycle_row {
-                                        let bit = scorebox_cycle_bit_from_choice(idx);
+                                    } else if is_scorebox_boards_row {
+                                        let bit = groovestats_scorebox_bit_from_choice(idx);
                                         bit != 0 && (scorebox_enabled_mask & bit) != 0
                                     } else {
                                         let bit = auto_screenshot_bit_from_choice(idx);
@@ -1427,6 +1428,12 @@ pub fn push_actors(
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
     }
+    // The search overlay stays opaque while the page under it fades.
+    let search_start = actors.len();
+    search::push_overlay(actors, state);
+    for actor in &mut actors[search_start..] {
+        actor.mul_alpha(alpha_multiplier);
+    }
 
     crate::screens::components::shared::update_overlay::push(
         actors,
@@ -1483,9 +1490,3 @@ pub fn get_actors(
     );
     actors
 }
-
-#[cfg(test)]
-mod resource_perf;
-
-#[cfg(test)]
-mod data_paths_perf;

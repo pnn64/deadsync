@@ -2,7 +2,7 @@ use crate::audio::{AudioOptions, NoteScrollClock};
 use crate::coin::CoinOptions;
 use crate::defaults::*;
 use crate::null_or_die::{GraphOrigin, NullOrDieOptions};
-use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
+use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SongLuaMode, SystemOptions};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GameplayBannerMode, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
@@ -72,6 +72,8 @@ pub struct Config {
     // Global background brightness during gameplay (ITGmania: Pref "BGBrightness").
     // 1.0 = full brightness, 0.0 = black.
     pub bg_brightness: f32,
+    /// Bake song Lua before gameplay or keep it running during play.
+    pub song_lua_mode: SongLuaMode,
     // Gameplay backdrop color matching the Simply Love ScreenGameplay underlay
     // quad. Non-black values draw over song art and below notefield/HUD actors.
     // Parsed from a `#RRGGBB` hex string in `deadsync.ini` (key
@@ -293,11 +295,6 @@ pub struct Config {
     pub select_music_step_artist_box_mode: SelectMusicStepArtistBoxMode,
     pub show_select_music_scorebox: bool,
     pub select_music_scorebox_placement: SelectMusicScoreboxPlacement,
-    pub select_music_scorebox_cycle_itg: bool,
-    pub select_music_scorebox_cycle_ex: bool,
-    pub select_music_scorebox_cycle_hard_ex: bool,
-    pub select_music_scorebox_cycle_tournaments: bool,
-    pub select_music_scorebox_cycle_golf: bool,
     pub select_music_scorebox_events_first: bool,
     pub select_music_show_golf_pars: bool,
     pub select_music_chart_info_peak_nps: bool,
@@ -341,6 +338,13 @@ pub struct Config {
     pub enable_golf: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
+    pub groovestats_scorebox_itg: bool,
+    pub groovestats_scorebox_ex: bool,
+    pub groovestats_scorebox_events: bool,
+    /// `None` until the player sets it; see
+    /// [`crate::options::arrowcloud_regular_boards_shown`].
+    pub arrowcloud_regular_boards: Option<bool>,
+    pub arrowcloud_event_boards: bool,
     pub show_srpg_shop: bool,
     pub srpg_shop_folder: SrpgShopFolder,
     pub submit_arrowcloud_fails: bool,
@@ -371,6 +375,8 @@ pub struct Config {
     pub auto_screenshot_eval: u8,
     /// `ITGmania` `InputFilter` parity: per-input debounce window in seconds.
     pub input_debounce_seconds: f32,
+    /// Enable the legacy dance-pad axis workaround (`ITGmania` Axis Fix).
+    pub axis_fix: bool,
     /// `StepMania` parity: option menus use Start-to-advance arcade navigation.
     pub arcade_options_navigation: bool,
     /// ITGmania/Simply Love parity: use left/right/start style menu navigation.
@@ -425,6 +431,7 @@ impl Default for Config {
             translated_titles: system.translated_titles,
             mine_hit_sound: system.mine_hit_sound,
             bg_brightness: system.bg_brightness,
+            song_lua_mode: system.song_lua_mode,
             gameplay_bg_color: Color::BLACK,
             center_1player_notefield: system.center_1player_notefield,
             banner_cache: system.banner_cache,
@@ -540,11 +547,6 @@ impl Default for Config {
             select_music_step_artist_box_mode: select_music.step_artist_box_mode,
             show_select_music_scorebox: select_music.show_scorebox,
             select_music_scorebox_placement: select_music.scorebox_placement,
-            select_music_scorebox_cycle_itg: select_music.scorebox_cycle_itg,
-            select_music_scorebox_cycle_ex: select_music.scorebox_cycle_ex,
-            select_music_scorebox_cycle_hard_ex: select_music.scorebox_cycle_hard_ex,
-            select_music_scorebox_cycle_tournaments: select_music.scorebox_cycle_tournaments,
-            select_music_scorebox_cycle_golf: select_music.scorebox_cycle_golf,
             select_music_scorebox_events_first: select_music.scorebox_events_first,
             select_music_show_golf_pars: select_music.show_golf_pars,
             select_music_chart_info_peak_nps: select_music.chart_info_peak_nps,
@@ -578,6 +580,11 @@ impl Default for Config {
             enable_golf: system.enable_golf,
             enable_boogiestats: system.enable_boogiestats,
             enable_groovestats: system.enable_groovestats,
+            groovestats_scorebox_itg: system.groovestats_scorebox_itg,
+            groovestats_scorebox_ex: system.groovestats_scorebox_ex,
+            groovestats_scorebox_events: system.groovestats_scorebox_events,
+            arrowcloud_regular_boards: system.arrowcloud_regular_boards,
+            arrowcloud_event_boards: system.arrowcloud_event_boards,
             show_srpg_shop: system.show_srpg_shop,
             srpg_shop_folder: system.srpg_shop_folder,
             submit_arrowcloud_fails: system.submit_arrowcloud_fails,
@@ -593,6 +600,7 @@ impl Default for Config {
             shade_scatterplot_judgments: runtime.shade_scatterplot_judgments,
             auto_screenshot_eval: select_music.auto_screenshot_eval,
             input_debounce_seconds: DEFAULT_INPUT_DEBOUNCE_SECONDS,
+            axis_fix: runtime.axis_fix,
             arcade_options_navigation: runtime.arcade_options_navigation,
             three_key_navigation: runtime.three_key_navigation,
             use_fsrs: runtime.use_fsrs,

@@ -503,6 +503,11 @@ pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
             edge.input_slot,
             INPUT_SLOT_INVALID,
         );
+        if state.control.paused {
+            let update = state.update_prepared_lane_input_slot(prepared_slot, edge.pressed);
+            state.sync_active_hold_pressed_state(lane_idx, update.is_down);
+            continue;
+        }
         // Hold integration below must observe the pre-edge state. Carry this
         // lookup to the original mutation point; nothing between may update slots.
         let slot_was_down = prepared_slot.slot_was_down();

@@ -1,7 +1,5 @@
-#[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
 #[allow(dead_code)]
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 mod perf;
 
 #[allow(dead_code)]
@@ -10,8 +8,8 @@ mod wav {
 
     mod kernel {
         use super::*;
-        use crate::{bench, perf};
-        use std::hint::black_box;
+        use crate::perf;
+
 
         #[test]
         fn float64_packets_preserve_half_boundaries_and_nonfinite_silence() {
@@ -105,65 +103,5 @@ mod wav {
             }
         }
 
-        #[test]
-        #[ignore = "release CPU and allocation benchmark"]
-        fn benchmark_wav_float() {
-            for encoding in [Encoding::Float32, Encoding::Float64, Encoding::Pcm16] {
-                for pattern in ["audio", "clipped", "exceptional"] {
-                    for samples in [64usize, 8192] {
-                        let mut bytes: Vec<_> = (0..samples)
-                            .flat_map(|i| {
-                                let value = match pattern {
-                                    "audio" => f64::from(i.wrapping_mul(71) as i16) / 32768.0,
-                                    "clipped" => f64::from(i.wrapping_mul(71) as i16) / 8192.0,
-                                    _ => [
-                                        0.0,
-                                        -0.0,
-                                        f64::INFINITY,
-                                        f64::NEG_INFINITY,
-                                        f64::NAN,
-                                        f64::MAX,
-                                        -f64::MAX,
-                                        0.25,
-                                    ][i % 8],
-                                };
-                                match encoding {
-                                    Encoding::Float32 => (value as f32).to_le_bytes().to_vec(),
-                                    Encoding::Float64 => value.to_le_bytes().to_vec(),
-                                    _ => (value as i16).to_le_bytes().to_vec(),
-                                }
-                            })
-                            .collect();
-                        let mut output = Vec::with_capacity(samples);
-                        let length = bytes.len();
-                        bytes.resize(length + 4096, 0);
-                        // Fix the relative page offset so the PCM memcpy control
-                        // does not vary with allocator address aliasing.
-                        let offset = (output.as_ptr() as usize)
-                            .wrapping_sub(bytes.as_ptr() as usize)
-                            .wrapping_add(128)
-                            & 4095;
-                        bytes.copy_within(..length, offset);
-                        let bytes = &bytes[offset..offset + length];
-                        let label = format!(
-                            "wav/bytes={}/{pattern}/samples={samples}",
-                            encoding.sample_bytes()
-                        );
-                        let mut work = || {
-                            decode_packet_into(
-                                black_box(bytes),
-                                black_box(encoding),
-                                black_box(&mut output),
-                            )
-                            .unwrap();
-                            black_box(&output);
-                        };
-                        let (_, counts) = perf::measure(&mut work);
-                        println!("{label}: allocation {counts:?}");
-                        bench::measure(&label, (1_000_000 / samples).max(100), &mut work);
-                    }
-                }
-            }
-        }
     }
 }

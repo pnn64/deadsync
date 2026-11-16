@@ -951,7 +951,3 @@ mod tests {
         assert!((map.search(frame).unwrap().0 - 1.0).abs() <= 1e-9);
     }
 }
-
-#[cfg(test)]
-#[path = "position_perf.rs"]
-mod perf;

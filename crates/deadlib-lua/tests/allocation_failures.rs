@@ -255,7 +255,7 @@ fn allocation_failure_in_a_native_callback_returns_status_four_and_skips_the_han
         s.finish(1)
     }
     thread_local! { static LAST: Cell<Allocations> = const { Cell::new(Allocations {
-        attempts:0,rejected:0,deny_from:0,enabled:false,
+        attempts:0,rejected:0,deny_from:0,enabled:false,allocated_bytes:0,freed_bytes:0,
     }) }; }
     matrix(
         |nth| {

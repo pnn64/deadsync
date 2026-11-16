@@ -19,14 +19,6 @@ cargo test -p deadlib-audio-decode-ogg --release --test libogg -- --ignored --no
 cargo test -p deadlib-audio-decode-ogg --release --test seeking -- --include-ignored --nocapture
 ```
 
-Use the platform's executable path and omit `-A x64` for other generators.
-The v1.3.6 reference tag is recorded with the run evidence in `COVERAGE.md`.
-The corpus test checks every Ogg file recursively under the selected directory.
-The separate historical test selects three hash-pinned files, including valid
-Ogg framing with an invalid Vorbis endpoint. See
-[historical validation](../../../vorbis/HISTORICAL.md); the container comparison
-does not treat codec timestamps as a container restriction.
-
 `capture` uses the same unmodified libogg page/packet APIs as `decode`, allowing
 the intentional initial packet hole before the first returned packet after a
 mid-stream seek. Later holes remain errors. Rust tests compare every generated

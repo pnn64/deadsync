@@ -37,6 +37,10 @@ const PROJECTED_BEAT_EPSILON: f32 = 0.005;
 #[path = "song_lua_itgmania_semantic_parity/whole_song_archives.rs"]
 pub(crate) mod whole_song_archives;
 
+#[expect(
+    dead_code,
+    reason = "the regression harness shares replay CLI entry points"
+)]
 #[path = "song_lua_itgmania_semantic_parity/native_gameplay.rs"]
 mod native_gameplay;
 
@@ -2650,7 +2654,77 @@ fn sample_update_track(
     } else {
         (now - start) / (end - start)
     };
-    Some(current.value.lerp(&next.value, t))
+    Some(deadsync_song_lua::playback::song_lua_overlay_sample_lerp(
+        target,
+        &current.value,
+        &next.value,
+        t,
+        end - start,
+    ))
+}
+
+#[test]
+fn sparse_wrapped_spin_rotation_does_not_invent_a_tween() {
+    let context = SongLuaCompileContext::new(Path::new("."), "Sparse Spin Wrap");
+    let samples = [
+        deadsync_song_lua::SongLuaOverlayUpdateSample {
+            time: 0.5,
+            value: SongLuaOverlayUpdateValue::F32(-90.000_03),
+        },
+        deadsync_song_lua::SongLuaOverlayUpdateSample {
+            time: 0.516_666_65,
+            value: SongLuaOverlayUpdateValue::F32(-90.0),
+        },
+        deadsync_song_lua::SongLuaOverlayUpdateSample {
+            time: 3.2,
+            value: SongLuaOverlayUpdateValue::F32(270.0),
+        },
+    ];
+    for axis in [
+        SongLuaOverlayUpdateTarget::RotationX,
+        SongLuaOverlayUpdateTarget::RotationY,
+        SongLuaOverlayUpdateTarget::RotationZ,
+    ] {
+        assert_eq!(
+            sample_update_track(
+                &context,
+                SongLuaTimeUnit::Second,
+                axis,
+                &samples,
+                0.0,
+                0.666_666_7,
+            ),
+            Some(SongLuaOverlayUpdateValue::F32(-90.0)),
+            "sparse wrapped {axis:?} must hold the last actual frame"
+        );
+        assert_eq!(
+            sample_update_track(&context, SongLuaTimeUnit::Second, axis, &samples, 0.0, 3.2),
+            Some(SongLuaOverlayUpdateValue::F32(270.0)),
+            "the recorded wrap must still take effect at its actual time"
+        );
+    }
+    let dense = [
+        deadsync_song_lua::SongLuaOverlayUpdateSample {
+            time: 0.5,
+            value: SongLuaOverlayUpdateValue::F32(-90.0),
+        },
+        deadsync_song_lua::SongLuaOverlayUpdateSample {
+            time: 0.516_666_65,
+            value: SongLuaOverlayUpdateValue::F32(270.0),
+        },
+    ];
+    assert_eq!(
+        sample_update_track(
+            &context,
+            SongLuaTimeUnit::Second,
+            SongLuaOverlayUpdateTarget::RotationX,
+            &dense,
+            0.0,
+            0.508_333_3,
+        ),
+        Some(SongLuaOverlayUpdateValue::F32(90.0)),
+        "an authored full rotation sampled in consecutive frames must still interpolate"
+    );
 }
 
 fn overlay_state_render_value(

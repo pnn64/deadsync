@@ -14,6 +14,7 @@ mod graphics;
 mod input_routing;
 mod live_case;
 mod lobby_views;
+mod lua_loading;
 mod option_previews;
 mod reflex_runtime;
 mod screen_nav;
@@ -22,6 +23,7 @@ mod select_music_views;
 mod smx_runtime;
 mod updater;
 
+use self::lua_loading::SongLuaLoading;
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
 use crate::course::{
@@ -665,7 +667,21 @@ pub struct AppState {
 
 struct PendingGameplayInit {
     receiver: std::sync::mpsc::Receiver<Result<gameplay::State, String>>,
-    finish: GameplayInitFinish,
+    finish: PendingGameplayFinish,
+    loading: Option<SongLuaLoading>,
+}
+
+enum PendingGameplayFinish {
+    Gameplay(GameplayInitFinish),
+    Practice(PracticeInitFinish),
+}
+
+struct PracticeInitFinish {
+    started: Instant,
+    payload_ms: f64,
+    config: config::app_config::Config,
+    runtime: deadsync_theme_simply_love::views::PracticeRuntimeView,
+    edit_snapshot: Option<practice::EditSnapshot>,
 }
 
 struct GameplayPreload {
@@ -673,6 +689,7 @@ struct GameplayPreload {
     requested_chart_ixs: Vec<usize>,
     gameplay_song: Vec<GameplayChartData>,
     song_lua: crate::gameplay_entry::PreparedGameplaySongLua,
+    song_lua_mode: config::options::SongLuaMode,
     payload_ms: f64,
     elapsed_ms: f64,
 }
@@ -681,6 +698,7 @@ struct PendingGameplayPreload {
     receiver: std::sync::mpsc::Receiver<Result<GameplayPreload, String>>,
     ready: Option<Result<GameplayPreload, String>>,
     enter_requested: bool,
+    loading: Option<SongLuaLoading>,
 }
 
 #[inline(always)]
@@ -750,15 +768,19 @@ fn evaluation_context_view(
     }
 }
 
-const fn scorebox_pane_filter(
+pub(crate) const fn scorebox_pane_filter(
     config: &config::app_config::Config,
 ) -> deadsync_score::SelectMusicScoreboxFilter {
     deadsync_score::SelectMusicScoreboxFilter {
-        itg: config.select_music_scorebox_cycle_itg,
-        ex: config.select_music_scorebox_cycle_ex,
-        hard_ex: config.select_music_scorebox_cycle_hard_ex,
-        tournaments: config.select_music_scorebox_cycle_tournaments,
-        golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
+        groovestats_itg: config.groovestats_scorebox_itg,
+        groovestats_ex: config.groovestats_scorebox_ex,
+        groovestats_events: config.groovestats_scorebox_events,
+        arrowcloud_regular: config::options::arrowcloud_regular_boards_shown(
+            config.arrowcloud_regular_boards,
+            config.enable_groovestats,
+        ),
+        arrowcloud_events: config.arrowcloud_event_boards,
+        golf: config.enable_golf,
         events_first: config.select_music_scorebox_events_first,
     }
 }
@@ -1628,7 +1650,7 @@ pub struct App {
     /// prewarm and borrowed by hot command submission.
     gameplay_sfx: GameplaySfx,
     ui_sfx: audio_requests::UiSfx,
-    /// At most one CPU-only Gameplay construction job. Song Lua charts build
+    /// At most one CPU-only Gameplay or Practice construction job. Song Lua charts build
     /// their retained actor session here so the application thread can
     /// continue pumping the window and rendering the loading frame. The job is
     /// started at the Gameplay transition, has no gameplay-frame miss path or
@@ -1643,7 +1665,8 @@ pub struct App {
     /// transition. It preloads the selected gameplay chart payload and compiled
     /// song-Lua session. Choosing Player Options drops the handoff; automatic
     /// Gameplay entry consumes it. The bounded worker channel is the only
-    /// synchronization and no GPU/audio resource crosses it.
+    /// ownership transfer; an atomic counter publishes baking progress only.
+    /// No GPU/audio resource crosses the handoff.
     gameplay_preload: Option<PendingGameplayPreload>,
     /// Sole application-thread reader for played music-position segments.
     /// The callback publishes through a bounded lock-free ring; this retained
@@ -2223,8 +2246,8 @@ impl App {
                 banner_failed: deadsync_online::banners::failed_ids(),
                 pack_ini_offsets_on: self.frame_config.machine_pack_ini_offsets,
                 pack_sync_confidence: self.frame_config.null_or_die_confidence_percent,
-                pack_sync_menu_only: self.frame_config.only_dedicated_menu_buttons,
-                pack_sync_three_key: self.frame_config.three_key_navigation,
+                only_dedicated_menu_buttons: self.frame_config.only_dedicated_menu_buttons,
+                three_key_navigation: self.frame_config.three_key_navigation,
             },
             ready_dirs,
             installed,
@@ -2824,6 +2847,9 @@ impl App {
         let music_rate = options.music_rate;
         let video_renderer = cfg.video_renderer;
         let global_offset_seconds = cfg.global_offset_seconds;
+        let song_lua_mode = cfg.song_lua_mode;
+        let loading = SongLuaLoading::for_song(&song, song_lua_mode, options.active_color_index);
+        let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let spawn = std::thread::Builder::new()
             .name("select-music-gameplay-preload".to_string())
@@ -2853,12 +2879,15 @@ impl App {
                         &gameplay_config,
                         &video_renderer.to_string(),
                         song_lua_seed(),
+                        song_lua_mode,
+                        bake_progress,
                     );
                     GameplayPreload {
                         song_path,
                         requested_chart_ixs,
                         gameplay_song,
                         song_lua,
+                        song_lua_mode,
                         payload_ms,
                         elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
                     }
@@ -2871,6 +2900,7 @@ impl App {
                     receiver,
                     ready: None,
                     enter_requested: false,
+                    loading,
                 });
             }
             Err(error) => warn!("Failed to start Select Music gameplay preload: {error}"),
@@ -3088,10 +3118,17 @@ impl App {
                     .pending_gameplay_init
                     .take()
                     .expect("received Gameplay state requires a pending worker");
-                let commands = self.finish_gameplay_init(gs, &pending.finish);
-                if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                let (commands, target) = match pending.finish {
+                    PendingGameplayFinish::Gameplay(finish) => {
+                        (self.finish_gameplay_init(gs, &finish), CurrentScreen::Gameplay)
+                    }
+                    PendingGameplayFinish::Practice(finish) => {
+                        (self.finish_practice_init(gs, finish), CurrentScreen::Practice)
+                    }
+                };
+                if self.state.screens.current_screen == target {
                     // Start the prepared intro with the song, after loading.
-                    let (_, duration) = self.get_in_transition_for_screen(CurrentScreen::Gameplay);
+                    let (_, duration) = self.get_in_transition_for_screen(target);
                     self.state.shell.transition = TransitionState::FadingIn {
                         elapsed: 0.0,
                         duration,
@@ -3645,14 +3682,12 @@ impl App {
                     song,
                     chart_hashes,
                     golf_pars,
-                    lua_submit_allowed,
                     has_edit,
                     is_srpg_event,
                     is_itl_event,
                     unlock_song_dir,
                     sync_pref,
                 } => {
-                    view.lua_submit_allowed = lua_submit_allowed;
                     view.has_edit = has_edit;
                     view.is_srpg_event = is_srpg_event;
                     view.sync_pref = sync_pref;
@@ -4459,10 +4494,9 @@ impl App {
         self.poll_gameplay_preload(event_loop);
         self.poll_pending_gameplay_init(event_loop);
 
-        // Match the old synchronous handoff visually without blocking the OS
-        // event loop: once the normal options window expires, retain the last
-        // presented Select Music frame until the background preload is ready.
-        if self.gameplay_preload_holds_frame() {
+        // Keep the last selection frame for ordinary loads. Baked Lua draws
+        // progress instead while the background worker holds the handoff.
+        if self.gameplay_preload_holds_frame() && self.song_lua_loading().is_none() {
             self.state.shell.last_frame_end_time = Instant::now();
             return;
         }
@@ -4553,6 +4587,49 @@ impl App {
         deadlib_present::runtime::tick(logic_dt);
         screens::components::shared::visual_style_bg::tick_global(logic_dt);
         self.fsr_monitor.poll_pending_saves();
+        let standalone_snek_test = self.state.screens.current_screen == CurrentScreen::Input;
+        let select_music_snek_test = self.state.screens.current_screen == CurrentScreen::SelectMusic
+            && self
+                .state
+                .screens
+                .select_music_state
+                .test_input_overlay_visible;
+        let evaluation_snek_test = self.state.screens.current_screen == CurrentScreen::Evaluation
+            && screens::evaluation::test_input_pane_active(
+                &self.state.screens.evaluation_state,
+            );
+        let snek_test_active =
+            (standalone_snek_test || select_music_snek_test || evaluation_snek_test)
+            && frame_policy.game_flag == config::theme::GameFlag::Dance;
+        self.fsr_monitor.set_snek_test_active(snek_test_active);
+        if snek_test_active {
+            let snapshot = self.fsr_monitor.snek_sensor_snapshot();
+            if standalone_snek_test {
+                screens::input::set_snek_sensor_state(
+                    &mut self.state.screens.input_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            } else if select_music_snek_test {
+                screens::select_music::set_snek_sensor_state(
+                    &mut self.state.screens.select_music_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            } else {
+                screens::evaluation::set_snek_sensor_state(
+                    &mut self.state.screens.evaluation_state,
+                    snapshot.connected,
+                    snapshot.read_error,
+                    snapshot.sensors,
+                    snapshot.revision,
+                );
+            }
+        }
         let smx_screen_work = smx_runtime::screen_work(
             self.state.screens.current_screen,
             self.fsr_pads_active,
@@ -4588,7 +4665,9 @@ impl App {
                 TransitionState::ActorsFadeIn { .. } | TransitionState::FadingIn { .. }
             );
         // Keep the loading cover alive even if preparation outlasts the intro.
-        let transition_dt = if self.pending_gameplay_init.is_some() {
+        let transition_dt = if self.pending_gameplay_init.is_some()
+            || self.gameplay_preload_holds_frame()
+        {
             0.0
         } else {
             logic_dt
@@ -4631,7 +4710,7 @@ impl App {
             transition_step_screen: transition_plan.step_screen,
             gameplay_offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),
         });
-        if transition_plan.step_screen {
+        if transition_plan.step_screen && !self.gameplay_preload_holds_frame() {
             if step_plan.step_screen {
                 let smx_assignment = matches!(
                     self.state.screens.current_screen,
@@ -4692,7 +4771,7 @@ impl App {
                 self.state.shell.screenshot.request(None);
             }
         }
-        if self.gameplay_preload_holds_frame() {
+        if self.gameplay_preload_holds_frame() && self.song_lua_loading().is_none() {
             // Navigation was requested while stepping this frame. Do not draw
             // the now-cleared Select Music prompt state; retain the framebuffer
             // that was presented immediately before the original deadline.
@@ -7931,6 +8010,16 @@ impl App {
         let mut gameplay_segments = None;
         let visual_policy = policy.visual;
 
+        if let Some(loading) = self.song_lua_loading() {
+            screens::components::shared::song_lua_loading::push(
+                &mut actors,
+                loading.title.clone(),
+                loading.progress.fraction(),
+                loading.color_index,
+            );
+            return (actors, CLEAR, None);
+        }
+
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
@@ -8507,8 +8596,17 @@ impl App {
         result.consumed || has_effect
     }
 
+    /// Typed text, the key that typed it where the platform says, and whether
+    /// it is the key repeating: the Content Browser types only with keys that
+    /// are not a player's buttons.
     #[inline(always)]
-    fn handle_key_text(&mut self, event_loop: &ActiveEventLoop, text: &str) {
+    fn handle_key_text(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        text: &str,
+        typed_by: Option<deadlib_platform::input::KeyCode>,
+        repeat: bool,
+    ) {
         let action = match raw_key_text_route(self.state.screens.current_screen) {
             RawKeyTextRoute::ManageLocalProfiles => screens::manage_local_profiles::handle_text(
                 &mut self.state.screens.manage_local_profiles_state,
@@ -8516,10 +8614,11 @@ impl App {
             ),
             RawKeyTextRoute::ContentBrowser => {
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                content_browser::handle_raw_key_event(
+                content_browser::handle_text(
                     &mut self.state.screens.content_browser_state,
-                    None,
-                    Some(text),
+                    text,
+                    typed_by,
+                    repeat,
                     &mut self.theme_effect_scratch,
                 );
                 if let Err(e) = self.drain_theme_effects(event_loop) {
@@ -8528,11 +8627,13 @@ impl App {
                 return;
             }
             RawKeyTextRoute::Options => {
+                let ctrl_held = self.state.shell.interaction.controls().ctrl();
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 screens::options::handle_raw_key_event(
                     &mut self.state.screens.options_state,
                     None,
                     Some(text),
+                    ctrl_held,
                     &mut self.theme_effect_scratch,
                 );
                 if let Err(e) = self.drain_theme_effects(event_loop) {
@@ -8693,8 +8794,7 @@ impl App {
                 debug_assert!(self.theme_effect_scratch.is_empty());
                 let consumed = content_browser::handle_raw_key_event(
                     &mut self.state.screens.content_browser_state,
-                    Some(&raw_key),
-                    None,
+                    &raw_key,
                     &mut self.theme_effect_scratch,
                 );
                 let has_effect = !self.theme_effect_scratch.is_empty();
@@ -8721,6 +8821,7 @@ impl App {
                     &mut self.state.screens.options_state,
                     Some(&raw_key),
                     None,
+                    ctrl_held,
                     &mut self.theme_effect_scratch,
                 );
                 let has_effect = !self.theme_effect_scratch.is_empty();
@@ -9730,150 +9831,108 @@ impl App {
                 let practice_runtime_view =
                     crate::gameplay_runtime::practice_view(&cfg, &gameplay_init_view);
                 let init_started = Instant::now();
-                let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
-                    &song_arc,
-                    &charts,
-                    std::array::from_fn(|p| &gameplay_charts[p].timing),
-                    &player_profiles,
-                    &scroll_speeds,
-                    po_state.music_rate,
-                    gameplay_viewport(self.state.shell.metrics),
-                    space::current_window_px(),
-                    cfg.display_aspect_ratio,
-                    0.0,
-                    &gameplay_session,
-                    &gameplay_config_from_config(&cfg),
-                    &cfg.video_renderer.to_string(),
-                    song_lua_seed(),
-                );
-                match crate::gameplay_entry::apply_song_lua_reload(
-                    &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
-                    &mut gameplay_session, cfg.global_offset_seconds,
-                ) {
-                    Ok(true) => crate::gameplay_runtime::refresh_chart_view(
-                        &mut gameplay_init_view, &cfg, &song_arc, &charts,
-                        &gameplay_charts, &player_profiles, &gameplay_session,
-                    ),
-                    Ok(false) => {},
-                    Err(error) => {
-                        self.fail_gameplay_init(error);
-                        return commands;
+                let metrics = self.state.shell.metrics;
+                let viewport = gameplay_viewport(metrics);
+                let display_size = space::current_window_px();
+                let music_rate = po_state.music_rate;
+                let color_index = po_state.active_color_index;
+                let loading = SongLuaLoading::for_song(&song_arc, cfg.song_lua_mode, color_index);
+                let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
+                let has_song_lua = !song_arc.background_lua_changes.is_empty()
+                    || !song_arc.foreground_lua_changes.is_empty();
+                let init_config = cfg.clone();
+                let init = move || -> Result<gameplay::State, String> {
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(display_size.0, display_size.1);
+                    let prepared_song_lua = crate::gameplay_entry::prepare_song_lua(
+                        &song_arc,
+                        &charts,
+                        std::array::from_fn(|p| &gameplay_charts[p].timing),
+                        &player_profiles,
+                        &scroll_speeds,
+                        music_rate,
+                        viewport,
+                        display_size,
+                        init_config.display_aspect_ratio,
+                        0.0,
+                        &gameplay_session,
+                        &gameplay_config_from_config(&init_config),
+                        &init_config.video_renderer.to_string(),
+                        song_lua_seed(),
+                        init_config.song_lua_mode,
+                        bake_progress,
+                    );
+                    if crate::gameplay_entry::apply_song_lua_reload(
+                        &song_arc, &mut charts, &mut gameplay_charts, &prepared_song_lua,
+                        &mut gameplay_session, init_config.global_offset_seconds,
+                    )? {
+                        crate::gameplay_runtime::refresh_chart_view(
+                            &mut gameplay_init_view, &init_config, &song_arc, &charts,
+                            &gameplay_charts, &player_profiles, &gameplay_session,
+                        );
                     }
-                }
-                let mut gs = gameplay::init(
-                    song_arc,
-                    charts,
-                    gameplay_charts,
-                    gameplay_viewport(self.state.shell.metrics),
-                    gameplay_session,
-                    gameplay_config_from_config(&cfg),
-                    po_state.active_color_index,
-                    po_state.music_rate,
-                    scroll_speeds,
-                    player_profiles,
-                    None,
-                    None,
-                    Some(Arc::from("Practice Mode")),
-                    Arc::from("PRACTICE MODE"),
-                    Some(LeadInTiming {
-                        min_seconds_to_step: 0.0,
-                        min_seconds_to_music: 0.0,
-                    }),
-                    None,
-                    None,
-                    None,
-                    None,
-                    [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
-                    false,
-                    None,
-                    None,
-                    [0; MAX_PLAYERS],
-                    prepared_song_lua,
-                    gameplay_init_view,
-                );
-                crate::gameplay_runtime::sync_initial_scores(&mut gs);
-                gs.disable_score_for_practice();
-                let init_ms = init_started.elapsed().as_secs_f64() * 1000.0;
-
-                let sfx_prewarm_started = Instant::now();
-                self.gameplay_sfx = prewarm_gameplay_sfx(
-                    &mut self.audio,
-                    gs.song_lua_visuals(),
-                    &gs.song_media.sound_paths,
-                );
-                let sfx_prewarm_ms = sfx_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let show_video_backgrounds = cfg.show_video_backgrounds;
-                let background_path =
-                    Self::refresh_gameplay_background_path(&mut gs, show_video_backgrounds);
-                let asset_prewarm_started = Instant::now();
-                if let Some(backend) = self.backend.as_mut() {
-                    prewarm_gameplay_assets(
-                        &mut self.asset_manager,
-                        backend,
-                        [
-                            &gs.noteskin_assets.noteskin,
-                            &gs.noteskin_assets.mine_noteskin,
-                            &gs.noteskin_assets.receptor_noteskin,
-                            &gs.noteskin_assets.tap_explosion_noteskin,
-                        ],
-                        gs.song(),
-                        &gs.background_changes,
-                        gs.song_lua_visuals(),
+                    let gs = gameplay::init(
+                        song_arc,
+                        charts,
+                        gameplay_charts,
+                        viewport,
+                        gameplay_session,
+                        gameplay_config_from_config(&init_config),
+                        color_index,
+                        music_rate,
+                        scroll_speeds,
+                        player_profiles,
+                        None,
+                        None,
+                        Some(Arc::from("Practice Mode")),
+                        Arc::from("PRACTICE MODE"),
+                        Some(LeadInTiming {
+                            min_seconds_to_step: 0.0,
+                            min_seconds_to_music: 0.0,
+                        }),
+                        None,
+                        None,
+                        None,
+                        None,
+                        [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+                        false,
+                        None,
+                        None,
+                        [0; MAX_PLAYERS],
+                        prepared_song_lua,
+                        gameplay_init_view,
                     );
-                    self.dynamic_media.set_gameplay_background_paths(
-                        &mut self.asset_manager,
-                        backend,
-                        gs.song(),
-                        &gs.background_changes,
-                    );
-                    self.dynamic_media.sync_active_song_lua_videos(
-                        &mut self.asset_manager,
-                        backend,
-                        gs.song_media.video_paths(),
-                    );
-                    prewarm_gameplay_banners(
-                        &mut self.dynamic_media,
-                        &mut self.asset_manager,
-                        backend,
-                        &gs,
-                        cfg.gameplay_banner_mode,
-                    );
-                }
-                let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let text_prewarm_started = Instant::now();
-                prewarm_gameplay_text_layout_cache(
-                    &self.asset_manager,
-                    &self.state.shell.metrics,
-                    &mut self.gameplay_text_layout_cache,
-                    &mut self.gameplay_compose_scratch,
-                    &mut self.actor_scratch,
-                    &mut gs,
-                    &cfg,
-                    true,
-                );
-                let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
-                let song = gs.song();
-                debug!(
-                    "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
-                    song.title
-                );
-                commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
-                commands.push(Command::SetDynamicBackground(background_path));
-                // Reconcile chart timing and any video fallback once after the
-                // deferred command installs the initial media.
-                gs.background_path_dirty = true;
-                let mut practice_state = practice::init(gs, practice_runtime_view);
-                if let Some(snapshot) = edit_snapshot {
-                    practice::restore_edit_snapshot(&mut practice_state, snapshot);
-                }
-                self.state.screens.practice_state = Some(practice_state);
-                if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    crate::gameplay_runtime::enter_practice(
-                        ps,
-                        &mut self.audio,
-                        &self.gameplay_sfx,
-                        &mut self.music_clock,
-                    );
+                    Ok(gs)
+                };
+                let finish = PracticeInitFinish {
+                    started: init_started,
+                    payload_ms,
+                    config: cfg,
+                    runtime: practice_runtime_view,
+                    edit_snapshot,
+                };
+                if has_song_lua {
+                    self.state.screens.practice_state = None;
+                    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+                    std::thread::Builder::new()
+                        .name("practice-song-lua-prepare".to_string())
+                        .spawn(move || {
+                            let _ = sender.send(init());
+                        })
+                        .expect("failed to start practice song Lua preparation worker");
+                    self.pending_gameplay_init = Some(PendingGameplayInit {
+                        receiver,
+                        finish: PendingGameplayFinish::Practice(finish),
+                        loading,
+                    });
+                } else {
+                    match init() {
+                        Ok(gs) => commands.extend(self.finish_practice_init(gs, finish)),
+                        Err(error) => {
+                            self.fail_gameplay_init(error);
+                            return commands;
+                        }
+                    }
                 }
             } else {
                 panic!("Navigating to Practice without PlayerOptions state!");
@@ -10075,7 +10134,8 @@ impl App {
                     });
                     let gameplay_song = if let Some(preload) = preload.flatten() {
                         preloaded_payload_ms = Some(preload.payload_ms);
-                        prepared_song_lua = Some(preload.song_lua);
+                        prepared_song_lua = (preload.song_lua_mode == cfg.song_lua_mode)
+                            .then_some(preload.song_lua);
                         preload.gameplay_song
                     } else {
                         match song_loading::load_gameplay_charts(
@@ -10256,6 +10316,13 @@ impl App {
                 let metrics = self.state.shell.metrics;
                 let (pixel_width, pixel_height) = space::current_window_px();
                 let display_aspect_ratio = finish.config.display_aspect_ratio;
+                let song_lua_mode = finish.config.song_lua_mode;
+                let loading = if !lua_reload && !song_lua_prepared {
+                    SongLuaLoading::for_song(&song_arc, song_lua_mode, color_index)
+                } else {
+                    None
+                };
+                let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
                 let init = move || {
                     space::set_current_metrics(metrics);
                     space::set_current_window_px(pixel_width, pixel_height);
@@ -10280,6 +10347,8 @@ impl App {
                             &gameplay_config,
                             &video_renderer.to_string(),
                             song_lua_seed(),
+                            song_lua_mode,
+                            bake_progress,
                         )
                         })
                     };
@@ -10332,7 +10401,11 @@ impl App {
                             let _ = sender.send(init());
                         })
                         .expect("failed to start song Lua preparation worker");
-                    self.pending_gameplay_init = Some(PendingGameplayInit { receiver, finish });
+                    self.pending_gameplay_init = Some(PendingGameplayInit {
+                        receiver,
+                        finish: PendingGameplayFinish::Gameplay(finish),
+                        loading,
+                    });
                 } else {
                     match init() {
                         Ok(gs) => commands.extend(self.finish_gameplay_init(gs, &finish)),
@@ -11075,7 +11148,11 @@ impl ApplicationHandler<UserEvent> for App {
                 if key_event.state == winit::event::ElementState::Pressed
                     && let Some(text) = key_event.text.as_deref()
                 {
-                    self.handle_key_text(event_loop, text);
+                    let typed_by = match key_event.physical_key {
+                        winit::keyboard::PhysicalKey::Code(code) => Some(code),
+                        winit::keyboard::PhysicalKey::Unidentified(_) => None,
+                    };
+                    self.handle_key_text(event_loop, text, typed_by, key_event.repeat);
                 }
                 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
                 self.handle_unix_window_keyboard_fallback(event_loop, &key_event);
@@ -11144,6 +11221,7 @@ impl ApplicationHandler<UserEvent> for App {
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
         self.apply_pending_pad_config_commands();
+        self.fsr_monitor.shutdown_snek();
         self.fsr_monitor.flush_pending_saves();
         deadsync_reflex::shutdown();
         if let Err(error) = self.state.shell.fullscreen_state.restore() {

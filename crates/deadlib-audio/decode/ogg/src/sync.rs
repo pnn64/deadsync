@@ -1,5 +1,5 @@
 //! Buffered transport synchronization, separate from strict page grammar.
-use crate::{Error, MAX_PAGE_SIZE, Page, PageHeader, crc, reserve};
+use crate::{Error, MAX_PAGE_SIZE, Page, PageHeader, crc};
 use core::ops::Range;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -58,6 +58,8 @@ pub enum PageOut<'a> {
 pub struct SyncBuffer {
     data: Vec<u8>,
     start: usize,
+    // Initialized scratch can extend past the live input, avoiding repeated zeroing.
+    filled: usize,
     length: usize,
     position: u64,
     current: Option<(u64, Range<usize>)>,
@@ -83,6 +85,7 @@ impl SyncBuffer {
         Self {
             data: Vec::new(),
             start: 0,
+            filled: 0,
             length: 0,
             position: 0,
             current: None,
@@ -94,7 +97,7 @@ impl SyncBuffer {
         self.position
     }
     pub fn buffered_bytes(&self) -> usize {
-        self.data.len() - self.start
+        self.filled - self.start
     }
     pub fn storage_bytes(&self) -> usize {
         self.data.capacity()
@@ -106,8 +109,8 @@ impl SyncBuffer {
         self.reset_at(0);
     }
     pub fn reset_at(&mut self, position: u64) {
-        self.data.clear();
         self.start = 0;
+        self.filled = 0;
         self.length = 0;
         self.position = position;
         self.current = None;
@@ -116,9 +119,17 @@ impl SyncBuffer {
     /// Append bytes, compacting consumed storage when needed. A rejected append
     /// leaves bytes, position, hole state and the last page unchanged.
     pub fn push(&mut self, bytes: &[u8]) -> Result<(), Error> {
+        self.prepare(bytes.len())?;
+        self.data.truncate(self.filled);
+        self.data.extend_from_slice(bytes);
+        self.filled = self.data.len();
+        self.current = None;
+        Ok(())
+    }
+    fn prepare(&mut self, additional: usize) -> Result<(), Error> {
         let length = self
             .buffered_bytes()
-            .checked_add(bytes.len())
+            .checked_add(additional)
             .filter(|&n| n <= self.limit)
             .ok_or(Error::LimitExceeded("sync buffer bytes"))?;
         // Reserve before compaction so allocation failure is transactional.
@@ -133,13 +144,11 @@ impl SyncBuffer {
                 .try_reserve_exact(target - self.data.len())
                 .map_err(|_| Error::Allocation)?;
         }
-        if self.start != 0 && bytes.len() > self.data.capacity() - self.data.len() {
-            self.data.copy_within(self.start.., 0);
-            self.data.truncate(self.data.len() - self.start);
+        if self.start != 0 && additional > self.data.capacity() - self.filled {
+            self.data.copy_within(self.start..self.filled, 0);
+            self.filled -= self.start;
             self.start = 0;
         }
-        self.data.extend_from_slice(bytes);
-        self.current = None;
         Ok(())
     }
     pub fn current_page(&self) -> Option<LocatedSyncedPage<'_>> {
@@ -163,7 +172,7 @@ impl SyncBuffer {
         Ok(())
     }
     fn step(&mut self) -> Result<Step, Error> {
-        let bytes = &self.data[self.start..];
+        let bytes = &self.data[self.start..self.filled];
         self.current = None;
         // Appends preserve an already recognized header and its declared length.
         if self.length != 0 && bytes.len() < self.length {
@@ -265,7 +274,6 @@ pub enum SyncRead<'a> {
 pub struct SyncReader<R> {
     inner: R,
     sync: SyncBuffer,
-    input: Vec<u8>,
     options: SyncReadOptions,
 }
 impl<R: Read> SyncReader<R> {
@@ -279,7 +287,6 @@ impl<R: Read> SyncReader<R> {
         Ok(Self {
             inner,
             sync: SyncBuffer::with_limit(options.max_buffered_bytes),
-            input: Vec::new(),
             options,
         })
     }
@@ -290,7 +297,7 @@ impl<R: Read> SyncReader<R> {
         self.sync.buffered_bytes()
     }
     pub fn storage_bytes(&self) -> usize {
-        self.sync.storage_bytes() + self.input.capacity()
+        self.sync.storage_bytes()
     }
     pub fn get_ref(&self) -> &R {
         &self.inner
@@ -322,19 +329,26 @@ impl<R: Read> SyncReader<R> {
             if matches!(boundary, SyncBoundary::Buffered | SyncBoundary::Bytes(0)) {
                 return Ok(SyncRead::Boundary);
             }
-            if self.sync.buffered_bytes() > self.options.max_buffered_bytes - self.options.read_size
-            {
-                return Err(Error::LimitExceeded("sync buffer bytes"));
+            // Leave room for a read alongside an incomplete page.
+            let reserve = if self.sync.data.capacity() == 0 {
+                self.options
+                    .read_size
+                    .saturating_mul(2)
+                    .min(self.options.max_buffered_bytes)
+            } else {
+                self.options.read_size
+            };
+            self.sync.prepare(reserve)?;
+            let start = self.sync.filled;
+            let end = start + self.options.read_size;
+            if self.sync.data.len() < end {
+                self.sync.data.resize(end, 0);
             }
-            if self.input.len() != self.options.read_size {
-                reserve(&mut self.input, self.options.read_size)?;
-                self.input.resize(self.options.read_size, 0);
-            }
-            let n = self.inner.read(&mut self.input)?;
+            let n = self.inner.read(&mut self.sync.data[start..end])?;
+            self.sync.filled += n;
             if n == 0 {
                 return Ok(SyncRead::Eof);
             }
-            self.sync.push(&self.input[..n])?;
         }
     }
 }

@@ -1,6 +1,6 @@
 """Generate bounded song Lua programs and compare them with ITGmania observations.
 
-Uses only Python's standard library. See docs/testing/song-lua-fuzzing.md.
+Uses only Python's standard library.
 """
 import argparse
 from collections import Counter
@@ -50,7 +50,17 @@ def digest(path):
 def write_json(path, value):
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    temporary.replace(path)
+    # Readers of the live summary can briefly deny an atomic replace on
+    # Windows. Keep the completed temporary file and retry the same rename;
+    # rebuilding the comparison would lose a long deterministic fuzz run.
+    for attempt in range(6):
+        try:
+            temporary.replace(path)
+            break
+        except PermissionError as error:
+            if os.name != "nt" or error.winerror != 5 or attempt == 5:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def read_json(path):

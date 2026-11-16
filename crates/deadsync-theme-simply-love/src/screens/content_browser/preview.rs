@@ -1061,8 +1061,5 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "preview_pipelines_original.rs"]
-mod pipelines_original;
-#[cfg(test)]
 #[path = "preview_pipelines_perf.rs"]
 mod pipelines_perf;

@@ -1,0 +1,2934 @@
+{
+  "baseline_commit": "d3154cbf5969783417147c423e90d02f4fd9548d",
+  "fixture_commit": "cc1d89d9acd1440ce45f4574396d6a251c9a462d",
+  "accepted_runner_sha256": "c4fac7317085b2bb7aee232ace88f86d7fa9199561251a9c7c15335206be5231",
+  "accepted_source_sha256": {
+    "Cargo.toml": "2ab85aeaed7165ae9931e4e90f4230e101f8863c997225d72235feff0d327f53",
+    "Cargo.lock": "3066d35a594258b956af8f6c7cf54451713ed50f23c66a7b20f55164083dad07",
+    "crates/deadsync-song-lua/src/actors/initial_state.rs": "029effa290e14cf07ac685b999520b044f12bac83df48fcb8a43e73a7ed11ae5",
+    "tests/song_lua_itgmania_semantic_parity/native_gameplay.rs": "2e671099ae7d67c04fbed023ccbc7a6dadf78654f287b94c3f8fc64ca56852ad",
+    "tests/song_lua_itgmania_semantic_parity/whole_song_archives.rs": "72ec0f37066bbeb7a82fdaf208f723f4b4c4412012dda7a2ae518dd36732d4f5"
+  },
+  "source_hash_normalization": "UTF-8 text with LF line endings",
+  "production_crate_sources_changed": false,
+  "environment": {
+    "cpu": "Intel Xeon E5-2697 v2",
+    "vcpus": 2,
+    "memory_mib": 65536,
+    "memory_limit_gib": 58,
+    "sample_rate_hz": 99,
+    "profile": "release; LTO disabled; codegen-units16; debug1; frame pointers",
+    "inputs": "Retained uncompressed tar captures; decompression and setup hashing excluded; all runner validation included",
+    "cache_policy": "OS caches uncontrolled; same VM per fixture; baseline followed by experimental and accepted runs"
+  },
+  "tests": {
+    "windows_native_gameplay": 79,
+    "linux_native_gameplay": 78,
+    "archive_integrity_windows": 1,
+    "archive_integrity_linux": 1,
+    "accepted_full_song_replays": 16
+  },
+  "profiles": [
+    {
+      "fixture": "fof",
+      "variant": "accepted",
+      "elapsed_seconds": 377.302,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "c4fac7317085b2bb7aee232ace88f86d7fa9199561251a9c7c15335206be5231",
+      "input_tar_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "pending_coverage": [
+          "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+          "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 36888,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 17689,
+          "percent": 47.953
+        },
+        "allocator_exclusive": {
+          "samples": 5888,
+          "percent": 15.962
+        },
+        "json_load_inclusive": {
+          "samples": 7937,
+          "percent": 21.516
+        },
+        "state_reads_inclusive": {
+          "samples": 52,
+          "percent": 0.141
+        },
+        "compare_calls_inclusive": {
+          "samples": 960,
+          "percent": 2.602
+        },
+        "coverage_inclusive": {
+          "samples": 281,
+          "percent": 0.762
+        },
+        "context_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "98f362133a842911f65c0a63a95100a39db96b3de039fbc5c0572142e704841a",
+          "bytes": 1736241
+        },
+        "profile.json.gz": {
+          "sha256": "d4ec877c390cc3b873ff5cab76f555b6972d1d90488752d05e2db027504ee63d",
+          "bytes": 2285557
+        },
+        "profile.json.syms.json": {
+          "sha256": "930314dc5ba0ded2b9b3944b380f5192c5b45e035dcddaf802aed4d3ccb3bef3",
+          "bytes": 454699
+        }
+      }
+    },
+    {
+      "fixture": "fof",
+      "variant": "baseline",
+      "elapsed_seconds": 485.866,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "pending_coverage": [
+          "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+          "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 47609,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 23549,
+          "percent": 49.463
+        },
+        "json_load_inclusive": {
+          "samples": 11986,
+          "percent": 25.176
+        },
+        "allocator_exclusive": {
+          "samples": 5728,
+          "percent": 12.031
+        },
+        "state_reads_inclusive": {
+          "samples": 60,
+          "percent": 0.126
+        },
+        "compare_calls_inclusive": {
+          "samples": 1003,
+          "percent": 2.107
+        },
+        "coverage_inclusive": {
+          "samples": 875,
+          "percent": 1.838
+        },
+        "context_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "03a99fa887e097a1b0ee4483b3288bc563a75adfa36b20b2aefa469399608795",
+          "bytes": 1757775
+        },
+        "profile.json.gz": {
+          "sha256": "5421d97a0f283c2dccb6da0e707f964a309a4f6a728d730c28edc116307fd3b5",
+          "bytes": 2433561
+        },
+        "profile.json.syms.json": {
+          "sha256": "4b3a8a54f0951ba9291c15aea287970981a38397ef432ab5bcfd879855ff6cf9",
+          "bytes": 483274
+        }
+      }
+    },
+    {
+      "fixture": "fof",
+      "variant": "candidate",
+      "elapsed_seconds": 379.065,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "a1450ecd63717db105270b58432cb9f690af05d1d79ae0b075f12bf06e547cb4",
+      "input_tar_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "pending_coverage": [
+          "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+          "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 36993,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 17653,
+          "percent": 47.72
+        },
+        "allocator_exclusive": {
+          "samples": 5761,
+          "percent": 15.573
+        },
+        "json_load_inclusive": {
+          "samples": 7952,
+          "percent": 21.496
+        },
+        "state_reads_inclusive": {
+          "samples": 54,
+          "percent": 0.146
+        },
+        "compare_calls_inclusive": {
+          "samples": 828,
+          "percent": 2.238
+        },
+        "coverage_inclusive": {
+          "samples": 270,
+          "percent": 0.73
+        },
+        "context_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "6024803431e9306fffb9904e76baa192839725e2bf3bb0a711416676276d3018",
+          "bytes": 1750748
+        },
+        "profile.json.gz": {
+          "sha256": "43e822992567f2f57634fbdbd0106572d36aeefe119c6eeb80ea33f7a60e08b2",
+          "bytes": 2284591
+        },
+        "profile.json.syms.json": {
+          "sha256": "227418845065d1f237df8fbc764e39be911912e3dac97a5281183bb82980002a",
+          "bytes": 433960
+        }
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "variant": "accepted",
+      "elapsed_seconds": 247.873,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "c4fac7317085b2bb7aee232ace88f86d7fa9199561251a9c7c15335206be5231",
+      "input_tar_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+          "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 24154,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 4983,
+          "percent": 20.63
+        },
+        "allocator_exclusive": {
+          "samples": 5931,
+          "percent": 24.555
+        },
+        "json_load_inclusive": {
+          "samples": 4641,
+          "percent": 19.214
+        },
+        "context_clone_inclusive": {
+          "samples": 99,
+          "percent": 0.41
+        },
+        "clock_clone_inclusive": {
+          "samples": 99,
+          "percent": 0.41
+        },
+        "state_reads_inclusive": {
+          "samples": 510,
+          "percent": 2.111
+        },
+        "compare_calls_inclusive": {
+          "samples": 2501,
+          "percent": 10.354
+        },
+        "coverage_inclusive": {
+          "samples": 699,
+          "percent": 2.894
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "834fb5724d489e0adac9064ecf45f7466e2b9eaac02c54c694741d4f420689d4",
+          "bytes": 6923848
+        },
+        "profile.json.gz": {
+          "sha256": "e5a9064f5ba0c3baa19386bd216219fff553a8b59fc42d8e3ef24035ea4b9a2c",
+          "bytes": 1448524
+        },
+        "profile.json.syms.json": {
+          "sha256": "d096cc1b9d713a5a3352ffe7b43f9edd35928dd9a771903af0a1aa3bee25acd7",
+          "bytes": 583419
+        }
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "variant": "baseline",
+      "elapsed_seconds": 310.014,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+          "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 30284,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 6676,
+          "percent": 22.045
+        },
+        "allocator_exclusive": {
+          "samples": 6295,
+          "percent": 20.787
+        },
+        "json_load_inclusive": {
+          "samples": 5875,
+          "percent": 19.4
+        },
+        "context_clone_inclusive": {
+          "samples": 103,
+          "percent": 0.34
+        },
+        "clock_clone_inclusive": {
+          "samples": 103,
+          "percent": 0.34
+        },
+        "state_reads_inclusive": {
+          "samples": 662,
+          "percent": 2.186
+        },
+        "compare_calls_inclusive": {
+          "samples": 2803,
+          "percent": 9.256
+        },
+        "coverage_inclusive": {
+          "samples": 2547,
+          "percent": 8.41
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "93690c60c6ae16a0464a3562c7aa3b1cf5a06925f38f6e19ebeedc5ef06db542",
+          "bytes": 6975899
+        },
+        "profile.json.gz": {
+          "sha256": "f2dc4b0023385495eb8457dad5140a272fcc16fc9af22827bdbc538f8021d53b",
+          "bytes": 1530751
+        },
+        "profile.json.syms.json": {
+          "sha256": "f5fe1af6a6cd2ea239f0f330c5002916e78047a2ecda23321e9aa2158af65052",
+          "bytes": 667722
+        }
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "variant": "candidate",
+      "elapsed_seconds": 257.699,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "a1450ecd63717db105270b58432cb9f690af05d1d79ae0b075f12bf06e547cb4",
+      "input_tar_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+          "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 25118,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 5019,
+          "percent": 19.982
+        },
+        "json_load_inclusive": {
+          "samples": 4547,
+          "percent": 18.103
+        },
+        "allocator_exclusive": {
+          "samples": 6102,
+          "percent": 24.293
+        },
+        "context_clone_inclusive": {
+          "samples": 99,
+          "percent": 0.394
+        },
+        "clock_clone_inclusive": {
+          "samples": 99,
+          "percent": 0.394
+        },
+        "state_reads_inclusive": {
+          "samples": 622,
+          "percent": 2.476
+        },
+        "compare_calls_inclusive": {
+          "samples": 2834,
+          "percent": 11.283
+        },
+        "coverage_inclusive": {
+          "samples": 722,
+          "percent": 2.874
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "5482e8f05609398235dae042c0e4fd0ec78ab9e96f2623793ed613c2ab95e022",
+          "bytes": 6943336
+        },
+        "profile.json.gz": {
+          "sha256": "f02939a600af471e3ea6554f604485c1435f1b2782afa561c0074db38207e46b",
+          "bytes": 1461242
+        },
+        "profile.json.syms.json": {
+          "sha256": "ebe2099dc98745157796d3b73767ff60e524a470f5073ae8593ee3fc795201cb",
+          "bytes": 639721
+        }
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "variant": "accepted",
+      "elapsed_seconds": 704.371,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "c4fac7317085b2bb7aee232ace88f86d7fa9199561251a9c7c15335206be5231",
+      "input_tar_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "pending_coverage": [
+          "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+          "native drawable state/resources: Quad",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 69077,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 1683,
+          "percent": 2.436
+        },
+        "allocator_exclusive": {
+          "samples": 2708,
+          "percent": 3.92
+        },
+        "json_load_inclusive": {
+          "samples": 1381,
+          "percent": 1.999
+        },
+        "context_clone_inclusive": {
+          "samples": 6,
+          "percent": 0.009
+        },
+        "state_reads_inclusive": {
+          "samples": 17754,
+          "percent": 25.702
+        },
+        "compare_calls_inclusive": {
+          "samples": 1576,
+          "percent": 2.282
+        },
+        "coverage_inclusive": {
+          "samples": 183,
+          "percent": 0.265
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "bd3f577b7b324fa0ea8313023e30c9b372b696cf9e4697a355c496245cdd6568",
+          "bytes": 7750169
+        },
+        "profile.json.gz": {
+          "sha256": "e6f44d230f7440fbd2995207d0ef0cf08838c0d7e4b1cbec7a84dfed97a0025f",
+          "bytes": 1250235
+        },
+        "profile.json.syms.json": {
+          "sha256": "791fbca30f26596ac70498580faab4be66e189028155c57f821f49da96f6f561",
+          "bytes": 656009
+        }
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "variant": "baseline",
+      "elapsed_seconds": 692.002,
+      "timing_method": "systemd journal start/deactivation interval",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "pending_coverage": [
+          "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+          "native drawable state/resources: Quad",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 68051,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 2239,
+          "percent": 3.29
+        },
+        "allocator_exclusive": {
+          "samples": 2534,
+          "percent": 3.724
+        },
+        "json_load_inclusive": {
+          "samples": 1659,
+          "percent": 2.438
+        },
+        "context_clone_inclusive": {
+          "samples": 8,
+          "percent": 0.012
+        },
+        "state_reads_inclusive": {
+          "samples": 16753,
+          "percent": 24.618
+        },
+        "compare_calls_inclusive": {
+          "samples": 1641,
+          "percent": 2.411
+        },
+        "coverage_inclusive": {
+          "samples": 611,
+          "percent": 0.898
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "d08ad3029dd7ce2195b71bfd0c198d223f2b29988e90a22af47c0eb866577f9a",
+          "bytes": 7763538
+        },
+        "profile.json.gz": {
+          "sha256": "5fb3cd0760f346d7ceb7de619d34d1608115625cb069fc1ce43610e00627131d",
+          "bytes": 1233885
+        },
+        "profile.json.syms.json": {
+          "sha256": "9d8cf58d4621ab170cc3ce398ad45e578d8b0c6f70f8073873f1c8977ea4179a",
+          "bytes": 691548
+        }
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "variant": "candidate",
+      "elapsed_seconds": 705.534,
+      "timing_method": "worker elapsed replay and profiler time",
+      "runner_sha256": "a1450ecd63717db105270b58432cb9f690af05d1d79ae0b075f12bf06e547cb4",
+      "input_tar_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "pending_coverage": [
+          "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+          "native drawable state/resources: Quad",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      },
+      "samples": 69425,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 1689,
+          "percent": 2.433
+        },
+        "allocator_exclusive": {
+          "samples": 2720,
+          "percent": 3.918
+        },
+        "json_load_inclusive": {
+          "samples": 1388,
+          "percent": 1.999
+        },
+        "context_clone_inclusive": {
+          "samples": 7,
+          "percent": 0.01
+        },
+        "state_reads_inclusive": {
+          "samples": 16848,
+          "percent": 24.268
+        },
+        "compare_calls_inclusive": {
+          "samples": 1577,
+          "percent": 2.272
+        },
+        "coverage_inclusive": {
+          "samples": 186,
+          "percent": 0.268
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "report.json.zst": {
+          "sha256": "d94ab4721db7cf7e7a690fd984b01202d8a464057eae89520918ac47c1e8c178",
+          "bytes": 7785268
+        },
+        "profile.json.gz": {
+          "sha256": "c4cc1d53ab1ff3240314f7428313a239926ce8fa0f8f6a37ddd5d3f6d8fbe4ca",
+          "bytes": 1241726
+        },
+        "profile.json.syms.json": {
+          "sha256": "cc3beeb77fb2e91d7b1c65cd618d140a3d5f900e80d9dbbe1f250ec22c1d554c",
+          "bytes": 600021
+        }
+      }
+    }
+  ],
+  "semantic_equivalence": [
+    {
+      "id": "68eda87bf02562c3",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.Draw",
+            "Actor.GetName",
+            "Actor.GetNumWrapperStates",
+            "Actor.GetParent",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZoom",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.SetSize",
+            "Actor.addcommand",
+            "Actor.blend",
+            "Actor.diffuse",
+            "Actor.diffusealpha",
+            "Actor.fadeleft",
+            "Actor.faderight",
+            "Actor.getrotation",
+            "Actor.playcommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.rotationz",
+            "Actor.scale_or_crop_background",
+            "Actor.sleep",
+            "Actor.visible",
+            "Actor.x",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoom",
+            "Actor.zoomto",
+            "Actor.zoomz",
+            "ActorFrame.GetChild",
+            "ActorFrame.GetChildren",
+            "ActorFrame.GetNumChildren",
+            "ActorFrame.SetDrawFunction",
+            "ActorFrame.SetFOV",
+            "ActorFrame.SetUpdateFunction",
+            "ActorFrame.fov",
+            "ActorFrame.vanishpoint",
+            "ActorFrameTexture.Create",
+            "ActorFrameTexture.EnableAlphaBuffer",
+            "ActorFrameTexture.EnableDepthBuffer",
+            "ActorFrameTexture.EnableFloat",
+            "ActorFrameTexture.EnablePreserveTexture",
+            "ActorFrameTexture.GetTexture",
+            "ActorMultiVertex.GetTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetTexture",
+            "ActorMultiVertex.SetVertices",
+            "BitmapText.GetText",
+            "GameState.GetCurrentSong",
+            "GameState.GetCurrentSteps",
+            "GameState.GetPlayerState",
+            "GameState.GetSongPosition",
+            "PlayerOptions.CMod",
+            "PlayerOptions.Distant",
+            "PlayerOptions.FromString",
+            "PlayerOptions.Hallway",
+            "PlayerOptions.Incoming",
+            "PlayerOptions.MMod",
+            "PlayerOptions.Mini",
+            "PlayerOptions.Overhead",
+            "PlayerOptions.Reverse",
+            "PlayerOptions.Space",
+            "PlayerOptions.XMod",
+            "PlayerState.GetPlayerOptions",
+            "PrefsManager.GetPreference",
+            "ScreenManager.GetTopScreen",
+            "Song.GetSongDir",
+            "Song.GetTimingData",
+            "Sprite.GetTexture",
+            "Sprite.LoadFromCurrentSongBackground",
+            "Steps.GetDifficulty",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.Draw",
+            "Actor.GetNumWrapperStates",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZoom",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.SetSize",
+            "Actor.addcommand",
+            "Actor.blend",
+            "Actor.fadeleft",
+            "Actor.faderight",
+            "Actor.getrotation",
+            "Actor.playcommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.scale_or_crop_background",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoomz",
+            "ActorFrame.GetChildren",
+            "ActorFrame.SetDrawFunction",
+            "ActorFrame.SetFOV",
+            "ActorFrame.fov",
+            "ActorFrame.vanishpoint",
+            "ActorFrameTexture.Create",
+            "ActorFrameTexture.EnableAlphaBuffer",
+            "ActorFrameTexture.EnableDepthBuffer",
+            "ActorFrameTexture.EnableFloat",
+            "ActorFrameTexture.EnablePreserveTexture",
+            "ActorFrameTexture.GetTexture",
+            "ActorMultiVertex.GetTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetTexture",
+            "ActorMultiVertex.SetVertices",
+            "BitmapText.GetText",
+            "GameState.GetSongPosition",
+            "PlayerOptions.CMod",
+            "PlayerOptions.Distant",
+            "PlayerOptions.FromString",
+            "PlayerOptions.Hallway",
+            "PlayerOptions.Incoming",
+            "PlayerOptions.MMod",
+            "PlayerOptions.Mini",
+            "PlayerOptions.Overhead",
+            "PlayerOptions.Space",
+            "PlayerOptions.XMod",
+            "Song.GetTimingData",
+            "Sprite.LoadFromCurrentSongBackground"
+          ],
+          "nested_theme_operations": [
+            "Actor.GetHeight",
+            "Actor.GetWidth",
+            "Actor.diffusealpha",
+            "Actor.scale_or_crop_background_no_move",
+            "Actor.setsize",
+            "Actor.xy",
+            "Actor.zoom",
+            "GameState.GetCurrentSong",
+            "PrefsManager.GetPreference",
+            "Song.GetBackgroundPath",
+            "Sprite.LoadBackground",
+            "Sprite.LoadFromSongBackground"
+          ],
+          "pending": [
+            "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetSize, Actor.addcommand, Actor.blend, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.scale_or_crop_background, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, ActorMultiVertex.GetTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, BitmapText.GetText, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Distant, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Space, PlayerOptions.XMod, Song.GetTimingData, Sprite.LoadFromCurrentSongBackground",
+            "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, Quad, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 8236,
+        "replayed_frames": 8236,
+        "compared_stage_fields": 1672,
+        "command_queries": {
+          "compared": true,
+          "native_count": 73039,
+          "actual_count": 73039
+        },
+        "native_event_indices_sha256": "87f3f52fb75cc6dcbc0e4ae255da606e28ce1df2cfb5a2a16ff66414a1ee5f8b"
+      }
+    },
+    {
+      "id": "730650ffb42269d8",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.Draw",
+            "Actor.GetName",
+            "Actor.GetNumWrapperStates",
+            "Actor.GetParent",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZoom",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.SetSize",
+            "Actor.addcommand",
+            "Actor.blend",
+            "Actor.diffuse",
+            "Actor.diffusealpha",
+            "Actor.fadeleft",
+            "Actor.faderight",
+            "Actor.getrotation",
+            "Actor.playcommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.rotationz",
+            "Actor.scale_or_crop_background",
+            "Actor.sleep",
+            "Actor.visible",
+            "Actor.x",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoom",
+            "Actor.zoomto",
+            "Actor.zoomz",
+            "ActorFrame.GetChild",
+            "ActorFrame.GetChildren",
+            "ActorFrame.GetNumChildren",
+            "ActorFrame.SetDrawFunction",
+            "ActorFrame.SetFOV",
+            "ActorFrame.SetUpdateFunction",
+            "ActorFrame.fov",
+            "ActorFrame.vanishpoint",
+            "ActorFrameTexture.Create",
+            "ActorFrameTexture.EnableAlphaBuffer",
+            "ActorFrameTexture.EnableDepthBuffer",
+            "ActorFrameTexture.EnableFloat",
+            "ActorFrameTexture.EnablePreserveTexture",
+            "ActorFrameTexture.GetTexture",
+            "ActorMultiVertex.GetTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetTexture",
+            "ActorMultiVertex.SetVertices",
+            "BitmapText.GetText",
+            "GameState.GetCurrentSong",
+            "GameState.GetCurrentSteps",
+            "GameState.GetPlayerState",
+            "GameState.GetSongPosition",
+            "PlayerOptions.CMod",
+            "PlayerOptions.Distant",
+            "PlayerOptions.FromString",
+            "PlayerOptions.Hallway",
+            "PlayerOptions.Incoming",
+            "PlayerOptions.MMod",
+            "PlayerOptions.Mini",
+            "PlayerOptions.Overhead",
+            "PlayerOptions.Reverse",
+            "PlayerOptions.Space",
+            "PlayerOptions.XMod",
+            "PlayerState.GetPlayerOptions",
+            "PrefsManager.GetPreference",
+            "ScreenManager.GetTopScreen",
+            "Song.GetSongDir",
+            "Song.GetTimingData",
+            "Sprite.GetTexture",
+            "Sprite.LoadFromCurrentSongBackground",
+            "Steps.GetDifficulty",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.Draw",
+            "Actor.GetNumWrapperStates",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZoom",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.SetSize",
+            "Actor.addcommand",
+            "Actor.blend",
+            "Actor.fadeleft",
+            "Actor.faderight",
+            "Actor.getrotation",
+            "Actor.playcommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.scale_or_crop_background",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoomz",
+            "ActorFrame.GetChildren",
+            "ActorFrame.SetDrawFunction",
+            "ActorFrame.SetFOV",
+            "ActorFrame.fov",
+            "ActorFrame.vanishpoint",
+            "ActorFrameTexture.Create",
+            "ActorFrameTexture.EnableAlphaBuffer",
+            "ActorFrameTexture.EnableDepthBuffer",
+            "ActorFrameTexture.EnableFloat",
+            "ActorFrameTexture.EnablePreserveTexture",
+            "ActorFrameTexture.GetTexture",
+            "ActorMultiVertex.GetTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetTexture",
+            "ActorMultiVertex.SetVertices",
+            "BitmapText.GetText",
+            "GameState.GetSongPosition",
+            "PlayerOptions.CMod",
+            "PlayerOptions.Distant",
+            "PlayerOptions.FromString",
+            "PlayerOptions.Hallway",
+            "PlayerOptions.Incoming",
+            "PlayerOptions.MMod",
+            "PlayerOptions.Mini",
+            "PlayerOptions.Overhead",
+            "PlayerOptions.Space",
+            "PlayerOptions.XMod",
+            "Song.GetTimingData",
+            "Sprite.LoadFromCurrentSongBackground"
+          ],
+          "nested_theme_operations": [
+            "Actor.GetHeight",
+            "Actor.GetWidth",
+            "Actor.diffusealpha",
+            "Actor.scale_or_crop_background_no_move",
+            "Actor.setsize",
+            "Actor.xy",
+            "Actor.zoom",
+            "GameState.GetCurrentSong",
+            "PrefsManager.GetPreference",
+            "Song.GetBackgroundPath",
+            "Sprite.LoadBackground",
+            "Sprite.LoadFromSongBackground"
+          ],
+          "pending": [
+            "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetSize, Actor.addcommand, Actor.blend, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.scale_or_crop_background, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, ActorMultiVertex.GetTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, BitmapText.GetText, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Distant, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Space, PlayerOptions.XMod, Song.GetTimingData, Sprite.LoadFromCurrentSongBackground",
+            "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, Quad, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 8338,
+        "replayed_frames": 8338,
+        "compared_stage_fields": 1694,
+        "command_queries": {
+          "compared": true,
+          "native_count": 75457,
+          "actual_count": 75457
+        },
+        "native_event_indices_sha256": "5e2a5bfc77cd0237ed30dd7af220c3b4f59023985e4f5d73c9bd640dfa8c96b2"
+      }
+    },
+    {
+      "id": "routine-fail-dance",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.FailPlayer",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetCurrentPossibleDancePoints",
+            "PlayerStageStats.GetFailed",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetPlayerStageStats",
+            "StageStats.GetRoutineStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "PlayerStageStats.FailPlayer",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetFailed",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetRoutineStageStats"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.FailPlayer, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetFailed, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 624,
+        "replayed_frames": 624,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 99,
+          "actual_count": 99
+        },
+        "native_event_indices_sha256": "dfba15b6523c41370b542ec4dd4f37442d76ca3e54cbfd09c4bfd4e7be17babe"
+      }
+    },
+    {
+      "id": "routine-fail-pump",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.FailPlayer",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetCurrentPossibleDancePoints",
+            "PlayerStageStats.GetFailed",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetPlayerStageStats",
+            "StageStats.GetRoutineStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "PlayerStageStats.FailPlayer",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetFailed",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetRoutineStageStats"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.FailPlayer, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetFailed, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 612,
+        "replayed_frames": 612,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 99,
+          "actual_count": 99
+        },
+        "native_event_indices_sha256": "c0e173ab950797cd4a84a96c18a6836bae05e2a40a779449378576e3b2fadaaf"
+      }
+    },
+    {
+      "id": "routine-life-dance",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.GetChild",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "Player.SetLife",
+            "PlayerStageStats.GetCurrentLife",
+            "ScreenGameplay.GetLifeMeter",
+            "ScreenManager.GetTopScreen",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "Player.SetLife",
+            "PlayerStageStats.GetCurrentLife",
+            "ScreenGameplay.GetLifeMeter"
+          ],
+          "nested_theme_operations": [
+            "Actor.bouncebegin",
+            "Actor.finishtweening",
+            "Actor.tween",
+            "Actor.zoomto",
+            "Actor.zoomx"
+          ],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, Player.SetLife, PlayerStageStats.GetCurrentLife, ScreenGameplay.GetLifeMeter",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/12/3",
+            "missing captured subscriber identity for ScreenGameplay/2/12/4",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/8/3",
+            "missing captured subscriber identity for ScreenGameplay/2/8/4",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 625,
+        "replayed_frames": 625,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 25,
+          "actual_count": 25
+        },
+        "native_event_indices_sha256": "bf0a16b53fed89dccb8b732aa41dd693d24dd6c51856e4300b87cdb477f93958"
+      }
+    },
+    {
+      "id": "routine-life-pump",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.GetChild",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "Player.SetLife",
+            "PlayerStageStats.GetCurrentLife",
+            "ScreenGameplay.GetLifeMeter",
+            "ScreenManager.GetTopScreen",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "Player.SetLife",
+            "PlayerStageStats.GetCurrentLife",
+            "ScreenGameplay.GetLifeMeter"
+          ],
+          "nested_theme_operations": [
+            "Actor.bouncebegin",
+            "Actor.finishtweening",
+            "Actor.tween",
+            "Actor.zoomto",
+            "Actor.zoomx"
+          ],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, Player.SetLife, PlayerStageStats.GetCurrentLife, ScreenGameplay.GetLifeMeter",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/12/3",
+            "missing captured subscriber identity for ScreenGameplay/2/12/4",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/8/3",
+            "missing captured subscriber identity for ScreenGameplay/2/8/4",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 623,
+        "replayed_frames": 623,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 25,
+          "actual_count": 25
+        },
+        "native_event_indices_sha256": "22d21c91f2da59683a85a93f99d6c1dfe588727b33424bf4da96740298762bcf"
+      }
+    },
+    {
+      "id": "routine-manual-dance",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetPlayerStageStats",
+            "StageStats.GetRoutineStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetRoutineStageStats"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 616,
+        "replayed_frames": 616,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 57,
+          "actual_count": 57
+        },
+        "native_event_indices_sha256": "f6dae6ee97e61a97af85b94e9b066326b03eb801982a8bcdedffc6265da34dbb"
+      }
+    },
+    {
+      "id": "routine-manual-pump",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetPlayerStageStats",
+            "StageStats.GetRoutineStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurMusicSeconds",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPercentDancePoints",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.MaxCombo",
+            "StageStats.GetRoutineStageStats"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 611,
+        "replayed_frames": 611,
+        "compared_stage_fields": 308,
+        "command_queries": {
+          "compared": true,
+          "native_count": 57,
+          "actual_count": 57
+        },
+        "native_event_indices_sha256": "ba28305ad21f6abedb547b2e6bbfa002708d75fbbdc9d32331b0862efbd9b01b"
+      }
+    },
+    {
+      "id": "score-format",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "MessageManager.Broadcast",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [],
+          "nested_theme_operations": [],
+          "pending": [
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "command_queries": {
+          "compared": true,
+          "native_count": 3,
+          "actual_count": 3
+        },
+        "native_event_indices_sha256": "d88c49bfd2797538c8c75ae26d7937eece9e7946785c140f9ef9b29fff6305a8"
+      }
+    },
+    {
+      "id": "score-queue-v2",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.GetName",
+            "Actor.playcommand",
+            "Actor.sleep",
+            "ActorFrame.GetChild",
+            "MessageManager.Broadcast",
+            "ScreenManager.GetTopScreen",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.playcommand"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: Actor.playcommand",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "command_queries": {
+          "compared": true,
+          "native_count": 7,
+          "actual_count": 7
+        },
+        "native_event_indices_sha256": "52b9c6322330686c97dfa3e5aa1384f6ae191446d66f39411d5b094eca6a592f"
+      }
+    },
+    {
+      "id": "score-redraw-manual",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.GetName",
+            "Actor.GetTweenTimeLeft",
+            "Actor.GetX",
+            "Actor.linear",
+            "Actor.playcommand",
+            "Actor.sleep",
+            "Actor.stoptweening",
+            "Actor.x",
+            "ActorFrame.GetChild",
+            "ActorFrame.SetUpdateFunction",
+            "BitmapText.GetText",
+            "GameState.GetCurMusicSeconds",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.GetActualDancePoints",
+            "ScreenManager.GetTopScreen",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.GetTweenTimeLeft",
+            "Actor.GetX",
+            "Actor.playcommand",
+            "Actor.stoptweening",
+            "BitmapText.GetText",
+            "GameState.GetCurMusicSeconds",
+            "PlayerStageStats.GetActualDancePoints"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: Actor.GetTweenTimeLeft, Actor.GetX, Actor.playcommand, Actor.stoptweening, BitmapText.GetText, GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 595,
+        "replayed_frames": 595,
+        "compared_stage_fields": 154,
+        "command_queries": {
+          "compared": true,
+          "native_count": 15,
+          "actual_count": 15
+        },
+        "native_event_indices_sha256": "a94c60adb085bb35bbe3dfd4e9d6b170865d42fce150b049a7ffe6ae028091d7"
+      }
+    },
+    {
+      "id": "style-dance-routine",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.GetChild",
+            "GameState.GetCurrentGame",
+            "GameState.GetCurrentSteps",
+            "GameState.GetCurrentStyle",
+            "GameState.GetEnabledPlayers",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "ScreenManager.GetTopScreen",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "Steps.GetStepsType",
+            "Style.GetName",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurrentGame",
+            "GameState.GetEnabledPlayers",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 417,
+        "replayed_frames": 417,
+        "compared_stage_fields": 220,
+        "command_queries": {
+          "compared": true,
+          "native_count": 17,
+          "actual_count": 17
+        },
+        "native_event_indices_sha256": "689be6b23559af1428e8cce814e760b7fde91f0a5201f0a5c93da8fd4390f786"
+      }
+    },
+    {
+      "id": "style-pump-routine",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.sleep",
+            "ActorFrame.GetChild",
+            "GameState.GetCurrentGame",
+            "GameState.GetCurrentSteps",
+            "GameState.GetCurrentStyle",
+            "GameState.GetEnabledPlayers",
+            "MessageManager.Broadcast",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo",
+            "PlayerStageStats.GetPossibleDancePoints",
+            "ScreenManager.GetTopScreen",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "Steps.GetStepsType",
+            "Style.GetName",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "GameState.GetCurrentGame",
+            "GameState.GetEnabledPlayers",
+            "PlayerStageStats.GetActualDancePoints",
+            "PlayerStageStats.GetCurrentCombo"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo",
+            "missing captured subscriber identity for ScreenGameplay/2/10",
+            "missing captured subscriber identity for ScreenGameplay/2/13/1",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/24",
+            "missing captured subscriber identity for ScreenGameplay/25/1/1",
+            "missing captured subscriber identity for ScreenGameplay/25/1/10",
+            "missing captured subscriber identity for ScreenGameplay/25/1/12",
+            "missing captured subscriber identity for ScreenGameplay/25/1/2",
+            "missing captured subscriber identity for ScreenGameplay/25/1/4",
+            "missing captured subscriber identity for ScreenGameplay/25/1/5",
+            "missing captured subscriber identity for ScreenGameplay/25/1/7",
+            "missing captured subscriber identity for ScreenGameplay/25/1/9",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 405,
+        "replayed_frames": 405,
+        "compared_stage_fields": 220,
+        "command_queries": {
+          "compared": true,
+          "native_count": 17,
+          "actual_count": 17
+        },
+        "native_event_indices_sha256": "689be6b23559af1428e8cce814e760b7fde91f0a5201f0a5c93da8fd4390f786"
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.Center",
+            "Actor.FullScreen",
+            "Actor.GetName",
+            "Actor.GetParent",
+            "Actor.GetRotationX",
+            "Actor.GetRotationY",
+            "Actor.GetRotationZ",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZ",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.GetZoomZ",
+            "Actor.MaskDest",
+            "Actor.MaskSource",
+            "Actor.accelerate",
+            "Actor.addrotationy",
+            "Actor.addrotationz",
+            "Actor.addx",
+            "Actor.addy",
+            "Actor.animate",
+            "Actor.aux",
+            "Actor.baserotationz",
+            "Actor.blend",
+            "Actor.bob",
+            "Actor.decelerate",
+            "Actor.diffuse",
+            "Actor.diffusealpha",
+            "Actor.diffuseramp",
+            "Actor.effectclock",
+            "Actor.effectcolor1",
+            "Actor.effectcolor2",
+            "Actor.effectmagnitude",
+            "Actor.effectoffset",
+            "Actor.effectperiod",
+            "Actor.getaux",
+            "Actor.linear",
+            "Actor.playcommand",
+            "Actor.queuecommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.rotationz",
+            "Actor.setstate",
+            "Actor.sleep",
+            "Actor.smooth",
+            "Actor.spin",
+            "Actor.stopeffect",
+            "Actor.stoptweening",
+            "Actor.texturetranslate",
+            "Actor.vibrate",
+            "Actor.visible",
+            "Actor.wag",
+            "Actor.x",
+            "Actor.xy",
+            "Actor.y",
+            "Actor.z",
+            "Actor.zoom",
+            "Actor.zoomto",
+            "Actor.zoomx",
+            "Actor.zoomy",
+            "Actor.zoomz",
+            "ActorFrame.GetChild",
+            "ActorFrame.SetUpdateFunction",
+            "ActorFrame.fov",
+            "ActorFrame.propagatecommand",
+            "ActorFrame.vanishpoint",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetVertices",
+            "ActorProxy.SetTarget",
+            "ActorSound.play",
+            "ActorSound.stop",
+            "BitmapText.settext",
+            "BitmapText.strokecolor",
+            "GameState.GetCurrentSong",
+            "GameState.GetCurrentSteps",
+            "GameState.GetEnabledPlayers",
+            "GameState.GetPlayerState",
+            "GameState.GetSongBeat",
+            "GameState.GetSongOptionsObject",
+            "MessageManager.Broadcast",
+            "PlayerOptions.GetReversePercentForColumn",
+            "PlayerOptions.Left",
+            "PlayerOptions.Mirror",
+            "PlayerOptions.NoteSkin",
+            "PlayerOptions.Right",
+            "PlayerOptions.Skew",
+            "PlayerOptions.Tilt",
+            "PlayerState.GetPlayerOptions",
+            "ScreenManager.GetTopScreen",
+            "Song.GetSongDir",
+            "SongOptions.MusicRate",
+            "Sprite.LinearFrames",
+            "Sprite.SetAllStateDelays",
+            "Sprite.SetStateProperties",
+            "Sprite.loop",
+            "Sprite.setstate",
+            "Steps.GetDifficulty",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.AddWrapperState",
+            "Actor.GetRotationX",
+            "Actor.GetRotationY",
+            "Actor.GetRotationZ",
+            "Actor.GetWrapperState",
+            "Actor.GetX",
+            "Actor.GetY",
+            "Actor.GetZ",
+            "Actor.GetZoomX",
+            "Actor.GetZoomY",
+            "Actor.GetZoomZ",
+            "Actor.MaskDest",
+            "Actor.MaskSource",
+            "Actor.accelerate",
+            "Actor.addrotationy",
+            "Actor.addrotationz",
+            "Actor.addx",
+            "Actor.addy",
+            "Actor.baserotationz",
+            "Actor.blend",
+            "Actor.bob",
+            "Actor.diffuseramp",
+            "Actor.effectclock",
+            "Actor.effectcolor1",
+            "Actor.effectcolor2",
+            "Actor.effectoffset",
+            "Actor.playcommand",
+            "Actor.rotationx",
+            "Actor.rotationy",
+            "Actor.setstate",
+            "Actor.smooth",
+            "Actor.stopeffect",
+            "Actor.stoptweening",
+            "Actor.texturetranslate",
+            "Actor.wag",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoomy",
+            "Actor.zoomz",
+            "ActorFrame.fov",
+            "ActorFrame.propagatecommand",
+            "ActorFrame.vanishpoint",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetVertices",
+            "ActorSound.play",
+            "ActorSound.stop",
+            "BitmapText.settext",
+            "BitmapText.strokecolor",
+            "GameState.GetEnabledPlayers",
+            "PlayerOptions.GetReversePercentForColumn",
+            "PlayerOptions.Left",
+            "PlayerOptions.Mirror",
+            "PlayerOptions.NoteSkin",
+            "PlayerOptions.Right",
+            "PlayerOptions.Skew",
+            "PlayerOptions.Tilt",
+            "Sprite.LinearFrames",
+            "Sprite.SetAllStateDelays",
+            "Sprite.SetStateProperties",
+            "Sprite.setstate"
+          ],
+          "nested_theme_operations": [
+            "Actor.blend",
+            "Actor.stretchto",
+            "Actor.tween",
+            "Actor.xy",
+            "Actor.ztest",
+            "Actor.zwrite",
+            "GameState.GetSongPosition",
+            "Sprite.GetTexture"
+          ],
+          "pending": [
+            "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+            "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "command_queries": {
+          "compared": true,
+          "native_count": 1128074,
+          "actual_count": 1128074
+        },
+        "native_event_indices_sha256": "b05c00f0732086763e87bf9a922789d50524eb42eb82fa5462ccd631c936dfde"
+      }
+    },
+    {
+      "fixture": "fof",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.GetZoomY",
+            "Actor.diffuse",
+            "Actor.queuecommand",
+            "Actor.sleep",
+            "Actor.texturetranslate",
+            "Actor.texturewrapping",
+            "Actor.visible",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoomtoheight",
+            "Actor.zoomtowidth",
+            "Actor.zoomx",
+            "Actor.ztest",
+            "Actor.zwrite",
+            "ActorMultiVertex.LoadTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetNumVertices",
+            "ActorMultiVertex.SetVertices",
+            "ActorSound.play",
+            "BitmapText.settext",
+            "GameState.GetCurrentSong",
+            "GameState.GetCurrentSteps",
+            "GameState.GetHumanPlayers",
+            "GameState.IsHumanPlayer",
+            "GameState.SetCurrentSteps",
+            "Screen.AddInputCallback",
+            "ScreenManager.GetTopScreen",
+            "ScreenWithMenuElements.StartTransitioningScreen",
+            "Song.GetSongDir",
+            "Song.GetStepsByStepsType",
+            "Steps.GetDifficulty",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.GetZoomY",
+            "Actor.texturetranslate",
+            "Actor.texturewrapping",
+            "Actor.xy",
+            "Actor.z",
+            "Actor.zoomtoheight",
+            "Actor.zoomtowidth",
+            "Actor.ztest",
+            "Actor.zwrite",
+            "ActorMultiVertex.LoadTexture",
+            "ActorMultiVertex.SetDrawState",
+            "ActorMultiVertex.SetNumVertices",
+            "ActorMultiVertex.SetVertices",
+            "ActorSound.play",
+            "BitmapText.settext",
+            "GameState.GetHumanPlayers",
+            "GameState.IsHumanPlayer",
+            "Screen.AddInputCallback"
+          ],
+          "nested_theme_operations": [
+            "Actor.accelerate",
+            "Actor.diffusealpha",
+            "Actor.queuecommand",
+            "GameState.GetCurrentSong",
+            "GameState.GetCurrentStyle",
+            "GameState.GetEnabledPlayers",
+            "GameState.GetHumanPlayers",
+            "GameState.IsCourseMode",
+            "PlayerStageStats.GetTapNoteScores",
+            "PlayerStageStats.SetScore",
+            "StageStats.GaveUp",
+            "StageStats.GetPlayerStageStats",
+            "StatsManager.GetCurStageStats",
+            "Style.GetStyleType"
+          ],
+          "pending": [
+            "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+            "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "command_queries": {
+          "compared": true,
+          "native_count": 495031,
+          "actual_count": 495031
+        },
+        "native_event_indices_sha256": "ae0f0f0d4c956b8a3c15cf289f2ecf99f50bdc33c172b9dd82a18dc399c92ffe"
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "identical": true,
+      "semantics": {
+        "coverage": {
+          "scope": "captured-song-lua-context",
+          "observed_song_operations": [
+            "Actor.diffuse",
+            "Actor.sleep",
+            "Actor.visible",
+            "Actor.x",
+            "Actor.xy",
+            "Actor.y",
+            "Actor.zoomto",
+            "ActorFrame.SetUpdateFunction",
+            "GameState.GetHumanPlayers",
+            "command.begin",
+            "command.end"
+          ],
+          "uncompared_song_operations": [
+            "Actor.xy",
+            "GameState.GetHumanPlayers"
+          ],
+          "nested_theme_operations": [],
+          "pending": [
+            "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+            "native drawable state/resources: Quad",
+            "missing captured subscriber identity for ScreenGameplay/18",
+            "missing captured subscriber identity for ScreenGameplay/19/1/1",
+            "missing captured subscriber identity for ScreenGameplay/19/1/3",
+            "missing captured subscriber identity for ScreenGameplay/19/1/4",
+            "missing captured subscriber identity for ScreenGameplay/19/1/6",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+            "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+            "missing captured subscriber identity for ScreenGameplay/2/6",
+            "missing captured subscriber identity for ScreenGameplay/2/9/1",
+            "missing captured subscriber identity for ScreenGameplay/3/1"
+          ],
+          "global_pending": [
+            "full theme stage commitment and history",
+            "unqueried score/alive-time observer fields",
+            "additional game/style/input/course contexts",
+            "production live mode activation"
+          ]
+        },
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "command_queries": {
+          "compared": true,
+          "native_count": 966361,
+          "actual_count": 966361
+        },
+        "native_event_indices_sha256": "f00189135fbfeec7c42677882447dda0c77353e63ee843053f06316ef809dfef"
+      }
+    }
+  ],
+  "controls": [
+    {
+      "id": "68eda87bf02562c3",
+      "elapsed_seconds": 26.548,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 8236,
+        "replayed_frames": 8236,
+        "compared_stage_fields": 1672,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetSize, Actor.addcommand, Actor.blend, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.scale_or_crop_background, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, ActorMultiVertex.GetTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, BitmapText.GetText, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Distant, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Space, PlayerOptions.XMod, Song.GetTimingData, Sprite.LoadFromCurrentSongBackground",
+          "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, Quad, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5ef07e6438ca0dffe0550f57dcffd57f1edc5b0faeb93789c85e4cdee5d9f51f",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "730650ffb42269d8",
+      "elapsed_seconds": 27.362,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 8338,
+        "replayed_frames": 8338,
+        "compared_stage_fields": 1694,
+        "pending_coverage": [
+          "uncompared song operations: Actor.AddWrapperState, Actor.Draw, Actor.GetNumWrapperStates, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZoom, Actor.GetZoomX, Actor.GetZoomY, Actor.SetSize, Actor.addcommand, Actor.blend, Actor.fadeleft, Actor.faderight, Actor.getrotation, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.scale_or_crop_background, Actor.xy, Actor.z, Actor.zoomz, ActorFrame.GetChildren, ActorFrame.SetDrawFunction, ActorFrame.SetFOV, ActorFrame.fov, ActorFrame.vanishpoint, ActorFrameTexture.Create, ActorFrameTexture.EnableAlphaBuffer, ActorFrameTexture.EnableDepthBuffer, ActorFrameTexture.EnableFloat, ActorFrameTexture.EnablePreserveTexture, ActorFrameTexture.GetTexture, ActorMultiVertex.GetTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetTexture, ActorMultiVertex.SetVertices, BitmapText.GetText, GameState.GetSongPosition, PlayerOptions.CMod, PlayerOptions.Distant, PlayerOptions.FromString, PlayerOptions.Hallway, PlayerOptions.Incoming, PlayerOptions.MMod, PlayerOptions.Mini, PlayerOptions.Overhead, PlayerOptions.Space, PlayerOptions.XMod, Song.GetTimingData, Sprite.LoadFromCurrentSongBackground",
+          "native drawable state/resources: ActorFrameTexture, ActorMultiVertex, Quad, Sprite",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "b2c5df4d4e3e01cfad111be4e7f02e72fae2a3ee43a079aafa15ce20d501be5a",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-fail-dance",
+      "elapsed_seconds": 3.001,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 624,
+        "replayed_frames": 624,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.FailPlayer, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetFailed, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "299818755ffc9826d8d52c69f7408a9324b4d3093ecad1e747b45b7963c85134",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-fail-pump",
+      "elapsed_seconds": 3.079,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 612,
+        "replayed_frames": 612,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.FailPlayer, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetFailed, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "b251032b5f5ef6d2735901d7bef2654787f5409b367f793d81448bcc427031aa",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-life-dance",
+      "elapsed_seconds": 3.11,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 625,
+        "replayed_frames": 625,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, Player.SetLife, PlayerStageStats.GetCurrentLife, ScreenGameplay.GetLifeMeter",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/12/3",
+          "missing captured subscriber identity for ScreenGameplay/2/12/4",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/8/3",
+          "missing captured subscriber identity for ScreenGameplay/2/8/4",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5534a49516fcc6e0fa7a62a08a4b23624b8adeae2395f0a16e53259a772a30d4",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-life-pump",
+      "elapsed_seconds": 3.113,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 623,
+        "replayed_frames": 623,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, Player.SetLife, PlayerStageStats.GetCurrentLife, ScreenGameplay.GetLifeMeter",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/12/3",
+          "missing captured subscriber identity for ScreenGameplay/2/12/4",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/8/3",
+          "missing captured subscriber identity for ScreenGameplay/2/8/4",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "5fee789359207ad25ea5c84a0ba4442080d366a1a47e9e5e119013a56e3bf026",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-manual-dance",
+      "elapsed_seconds": 3.063,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 616,
+        "replayed_frames": 616,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "04189fbd32d8869891db3c89312d341af0e724f59d25c643f25af42e4ab5650a",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "routine-manual-pump",
+      "elapsed_seconds": 3.025,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 611,
+        "replayed_frames": 611,
+        "compared_stage_fields": 308,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo, PlayerStageStats.GetPercentDancePoints, PlayerStageStats.GetTapNoteScores, PlayerStageStats.MaxCombo, StageStats.GetRoutineStageStats",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "8636984cf2218c5275dd41c9d6e047d09d6d7dee62e02c5ae72013b8f69b874b",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "score-format",
+      "elapsed_seconds": 2.799,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "pending_coverage": [
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "70b773acb244f4f07801e186e3a0f3f3f3bd9da27a4dcae6ce2c0014553d94bb",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "score-queue-v2",
+      "elapsed_seconds": 2.877,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "pending_coverage": [
+          "uncompared song operations: Actor.playcommand",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "b8a88c101b99450491c75164f8c9f21849c1d07ed479e4c293efee3493368df4",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "score-redraw-manual",
+      "elapsed_seconds": 2.894,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 595,
+        "replayed_frames": 595,
+        "compared_stage_fields": 154,
+        "pending_coverage": [
+          "uncompared song operations: Actor.GetTweenTimeLeft, Actor.GetX, Actor.playcommand, Actor.stoptweening, BitmapText.GetText, GameState.GetCurMusicSeconds, PlayerStageStats.GetActualDancePoints",
+          "missing captured subscriber identity for ScreenGameplay/18",
+          "missing captured subscriber identity for ScreenGameplay/19/1/1",
+          "missing captured subscriber identity for ScreenGameplay/19/1/3",
+          "missing captured subscriber identity for ScreenGameplay/19/1/4",
+          "missing captured subscriber identity for ScreenGameplay/19/1/6",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+          "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "e8d594b0887f6f1089b7972967f2f3b4dd1170e3bea6a15543561ebf10efce5f",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "style-dance-routine",
+      "elapsed_seconds": 2.884,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 417,
+        "replayed_frames": 417,
+        "compared_stage_fields": 220,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "bb2a716c126bebac509e19dfeb964203bd83171b3b3a63e0b9f261dcab3b3ba0",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    },
+    {
+      "id": "style-pump-routine",
+      "elapsed_seconds": 2.89,
+      "comparison": {
+        "whole_song_parity_proven": false,
+        "archive_accepted": true,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "production_parity_proven": false,
+        "native_frames": 405,
+        "replayed_frames": 405,
+        "compared_stage_fields": 220,
+        "pending_coverage": [
+          "uncompared song operations: GameState.GetCurrentGame, GameState.GetEnabledPlayers, PlayerStageStats.GetActualDancePoints, PlayerStageStats.GetCurrentCombo",
+          "missing captured subscriber identity for ScreenGameplay/2/10",
+          "missing captured subscriber identity for ScreenGameplay/2/13/1",
+          "missing captured subscriber identity for ScreenGameplay/2/6",
+          "missing captured subscriber identity for ScreenGameplay/2/9/1",
+          "missing captured subscriber identity for ScreenGameplay/24",
+          "missing captured subscriber identity for ScreenGameplay/25/1/1",
+          "missing captured subscriber identity for ScreenGameplay/25/1/10",
+          "missing captured subscriber identity for ScreenGameplay/25/1/12",
+          "missing captured subscriber identity for ScreenGameplay/25/1/2",
+          "missing captured subscriber identity for ScreenGameplay/25/1/4",
+          "missing captured subscriber identity for ScreenGameplay/25/1/5",
+          "missing captured subscriber identity for ScreenGameplay/25/1/7",
+          "missing captured subscriber identity for ScreenGameplay/25/1/9",
+          "missing captured subscriber identity for ScreenGameplay/3/1"
+        ],
+        "capture_completed_gameplay": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "fixture_sha256": "06cf1970fefbf01e358974808ffe9d2694ce07a2df66a2c48cfed68ae9953437",
+        "mismatch_count": 0,
+        "mismatch_fields": {},
+        "first_mismatches": [],
+        "error_count": 0,
+        "errors": []
+      }
+    }
+  ],
+  "rejected_experiment": "candidate variants included compile-time actor-state-reader specialization. Sandman state-read samples 16753 -> 16848; elapsed 692.002s -> 705.534s. Specialization removed; accepted variants retain the existing production reader."
+}

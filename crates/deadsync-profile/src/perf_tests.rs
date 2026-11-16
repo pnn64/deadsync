@@ -1,16 +1,9 @@
 use super::*;
-use std::hint::black_box;
 
-#[path = "perf_original.rs"]
-#[allow(dead_code)]
-mod original;
-use original::*;
 
-#[path = "../../../tests/support/perf.rs"]
+#[path = "../../../tests/support/allocations.rs"]
 #[allow(dead_code)]
 pub(super) mod allocations;
-#[path = "../../../tests/support/paired_bench.rs"]
-mod paired;
 
 const GUID: &str = "00000000-0000-4000-8000-000000000001";
 const STYLES: [PlayStyle; 6] = [
@@ -48,7 +41,7 @@ fn populated_options() -> PlayerOptionsData {
 
 fn populated_profile(favorites: usize) -> Profile {
     let mut profile = Profile {
-        display_name: "Performance fixture".into(),
+        display_name: "Profile fixture".into(),
         current_combo: 42,
         groovestats_api_key: "fixture-gs-key".into(),
         groovestats_username: "fixture-user".into(),
@@ -66,53 +59,8 @@ fn populated_profile(favorites: usize) -> Profile {
     profile
 }
 
-fn assert_profile_matches(actual: &Profile, expected: &Profile) {
-    assert_eq!(format!("{actual:?}"), format!("{expected:?}"));
-    // Debug redacts the password; compare the fixture value separately.
-    assert_eq!(actual.groovestats_password, expected.groovestats_password);
-}
-
 #[test]
-fn moved_options_preserve_every_field_and_saved_style() {
-    for options in [PlayerOptionsData::default(), populated_options()] {
-        for style in STYLES {
-            let mut old = populated_profile(3);
-            *old.player_options_mut(style) = options.clone();
-            let mut current = old.clone();
-            old.original_apply_player_options_for_style(style);
-            current.apply_player_options_for_style(style);
-            assert_profile_matches(&current, &old);
-            assert_eq!(current.player_options(style), &options);
-            assert_eq!(current.current_player_options(), options);
-            // Covers changed values, unchanged values, and returning to defaults.
-            for next in [
-                populated_options(),
-                populated_options(),
-                PlayerOptionsData::default(),
-            ] {
-                let expected_changed = old.original_set_current_player_options(next.clone());
-                assert_eq!(current.set_current_player_options(next), expected_changed);
-                assert_profile_matches(&current, &old);
-            }
-        }
-    }
-    // NaNs must still be assigned (PartialEq returns false), with their bits intact.
-    let mut options = populated_options();
-    options.long_error_bar_intensity = f32::from_bits(0x7fc01234);
-    let mut old = Profile::default();
-    let mut current = old.clone();
-    assert_eq!(
-        current.set_current_player_options(options.clone()),
-        old.original_set_current_player_options(options)
-    );
-    assert_eq!(
-        current.long_error_bar_intensity.to_bits(),
-        old.long_error_bar_intensity.to_bits()
-    );
-}
-
-#[test]
-fn borrowed_ini_matches_owned_parser_and_typed_defaults() {
+fn borrowed_ini_matches_shared_ini_parser() {
     let complete = render_profile_ini_content(GUID, &populated_profile(0));
     let machine = render_machine_player_defaults_template(&populated_options());
     let mut duplicate = machine.clone();
@@ -136,11 +84,6 @@ fn borrowed_ini_matches_owned_parser_and_typed_defaults() {
             assert_eq!(current.get(section, "not-present"), None);
         }
         assert!(!current.section_has_any("missing"));
-        let base = populated_options();
-        assert_eq!(
-            machine_player_defaults_from_ini(text, &base),
-            original_machine_player_defaults_from_ini(text, &base)
-        );
     }
 }
 
@@ -177,27 +120,28 @@ impl Drop for RuntimeFixture {
     }
 }
 
-fn save(
-    kind: usize,
-    original: bool,
-    root: &Path,
-    duplicate: impl FnMut(&str, &Path, &Path, &Path),
-) -> Option<RuntimeProfileSidecarWriteError> {
-    match (kind, original) {
-        (0, false) => runtime_save_profile_ini_for_side(root, PlayerSide::P1, duplicate),
-        (0, true) => original_runtime_save_profile_ini_for_side(root, PlayerSide::P1, duplicate),
-        (1, false) => {
-            runtime_save_groovestats_credentials_for_side(root, PlayerSide::P1, duplicate)
+
+#[test]
+fn moved_options_preserve_every_field_and_saved_style() {
+    for options in [PlayerOptionsData::default(), populated_options()] {
+        for style in STYLES {
+            let mut profile = populated_profile(3);
+            *profile.player_options_mut(style) = options.clone();
+            profile.apply_player_options_for_style(style);
+            assert_eq!(profile.player_options(style), &options);
+            assert_eq!(profile.current_player_options(), options);
+            for next in [populated_options(), populated_options(), PlayerOptionsData::default()] {
+                let changed = profile.current_player_options() != next;
+                assert_eq!(profile.set_current_player_options(next.clone()), changed);
+                assert_eq!(profile.current_player_options(), next);
+            }
         }
-        (1, true) => {
-            original_runtime_save_groovestats_credentials_for_side(root, PlayerSide::P1, duplicate)
-        }
-        (2, false) => runtime_save_arrowcloud_api_key_for_side(root, PlayerSide::P1, duplicate),
-        (2, true) => {
-            original_runtime_save_arrowcloud_api_key_for_side(root, PlayerSide::P1, duplicate)
-        }
-        _ => unreachable!(),
     }
+    let mut options = populated_options();
+    options.long_error_bar_intensity = f32::from_bits(0x7fc01234);
+    let mut profile = Profile::default();
+    assert!(profile.set_current_player_options(options));
+    assert_eq!(profile.long_error_bar_intensity.to_bits(), 0x7fc01234);
 }
 
 #[test]
@@ -216,49 +160,42 @@ fn sidecar_snapshots_preserve_bytes_callbacks_errors_and_load_reports() {
         arrowcloud_ini_path(&root.join("a")),
     ];
     for kind in 0..3 {
-        let mut expected: Option<(Vec<u8>, String, allocations::Churn)> = None;
-        for original in [true, false] {
-            *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
-            runtime_lock_profiles()[0] = profile.clone();
-            runtime_lock_profiles()[0].mini_percent = 21;
-            let mut calls = 0;
-            let (error, churn) = allocations::measure(|| {
-                save(kind, original, root, |guid, _, _, kept| {
-                    calls += 1;
-                    assert_eq!(guid, GUID);
-                    assert_eq!(kept, root.join("a"));
-                    // Acquiring the profile mutex also proves it was released before
-                    // the externally supplied callback. Mutations must not leak into
-                    // the already prepared sidecar snapshot.
-                    let mut profiles = RUNTIME_PROFILES
-                        .try_lock()
-                        .expect("profile lock held across callback");
-                    if kind == 0 {
-                        assert_eq!(
-                            profiles[0]
-                                .player_options(runtime_session_play_style())
-                                .mini_percent,
-                            21
-                        );
-                    }
-                    profiles[0].display_name = "callback change".into();
-                    profiles[0].groovestats_api_key = "callback gs".into();
-                    profiles[0].arrowcloud_api_key = "callback ac".into();
-                })
-            });
-            assert!(error.is_none());
-            assert_eq!(calls, 1);
-            let bytes = fs::read(&paths[kind]).unwrap();
-            let state = format!("{:?}", runtime_lock_profiles()[0]);
-            if let Some((expected_bytes, expected_state, before)) = &expected {
-                assert_eq!(&bytes, expected_bytes);
-                assert_eq!(&state, expected_state);
-                assert!(churn.allocs < before.allocs);
-                assert!(churn.allocated_bytes < before.allocated_bytes);
-            } else {
-                expected = Some((bytes, state, churn));
-            }
+        *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
+        let mut snapshot = profile.clone();
+        snapshot.mini_percent = 21;
+        runtime_lock_profiles()[0] = snapshot.clone();
+        if kind == 0 {
+            snapshot.store_current_player_options(runtime_session_play_style());
         }
+        let expected = match kind {
+            0 => render_profile_ini_content(GUID, &snapshot),
+            1 => render_groovestats_ini_content(
+                &snapshot.groovestats_api_key,
+                snapshot.groovestats_is_pad_player,
+                &snapshot.groovestats_username,
+                snapshot.groovestats_password.expose(),
+            ),
+            2 => render_arrowcloud_ini_content(&snapshot.arrowcloud_api_key),
+            _ => unreachable!(),
+        };
+        let mut calls = 0;
+        let error = save(kind, root, |guid, _, _, kept| {
+            calls += 1;
+            assert_eq!(guid, GUID);
+            assert_eq!(kept, root.join("a"));
+            // The callback can acquire the profile mutex. Its mutations must not
+            // leak into the snapshot already prepared for serialization.
+            let mut profiles = RUNTIME_PROFILES.try_lock().expect("profile lock held across callback");
+            if kind == 0 {
+                assert_eq!(profiles[0].player_options(runtime_session_play_style()).mini_percent, 21);
+            }
+            profiles[0].display_name = "callback change".into();
+            profiles[0].groovestats_api_key = "callback gs".into();
+            profiles[0].arrowcloud_api_key = "callback ac".into();
+        });
+        assert!(error.is_none());
+        assert_eq!(calls, 1);
+        assert_eq!(fs::read(&paths[kind]).unwrap(), expected.as_bytes());
     }
     // The new borrowed parser is also exercised through the actual file loader.
     let report = runtime_load_profile_data_for_side(
@@ -298,148 +235,24 @@ fn sidecar_snapshots_preserve_bytes_callbacks_errors_and_load_reports() {
         .map
         .insert(GUID.into(), blocked.clone());
     for kind in 0..3 {
-        let old = save(kind, true, root, |_, _, _, _| unreachable!()).unwrap();
-        let current = save(kind, false, root, |_, _, _, _| unreachable!()).unwrap();
-        assert_eq!(current.path, old.path);
-        assert_eq!(current.error.kind(), old.error.kind());
+        let error = save(kind, root, |_, _, _, _| unreachable!()).unwrap();
+        assert_eq!(error.path.parent(), Some(blocked.as_path()));
     }
     runtime_lock_session().active_profiles[0] = ActiveProfile::Guest;
     for kind in 0..3 {
-        assert!(save(kind, false, root, |_, _, _, _| unreachable!()).is_none());
+        assert!(save(kind, root, |_, _, _, _| unreachable!()).is_none());
     }
 }
 
-fn save_preparation(profile: &mut Profile, kind: usize, original: bool) -> String {
-    if kind == 0 {
-        profile.store_current_player_options(PlayStyle::Single);
-    }
-    // Mirrors the original save's snapshot lifetime through serialization.
-    let snapshot;
-    let profile = if original {
-        snapshot = profile.clone();
-        &snapshot
-    } else {
-        &*profile
-    };
+fn save(
+    kind: usize,
+    root: &Path,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
     match kind {
-        0 => render_profile_ini_content(GUID, profile),
-        1 => render_groovestats_ini_content(
-            &profile.groovestats_api_key,
-            profile.groovestats_is_pad_player,
-            &profile.groovestats_username,
-            profile.groovestats_password.expose(),
-        ),
-        2 => render_arrowcloud_ini_content(&profile.arrowcloud_api_key),
+        0 => runtime_save_profile_ini_for_side(root, PlayerSide::P1, duplicate),
+        1 => runtime_save_groovestats_credentials_for_side(root, PlayerSide::P1, duplicate),
+        2 => runtime_save_arrowcloud_api_key_for_side(root, PlayerSide::P1, duplicate),
         _ => unreachable!(),
-    }
-}
-
-#[test]
-fn ownership_changes_reduce_allocation_churn() {
-    let mut profile = populated_profile(10_000);
-    for kind in 0..3 {
-        let (old, before) = allocations::measure(|| save_preparation(&mut profile, kind, true));
-        let (current, after) = allocations::measure(|| save_preparation(&mut profile, kind, false));
-        assert_eq!(current, old);
-        assert!(before.allocs > after.allocs + 11_000);
-        println!("save {kind}: original {before:?}, current {after:?}");
-    }
-    let text = render_machine_player_defaults_template(&populated_options());
-    let base = PlayerOptionsData::default();
-    let (old, before) =
-        allocations::measure(|| original_machine_player_defaults_from_ini(&text, &base));
-    let (current, after) = allocations::measure(|| machine_player_defaults_from_ini(&text, &base));
-    assert_eq!(current, old);
-    assert!(after.allocs < before.allocs / 2);
-    println!("INI defaults: original {before:?}, current {after:?}");
-    let (_, before) =
-        allocations::measure(|| profile.original_apply_player_options_for_style(PlayStyle::Single));
-    let (_, after) =
-        allocations::measure(|| profile.apply_player_options_for_style(PlayStyle::Single));
-    assert!(after.allocs < before.allocs);
-    println!("style apply: original {before:?}, current {after:?}");
-}
-
-#[test]
-#[ignore = "paired release benchmark; run alone with --nocapture --test-threads=1"]
-fn benchmark_profile_sidecar_preparation() {
-    for count in [0, 1_000, 10_000] {
-        for (kind, name) in ["profile", "groovestats", "arrowcloud"]
-            .into_iter()
-            .enumerate()
-        {
-            let mut profile = populated_profile(count);
-            paired::compare(
-                &format!("{name} save preparation/{count} favorites"),
-                100,
-                |current| {
-                    black_box(save_preparation(black_box(&mut profile), kind, !current));
-                },
-            );
-        }
-    }
-}
-
-#[test]
-#[ignore = "paired release benchmark; run alone with --nocapture --test-threads=1"]
-fn benchmark_profile_ini_loading() {
-    let base = populated_options();
-    for (name, text) in [
-        ("empty", String::new()),
-        ("template", render_machine_player_defaults_template(&base)),
-        (
-            "four styles",
-            render_profile_ini_content(GUID, &populated_profile(0)),
-        ),
-    ] {
-        paired::compare(&format!("INI parse/{name}"), 1_000, |current| {
-            if current {
-                black_box(ProfileIni::parse(black_box(&text)));
-            } else {
-                black_box(OriginalProfileIni::parse(black_box(&text)));
-            }
-        });
-        paired::compare(&format!("typed defaults/{name}"), 1_000, |current| {
-            black_box(if current {
-                machine_player_defaults_from_ini(black_box(&text), &base)
-            } else {
-                original_machine_player_defaults_from_ini(black_box(&text), &base)
-            });
-        });
-    }
-}
-
-#[test]
-#[ignore = "paired release benchmark; run alone with --nocapture --test-threads=1"]
-fn benchmark_owned_player_options() {
-    for (name, options) in [
-        ("defaults", PlayerOptionsData::default()),
-        ("custom", populated_options()),
-    ] {
-        let mut profile = Profile::default();
-        profile.player_options_singles = options.clone();
-        paired::compare(&format!("apply style/{name}"), 10_000, |current| {
-            if current {
-                black_box(&mut profile).apply_player_options_for_style(PlayStyle::Single);
-            } else {
-                black_box(&mut profile).original_apply_player_options_for_style(PlayStyle::Single);
-            }
-            black_box(&profile);
-        });
-        paired::compare_prepared(
-            &format!("set changed options/{name}"),
-            10_000,
-            || options.clone(),
-            |options, current| {
-                // Force a real change without allocating or cloning a whole profile.
-                profile.mini_percent = options.mini_percent.wrapping_add(1);
-                black_box(if current {
-                    profile.set_current_player_options(options)
-                } else {
-                    profile.original_set_current_player_options(options)
-                });
-                black_box(&profile);
-            },
-        );
     }
 }

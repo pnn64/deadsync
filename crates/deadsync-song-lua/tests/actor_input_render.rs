@@ -1,13 +1,21 @@
 #![cfg(target_os = "windows")]
 //! One focused production playback/pixel differential, without the Song lib harness.
 pub use deadsync_song_lua::*;
-#[path = "../src/input.rs"]
-mod input;
-#[path = "../src/runtime_fallback.rs"]
-mod runtime_fallback;
+#[expect(
+    dead_code,
+    reason = "playback uses only the shared quaternion composition helpers"
+)]
 #[path = "../src/actor_quaternion.rs"]
 mod actor_quaternion;
+#[path = "../src/runtime_fallback.rs"]
+mod runtime_fallback;
+#[path = "support/paths.rs"]
+mod tests;
 #[allow(dead_code)]
+#[expect(
+    unused_imports,
+    reason = "this fixture exercises only rendering entry points"
+)]
 mod renderer {
     include!("../src/playback.rs");
 
@@ -105,7 +113,7 @@ mod renderer {
         };
         use deadsync_song_lua::{
             SongLuaCompileContext, SongLuaInputEvent, SongLuaInputType, SongLuaNoteskinResolver,
-            compile_song_lua_layers_with_default_host,
+            compile_song_lua_layers,
         };
         use winit::{
             dpi::PhysicalSize, event_loop::EventLoop,
@@ -174,7 +182,7 @@ mod renderer {
             context.music_length_seconds = 1.0;
             context.screen_width = 64.0;
             context.screen_height = 48.0;
-            let mut compiled = compile_song_lua_layers_with_default_host(
+            let mut compiled = compile_song_lua_layers(
                 &[&path],
                 0,
                 &context,

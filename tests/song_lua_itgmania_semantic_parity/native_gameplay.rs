@@ -229,19 +229,20 @@ fn compare_calls(
         return Ok(calls);
     }
     let mut native_handles = BTreeMap::new();
-    let native: Vec<Value> = trace["events"]
+    let events = trace["events"]
         .as_array()
-        .ok_or("missing native events")?
+        .ok_or("missing native events")?;
+    let native: Vec<usize> = events
         .iter()
-        .filter(|event| {
-            event
-                .pointer("/caller/source")
+        .enumerate()
+        .filter(|(_, event)| {
+            caller_source(event)
                 .unwrap_or(&event["source"])
                 .as_str()
                 .is_some_and(|source| source.starts_with("song:/"))
         })
-        .filter(|event| compared_call_operation(event))
-        .filter(|event| {
+        .filter(|(_, event)| compared_call_operation(event))
+        .filter(|(_, event)| {
             !matches!(
                 event["operation"].as_str(),
                 Some("Actor.sleep" | "Actor.queuecommand")
@@ -250,7 +251,7 @@ fn compare_calls(
                     .as_str()
                     .is_some_and(|actor| actor.starts_with("def-"))
         })
-        .filter(|event| {
+        .filter(|(_, event)| {
             scope == Scope::Full
                 || event["scene"].as_u64().is_some_and(|at| {
                     at < scene
@@ -260,42 +261,49 @@ fn compare_calls(
                                 .is_some_and(|time| time <= seconds + 1e-6)
                 })
         })
-        .map(|event| {
-            let mut value = event.clone();
-            let scene = value["scene"].as_u64().unwrap_or(0);
-            normalize_query_handles(&mut value["args"], &mut native_handles, scene);
-            if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
-                value["results"] = event["detail"]["results"].clone();
-                normalize_query_handles(&mut value["results"], &mut native_handles, scene);
-            }
-            if event["kind"] != "command" {
-                if let Some(caller) = event.get("caller") {
-                    value["source"] = caller["source"].clone();
-                    value["line"] = caller["line"].clone();
-                }
-            }
-            if event["kind"] == "call" {
-                value["tween_time_left"] = event["detail"]["native_tween_time_left"].clone();
-            }
-            value
-        })
+        .map(|(index, _)| index)
         .collect();
     if actual.len() != native.len() {
         mismatches.push(
             json!({"field":"command_query_count","native":native.len(),"deadsync":actual.len()}),
         );
     }
-    for (native, actual) in native.iter().zip(&actual) {
-        if !same_call_event(trace, native, actual)? {
+    // Normalize one expected event at a time. The archive already retains the
+    // complete native trace; a second owned copy can add gigabytes on long songs.
+    for (index, actual) in native.iter().zip(&actual) {
+        let event = &events[*index];
+        let mut value = event.clone();
+        let scene = value["scene"].as_u64().unwrap_or(0);
+        normalize_query_handles(&mut value["args"], &mut native_handles, scene);
+        if matches!(event["kind"].as_str(), Some("query" | "modifier")) {
+            value["results"] = event["detail"]["results"].clone();
+            normalize_query_handles(&mut value["results"], &mut native_handles, scene);
+        }
+        if event["kind"] != "command" {
+            if let Some(caller) = event.get("caller") {
+                value["source"] = caller["source"].clone();
+                value["line"] = caller["line"].clone();
+            }
+        }
+        if event["kind"] == "call" {
+            value["tween_time_left"] = event["detail"]["native_tween_time_left"].clone();
+        }
+        if !same_call_event(trace, &value, actual)? {
             mismatches
-                .push(json!({"field":"command_query_event","native":native,"deadsync":actual}));
+                .push(json!({"field":"command_query_event","native":value,"deadsync":actual}));
         }
     }
     let mut calls = json!({"compared":true,"native_count":native.len(),"actual_count":actual.len()});
     calls["actual"] = Value::Array(actual);
-    calls["native"] = Value::Array(native);
+    calls["native_event_indices"] = json!(native);
     calls["uncompared_actual"] = Value::Array(uncompared_actual);
     Ok(calls)
+}
+
+// Preserve the distinction between a missing source and an explicit null:
+// only a missing caller/source falls back to the event's own source.
+fn caller_source(event: &Value) -> Option<&Value> {
+    event.get("caller")?.get("source")
 }
 
 fn compared_call_operation(event: &Value) -> bool {
@@ -441,19 +449,31 @@ fn same_value(native: &Value, actual: &Value) -> bool {
 }
 
 fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: usize) -> Value {
-    let observed: BTreeSet<&str> = trace["events"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|event| {
-            event
-                .pointer("/caller/source")
-                .unwrap_or(&event["source"])
-                .as_str()
-                .is_some_and(|source| source.starts_with("song:/"))
-        })
-        .filter_map(|event| event["operation"].as_str())
-        .collect();
+    let mut observed = BTreeSet::new();
+    let mut theme = BTreeSet::new();
+    let mut tail_call = false;
+    let mut modifier = false;
+    // Decode provenance once per event. JSON pointers allocate decoded path
+    // components; these fixed keys can be borrowed directly instead.
+    for event in trace["events"].as_array().into_iter().flatten() {
+        let source = event["source"].as_str();
+        let caller = caller_source(event);
+        let song_source = source.is_some_and(|source| source.starts_with("song:/"));
+        let song_caller = caller.unwrap_or(&event["source"])
+            .as_str().is_some_and(|source| source.starts_with("song:/"));
+        if let Some(operation) = event["operation"].as_str() {
+            if song_caller { observed.insert(operation); }
+            if song_source && caller.and_then(Value::as_str)
+                .is_some_and(|source| !source.starts_with("song:/"))
+            {
+                theme.insert(operation);
+            }
+        }
+        tail_call |= song_source && (caller.is_some_and(|source| source == "=(tail call)")
+            || event.get("caller").and_then(|caller| caller.get("tail_call"))
+                .and_then(Value::as_bool) == Some(true));
+        modifier |= song_caller && event["kind"] == "modifier";
+    }
     let compared: BTreeSet<_> = CALL_OPERATIONS
         .iter()
         .copied()
@@ -463,34 +483,11 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
             "MessageManager.Broadcast",
         ])
         .collect();
-    let theme: BTreeSet<&str> = trace["events"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter(|event| {
-            event["source"]
-                .as_str()
-                .is_some_and(|source| source.starts_with("song:/"))
-                && event
-                    .pointer("/caller/source")
-                    .and_then(Value::as_str)
-                    .is_some_and(|source| !source.starts_with("song:/"))
-        })
-        .filter_map(|event| event["operation"].as_str())
-        .collect();
     let mut pending = Vec::new();
-    if trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
-        (event.pointer("/caller/source").is_some_and(|source| source == "=(tail call)")
-            || event.pointer("/caller/tail_call").and_then(Value::as_bool) == Some(true))
-        && event["source"].as_str().is_some_and(|source| source.starts_with("song:/"))))
-    {
+    if tail_call {
         pending.push("native tail-call provenance is unavailable".to_owned());
     }
-    if trace["capabilities"]["native_modifier_results"] != true
-        && trace["events"].as_array().is_some_and(|events| events.iter().any(|event|
-            event["kind"] == "modifier" && event.pointer("/caller/source").unwrap_or(&event["source"])
-                .as_str().is_some_and(|source| source.starts_with("song:/"))))
-    {
+    if trace["capabilities"]["native_modifier_results"] != true && modifier {
         pending.push("native modifier return values are not captured".to_owned());
     }
     if scope != Scope::Full || replayed != total {
@@ -635,8 +632,8 @@ return Def.ActorFrame {{
             "UpperLeft merges root On with the native effect; its command identity belongs to ActorDef, not the song");
     }
 
-    use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
-        GameplayStreamClockSnapshot, GameplayViewport, Arc, json};
+    use super::{gameplay, interactive, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
+        GameplayStreamClockSnapshot, GameplayViewport, Arc, Value, json};
 
     #[test]
     fn call_comparison_uses_the_same_method_domain_without_losing_value_checks() {
@@ -663,6 +660,8 @@ return Def.ActorFrame {{
             let report = super::compare_calls(&trace, std::path::Path::new("control/control.ssc"),
                 1, 0.0, super::Scope::Full, &mut mismatches).unwrap();
             assert_eq!(report["native_count"], 1);
+            assert_eq!(report["native_event_indices"], json!([1]));
+            assert!(report.get("native").is_none(), "native events remain in the archive without a second report copy");
             assert_eq!(report["actual_count"], 1);
             assert_eq!(report["uncompared_actual"], json!([outside]));
             assert_eq!(mismatches.len(), usize::from(wrong_value), "compared getter values still fail");
@@ -709,7 +708,7 @@ return Def.ActorFrame {{
     #[test]
     fn option_trace_keeps_native_returns_and_strings() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
-            compile_song_lua_with_default_host};
+            compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(2_000_000).expect("install option trace");
         let dir = std::env::temp_dir().join(format!("deadsync-option-call-trace-{}", std::process::id()));
@@ -731,7 +730,7 @@ return Def.ActorFrame{}
 "#).expect("write real option calls");
         let mut context = SongLuaCompileContext::new(&dir, "option trace control");
         context.live = true;
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+        let compiled = compile_song_lua::<(), (), _>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None, |_, _| None).expect("compile real option operations");
         assert!(compiled.live_scene.is_some());
@@ -912,7 +911,7 @@ return Def.ActorFrame{}
 
     #[test]
     fn native_overlay_preserves_theme_tree_and_capture_probe_input() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-overlay-tree-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("tree.lua");
@@ -936,7 +935,7 @@ end }
             context.live = true;
             context.players[1].enabled = false;
             context.capture_overlay_probe = captured;
-            let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+            let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
                 SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
                 |_| None, |_,_| None).unwrap();
             let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -948,7 +947,7 @@ end }
 
     #[test]
     fn native_gameplay_decorations_retain_children_while_hibernating() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-decorations-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("decorations.lua");
@@ -975,7 +974,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native decorations");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -985,7 +984,7 @@ end }
 
     #[test]
     fn native_plain_actor_draws_do_not_consume_geometry_budget() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-plain-actor-draws-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("draws.lua");
@@ -1006,7 +1005,7 @@ return root
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "plain Actor draws");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -1019,7 +1018,7 @@ return root
 
     #[test]
     fn native_live_draw_payload_can_exceed_the_baked_operation_count() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-live-draw-payload-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("draws.lua");
@@ -1035,7 +1034,7 @@ return Def.ActorFrame {
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "live draw payload");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -1048,7 +1047,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_finish_tweening_propagates_and_source_broadcasts_keep_callback_scope() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-finish-tree-scope-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("commands.lua");
@@ -1074,7 +1073,7 @@ return Def.ActorFrame {
         let mut context = SongLuaCompileContext::new(&dir, "finish tree and source scope");
         context.live = true;
         context.defer_initial_live_update = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let scene = compiled.live_scene.as_mut().unwrap();
@@ -1092,7 +1091,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_failed_exit_records_history_without_emptying_the_meter() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-exit-life-record-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("history.lua");
@@ -1100,7 +1099,7 @@ return Def.ActorFrame {
         let mut context = SongLuaCompileContext::new(&dir, "failed exit life history");
         context.live = true;
         context.players[1].enabled = false;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let scene = compiled.live_scene.as_mut().unwrap();
@@ -1126,7 +1125,7 @@ return Def.ActorFrame {
 
     #[test]
     fn native_event_mode_reads_the_owned_preference_without_nested_api_calls() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         super::start_call_log(2_000_000).unwrap();
         let dir = std::env::temp_dir().join(format!("deadsync-event-mode-owner-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1141,7 +1140,7 @@ return Def.ActorFrame {}
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "event mode preference owner");
         context.live = true;
-        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
@@ -1153,7 +1152,7 @@ return Def.ActorFrame {}
 
     #[test]
     fn native_gameplay_transitions_retain_their_loaded_auto_actors() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-transition-children-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("transitions.lua");
@@ -1187,7 +1186,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native transition children");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -1197,7 +1196,7 @@ end }
 
     #[test]
     fn native_background_retains_borders_and_duplicate_brightness_quads() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         let dir = std::env::temp_dir().join(format!("deadsync-native-background-children-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let entry = dir.join("background.lua");
@@ -1225,7 +1224,7 @@ end }
 "#).unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native background children");
         context.live = true;
-        let mut compiled = compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        let mut compiled = compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().take_startup_output();
@@ -1235,7 +1234,7 @@ end }
 
     #[test]
     fn native_current_background_helper_keeps_its_theme_query_caller() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         super::start_call_log(2_000_000).unwrap();
         let dir = std::env::temp_dir().join(format!("deadsync-background-helper-caller-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -1243,7 +1242,7 @@ end }
         std::fs::write(&entry, "return Def.Sprite { InitCommand=function(self) assert(self:LoadFromCurrentSongBackground() == self) end }").unwrap();
         let mut context = SongLuaCompileContext::new(&dir, "native background helper caller");
         context.live = true;
-        compile_song_lua_with_default_host::<(),(),_>(&entry, &context,
+        compile_song_lua::<(),(),_>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_,_,_| Ok(Arc::<[()]>::from([])),
             |_| None, |_,_| None).unwrap();
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
@@ -1275,7 +1274,7 @@ end }
 
     #[test]
     fn autonomous_theme_queries_stay_outside_song_trace_but_nested_calls_remain() {
-        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(2_000_000).unwrap();
         let dir=std::env::temp_dir().join(format!("deadsync-theme-call-scope-{}",std::process::id()));
@@ -1285,7 +1284,7 @@ local nested=assert(loadstring("return function() return GAMESTATE:GetSongOption
 return Def.ActorFrame { OnCommand=function(self) assert(nested()==1) end }
 "#).unwrap();
         let mut context=SongLuaCompileContext::new(&dir,"theme call scope");context.live=true;
-        let compiled=compile_song_lua_with_default_host::<(),(),_>(&entry,&context,SongLuaNoteskinResolver::default(),
+        let compiled=compile_song_lua::<(),(),_>(&entry,&context,SongLuaNoteskinResolver::default(),
             |_,_,_|Ok(Arc::<[()]>::from([])), |_|None, |_,_|None).unwrap();
         assert!(compiled.live_scene.is_some());
         let events=super::CALL_EVENTS.with_borrow(|capture|capture.events.clone());
@@ -1372,9 +1371,9 @@ end }
 "#).unwrap();
         let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap());
         let session = super::native_gameplay_session(&json!({"style":"double"})).unwrap();
-        let selected = super::native_starting_chart(&song, &session, Some("Challenge")).unwrap();
+        let selected = super::native_starting_chart(&song, &session, &json!({"input":{"requested_difficulty":"Challenge"}})).unwrap();
         assert_eq!(selected, 1, "same-difficulty single chart is not the double chart");
-        assert!(super::native_starting_chart(&song, &session, Some("Hard")).is_err());
+        assert!(super::native_starting_chart(&song, &session, &json!({"input":{"requested_difficulty":"Hard"}})).is_err());
         let chart = Arc::new(song.charts[selected].clone());
         let charts = [chart.clone(), chart];
         let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[selected], -0.008).unwrap().remove(0));
@@ -1399,6 +1398,116 @@ end }
                 screen_seconds: 0.1, delta_seconds: 0.1, ..Default::default() }).unwrap();
         assert!(output.errors.is_empty(), "{:?}", output.errors);
         assert!(output.broadcasts.iter().any(|(_, name, _)| name == "DoubleSceneReady"), "double On executed");
+    }
+
+    #[test]
+    fn native_starting_chart_checks_identity_and_maps_catalog_to_payload() {
+        paths::init();
+        let directory = std::env::temp_dir().join(format!("deadsync-native-chart-selector-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        for extension in ["sm", "ssc"] {
+            let simfile = directory.join(format!("control.{extension}"));
+            let mut source = "#VERSION:0.83;#TITLE:Chart selector;#BPMS:0=120;\n".to_owned();
+            for (kind, description, notes) in [
+                ("dance-solo", "Solo", "000001\n000000\n000000\n000000"),
+                ("dance-single", "First", "1000\n0000\n0000\n0000"),
+                ("dance-single", "Second", "0100\n0000\n0000\n0000"),
+            ] {
+                if extension == "sm" {
+                    source.push_str(&format!("#NOTES:{kind}:{description}:Edit:1:0,0,0,0,0:\n{notes}\n;\n"));
+                } else {
+                    source.push_str(&format!("#NOTEDATA:;#STEPSTYPE:{kind};#DESCRIPTION:{description};#CHARTNAME:{description};#DIFFICULTY:Edit;#METER:1;#NOTES:\n{notes}\n;\n"));
+                }
+            }
+            std::fs::write(&simfile, source).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap();
+            assert_eq!(song.charts.len(), 2, "unsupported solo is catalogued without a playable payload");
+            let catalog: Vec<_> = [("Solo", "StepsType_Dance_Solo"), ("First", "StepsType_Dance_Single"),
+                ("Second", "StepsType_Dance_Single")].into_iter().enumerate().map(|(i,(description, kind))|
+                    json!({"index":i+1,"description":description,"chart_name":description,
+                        "steps_type":kind,"difficulty":"Difficulty_Edit","meter":1,"is_autogen":false})).collect();
+            let mut trace = json!({"input":{"game":"dance","style":"single","requested_difficulty":"Edit",
+                "requested_chart_index":3,"starting_chart":catalog[2],"chart_catalog":catalog}});
+            let session = super::native_gameplay_session(&trace).unwrap();
+            assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), 1);
+            // Final observed fields may describe a later authored chart switch.
+            trace["difficulty"] = json!("Difficulty_Hard");
+            trace["description"] = json!("First");
+            assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), 1);
+            for (pointer, value) in [
+                ("/input/starting_chart/index", json!(0)),
+                ("/input/requested_chart_index", json!(2)),
+                ("/input/chart_catalog/0/description", json!("Reordered")),
+                ("/input/chart_catalog/1/meter", json!(2)),
+                ("/input/requested_difficulty", json!("Hard")),
+            ] {
+                let mut bad = trace.clone();
+                *bad.pointer_mut(pointer).unwrap() = value;
+                assert!(super::native_starting_chart(&song, &session, &bad).is_err(), "accepted {pointer}");
+            }
+            let mut missing = trace.clone();
+            missing["input"].as_object_mut().unwrap().remove("starting_chart");
+            assert!(super::native_starting_chart(&song, &session, &missing).is_err());
+            missing["input"].as_object_mut().unwrap().remove("requested_chart_index");
+            assert_eq!(super::native_starting_chart(&song, &session, &missing).unwrap(), 0,
+                "older traces retain the first matching chart behavior");
+            trace["input"]["game"] = json!("lights");
+            assert!(super::native_gameplay_session(&trace).is_err(), "unknown games must not replay as dance");
+        }
+    }
+
+    #[test]
+    fn native_starting_chart_respects_game_and_partner_styles() {
+        paths::init();
+        let directory = std::env::temp_dir().join(format!("deadsync-native-style-selector-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let kinds = [
+            ("dance-single", "StepsType_Dance_Single", 4),
+            ("dance-double", "StepsType_Dance_Double", 8),
+            ("dance-couple", "StepsType_Dance_Couple", 8),
+            ("dance-routine", "StepsType_Dance_Routine", 8),
+            ("pump-single", "StepsType_Pump_Single", 5),
+            ("pump-double", "StepsType_Pump_Double", 10),
+            ("pump-couple", "StepsType_Pump_Couple", 10),
+            ("pump-routine", "StepsType_Pump_Routine", 10),
+        ];
+        for extension in ["sm", "ssc"] {
+            let simfile = directory.join(format!("control.{extension}"));
+            let mut source = "#VERSION:0.83;#TITLE:Native style selector;#BPMS:0=120;\n".to_owned();
+            let mut catalog = Vec::new();
+            for (index, (kind, native_kind, lanes)) in kinds.iter().enumerate() {
+                let empty = "0".repeat(*lanes);
+                let notes = format!("1{}\n{empty}\n{empty}\n{empty}", "0".repeat(lanes-1));
+                if extension == "sm" {
+                    source.push_str(&format!("#NOTES:{kind}:{kind}:Edit:1:0,0,0,0,0:\n{notes}\n;\n"));
+                } else {
+                    source.push_str(&format!("#NOTEDATA:;#STEPSTYPE:{kind};#DESCRIPTION:{kind};#CHARTNAME:{kind};#DIFFICULTY:Edit;#METER:1;#NOTES:\n{notes}\n;\n"));
+                }
+                catalog.push(json!({"index":index+1,"steps_type":native_kind,"description":kind,
+                    "chart_name":kind,"difficulty":"Difficulty_Edit","meter":1,"is_autogen":false}));
+            }
+            std::fs::write(&simfile, source).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap();
+            assert_eq!(song.charts.len(), 8);
+            for (game, offset, width) in [("dance", 0, 4), ("pump", 4, 5)] {
+                for (style, chart, players, columns) in [
+                    ("single", 0, 1, width), ("versus", 0, 2, width),
+                    ("double", 1, 1, 2*width), ("couple", 2, 2, width), ("routine", 3, 2, 2*width),
+                ] {
+                    let index = offset + chart;
+                    let trace = json!({"game":"dance","style":"single","input":{
+                        "game":game,"style":style,"requested_difficulty":"Edit","requested_chart_index":index+1,
+                        "starting_chart":catalog[index],"chart_catalog":catalog}});
+                    let session = super::native_gameplay_session(&trace).unwrap();
+                    assert_eq!(session.play_style.player_count(), players, "{game}/{style}");
+                    assert_eq!(session.play_style.cols_per_player(), columns, "{game}/{style}");
+                    assert_eq!(session.joined_sides, [true,players == 2]);
+                    assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), index, "{game}/{style}");
+                    let legacy = json!({"game":game,"style":style,"input":{"requested_difficulty":"Edit"}});
+                    assert_eq!(super::native_starting_chart(&song, &session, &legacy).unwrap(), index);
+                }
+            }
+        }
     }
 
     #[test]
@@ -1525,6 +1634,20 @@ end }}
             "events": [{"seq": 1, "kind": "call"}], "stage_samples": [{}]
         });
         super::validate_capture(&complete).expect("complete executable observations");
+        let mut observed_errors = complete.clone();
+        observed_errors["script_errors"] = serde_json::json!([]);
+        observed_errors["dropped_script_errors"] = serde_json::json!(0);
+        super::validate_capture(&observed_errors).expect("complete native error observation");
+        for (errors, dropped) in [
+            (serde_json::json!([{"message":"syntax error before song construction"}]), serde_json::json!(0)),
+            (serde_json::json!([]), serde_json::json!(1)),
+            (serde_json::json!([]), serde_json::Value::Null),
+            (serde_json::Value::Null, serde_json::json!(0)),
+        ] {
+            observed_errors["script_errors"] = errors;
+            observed_errors["dropped_script_errors"] = dropped;
+            assert!(super::validate_capture(&observed_errors).is_err(), "native script failure cannot become an accepted archive");
+        }
         assert_eq!(super::native_random_seed(&complete).expect("legacy seed"), 1);
         let mut seeded = complete.clone();
         seeded["capabilities"]["native_random_seed"] = serde_json::json!(true);
@@ -1549,6 +1672,24 @@ end }}
             {"player": "PlayerNumber_P1", "options_string": "NoHideLights, PlayerAutoPlay, Overhead"}
         ]});
         super::validate_capture(&initial).expect("recorded native startup inputs");
+        let mut both = initial.clone();
+        both["capabilities"]["native_inactive_player_options"] = serde_json::json!(true);
+        assert!(super::validate_capture(&both).is_err());
+        both["input"]["gameplay_preferences"]["players"] = serde_json::json!([
+            {"player":"PlayerNumber_P1", "enabled":true, "options_string":"PlayerAutoPlay"},
+            {"player":"PlayerNumber_P2", "enabled":false, "options_string":"PlayerAutoPlay"}
+        ]);
+        super::validate_capture(&both).expect("initial inactive side remains available for authored join");
+        for (path, value) in [
+            ("/input/gameplay_preferences/players/1/enabled", serde_json::Value::Null),
+            ("/input/gameplay_preferences/players/1/player", serde_json::json!("PlayerNumber_P1")),
+            ("/input/gameplay_preferences/players/1/options_string", serde_json::Value::Null),
+            ("/input/gameplay_preferences/players/0/enabled", serde_json::json!(false)),
+        ] {
+            let mut invalid = both.clone();
+            *invalid.pointer_mut(path).unwrap() = value;
+            assert!(super::validate_capture(&invalid).is_err(), "accepted incomplete roster: {path}");
+        }
         for ratio in [serde_json::json!(0), serde_json::json!(4.0 / 3.0)] {
             initial["input"]["preferences"]["display_aspect_ratio"] = ratio;
             super::validate_capture(&initial).expect("native configured display ratio");
@@ -1794,6 +1935,91 @@ end }}
             [0; 2], prepared, Default::default());
         state.set_live_autoplay_enabled(true);
         state
+    }
+
+    #[test]
+    fn recorded_gameplay_input_preserves_native_scoring_phases() {
+        let mut state = owned_judgment_control("recorded-input-score", "1000\n1000\n1000\n0001", r#"
+local text
+local callbacks = 0
+return Def.ActorFrame {
+ OnCommand=function(self)
+  SCREENMAN:GetTopScreen():AddInputCallback(function(e)
+   callbacks = callbacks + 1
+   local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+   text:settext(callbacks..':'..stats:GetTapNoteScores('TapNoteScore_W1'))
+  end)
+ end,
+ Def.BitmapText {Font='Common Normal',InitCommand=function(self) text=self; self:settext('0:0') end},
+}
+"#, -0.008);
+        state.set_live_autoplay_enabled(false);
+        update_judgment_control(&mut state, -250_000_000, 750_000_000);
+        let first_note_seconds = state.gameplay.chart_runtime.note_time_cache_ns[0] as f64 / 1e9;
+        let second_note_seconds = state.gameplay.chart_runtime.note_time_cache_ns[1] as f64 / 1e9;
+        let find_text=|s: &gameplay::State| s.gameplay.mods.song_lua_visuals.overlays.iter()
+            .chain(s.gameplay.mods.song_lua_visuals.foreground_visual_layers.iter().flat_map(|l|l.overlays.iter()))
+            .find_map(|a|
+                if let deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText {text,..}=&a.kind {
+                    Some(text.to_string())
+                } else {None}).unwrap();
+        let mut input_replay = interactive::InputReplay::default();
+        let mut previous_seconds = -0.25;
+        let mut deliver = |state: &mut gameplay::State, seconds: f64, kind: &str| {
+            let delta = (seconds - previous_seconds) as f32;
+            previous_seconds = seconds;
+            let host = 1_000_000_000 + (seconds * 1e9) as u64;
+            let snapshot = GameplayAudioSnapshot { stream_clock: GameplayStreamClockSnapshot {
+                music_nanos: (seconds * 1e9).round() as i64,
+                has_music_mapping: true, valid_at_host_nanos: host, ..Default::default()
+            }, ..Default::default() };
+            let event = json!({"PlayerNumber":"PlayerNumber_P1","controller":"GameController_1",
+                "button":"Left","GameButton":"MenuLeft","type":kind,
+                "DeviceInput":{"device":"InputDevice_Key","button":"DeviceButton_left",
+                    "level":1,"down":kind!="InputEventType_Release","ago":0.03}});
+            let clocks = if kind == "InputEventType_Repeat" { json!([]) } else {
+                json!([{"player":0,"column":0,"music_seconds":seconds,"music_rate":1,
+                    "last_beat_update_ago":0,"step_ago":0.03,"search_seconds":seconds-0.03}])
+            };
+            gameplay::update_with_input(state, delta, snapshot, ||host, &mut Vec::new(), |state| {
+                input_replay.dispatch(state, &json!({"event":event,"step_clock_inputs":clocks}), snapshot).unwrap();
+            });
+            assert!(state.take_song_lua_output().errors.is_empty());
+        };
+        // Use the chart's calibrated note time, 30ms before this frame. Repeats must
+        // not score the second note or cause another synthesized Lua repeat.
+        deliver(&mut state, first_note_seconds + 0.03, "InputEventType_FirstPress");
+        assert!(state.gameplay.chart_runtime.notes[0].result.is_some(), "the physical press judges its note in the input phase");
+        assert_eq!(state.gameplay.players()[0].judgment_counts.iter().sum::<u32>(), 0);
+        assert_eq!(find_text(&state), "1:0", "native row statistics wait for the next Player::Update");
+        // The next frame finalizes the completed row before the recorded repeat.
+        deliver(&mut state, second_note_seconds, "InputEventType_Repeat");
+        assert_eq!(state.gameplay.players()[0].judgment_counts, [1, 0, 0, 0, 0, 0],
+            "input result {:?} at note time {}", state.gameplay.chart_runtime.notes[0].result,
+            state.gameplay.chart_runtime.note_time_cache_ns[0]);
+        assert_eq!(find_text(&state), "2:1");
+        deliver(&mut state, first_note_seconds + 0.45, "InputEventType_Release");
+        assert!(!state.gameplay.lane_is_pressed(0));
+        assert_eq!(find_text(&state), "3:1");
+        update_judgment_control(&mut state, 500_000_000, 1_500_000_000);
+        assert_eq!(find_text(&state), "3:1");
+    }
+
+    #[test]
+    fn recorded_input_clocks_check_routing_without_choosing_a_lane() {
+        for clocks in [Value::Null, json!([{"player":0,"column":3,
+            "music_seconds":0,"music_rate":1,"last_beat_update_ago":0,"step_ago":0,"search_seconds":0}])] {
+            let mut state = owned_judgment_control("recorded-input-routing", "1000\n0000\n0000\n0001", "", -0.008);
+            state.set_live_autoplay_enabled(false);
+            let record = json!({"event":{"PlayerNumber":"PlayerNumber_P1","controller":"GameController_1",
+                "button":"Left","GameButton":"MenuLeft","type":"InputEventType_FirstPress",
+                "DeviceInput":{"device":"InputDevice_Key","button":"DeviceButton_left","down":true,"ago":0}},
+                "step_clock_inputs":clocks});
+            let error = interactive::InputReplay::default().dispatch(&mut state, &record, GameplayAudioSnapshot::default()).unwrap_err();
+            assert!(error.contains("native step clock observations") || error.contains("input routing differs"), "{error}");
+            assert_eq!(state.gameplay.players()[0].judgment_counts.iter().sum::<u32>(), 0);
+            assert!(!state.gameplay.lane_is_pressed(3), "native column metadata must not choose our lane");
+        }
     }
 
     #[test]
@@ -2785,7 +3011,7 @@ return Def.ActorFrame {
     #[test]
     fn arrow_effects_reads_owned_style_without_extra_lua_queries() {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaNoteskinResolver,
-            compile_song_lua_with_default_host};
+            compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(10_000).expect("observational logger");
         let dir = std::env::temp_dir().join(format!("deadsync-arrow-style-{}", std::process::id()));
@@ -2797,27 +3023,86 @@ assert(GAMESTATE:GetCurrentStyle():GetName() == 'single')
 assert(ArrowEffects.GetXPos(ps, 1, 0) == -96)
 GAMESTATE:SetCurrentStyle('double')
 assert(ArrowEffects.GetXPos(ps, 8, 0) == 224)
+assert(GAMESTATE:GetCurrentStyle():GetName() == 'double')
+GAMESTATE:GetCurrentStyle().GetName = function() return 'authored' end
+assert(GAMESTATE:GetCurrentStyle():GetName() == 'authored')
 return Def.Actor {}
 "#).expect("style control");
         let mut context = SongLuaCompileContext::new(&dir, "owned style");
         context.live = true;
-        compile_song_lua_with_default_host::<(), (), _>(&entry, &context,
+        compile_song_lua::<(), (), _>(&entry, &context,
             SongLuaNoteskinResolver::default(), |_, _, _| Ok(Arc::<[()]>::from([])),
             |_| None, |_, _| None).expect("native column positions after style mutation");
         let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
         let queries: Vec<_> = events.iter().filter(|event|
             event["operation"] == "GameState.GetCurrentStyle").collect();
-        assert_eq!(queries.len(), 1, "internal engine reads must not emit Lua queries: {events:?}");
+        assert_eq!(queries.len(), 4, "internal engine reads must not emit Lua queries: {events:?}");
         assert_eq!(queries[0]["line"], 0, "native constructor query line");
         assert_eq!(queries[0]["phase"], "construction");
         assert!(queries[0]["source"].as_str().expect("authored query source")
             .ends_with("default.lua"));
         assert_eq!(queries[0]["results"][0]["name"], "single");
+        for query in &queries[1..] {
+            assert_eq!(query["results"][0]["name"], "double");
+        }
+        let names: Vec<_> = events.iter().filter(|event| event["operation"] == "Style.GetName").collect();
+        assert_eq!(names.len(), 2, "observe the new native style, preserving the authored replacement");
+        assert_eq!(names[1]["results"], serde_json::json!(["double"]));
+    }
+
+    #[test]
+    fn routine_point_queries_observe_the_distinct_live_statistics_owner() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaLivePlayer,
+            SongLuaNoteskinResolver, compile_song_lua};
+        use std::{fs, sync::Arc};
+        super::start_call_log(10_000).expect("observational logger");
+        let dir = std::env::temp_dir().join(format!("deadsync-routine-query-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local stage = STATSMAN:GetCurStageStats()
+local p1, p2, team = stage:GetPlayerStageStats(0), stage:GetPlayerStageStats(1), stage:GetRoutineStageStats()
+return Def.ActorFrame { InitCommand = function(self)
+    self:sleep(30)
+    self:SetUpdateFunction(function()
+        for _,stats in ipairs{p1, p2, team} do
+            stats:GetPossibleDancePoints()
+            stats:GetCurrentPossibleDancePoints()
+        end
+    end)
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "routine query observers");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.style_name = "routine".into();
+        context.players[1].enabled = true;
+        let mut compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+        for (step, points) in [[10, 15, 25], [20, 25, 45]].into_iter().enumerate() {
+            let stats = |possible| SongLuaLivePlayer {
+                possible_points: possible, current_possible_points: possible - 5,
+                ..Default::default()
+            };
+            let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
+                music_seconds: (step + 1) as f64, screen_seconds: (step + 1) as f64,
+                delta_seconds: 1.0, players: [stats(points[0]), stats(points[1])],
+                routine: Some(stats(points[2])), ..Default::default()
+            }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let queries: Vec<_> = events.iter().filter(|event| matches!(event["operation"].as_str(),
+            Some("PlayerStageStats.GetPossibleDancePoints" | "PlayerStageStats.GetCurrentPossibleDancePoints"))).collect();
+        assert_eq!(queries.iter().map(|event| event["results"][0].as_i64().unwrap()).collect::<Vec<_>>(),
+            [10, 5, 15, 10, 25, 20, 20, 15, 25, 20, 45, 40]);
+        assert!(queries.iter().all(|event| event["phase"] == "callback"));
     }
 
     fn dynamic_command_observations(enabled: bool) -> Vec<serde_json::Value> {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame,
-            SongLuaNoteskinResolver, compile_song_lua_with_default_host};
+            SongLuaNoteskinResolver, compile_song_lua};
         use std::{fs, sync::Arc};
         super::start_call_log(10_000).expect("observational logger");
         let dir = std::env::temp_dir().join(format!("deadsync-dynamic-trace-{}-{enabled}", std::process::id()));
@@ -2838,7 +3123,7 @@ return Def.Actor {
         let mut context = SongLuaCompileContext::new(&dir, "dynamic observer");
         context.live = true;
         context.trace_dynamic_commands = enabled;
-        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let mut compiled = compile_song_lua::<(), (), _>(
             &entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
         let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
@@ -2874,7 +3159,7 @@ return Def.Actor {
     #[test]
     fn native_multivertex_texture_getter_preserves_runtime_and_observation_scope() {
         use deadsync_song_lua::{
-            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua_with_default_host,
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua,
         };
         use std::{fs, sync::Arc};
         super::start_call_log(250_000).expect("install observational logger");
@@ -2914,7 +3199,7 @@ return Def.ActorFrame {
 "#).expect("write texture trace control");
         let mut context = SongLuaCompileContext::new(&dir, "native texture class observations");
         context.live = true;
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let compiled = compile_song_lua::<(), (), _>(
             &entry, &context, SongLuaNoteskinResolver::default(),
             |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
         ).expect("compile real texture getter control");
@@ -2941,7 +3226,7 @@ return Def.ActorFrame {
         use super::start_call_log;
         use deadsync_song_lua::{
             SongLuaCompileContext, SongLuaDifficulty, SongLuaNoteskinResolver, SongLuaStep,
-            compile_song_lua_with_default_host,
+            compile_song_lua,
         };
         use std::{fs, sync::Arc};
         start_call_log(250_000).expect("install observational logger");
@@ -2979,7 +3264,7 @@ return Def.ActorFrame {
             })
             .collect();
         context.player_step_indices[0] = Some(1);
-        let compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let compiled = compile_song_lua::<(), (), _>(
             &entry,
             &context,
             SongLuaNoteskinResolver::default(),
@@ -3081,6 +3366,7 @@ local options = state:GetPlayerOptions('ModsLevel_Song')
 local amount, approach = options:Reverse()
 assert(amount == 0 and approach == 1)
 return Def.ActorFrame{Name='Control', InitCommand=function(self)
+    assert(self:aux(4):getaux()==4)
     self:x(12):y(24):SetUpdateFunction(function(self)
         local beat = GAMESTATE:GetSongBeat()
         assert(beat == 0 or beat == 0.25)
@@ -3109,7 +3395,7 @@ end}
         context.display_height = 0.0;
         context.render_to_texture = false;
         context.players[1].enabled = false;
-        let mut compiled = compile_song_lua_with_default_host::<(), (), _>(
+        let mut compiled = compile_song_lua::<(), (), _>(
             &entry,
             &context,
             SongLuaNoteskinResolver::default(),
@@ -3131,6 +3417,7 @@ end}
                 gameplay_outro: false,
                 chart_attacks: None,
                 players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
+                routine: None,
             })
             .expect("advance update callback");
         assert!(output.errors.is_empty(), "{:?}", output.errors);
@@ -3151,6 +3438,10 @@ end}
             assert_eq!(event["phase"], "construction");
             assert!(super::same_value(&event["results"], &results));
         }
+        let aux = events.iter().find(|event| event["operation"] == "Actor.getaux")
+            .expect("lowercase getter observation");
+        assert_eq!(aux["kind"], "query");
+        assert_eq!(aux["results"], serde_json::json!([4]));
         let beats: Vec<_> = events
             .iter()
             .filter(|event| event["operation"] == "GameState.GetSongBeat")
@@ -3240,6 +3531,35 @@ end}
             let mut event = serde_json::json!({"source":source});
             assert!(!super::normalize_call_source(&mut event, "/tmp/song/"));
         }
+    }
+
+    #[test]
+    fn coverage_preserves_missing_null_theme_and_tail_call_provenance() {
+        use super::{Scope, coverage};
+        use serde_json::json;
+        let trace = json!({
+            "capabilities":{"native_call_sources":true,"native_constructor_queries":true},
+            "actor_definitions":[{"class":"ActorFrame"}],
+            "events":[
+                {"source":"song:/a.lua","operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{},"operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{"source":null},"operation":"NullCaller"},
+                {"source":"song:/a.lua","caller":{"source":42},"operation":"NumberCaller"},
+                {"source":"song:/a.lua","caller":{"source":"theme:/a.lua"},"operation":"ThemeCall"},
+                {"source":"theme:/a.lua","caller":{"source":"song:/a.lua"},"operation":"Actor.sleep"},
+                {"source":"song:/a.lua","caller":{"source":"=(tail call)"},"operation":"TailCall"},
+                {"source":"song:/a.lua","caller":{"source":null,"tail_call":true}},
+                {"source":"song:/a.lua","kind":"modifier"}
+            ]
+        });
+        let value = coverage(&trace, Scope::Full, &json!({"compared":true}), 2, 2);
+        assert_eq!(value["observed_song_operations"], json!(["Actor.sleep"]));
+        assert_eq!(value["nested_theme_operations"], json!(["TailCall","ThemeCall"]));
+        assert_eq!(value["uncompared_song_operations"], json!([]));
+        assert_eq!(value["pending"], json!([
+            "native tail-call provenance is unavailable",
+            "native modifier return values are not captured"
+        ]));
     }
 
     #[test]
@@ -3389,7 +3709,7 @@ end}
     }
 
     #[test]
-    fn instantiated_background_effect_maps_its_authored_child() {
+    fn instantiated_background_effect_keeps_wrapper_in_subscriber_paths() {
         use serde_json::json;
         let trace = json!({
             "capabilities":{"native_actor_creation":true}, "roots":["effect","fg"],
@@ -3413,7 +3733,7 @@ end}
                 {"actor":"sprite-a","definition_id":"sprite","parent":"entry-a","pointer_hex":"20","ordinal":4,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"},
                 {"actor":"fg-a","definition_id":"fg","parent":"fg-parent","pointer_hex":"10","ordinal":5,"scene":1,"before_seq":1,"provenance":"native-ActorUtil-before-LoadFromNode"}]
         });
-        let expected = vec![("1".into(),64),("1/1".into(),48),("1/2".into(),32),("2".into(),16)];
+        let expected = vec![("1".into(),80),("1/1".into(),64),("1/1/1".into(),48),("1/1/2".into(),32),("2".into(),16)];
         assert_eq!(super::native_creation_order_for_entries(&trace,1,1)
             .expect("instantiated effect ownership"), expected);
         for effect in ["Centered", "StretchNoLoop", "StretchRewind"] {
@@ -3428,7 +3748,7 @@ end}
         background_only["actor_creation_inputs"].as_array_mut().unwrap().pop();
         background_only["runtime_actors"].as_array_mut().unwrap().remove(4);
         assert_eq!(super::native_creation_order_for_entries(&background_only,1,1)
-            .expect("background-only scene"), expected[..3]);
+            .expect("background-only scene"), expected[..4]);
         let mut changed_results = trace.clone();
         changed_results["events"] = json!([{"operation":"message","detail":{"results":["unrelated"]}}]);
         assert_eq!(super::native_creation_order_for_entries(&changed_results,1,1)
@@ -3680,9 +4000,15 @@ fn native_fail_type(trace: &Value) -> Result<deadsync_gameplay::GameplayFailType
     }
     let players = preferences["players"].as_array().filter(|p| !p.is_empty() && p.len() <= 2)
         .ok_or("native gameplay inputs must contain one or two players")?;
-    let player = &players[0];
-    if players.iter().enumerate().any(|(index,p)| p["player"] != format!("PlayerNumber_P{}",index+1)
-        || p["disabled_timing_windows"] != json!([]) || p["min_tns_to_hide_notes"] != "TapNoteScore_W3"
+    // New captures retain both sides' initial options, including the side a
+    // song may join later. Inactive players have not received the theme's
+    // enabled-player fail/timing initialization yet.
+    let active: Vec<_> = players.iter().filter(|player|
+        trace["capabilities"]["native_inactive_player_options"] != true || player["enabled"] == true).collect();
+    let player = active.first().ok_or("native gameplay has no enabled player")?;
+    if players.iter().enumerate().any(|(index,p)| p["player"] != format!("PlayerNumber_P{}",index+1))
+        || active.iter().any(|p|
+        p["disabled_timing_windows"] != json!([]) || p["min_tns_to_hide_notes"] != "TapNoteScore_W3"
         || p["fail_setting"] != player["fail_setting"]) {
         return Err("native player timing or fail modifiers differ; this context remains pending".into());
     }
@@ -3704,6 +4030,12 @@ pub(crate) enum Scope {
 }
 
 pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
+    if (trace.get("script_errors").is_some() || trace.get("dropped_script_errors").is_some())
+        && (!trace["script_errors"].as_array().is_some_and(Vec::is_empty)
+            || trace["dropped_script_errors"].as_u64() != Some(0))
+    {
+        return Err("native script loading/execution failed or its diagnostics are incomplete".into());
+    }
     native_random_seed(trace)?;
     if trace["capabilities"]["native_random_seed"] == true
         && (!trace["random_reseeds"].is_array() || trace["dropped_random_reseeds"] != 0)
@@ -3744,6 +4076,15 @@ pub(crate) fn validate_capture(trace: &Value) -> Result<(), String> {
         })
     {
         return Err("declared native initial player options are incomplete".into());
+    }
+    if trace["capabilities"]["native_inactive_player_options"] == true
+        && !trace["input"]["gameplay_preferences"]["players"].as_array().is_some_and(|players|
+            players.len() == 2 && players.iter().enumerate().all(|(index, player)|
+                player["player"] == format!("PlayerNumber_P{}", index + 1)
+                    && player["enabled"].is_boolean() && player["options_string"].is_string())
+                && players.iter().any(|player| player["enabled"] == true))
+    {
+        return Err("declared native active/inactive player options are incomplete".into());
     }
     for (field, sequence) in [("update_frames", "sequence"), ("events", "seq")] {
         let values = trace[field].as_array().ok_or_else(|| format!("native {field} are missing"))?;
@@ -3846,12 +4187,12 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
     let mut observed = BTreeSet::new();
     let mut paths = BTreeMap::new();
     let mut background_roots = BTreeMap::new();
-    let mut background_effects = BTreeSet::new();
     if background_entries > 0 {
         // Older captures observe children loaded directly onto an external
         // background frame. A composed ActorDef can instead expose the full
         // instantiated UpperLeft/Centered effect and its LoadActor(File1)
-        // child. That child is the authored entry; the effect is theme-owned.
+        // child. The production loader retains that wrapper as the entry root,
+        // so its authored child and descendants need the extra path component.
         let mut background_owners = Vec::new();
         for input in inputs.iter().filter(|input| input["scene"].as_u64() == Some(scene)) {
             let parent = input["parent"].as_str();
@@ -3870,9 +4211,8 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
                 if children.len() != 1 {
                     return Err("native background effect does not own one authored entry".into());
                 }
-                let entry = children[0]["actor"].as_str().ok_or("invalid native background entry identity")?;
-                background_effects.insert(actor);
-                background_owners.push((entry, true));
+                children[0]["actor"].as_str().ok_or("invalid native background entry identity")?;
+                background_owners.push((actor, true));
             } else if let Some(parent) = parent {
                 if !background_owners.iter().any(|&(owner, _)| owner == parent) {
                     background_owners.push((parent, false));
@@ -3929,7 +4269,6 @@ fn native_creation_order_with_coverage_for_entries(trace: &Value, scene: u64, ba
         }
         if input["scene"].as_u64() != Some(scene) { continue; }
         if !pointers.insert(pointer) { return Err("duplicate native subscriber pointer in scene".into()); }
-        if background_effects.contains(actor) { continue; }
         if !foreground_roots.is_empty() && !foreground_roots.contains_key(actor)
             && !background_roots.contains_key(actor)
             && input["parent"].as_str().is_none_or(|parent| !paths.contains_key(parent))
@@ -4153,19 +4492,93 @@ fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
     use deadsync_gameplay::GameplayInputPlayStyle;
     // GameState::SetCurrentStyle can change the final observed style during a
     // gameplay reload. Replay must begin with the captured launch input.
-    let play_style = match trace["input"]["style"].as_str().or_else(|| trace["style"].as_str()) {
-        Some("single") => GameplayInputPlayStyle::Single,
-        Some("versus") => GameplayInputPlayStyle::Versus,
-        Some("double") => GameplayInputPlayStyle::Double,
-        _ => return Err("live replay currently supports single, versus and double; other styles remain pending".into()),
+    let game = trace["input"]["game"].as_str().or_else(|| trace["game"].as_str()).unwrap_or("dance");
+    let style = trace["input"]["style"].as_str().or_else(|| trace["style"].as_str());
+    let play_style = match (game, style) {
+        ("dance", Some("single")) => GameplayInputPlayStyle::Single,
+        ("dance", Some("versus")) => GameplayInputPlayStyle::Versus,
+        ("dance", Some("double")) => GameplayInputPlayStyle::Double,
+        ("dance", Some("couple")) => GameplayInputPlayStyle::Couple,
+        ("dance", Some("routine")) => GameplayInputPlayStyle::Routine,
+        ("pump", Some("single")) => GameplayInputPlayStyle::PumpSingle,
+        ("pump", Some("versus")) => GameplayInputPlayStyle::PumpVersus,
+        ("pump", Some("double")) => GameplayInputPlayStyle::PumpDouble,
+        ("pump", Some("couple")) => GameplayInputPlayStyle::PumpCouple,
+        ("pump", Some("routine")) => GameplayInputPlayStyle::PumpRoutine,
+        _ => return Err(format!("unsupported native replay game/style: {game}/{style:?}")),
     };
     Ok(GameplaySession { play_style, joined_sides: [true,play_style.is_versus()], ..Default::default() })
 }
 
 fn native_starting_chart(
-    song: &deadsync_chart::SongData, session: &GameplaySession, difficulty: Option<&str>,
+    song: &deadsync_chart::SongData, session: &GameplaySession, trace: &Value,
 ) -> Result<usize, String> {
-    let steps_type = if session.play_style.is_double() { "dance-double" } else { "dance-single" };
+    use deadsync_gameplay::GameplayInputPlayStyle as Style;
+    let steps_type = match session.play_style {
+        Style::Single | Style::Versus => "dance-single",
+        Style::Double => "dance-double",
+        Style::Couple => "dance-couple",
+        Style::Routine => "dance-routine",
+        Style::PumpSingle | Style::PumpVersus => "pump-single",
+        Style::PumpDouble => "pump-double",
+        Style::PumpCouple => "pump-couple",
+        Style::PumpRoutine => "pump-routine",
+    };
+    let difficulty = trace["input"]["requested_difficulty"].as_str();
+    let input = &trace["input"];
+    if let Some(selected) = input.get("starting_chart") {
+        let catalog = input["chart_catalog"].as_array().ok_or("native starting chart requires its catalog")?;
+        let index = selected["index"].as_u64().and_then(|index| usize::try_from(index).ok())
+            .and_then(|index| index.checked_sub(1)).ok_or("native starting chart index is invalid")?;
+        if catalog.get(index) != Some(selected) {
+            return Err("native starting chart does not match its catalog entry".into());
+        }
+        if let Some(requested) = input.get("requested_chart_index") {
+            if requested.as_u64() != Some(index as u64 + 1) {
+                return Err("native starting chart does not match the requested index".into());
+            }
+        }
+        // Native indices include unplayable chart types and autogens. Resolve
+        // through the independently parsed catalog, verifying its authored
+        // entries before using its playable payload mapping. Native tidy-up may
+        // remove duplicates or change metadata: fail explicitly in that case.
+        let parsed = deadsync_simfile::song::load_native_step_metadata(song)?;
+        let mut authored = 0;
+        let mut playable = None;
+        for (native_index, native) in catalog.iter().enumerate() {
+            if native["index"].as_u64() != Some(native_index as u64 + 1) {
+                return Err("native chart catalog indices are not contiguous".into());
+            }
+            match native["is_autogen"].as_bool() {
+                Some(true) => continue,
+                Some(false) => (),
+                None => return Err("native chart catalog is missing its autogen flag".into()),
+            }
+            let chart = parsed.get(authored).ok_or("native chart catalog exceeds parsed authored charts")?;
+            let kind = native["steps_type"].as_str().and_then(|kind| kind.strip_prefix("StepsType_"))
+                .map(|kind| kind.replace('_', "-").to_ascii_lowercase());
+            let native_difficulty = native["difficulty"].as_str().and_then(|d| d.strip_prefix("Difficulty_"));
+            if kind.as_deref() != Some(chart.chart_type.as_str())
+                || !native_difficulty.is_some_and(|d| d.eq_ignore_ascii_case(&chart.difficulty))
+                || native["description"].as_str() != Some(chart.description.as_str())
+                || native["chart_name"].as_str() != Some(chart.chart_name.as_str())
+                || native["meter"].as_u64() != Some(u64::from(chart.meter)) {
+                return Err(format!("native chart catalog identity differs at index {}", native_index + 1));
+            }
+            if native_index == index { playable = chart.playable_index; }
+            authored += 1;
+        }
+        if authored != parsed.len() { return Err("native chart catalog is missing authored charts".into()); }
+        let playable = playable.ok_or("selected native chart is autogenerated or not playable")?;
+        let chart = &song.charts[playable];
+        if chart.chart_type != steps_type || !difficulty.is_none_or(|d| chart.difficulty.eq_ignore_ascii_case(d)) {
+            return Err("selected native chart does not match the requested style/difficulty".into());
+        }
+        return Ok(playable);
+    }
+    if input.get("requested_chart_index").is_some() {
+        return Err("an explicit native chart index requires starting chart identity".into());
+    }
     song.charts.iter().position(|chart| chart.chart_type == steps_type
         && difficulty.is_none_or(|wanted| chart.difficulty.eq_ignore_ascii_case(wanted)))
         .ok_or_else(|| "requested native starting chart is absent".into())
@@ -4301,7 +4714,6 @@ fn replay_mode(
         .as_array()
         .ok_or("missing native stage observations")?;
     let progress_observer_frames = native_progress_observer_frames(samples, frames)?;
-    let difficulty = trace["input"]["requested_difficulty"].as_str();
     let preferences = &trace["input"]["preferences"];
     let sync = match preferences["default_sync_offset"].as_str() {
         Some("SyncOffset_NULL") => deadsync_chart::SyncPref::Null,
@@ -4325,7 +4737,7 @@ fn replay_mode(
         simfile,
         config.global_offset_seconds,
     )?);
-    let initial = native_starting_chart(&song, &session, difficulty)?;
+    let initial = native_starting_chart(&song, &session, &trace)?;
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
@@ -4380,6 +4792,12 @@ fn replay_mode(
     }
     for (player, windows) in context.players.iter_mut().zip(native_theme_timing_windows(trace)?) {
         player.timing_windows = windows;
+        if trace["capabilities"]["native_inactive_player_options"] == true {
+            // This harness generation applies its declared autoplay input to
+            // both preferred PlayerOptions before song Lua runs, so a later
+            // JoinPlayer keeps that input. The enabled roster is unchanged.
+            player.autoplay = f32::from(autoplay);
+        }
     }
     // Optional input comes from retained machine configuration or the native
     // input snapshot. Query observations remain expectations only.
@@ -4416,6 +4834,8 @@ fn replay_mode(
             &config,
             &context.video_renderers,
             context.random_seed,
+            deadsync_config::options::SongLuaMode::Baked,
+            None,
         )
     } else {
         deadsync_song_lua::playback::prepare_song_lua(
@@ -4487,6 +4907,7 @@ fn replay_mode(
     let draw_samples = trace["drawable_samples"].as_array().map(Vec::as_slice).unwrap_or_default();
     let input_events = trace["input_events"].as_array().map(Vec::as_slice).unwrap_or_default();
     let mut input_cursor = 0;
+    let mut input_replay = interactive::InputReplay::default();
     let mut draw_cursor = 0;
     if trace["capabilities"]["native_drawable_vertices"] == true {
         draw_checks.bind(&state, trace, 1)?;
@@ -4505,6 +4926,9 @@ fn replay_mode(
     let mut errors = startup.errors;
     let mut runtime_coverage: BTreeSet<String> = startup.coverage_gaps.into_iter().collect();
     runtime_coverage.extend(factory_coverage);
+    if trace.get("script_errors").is_none() {
+        runtime_coverage.insert("legacy capture has no native script-error observation".into());
+    }
     let mut broadcasts: Vec<_> = startup
         .source_broadcasts
         .iter()
@@ -4638,7 +5062,7 @@ fn replay_mode(
         gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
         while let Some(event) = input_events.get(input_cursor) {
             if event["before_update_sequence"].as_u64() != Some(index as u64+2) { break; }
-            if let Err(error)=interactive::dispatch(state, &event["event"]) { input_error=Some(error); break; }
+            if let Err(error)=input_replay.dispatch(state, event, snapshot) { input_error=Some(error); break; }
             input_cursor += 1;
         }
         });
@@ -4950,7 +5374,6 @@ pub(super) fn compile_generated(
     validate_capture(trace)?;
     let autoplay = native_autoplay(trace)?;
     let session = native_gameplay_session(trace)?;
-    let difficulty = trace["input"]["requested_difficulty"].as_str();
     let preferences = &trace["input"]["preferences"];
     let sync = match preferences["default_sync_offset"].as_str() {
         Some("SyncOffset_NULL") => deadsync_chart::SyncPref::Null,
@@ -4970,7 +5393,7 @@ pub(super) fn compile_generated(
         simfile,
         config.global_offset_seconds,
     )?);
-    let initial = native_starting_chart(&song, &session, difficulty)?;
+    let initial = native_starting_chart(&song, &session, trace)?;
     let first = Arc::new(song.charts[initial].clone());
     let charts = [first.clone(), first];
     let initial_payload = Arc::new(
