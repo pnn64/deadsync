@@ -2929,6 +2929,65 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn beat_tick_survives_delay_enable_pause_and_practice_restart() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            delays: vec![DelaySegment { beat: 4.0, duration: 2.0 }],
+            ..Default::default()
+        }, 480);
+        state.drain_audio_commands().for_each(drop);
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Beat, 3.0);
+        state.run_pre_notes_phase(3_000_000_000, 3_000_000_000, 3_000_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+        let expected = vec![GameplayAudioCommand::PlayAssistTickAtMusicTime {
+            path: MEASURE_TICK_SFX_PATH, music_seconds: 4.0,
+        }];
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+        state.set_gameplay_paused(true);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 0.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+        state.set_gameplay_paused(false);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+        state.run_pre_notes_phase(3_970_000_000, 3_970_000_000, 3_970_000_000, 0.0, 1.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0, "no duplicate tick on following frame");
+
+        state.start_practice_music_at(3.0, 3.0);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 3, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn beat_tick_uses_measure_and_beat_sounds_on_fractional_grid() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            time_signatures: vec![deadsync_rules::timing::TimeSignatureSegment {
+                beat: 0.0, numerator: 3, denominator: 8,
+            }],
+            ..Default::default()
+        }, 480);
+        state.drain_audio_commands().for_each(drop);
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Beat, 0.70);
+        for (now, seconds, path) in [
+            (710_000_000, 0.75, MEASURE_TICK_SFX_PATH),
+            (1_210_000_000, 1.25, BEAT_TICK_SFX_PATH),
+            (1_460_000_000, 1.5, MEASURE_TICK_SFX_PATH),
+        ] {
+            state.run_pre_notes_phase(now, now, now, 0.0, 1.0, 1, "assist");
+            assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), vec![
+                GameplayAudioCommand::PlayAssistTickAtMusicTime { path, music_seconds: seconds },
+            ]);
+        }
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Off, 1.6);
+        state.run_pre_notes_phase(1_960_000_000, 1_960_000_000, 1_960_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+    }
+
+    #[test]
     fn gameplay_pause_skips_judgments_and_roll_decay_but_keeps_screen_time() {
         let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
         state.chart_runtime.notes[0].note_type = NoteType::Roll;
