@@ -1303,6 +1303,7 @@ where
             },
         },
         control: GameplayControlRuntimeState {
+            paused: false,
             exit_input: GameplayExitInputState::default(),
             offset_adjust_hold: GameplayOffsetAdjustHoldState::default(),
             input_state: GameplayInputState::default(),

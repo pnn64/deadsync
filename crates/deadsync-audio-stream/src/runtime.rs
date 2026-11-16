@@ -32,6 +32,7 @@ pub struct AudioControl {
 
 struct AudioEngine {
     command_sender: Sender<StreamCommand>,
+    controls: std::sync::Arc<deadlib_audio_core::MixControls>,
     sfx_cache: SfxCache,
     output: OutputFormat,
     startup_output_devices: Vec<OutputDeviceInfo>,
@@ -82,6 +83,7 @@ pub fn init(
         AudioControl {
             engine: Some(AudioEngine {
                 command_sender,
+                controls: controls.clone(),
                 sfx_cache: SfxCache::new(controls, sfx_sender),
                 output: OutputFormat {
                     sample_rate_hz: ready.device_sample_rate,
@@ -221,6 +223,17 @@ impl AudioControl {
         stop_music(self.engine.as_ref());
     }
 
+    /// Freeze the current music cursor without stopping actor or menu sounds.
+    pub fn pause_music(&self, paused: bool) {
+        if let Some(engine) = &self.engine
+            && engine.controls.set_stream_paused(paused)
+        {
+            // Scheduled assist sounds use device-frame targets, which no longer
+            // correspond to their song times when music is paused or resumed.
+            stop_assist_tick_bus();
+        }
+    }
+
     pub fn set_music_rate(&self, rate: f32) {
         set_music_rate(self.engine.as_ref(), rate);
     }
@@ -269,6 +282,7 @@ fn play_music(engine: Option<&AudioEngine>, path: PathBuf, cut: Cut, looping: bo
     deadlib_audio_core::snap_music_gain_generation();
 
     if let Some(engine) = engine {
+        engine.controls.set_stream_paused(false);
         let _ = engine.command_sender.send(StreamCommand::PlayMusic {
             decode_options: crate::DECODE_OPTIONS,
             path,
@@ -300,6 +314,7 @@ fn stop_music(engine: Option<&AudioEngine>) {
     deadlib_audio_core::reset_music_target_gain();
     deadlib_audio_core::snap_music_gain_generation();
     if let Some(engine) = engine {
+        engine.controls.set_stream_paused(false);
         let _ = engine.command_sender.send(StreamCommand::StopMusic);
     }
 }

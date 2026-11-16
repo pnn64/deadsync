@@ -560,6 +560,7 @@ pub(crate) fn drain_core(
             GameplayAudioCommand::StopMusic => {
                 audio.stop_music();
             }
+            GameplayAudioCommand::PauseMusic(paused) => audio.pause_music(paused),
             GameplayAudioCommand::SetMusicRate(rate) => {
                 audio.set_music_rate(rate);
             }

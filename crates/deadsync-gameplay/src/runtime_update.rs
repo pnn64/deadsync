@@ -139,6 +139,7 @@ where
     }
 
     pub fn finish_gameplay_if_ready(&mut self, trace_enabled: bool) -> Option<GameplayAction> {
+        if self.control.paused { return None; }
         let now = self.total_elapsed_in_screen();
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
             if !self.profiles_runtime.profiles[player].golf_scoring_enabled() { continue; }
@@ -263,6 +264,14 @@ where
             phase_timings.pre_notes_us = elapsed_us_since(started);
         }
 
+        if self.control.paused {
+            // Native Player still updates its actor children, but skips note
+            // judgments and hold/roll decay. Physical held state remains live.
+            process_input_edges(self, trace_enabled, &mut phase_timings, song_clock);
+            self.finalize_update_trace(delta_time, music_time_sec, frame_trace_started, phase_timings);
+            return GameplayAction::None;
+        }
+
         let autoplay_started = if trace_enabled {
             Some(Instant::now())
         } else {
@@ -333,6 +342,17 @@ where
             phase_timings,
         );
         GameplayAction::None
+    }
+
+    pub fn set_gameplay_paused(&mut self, paused: bool) {
+        if self.control.paused == paused || (paused && self.mods.attacks.cleared_for_outro) {
+            return;
+        }
+        self.control.paused = paused;
+        self.control.exit_input.hold_to_exit_key = None;
+        self.control.exit_input.hold_to_exit_start = None;
+        self.control.exit_input.hold_to_exit_aborted_at = None;
+        self.push_audio_command(GameplayAudioCommand::PauseMusic(paused));
     }
 
     #[inline(always)]

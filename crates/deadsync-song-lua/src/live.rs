@@ -203,6 +203,8 @@ pub struct SongLuaLiveBroadcast {
 
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
+    /// Ordered music/player pause transitions; repeated unchanged requests are ignored.
+    pub gameplay_pauses: Vec<bool>,
     /// Ordered actor-owned audio operations emitted by authored Lua callbacks.
     pub actor_sounds: Vec<SongLuaActorSound>,
     pub request: Option<SongLuaLiveRequest>,
@@ -225,6 +227,7 @@ pub struct SongLuaLiveOutput {
 
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
+        self.gameplay_pauses.append(&mut next.gameplay_pauses);
         self.actor_sounds.append(&mut next.actor_sounds);
         if next.request.is_some() {
             self.request = next.request;

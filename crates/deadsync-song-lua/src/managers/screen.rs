@@ -13,6 +13,9 @@ pub(crate) struct Screen {
 type Shared = Arc<Mutex<Requests>>;
 #[derive(Default)]
 pub(crate) struct Requests {
+    pub gameplay_paused: bool,
+    pub gameplay_pauses: Vec<bool>,
+    pub gameplay_outro: bool,
     pub next: Option<String>,
     pub actor_names: Option<super::super::actors::ActorNames>,
     #[cfg(feature = "test-support")]
@@ -48,6 +51,12 @@ impl SongRuntime {
         screen: Value,
         players: [Value; LUA_PLAYERS],
     ) -> Result<(), Error> {
+        {
+            let mut state = self.screen.state.lock().unwrap();
+            state.gameplay_paused = false;
+            state.gameplay_pauses.clear();
+            state.gameplay_outro = false;
+        }
         let globals = self.vm.rooted(self.screen.globals)?;
         let state = self.screen.state.clone();
         self.vm

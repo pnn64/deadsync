@@ -239,6 +239,7 @@ impl SongLiveScene {
     }
     pub fn note_gameplay_outro_after_actors(&mut self) {
         self.outro_started = true;
+        self.runtime.access().screen.state.lock().unwrap().gameplay_outro = true;
     }
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_reset && !self.off_pending
@@ -329,7 +330,8 @@ impl SongLiveScene {
         self.outro_started |= frame.gameplay_outro;
         self.last_music = frame.music_seconds as f32;
         self.read_states(runtime)?;
-        if let Err(e) = self.frames.finish_health_update(runtime) {
+        let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
+        if !paused && let Err(e) = self.frames.finish_health_update(runtime) {
             let batch = runtime.vm.rooted(self.retained)?;
             runtime
                 .actors
@@ -464,6 +466,7 @@ impl SongLiveScene {
             .map(|_| ())
     }
     fn take_output(&mut self, runtime: &mut SongRuntime) -> Result<SongLuaLiveOutput, Error> {
+        let gameplay_pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
         let (request, source_requests) = runtime.take_screen_requests();
         let broadcasts = runtime.actors.take_song_broadcasts(&mut runtime.vm);
         let source_broadcasts = runtime.actors.take_live_sources(&mut runtime.vm);
@@ -492,6 +495,7 @@ impl SongLiveScene {
             .take_live_draw_frames(&mut runtime.vm, &sources)
             .map_err(|e| error(runtime, e.as_bytes()))?;
         Ok(SongLuaLiveOutput {
+            gameplay_pauses,
             actor_sounds,
             request,
             source_requests,

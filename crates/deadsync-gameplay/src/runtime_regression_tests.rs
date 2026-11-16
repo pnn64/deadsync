@@ -2929,6 +2929,53 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn gameplay_pause_skips_judgments_and_roll_decay_but_keeps_screen_time() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+        state.boundary.total_elapsed_in_screen = 1.0;
+        let snapshot = GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot {
+                music_nanos: start,
+                music_seconds_per_second: 0.0,
+                has_music_mapping: true,
+                valid_at: Instant::now(), valid_at_host_nanos: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        state.drain_audio_commands().for_each(drop);
+        state.set_gameplay_paused(true);
+        state.set_gameplay_paused(true);
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), vec![GameplayAudioCommand::PauseMusic(true)]);
+        let mut prepared = false;
+        state.update_gameplay_frame_with_pre_player(0.5, snapshot, "unused", || 1, |_| prepared = true);
+        assert!(prepared, "paused frames still prepare live actors");
+        assert_eq!(state.boundary.total_elapsed_in_screen, 1.5);
+        assert!(state.chart_runtime.notes[0].result.is_none(), "paused autoplay cannot judge");
+        state.set_gameplay_paused(false);
+        state.update_gameplay_frame(0.0, snapshot, "unused", || 1);
+        assert!(state.chart_runtime.notes[0].result.is_some());
+        let life = state.active_hold(0).unwrap().life;
+        state.set_gameplay_paused(true);
+        state.update_gameplay_frame(0.6, snapshot, "unused", || 1);
+        assert_eq!(state.active_hold(0).unwrap().life, life);
+        state.set_gameplay_paused(false);
+        state.update_gameplay_frame(0.01, snapshot, "unused", || 1);
+        assert!(state.active_hold(0).unwrap().life < life, "normal frame decay resumes");
+        state.set_gameplay_paused(true);
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns() + 1_000_000_000;
+        assert!(state.finish_gameplay_if_ready(false).is_none(), "pause blocks screen completion");
+        state.set_gameplay_paused(false);
+        state.mods.attacks.cleared_for_outro = true;
+        state.set_gameplay_paused(true);
+        assert!(!state.control.paused, "native ignores pause requests during outro");
+    }
+
+    #[test]
     fn autoplay_roll_uses_frame_time_when_audio_stalls() {
         let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
         state.chart_runtime.notes[0].note_type = NoteType::Roll;

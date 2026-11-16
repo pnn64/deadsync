@@ -221,6 +221,35 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     let screen_value = call.captures()[3];
     let first = argument(call, 0);
     match data.method {
+        "PauseGame" => {
+            let screen = table(call, screen_value)?;
+            let paused = !matches!(first, Value::Nil | Value::Boolean(false));
+            if paused && data.requests.lock().unwrap().gameplay_outro { return Ok(()); }
+            let previous = get_static(call, screen, b"__songlua_paused")?;
+            if !matches!(previous, Value::Nil | Value::Boolean(false)) == paused {
+                return Ok(());
+            }
+            let globals = call.captures()[9];
+            {
+                let mut stack = call.native_stack()?;
+                stack.push(screen_value)?;
+                let owner = stack.top();
+                stack.raw_set_static(owner as isize, b"__songlua_paused", Value::Boolean(paused))?;
+                stack.push(globals)?;
+                let globals_index = stack.top();
+                side_effect(&mut stack, globals_index)?;
+            }
+            if call.store().clock.live.load(std::sync::atomic::Ordering::Relaxed) {
+                {
+                    let mut requests = data.requests.lock().unwrap();
+                    requests.gameplay_paused = paused;
+                    requests.gameplay_pauses.push(paused);
+                }
+                play(call, screen, if paused { b"Pause" } else { b"Unpause" }, None, true)?;
+            }
+            // LunaScreenGameplay::PauseGame has no return values.
+            return Ok(());
+        }
         "SetMinSecondsToMusic" => {
             let receiver = table(call, arg(call, 0))?;
             let seconds = call.number(1)? as f32;
@@ -399,20 +428,15 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 stack.push_bytes(&text)?;
             }
         }
-        "SetNextScreenName" | "SetPrevScreenName" | "PauseGame" | "SetOptionRowIndex" => {
+        "SetNextScreenName" | "SetPrevScreenName" | "SetOptionRowIndex" => {
             let key = match data.method {
                 "SetNextScreenName" => b"__songlua_next_screen_name".as_slice(),
                 "SetPrevScreenName" => b"__songlua_prev_screen_name",
-                "PauseGame" => b"__songlua_paused",
                 _ => b"__songlua_current_row_index",
             };
             if data.method != "SetOptionRowIndex" || row.is_some() {
                 stack.push_bytes(key)?;
                 match data.method {
-                    "PauseGame" => stack.push(Value::Boolean(!matches!(
-                        first,
-                        Value::Nil | Value::Boolean(false)
-                    )))?,
                     "SetOptionRowIndex" => stack.push(Value::Number(row.unwrap().max(0) as f64))?,
                     _ => stack.push_bytes(first_text.as_deref().unwrap_or_default().as_bytes())?,
                 }
@@ -570,7 +594,7 @@ fn method_captures(
         "GetOptionRow" => &[0, 1],
         "GetChild" => &[0, 1, 3, 4, 5, 6, 7],
         "GetLifeMeter" => &[6, 7],
-        "StartTransitioningScreen" => &[0, 1, 3, 9],
+        "StartTransitioningScreen" | "PauseGame" => &[0, 1, 3, 9],
         "GetMusicWheel" => &[8],
         "GetSortOrder" | "GetNextCourseSong" => &[],
         "ChangeSort" | "SetOpenSection" | "Move" => &[8, 9],

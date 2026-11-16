@@ -2147,7 +2147,7 @@ where
             display_music_time_ns,
             visual_scroll_music_time_ns,
         );
-        if self.control.tick_mode == GameplayTimingTickMode::Assist {
+        if !self.control.paused && self.control.tick_mode == GameplayTimingTickMode::Assist {
             let song_row = self.assist_row_no_offset_ns(music_time_ns);
             self.run_assist_clap(
                 song_row,

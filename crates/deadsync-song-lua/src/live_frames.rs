@@ -264,6 +264,7 @@ impl SongLiveFrames {
         deltas: Option<[f32; LUA_PLAYERS + 1]>,
         outro_started: bool,
     ) -> Result<f64, Error> {
+        runtime.screen.state.lock().unwrap().gameplay_outro = outro_started || frame.gameplay_outro;
         let owners = self.owners(runtime)?;
         if let Some(beat) = self.prepared.take() {
             feed(runtime, owners, frame)?;
@@ -705,19 +706,22 @@ fn runtime_table(stack: &mut NativeStack<'_, '_>, globals: usize) -> Result<(), 
     require_table(stack, stack.top())
 }
 fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> Result<(), Error> {
+    let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
     runtime.vm.with_native_stack(|stack| {
         let base = stack.top();
         stack.push(owners)?;
         let batch = stack.top();
         index(stack, batch, 1)?;
         let stage = stack.top();
-        write(
-            stack,
-            stage,
-            "__songlua_gameplay_seconds",
-            Value::Number(frame.screen_seconds),
-            true,
-        )?;
+        if !paused {
+            write(
+                stack,
+                stage,
+                "__songlua_gameplay_seconds",
+                Value::Number(frame.screen_seconds),
+                true,
+            )?;
+        }
         stack.set_top(stack.top() - 1)?;
         for (i, player) in frame.players.iter().enumerate() {
             index(stack, batch, i + 2)?;

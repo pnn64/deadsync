@@ -4343,6 +4343,37 @@ end
 }
 
 #[test]
+fn live_pause_output_preserves_transitions_and_ignores_outro_pause() {
+    let mut compiled = compile("pause-output", r#"
+return Def.ActorFrame { OnCommand=function(self)
+ local screen=SCREENMAN:GetTopScreen()
+ self:SetUpdateFunction(function()
+  if GetTimeSinceStart()==0 then return end
+  screen:PauseGame(true)
+  screen:PauseGame(true)
+  screen:PauseGame(false)
+  screen:PauseGame(true)
+ end)
+end }
+"#);
+    let mut scene = compiled.live_scene.take().unwrap();
+    scene.take_startup_output();
+    let output = scene.advance(SongLuaLiveFrame {
+        music_seconds: 1.0, screen_seconds: 1.0, delta_seconds: 0.1, uptime_seconds: Some(1.0),
+        ..Default::default()
+    }).unwrap();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    assert_eq!(output.gameplay_pauses, [true, false, true]);
+    scene.note_gameplay_outro_after_actors();
+    let output = scene.advance(SongLuaLiveFrame {
+        music_seconds: 1.0, screen_seconds: 1.1, delta_seconds: 0.1, uptime_seconds: Some(1.1),
+        gameplay_outro: true, ..Default::default()
+    }).unwrap();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    assert_eq!(output.gameplay_pauses, [false], "outro can resume, but cannot pause again");
+}
+
+#[test]
 fn live_uptime_advances_while_music_is_paused() {
     let mut compiled = compile(
         "uptime-paused",

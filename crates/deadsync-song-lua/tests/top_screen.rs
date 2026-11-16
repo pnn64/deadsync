@@ -91,6 +91,36 @@ fn screen_controls_preserve_bound_receivers_defaults_and_argument_rules() {
 }
 
 #[test]
+fn pause_commands_observe_the_new_state_and_return_no_values() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "pause commands");
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let _scenes = test_support::top_screen_controls(&mut runtime, &context).unwrap();
+    runtime.vm_mut().execute(&compile_named(br#"
+        local top=SCREENMAN:GetTopScreen()
+        local events={}
+        top:addcommand('Pause',function(self)
+            assert(self:IsPaused())
+            events[#events+1]='pause'
+        end)
+        top:addcommand('Unpause',function(self)
+            assert(not self:IsPaused())
+            events[#events+1]='unpause'
+        end)
+        assert(select('#',top:PauseGame(true))==0)
+        assert(select('#',top:PauseGame(true))==0)
+        assert(select('#',top:PauseGame(false))==0)
+        assert(select('#',top:PauseGame(false))==0)
+        assert(table.concat(events,',')=='pause,unpause')
+        top:PauseGame(0)
+        assert(top:IsPaused())
+        top:PauseGame(nil)
+        assert(not top:IsPaused())
+        assert(table.concat(events,',')=='pause,unpause,pause,unpause')
+    "#, b"@/fixture/pause-commands.lua").unwrap()).unwrap();
+}
+
+#[test]
 fn screen_lead_in_uses_typed_receiver_range_and_no_side_effect() {
     let mut p = Pair::new(true, [true, false]);
     p.script(r#"

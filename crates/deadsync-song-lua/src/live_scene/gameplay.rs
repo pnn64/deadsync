@@ -28,7 +28,7 @@ impl Callbacks {
         label: &'static str,
         event: impl FnOnce(&GameplayRuntimeState<P, O, C, D>) -> Event,
     ) {
-        let writes = {
+        let (writes, pauses) = {
             let mut guard = self.owner.access();
             let runtime = &mut *guard;
             let result = self
@@ -39,9 +39,11 @@ impl Callbacks {
                     .actors
                     .gameplay_error(&mut runtime.vm, None, flag, label, e);
             }
-            runtime.take_player_writes()
+            let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+            (runtime.take_player_writes(), pauses)
         };
         crate::live::apply_player_writes(writes, game);
+        for paused in pauses { game.set_gameplay_paused(paused); }
     }
 }
 impl SongLiveScene {
@@ -209,8 +211,10 @@ impl SongLiveScene {
                 }
             };
             let writes = runtime.take_player_writes();
+            let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
             drop(guard);
             crate::live::apply_player_writes(writes, game);
+            for paused in pauses { game.set_gameplay_paused(paused); }
             result
         }));
         Ok(())
@@ -219,8 +223,12 @@ impl SongLiveScene {
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) {
-        let writes = self.runtime.access().take_player_writes();
+        let mut runtime = self.runtime.access();
+        let writes = runtime.take_player_writes();
+        let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+        drop(runtime);
         crate::live::apply_player_writes(writes, game);
+        for paused in pauses { game.set_gameplay_paused(paused); }
     }
     pub fn apply_output_player_writes<P: GameplayProfileData, O, C, D>(
         &self,
@@ -228,12 +236,15 @@ impl SongLiveScene {
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) {
         crate::live::apply_player_writes(output.player_writes.iter().copied(), game);
+        for &paused in &output.gameplay_pauses { game.set_gameplay_paused(paused); }
     }
     pub fn prepare_gameplay_player_options<P: GameplayProfileData, O, C, D>(
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
+        let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+        for paused in pauses { game.set_gameplay_paused(paused); }
         runtime.refresh_gameplay_options(std::array::from_fn(|player| {
             deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
         }))?;

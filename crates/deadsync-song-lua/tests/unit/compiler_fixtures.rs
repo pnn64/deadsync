@@ -18235,7 +18235,8 @@ SOUND:DimMusic(0.5, 1.0)
 SOUND:PlayMusicPart("sample.ogg", 0, 5)
 SOUND:StopMusic()
 top:SetNextScreenName("ScreenEvaluationStage")
-top:AddInputCallback(function() end):PauseGame(true):RemoveInputCallback(function() end)
+top:AddInputCallback(function() end):PauseGame(true)
+top:RemoveInputCallback(function() end)
 top:StartTransitioningScreen("SM_GoToNextScreen")
 
 mod_actions = {
