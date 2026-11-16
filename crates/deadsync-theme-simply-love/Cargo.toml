@@ -42,7 +42,7 @@ bitflags = "2.13.2"
 chrono = "0.4.45"
 glam = "0.34.1"
 image = "0.25.10"
-log = "0.4.34"
+log = "0.4.35"
 memchr = "2.8.3"
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
 qrcodegen = "1.8.0"

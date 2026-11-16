@@ -112,7 +112,7 @@ deadsync-shell = { path = "crates/deadsync-shell" }
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
-log = "0.4.34"
+log = "0.4.35"
 
 [dev-dependencies]
 deadlib-assets = { path = "crates/deadlib-assets" }
@@ -135,7 +135,7 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 tar = "0.4.46"
 tempfile = "3.27.0"
-zstd = "0.14.3"
+zstd = "0.14.4"
 
 [patch.crates-io]
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is

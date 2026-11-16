@@ -7,9 +7,9 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
 deadlib-platform = { path = "../deadlib-platform" }
-rubato = "5.0.1"
+rubato = "5.1.0"
 deadlib-audio-core = { path = "../deadlib-audio-core" }
-log = "0.4.34"
+log = "0.4.35"
 
 [target.'cfg(windows)'.dependencies]
 deadlib-audio-backend-wasapi = { path = "../deadlib-audio-backend-wasapi" }
