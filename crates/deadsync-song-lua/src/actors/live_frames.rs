@@ -83,7 +83,10 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         let children = table(call, children)?;
         call.with_roots(&[Value::Table(screen), Value::Table(children)], |call| {
             for i in 0..LUA_PLAYERS {
-                let meter = get(call, children, format!("LifeP{}", i + 1).as_bytes())?;
+                let player = get(call, children, crate::top_screen_player_name(i).as_bytes())?;
+                let meter = if player == Value::Nil { Value::Nil } else {
+                    raw_field(call, table(call, player)?, "__songlua_life_meter")?
+                };
                 if meter != Value::Nil {
                     table(call, meter)?;
                     let stats = call.raw_table_get(batch, Value::Number((i + 2) as f64))?;

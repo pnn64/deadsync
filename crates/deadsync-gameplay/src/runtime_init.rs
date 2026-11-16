@@ -1068,6 +1068,13 @@ where
             combo_carry[p],
             caps,
         );
+        if play_style.is_routine() {
+            // Player::Load seeds history only for an individual LifeMeter.
+            // CombinedLifeMeterShared changes a separate inner meter; native
+            // Player::ChangeLifeRecord still reads GameState's initial tug life.
+            player.life_record_source = LifeRecordSource::Combined(0.5);
+            player.life_history.clear();
+        }
         let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
         let possible = target.score_type.possible_points(
             possible_grade_points[p],

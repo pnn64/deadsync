@@ -12,7 +12,8 @@ where
         let old = runtime.life;
         runtime.life = life.clamp(0.0, 1.0);
         deadsync_rules::life::record_life_change(
-            &mut runtime.life_history, seconds, old, runtime.life);
+            &mut runtime.life_history, seconds,
+            runtime.life_record_source.value(old), runtime.life_record_source.value(runtime.life));
         self.display.density_graph.life_dirty[player] = true;
         self.share_routine_life(player);
     }
@@ -33,7 +34,6 @@ where
         let before = runtime.life_history.last().map_or(runtime.life, |&(_, life)| life);
         deadsync_rules::life::record_life_change(&mut runtime.life_history, seconds, before, life);
         self.display.density_graph.life_dirty[player] = true;
-        self.share_routine_life(player);
     }
 
     /// Routine has one CombinedLifeMeterShared fed by both Players. Both
@@ -59,16 +59,8 @@ where
         target.stage_failed = source.stage_failed;
         target.course_life = source.course_life;
         target.course_submit_life = source.course_submit_life;
-        // record_life_change rewrites at most the last two samples.
-        let keep = target
-            .life_history
-            .len()
-            .min(source.life_history.len())
-            .saturating_sub(2);
-        target.life_history.truncate(keep);
-        target
-            .life_history
-            .extend_from_slice(&source.life_history[keep..]);
+        // Each PlayerStageStats owns its own history. Sharing a physical
+        // meter neither records life for the other participant nor aliases it.
         self.display.density_graph.life_dirty[to] |= self.display.density_graph.life_dirty[from];
         if fails_now {
             self.capture_failed_ex_score_inputs(to, self.player_blue_window_ms(to));

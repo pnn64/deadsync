@@ -227,7 +227,10 @@ fn player(
 ) -> Result<TableId, Error> {
     object(call, |call, owner| {
         set(owner, "__songlua_failed", false, call)?;
-        set(owner, "__songlua_life", crate::SONG_LUA_INITIAL_LIFE, call)?;
+        let initial_life = if crate::song_lua_style_info(&context.style_name).style_type == "StyleType_TwoPlayersSharedSides" {
+            0.
+        } else { crate::SONG_LUA_INITIAL_LIFE };
+        set(owner, "__songlua_life", initial_life, call)?;
         for key in [
             "__songlua_score",
             "__songlua_cur_max_score",
@@ -545,7 +548,10 @@ fn reset(call: &mut HostCall<'_>, context: &crate::SongLuaCompileContext) -> Res
                     set(stats, key, 0_i32, call)?;
                 }
                 set(stats, "__songlua_failed", false, call)?;
-                set(stats, "__songlua_life", crate::SONG_LUA_INITIAL_LIFE, call)?;
+                let initial_life = if crate::song_lua_style_info(&context.style_name).style_type == "StyleType_TwoPlayersSharedSides" {
+                    0.
+                } else { crate::SONG_LUA_INITIAL_LIFE };
+                set(stats, "__songlua_life", initial_life, call)?;
                 set(stats, "__songlua_combo", 0_i32, call)?;
                 set(stats, "__songlua_miss_combo", 0_i32, call)?;
                 let counts = raw_table(call, stats, "__songlua_tap_scores")?;

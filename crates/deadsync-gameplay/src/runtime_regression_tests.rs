@@ -6160,7 +6160,40 @@ mod runtime_regression_tests {
 
         // CombinedLifeMeterShared: one meter changed by both participants.
         assert_eq!(players[0].life, players[1].life);
-        assert_eq!(players[0].life_history, players[1].life_history);
+        assert_ne!(players[0].life_history, players[1].life_history,
+            "native PlayerStageStats records only its own life events");
+        for player in players {
+            assert_eq!(player.life_history.last().unwrap().1, 0.5,
+                "combined-meter history reads the independent tug-life value");
+        }
+    }
+
+    #[test]
+    fn routine_life_writes_share_the_meter_but_preserve_individual_history() {
+        for style in [GameplayInputPlayStyle::Routine, GameplayInputPlayStyle::PumpRoutine] {
+            let mut state = routine_state_for_style(style);
+            assert!(state.players().iter().all(|p| p.life == 0.5 && p.life_history.is_empty()));
+            state.set_player_life_from_script(0, 0.8);
+            assert!(state.players().iter().all(|p| p.life == 0.8));
+            assert_eq!(state.players()[0].life_history.last().unwrap().1, 0.5);
+            assert!(state.players()[1].life_history.is_empty());
+            let p1_history = state.players()[0].life_history.clone();
+            state.set_player_life_from_script(1, 0.2);
+            assert!(state.players().iter().all(|p| p.life == 0.2));
+            assert_eq!(state.players()[0].life_history, p1_history);
+            assert_eq!(state.players()[1].life_history.last().unwrap().1, 0.5);
+            state.record_player_life_from_script(1, 0.);
+            assert!(state.players().iter().all(|p| p.life == 0.2));
+            assert_eq!(state.players()[0].life_history, p1_history);
+            assert_eq!(state.players()[1].life_history.last().unwrap().1, 0.);
+            for player in &mut state.players_runtime.players {
+                reset_player_runtime_for_practice(player, 0.);
+                assert!(player.life_history.is_empty());
+                apply_course_life_event(player, 1., 0.008, CourseLifeEvent::Tap(JudgeGrade::Fantastic));
+                assert_eq!(player.life_history.last().unwrap().1, 0.5);
+                assert!(player.life > 0.5);
+            }
+        }
     }
 
     #[test]

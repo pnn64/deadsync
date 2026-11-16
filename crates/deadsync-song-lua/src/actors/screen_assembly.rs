@@ -90,12 +90,20 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
     call.store().scenes.get_mut(&scene).unwrap().root = Some(top);
     let builds =
         [0, 1].map(|index| generated_players::Build::new(data.statistics.clone(), context, index));
+    let combined_life = crate::song_lua_style_info(&context.style_name).style_type == "StyleType_TwoPlayersSharedSides";
     // The native screen constructs both meters, then both players, even when
     // only one player is enabled. Parts are attached after screen parenting.
-    let meters = [
-        builds[0].create_meter(call, scene)?,
-        builds[1].create_meter(call, scene)?,
-    ];
+    let first_meter = builds[0].create_meter(call, scene)?;
+    let meters = [first_meter, if combined_life { first_meter } else { builds[1].create_meter(call, scene)? }];
+    if combined_life {
+        let combined = dummy(call, scene, "ActorFrame", "CombinedLife", Some(top))?;
+        native_children::insert(call, top, "CombinedLife", Value::Table(combined))?;
+        underlay::set_name(call, first_meter, "CoopLifeMeterInternal")?;
+        native_children::adopt(call, first_meter, combined)?;
+        native_children::insert(call, combined, "CoopLifeMeterInternal", Value::Table(first_meter))?;
+        write_order(call, combined, &[first_meter])?;
+        tag(call, combined, "CombinedLife")?;
+    }
     let players = [
         builds[0].create_player(call, scene)?,
         builds[1].create_player(call, scene)?,
@@ -111,6 +119,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         player_parts::install(call, scene, player, index, &context.style_name)?;
     }
     for (index, &meter) in meters.iter().enumerate() {
+        if combined_life { continue; }
         native_children::adopt(call, meter, top)?;
         set(
             call,
@@ -131,6 +140,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         }
     }
     for (index, &meter) in meters.iter().enumerate() {
+        if combined_life { continue; }
         if context.players[index].enabled {
             native_children::insert(
                 call,
@@ -194,6 +204,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
             "Underlay",
             "PlayerP1",
             "PlayerP2",
+            "CombinedLife",
             "LifeP1",
             "LifeP2",
             "ScoreP1",
@@ -223,7 +234,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
     // authored broadcast recording and never enter a song's startup output.
     song_capture::without_live_broadcasts(call, |call| {
         for (index, &meter) in meters.iter().enumerate() {
-            if !context.players[index].enabled {
+            if !context.players[index].enabled || (combined_life && index != 0) {
                 continue;
             }
             let params = call.try_new_table()?;
@@ -274,6 +285,7 @@ fn assemble(call: &mut HostCall<'_>, data: &Build, scene: u64) -> Result<[TableI
         "OniGameOverP1",
         "OniGameOverP2",
         "NextSong",
+        "CombinedLife",
         "LifeP1",
         "LifeP2",
         "ScoreP1",

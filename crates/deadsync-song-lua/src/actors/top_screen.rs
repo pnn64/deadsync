@@ -92,6 +92,8 @@ pub(super) fn create(
     context: &crate::SongLuaCompileContext,
 ) -> Result<TableId, Error> {
     let actor = dummy(call, scene, "TopScreen", "ScreenGameplay", None)?;
+    set(call, actor, "__songlua_combined_life", Value::Boolean(
+        crate::song_lua_style_info(&context.style_name).style_type == "StyleType_TwoPlayersSharedSides"))?;
     for (key, value) in [
         ("__songlua_player1_enabled", context.players[0].enabled),
         ("__songlua_player2_enabled", context.players[1].enabled),
@@ -293,6 +295,10 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             let Some(name) = string(call, first) else {
                 return call.push(Value::Nil);
             };
+            if crate::top_screen_life_meter_index(&name).is_some()
+                && get_static(call, screen, b"__songlua_combined_life")? == Value::Boolean(true) {
+                return call.push(Value::Nil);
+            }
             let player = crate::top_screen_player_index(&name)
                 .map(|i| (i, 4 + i))
                 .or_else(|| crate::top_screen_life_meter_index(&name).map(|i| (i, 6 + i)));

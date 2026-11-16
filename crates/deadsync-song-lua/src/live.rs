@@ -108,7 +108,8 @@ impl SongLuaLivePlayer {
             actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
             life: player.life,
-            life_record_latest: player.life_history.last().map(|&(_, life)| life),
+            life_record_latest: player.life_history.last().map(|&(_, life)| life).or_else(||
+                matches!(player.life_record_source, deadsync_gameplay::LifeRecordSource::Combined(_)).then_some(0.)),
             failed: player.stage_failed || player.fail_time.is_some(),
             fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo,

@@ -18,6 +18,7 @@ pub(super) struct Build {
 struct Method {
     statistics: Statistics,
     index: usize,
+    combined_life: bool,
     name: &'static str,
 }
 
@@ -106,6 +107,7 @@ impl Build {
         Method {
             statistics: self.statistics.clone(),
             index: self.index,
+            combined_life: crate::song_lua_style_info(&self.style).style_type == "StyleType_TwoPlayersSharedSides",
             name: "",
         }
     }
@@ -194,6 +196,7 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
     let method = Method {
         statistics: data.statistics.clone(),
         index: data.index,
+        combined_life: crate::song_lua_style_info(&style).style_type == "StyleType_TwoPlayersSharedSides",
         name: "",
     };
     let id = {
@@ -428,11 +431,18 @@ fn change_life(
     actor: TableId,
     life: f32,
 ) -> Result<(), Error> {
+    // Player::ChangeLifeRecord uses the independent tug-life value when the
+    // player is attached to a combined meter. SetLife still changes the shared
+    // inner meter immediately, before LifeChanged listeners run.
+    let recorded = if data.combined_life { 0.5 } else { life };
     {
         let mut state = data.statistics.lock().unwrap();
         if let Some(players) = state.players.as_mut() {
+            if data.combined_life {
+                for player in players.iter_mut() { player.life = life; }
+            }
             players[data.index].life = life;
-            players[data.index].life_record_latest = Some(life);
+            players[data.index].life_record_latest = Some(recorded);
         }
     }
     let catalog = table(call, call.captures()[2])?;
@@ -454,7 +464,7 @@ fn change_life(
             )?,
         )?
     };
-    raw_set(call, stats, b"__songlua_life", Value::Number(life as f64))?;
+    raw_set(call, stats, b"__songlua_life", Value::Number(recorded as f64))?;
     if call
         .store()
         .clock
@@ -475,7 +485,8 @@ fn change_life(
     raw_set(call, meter, b"__songlua_life", Value::Number(life as f64))?;
     let params = call.try_new_table()?;
     call.with_roots(&[Value::Table(params)], |call| {
-        let player = call.try_intern(format!("PlayerNumber_P{}", data.index + 1).as_bytes())?;
+        let meter_owner = if data.combined_life { 0 } else { data.index };
+        let player = call.try_intern(format!("PlayerNumber_P{}", meter_owner + 1).as_bytes())?;
         raw_set(call, params, b"Player", player)?;
         raw_set(call, params, b"LifeMeter", Value::Table(meter))?;
         messages::dispatch(call, b"LifeChanged", Some(Value::Table(params)), true)
