@@ -335,8 +335,22 @@ fn collect_initial(
         if initial_state::value_text(call, class)?.is_some() {
             save_initial(call, data, retained, actor, false)?;
         }
-        // The compiler walks raw sequence slots: aliases are visited again,
-        // holes stop the walk, and wrappers are not sequence children.
+        // Offline Def still holds the authored declaration here. Init later
+        // compacts its children, including entries after nil helper loads and
+        // entries in an explicit children table. Capture those same children
+        // now so their Init/On queues survive chronological replay.
+        if call.store().actors.get(&actor).is_some_and(|a| a.offline_instance) {
+            let children = call.call(helper(call, 10)?, &[value])?[0];
+            return call.with_roots(&[children], |call| {
+                let children = table(call, children)?;
+                for index in 1..=call.raw_table_len(children)? {
+                    let child = call.raw_table_get(children, Value::Number(index as f64))?;
+                    collect_initial(call, data, retained, child)?;
+                }
+                Ok(())
+            });
+        }
+        // Materialized actors and the loader group already have dense slots.
         let mut index = 1;
         loop {
             let value = call.raw_table_get(actor, Value::Number(index as f64))?;
