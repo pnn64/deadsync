@@ -916,9 +916,20 @@ where
         }
     }
 
+    fn autoplay_roll_frame_notes(&self) -> [Option<usize>; MAX_COLS] {
+        let mut notes = [None; MAX_COLS];
+        let mut mask = self.hold_runtime.active_roll_mask();
+        while mask != 0 {
+            let column = mask.trailing_zeros() as usize;
+            mask &= mask - 1;
+            notes[column] = self.hold_runtime.active_holds[column].as_ref().map(|hold| hold.note_index);
+        }
+        notes
+    }
+
     fn advance_autoplay_roll_frame(
         &mut self,
-        previous_music_time_ns: SongTimeNs,
+        previous_roll_notes: &[Option<usize>; MAX_COLS],
         music_time_ns: SongTimeNs,
         delta_time: f32,
     ) {
@@ -932,15 +943,20 @@ where
             let Some(active) = self.hold_runtime.active_holds[column].as_mut() else { continue; };
             let note = &mut self.chart_runtime.notes[active.note_index];
             let Some(hold) = note.hold.as_mut() else { continue; };
-            // Player::UpdateHoldNotes drains the frame delta, even when the
-            // audio clock stalls. CrossedRows starts new rolls afterwards.
-            if active.start_time_ns <= previous_music_time_ns && !active.let_go {
+            // CrossedRows starts new rolls after UpdateHoldNotes. Identify an
+            // already-judged head by note identity: the audio clock can move
+            // backward across its timestamp without making it a new head.
+            if previous_roll_notes[column] == Some(active.note_index) && !active.let_go {
                 let player = player_index_for_column(self.setup.num_players, self.setup.cols_per_player, column);
                 let timing = &self.timing_runtime.timing_players[player];
                 let beat = timing.get_beat_for_time(song_time_ns_to_seconds(music_time_ns));
-                advance_hold_last_held(hold, timing, beat, note.row_index, note.beat);
-                active.life = (active.life - delta_time / deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL).max(0.0);
-                hold.life = active.life;
+                // Native hold logic is bounded by the current rounded row,
+                // including when a clock correction crosses the head again.
+                if beat_to_note_row(beat) >= beat_to_note_row(note.beat) {
+                    advance_hold_last_held(hold, timing, beat, note.row_index, note.beat);
+                    active.life = (active.life - delta_time / deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL).max(0.0);
+                    hold.life = active.life;
+                }
             }
             // The ordinary hold pass still resolves the tail or LetGo, but
             // must not subtract a second interval from the music clock.
@@ -2053,15 +2069,21 @@ where
             // Player::Update taps autoplay rolls only below half life, before
             // UpdateHoldNotes drains this frame. Keep last_update_time_ns so
             // the refill does not skip that drain or shift the next pulse.
-            if active.life >= 0.5
-                || now_music_time_ns < active.start_time_ns
-                || now_music_time_ns > active.end_time_ns
-            {
+            if active.life >= 0.5 {
                 continue;
             }
-            let Some(hold) = self.chart_runtime.notes[active.note_index].hold.as_mut() else {
+            let player = player_index_for_column(self.setup.num_players, self.setup.cols_per_player, col);
+            let row = beat_to_note_row(self.timing_runtime.timing_players[player]
+                .get_beat_for_time(song_time_ns_to_seconds(now_music_time_ns)));
+            let note = &mut self.chart_runtime.notes[active.note_index];
+            let Some(hold) = note.hold.as_mut() else {
                 continue;
             };
+            // IsHoldNoteAtRow and the head fallback use the same rounded row
+            // as UpdateHoldNotes, rather than exact start/end timestamps.
+            if row < beat_to_note_row(note.beat) || row > beat_to_note_row(hold.end_beat) {
+                continue;
+            }
             active.life = MAX_HOLD_LIFE;
             hold.life = MAX_HOLD_LIFE;
             // Native Step also presses the receptor; it does not rescore the
@@ -2165,6 +2187,7 @@ where
     pub fn run_post_input_gameplay_phases(
         &mut self,
         previous_music_time_ns: SongTimeNs,
+        previous_roll_notes: &[Option<usize>; MAX_COLS],
         music_time_ns: SongTimeNs,
         music_time_sec: f32,
         delta_time: f32,
@@ -2187,7 +2210,7 @@ where
         } else {
             None
         };
-        self.advance_autoplay_roll_frame(previous_music_time_ns, music_time_ns, delta_time);
+        self.advance_autoplay_roll_frame(previous_roll_notes, music_time_ns, delta_time);
         self.update_active_holds(&current_inputs, music_time_ns);
         if let Some(started) = active_holds_started {
             phase_timings.active_holds_us = elapsed_us_since(started);

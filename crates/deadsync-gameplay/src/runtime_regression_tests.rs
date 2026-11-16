@@ -2936,27 +2936,65 @@ mod runtime_regression_tests {
         state.apply_global_offset_delta(-state.global_offset_seconds());
         let start = state.chart_runtime.note_time_cache_ns[0];
         state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+        let before_head = state.autoplay_roll_frame_notes();
         state.run_autoplay_or_replay_frame(start);
-        state.advance_autoplay_roll_frame(start - 1, start, 0.3);
+        state.advance_autoplay_roll_frame(&before_head, start, 0.3);
         state.update_active_holds(&[false; MAX_COLS], start);
         assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0,
             "a roll head is crossed after this frame's hold-life update");
 
         // Only 10 ms of audio progress, but a long native frame drains 60%.
         let at = start + 10_000_000;
+        let before = state.autoplay_roll_frame_notes();
         state.run_autoplay_or_replay_frame(at);
-        state.advance_autoplay_roll_frame(start, at, 0.6 * deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL);
+        state.advance_autoplay_roll_frame(&before, at, 0.6 * deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL);
         state.update_active_holds(&[false; MAX_COLS], at);
         assert!((state.hold_runtime.active_holds[0].as_ref().unwrap().life - 0.4).abs() < 0.00001);
         // Autoplay refills below half life before the next frame's drain.
         state.run_autoplay_or_replay_frame(at);
         assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0);
-        state.advance_autoplay_roll_frame(at, at, 0.4);
+        state.advance_autoplay_roll_frame(&before, at, 0.4);
         state.update_active_holds(&[false; MAX_COLS], at);
         assert!(state.hold_runtime.active_holds[0].is_none());
         assert_eq!(state.chart_runtime.notes[0].hold.as_ref().unwrap().result, Some(HoldResult::LetGo),
             "an audio stall does not stop native roll-life decay");
         assert_eq!(state.display.hold_feedback.hold_judgments[0].unwrap().result, HoldResult::LetGo);
+    }
+
+    #[test]
+    fn autoplay_roll_clock_rewind_uses_current_rounded_head_row() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.run_autoplay_or_replay_frame(start);
+        let window = deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL;
+        // Start, rewind below the head, cross its rounded row before its exact
+        // timestamp, then move forward. Only in-range frames drain roll life.
+        for (offset, delta, drained) in [
+            (50_000_000, 0.05, 0.05),
+            (-50_000_000, 0.1, 0.05),
+            (-1_000_000, 0.02, 0.07),
+            (20_000_000, 0.03, 0.1),
+        ] {
+            let before = state.autoplay_roll_frame_notes();
+            let at = start + offset;
+            state.run_autoplay_or_replay_frame(at);
+            state.advance_autoplay_roll_frame(&before, at, delta);
+            state.update_active_holds(&[false; MAX_COLS], at);
+            let life = state.active_hold(0).expect("roll remains active").life;
+            assert!((life - (1.0 - drained / window)).abs() < 0.00001,
+                "clock offset {offset}: wrong roll life {life}");
+        }
+        state.hold_runtime.active_holds[0].as_mut().unwrap().life = 0.4;
+        state.chart_runtime.notes[0].hold.as_mut().unwrap().life = 0.4;
+        state.run_autoplay_or_replay_frame(start - 50_000_000);
+        assert_eq!(state.active_hold(0).unwrap().life, 0.4,
+            "the previous head judgment does not refill before its current row");
+        state.run_autoplay_or_replay_frame(start - 1_000_000);
+        assert_eq!(state.active_hold(0).unwrap().life, 1.0,
+            "a rounded head row can refill just before its exact timestamp");
     }
 
     #[test]

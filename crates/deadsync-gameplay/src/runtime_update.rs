@@ -268,6 +268,7 @@ where
         } else {
             None
         };
+        let previous_roll_notes = self.autoplay_roll_frame_notes();
         self.run_autoplay_or_replay_frame(music_time_ns);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
@@ -288,6 +289,7 @@ where
 
         self.run_post_input_gameplay_phases(
             previous_music_time_ns,
+            &previous_roll_notes,
             music_time_ns,
             music_time_sec,
             delta_time,
