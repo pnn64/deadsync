@@ -580,11 +580,14 @@ pub struct State {
     pub(super) pack_sync_overlay: crate::screens::pack_sync::OverlayState,
     /// The pack that review is about.
     pub(super) pack_sync_group: Option<String>,
-    /// The review's settings, written by the shell: the confidence a measured
-    /// offset needs to be offered, and the menu buttons it answers to.
+    /// The review's confidence, written by the shell: what a measured offset
+    /// needs to be offered.
     pub(super) pack_sync_confidence: u8,
-    pub(super) pack_sync_menu_only: bool,
-    pub(super) pack_sync_three_key: bool,
+    /// The machine's menu buttons, written by the shell: whether only the
+    /// dedicated menu buttons steer menus, and whether only three of them --
+    /// see [`three_key`]. The review reads them too.
+    pub(super) only_dedicated_menu_buttons: bool,
+    pub(super) three_key_navigation: bool,
     /// Whether the engine will actually act on a `Pack.ini` right now. Written
     /// by the shell, because it is a machine setting rather than a fact about
     /// any pack -- and a dialog that does not say this is a dialog that looks
@@ -592,6 +595,14 @@ pub struct State {
     pub(super) pack_ini_offsets_on: bool,
 
     pub(super) nav_hold: Option<NavHold>,
+    /// LEFT+RIGHT held together, as BACK on a three-key cabinet.
+    pub(super) menu_lr_chord: crate::screens::input::MenuLrChordTracker,
+    /// Per side, where the cursor was before that side's last three-key LEFT
+    /// or RIGHT, for the chord to put it back.
+    pub(super) three_key_undo: [Option<super::input::NavMark>; 2],
+    /// Keyboard presses not yet paired with the character they typed -- see
+    /// `input::KeyPress`.
+    pub(super) key_presses: Vec<super::input::KeyPress>,
     pub(super) pending_turn: Option<PendingTurn>,
     pub(super) reload_prompt: Option<ReloadPrompt>,
     /// Pack folders installed since the library was last rescanned. Kept
@@ -697,10 +708,13 @@ pub fn init() -> State {
         pack_sync_overlay: crate::screens::pack_sync::OverlayState::Hidden,
         pack_sync_group: None,
         pack_sync_confidence: DEFAULT_PACK_SYNC_CONFIDENCE,
-        pack_sync_menu_only: false,
-        pack_sync_three_key: false,
+        only_dedicated_menu_buttons: false,
+        three_key_navigation: false,
         pack_ini_offsets_on: false,
         nav_hold: None,
+        menu_lr_chord: crate::screens::input::MenuLrChordTracker::default(),
+        three_key_undo: [None; 2],
+        key_presses: Vec::new(),
         pending_turn: None,
         reload_prompt: None,
         installed_dirs: Vec::new(),
@@ -740,6 +754,9 @@ pub fn on_enter(state: &mut State) {
     state.year_slot = 0;
     state.cursor = 0;
     state.nav_hold = None;
+    state.menu_lr_chord = crate::screens::input::MenuLrChordTracker::default();
+    state.three_key_undo = [None; 2];
+    state.key_presses.clear();
     state.caret_elapsed = 0.0;
     state.reload_prompt = None;
     state.pending_turn = None;
@@ -778,6 +795,7 @@ pub fn update(state: &mut State, delta_time: f32) {
     if delta_time <= 0.0 || !delta_time.is_finite() {
         return;
     }
+    super::input::age_key_presses(state, delta_time);
     super::rip::update(state, delta_time);
     super::sync_dialog::tick(state);
     // While the pack sync review is up it is the screen: nothing behind it
@@ -835,12 +853,13 @@ pub struct Services {
     /// Whether `MachinePackIniOffsets` is on. Off by default, and while it is
     /// off a pack's `Pack.ini` sync value changes nothing at all.
     pub pack_ini_offsets_on: bool,
-    /// The pack sync review's settings: the confidence a measured offset
-    /// needs, and whether only the dedicated menu buttons -- and only three of
-    /// them -- navigate it.
+    /// The pack sync review's confidence: what a measured offset needs.
     pub pack_sync_confidence: u8,
-    pub pack_sync_menu_only: bool,
-    pub pack_sync_three_key: bool,
+    /// The machine's menu buttons: whether only the dedicated menu buttons
+    /// steer menus, and whether only three of them. The browser and its pack
+    /// sync review both answer to them.
+    pub only_dedicated_menu_buttons: bool,
+    pub three_key_navigation: bool,
 }
 
 impl Default for Services {
@@ -861,8 +880,8 @@ impl Default for Services {
             banner_failed: Arc::new(HashSet::new()),
             pack_ini_offsets_on: false,
             pack_sync_confidence: DEFAULT_PACK_SYNC_CONFIDENCE,
-            pack_sync_menu_only: false,
-            pack_sync_three_key: false,
+            only_dedicated_menu_buttons: false,
+            three_key_navigation: false,
         }
     }
 }
@@ -894,12 +913,12 @@ pub fn sync_stepmaniaonline(
         banner_failed,
         pack_ini_offsets_on,
         pack_sync_confidence,
-        pack_sync_menu_only,
-        pack_sync_three_key,
+        only_dedicated_menu_buttons,
+        three_key_navigation,
     } = services;
     state.pack_sync_confidence = pack_sync_confidence;
-    state.pack_sync_menu_only = pack_sync_menu_only;
-    state.pack_sync_three_key = pack_sync_three_key;
+    state.only_dedicated_menu_buttons = only_dedicated_menu_buttons;
+    state.three_key_navigation = three_key_navigation;
     state.song_preview = song_preview;
     state.song_installs = song_installs;
     super::preview::sync(state);
@@ -1286,6 +1305,21 @@ pub(super) fn grid_landable(state: &State) -> bool {
 /// there and types is already searching.
 pub(super) fn search_field_showing(state: &State) -> bool {
     tab(state) == Tab::Search
+}
+
+/// Whether the keyboard is typing into the search box: the reader is in its
+/// results. On the tab strip above them the keys are the pad's, so a key
+/// bound to LEFT or RIGHT can leave the tab it arrived on.
+pub(super) fn typing_search(state: &State) -> bool {
+    search_field_showing(state) && state.zone == Zone::List
+}
+
+/// Whether the cabinet steers with only the three dedicated menu buttons:
+/// MenuLeft, MenuRight and START, with LEFT+RIGHT together for BACK. DeadSync
+/// asks for both settings before any menu works this way, as the pack sync
+/// review does.
+pub(super) const fn three_key(state: &State) -> bool {
+    state.only_dedicated_menu_buttons && state.three_key_navigation
 }
 
 /// The heading band's title and blurb, verbatim from the original.

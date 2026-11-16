@@ -184,8 +184,8 @@ pub(super) const fn overlay_visible(state: &State) -> bool {
 
 pub(super) const fn nav_policy(state: &State) -> shared::NavigationPolicy {
     shared::NavigationPolicy {
-        only_dedicated_menu_buttons: state.pack_sync_menu_only,
-        three_key_navigation: state.pack_sync_three_key,
+        only_dedicated_menu_buttons: state.only_dedicated_menu_buttons,
+        three_key_navigation: state.three_key_navigation,
     }
 }
 
