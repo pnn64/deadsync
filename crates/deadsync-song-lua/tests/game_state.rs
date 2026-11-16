@@ -14,6 +14,40 @@ fn execute(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
         .unwrap_or_else(|e| panic!("{source}\n{e:?}"))
         .to_vec()
 }
+
+#[test]
+fn pump_game_and_style_metadata_survive_bare_style_selection() {
+    for live in [false, true] {
+        for initial in ["single", "versus", "double", "couple", "routine"] {
+            let mut context = context();
+            context.live = live;
+            context.style_name = format!("pump-{initial}");
+            context.players[1].enabled = matches!(initial, "versus" | "couple" | "routine");
+            let mut runtime = SongRuntime::new(&context).unwrap();
+            execute(&mut runtime, r#"
+                local game = GAMESTATE:GetCurrentGame()
+                assert(game:GetName() == 'pump')
+                assert(GAMESTATE:GetCurrentStyle():GetStepsType():match('^StepsType_Pump_'))
+                for _,row in ipairs {
+                    {'single', 'Single', 5, 1}, {'versus', 'Single', 5, 2},
+                    {'double', 'Double', 10, 1}, {'couple', 'Couple', 5, 2},
+                    {'routine', 'Routine', 10, 2}
+                } do
+                  if #GAMESTATE:GetEnabledPlayers() == row[4] then
+                    GAMESTATE:SetCurrentStyle(row[1])
+                    local style = GAMESTATE:GetCurrentStyle()
+                    assert(style:GetName() == row[1])
+                    assert(style:GetStepsType() == 'StepsType_Pump_' .. row[2])
+                    assert(style:ColumnsPerPlayer() == row[3])
+                    assert(style.__songlua_style_key == 'pump-' .. row[1])
+                    assert(GAMESTATE:GetCurrentGame() == game and game:GetName() == 'pump')
+                  end
+                end
+            "#);
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,

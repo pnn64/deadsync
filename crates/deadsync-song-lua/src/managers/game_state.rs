@@ -16,6 +16,7 @@ struct Setup {
 }
 struct Metadata {
     roster: Arc<Roster>,
+    game_name: &'static str,
     screen_x: [f32; crate::LUA_PLAYERS],
     versus_player_screen_x: Option<[f32; crate::LUA_PLAYERS]>,
     display_bpms: [f32; 2],
@@ -165,6 +166,11 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             joined: AtomicU8::new(context.players.iter().enumerate().fold(0, |bits, (i, p)| bits | (u8::from(p.enabled) << i))),
             master: AtomicU8::new(context.players.iter().position(|p| p.enabled).unwrap_or(crate::LUA_PLAYERS) as u8),
         }),
+        game_name: if crate::song_lua_style_info(&context.style_name).steps_type.starts_with("StepsType_Pump_") {
+            "pump"
+        } else {
+            "dance"
+        },
         screen_x: context.players.each_ref().map(|p| p.screen_x),
         versus_player_screen_x: context.versus_player_screen_x,
         display_bpms: context.song_display_bpms,
@@ -254,7 +260,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             let course = raw(call, catalog, "course")?;
             constant_field(call, class, "GetCurrentCourse", course)?;
             let game = object(call, |call, game| {
-                constant_field(call, game, "GetName", "dance")
+                constant_field(call, game, "GetName", metadata.game_name)
             })?;
             constant_field(call, class, "GetCurrentGame", game)?;
             for (name, value) in [
@@ -505,7 +511,13 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
         "SetCurrentSong" | "SetCurrentStyle" | "SetCurrentTrail" => {
             let slot = table(call, call.captures()[4])?;
             if name == "SetCurrentStyle" {
-                let key = text(call, arg(call, 0)).unwrap_or_else(|| "single".into());
+                let mut key = text(call, arg(call, 0)).unwrap_or_else(|| "single".into());
+                // Native resolves a style string within the current game.
+                // Retain pump's internal key so subsequent scene projections
+                // keep its five/ten-column metadata after a Lua style change.
+                if meta.game_name == "pump" && matches!(key.as_str(), "single" | "versus" | "double" | "couple" | "routine") {
+                    key.insert_str(0, "pump-");
+                }
                 let value = super::utility::style(call, &key)?;
                 call.raw_table_set(slot, Value::Number(1.0), Value::Table(value))?;
             } else if name == "SetCurrentSong" {
