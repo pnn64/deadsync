@@ -265,6 +265,8 @@ const BOOM_SFX_PATH: &str = "assets/sounds/boom.ogg";
 pub struct GameplaySfx {
     boom: Option<deadsync_audio_stream::SfxId>,
     assist_tick: Option<deadsync_audio_stream::SfxId>,
+    beat_tick: Option<deadsync_audio_stream::SfxId>,
+    measure_tick: Option<deadsync_audio_stream::SfxId>,
     song_lua: HashMap<String, deadsync_audio_stream::SfxId>,
 }
 
@@ -273,6 +275,8 @@ impl GameplaySfx {
         match path {
             BOOM_SFX_PATH => self.boom.as_ref(),
             deadsync_gameplay::ASSIST_TICK_SFX_PATH => self.assist_tick.as_ref(),
+            deadsync_gameplay::BEAT_TICK_SFX_PATH => self.beat_tick.as_ref(),
+            deadsync_gameplay::MEASURE_TICK_SFX_PATH => self.measure_tick.as_ref(),
             _ => self.song_lua.get(path),
         }
     }
@@ -290,6 +294,12 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     let boom = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(BOOM_SFX_PATH));
     let assist_tick = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
         deadsync_gameplay::ASSIST_TICK_SFX_PATH,
+    ));
+    let beat_tick = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+        deadsync_gameplay::BEAT_TICK_SFX_PATH,
+    ));
+    let measure_tick = audio.prepare_sfx(&deadsync_assets::resolve_asset_path(
+        deadsync_gameplay::MEASURE_TICK_SFX_PATH,
     ));
 
     let mut sound_paths = Vec::<PathBuf>::with_capacity(song_lua_sound_paths.len());
@@ -327,6 +337,8 @@ pub fn prewarm_gameplay_sfx<CapturedActor, StateDelta>(
     GameplaySfx {
         boom,
         assist_tick,
+        beat_tick,
+        measure_tick,
         song_lua,
     }
 }

@@ -241,6 +241,16 @@ pub struct TimeSignatureSegment {
     pub denominator: i32,
 }
 
+impl TimeSignatureSegment {
+    /// ITGmania TimeSignatureSegment::GetNoteRowsPerMeasure.
+    #[must_use]
+    pub fn note_rows_per_measure(&self) -> i64 {
+        (i64::from(ROWS_PER_BEAT) * 4 * i64::from(self.numerator)
+            / i64::from(self.denominator.max(1)))
+        .max(1)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TickcountSegment {
     pub beat: f32,
@@ -797,14 +807,18 @@ impl TimingData {
             let start = i64::from(beat_to_note_row(signature.beat));
             let end = self.time_signatures.get(index + 1)
                 .map_or(i64::MAX, |next| i64::from(beat_to_note_row(next.beat)));
-            let rows_per_measure = (192 * i64::from(signature.numerator)
-                / i64::from(signature.denominator.max(1))).max(1);
+            let rows_per_measure = signature.note_rows_per_measure();
             if i64::from(row) < end {
                 return (measure + (i64::from(row) - start) / rows_per_measure).max(0) as usize;
             }
             measure += (end - start + rows_per_measure - 1) / rows_per_measure;
         }
         measure.max(0) as usize
+    }
+
+    #[must_use]
+    pub fn time_signature_segments(&self) -> &[TimeSignatureSegment] {
+        &self.time_signatures
     }
 
     #[inline(always)]

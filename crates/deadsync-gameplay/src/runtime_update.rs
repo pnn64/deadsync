@@ -449,12 +449,7 @@ where
         }
     }
 
-
-    pub fn schedule_beat_tick_row(
-        &mut self,
-        beat_row: usize,
-        assist_tick_sfx_path: &'static str,
-    ) {
+    pub fn schedule_beat_tick_row(&mut self, beat_row: usize) {
         let Some(music_seconds) =
             beat_tick_music_seconds_for_row(
                 &self.timing_runtime.timing,
@@ -466,7 +461,7 @@ where
 
         self.push_audio_command(
             GameplayAudioCommand::PlayAssistTickAtMusicTime {
-                path: assist_tick_sfx_path,
+                path: beat_tick_sfx_for_row(&self.timing_runtime.timing, beat_row),
                 music_seconds,
             },
         );
@@ -477,7 +472,6 @@ where
         music_time_ns: SongTimeNs,
         slope: f32,
         assist_sfx_generation: u64,
-        assist_tick_sfx_path: &'static str,
     ) {
         let global_offset =
             self.clock.offsets.global_offset_seconds() * self.music_rate();
@@ -513,10 +507,7 @@ where
 
         for ix in update.schedule_start..update.schedule_end {
             let beat_row = self.control.beat_tick.rows[ix];
-            self.schedule_beat_tick_row(
-                beat_row,
-                assist_tick_sfx_path,
-            );
+            self.schedule_beat_tick_row(beat_row);
         }
     }
 

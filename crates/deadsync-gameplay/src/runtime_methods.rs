@@ -2204,7 +2204,6 @@ where
                     music_time_ns,
                     seconds_per_second,
                     assist_sfx_generation,
-                    assist_tick_sfx_path,
                 );
             }
 

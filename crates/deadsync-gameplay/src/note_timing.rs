@@ -645,7 +645,7 @@ impl GameplayTimeToBeatCaches {
         )
         .max(song_row)
     }
-    
+
     pub fn beat_tick_row_no_offset(
         &mut self,
         timing: &TimingData,
@@ -669,10 +669,7 @@ impl GameplayTimeToBeatCaches {
         slope: f32,
         song_row: i32,
     ) -> i32 {
-        let horizon = assist_lookahead_music_horizon_seconds(
-            audio_output_delay_seconds,
-            slope,
-        );
+        let horizon = assist_lookahead_music_horizon_seconds(audio_output_delay_seconds, slope);
 
         beat_tick_row_no_offset_cached(
             timing,
@@ -701,24 +698,20 @@ fn beat_tick_row_no_offset_cached(
     music_time_ns: SongTimeNs,
     cache: &mut BeatInfoCache,
 ) -> i32 {
-    let target_time_ns = song_time_ns_add_seconds(
-        music_time_ns,
-        -global_offset_seconds,
-    );
-
-    let beat = timing
-        .get_beat_info_from_time_ns_cached(target_time_ns, cache)
-        .beat;
-
-    if !beat.is_finite() {
+    let target_time_ns = song_time_ns_add_seconds(music_time_ns, -global_offset_seconds);
+    let info = timing.get_beat_info_from_time_ns_cached(target_time_ns, cache);
+    if !info.beat.is_finite() {
         return -1;
     }
 
-    // Metronome rows are absolute musical rows, not
-    // indices into the chart's nonempty-row table.
-    (beat.floor() as i32)
-        .saturating_mul(ROWS_PER_BEAT)
-        .max(-1)
+    // Keep fractional-beat measure boundaries (e.g. 3/8). During a delay the
+    // displayed beat has arrived, but its tick is still in the future.
+    let row = if info.is_in_delay {
+        beat_to_note_row(info.beat).saturating_sub(1)
+    } else {
+        (info.beat * ROWS_PER_BEAT as f32).floor() as i32
+    };
+    row.max(-1)
 }
 
 #[inline(always)]
@@ -1166,34 +1159,57 @@ pub fn build_beat_tick_rows(timing: &TimingData, last_beat: f32) -> Vec<usize> {
         return Vec::new();
     }
 
-    let max_beat = last_beat
-        .floor()
-        .min((i32::MAX / ROWS_PER_BEAT) as f32) as usize;
-
+    let max_row = (last_beat * ROWS_PER_BEAT as f32).floor() as i32;
+    let default_signature = [deadsync_rules::timing::default_time_signature()];
+    let signatures = timing.time_signature_segments();
+    let signatures = if signatures.is_empty() { &default_signature } else { signatures };
     let mut rows = Vec::new();
     let mut last_tick_time_ns = None;
-
-    for beat_number in 0..=max_beat {
-        let row = beat_number * ROWS_PER_BEAT as usize;
-        let beat = note_row_to_beat(row as i32);
-
-        // Warped beats do not occupy audible musical time.
-        if timing.is_warp_at_beat(beat) {
-            continue;
+    let mut time_cache = BeatTimeCache::new(timing);
+    let cached_times = timing.supports_row_time_cache();
+    for (index, signature) in signatures.iter().enumerate() {
+        let start = i64::from(beat_to_note_row(signature.beat));
+        let end = signatures.get(index + 1)
+            .map_or(i64::from(max_row) + 1, |next| i64::from(beat_to_note_row(next.beat)))
+            .min(i64::from(max_row) + 1);
+        let rows_per_measure = signature.note_rows_per_measure();
+        let mut row = start.max(0);
+        while row < end {
+            let row_in_measure = (row - start) % rows_per_measure;
+            let remainder = row_in_measure % i64::from(ROWS_PER_BEAT);
+            if remainder == 0 {
+                let beat = note_row_to_beat(row as i32);
+                if !timing.is_warp_at_beat(beat) {
+                    let tick_time_ns = if cached_times {
+                        timing.get_time_for_beat_no_offset_ns_cached(beat, &mut time_cache)
+                    } else {
+                        timing.get_time_for_beat_no_offset_ns(beat)
+                    };
+                    if last_tick_time_ns.is_none_or(|previous| tick_time_ns > previous) {
+                        rows.push(row as usize);
+                        last_tick_time_ns = Some(tick_time_ns);
+                    }
+                }
+            }
+            // Native NoteRowToMeasureAndBeat counts quarter-note beats within
+            // each measure, restarting at every measure/signature boundary.
+            row += (i64::from(ROWS_PER_BEAT) - remainder)
+                .min(rows_per_measure - row_in_measure);
         }
-
-        let tick_time_ns = timing.get_time_for_beat_no_offset_ns(beat);
-
-        // Prevent duplicate or non-monotonic tick timestamps.
-        if last_tick_time_ns.is_some_and(|previous| tick_time_ns <= previous) {
-            continue;
-        }
-
-        rows.push(row);
-        last_tick_time_ns = Some(tick_time_ns);
     }
-
     rows
+}
+
+#[must_use]
+pub fn beat_tick_sfx_for_row(timing: &TimingData, row: usize) -> &'static str {
+    let row = row.min(i32::MAX as usize) as i32;
+    let signatures = timing.time_signature_segments();
+    let index = signatures.partition_point(|signature| beat_to_note_row(signature.beat) <= row);
+    let default_signature = deadsync_rules::timing::default_time_signature();
+    let signature = if index == 0 { &default_signature } else { &signatures[index - 1] };
+    let row_in_measure = (i64::from(row) - i64::from(beat_to_note_row(signature.beat)))
+        % signature.note_rows_per_measure();
+    if row_in_measure == 0 { MEASURE_TICK_SFX_PATH } else { BEAT_TICK_SFX_PATH }
 }
 
 #[inline(always)]
