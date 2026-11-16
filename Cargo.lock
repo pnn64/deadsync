@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.2494"
+version = "0.6.0"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -1933,7 +1933,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.2494"
+version = "0.6.0"
 dependencies = [
  "askama",
  "bitflags 2.13.2",
@@ -2003,7 +2003,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.2494"
+version = "0.6.0"
 dependencies = [
  "log",
  "semver",
@@ -2269,9 +2269,9 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.29"
+version = "0.2.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+checksum = "e1255e7a9f1902190d4c10a75f2f7f495d3d3ce13e9ba26e6c48683a0f4dbed7"
 dependencies = [
  "cfg-if",
  "libc",
@@ -6757,9 +6757,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.6.0"
+version = "9.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80cc68510ea7553c30a69c732de5278e94183f68765af6c642dbccefd6ec777e"
+checksum = "953a376f4930ed5af88e1e65948385f76866b45e7f75b21ac275327d0eeb9b46"
 dependencies = [
  "constant_time_eq",
  "crc32fast",

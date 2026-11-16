@@ -7,7 +7,7 @@ description = "A competitive SM/ITG engine focused on perfect sync and performan
 license = "GPL-3.0"
 repository = "https://github.com/pnn64/deadsync"
 keywords = ["deadsync", "stepmania", "itg", "inthegroove", "rhythmgame", "vulkan"]
-rust-version = "1.97"
+rust-version = "1.100"
 
 [workspace]
 members = [
@@ -83,7 +83,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.2494"
+version = "0.6.0"
 
 [[bin]]
 name = "generate_pseudo"
@@ -213,4 +213,3 @@ inline_always = "allow"
 
 [workspace.dependencies]
 serde_json = "1.0.154"
-windows-core = "0.100.0"
