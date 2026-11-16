@@ -46,6 +46,38 @@ fn main_position(key: Key, hash: u32, count: usize) -> usize {
 }
 
 impl Table {
+    /// Lua 5.1's removeentry keeps a deleted collectable key only as a next()
+    /// cursor. Even an otherwise-live string must no longer match a new write.
+    pub(crate) fn retire_native_key(&mut self, key: Value) {
+        if !self.native51 { return; }
+        let Some(key) = Key::from_value(key) else { return; };
+        let Some(dead) = key.dead() else { return; };
+        let Some((_, Some(index))) = self.slot(key) else { return; };
+        if self.entries[index].value != Value::Nil { return; }
+        self.native_index_remove(key);
+        self.entries[index].key = dead;
+        self.touch_fields();
+    }
+
+    pub(crate) fn retire_native_keys_in_trace_slice(&mut self, cursor: usize, budget: usize) {
+        if !self.native51 { return; }
+        let start = cursor >> 1;
+        let (start, end) = if cursor & 1 == 0 {
+            let array_end = start.saturating_add(budget).min(self.array.len());
+            let hash_end = if array_end == self.array.len() {
+                budget.saturating_sub(array_end - start).min(self.entries.len())
+            } else { 0 };
+            (0, hash_end)
+        } else {
+            (start, start.saturating_add(budget).min(self.entries.len()))
+        };
+        for index in start..end {
+            if self.entries[index].value == Value::Nil {
+                self.retire_native_key(self.entries[index].key.value());
+            }
+        }
+    }
+
     pub(crate) fn with_native51_capacity(
         array: usize,
         records: usize,

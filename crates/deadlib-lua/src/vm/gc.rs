@@ -1301,6 +1301,9 @@ impl Vm {
             }
         };
         self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
+        if !weak_keys || !weak_values {
+            self.tables[slot_index(id.0)].retire_native_keys_in_trace_slice(cursor, 64);
+        }
         let table = &self.tables[slot_index(id.0)];
         let (next, pairs) = table.trace_slice(cursor, 64);
         // Resume after children: a wide table needs only one pending slice and
@@ -1547,6 +1550,7 @@ impl Vm {
                     self.tables[index]
                         .set(*key, Value::Nil)
                         .expect("existing key");
+                    self.tables[index].retire_native_key(*key);
                 }
                 let Some(next) = next else { break };
                 cursor = next;

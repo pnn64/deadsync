@@ -21,6 +21,13 @@ enum Key {
     Userdata(UserdataId),
     LightUserdata(u64),
     ParserPrototype(ParserPrototypeId),
+    DeadString(StringId),
+    DeadTable(TableId),
+    DeadFunction(FunctionId),
+    DeadNative(u64),
+    DeadThread(ThreadId),
+    DeadUserdata(UserdataId),
+    DeadParserPrototype(ParserPrototypeId),
 }
 impl PartialEq for Key {
     fn eq(&self, other: &Self) -> bool {
@@ -36,6 +43,13 @@ impl PartialEq for Key {
             (Self::Userdata(a), Self::Userdata(b)) => a == b,
             (Self::LightUserdata(a), Self::LightUserdata(b)) => a == b,
             (Self::ParserPrototype(a), Self::ParserPrototype(b)) => a == b,
+            (Self::DeadString(a), Self::DeadString(b)) => a == b,
+            (Self::DeadTable(a), Self::DeadTable(b)) => a == b,
+            (Self::DeadFunction(a), Self::DeadFunction(b)) => a == b,
+            (Self::DeadNative(a), Self::DeadNative(b)) => a == b,
+            (Self::DeadThread(a), Self::DeadThread(b)) => a == b,
+            (Self::DeadUserdata(a), Self::DeadUserdata(b)) => a == b,
+            (Self::DeadParserPrototype(a), Self::DeadParserPrototype(b)) => a == b,
             _ => false,
         }
     }
@@ -61,7 +75,9 @@ impl Key {
     }
     fn value(self) -> Value {
         match self {
-            Self::Vacant => Value::Nil,
+            Self::Vacant | Self::DeadString(_) | Self::DeadTable(_) | Self::DeadFunction(_)
+            | Self::DeadNative(_) | Self::DeadThread(_) | Self::DeadUserdata(_)
+            | Self::DeadParserPrototype(_) => Value::Nil,
             Self::Boolean(v) => Value::Boolean(v),
             Self::Number(v) => Value::Number(f64::from_bits(v)),
             Self::String(v) => Value::String(v),
@@ -87,7 +103,29 @@ impl Key {
             Self::Userdata(v) => (v.0, 8),
             Self::LightUserdata(v) => (v, 9),
             Self::ParserPrototype(v) => (v.0, 10),
+            Self::DeadString(v) => (v.0, 0x83),
+            Self::DeadTable(v) => (v.0, 0x84),
+            Self::DeadFunction(v) => (v.0, 0x85),
+            Self::DeadNative(v) => (v, 0x86),
+            Self::DeadThread(v) => (v.0, 0x87),
+            Self::DeadUserdata(v) => (v.0, 0x88),
+            Self::DeadParserPrototype(v) => (v.0, 0x8a),
         }
+    }
+    fn dead(self) -> Option<Self> {
+        Some(match self {
+            Self::String(v) => Self::DeadString(v),
+            Self::Table(v) => Self::DeadTable(v),
+            Self::Function(v) => Self::DeadFunction(v),
+            Self::Native(v) => Self::DeadNative(v),
+            Self::Thread(v) => Self::DeadThread(v),
+            Self::Userdata(v) => Self::DeadUserdata(v),
+            Self::ParserPrototype(v) => Self::DeadParserPrototype(v),
+            _ => return None,
+        })
+    }
+    fn matches_next(self, key: Self) -> bool {
+        self == key || key.dead() == Some(self)
     }
     /// A multiplication carries bits only upward, so the high half is first
     /// folded into the low half: a number's varying bits sit near the top of
@@ -700,19 +738,21 @@ impl Table {
                 && self
                     .entries
                     .get(first - 1)
-                    .is_some_and(|entry| entry.key == key)
+                    .is_some_and(|entry| entry.key.matches_next(key))
             {
                 first - 1
             } else if second != 0
                 && self
                     .entries
                     .get(second - 1)
-                    .is_some_and(|entry| entry.key == key)
+                    .is_some_and(|entry| entry.key.matches_next(key))
             {
                 second - 1
             } else {
                 self.slot(key)
                     .and_then(|(_, index)| index)
+                    .or_else(|| self.native51.then(|| self.entries.iter()
+                        .position(|entry| entry.key.matches_next(key))).flatten())
                     .ok_or(InvalidNextKey)?
             };
             (self.array.len(), index + 1)
