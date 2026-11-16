@@ -91,6 +91,9 @@ pub(super) const DANGER: Source =
     bundled!("BGAnimations/ScreenGameplay underlay/PerPlayer/Danger.lua");
 pub(super) const SONG_INFO: Source =
     bundled!("BGAnimations/ScreenGameplay underlay/Shared/SongInfoBar.lua");
+pub(super) const SCORE: Source =
+    bundled!("BGAnimations/ScreenGameplay underlay/PerPlayer/Score.lua");
+pub(super) const SCORE_REDRAW: Source = bundled!("Scripts/SL-ScoreRedraw.lua");
 
 pub(super) fn statistics(name: &str) -> Option<Source> {
     Some(match name {

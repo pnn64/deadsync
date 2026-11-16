@@ -180,7 +180,6 @@ fn formatting_and_numeric_helpers_match_existing_argument_conversion() {
     ] {
         for name in [
             "PlayerNumberToString",
-            "FormatPercentScore",
             "FormatNumberAndSuffix",
             "SecondsToMSSMsMs",
             "SecondsToMMSSMsMs",
@@ -209,6 +208,51 @@ fn formatting_and_numeric_helpers_match_existing_argument_conversion() {
         end
         return snapshot(result)
     "#);
+}
+
+#[test]
+fn percent_score_matches_native_argument_conversion_and_printf_formatting() {
+    let mut runtime = SongRuntime::new(&SongLuaCompileContext::new(
+        std::path::Path::new("."),
+        "native percent formatting",
+    ))
+    .unwrap();
+    let source = r#"
+        assert(not pcall(FormatPercentScore))
+        for _,value in ipairs{false,{},'invalid',string.char(255)} do
+            assert(not pcall(FormatPercentScore,value))
+        end
+        assert(not pcall(FormatPercentScore,nil))
+        assert(FormatPercentScore(0)==' 0.00%')
+        assert(FormatPercentScore(-1/math.huge)=='-0.00%')
+        assert(FormatPercentScore(1.25)=='125.00%')
+        assert(FormatPercentScore(-2.25)=='-225.00%')
+        assert(FormatPercentScore(1/3)=='33.33%')
+        assert(FormatPercentScore(' 1.25 ')=='125.00%')
+        assert(FormatPercentScore('0x10')=='1600.00%')
+        assert(FormatPercentScore('nan')=='  nan%')
+        assert(FormatPercentScore('inf')=='  inf%')
+        assert(FormatPercentScore(math.huge)=='  inf%')
+        local original=string.format
+        string.format=function()error('authored formatter must not run')end
+        assert(FormatPercentScore(.5)=='50.00%')
+        string.format=original
+    "#;
+    runtime
+        .vm_mut()
+        .execute(&compile_named(source.as_bytes(), b"=native percent formatting").unwrap())
+        .unwrap();
+    // The engine uses the platform printf spelling for a negative quiet NaN.
+    let nan = if cfg!(windows) {
+        "-nan(ind)%"
+    } else {
+        " -nan%"
+    };
+    let source = format!("assert(FormatPercentScore(0/0)=={nan:?},FormatPercentScore(0/0))");
+    runtime
+        .vm_mut()
+        .execute(&compile_named(source.as_bytes(), b"=native nonfinite formatting").unwrap())
+        .unwrap();
 }
 
 #[test]

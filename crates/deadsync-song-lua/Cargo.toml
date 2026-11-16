@@ -262,6 +262,10 @@ name = "gameplay_theme"
 required-features = ["test-support"]
 
 [[test]]
+name = "gameplay_score"
+required-features = ["test-support"]
+
+[[test]]
 name = "gameplay_underlay"
 required-features = ["test-support"]
 
