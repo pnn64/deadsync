@@ -483,13 +483,23 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
 
 pub(super) fn render_time(actor: &Actor, frame_clock: [f32; 2], render: &mut SongLuaOverlayState) {
     render.spin_baked = actor.effects.spin_baked;
+    render.effect_time = render_effect_time(actor, frame_clock, render);
+}
+
+pub(super) fn render_effect_time(
+    actor: &Actor,
+    frame_clock: [f32; 2],
+    render: &SongLuaOverlayState,
+) -> Option<[f32; 2]> {
     if (render.rainbow || !matches!(render.effect_mode, EffectMode::None | EffectMode::Spin))
         && let Some(motion) = actor.effects.motion
     {
-        render.effect_time = Some([
+        Some([
             frame_clock[usize::from(render.effect_clock == EffectClock::Beat)],
             motion.units.unwrap_or(0.0),
-        ]);
+        ])
+    } else {
+        render.effect_time
     }
 }
 

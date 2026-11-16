@@ -484,6 +484,7 @@ impl SongRuntime {
             let mut scheduled = baseline.clone();
             let mut masks = self.update_masks(&players)?;
             let mut broadcasts = Vec::new();
+            let mut motions = Vec::with_capacity(values.len());
 
             for (frame, (exact_beat, delta)) in frames.into_iter().enumerate().skip(1) {
                 if frame & 63 == 0 {
@@ -646,8 +647,18 @@ impl SongRuntime {
                     );
                 }
                 let music = self.update_music_seconds(seconds, context)?;
-                for (i, &value) in values.iter().enumerate() {
-                    let (time, spin) = self.update_motion(value, [music, next_beat], true)?;
+                self.actors
+                    .chronological_read_many(
+                        &mut self.vm,
+                        &values,
+                        Query::Motion([music, next_beat], true),
+                        &mut motions,
+                    )
+                    .map_err(|e| e.to_string())?;
+                for (i, motion) in motions.iter().enumerate() {
+                    let &Answer::Motion(time, spin) = motion else {
+                        unreachable!()
+                    };
                     if let Some(clock) = time {
                         let clock = current[i]
                             .effect_time

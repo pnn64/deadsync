@@ -23,7 +23,7 @@ pub(crate) enum Answer {
 #[derive(Clone)]
 struct Read {
     query: Query,
-    output: Arc<Mutex<Option<Answer>>>,
+    output: Arc<Mutex<Vec<Answer>>>,
 }
 impl Actors {
     pub(crate) fn apply_song_replay_pose(&self, vm: &Vm, value: Value, state: &mut State) -> bool {
@@ -96,21 +96,42 @@ impl Actors {
         actor: Value,
         query: Query,
     ) -> Result<Answer, Error> {
-        let output = Arc::new(Mutex::new(None));
-        let function = vm.new_host_function_with_data(
-            read,
-            &[
-                Value::Table(self.registry),
-                Value::Table(self.helpers),
-                actor,
-            ],
-            Read {
-                query,
-                output: output.clone(),
-            },
-        )?;
-        vm.call(function, &[])?;
-        Ok(output.lock().unwrap().take().unwrap())
+        let mut output = Vec::new();
+        self.chronological_read_many(vm, &[actor], query, &mut output)?;
+        Ok(output.pop().unwrap())
+    }
+    /// Keep actor order and authored getter behavior while sharing rooted host
+    /// calls across a frame's observations. Reuse the caller's result buffer.
+    pub(crate) fn chronological_read_many(
+        &self,
+        vm: &mut Vm,
+        actors: &[Value],
+        query: Query,
+        answers: &mut Vec<Answer>,
+    ) -> Result<(), Error> {
+        answers.clear();
+        let output = Arc::new(Mutex::new(std::mem::take(answers)));
+        // Lua closures allow 255 captures; the first two belong to the host.
+        let mut captures = Vec::with_capacity(actors.len().min(253) + 2);
+        captures.extend([Value::Table(self.registry), Value::Table(self.helpers)]);
+        let result = (|| {
+            for actors in actors.chunks(253) {
+                captures.truncate(2);
+                captures.extend_from_slice(actors);
+                let function = vm.new_host_function_with_data(
+                    read,
+                    &captures,
+                    Read {
+                        query,
+                        output: output.clone(),
+                    },
+                )?;
+                vm.call(function, &[])?;
+            }
+            Ok(())
+        })();
+        *answers = std::mem::take(&mut *output.lock().unwrap());
+        result
     }
     pub(crate) fn models_active(&self, vm: &mut Vm) -> bool {
         vm.store()
@@ -198,8 +219,17 @@ impl Actors {
 }
 fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Read>().unwrap().clone();
-    let actor = table(call, call.captures()[2])?;
-    let answer = match data.query {
+    // A getter may call back into Lua; never hold the output lock across it.
+    let mut answers = std::mem::take(&mut *data.output.lock().unwrap());
+    for index in 2..call.captures().len() {
+        let actor = table(call, call.captures()[index])?;
+        answers.push(read_actor(call, actor, data.query)?);
+    }
+    *data.output.lock().unwrap() = answers;
+    Ok(())
+}
+fn read_actor(call: &mut HostCall<'_>, actor: TableId, query: Query) -> Result<Answer, Error> {
+    Ok(match query {
         Query::Active => Answer::Active(active(call, actor)?),
         Query::Motion(clock, include_spin) => {
             let time = effect_time(call, actor, clock)?;
@@ -212,9 +242,7 @@ fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Query::Mask => Answer::Mask(mask(call, actor)?),
         Query::Field(clock) => Answer::Field(field_wrappers(call, actor, clock)?),
-    };
-    *data.output.lock().unwrap() = Some(answer);
-    Ok(())
+    })
 }
 fn boolean(call: &HostCall<'_>, value: Value) -> Result<Option<bool>, Error> {
     match value {
@@ -560,19 +588,22 @@ fn effect_time(
     let fallback = {
         let guard = call.store();
         guard.actors.get(&actor).map(|a| {
-            let mut state = a.state.render;
-            effects::render_time(a, clock, &mut state);
-            state
+            let state = &a.state.render;
+            (
+                state.rainbow,
+                state.effect_mode,
+                effects::render_effect_time(a, clock, state),
+            )
         })
     };
     let value = get_static(call, actor, b"__songlua_state_rainbow")?;
-    let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.rainbow));
+    let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.0));
     if !rainbow {
         let value = get_static(call, actor, b"__songlua_state_effect_mode")?;
         let selected = if value == Value::Nil {
             fallback.is_some_and(|s| {
                 !matches!(
-                    s.effect_mode,
+                    s.1,
                     deadlib_present::anim::EffectMode::None
                         | deadlib_present::anim::EffectMode::Spin
                 )
@@ -600,7 +631,7 @@ fn effect_time(
     }
     let value = get_static(call, actor, b"__songlua_state_motion_clock")?;
     let Some(motion) = optional_table(call, value)? else {
-        return Ok(fallback.and_then(|s| s.effect_time));
+        return Ok(fallback.and_then(|s| s.2));
     };
     call.with_roots(&[value], |call| {
         let value = get_static(call, actor, b"__songlua_state_effect_clock")?;
@@ -643,4 +674,88 @@ fn field_wrappers(
         })?;
         Ok(Some(states))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn batched_motion_reads_preserve_order_roots_and_getter_errors() {
+        let mut runtime =
+            crate::SongRuntime::new(&crate::SongLuaCompileContext::new(".", "motion reads"))
+                .unwrap();
+        let source = br#"
+            last = 0
+            fail = false
+            local actors = {}
+            for i = 1, 600 do
+                actors[i] = {
+                    __songlua_state_rainbow = true,
+                    __songlua_state_effect_clock = 'beat',
+                    __songlua_state_motion_clock = setmetatable({}, {
+                        __index = function(_, key)
+                            assert(key == 'units' and last + 1 == i)
+                            last = i
+                            if i == 253 or i == 254 then collectgarbage('collect') end
+                            if fail and i == 254 then return {} end
+                            return i
+                        end,
+                    }),
+                    __songlua_state_spin = { baked = true, rotation = {i, i+1, i+2} },
+                }
+            end
+            return actors
+        "#;
+        let value = runtime
+            .vm
+            .execute(&deadlib_lua::compile_named(source, b"=motion reads").unwrap())
+            .unwrap()[0];
+        let root = runtime.vm.pin(value).unwrap();
+        let Value::Table(table) = value else {
+            unreachable!()
+        };
+        let actors = (1..=600)
+            .map(|i| {
+                runtime
+                    .vm
+                    .raw_table_get(table, Value::Number(i as f64))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let mut answers = Vec::new();
+        for failed in [false, true, false] {
+            let setup = if failed {
+                b"last=0; fail=true".as_slice()
+            } else {
+                b"last=0; fail=false".as_slice()
+            };
+            runtime
+                .vm
+                .execute(&deadlib_lua::compile_named(setup, b"=reset motion reads").unwrap())
+                .unwrap();
+            let result = runtime.actors.chronological_read_many(
+                &mut runtime.vm,
+                &actors,
+                Query::Motion([10., 20.], true),
+                &mut answers,
+            );
+            if failed {
+                assert!(result.unwrap_err().to_string().contains("number expected"));
+                assert_eq!(runtime.vm.get_global(b"last").unwrap(), Value::Number(254.));
+                continue;
+            }
+            result.unwrap();
+            assert_eq!(answers.len(), actors.len());
+            for (i, answer) in answers.iter().enumerate() {
+                let &Answer::Motion(time, spin) = answer else {
+                    panic!("motion answer")
+                };
+                let n = (i + 1) as f32;
+                assert_eq!(time, Some([20., n]));
+                assert_eq!(spin, Some([n, n + 1., n + 2.]));
+            }
+        }
+        runtime.vm.unpin(root).unwrap();
+    }
 }
