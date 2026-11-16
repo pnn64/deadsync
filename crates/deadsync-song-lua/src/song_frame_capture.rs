@@ -77,6 +77,7 @@ impl SongOverlayFrameCapture {
         context: &SongLuaCompileContext,
         states: SongFrameCaptureStates<'_>,
         clock: SongFrameCaptureClock,
+        initialize_updates: bool,
     ) -> Result<(), String> {
         frame_capture::capture_update_overlay_samples(
             source,
@@ -85,6 +86,7 @@ impl SongOverlayFrameCapture {
                 baseline: states.baseline,
                 from_states: states.from,
                 update_states: states.update,
+                initialize_updates,
                 to_states: states.to,
                 restored_indices: states.restored_indices,
                 tracks: &mut self.tracks,
@@ -232,7 +234,9 @@ impl SongRuntime {
             for actor in actors {
                 rooted.push(&mut self.vm, *actor)?;
             }
-            self.capture_rooted_song_overlay_frame(screen, capture, &rooted, context, states, clock)
+            self.capture_rooted_song_overlay_frame(
+                screen, capture, &rooted, context, states, clock, false,
+            )
         })();
         rooted.release(&mut self.vm)?;
         result
@@ -246,6 +250,7 @@ impl SongRuntime {
         context: &SongLuaCompileContext,
         states: SongFrameCaptureStates<'_>,
         clock: SongFrameCaptureClock,
+        initialize_updates: bool,
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
@@ -257,7 +262,7 @@ impl SongRuntime {
             actors,
             access,
         };
-        capture.capture(&mut source, context, states, clock)
+        capture.capture(&mut source, context, states, clock, initialize_updates)
     }
 }
 struct Source<'a> {
@@ -265,6 +270,186 @@ struct Source<'a> {
     screen: ActorScene,
     actors: &'a [Value],
     access: Access,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Publications {
+        count: usize,
+        rows: Vec<(
+            usize,
+            Vec<frame_capture::ScheduledUpdate>,
+            Vec<(Target, Update)>,
+        )>,
+        fail: bool,
+    }
+    impl CaptureSource for Publications {
+        fn actor_count(&self) -> usize {
+            self.count
+        }
+        fn chronological(&self) -> bool {
+            true
+        }
+        fn drain(&mut self, visit: &mut CaptureVisitor<'_>) -> Result<(), String> {
+            for (index, scheduled, final_values) in &self.rows {
+                visit(*index, &[], scheduled, final_values, false, &mut || {
+                    Ok(false)
+                })?;
+                if self.fail {
+                    return Err("publication failed".into());
+                }
+            }
+            Ok(())
+        }
+        fn reset(&mut self, _: usize) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn tween(target: Target, value: f32) -> frame_capture::ScheduledUpdate {
+        frame_capture::ScheduledUpdate {
+            progress: None,
+            dispatch_seconds: None,
+            frame_advance: 0.,
+            initial_value: None,
+            delay_seconds: 0.,
+            duration_seconds: 1.,
+            easing: None,
+            opt1: None,
+            target,
+            value: Update::F32(value),
+        }
+    }
+
+    #[test]
+    fn replay_capture_keeps_completed_and_restored_states_across_sparse_publications() {
+        let context = SongLuaCompileContext::new(std::path::Path::new("."), "sparse capture");
+        let mut baseline = vec![State::default(); 3];
+        let mut states = baseline.clone();
+        for (state, x) in states.iter_mut().zip([10., 30., 50.]) {
+            state.x = x;
+        }
+        let mut updates = vec![
+            State {
+                x: -999.,
+                ..State::default()
+            };
+            3
+        ];
+        let mut capture = SongOverlayFrameCapture::default();
+        frame_capture::append_scheduled_overlay_updates(
+            &mut capture.scheduled,
+            &context,
+            &states,
+            0,
+            &[tween(Target::Y, 40.)],
+            0.,
+        );
+        let mut source = Publications {
+            count: 3,
+            rows: vec![
+                (0, vec![], vec![(Target::X, Update::F32(60.))]),
+                (0, vec![tween(Target::X, 100.)], vec![]),
+                (2, vec![tween(Target::X, 150.)], vec![]),
+            ],
+            fail: false,
+        };
+        let run = |source: &mut Publications,
+                   baseline: &[State],
+                   states: &mut [State],
+                   updates: &mut [State],
+                   capture: &mut SongOverlayFrameCapture,
+                   at: f64| {
+            let from = states.to_vec();
+            capture.capture(
+                source,
+                &context,
+                SongFrameCaptureStates {
+                    baseline,
+                    from: &from,
+                    update: updates,
+                    to: states,
+                    restored_indices: &[0],
+                },
+                SongFrameCaptureClock {
+                    prior_time: 0.,
+                    next_time: at as f32,
+                    next_seconds: at,
+                },
+                true,
+            )
+        };
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.,
+        )
+        .unwrap();
+        assert_eq!((states[0].x, states[0].y), (10., 40.));
+        assert_eq!((updates[0].x, updates[0].y), (60., 40.));
+        assert_eq!(capture.scheduled[0].from, Update::F32(60.));
+        assert_eq!(capture.scheduled[1].from, Update::F32(50.));
+
+        // A previously idle actor and a newly appended wrapper must initialize
+        // from this frame, without carrying another actor's scratch state.
+        states[1].x = 80.;
+        states.push(State {
+            x: 110.,
+            ..State::default()
+        });
+        baseline.push(State::default());
+        updates.push(State::default());
+        source.count = 4;
+        source.rows = vec![
+            (1, vec![tween(Target::X, 180.)], vec![]),
+            (3, vec![tween(Target::X, 220.)], vec![]),
+        ];
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.5,
+        )
+        .unwrap();
+        assert_eq!(capture.scheduled[2].from, Update::F32(80.));
+        assert_eq!(capture.scheduled[3].from, Update::F32(110.));
+
+        // A failed publication must not leave initialization flags live for
+        // the next capture, even when it touches the same actor again.
+        source.rows = vec![(1, vec![], vec![(Target::X, Update::F32(90.))])];
+        source.fail = true;
+        assert!(
+            run(
+                &mut source,
+                &baseline,
+                &mut states,
+                &mut updates,
+                &mut capture,
+                1.6
+            )
+            .is_err()
+        );
+        states[1].x = 123.;
+        source.rows = vec![(1, vec![tween(Target::Z, 250.)], vec![])];
+        source.fail = false;
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.7,
+        )
+        .unwrap();
+        assert_eq!(updates[1].x, 123.);
+    }
 }
 impl CaptureSource for Source<'_> {
     fn actor_count(&self) -> usize {

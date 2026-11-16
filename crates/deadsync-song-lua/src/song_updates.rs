@@ -447,6 +447,7 @@ impl SongRuntime {
                     next_time: start_time,
                     next_seconds: start_seconds,
                 },
+                true,
             )?;
             replay.stop(capture.stopped_indices());
             let music = self.update_music_seconds(start_seconds, context)?;
@@ -560,7 +561,6 @@ impl SongRuntime {
                     self.update_pose(value, &mut replay_states[i]);
                 }
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
-                update_states.copy_from_slice(&replay_states);
                 let next_masks = self.update_masks(&players)?;
                 self.capture_rooted_song_overlay_frame(
                     screen,
@@ -579,6 +579,7 @@ impl SongRuntime {
                         next_time,
                         next_seconds: seconds,
                     },
+                    true,
                 )?;
                 replay.stop(capture.stopped_indices());
                 self.sample_rooted_song_overlay_schedule(
