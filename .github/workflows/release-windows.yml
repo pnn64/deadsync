@@ -88,6 +88,11 @@ jobs:
           rustup toolchain install nightly
           rustup +nightly component add rust-src
 
+      - name: Check vendored rfd for Windows 7
+        if: ${{ matrix.platform == 'win7' }}
+        shell: pwsh
+        run: scripts/check-vendored-rfd.ps1 -Target "${{ matrix.target }}"
+
       - name: Build release
         shell: pwsh
         run: |

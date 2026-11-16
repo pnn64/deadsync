@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.18.0
+
+- Fix some GTK3 memory leaks
+- Add GTK4 backend behind the `gtk4` feature
+- MSRV is now 1.92
+- Fix macOS file dialogs ignoring `set_directory` when `set_file_name` is also used.
+- Add `FileDialog::set_show_hidden_files` and `AsyncFileDialog::set_show_hidden_files` to control hidden file visibility. Supported on macOS, Windows, and Linux (GTK3).
+- Honor `FileDialog::set_directory` and `AsyncFileDialog::set_directory` when using the zenity fallback backend on Linux.
+- Fix `liblary` typo in docs
+- Change wasm title to sanitize text contents via `title_el.set_text_content()` rather than `title_el.set_inner_html()`.
+- Set wasm dialog styles via `set_text_content()` rather than `set_inner_html()`, so rfd no longer uses `innerHTML`.
+- Fix GTK3 message dialogs using the description as a printf format string, which garbled text containing `%` and could crash. The description is now shown as given, so `%%` is no longer shown as `%`.
+- Support files without an extension in GTK3 and zenity filters, as the XDG portal backend does since #215. A match-all filter (`"*"`) or an empty one (`""`) now uses the glob `"*"`, not `"*.*"` or `"*."`, so a filter such as "All files" matches a name with no dot, like `README`.
+- Zenity now returns correct paths when a name contains `|`. Also file names that start or end with a space are kept intact.
+
 ## 0.17.2
 
 - Lower MSRV back to 1.88 by @PolyMeilex in https://github.com/PolyMeilex/rfd/pull/303

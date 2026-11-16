@@ -12,7 +12,7 @@ use objc2_core_foundation::{
     kCFUserNotificationCautionAlertLevel, kCFUserNotificationDefaultResponse,
     kCFUserNotificationNoteAlertLevel, kCFUserNotificationOtherResponse,
     kCFUserNotificationStopAlertLevel, CFOptionFlags, CFRetained, CFString, CFTimeInterval,
-    CFUserNotification, CFURL,
+    CFUserNotificationDisplayAlert, CFURL,
 };
 
 use std::{mem::MaybeUninit, thread};
@@ -90,10 +90,8 @@ impl UserAlert {
             .other_button_title
             .map(|value| CFString::from_str(&value[..]));
         let mut response_flags = MaybeUninit::<CFOptionFlags>::uninit();
-        // SAFETY: All Core Foundation references live through the call, and
-        // `response_flags` is valid writable storage for the returned flags.
         let is_cancel = unsafe {
-            CFUserNotification::display_alert(
+            CFUserNotificationDisplayAlert(
                 self.timeout,
                 self.flags,
                 self.icon_url.as_deref(),

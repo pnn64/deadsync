@@ -1,7 +1,6 @@
 use std::{error::Error, fmt::Display, path::PathBuf, process::Command};
 
 use crate::{
-    file_dialog::Filter,
     message_dialog::{MessageButtons, MessageLevel},
     FileDialog, MessageDialogResult,
 };
@@ -43,25 +42,35 @@ fn command() -> Command {
     cmd
 }
 
-fn add_filters(command: &mut Command, filters: &[Filter]) {
-    for f in filters.iter() {
-        command.arg("--file-filter");
+fn file_dialog_command(dialog: &FileDialog) -> Command {
+    let mut command = command();
 
-        let extensions: Vec<_> = f
+    for filter in &dialog.filters {
+        command.arg("--file-filter");
+        let extensions: Vec<_> = filter
             .extensions
             .iter()
-            .map(|ext| format!("*.{}", ext))
+            .map(|ext| {
+                if ext == "*" || ext.is_empty() {
+                    "*".to_owned()
+                } else {
+                    format!("*.{}", ext)
+                }
+            })
             .collect();
-
-        command.arg(format!("{} | {}", f.name, extensions.join(" ")));
+        command.arg(format!("{} | {}", filter.name, extensions.join(" ")));
     }
-}
 
-fn add_filename(command: &mut Command, file_name: &Option<String>) {
-    if let Some(name) = file_name.as_ref() {
+    if let Some(name) = dialog.file_name.as_ref() {
         command.arg("--filename");
         command.arg(name);
     }
+
+    if let Some(dir) = dialog.starting_directory.as_ref() {
+        command.current_dir(dir);
+    }
+
+    command
 }
 
 async fn run(mut command: Command) -> ZenityResult<Option<String>> {
@@ -77,81 +86,71 @@ async fn run(mut command: Command) -> ZenityResult<Option<String>> {
     Ok((res.status.success() || !buffer.is_empty()).then_some(buffer))
 }
 
+/// Strip the single newline zenity prints after its output
+fn strip_newline(buffer: &str) -> &str {
+    buffer.strip_suffix('\n').unwrap_or(buffer)
+}
+
 pub async fn pick_file(dialog: &FileDialog) -> ZenityResult<Option<PathBuf>> {
-    let mut command = command();
+    let mut command = file_dialog_command(dialog);
     command.arg("--file-selection");
 
-    add_filters(&mut command, &dialog.filters);
-    add_filename(&mut command, &dialog.file_name);
-
-    run(command).await.map(|res| {
-        res.map(|buffer| {
-            let trimed = buffer.trim();
-            trimed.into()
-        })
-    })
+    Ok(run(command)
+        .await?
+        .as_deref()
+        .map(strip_newline)
+        .map(PathBuf::from))
 }
 
 pub async fn pick_files(dialog: &FileDialog) -> ZenityResult<Vec<PathBuf>> {
-    let mut command = command();
-    command.args(["--file-selection", "--multiple"]);
+    let mut command = file_dialog_command(dialog);
+    command.args(["--file-selection", "--multiple", "--separator=\n"]);
 
-    add_filters(&mut command, &dialog.filters);
-    add_filename(&mut command, &dialog.file_name);
-
-    run(command).await.map(|res| {
-        res.map(|buffer| {
-            let list = buffer.trim().split('|').map(PathBuf::from).collect();
-            list
-        })
-        .unwrap_or_default()
-    })
+    Ok(run(command)
+        .await?
+        .as_deref()
+        .map(strip_newline)
+        .map(|s| s.split('\n').map(PathBuf::from).collect())
+        .unwrap_or_default())
 }
 
 pub async fn pick_folder(dialog: &FileDialog) -> ZenityResult<Option<PathBuf>> {
-    let mut command = command();
+    let mut command = file_dialog_command(dialog);
     command.args(["--file-selection", "--directory"]);
 
-    add_filters(&mut command, &dialog.filters);
-    add_filename(&mut command, &dialog.file_name);
-
-    run(command).await.map(|res| {
-        res.map(|buffer| {
-            let trimed = buffer.trim();
-            trimed.into()
-        })
-    })
+    Ok(run(command)
+        .await?
+        .as_deref()
+        .map(strip_newline)
+        .map(PathBuf::from))
 }
 
 pub async fn pick_folders(dialog: &FileDialog) -> ZenityResult<Vec<PathBuf>> {
-    let mut command = command();
-    command.args(["--file-selection", "--directory", "--multiple"]);
+    let mut command = file_dialog_command(dialog);
+    command.args([
+        "--file-selection",
+        "--directory",
+        "--multiple",
+        "--separator=\n",
+    ]);
 
-    add_filters(&mut command, &dialog.filters);
-    add_filename(&mut command, &dialog.file_name);
-
-    run(command).await.map(|res| {
-        res.map(|buffer| {
-            let list = buffer.trim().split('|').map(PathBuf::from).collect();
-            list
-        })
-        .unwrap_or_default()
-    })
+    Ok(run(command)
+        .await?
+        .as_deref()
+        .map(strip_newline)
+        .map(|s| s.split('\n').map(PathBuf::from).collect())
+        .unwrap_or_default())
 }
 
 pub async fn save_file(dialog: &FileDialog) -> ZenityResult<Option<PathBuf>> {
-    let mut command = command();
+    let mut command = file_dialog_command(dialog);
     command.args(["--file-selection", "--save", "--confirm-overwrite"]);
 
-    add_filters(&mut command, &dialog.filters);
-    add_filename(&mut command, &dialog.file_name);
-
-    run(command).await.map(|res| {
-        res.map(|buffer| {
-            let trimed = buffer.trim();
-            trimed.into()
-        })
-    })
+    Ok(run(command)
+        .await?
+        .as_deref()
+        .map(strip_newline)
+        .map(PathBuf::from))
 }
 
 pub async fn message(
@@ -180,7 +179,10 @@ pub async fn message(
     }
 
     run(command).await.map(|res| match res {
-        Some(_) => MessageDialogResult::Ok,
+        Some(_) => match btns {
+            MessageButtons::OkCustom(ok) => MessageDialogResult::Custom(ok.clone()),
+            _ => MessageDialogResult::Ok,
+        },
         None => MessageDialogResult::Cancel,
     })
 }

@@ -59,7 +59,7 @@ impl<'a> WasmDialog<'a> {
             let title_el: HtmlElement = document.create_element("div").unwrap().dyn_into().unwrap();
 
             title_el.set_id("rfd-title");
-            title_el.set_inner_html(title);
+            title_el.set_text_content(Some(title));
 
             card.append_child(&title_el).unwrap();
             title_el
@@ -125,7 +125,7 @@ impl<'a> WasmDialog<'a> {
         };
 
         let style = document.create_element("style").unwrap();
-        style.set_inner_html(include_str!("./wasm/style.css"));
+        style.set_text_content(Some(include_str!("./wasm/style.css")));
         overlay.append_child(&style).unwrap();
 
         Self {
@@ -163,7 +163,7 @@ impl<'a> WasmDialog<'a> {
                     move || {
                         rej.call0(&JsValue::undefined()).unwrap();
                         input.set_value("");
-                        body_for_cancel.remove_child(&overlay_for_cancel).unwrap();
+                        let _ = body_for_cancel.remove_child(&overlay_for_cancel);
                     }
                 }) as Box<dyn FnMut()>);
 

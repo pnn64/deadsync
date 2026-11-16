@@ -11,8 +11,9 @@
 
 [package]
 edition = "2021"
+rust-version = "1.92"
 name = "rfd"
-version = "0.17.2"
+version = "0.18.0"
 authors = ["Poly <marynczak.bartlomiej@gmail.com>"]
 build = "build.rs"
 autolib = false
@@ -46,6 +47,7 @@ gtk3 = [
     "glib-sys",
     "gobject-sys",
 ]
+gtk4 = ["dep:gtk4"]
 wayland = [
     "wayland-backend",
     "wayland-client",
@@ -70,6 +72,10 @@ name = "save"
 path = "examples/save.rs"
 
 [[example]]
+name = "show_hidden"
+path = "examples/show_hidden.rs"
+
+[[example]]
 name = "simple"
 path = "examples/simple.rs"
 
@@ -82,39 +88,44 @@ version = "0.6"
 [dev-dependencies.futures]
 version = "0.3.12"
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.glib-sys]
-version = "0.18.0"
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.glib-sys]
+version = "0.22.9"
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.gobject-sys]
-version = "0.18.0"
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.gobject-sys]
+version = "0.22.9"
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.gtk-sys]
-version = "0.18.0"
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.gtk-sys]
+version = "0.19.0"
 features = ["v3_24"]
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.libc]
-version = "0.2"
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.percent-encoding]
-version = "2"
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.pollster]
-version = "0.4"
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.gtk4]
+version = "0.11.1"
+features = ["v4_10"]
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.wayland-backend]
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.libc]
+version = "0.2"
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.percent-encoding]
+version = "2"
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.pollster]
+version = "1.0"
+optional = true
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.wayland-backend]
 version = "0.3"
 features = ["client_system"]
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.wayland-client]
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.wayland-client]
 version = "0.31"
 optional = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd"))'.dependencies.wayland-protocols]
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "netbsd", target_os = "openbsd", target_os = "solaris", target_os = "illumos"))'.dependencies.wayland-protocols]
 version = "0.32"
 features = [
     "unstable",
@@ -122,16 +133,16 @@ features = [
 ]
 optional = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.js-sys]
+[target.'cfg(target_family = "wasm")'.dependencies.js-sys]
 version = "0.3.46"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen]
+[target.'cfg(target_family = "wasm")'.dependencies.wasm-bindgen]
 version = "0.2.69"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen-futures]
+[target.'cfg(target_family = "wasm")'.dependencies.wasm-bindgen-futures]
 version = "0.4.19"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+[target.'cfg(target_family = "wasm")'.dependencies.web-sys]
 version = "0.3.46"
 features = [
     "Document",
@@ -170,10 +181,13 @@ features = [
     "NSControl",
     "NSOpenPanel",
     "NSPanel",
+    "NSPopUpButton",
     "NSResponder",
     "NSRunningApplication",
     "NSSavePanel",
+    "NSTextField",
     "NSView",
+    "objc2-uniform-type-identifiers",
     "NSWindow",
 ]
 default-features = false
@@ -196,9 +210,18 @@ features = [
     "std",
     "NSArray",
     "NSEnumerator",
+    "NSGeometry",
     "NSString",
     "NSThread",
     "NSURL",
+]
+default-features = false
+
+[target.'cfg(target_os = "macos")'.dependencies.objc2-uniform-type-identifiers]
+version = "0.3.0"
+features = [
+    "std",
+    "UTType",
 ]
 default-features = false
 

@@ -25,6 +25,8 @@ pub struct FileDialog {
     pub(crate) parent: Option<RawWindowHandle>,
     pub(crate) parent_display: Option<RawDisplayHandle>,
     pub(crate) can_create_directories: Option<bool>,
+    pub(crate) show_hidden_files: Option<bool>,
+    pub(crate) format_label: Option<String>,
 }
 
 // Oh god, I don't like sending RawWindowHandle between threads but here we go anyways...
@@ -34,7 +36,7 @@ unsafe impl Sync for FileDialog {}
 
 impl FileDialog {
     /// New file dialog builder
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     pub fn new() -> Self {
         Default::default()
     }
@@ -46,8 +48,11 @@ impl FileDialog {
     /// The name of the filter will be displayed on supported platforms:
     ///   * Windows
     ///   * Linux
+    ///   * Mac (`save_file` only, when two or more filters are registered)
     ///
-    /// On platforms that don't support filter names, all filters will be merged into one filter
+    /// In every other case — other platforms, Mac's `pick_file`/`pick_files`/etc, or Mac's
+    /// `save_file` with fewer than two filters — all filters are merged into one flat
+    /// allowed-types list
     pub fn add_filter(mut self, name: impl Into<String>, extensions: &[impl ToString]) -> Self {
         self.filters.push(Filter {
             name: name.into(),
@@ -108,15 +113,33 @@ impl FileDialog {
         self.can_create_directories.replace(can);
         self
     }
+
+    /// Show hidden files in the dialog.
+    /// Supported platforms:
+    ///  * Windows
+    ///  * Mac
+    ///  * Linux (GTK3 only, not XDG Portal)
+    pub fn set_show_hidden_files(mut self, show: bool) -> Self {
+        self.show_hidden_files = Some(show);
+        self
+    }
+
+    /// Set the label shown next to the format picker in `save_file`'s accessory view
+    /// (only shown when two or more filters are registered). Defaults to "Format:".
+    /// Supported in: `macos`.
+    pub fn set_format_label(mut self, label: impl Into<String>) -> Self {
+        self.format_label = Some(label.into());
+        self
+    }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 use crate::backend::{FilePickerDialogImpl, FileSaveDialogImpl, FolderPickerDialogImpl};
 
 #[cfg(target_os = "macos")]
 use crate::backend::FileOrFolderPickerDialogImpl;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 impl FileDialog {
     /// Pick one file
     pub fn pick_file(self) -> Option<PathBuf> {
@@ -158,9 +181,13 @@ impl FileDialog {
     ///
     /// #### Platform specific notes regarding save dialog filters:
     /// - On macOS
-    ///     - If filter is set, all files will be grayed out (no matter the extension sadly)
-    ///     - If user does not type an extension MacOs will append first available extension from filters list
-    ///     - If user types in filename with extension MacOs will check if it exists in filters list, if not it will display appropriate message
+    ///     - If exactly one filter is set, all other file types are grayed out (no matter the extension sadly)
+    ///     - If two or more filters are registered, a dropdown accessory view (labeled "Format:" by default,
+    ///       see `set_format_label`) is shown listing each filter's name; selecting one updates which file
+    ///       types are allowed and the auto-appended extension
+    ///     - If user does not type an extension MacOs will append the first available extension from the active filter
+    ///     - If user types in filename with extension MacOs will check if it exists in the active filter's list, if
+    ///       not it will display appropriate message
     /// - On GTK
     ///     - It only filters which already existing files get shown to the user
     ///     - It does not append extensions automatically
@@ -197,8 +224,11 @@ impl AsyncFileDialog {
     /// The name of the filter will be displayed on supported platforms:
     ///   * Windows
     ///   * Linux
+    ///   * Mac (`save_file` only, when two or more filters are registered)
     ///
-    /// On platforms that don't support filter names, all filters will be merged into one filter
+    /// In every other case — other platforms, Mac's `pick_file`/`pick_files`/etc, or Mac's
+    /// `save_file` with fewer than two filters — all filters are merged into one flat
+    /// allowed-types list
     pub fn add_filter(mut self, name: impl Into<String>, extensions: &[impl ToString]) -> Self {
         self.file_dialog = self.file_dialog.add_filter(name, extensions);
         self
@@ -252,13 +282,31 @@ impl AsyncFileDialog {
         self.file_dialog = self.file_dialog.set_can_create_directories(can);
         self
     }
+
+    /// Show hidden files in the dialog.
+    /// Supported platforms:
+    ///  * Windows
+    ///  * Mac
+    ///  * Linux (GTK3 only, not XDG Portal)
+    pub fn set_show_hidden_files(mut self, show: bool) -> Self {
+        self.file_dialog = self.file_dialog.set_show_hidden_files(show);
+        self
+    }
+
+    /// Set the label shown next to the format picker in `save_file`'s accessory view
+    /// (only shown when two or more filters are registered). Defaults to "Format:".
+    /// Supported in: `macos`.
+    pub fn set_format_label(mut self, label: impl Into<String>) -> Self {
+        self.file_dialog = self.file_dialog.set_format_label(label);
+        self
+    }
 }
 
 #[cfg(target_os = "macos")]
 use crate::backend::AsyncFileOrFolderPickerDialogImpl;
 use crate::backend::AsyncFilePickerDialogImpl;
 use crate::backend::AsyncFileSaveDialogImpl;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 use crate::backend::AsyncFolderPickerDialogImpl;
 
 use std::future::Future;
@@ -274,7 +322,7 @@ impl AsyncFileDialog {
         AsyncFilePickerDialogImpl::pick_files_async(self.file_dialog)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     /// Pick one folder
     ///
     /// Does not exist in `WASM32`
@@ -282,7 +330,7 @@ impl AsyncFileDialog {
         AsyncFolderPickerDialogImpl::pick_folder_async(self.file_dialog)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     /// Pick multiple folders
     ///
     /// Does not exist in `WASM32`
@@ -310,9 +358,13 @@ impl AsyncFileDialog {
     ///
     /// #### Platform specific notes regarding save dialog filters:
     /// - On MacOs
-    ///     - If filter is set, all files will be grayed out (no matter the extension sadly)
-    ///     - If user does not type an extension MacOs will append first available extension from filters list
-    ///     - If user types in filename with extension MacOs will check if it exists in filters list, if not it will display appropriate message
+    ///     - If exactly one filter is set, all other file types are grayed out (no matter the extension sadly)
+    ///     - If two or more filters are registered, a dropdown accessory view (labeled "Format:" by default,
+    ///       see `set_format_label`) is shown listing each filter's name; selecting one updates which file
+    ///       types are allowed and the auto-appended extension
+    ///     - If user does not type an extension MacOs will append the first available extension from the active filter
+    ///     - If user types in filename with extension MacOs will check if it exists in the active filter's list, if
+    ///       not it will display appropriate message
     /// - On GTK
     ///     - It only filters which already existing files get shown to the user
     ///     - It does not append extensions automatically
