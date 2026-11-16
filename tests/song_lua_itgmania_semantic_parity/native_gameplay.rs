@@ -638,8 +638,8 @@ return Def.ActorFrame {{
             "UpperLeft merges root On with the native effect; its command identity belongs to ActorDef, not the song");
     }
 
-    use super::{gameplay, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
-        GameplayStreamClockSnapshot, GameplayViewport, Arc, json};
+    use super::{gameplay, interactive, paths, GameplayAudioSnapshot, GameplayConfig, GameplaySession,
+        GameplayStreamClockSnapshot, GameplayViewport, Arc, Value, json};
 
     #[test]
     fn call_comparison_uses_the_same_method_domain_without_losing_value_checks() {
@@ -1941,6 +1941,91 @@ end }}
             [0; 2], prepared, Default::default());
         state.set_live_autoplay_enabled(true);
         state
+    }
+
+    #[test]
+    fn recorded_gameplay_input_preserves_native_scoring_phases() {
+        let mut state = owned_judgment_control("recorded-input-score", "1000\n1000\n1000\n0001", r#"
+local text
+local callbacks = 0
+return Def.ActorFrame {
+ OnCommand=function(self)
+  SCREENMAN:GetTopScreen():AddInputCallback(function(e)
+   callbacks = callbacks + 1
+   local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+   text:settext(callbacks..':'..stats:GetTapNoteScores('TapNoteScore_W1'))
+  end)
+ end,
+ Def.BitmapText {Font='Common Normal',InitCommand=function(self) text=self; self:settext('0:0') end},
+}
+"#, -0.008);
+        state.set_live_autoplay_enabled(false);
+        update_judgment_control(&mut state, -250_000_000, 750_000_000);
+        let first_note_seconds = state.gameplay.chart_runtime.note_time_cache_ns[0] as f64 / 1e9;
+        let second_note_seconds = state.gameplay.chart_runtime.note_time_cache_ns[1] as f64 / 1e9;
+        let find_text=|s: &gameplay::State| s.gameplay.mods.song_lua_visuals.overlays.iter()
+            .chain(s.gameplay.mods.song_lua_visuals.foreground_visual_layers.iter().flat_map(|l|l.overlays.iter()))
+            .find_map(|a|
+                if let deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText {text,..}=&a.kind {
+                    Some(text.to_string())
+                } else {None}).unwrap();
+        let mut input_replay = interactive::InputReplay::default();
+        let mut previous_seconds = -0.25;
+        let mut deliver = |state: &mut gameplay::State, seconds: f64, kind: &str| {
+            let delta = (seconds - previous_seconds) as f32;
+            previous_seconds = seconds;
+            let host = 1_000_000_000 + (seconds * 1e9) as u64;
+            let snapshot = GameplayAudioSnapshot { stream_clock: GameplayStreamClockSnapshot {
+                music_nanos: (seconds * 1e9).round() as i64,
+                has_music_mapping: true, valid_at_host_nanos: host, ..Default::default()
+            }, ..Default::default() };
+            let event = json!({"PlayerNumber":"PlayerNumber_P1","controller":"GameController_1",
+                "button":"Left","GameButton":"MenuLeft","type":kind,
+                "DeviceInput":{"device":"InputDevice_Key","button":"DeviceButton_left",
+                    "level":1,"down":kind!="InputEventType_Release","ago":0.03}});
+            let clocks = if kind == "InputEventType_Repeat" { json!([]) } else {
+                json!([{"player":0,"column":0,"music_seconds":seconds,"music_rate":1,
+                    "last_beat_update_ago":0,"step_ago":0.03,"search_seconds":seconds-0.03}])
+            };
+            gameplay::update_with_input(state, delta, snapshot, ||host, &mut Vec::new(), |state| {
+                input_replay.dispatch(state, &json!({"event":event,"step_clock_inputs":clocks}), snapshot).unwrap();
+            });
+            assert!(state.take_song_lua_output().errors.is_empty());
+        };
+        // Use the chart's calibrated note time, 30ms before this frame. Repeats must
+        // not score the second note or cause another synthesized Lua repeat.
+        deliver(&mut state, first_note_seconds + 0.03, "InputEventType_FirstPress");
+        assert!(state.gameplay.chart_runtime.notes[0].result.is_some(), "the physical press judges its note in the input phase");
+        assert_eq!(state.gameplay.players()[0].judgment_counts.iter().sum::<u32>(), 0);
+        assert_eq!(find_text(&state), "1:0", "native row statistics wait for the next Player::Update");
+        // The next frame finalizes the completed row before the recorded repeat.
+        deliver(&mut state, second_note_seconds, "InputEventType_Repeat");
+        assert_eq!(state.gameplay.players()[0].judgment_counts, [1, 0, 0, 0, 0, 0],
+            "input result {:?} at note time {}", state.gameplay.chart_runtime.notes[0].result,
+            state.gameplay.chart_runtime.note_time_cache_ns[0]);
+        assert_eq!(find_text(&state), "2:1");
+        deliver(&mut state, first_note_seconds + 0.45, "InputEventType_Release");
+        assert!(!state.gameplay.lane_is_pressed(0));
+        assert_eq!(find_text(&state), "3:1");
+        update_judgment_control(&mut state, 500_000_000, 1_500_000_000);
+        assert_eq!(find_text(&state), "3:1");
+    }
+
+    #[test]
+    fn recorded_input_clocks_check_routing_without_choosing_a_lane() {
+        for clocks in [Value::Null, json!([{"player":0,"column":3,
+            "music_seconds":0,"music_rate":1,"last_beat_update_ago":0,"step_ago":0,"search_seconds":0}])] {
+            let mut state = owned_judgment_control("recorded-input-routing", "1000\n0000\n0000\n0001", "", -0.008);
+            state.set_live_autoplay_enabled(false);
+            let record = json!({"event":{"PlayerNumber":"PlayerNumber_P1","controller":"GameController_1",
+                "button":"Left","GameButton":"MenuLeft","type":"InputEventType_FirstPress",
+                "DeviceInput":{"device":"InputDevice_Key","button":"DeviceButton_left","down":true,"ago":0}},
+                "step_clock_inputs":clocks});
+            let error = interactive::InputReplay::default().dispatch(&mut state, &record, GameplayAudioSnapshot::default()).unwrap_err();
+            assert!(error.contains("native step clock observations") || error.contains("input routing differs"), "{error}");
+            assert_eq!(state.gameplay.players()[0].judgment_counts.iter().sum::<u32>(), 0);
+            assert!(!state.gameplay.lane_is_pressed(3), "native column metadata must not choose our lane");
+        }
     }
 
     #[test]
@@ -4748,6 +4833,7 @@ fn replay_mode(
     let draw_samples = trace["drawable_samples"].as_array().map(Vec::as_slice).unwrap_or_default();
     let input_events = trace["input_events"].as_array().map(Vec::as_slice).unwrap_or_default();
     let mut input_cursor = 0;
+    let mut input_replay = interactive::InputReplay::default();
     let mut draw_cursor = 0;
     if trace["capabilities"]["native_drawable_vertices"] == true {
         draw_checks.bind(&state, trace, 1)?;
@@ -4902,7 +4988,7 @@ fn replay_mode(
         gameplay::update_with_input(&mut state, delta as f32, snapshot, || host, &mut effects, |state| {
         while let Some(event) = input_events.get(input_cursor) {
             if event["before_update_sequence"].as_u64() != Some(index as u64+2) { break; }
-            if let Err(error)=interactive::dispatch(state, &event["event"]) { input_error=Some(error); break; }
+            if let Err(error)=input_replay.dispatch(state, event, snapshot) { input_error=Some(error); break; }
             input_cursor += 1;
         }
         });

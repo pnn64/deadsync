@@ -47,6 +47,17 @@ impl Callbacks {
     }
 }
 impl SongLiveScene {
+    /// Refresh input-phase queries after a physical judgment without advancing
+    /// actor updates, option clocks, or the next frame's preparation.
+    pub fn refresh_gameplay_statistics<P: GameplayProfileData, O, C, D>(
+        &self,
+        game: &GameplayRuntimeState<P, O, C, D>,
+    ) -> Result<(), Error> {
+        let mut runtime = self.runtime.access();
+        let owners = self.frames.owners(&mut runtime)?;
+        runtime.feed_gameplay_callback(owners, &SongLuaLiveFrame::from_gameplay(game, 0.), self.context.song_timing.as_ref())
+    }
+
     fn callbacks(&self) -> Result<Callbacks, Error> {
         let mut runtime = self.runtime.access();
         let owners = self.frames.owners(&mut runtime)?;

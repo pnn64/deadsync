@@ -3207,6 +3207,9 @@ fn dispatch_song_lua_callback(state: &mut State, event: &InputEvent, physical: O
 pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongLuaInputEvent<'_>) {
     if state.song_lua_ended { return; }
     let Some(scene) = &mut state.song_lua else { return; };
+    if let Err(error) = scene.refresh_gameplay_statistics(&state.gameplay) {
+        state.song_lua_output.errors.push(error.to_string());
+    }
     match scene.input(&input) {
         Ok((_, output)) => {
             // GameLoop delivers callbacks after ScreenManager::Update and
