@@ -5,6 +5,10 @@ use deadsync_song_lua::{
 };
 use std::{collections::HashMap, path::Path, sync::Arc};
 
+#[path = "../../../tests/support/allocations.rs"]
+#[expect(dead_code, reason = "only the scoped measurement is needed here")]
+mod allocations;
+
 fn slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, String> {
     Ok(Arc::from([]))
 }
@@ -268,6 +272,99 @@ fn frame(t: f64) -> SongLuaLiveFrame {
     f.players[0].life = 0.5;
     f.players[1].life = 0.5;
     f
+}
+
+#[test]
+fn steady_state_updates_reuse_actor_snapshot_storage() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "local t=Def.ActorFrame{}; for i=1,128 do t[#t+1]=Def.Quad{} end; return t",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot allocation fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    for i in 1..=4 {
+        scene.update(frame(i as f64 * 0.1)).unwrap();
+    }
+    let bytes_per_snapshot =
+        scene.states().len() * std::mem::size_of::<song::SongLuaOverlayState>();
+    for i in 5..=8 {
+        let (_, churn) = allocations::measure(|| scene.update(frame(i as f64 * 0.1)).unwrap());
+        println!("snapshot update: {churn:?}; full snapshot: {bytes_per_snapshot} bytes");
+        assert!(
+            churn.allocated_bytes < bytes_per_snapshot,
+            "steady update allocated at least another full actor snapshot ({bytes_per_snapshot} bytes): {churn:?}"
+        );
+    }
+    scene.end().unwrap();
+}
+
+#[test]
+fn failed_state_read_preserves_both_snapshots_and_can_recover() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "return Def.ActorFrame{Def.Quad{InitCommand=function(self) A=self end}, Def.Quad{InitCommand=function(self) B=self end}}",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot error fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    scene.update(frame(0.1)).unwrap();
+    let states = scene.states().to_vec();
+    let tracked: Vec<_> = scene.tracked_states().map(|(_, state)| state).collect();
+    scene
+        .runtime_mut()
+        .vm_mut()
+        .execute(
+            &compile_named(
+                br#"
+        A:x(123)
+        old_meta=getmetatable(B)
+        rawset(B,'__songlua_actor_type','Sprite')
+        rawset(B,'__songlua_state_sprite_texture',nil)
+        setmetatable(B,{__index=function(self,key)
+            if key=='Texture' then error('snapshot read failed') end
+            local index=old_meta.__index
+            if type(index)=='function' then return index(self,key) end
+            return index[key]
+        end})
+    "#,
+                b"=snapshot failure",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let error = scene.update(frame(0.2)).unwrap_err();
+    assert!(
+        error.to_string().contains("snapshot read failed"),
+        "{error}"
+    );
+    assert_eq!(scene.states(), states);
+    assert_eq!(
+        scene.tracked_states().map(|(_, state)| state).collect::<Vec<_>>(),
+        tracked
+    );
+    scene
+        .runtime_mut()
+        .vm_mut()
+        .execute(
+            &compile_named(
+                b"setmetatable(B,old_meta);rawset(B,'__songlua_actor_type','Quad')",
+                b"=snapshot recovery",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    scene.update(frame(0.3)).unwrap();
+    assert!(scene.states().iter().any(|state| state.x == 123.));
+    assert_ne!(scene.states(), states);
+    assert_eq!(scene.tracked_states().count(), tracked.len());
+    scene.end().unwrap();
 }
 
 #[test]

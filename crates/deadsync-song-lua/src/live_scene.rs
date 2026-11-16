@@ -40,6 +40,7 @@ pub struct SongLiveScene {
     tracked: Vec<(SongLuaTrackedActorTarget, Value)>,
     states: Vec<SongLuaOverlayState>,
     tracked_states: Vec<SongLuaOverlayState>,
+    state_scratch: Arc<Mutex<[Vec<SongLuaOverlayState>; 2]>>,
     targets: Vec<(usize, crate::SongLuaLiveTarget)>,
     visual_targets: rustc_hash::FxHashMap<usize, crate::SongLuaLiveTarget>,
     entry_paths: Vec<PathBuf>,
@@ -151,6 +152,7 @@ impl SongLiveScene {
             tracked: b.tracked,
             states: Vec::new(),
             tracked_states: Vec::new(),
+            state_scratch: Default::default(),
             targets: Vec::new(),
             visual_targets: Default::default(),
             entry_paths: b.entry_paths,
@@ -450,12 +452,17 @@ impl SongLiveScene {
     }
     fn read_states(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
         let batch = runtime.vm.rooted(self.retained)?;
-        let mut states =
-            runtime
-                .actors
-                .live_phase(&mut runtime.vm, self.screen, batch, Phase::States)?;
-        self.tracked_states = states.split_off(self.actors.len());
-        self.states = states;
+        runtime.actors.live_phase(
+            &mut runtime.vm,
+            self.screen,
+            batch,
+            Phase::States(self.state_scratch.clone()),
+        )?;
+        // Publish both lists together; failed reads leave the last snapshot
+        // intact. The old vectors become scratch for the next successful read.
+        let mut scratch = self.state_scratch.lock().unwrap();
+        std::mem::swap(&mut self.states, &mut scratch[0]);
+        std::mem::swap(&mut self.tracked_states, &mut scratch[1]);
         Ok(())
     }
     fn off(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
@@ -463,7 +470,6 @@ impl SongLiveScene {
         runtime
             .actors
             .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off)
-            .map(|_| ())
     }
     fn take_output(&mut self, runtime: &mut SongRuntime) -> Result<SongLuaLiveOutput, Error> {
         let gameplay_pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);

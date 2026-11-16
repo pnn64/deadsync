@@ -26,6 +26,48 @@ fn execute(runtime: &mut SongRuntime, text: &str) -> Value {
         .unwrap_or(Value::Nil)
 }
 
+#[test]
+fn reading_actor_kind_does_not_copy_the_clock_recording() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "kind allocation fixture");
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let definition = execute(&mut runtime, "return Def.Quad{}");
+    let scene = runtime.instantiate_actor(definition).unwrap();
+    let actor = runtime.actor_scene_root(scene).unwrap();
+    let names = Default::default();
+    let mut read = |context: &SongLuaCompileContext| {
+        let kind = runtime
+            .read_song_overlay_kind(
+                actor,
+                deadsync_song_lua::SongOverlayKindInputs {
+                    actor_type: "Quad",
+                    initial_state: Default::default(),
+                    context,
+                    aft_capture_names: &names,
+                },
+                |_, _, _| Ok(Arc::<[()]>::from([])),
+                |_: &()| None::<SongLuaOverlayModelLayer<()>>,
+            )
+            .unwrap();
+        assert!(matches!(kind, Some(SongLuaOverlayKind::Quad)));
+    };
+    read(&context);
+    let (_, empty) = allocations::measure(|| read(&context));
+    context.host_clock_inputs = (0..16_384)
+        .map(|i| deadsync_song_lua::SongLuaHostClockInput {
+            clock: "GetTimeSinceStart".into(),
+            source: "@/fixture/default.lua".into(),
+            line: 1,
+            value: i as f64 / 60.,
+        })
+        .collect();
+    let (_, recorded) = allocations::measure(|| read(&context));
+    println!("actor-kind allocations: empty={empty:?}, recorded={recorded:?}");
+    assert!(
+        recorded.allocated_bytes <= empty.allocated_bytes + 4096,
+        "actor-kind allocation grew with an unrelated clock recording: {empty:?} -> {recorded:?}"
+    );
+}
+
 fn runtime(dense: bool) -> SongRuntime {
     let context = SongLuaCompileContext::new(Path::new("."), "performance fixture");
     let mut runtime = SongRuntime::new(&context).unwrap();

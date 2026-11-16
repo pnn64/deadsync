@@ -3,7 +3,7 @@ use super::*;
 
 #[derive(Clone)]
 pub(crate) enum Phase {
-    States,
+    States(Arc<Mutex<[Vec<crate::SongLuaOverlayState>; 2]>>),
     Off,
     ClearHistory,
     EndSounds,
@@ -13,7 +13,6 @@ pub(crate) enum Phase {
 struct Run {
     scene: u64,
     phase: Phase,
-    output: Arc<Mutex<Vec<crate::SongLuaOverlayState>>>,
 }
 impl Actors {
     pub(crate) fn suppress_load_sound_retirement(&self, vm: &mut Vm, scene: ActorScene) {
@@ -61,8 +60,7 @@ impl Actors {
         scene: ActorScene,
         batch: Value,
         phase: Phase,
-    ) -> Result<Vec<crate::SongLuaOverlayState>, Error> {
-        let output = Arc::new(Mutex::new(Vec::new()));
+    ) -> Result<(), Error> {
         let error = if let Phase::Health(e) = &phase {
             e.value().unwrap_or(Value::Nil)
         } else {
@@ -79,14 +77,12 @@ impl Actors {
             Run {
                 scene: scene.id,
                 phase,
-                output: output.clone(),
             },
         )?;
         let first = vm.store().next;
         let result = vm.call(f, &[]).map(|_| ());
         song_activation::adopt_created(vm.store(), scene.id, first);
-        result?;
-        Ok(std::mem::take(&mut *output.lock().unwrap()))
+        result
     }
     pub(crate) fn take_live_sources(&self, vm: &mut Vm) -> Vec<crate::SongLuaLiveBroadcast> {
         vm.store()
@@ -99,19 +95,27 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Run>().unwrap().clone();
     let batch = table(call, call.captures()[2])?;
     match data.phase {
-        Phase::States => {
-            let mut output = Vec::new();
-            for slot in [2., 3.] {
-                let list = call.raw_table_get(batch, Value::Number(slot))?;
-                let list = table(call, list)?;
-                let len = call.raw_table_len(list)?;
-                output.reserve(len);
-                for i in 1..=len {
-                    let actor = table(call, call.raw_table_get(list, Value::Number(i as f64))?)?;
-                    output.push(initial_state::read_live(call, actor)?);
+        Phase::States(buffers) => {
+            // A state read can invoke authored Lua. Keep the scratch storage
+            // unlocked during callbacks and return it even when a read fails.
+            let mut outputs = std::mem::take(&mut *buffers.lock().unwrap());
+            let result = (|| {
+                for (slot, output) in [2., 3.].into_iter().zip(&mut outputs) {
+                    output.clear();
+                    let list = call.raw_table_get(batch, Value::Number(slot))?;
+                    let list = table(call, list)?;
+                    let len = call.raw_table_len(list)?;
+                    output.reserve(len);
+                    for i in 1..=len {
+                        let actor =
+                            table(call, call.raw_table_get(list, Value::Number(i as f64))?)?;
+                        output.push(initial_state::read_live(call, actor)?);
+                    }
                 }
-            }
-            *data.output.lock().unwrap() = output;
+                Ok::<(), Error>(())
+            })();
+            *buffers.lock().unwrap() = outputs;
+            result?;
         }
         Phase::ClearHistory => {
             let globals = table(call, helper(call, 5)?)?;

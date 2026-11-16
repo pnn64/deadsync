@@ -1,8 +1,6 @@
 //! Existing compiler renderer kinds. Command probing and tree policy are separate.
 use super::*;
-use crate::{
-    SongLuaCompileContext, SongLuaOverlayKind as Kind, SongLuaOverlayState, SongLuaProxyTarget,
-};
+use crate::{SongLuaOverlayKind as Kind, SongLuaProxyTarget};
 use deadlib_present::actors::TextAttribute;
 use std::path::PathBuf;
 
@@ -19,8 +17,9 @@ impl Output {
 #[derive(Clone)]
 struct Read {
     class: String,
-    initial: SongLuaOverlayState,
-    context: SongLuaCompileContext,
+    live: bool,
+    music_length_seconds: f32,
+    graph_size: [f32; 2],
     aft_names: HashSet<String>,
     output: Arc<Mutex<Option<Output>>>,
 }
@@ -41,8 +40,12 @@ impl Actors {
             ],
             Read {
                 class: inputs.actor_type.to_owned(),
-                initial: inputs.initial_state,
-                context: inputs.context.clone(),
+                live: inputs.context.live,
+                music_length_seconds: inputs.context.music_length_seconds,
+                graph_size: crate::lua_util::read_graph_display_size(
+                    inputs.initial_state,
+                    inputs.context,
+                ),
                 aft_names: inputs.aft_capture_names.clone(),
                 output: output.clone(),
             },
@@ -166,10 +169,10 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
     } else if class.eq_ignore_ascii_case("ActorMultiVertex") {
         let vertices = match meshes::vertices(call, actor)? {
             Some(vertices) => vertices,
-            None if data.context.live => Arc::from([]),
+            None if data.live => Arc::from([]),
             None => return Ok(Output::ready(None)),
         };
-        let texture_path = if data.context.live {
+        let texture_path = if data.live {
             meshes::texture_path(call, actor)?
         } else if assets::field(call, actor, b"__songlua_aft_capture_name")?.is_some() {
             None
@@ -203,12 +206,12 @@ fn kind(call: &mut HostCall<'_>, data: &Read, actor: TableId) -> Result<Output, 
         Kind::SongMeterDisplay {
             stream_width: meter.stream_width,
             stream_state: meter.stream_state,
-            music_length_seconds: data.context.music_length_seconds.max(0.),
+            music_length_seconds: data.music_length_seconds.max(0.),
         }
     } else if class.eq_ignore_ascii_case("GraphDisplay") {
         let graph = graphs::read(call, actor)?;
         Kind::GraphDisplay {
-            size: crate::lua_util::read_graph_display_size(data.initial, &data.context),
+            size: data.graph_size,
             body_values: graph.body_values,
             body_state: graph.body_state,
             line_state: Box::new(graph.line_state),

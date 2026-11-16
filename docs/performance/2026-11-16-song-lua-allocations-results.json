@@ -1,0 +1,826 @@
+{
+  "baseline_commit": "a9964a104ac4cae0ab5a6a76caf5c263138c258e",
+  "fixture_commit": "cc1d89d9acd1440ce45f4574396d6a251c9a462d",
+  "candidate_source_sha256": {
+    "crates/deadsync-song-lua/src/actors/live_scene.rs": "fa25176d9e7158d14cb6b8eb96c939af1130e77c95ce21e3cc3d611e6eeec4cd",
+    "crates/deadsync-song-lua/src/actors/song_kinds.rs": "26c49f75679ec686aa6ad8bc02cb18a5cb84e276f0853db94c6bde02ca83a469",
+    "crates/deadsync-song-lua/src/live_scene.rs": "cbf75009067a5aaf7bf33ebf96d4af98446ccf450b24c403b2b9235025822e65",
+    "crates/deadsync-song-lua/tests/live_scene.rs": "5bd1af78f855bc1654a16eeecf39574617b1899176be406ea4b4674631543d8e",
+    "crates/deadsync-song-lua/tests/performance.rs": "f869bb3aaf205eca71ae4474ed8091a43e6f0bdfc805f23efd9e6f8844f385b4"
+  },
+  "source_hash_normalization": "UTF-8 text with LF line endings",
+  "environment": {
+    "cpu": "Intel Xeon E5-2697 v2",
+    "vcpus_per_worker": 2,
+    "memory_mib_per_worker": 65536,
+    "memory_limit_gib": 58,
+    "sample_rate_hz": 99,
+    "profile": "release; debug=1; lto=false; codegen-units=16; frame pointers",
+    "cache_policy": "OS caches uncontrolled; baseline followed by candidate on the same VM",
+    "input_policy": "Retained native captures; decompression and setup hashing excluded; runner validation included"
+  },
+  "targeted_tests": [
+    {
+      "target": "draw",
+      "passed": 12,
+      "platform": "Linux"
+    },
+    {
+      "target": "framebuffers",
+      "passed": 7,
+      "platform": "Linux"
+    },
+    {
+      "target": "graphs",
+      "passed": 7,
+      "platform": "Linux"
+    },
+    {
+      "target": "live_compiler",
+      "passed": 17,
+      "platform": "Windows"
+    },
+    {
+      "target": "live_scene",
+      "passed": 26,
+      "platform": "Windows"
+    },
+    {
+      "target": "live_visuals",
+      "passed": 10,
+      "platform": "Windows"
+    },
+    {
+      "target": "meshes",
+      "passed": 9,
+      "platform": "Linux"
+    },
+    {
+      "target": "performance",
+      "passed": 4,
+      "platform": "Windows"
+    },
+    {
+      "target": "proxies",
+      "passed": 8,
+      "platform": "Linux"
+    },
+    {
+      "target": "song_meters",
+      "passed": 9,
+      "platform": "Linux"
+    },
+    {
+      "target": "song_update_output",
+      "passed": 8,
+      "platform": "Linux"
+    }
+  ],
+  "targeted_pass_count": 117,
+  "native_gameplay_pass_count": 77,
+  "ignored_opt_in_benchmarks": 4,
+  "original_linux_snapshot_failure_count": 25,
+  "original_failures_identical_before_after": true,
+  "refreshed_default_field_snapshots": 2,
+  "remaining_linux_path_snapshot_failures": 24,
+  "allocation_bytes": {
+    "quad_kind_empty": {
+      "baseline": 3390,
+      "candidate": 968
+    },
+    "quad_kind_16384_clock_records": {
+      "baseline": 3345726,
+      "candidate": 968
+    },
+    "128_quad_steady_frame": {
+      "baseline": 251557,
+      "candidate_min": 13541,
+      "candidate_max": 14053
+    }
+  },
+  "profiles": [
+    {
+      "fixture": "fof",
+      "variant": "baseline",
+      "elapsed_seconds": 465.538,
+      "timing_method": "worker elapsed replay + profiler time",
+      "runner_sha256": "5402f359c5fb434f95f892e1748a56103c8f2a1ab15e5e69f933d5b9b566d0e1",
+      "input_tar_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+      "comparison": {
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+        "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 45582,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 22844,
+          "percent": 50.116
+        },
+        "allocator_exclusive": {
+          "samples": 5823,
+          "percent": 12.775
+        },
+        "context_clone_inclusive": {
+          "samples": 1,
+          "percent": 0.002
+        },
+        "state_reads_inclusive": {
+          "samples": 51,
+          "percent": 0.112
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "2d9c88905c57d6de57a77df82ef80c9c1cf5a6b9c190f42ff39bea250f5e64c7",
+          "bytes": 2407883
+        },
+        "profile.json.syms.json": {
+          "sha256": "eba64b9bfc9d3f7c89ab79f952900790968b14d2a15f5dfd7e73267980b053e9",
+          "bytes": 459901
+        },
+        "report.json.zst": {
+          "sha256": "5d43676808aad39e3324513797cdcd982fbc468e417893033b63be0006dc83b2",
+          "bytes": 1749536
+        }
+      }
+    },
+    {
+      "fixture": "fof",
+      "variant": "candidate",
+      "elapsed_seconds": 465.655,
+      "timing_method": "worker elapsed replay + profiler time",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "5b9372c9fd7850a93218c0a6f31f8dbe89403daaef4071f8d64b74e9b9e49f0b",
+      "comparison": {
+        "native_frames": 1573,
+        "replayed_frames": 1573,
+        "compared_stage_fields": 1419,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.GetZoomY, Actor.texturetranslate, Actor.texturewrapping, Actor.xy, Actor.z, Actor.zoomtoheight, Actor.zoomtowidth, Actor.ztest, Actor.zwrite, ActorMultiVertex.LoadTexture, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetNumVertices, ActorMultiVertex.SetVertices, ActorSound.play, BitmapText.settext, GameState.GetHumanPlayers, GameState.IsHumanPlayer, Screen.AddInputCallback",
+        "native drawable state/resources: ActorMultiVertex, BitmapText, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 45615,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 22525,
+          "percent": 49.381
+        },
+        "allocator_exclusive": {
+          "samples": 6039,
+          "percent": 13.239
+        },
+        "state_reads_inclusive": {
+          "samples": 32,
+          "percent": 0.07
+        },
+        "context_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "2ee1c8719b77ec25686d16a9b8d3338891b6cb95941dc1705a4941b07ed71891",
+          "bytes": 2410190
+        },
+        "profile.json.syms.json": {
+          "sha256": "cbe32642ad4c3861efebedf08303d3da8afb9dfcba32033eb007fddd2deaf159",
+          "bytes": 454464
+        },
+        "report.json.zst": {
+          "sha256": "4d9a761eaeedbbfba1c1d159103e53177ae25c2c4e2fa10623396b115b1455a9",
+          "bytes": 1720690
+        }
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "variant": "baseline",
+      "elapsed_seconds": 379.674,
+      "timing_method": "systemd journal start/deactivation interval",
+      "runner_sha256": "5402f359c5fb434f95f892e1748a56103c8f2a1ab15e5e69f933d5b9b566d0e1",
+      "input_tar_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+      "comparison": {
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 37074,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 6559,
+          "percent": 17.692
+        },
+        "allocator_exclusive": {
+          "samples": 12192,
+          "percent": 32.886
+        },
+        "context_clone_inclusive": {
+          "samples": 6460,
+          "percent": 17.425
+        },
+        "clock_clone_inclusive": {
+          "samples": 6440,
+          "percent": 17.371
+        },
+        "state_reads_inclusive": {
+          "samples": 532,
+          "percent": 1.435
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 7,
+          "percent": 0.019
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "3cf180fcb61435000dcf095dbc51e14234ad3562e6b0c82db149b602c780fda8",
+          "bytes": 2087683
+        },
+        "profile.json.syms.json": {
+          "sha256": "ee17082a54a77e0b4a669a0a713e82e46271aff2e9040b0687d42224d72bbf39",
+          "bytes": 637901
+        },
+        "report.json.zst": {
+          "sha256": "b30a868a5cd518965994173ff11a141eb127d2cffcb93c945139779e4920d094",
+          "bytes": 7011485
+        }
+      }
+    },
+    {
+      "fixture": "paint-ssc",
+      "variant": "candidate",
+      "elapsed_seconds": 290.352,
+      "timing_method": "worker elapsed replay + profiler time",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "e6e3beb85ee7761ad9ea8066d56d67adf13afa5a26b68e24b21ea5d5d38336a3",
+      "comparison": {
+        "native_frames": 4190,
+        "replayed_frames": 4190,
+        "compared_stage_fields": 2871,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.AddWrapperState, Actor.GetRotationX, Actor.GetRotationY, Actor.GetRotationZ, Actor.GetWrapperState, Actor.GetX, Actor.GetY, Actor.GetZ, Actor.GetZoomX, Actor.GetZoomY, Actor.GetZoomZ, Actor.MaskDest, Actor.MaskSource, Actor.accelerate, Actor.addrotationy, Actor.addrotationz, Actor.addx, Actor.addy, Actor.baserotationz, Actor.blend, Actor.bob, Actor.diffuseramp, Actor.effectclock, Actor.effectcolor1, Actor.effectcolor2, Actor.effectoffset, Actor.playcommand, Actor.rotationx, Actor.rotationy, Actor.setstate, Actor.smooth, Actor.stopeffect, Actor.stoptweening, Actor.texturetranslate, Actor.wag, Actor.xy, Actor.z, Actor.zoomy, Actor.zoomz, ActorFrame.fov, ActorFrame.propagatecommand, ActorFrame.vanishpoint, ActorMultiVertex.SetDrawState, ActorMultiVertex.SetVertices, ActorSound.play, ActorSound.stop, BitmapText.settext, BitmapText.strokecolor, GameState.GetEnabledPlayers, PlayerOptions.GetReversePercentForColumn, PlayerOptions.Left, PlayerOptions.Mirror, PlayerOptions.NoteSkin, PlayerOptions.Right, PlayerOptions.Skew, PlayerOptions.Tilt, Sprite.LinearFrames, Sprite.SetAllStateDelays, Sprite.SetStateProperties, Sprite.setstate",
+        "native drawable state/resources: ActorMultiVertex, ActorProxy, BitmapText, Model, Quad, Sound, Sprite",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 28350,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 6660,
+          "percent": 23.492
+        },
+        "allocator_exclusive": {
+          "samples": 5907,
+          "percent": 20.836
+        },
+        "context_clone_inclusive": {
+          "samples": 107,
+          "percent": 0.377
+        },
+        "clock_clone_inclusive": {
+          "samples": 107,
+          "percent": 0.377
+        },
+        "state_reads_inclusive": {
+          "samples": 477,
+          "percent": 1.683
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "532c64e7cb3e2f34cbc4914668a9370b10e0131b05beaaab2585d13d8729bcf4",
+          "bytes": 1512546
+        },
+        "profile.json.syms.json": {
+          "sha256": "44827fb1da7551d9525bcbd3d4bacde41de0b2773545989de87ddebaeb2db9a9",
+          "bytes": 680266
+        },
+        "report.json.zst": {
+          "sha256": "a76bc48ee97351b99a3f910d20dccd7d5e1024fcad4084a56b272961b3c79bd2",
+          "bytes": 7013752
+        }
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "variant": "baseline",
+      "elapsed_seconds": 801.844,
+      "timing_method": "systemd journal start/deactivation interval",
+      "runner_sha256": "5402f359c5fb434f95f892e1748a56103c8f2a1ab15e5e69f933d5b9b566d0e1",
+      "input_tar_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+      "comparison": {
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 78812,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 2206,
+          "percent": 2.799
+        },
+        "allocator_exclusive": {
+          "samples": 8371,
+          "percent": 10.621
+        },
+        "context_clone_inclusive": {
+          "samples": 6376,
+          "percent": 8.09
+        },
+        "clock_clone_inclusive": {
+          "samples": 20,
+          "percent": 0.025
+        },
+        "state_reads_inclusive": {
+          "samples": 19792,
+          "percent": 25.113
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 3054,
+          "percent": 3.875
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "88403ff7b254e79819bd1163c8770c73645008ac584496871e34fbb03a2a658b",
+          "bytes": 1968834
+        },
+        "profile.json.syms.json": {
+          "sha256": "0b5edf808b91caf73860e223f4bf7f100bd33e33ddda39e2109ca86125d71061",
+          "bytes": 705035
+        },
+        "report.json.zst": {
+          "sha256": "58724aaeb990fc6ccdecb502251accbbe7b4165d835f49889b1c575ae3e6b29c",
+          "bytes": 7764055
+        }
+      }
+    },
+    {
+      "fixture": "mr-sandman",
+      "variant": "candidate",
+      "elapsed_seconds": 719.264,
+      "timing_method": "worker elapsed replay + profiler time",
+      "runner_sha256": "633ba889f7e2bfd84e973d3294c3b2aed04d22722b444536091d4d732406a54b",
+      "input_tar_sha256": "cda3f6069cb2da5b4fc79da0886fc07305f6071c65c887524fa556d846a8be17",
+      "comparison": {
+        "native_frames": 5370,
+        "replayed_frames": 5370,
+        "compared_stage_fields": 2090,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      },
+      "pending_coverage": [
+        "uncompared song operations: Actor.xy, GameState.GetHumanPlayers",
+        "native drawable state/resources: Quad",
+        "missing captured subscriber identity for ScreenGameplay/18",
+        "missing captured subscriber identity for ScreenGameplay/19/1/1",
+        "missing captured subscriber identity for ScreenGameplay/19/1/3",
+        "missing captured subscriber identity for ScreenGameplay/19/1/4",
+        "missing captured subscriber identity for ScreenGameplay/19/1/6",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/1",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/11",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/3",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/5",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/7",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/2/9",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/2",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/4",
+        "missing captured subscriber identity for ScreenGameplay/2/2/2/3/6",
+        "missing captured subscriber identity for ScreenGameplay/2/6",
+        "missing captured subscriber identity for ScreenGameplay/2/9/1",
+        "missing captured subscriber identity for ScreenGameplay/3/1"
+      ],
+      "sampled_stacks": 70774,
+      "cpu_sample_groups": {
+        "hash_file_inclusive": {
+          "samples": 2277,
+          "percent": 3.217
+        },
+        "allocator_exclusive": {
+          "samples": 2699,
+          "percent": 3.814
+        },
+        "context_clone_inclusive": {
+          "samples": 5,
+          "percent": 0.007
+        },
+        "state_reads_inclusive": {
+          "samples": 16960,
+          "percent": 23.964
+        },
+        "clock_clone_inclusive": {
+          "samples": 0,
+          "percent": 0.0
+        },
+        "state_vector_growth_memmove_exclusive": {
+          "samples": 0,
+          "percent": 0.0
+        }
+      },
+      "artifacts": {
+        "profile.json.gz": {
+          "sha256": "3923d05f61fd2d839ca993f697bc92618f6966b9994dfeb0350674e207159ab2",
+          "bytes": 1274324
+        },
+        "profile.json.syms.json": {
+          "sha256": "6ee304e26834358f19668511ea6dafad6c766ee4b0a744ae5ee1ab4c56efcb6a",
+          "bytes": 653523
+        },
+        "report.json.zst": {
+          "sha256": "b47e788d28d97591dffa7aaf6640a3489594497c5efd12ec1b4678317cc5c4ee",
+          "bytes": 7730833
+        }
+      }
+    }
+  ],
+  "controls": [
+    {
+      "id": "68eda87bf02562c3",
+      "source_simfile": "280-MODS-[MASTER] Sharkmode/Sharkmode.ssc",
+      "elapsed_seconds": 28.242,
+      "comparison": {
+        "native_frames": 8236,
+        "replayed_frames": 8236,
+        "compared_stage_fields": 1672,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "730650ffb42269d8",
+      "source_simfile": "Sharkmode [Ky_Dash]/Sharkmode.ssc",
+      "elapsed_seconds": 30.354,
+      "comparison": {
+        "native_frames": 8338,
+        "replayed_frames": 8338,
+        "compared_stage_fields": 1694,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-fail-dance",
+      "source_simfile": "__pass3_controls/routine-fail/dance/control.ssc",
+      "elapsed_seconds": 3.711,
+      "comparison": {
+        "native_frames": 624,
+        "replayed_frames": 624,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-fail-pump",
+      "source_simfile": "__pass3_controls/routine-fail/pump/control.ssc",
+      "elapsed_seconds": 3.739,
+      "comparison": {
+        "native_frames": 612,
+        "replayed_frames": 612,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-life-dance",
+      "source_simfile": "__pass3_controls/routine-life/dance/control.ssc",
+      "elapsed_seconds": 3.687,
+      "comparison": {
+        "native_frames": 625,
+        "replayed_frames": 625,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-life-pump",
+      "source_simfile": "__pass3_controls/routine-life/pump/control.ssc",
+      "elapsed_seconds": 3.829,
+      "comparison": {
+        "native_frames": 623,
+        "replayed_frames": 623,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-manual-dance",
+      "source_simfile": "__pass3_controls/routine-manual/dance/control.ssc",
+      "elapsed_seconds": 3.713,
+      "comparison": {
+        "native_frames": 616,
+        "replayed_frames": 616,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "routine-manual-pump",
+      "source_simfile": "__pass3_controls/routine-manual/pump/control.ssc",
+      "elapsed_seconds": 3.691,
+      "comparison": {
+        "native_frames": 611,
+        "replayed_frames": 611,
+        "compared_stage_fields": 308,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "score-format",
+      "source_simfile": "__pass3_controls/score-format/control.sm",
+      "elapsed_seconds": 3.489,
+      "comparison": {
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "score-queue-v2",
+      "source_simfile": "__pass3_controls/score-queue-v2/control.sm",
+      "elapsed_seconds": 3.505,
+      "comparison": {
+        "native_frames": 507,
+        "replayed_frames": 507,
+        "compared_stage_fields": 132,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "score-redraw-manual",
+      "source_simfile": "__pass3_controls/score-redraw-manual/control.sm",
+      "elapsed_seconds": 3.579,
+      "comparison": {
+        "native_frames": 595,
+        "replayed_frames": 595,
+        "compared_stage_fields": 154,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "style-dance-routine",
+      "source_simfile": "__pass3_controls/styles/dance/control.ssc",
+      "elapsed_seconds": 3.571,
+      "comparison": {
+        "native_frames": 417,
+        "replayed_frames": 417,
+        "compared_stage_fields": 220,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    },
+    {
+      "id": "style-pump-routine",
+      "source_simfile": "__pass3_controls/styles/pump/control.ssc",
+      "elapsed_seconds": 3.687,
+      "comparison": {
+        "native_frames": 405,
+        "replayed_frames": 405,
+        "compared_stage_fields": 220,
+        "mismatch_count": 0,
+        "error_count": 0,
+        "execution_path": "diagnostic-live-lua",
+        "production_preparation_exercised": false,
+        "capture_completed_gameplay": true,
+        "archive_accepted": true,
+        "acceptance_basis": "full replay of implemented comparisons",
+        "whole_song_parity_proven": false,
+        "production_parity_proven": false
+      }
+    }
+  ]
+}
