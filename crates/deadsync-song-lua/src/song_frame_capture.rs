@@ -1,5 +1,9 @@
 //! The existing chronological track compiler over Rust replay publications.
-use super::{actors::perframes::Access, song_compiler_roots::Roots, *};
+use super::{
+    actors::perframes::Access,
+    song_compiler_roots::{RootedValues, Roots},
+    *,
+};
 use crate::{
     SongLuaOverlayState as State, SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateTrack,
     SongLuaOverlayUpdateValue as Update,
@@ -105,22 +109,33 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            if self
-                .actors
-                .publish_song_tween_frame(&mut self.vm, screen, actors)
-            {
-                Ok(())
-            } else {
-                Err("song replay capture is not active".into())
-            }
+            self.publish_rooted_song_tween_frame(screen, &rooted)
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn publish_rooted_song_tween_frame(
+        &mut self,
+        screen: ActorScene,
+        actors: &RootedValues,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        if self
+            .actors
+            .publish_song_tween_frame(&mut self.vm, screen, actors)
+        {
+            Ok(())
+        } else {
+            Err("song replay capture is not active".into())
+        }
     }
 
     /// Apply the full preparation getter handoff in supplied order. This is
@@ -166,23 +181,37 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            let access = self.actors.perframe_access();
-            capture.sample_schedule(states, seconds, |index, target, value| {
-                if let Some(actor) = actors.get(index) {
-                    access
-                        .update_getter(&mut self.vm, *actor, target, value)
-                        .map_err(|e| e.to_string())?;
-                }
-                Ok(())
-            })
+            self.sample_rooted_song_overlay_schedule(screen, capture, &rooted, states, seconds)
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn sample_rooted_song_overlay_schedule(
+        &mut self,
+        screen: ActorScene,
+        capture: &SongOverlayFrameCapture,
+        actors: &RootedValues,
+        states: &mut [State],
+        seconds: f64,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        let access = self.actors.perframe_access();
+        capture.sample_schedule(states, seconds, |index, target, value| {
+            if let Some(actor) = actors.get(index) {
+                access
+                    .update_getter(&mut self.vm, *actor, target, value)
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })
     }
 
     /// Consume the active replay's complete ordered publication batch. Actor
@@ -198,22 +227,37 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            let access = self.actors.perframe_access();
-            let mut source = Source {
-                runtime: self,
-                screen,
-                actors,
-                access,
-            };
-            capture.capture(&mut source, context, states, clock)
+            self.capture_rooted_song_overlay_frame(screen, capture, &rooted, context, states, clock)
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn capture_rooted_song_overlay_frame(
+        &mut self,
+        screen: ActorScene,
+        capture: &mut SongOverlayFrameCapture,
+        actors: &RootedValues,
+        context: &SongLuaCompileContext,
+        states: SongFrameCaptureStates<'_>,
+        clock: SongFrameCaptureClock,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        let access = self.actors.perframe_access();
+        let mut source = Source {
+            runtime: self,
+            screen,
+            actors,
+            access,
+        };
+        capture.capture(&mut source, context, states, clock)
     }
 }
 struct Source<'a> {
