@@ -1457,8 +1457,62 @@ end }
             missing["input"].as_object_mut().unwrap().remove("requested_chart_index");
             assert_eq!(super::native_starting_chart(&song, &session, &missing).unwrap(), 0,
                 "older traces retain the first matching chart behavior");
-            trace["input"]["game"] = json!("pump");
-            assert!(super::native_gameplay_session(&trace).is_err(), "pump must not replay as dance");
+            trace["input"]["game"] = json!("lights");
+            assert!(super::native_gameplay_session(&trace).is_err(), "unknown games must not replay as dance");
+        }
+    }
+
+    #[test]
+    fn native_starting_chart_respects_game_and_partner_styles() {
+        paths::init();
+        let directory = std::env::temp_dir().join(format!("deadsync-native-style-selector-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let kinds = [
+            ("dance-single", "StepsType_Dance_Single", 4),
+            ("dance-double", "StepsType_Dance_Double", 8),
+            ("dance-couple", "StepsType_Dance_Couple", 8),
+            ("dance-routine", "StepsType_Dance_Routine", 8),
+            ("pump-single", "StepsType_Pump_Single", 5),
+            ("pump-double", "StepsType_Pump_Double", 10),
+            ("pump-couple", "StepsType_Pump_Couple", 10),
+            ("pump-routine", "StepsType_Pump_Routine", 10),
+        ];
+        for extension in ["sm", "ssc"] {
+            let simfile = directory.join(format!("control.{extension}"));
+            let mut source = "#VERSION:0.83;#TITLE:Native style selector;#BPMS:0=120;\n".to_owned();
+            let mut catalog = Vec::new();
+            for (index, (kind, native_kind, lanes)) in kinds.iter().enumerate() {
+                let empty = "0".repeat(*lanes);
+                let notes = format!("1{}\n{empty}\n{empty}\n{empty}", "0".repeat(lanes-1));
+                if extension == "sm" {
+                    source.push_str(&format!("#NOTES:{kind}:{kind}:Edit:1:0,0,0,0,0:\n{notes}\n;\n"));
+                } else {
+                    source.push_str(&format!("#NOTEDATA:;#STEPSTYPE:{kind};#DESCRIPTION:{kind};#CHARTNAME:{kind};#DIFFICULTY:Edit;#METER:1;#NOTES:\n{notes}\n;\n"));
+                }
+                catalog.push(json!({"index":index+1,"steps_type":native_kind,"description":kind,
+                    "chart_name":kind,"difficulty":"Difficulty_Edit","meter":1,"is_autogen":false}));
+            }
+            std::fs::write(&simfile, source).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, -0.008).unwrap();
+            assert_eq!(song.charts.len(), 8);
+            for (game, offset, width) in [("dance", 0, 4), ("pump", 4, 5)] {
+                for (style, chart, players, columns) in [
+                    ("single", 0, 1, width), ("versus", 0, 2, width),
+                    ("double", 1, 1, 2*width), ("couple", 2, 2, width), ("routine", 3, 2, 2*width),
+                ] {
+                    let index = offset + chart;
+                    let trace = json!({"game":"dance","style":"single","input":{
+                        "game":game,"style":style,"requested_difficulty":"Edit","requested_chart_index":index+1,
+                        "starting_chart":catalog[index],"chart_catalog":catalog}});
+                    let session = super::native_gameplay_session(&trace).unwrap();
+                    assert_eq!(session.play_style.player_count(), players, "{game}/{style}");
+                    assert_eq!(session.play_style.cols_per_player(), columns, "{game}/{style}");
+                    assert_eq!(session.joined_sides, [true,players == 2]);
+                    assert_eq!(super::native_starting_chart(&song, &session, &trace).unwrap(), index, "{game}/{style}");
+                    let legacy = json!({"game":game,"style":style,"input":{"requested_difficulty":"Edit"}});
+                    assert_eq!(super::native_starting_chart(&song, &session, &legacy).unwrap(), index);
+                }
+            }
         }
     }
 
@@ -4277,17 +4331,22 @@ fn compare_stage_sample(
 
 fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
     use deadsync_gameplay::GameplayInputPlayStyle;
-    if trace["input"]["game"].as_str().or_else(|| trace["game"].as_str())
-        .is_some_and(|game| game != "dance") {
-        return Err("live replay currently requires the dance game; other games remain pending".into());
-    }
     // GameState::SetCurrentStyle can change the final observed style during a
     // gameplay reload. Replay must begin with the captured launch input.
-    let play_style = match trace["input"]["style"].as_str().or_else(|| trace["style"].as_str()) {
-        Some("single") => GameplayInputPlayStyle::Single,
-        Some("versus") => GameplayInputPlayStyle::Versus,
-        Some("double") => GameplayInputPlayStyle::Double,
-        _ => return Err("live replay currently supports single, versus and double; other styles remain pending".into()),
+    let game = trace["input"]["game"].as_str().or_else(|| trace["game"].as_str()).unwrap_or("dance");
+    let style = trace["input"]["style"].as_str().or_else(|| trace["style"].as_str());
+    let play_style = match (game, style) {
+        ("dance", Some("single")) => GameplayInputPlayStyle::Single,
+        ("dance", Some("versus")) => GameplayInputPlayStyle::Versus,
+        ("dance", Some("double")) => GameplayInputPlayStyle::Double,
+        ("dance", Some("couple")) => GameplayInputPlayStyle::Couple,
+        ("dance", Some("routine")) => GameplayInputPlayStyle::Routine,
+        ("pump", Some("single")) => GameplayInputPlayStyle::PumpSingle,
+        ("pump", Some("versus")) => GameplayInputPlayStyle::PumpVersus,
+        ("pump", Some("double")) => GameplayInputPlayStyle::PumpDouble,
+        ("pump", Some("couple")) => GameplayInputPlayStyle::PumpCouple,
+        ("pump", Some("routine")) => GameplayInputPlayStyle::PumpRoutine,
+        _ => return Err(format!("unsupported native replay game/style: {game}/{style:?}")),
     };
     Ok(GameplaySession { play_style, joined_sides: [true,play_style.is_versus()], ..Default::default() })
 }
@@ -4295,7 +4354,17 @@ fn native_gameplay_session(trace: &Value) -> Result<GameplaySession, String> {
 fn native_starting_chart(
     song: &deadsync_chart::SongData, session: &GameplaySession, trace: &Value,
 ) -> Result<usize, String> {
-    let steps_type = if session.play_style.is_double() { "dance-double" } else { "dance-single" };
+    use deadsync_gameplay::GameplayInputPlayStyle as Style;
+    let steps_type = match session.play_style {
+        Style::Single | Style::Versus => "dance-single",
+        Style::Double => "dance-double",
+        Style::Couple => "dance-couple",
+        Style::Routine => "dance-routine",
+        Style::PumpSingle | Style::PumpVersus => "pump-single",
+        Style::PumpDouble => "pump-double",
+        Style::PumpCouple => "pump-couple",
+        Style::PumpRoutine => "pump-routine",
+    };
     let difficulty = trace["input"]["requested_difficulty"].as_str();
     let input = &trace["input"];
     if let Some(selected) = input.get("starting_chart") {
