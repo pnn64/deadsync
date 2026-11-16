@@ -12,9 +12,16 @@
 //!   losing all of it to one press is a poor trade.
 //! * START on a pack opens its detail page. Downloading only ever happens from
 //!   there: selecting a pack in a list must never cost 400 MB.
+//!
+//! The buttons are the ones DeadSync is set up with. A keyboard key bound to
+//! a button is that button here too, and only types inside a text box -- see
+//! `handle_raw_key_event`. On a cabinet with only the three dedicated menu
+//! buttons, LEFT and RIGHT step through whatever the cursor is in, START goes
+//! in, and LEFT+RIGHT together is BACK -- see `press_three_key`.
 
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::{InputEvent, Keymap, VirtualAction};
+use deadsync_profile::PlayerSide;
 
 use super::layout as lo;
 use super::preview;
@@ -22,15 +29,16 @@ use super::rip;
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::screens::Screen;
 use crate::screens::content_browser::state::{
-    FEATURED_COLUMNS, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_INTERVAL, NavHold, PendingTurn,
-    QUERY_MAX_CHARS, ReloadPrompt, State, TABS, Tab, Zone, at_list_end, clamp_cursor,
+    FEATURED_COLUMNS, FEATURED_VISIBLE, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_INTERVAL, NavHold,
+    PendingTurn, QUERY_MAX_CHARS, ReloadPrompt, State, TABS, Tab, Zone, at_list_end, clamp_cursor,
     clamp_doubles, doubles_column, doubles_cursor, doubles_showing, downloads_active,
     featured_goto, featured_page, featured_row_col, focused_pack, grid_landable, installed_at,
     installed_cell, installed_goto, installed_page, installed_showing, list_page, more_loading,
-    rebuild_results, rip_showing, row_count, search_field_showing, total_pages, visible_rows,
-    years_showing,
+    rebuild_results, rip_showing, row_count, search_field_showing, three_key, total_pages,
+    typing_search, visible_rows, years_showing,
 };
 use crate::screens::content_browser::sync_dialog::{self, SyncAction, SyncStep};
+use crate::screens::input::{self as screen_input, ThreeKeyMenuAction};
 use deadsync_chart::song::SyncPref;
 
 /// What a keypress did, so the sound and the effect are chosen once rather
@@ -64,8 +72,11 @@ enum Outcome {
 
 pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
     // While the pack sync review is up it takes every event, releases too:
-    // its three-key navigation reads chords out of them.
+    // its three-key navigation reads chords out of them. The browser's own
+    // chord only keeps count, so a button let go under the review is not
+    // still held down once it closes.
     if sync_dialog::overlay_visible(state) {
+        state.menu_lr_chord.track(event);
         let mut effects = Vec::new();
         let policy = sync_dialog::nav_policy(state);
         crate::screens::pack_sync::handle_input(
@@ -76,7 +87,20 @@ pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
         );
         return ThemeEffect::batch(effects);
     }
+    let three_key = three_key(state);
+    if let Some((side, nav)) =
+        screen_input::three_key_menu_action(&mut state.menu_lr_chord, event, three_key)
+    {
+        return effect_of(press_three_key(state, side, nav));
+    }
     if !event.pressed {
+        // LEFT and RIGHT are the three-key cabinet's UP and DOWN: letting one
+        // go ends what it held, and the chance to undo it.
+        if three_key && let Some(side) = screen_input::menu_lr_side(event.action) {
+            state.three_key_undo[side_index(side)] = None;
+            state.nav_hold = None;
+            rip::let_go(state);
+        }
         if let Some(delta) = nav_delta(event.action)
             && state.nav_hold.is_some_and(|hold| hold.delta == delta)
         {
@@ -87,8 +111,14 @@ pub fn handle_input(state: &mut State, event: &InputEvent) -> ThemeEffect {
         }
         return ThemeEffect::None;
     }
+    // Any other button is the reader moving on from a LEFT or RIGHT.
+    state.three_key_undo = [None; 2];
+    effect_of(press(state, event.action))
+}
 
-    match press(state, event.action) {
+/// What a keypress did, as the sound it makes and the effect it asks for.
+fn effect_of(outcome: Outcome) -> ThemeEffect {
+    match outcome {
         Outcome::None => ThemeEffect::None,
         Outcome::Invalid => crate::effects::sfx("assets/sounds/common_invalid.ogg"),
         Outcome::Moved | Outcome::Closed => crate::effects::sfx("assets/sounds/change.ogg"),
@@ -157,6 +187,287 @@ fn press(state: &mut State, action: VirtualAction) -> Outcome {
         Zone::Installed => press_installed(state, action),
         Zone::List => press_list(state, action),
         Zone::Rip => press_rip(state, action),
+    }
+}
+
+// --- three-key navigation -----------------------------------------------------
+
+const fn side_index(side: PlayerSide) -> usize {
+    match side {
+        PlayerSide::P1 => 0,
+        PlayerSide::P2 => 1,
+    }
+}
+
+/// The three buttons, as the browser's own.
+///
+/// LEFT and RIGHT step through whatever the cursor is in -- the strip, a
+/// list, a grid in reading order, a dialog's choices -- and at the end of a
+/// strip carry on down into what is under it. START is START. LEFT+RIGHT is
+/// BACK, a rung at a time as ever; the first of the two had already stepped
+/// by the time the second made it a chord, so that step is put back first.
+fn press_three_key(state: &mut State, side: PlayerSide, nav: ThreeKeyMenuAction) -> Outcome {
+    let side_ix = side_index(side);
+    let (start, back) = match side {
+        PlayerSide::P1 => (VirtualAction::p1_start, VirtualAction::p1_back),
+        PlayerSide::P2 => (VirtualAction::p2_start, VirtualAction::p2_back),
+    };
+    match nav {
+        ThreeKeyMenuAction::Prev | ThreeKeyMenuAction::Next => {
+            let before = NavMark::take(state);
+            let outcome = three_key_step(state, nav == ThreeKeyMenuAction::Next);
+            state.three_key_undo[side_ix] = (NavMark::take(state) != before).then_some(before);
+            outcome
+        }
+        ThreeKeyMenuAction::Confirm => {
+            state.three_key_undo = [None; 2];
+            // A meter has thirty values and no keyboard to type one with, so
+            // START on it takes LEFT and RIGHT over for the value instead.
+            if state.zone == Zone::Rip
+                && state.reload_prompt.is_none()
+                && let Some(said) = rip::adjust(&mut state.rip)
+            {
+                return heard(said);
+            }
+            press(state, start)
+        }
+        ThreeKeyMenuAction::Cancel => {
+            if let Some(mark) = state.three_key_undo[side_ix].take() {
+                mark.restore(state);
+            }
+            state.nav_hold = None;
+            rip::let_go(state);
+            press(state, back)
+        }
+    }
+}
+
+/// One step of LEFT or RIGHT on a three-key cabinet, in whatever has the
+/// cursor. The same press as the pad's UP/DOWN or LEFT/RIGHT wherever one of
+/// those already walks the thing in order.
+fn three_key_step(state: &mut State, forward: bool) -> Outcome {
+    let (vertical, horizontal) = if forward {
+        (VirtualAction::p1_menu_down, VirtualAction::p1_menu_right)
+    } else {
+        (VirtualAction::p1_menu_up, VirtualAction::p1_menu_left)
+    };
+    if state.reload_prompt.is_some() {
+        return press(state, horizontal);
+    }
+    if state.rip.prompt.is_some() {
+        return Outcome::None;
+    }
+    match state.zone {
+        Zone::Detail if state.song_menu.is_some() => press(state, horizontal),
+        Zone::Detail | Zone::List => press(state, vertical),
+        Zone::Tabs => press(state, horizontal),
+        Zone::Featured => featured_step(state, forward),
+        // A strip carries on down off its end, and up off its start, so the
+        // rows under it are not out of reach.
+        Zone::Years | Zone::DoublesPick => match press(state, horizontal) {
+            Outcome::Invalid => press(state, vertical),
+            outcome => outcome,
+        },
+        // The foot of the left column carries on into the right one.
+        Zone::DoublesRows => match press(state, vertical) {
+            Outcome::Invalid if forward => press(state, horizontal),
+            outcome => outcome,
+        },
+        Zone::Installed if state.sync_dialog.is_some() => sync_dialog_step(state, forward),
+        Zone::Installed if state.removing.is_some() => Outcome::None,
+        Zone::Installed => installed_step(state, forward),
+        Zone::Rip => heard(rip::three_key_step(state, forward)),
+    }
+}
+
+/// The featured grid in reading order: along the top row, then the one under
+/// it, then the next page. Before the first card is the strip; after the last
+/// is the list, as UP and DOWN leave it.
+fn featured_step(state: &mut State, forward: bool) -> Outcome {
+    let here = state.featured_index;
+    let next = if forward {
+        here + 1
+    } else if here == 0 {
+        state.zone = Zone::Tabs;
+        return Outcome::Moved;
+    } else {
+        here - 1
+    };
+    if next >= state.featured.len() {
+        state.zone = Zone::List;
+        return Outcome::Moved;
+    }
+    let page = next / FEATURED_VISIBLE;
+    let slot = next % FEATURED_VISIBLE;
+    if featured_goto(
+        state,
+        page as isize,
+        (slot / FEATURED_COLUMNS) as isize,
+        (slot % FEATURED_COLUMNS) as isize,
+    ) {
+        Outcome::Moved
+    } else {
+        Outcome::Invalid
+    }
+}
+
+/// The library in reading order: down a column, then the next, then the next
+/// page. Before the first pack is the strip.
+fn installed_step(state: &mut State, forward: bool) -> Outcome {
+    if forward {
+        if state.installed_cursor + 1 >= state.installed.len() {
+            return Outcome::Invalid;
+        }
+        state.installed_cursor += 1;
+    } else if state.installed_cursor == 0 {
+        state.zone = Zone::Tabs;
+    } else {
+        state.installed_cursor -= 1;
+    }
+    Outcome::Moved
+}
+
+/// The sync dialog's choices as one ring, with the Pack.ini row's two values
+/// as a stop each: there is no LEFT/RIGHT left over to pick one with.
+fn sync_dialog_step(state: &mut State, forward: bool) -> Outcome {
+    let offered = sync_dialog::actions(state);
+    let Some(dialog) = state.sync_dialog.as_mut() else {
+        return Outcome::None;
+    };
+    if dialog.step != SyncStep::Choose {
+        return Outcome::None;
+    }
+    let width = |action: SyncAction| if action == SyncAction::PackIni { 2 } else { 1 };
+    let stops: usize = offered.iter().map(|action| width(*action)).sum();
+    if stops == 0 {
+        return Outcome::Invalid;
+    }
+    let mut here = 0;
+    for &action in offered {
+        if action == dialog.action {
+            if action == SyncAction::PackIni && dialog.record == SyncPref::Null {
+                here += 1;
+            }
+            break;
+        }
+        here += width(action);
+    }
+    let delta = if forward { 1 } else { -1 };
+    let want = (here as isize + delta).rem_euclid(stops as isize) as usize;
+    let mut first = 0;
+    for &action in offered {
+        if want < first + width(action) {
+            dialog.action = action;
+            if action == SyncAction::PackIni {
+                dialog.record = if want == first {
+                    SyncPref::Itg
+                } else {
+                    SyncPref::Null
+                };
+            }
+            break;
+        }
+        first += width(action);
+    }
+    Outcome::Moved
+}
+
+/// Where the cursor is, everything about it a LEFT or RIGHT can change, so
+/// the chord can put back the step its first button took.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct NavMark {
+    tab_index: usize,
+    year_slot: usize,
+    zone: Zone,
+    cursor: usize,
+    featured_index: usize,
+    featured_window: usize,
+    doubles_column: usize,
+    doubles_window: [usize; 2],
+    doubles_row: usize,
+    installed_cursor: usize,
+    song_pick: usize,
+    song_window: usize,
+    detail_on_button: bool,
+    song_menu_choice: Option<usize>,
+    chart: Option<usize>,
+    reload_choice: Option<usize>,
+    sync_choice: Option<(SyncAction, SyncPref)>,
+    rip: rip::RipMark,
+}
+
+impl NavMark {
+    fn take(state: &State) -> Self {
+        Self {
+            tab_index: state.tab_index,
+            year_slot: state.year_slot,
+            zone: state.zone,
+            cursor: state.cursor,
+            featured_index: state.featured_index,
+            featured_window: state.featured_window,
+            doubles_column: state.doubles_column,
+            doubles_window: state.doubles_window,
+            doubles_row: state.doubles_row,
+            installed_cursor: state.installed_cursor,
+            song_pick: state.song_pick,
+            song_window: state.song_window,
+            detail_on_button: state.detail_on_button,
+            song_menu_choice: state.song_menu.map(|menu| menu.choice),
+            chart: state.preview.as_ref().and_then(|preview| preview.chart),
+            reload_choice: state.reload_prompt.as_ref().map(|prompt| prompt.choice),
+            sync_choice: state
+                .sync_dialog
+                .as_ref()
+                .map(|dialog| (dialog.action, dialog.record)),
+            rip: rip::RipMark::take(&state.rip),
+        }
+    }
+
+    /// Back to where the mark was taken. A tab or a year is a different list,
+    /// so changing back rebuilds it before the cursor goes back onto it.
+    fn restore(self, state: &mut State) {
+        if state.tab_index != self.tab_index || state.year_slot != self.year_slot {
+            state.tab_index = self.tab_index;
+            state.year_slot = self.year_slot;
+            rebuild_results(state, None);
+        }
+        state.zone = self.zone;
+        state.cursor = self.cursor;
+        clamp_cursor(state);
+        if self.featured_index < state.featured.len() {
+            state.featured_index = self.featured_index;
+            state.featured_window = self.featured_window;
+        }
+        state.doubles_column = self.doubles_column;
+        state.doubles_window = self.doubles_window;
+        state.doubles_row = self.doubles_row;
+        clamp_doubles(state);
+        state.installed_cursor = self
+            .installed_cursor
+            .min(state.installed.len().saturating_sub(1));
+        state.song_pick = self.song_pick;
+        state.song_window = self.song_window;
+        state.detail_on_button = self.detail_on_button;
+        if let (Some(menu), Some(choice)) = (state.song_menu.as_mut(), self.song_menu_choice) {
+            menu.choice = choice;
+        }
+        if let (Some(now), Some(then)) = (
+            state.preview.as_ref().and_then(|preview| preview.chart),
+            self.chart,
+        ) && now != then
+        {
+            preview::step_chart(state, then as isize - now as isize);
+        }
+        if let (Some(prompt), Some(choice)) = (state.reload_prompt.as_mut(), self.reload_choice) {
+            prompt.choice = choice;
+        }
+        if let (Some(dialog), Some((action, record))) =
+            (state.sync_dialog.as_mut(), self.sync_choice)
+        {
+            dialog.action = action;
+            dialog.record = record;
+        }
+        self.rip.restore(&mut state.rip);
     }
 }
 
@@ -1191,115 +1502,397 @@ pub(super) fn repeat_nav_hold(state: &mut State, dt: f32) {
     }
 }
 
-/// Keyboard input.
+/// What the keymap has a keyboard key do, as far as the browser cares.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct Binding {
+    /// Bound to a player's button: anything but the two system holds, which
+    /// work everywhere and stop nothing else.
+    pad: bool,
+    /// Bound to a button that stays a button even in a text box: START,
+    /// BACK, a dedicated menu direction, or a coin or service button. Without
+    /// the first of these a cabinet whose buttons are all keys could type its
+    /// way into the box and not out of it; a coin is never a character.
+    keeps: bool,
+}
+
+impl Binding {
+    pub(super) fn of(keymap: &Keymap, code: KeyCode) -> Self {
+        Self {
+            pad: keymap.keycode_has_action(code, |action| !action.is_system()),
+            keeps: keymap.keycode_has_action(code, button_in_a_box),
+        }
+    }
+}
+
+const fn button_in_a_box(action: VirtualAction) -> bool {
+    matches!(
+        action,
+        VirtualAction::p1_start
+            | VirtualAction::p2_start
+            | VirtualAction::p1_back
+            | VirtualAction::p2_back
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p1_menu_left
+            | VirtualAction::p1_menu_right
+            | VirtualAction::p2_menu_up
+            | VirtualAction::p2_menu_down
+            | VirtualAction::p2_menu_left
+            | VirtualAction::p2_menu_right
+            | VirtualAction::p1_coin
+            | VirtualAction::p2_coin
+            | VirtualAction::p1_operator
+            | VirtualAction::p2_operator
+    )
+}
+
+/// A key's press, paired with the character it typed.
 ///
-/// Typing searches, wherever the reader is. On the SEARCH tab the characters
-/// go straight into the box that is already on screen; anywhere else the first
-/// character carries them to that tab and lands there too, so a keystroke is
-/// never swallowed. While the box is live the keys that type are its own, so
-/// a WASD-style pad mapping cannot scroll the list, or switch tabs and take
-/// the search with it, out from under someone mid-word.
+/// The two reach the browser separately and in either order: on Windows a
+/// stalled frame hands over a quick tap's press and release before its
+/// character. So each press is remembered until its character has been
+/// judged by what the press did -- a press that went to the keymap was a
+/// button, and its character is not also typing, wherever the cursor has got
+/// to since.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct KeyPress {
+    code: KeyCode,
+    /// Down right now.
+    held: bool,
+    /// The press went to the keymap, as the button the key is bound to.
+    acted: bool,
+    /// 1 while the press's character is still to come, -1 when the character
+    /// came ahead of its press, 0 once the two are paired.
+    owed: i8,
+    /// Seconds spent waiting for the other half, once the key is up. A key
+    /// that types nothing -- an arrow, or a letter with Alt held -- never
+    /// sends one, and what never comes is not waited for long.
+    waited: f32,
+}
+
+/// How long a press waits for its character, or a character for its press,
+/// once the key is up. The two are a few milliseconds apart even across a
+/// stalled frame.
+const KEY_PAIRING_WAIT: f32 = 0.5;
+
+/// Forget the halves that have waited too long. Called from `update`.
+pub(super) fn age_key_presses(state: &mut State, dt: f32) {
+    state.key_presses.retain_mut(|press| {
+        if press.held || press.owed == 0 {
+            return press.held;
+        }
+        press.waited += dt;
+        press.waited < KEY_PAIRING_WAIT
+    });
+}
+
+fn key_press(state: &State, code: KeyCode) -> Option<usize> {
+    state
+        .key_presses
+        .iter()
+        .position(|press| press.code == code)
+}
+
+/// A keyboard key going down or coming up. True when the browser took it, so
+/// the keymap does not also make it a button.
 ///
-/// The Rip Packs tab is the exception: nothing there is a search, so typing
-/// on it goes nowhere -- except into its own prompt, while one is open.
+/// A key bound to a button is that button, as it is everywhere else in
+/// DeadSync. Only a text box -- the search box, with the cursor in its
+/// results, or the rip tab's prompt -- takes the keys that type, so W/A/S/D or
+/// the default Q/E/Z/C spell rather than scroll mid-word. Even there START,
+/// BACK and the dedicated menu buttons stay buttons, and the box keeps
+/// Backspace while it has something to take out.
+///
+/// Enter, Escape, Backspace, PageUp and PageDown do their own thing only when
+/// the keymap has not given them a button to be.
 pub fn handle_raw_key_event(
     state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
+    key: &RawKeyboardEvent,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let binding = deadsync_input::with_keymap(|keymap| Binding::of(keymap, key.code));
+    raw_key(state, key, binding, effects)
+}
+
+/// Characters typed on the keyboard, the key that typed them where the
+/// platform says, and whether they are the key repeating.
+///
+/// Typing searches, from anywhere but a pack's page and the dialogs: off the
+/// SEARCH tab the first character carries the reader to it and lands in the
+/// box. A key bound to a button never starts that -- it was that button --
+/// and the press that carried the reader into a box is not also typed into it.
+/// The rip tab is the exception: nothing there is a search, so typing goes
+/// only into its prompt.
+pub fn handle_text(
+    state: &mut State,
+    text: &str,
+    typed_by: Option<KeyCode>,
+    repeat: bool,
+    effects: &mut Vec<ThemeEffect>,
+) {
+    let typed_by = typed_by.map(|code| {
+        (
+            code,
+            deadsync_input::with_keymap(|keymap| Binding::of(keymap, code)),
+        )
+    });
+    text_typed(state, text, typed_by, repeat, effects);
+}
+
+/// `handle_raw_key_event`, with the key's binding already looked up.
+pub(super) fn raw_key(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    binding: Binding,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let at = key_press(state, key.code);
+    if !key.pressed {
+        if let Some(at) = at {
+            let press = &mut state.key_presses[at];
+            press.held = false;
+            // A character still to come is this press's, and is judged by it.
+            if press.owed <= 0 {
+                state.key_presses.swap_remove(at);
+            }
+        }
+        return false;
+    }
+    // A key held down is what its first press made it: a button stays the
+    // keymap's, even once the box it moved the cursor into would type it.
+    // Some platforms report a held key again as a fresh press; that is the
+    // key repeating too.
+    let held = at
+        .map(|at| state.key_presses[at])
+        .filter(|press| press.held);
+    if key.repeat || held.is_some() {
+        if held.is_some_and(|press| press.acted) {
+            return false;
+        }
+        let taken = take_key(state, key, binding, effects);
+        if !taken
+            && binding.pad
+            && let Some(at) = key_press(state, key.code)
+        {
+            state.key_presses[at].acted = true;
+        }
+        return taken;
+    }
+    let text_came_first = at.is_some_and(|at| state.key_presses[at].owed < 0);
+    let taken = take_key(state, key, binding, effects);
+    let press = KeyPress {
+        code: key.code,
+        held: true,
+        acted: !taken && binding.pad,
+        owed: if text_came_first { 0 } else { 1 },
+        waited: 0.0,
+    };
+    match key_press(state, key.code) {
+        Some(at) => state.key_presses[at] = press,
+        None => state.key_presses.push(press),
+    }
+    taken
+}
+
+/// What the key does here, if anything of its own.
+fn take_key(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    binding: Binding,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
     if rip_showing(state) && state.reload_prompt.is_none() {
-        return rip_raw_key_event(state, key, text, effects);
+        return state.rip.prompt.is_some() && prompt_key(state, key, binding, effects);
     }
-    if let Some(key) = key {
-        if !key.pressed {
-            return false;
-        }
-        // A pack's page is read with the pad's actions, not typed into: Escape
-        // there is BACK, out to the results it was opened from -- not a key
-        // that clears the search those results came from. The reload question
-        // is answered the same way.
-        if state.zone == Zone::Detail
-            || state.reload_prompt.is_some()
-            || state.sync_dialog.is_some()
-            || sync_dialog::overlay_visible(state)
-        {
-            return false;
-        }
-        if search_field_showing(state) {
-            match key.code {
-                KeyCode::Backspace => {
-                    if edit_query(state, |query| {
-                        query.pop();
-                    }) {
-                        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
-                    }
-                    return true;
-                }
-                // The box is already live, so there is nothing to confirm --
-                // Enter just puts the reader on the answer. Once they are on
-                // it, Enter is START: it opens the pack under the cursor.
-                KeyCode::Enter | KeyCode::NumpadEnter => {
-                    if state.zone == Zone::List {
-                        return false;
-                    }
-                    state.zone = Zone::List;
-                    state.cursor = 0;
-                    return true;
-                }
-                // Escape leaves the box as BACK does, a rung at a time: off the
-                // results up to the tabs with the search kept, and from the
-                // tabs out of the browser -- never a key the box keeps for
-                // itself, which left a reader whose way out is Escape stuck.
-                KeyCode::Escape => {
-                    if state.zone == Zone::Tabs {
-                        return false;
-                    }
-                    state.zone = Zone::Tabs;
-                    state.nav_hold = None;
-                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
-                    return true;
-                }
-                // The character comes on its own, as text; the key is not
-                // also a pad button. Bound to one -- W/A/S/D, or the default
-                // Q/E/Z/C -- it walked the cursor off the results while a word
-                // was typed, and a Left or Right on the tabs then left SEARCH
-                // and cleared it.
-                code if types_text(code) => return true,
-                _ => {}
-            }
-        }
-        return match key.code {
-            KeyCode::PageUp | KeyCode::PageDown => {
-                state.nav_hold = None;
-                let direction = if key.code == KeyCode::PageUp { -1 } else { 1 };
-                if page(state, direction) == Outcome::Moved {
-                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
-                }
-                true
-            }
-            // Escape clears a committed search before it leaves, so a query
-            // costs one key to undo rather than a trip out through the menu.
-            KeyCode::Escape => {
-                if state.query.is_empty() {
-                    false
-                } else {
-                    state.query.clear();
-                    rebuild_results(state, None);
-                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
-                    true
-                }
-            }
-            _ => false,
-        };
-    }
-
-    let Some(text) = text else {
+    // A pack's page is read with the pad's buttons, not typed into, and so
+    // are the dialogs.
+    if state.zone == Zone::Detail
+        || state.reload_prompt.is_some()
+        || state.sync_dialog.is_some()
+        || sync_dialog::overlay_visible(state)
+    {
         return false;
+    }
+    if typing_search(state) {
+        if search_box_key(state, key, binding, effects) {
+            return true;
+        }
+    } else if search_field_showing(state) && !binding.pad {
+        match key.code {
+            // On the strip over the box there is nothing to confirm: Enter
+            // just puts the reader on the answer, from its top.
+            KeyCode::Enter | KeyCode::NumpadEnter if !key.repeat => {
+                state.zone = Zone::List;
+                state.cursor = 0;
+                state.caret_elapsed = 0.0;
+                return true;
+            }
+            KeyCode::Backspace => {
+                if edit_query(state, |query| {
+                    query.pop();
+                }) {
+                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+                }
+                return true;
+            }
+            _ => {}
+        }
+    }
+    // The list's own page keys, where the list is the thing the cursor is in.
+    if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown)
+        && !binding.pad
+        && state.zone == Zone::List
+    {
+        state.nav_hold = None;
+        let direction = if key.code == KeyCode::PageUp { -1 } else { 1 };
+        if page(state, direction) == Outcome::Moved {
+            effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+        }
+        return true;
+    }
+    false
+}
+
+/// A key while the search box is typing.
+fn search_box_key(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    binding: Binding,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    match key.code {
+        // An empty box has nothing to take out, so the key is its button
+        // again -- BACK, for someone who put BACK on it.
+        KeyCode::Backspace => {
+            if state.query.is_empty() {
+                return false;
+            }
+            if edit_query(state, |query| {
+                query.pop();
+            }) {
+                effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+            }
+            true
+        }
+        // Escape leaves the box as BACK does, up to the strip with the
+        // search kept -- and is BACK, where the keymap says so.
+        KeyCode::Escape if !binding.pad => {
+            state.zone = Zone::Tabs;
+            state.nav_hold = None;
+            effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+            true
+        }
+        // The character comes on its own, as text; the key is not also a
+        // pad button. Bound to one -- W/A/S/D, or the default Q/E/Z/C -- it
+        // walked the cursor off the results while a word was typed.
+        code => box_takes(code, binding, false),
+    }
+}
+
+/// A key while the rip tab's prompt is open: typed characters go in,
+/// Backspace takes one out, and Enter and Escape take the answer or leave it
+/// unless they are buttons of their own -- START and BACK, by default, which
+/// do the same.
+fn prompt_key(
+    state: &mut State,
+    key: &RawKeyboardEvent,
+    binding: Binding,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    let numeric = rip::prompt_numeric(&state.rip);
+    let heard = match key.code {
+        // Not on a repeat: the Enter that opened the prompt, still held, must
+        // not close it again.
+        KeyCode::Enter | KeyCode::NumpadEnter if !binding.pad => {
+            if key.repeat {
+                rip::Heard::Nothing
+            } else {
+                rip::accept_prompt(&mut state.rip);
+                rip::Heard::Start
+            }
+        }
+        KeyCode::Escape if !binding.pad => {
+            if key.repeat {
+                rip::Heard::Nothing
+            } else {
+                rip::cancel_prompt(&mut state.rip);
+                rip::Heard::Change
+            }
+        }
+        KeyCode::Backspace => {
+            if state
+                .rip
+                .prompt
+                .as_ref()
+                .is_none_or(|prompt| prompt.text.is_empty())
+            {
+                return false;
+            }
+            rip::prompt_backspace(&mut state.rip);
+            rip::Heard::Change
+        }
+        code if box_takes(code, binding, numeric) => rip::Heard::Nothing,
+        _ => return false,
     };
+    if let Some(path) = heard.sfx() {
+        effects.push(crate::effects::sfx(path));
+    }
+    true
+}
+
+/// Whether a text box takes a key as it goes down, leaving its character to
+/// type: the keys that type, unless they are a button that stays one. A
+/// box that wants a number takes the numpad's digits too, whoever plays on
+/// them -- the second player's BACK is a 0 there.
+fn box_takes(code: KeyCode, binding: Binding, numeric: bool) -> bool {
+    (numeric && numpad_digit(code)) || (types_text(code) && !binding.keeps)
+}
+
+const fn numpad_digit(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::Numpad0
+            | KeyCode::Numpad1
+            | KeyCode::Numpad2
+            | KeyCode::Numpad3
+            | KeyCode::Numpad4
+            | KeyCode::Numpad5
+            | KeyCode::Numpad6
+            | KeyCode::Numpad7
+            | KeyCode::Numpad8
+            | KeyCode::Numpad9
+    )
+}
+
+/// `handle_text`, with the typing key's binding already looked up. Whether
+/// the text went anywhere.
+pub(super) fn text_typed(
+    state: &mut State,
+    text: &str,
+    typed_by: Option<(KeyCode, Binding)>,
+    repeat: bool,
+    effects: &mut Vec<ThemeEffect>,
+) -> bool {
+    // Pair the character with its press first, whatever it is: Enter's "\r"
+    // is still Enter's.
+    if let Some((code, _)) = typed_by
+        && pressed_as_a_button(state, code, repeat)
+    {
+        return false;
+    }
     let mut printable = text.chars().filter(|ch| !ch.is_control()).peekable();
     if printable.peek().is_none() {
         return false;
+    }
+    if rip_showing(state) && state.reload_prompt.is_none() {
+        let numeric = rip::prompt_numeric(&state.rip);
+        if state.rip.prompt.is_none() || !types_into_box(typed_by, numeric) {
+            return false;
+        }
+        if rip::prompt_type(&mut state.rip, text) {
+            effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+        }
+        return true;
     }
     // Reading a pack is not searching for one.
     if state.zone == Zone::Detail
@@ -1310,7 +1903,15 @@ pub fn handle_raw_key_event(
     {
         return false;
     }
-    if !search_field_showing(state) {
+    if typing_search(state) {
+        if !types_into_box(typed_by, false) {
+            return false;
+        }
+    } else {
+        // A button never starts a search; a key that is nothing else does.
+        if typed_by.is_some_and(|(_, binding)| binding.pad) {
+            return false;
+        }
         focus_search(state);
     }
     if edit_query(state, |query| {
@@ -1320,6 +1921,60 @@ pub fn handle_raw_key_event(
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
     true
+}
+
+/// Pair a character with the press of the key that typed it. True when that
+/// press went to the keymap, so the character was a button's and is not
+/// typing. A character ahead of its press is judged where the cursor is, and
+/// the press, when it comes, knows its character has been.
+fn pressed_as_a_button(state: &mut State, code: KeyCode, repeat: bool) -> bool {
+    let at = key_press(state, code);
+    if repeat {
+        return at.is_some_and(|at| {
+            let press = state.key_presses[at];
+            press.held && press.acted
+        });
+    }
+    match at {
+        Some(at) if state.key_presses[at].owed > 0 => {
+            let press = &mut state.key_presses[at];
+            press.owed = 0;
+            let acted = press.acted;
+            if !press.held {
+                state.key_presses.swap_remove(at);
+            }
+            acted
+        }
+        // Its own character already in while it is still down: this is the
+        // key repeating, whatever the platform says.
+        Some(at) if state.key_presses[at].held && state.key_presses[at].owed == 0 => {
+            state.key_presses[at].acted
+        }
+        Some(at) => {
+            let press = &mut state.key_presses[at];
+            press.owed = -1;
+            press.waited = 0.0;
+            false
+        }
+        None => {
+            state.key_presses.push(KeyPress {
+                code,
+                held: false,
+                acted: false,
+                owed: -1,
+                waited: 0.0,
+            });
+            false
+        }
+    }
+}
+
+/// Whether a text box takes what this key typed: what it took as the key
+/// went down -- see `box_takes` -- and what an unbound key outside the main
+/// block types, the numpad when nobody plays on it. Where the platform does
+/// not say which key it was, the text is taken, as it always was.
+fn types_into_box(typed_by: Option<(KeyCode, Binding)>, numeric: bool) -> bool {
+    typed_by.is_none_or(|(code, binding)| box_takes(code, binding, numeric) || !binding.pad)
 }
 
 /// Whether a key types a character: the letters, digits, space and
@@ -1382,57 +2037,10 @@ const fn types_text(code: KeyCode) -> bool {
     )
 }
 
-/// The keyboard on the rip tab. With its prompt open every key is the
-/// prompt's -- typed characters go in, Backspace takes one out, Enter takes
-/// the answer and Escape leaves it -- so a letter bound to a pad button does
-/// not also move the cursor. Otherwise the keys are the pad's, and typing
-/// goes nowhere.
-fn rip_raw_key_event(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
-    effects: &mut Vec<ThemeEffect>,
-) -> bool {
-    if state.rip.prompt.is_none() {
-        return false;
-    }
-    if let Some(key) = key {
-        if !key.pressed {
-            return false;
-        }
-        let heard = match key.code {
-            // Not on a repeat: the Enter that opened the prompt, still held,
-            // must not close it again.
-            KeyCode::Enter | KeyCode::NumpadEnter if !key.repeat => {
-                rip::accept_prompt(&mut state.rip);
-                rip::Heard::Start
-            }
-            KeyCode::Escape if !key.repeat => {
-                rip::cancel_prompt(&mut state.rip);
-                rip::Heard::Change
-            }
-            KeyCode::Backspace if rip::prompt_backspace(&mut state.rip) => rip::Heard::Change,
-            _ => rip::Heard::Nothing,
-        };
-        if let Some(path) = heard.sfx() {
-            effects.push(crate::effects::sfx(path));
-        }
-        return true;
-    }
-    let Some(text) = text else {
-        return false;
-    };
-    if rip::prompt_type(&mut state.rip, text) {
-        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
-    }
-    true
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::screens::content_browser::state;
-    use crate::screens::content_browser::state::FEATURED_VISIBLE;
     use deadsync_online::pack_page::{PackPage, PagePhase, PageSnapshot, SongRow};
     use deadsync_online::stepmaniaonline::{CatalogPhase, PackInfo, Snapshot};
     use preview::SongRequest;
@@ -1727,22 +2335,19 @@ mod tests {
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
         state.query = "rosewood".to_owned();
         state.zone = Zone::Tabs;
-        let mut effects = Vec::new();
-        let enter = raw_key(KeyCode::Enter);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&enter),
-            None,
-            &mut effects
-        ));
+        assert!(key(&mut state, KeyCode::Enter));
         assert_eq!(state.zone, Zone::List, "on the results");
 
         state.cursor = 2;
-        assert!(
-            !handle_raw_key_event(&mut state, Some(&enter), None, &mut effects),
-            "left for START"
-        );
+        assert!(!key(&mut state, KeyCode::Enter), "left for START");
         assert_eq!(state.cursor, 2, "and not thrown back to the top");
+
+        // Enter bound to START, as it is out of the box, is START: down into
+        // the results the same way, and open from them.
+        let mut keyboard = Keyboard::new(&[(START, KeyCode::Enter)]);
+        state.zone = Zone::Tabs;
+        assert!(!keyboard.down(&mut state, KeyCode::Enter));
+        assert_eq!(state.zone, Zone::List, "START went down into them");
     }
 
     /// A pack opened from a search is read, not typed into: Escape and
@@ -1753,10 +2358,9 @@ mod tests {
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
         state.query = "rosewood".to_owned();
         state.zone = Zone::Detail;
-        let mut effects = Vec::new();
         for code in [KeyCode::Escape, KeyCode::Backspace, KeyCode::PageDown] {
             assert!(
-                !handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects),
+                !key(&mut state, code),
                 "{code:?} is the page's, not the search box's"
             );
         }
@@ -1825,7 +2429,7 @@ mod tests {
     const START: VirtualAction = VirtualAction::p1_start;
     const SELECT: VirtualAction = VirtualAction::p1_select;
 
-    fn raw_key(code: KeyCode) -> RawKeyboardEvent {
+    fn key_event(code: KeyCode) -> RawKeyboardEvent {
         RawKeyboardEvent {
             code,
             pressed: true,
@@ -2352,7 +2956,8 @@ mod tests {
     }
 
     /// The box is the tab. There is no prompt to open and nothing to press
-    /// first: a reader who arrives on SEARCH and types is already searching.
+    /// first: a reader who arrives on SEARCH and types is already searching,
+    /// with the cursor down in the results.
     #[test]
     fn the_search_box_is_live_the_moment_the_tab_is_open() {
         let mut state = browsing(20);
@@ -2360,39 +2965,34 @@ mod tests {
         state.zone = Zone::Tabs;
         assert!(search_field_showing(&state));
 
-        let mut effects = Vec::new();
-        assert!(handle_raw_key_event(
-            &mut state,
-            None,
-            Some("ky"),
-            &mut effects
-        ));
+        assert!(typed(&mut state, "ky"));
         assert_eq!(state.query, "ky", "straight into the box");
+        assert_eq!(state.zone, Zone::List, "with the cursor in its results");
 
         // backspace edits it
-        let key = raw_key(KeyCode::Backspace);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&key),
-            None,
-            &mut effects
-        ));
+        assert!(key(&mut state, KeyCode::Backspace));
         assert_eq!(state.query, "k");
     }
 
-    /// A key that types is the search box's alone while the box is live. With
-    /// a pad mapped to W/A/S/D, "rosewood" walked the cursor up onto the tabs
-    /// on its W, and its D then left SEARCH and threw the word away -- the box
-    /// ended up holding "d". Off the SEARCH tab the same keys are the pad's,
-    /// and the arrows always are.
+    /// A key that types is the search box's while the box is live. With a
+    /// pad mapped to W/A/S/D, "rosewood" walked the cursor up onto the tabs on
+    /// its W, and its D then left SEARCH and threw the word away -- the box
+    /// ended up holding "d". Off the box the same keys are the pad's, and the
+    /// arrows always are.
     #[test]
     fn the_keys_that_type_are_the_search_boxs_alone() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p1_up, KeyCode::KeyW),
+            (VirtualAction::p1_left, KeyCode::KeyA),
+            (VirtualAction::p1_down, KeyCode::KeyS),
+            (VirtualAction::p1_right, KeyCode::KeyD),
+            (VirtualAction::p1_up, KeyCode::ArrowUp),
+            (VirtualAction::p1_select, KeyCode::Slash),
+            (VirtualAction::p1_center, KeyCode::Space),
+        ]);
         let mut state = browsing(3);
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
         state.zone = Zone::List;
-        let mut effects = Vec::new();
-        // each key, as the shell sends it, then the pad button it is bound to
-        // if the browser left the key alone, then its text
         for ch in "rosewood".chars() {
             let code = match ch {
                 'w' => KeyCode::KeyW,
@@ -2401,49 +3001,28 @@ mod tests {
                 'd' => KeyCode::KeyD,
                 _ => KeyCode::KeyR,
             };
-            if !handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects) {
-                let bound = match ch {
-                    'w' => Some(UP),
-                    'a' => Some(LEFT),
-                    's' => Some(DOWN),
-                    'd' => Some(RIGHT),
-                    _ => None,
-                };
-                if let Some(action) = bound {
-                    press(&mut state, action);
-                }
-            }
-            let text = ch.to_string();
-            assert!(handle_raw_key_event(
-                &mut state,
-                None,
-                Some(&text),
-                &mut effects
-            ));
+            keyboard.stroke(&mut state, code, &ch.to_string());
         }
         assert_eq!(state.query, "rosewood", "every letter kept");
-        assert!(search_field_showing(&state), "still on SEARCH");
+        assert!(typing_search(&state), "still in the box");
 
-        for code in [KeyCode::Space, KeyCode::Slash, KeyCode::Digit7] {
-            assert!(
-                handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects),
-                "{code:?} types"
-            );
+        for (code, text) in [
+            (KeyCode::Space, " "),
+            (KeyCode::Slash, "/"),
+            (KeyCode::Digit7, "7"),
+        ] {
+            assert!(keyboard.down(&mut state, code), "{code:?} types");
+            keyboard.text(&mut state, code, text);
+            keyboard.up(&mut state, code);
         }
+        assert_eq!(state.query, "rosewood /7");
         for code in [KeyCode::ArrowUp, KeyCode::ArrowRight, KeyCode::Numpad8] {
-            assert!(
-                !handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects),
-                "{code:?} is the pad's"
-            );
+            assert!(!keyboard.down(&mut state, code), "{code:?} is the pad's");
+            keyboard.up(&mut state, code);
         }
         state.tab_index = TABS.iter().position(|t| *t == Tab::Pad).unwrap();
         assert!(
-            !handle_raw_key_event(
-                &mut state,
-                Some(&raw_key(KeyCode::KeyD)),
-                None,
-                &mut effects
-            ),
+            !keyboard.down(&mut state, KeyCode::KeyD),
             "off SEARCH a letter is the pad's too"
         );
     }
@@ -2457,23 +3036,21 @@ mod tests {
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
         state.query = "rosewood".to_owned();
         state.zone = Zone::List;
-        let mut effects = Vec::new();
-        let escape = raw_key(KeyCode::Escape);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&escape),
-            None,
-            &mut effects
-        ));
+        assert!(key(&mut state, KeyCode::Escape));
         assert_eq!(state.zone, Zone::Tabs, "up to the tabs");
         assert_eq!(state.query, "rosewood", "with the search kept");
         assert_eq!(state.results.len(), 3);
 
-        assert!(
-            !handle_raw_key_event(&mut state, Some(&escape), None, &mut effects),
-            "left for BACK"
-        );
+        assert!(!key(&mut state, KeyCode::Escape), "left for BACK");
         assert_eq!(press(&mut state, BACK), Outcome::Leave, "which leaves");
+
+        // Escape bound to BACK, as it is out of the box, is BACK: the same
+        // rung up, by the keymap.
+        let mut keyboard = Keyboard::new(&[(BACK, KeyCode::Escape)]);
+        state.zone = Zone::List;
+        assert!(!keyboard.down(&mut state, KeyCode::Escape));
+        assert_eq!(state.zone, Zone::Tabs, "BACK climbed to the tabs");
+        assert_eq!(state.query, "rosewood");
     }
 
     /// The two network passes wait for the typing to stop. Every keystroke is
@@ -2484,15 +3061,13 @@ mod tests {
     fn the_network_passes_wait_for_the_typing_to_stop() {
         let mut state = browsing(20);
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
-        let mut effects = Vec::new();
-
-        handle_raw_key_event(&mut state, None, Some("r"), &mut effects);
+        typed(&mut state, "r");
         assert!(
             crate::screens::content_browser::state::wanted_search(&state).is_none(),
             "still typing"
         );
 
-        handle_raw_key_event(&mut state, None, Some("o"), &mut effects);
+        typed(&mut state, "o");
         crate::screens::content_browser::state::update(&mut state, 0.1);
         assert!(
             crate::screens::content_browser::state::wanted_search(&state).is_none(),
@@ -2517,100 +3092,54 @@ mod tests {
         state.tab_index = TABS.iter().position(|t| *t == Tab::Pad).unwrap();
         state.zone = Zone::List;
 
-        let mut effects = Vec::new();
-        assert!(handle_raw_key_event(
-            &mut state,
-            None,
-            Some("k"),
-            &mut effects
-        ));
+        assert!(typed(&mut state, "k"));
         assert!(search_field_showing(&state), "carried to SEARCH");
         assert_eq!(state.query, "k", "and kept the character");
 
-        assert!(handle_raw_key_event(
-            &mut state,
-            None,
-            Some("y"),
-            &mut effects
-        ));
+        assert!(typed(&mut state, "y"));
         assert_eq!(state.query, "ky");
     }
 
     /// The rip tab is not a search: typing on it goes nowhere, and its keys
-    /// are left to the pad -- until its prompt is open, when every key is
-    /// the prompt's.
+    /// are left to the pad -- until its prompt is open, when the keys that
+    /// type are the prompt's.
     #[test]
     fn typing_on_the_rip_tab_goes_to_its_prompt_or_nowhere() {
         let mut state = browsing(0);
         state.tab_index = TABS.iter().position(|t| *t == Tab::Rip).unwrap();
         state.zone = Zone::Rip;
-        let mut effects = Vec::new();
-        assert!(!handle_raw_key_event(
-            &mut state,
-            None,
-            Some("zaia"),
-            &mut effects
-        ));
+        assert!(!typed(&mut state, "zaia"));
         assert!(rip_showing(&state), "not carried to SEARCH");
         assert!(state.query.is_empty());
-        let escape = raw_key(KeyCode::Escape);
-        assert!(!handle_raw_key_event(
-            &mut state,
-            Some(&escape),
-            None,
-            &mut effects
-        ));
+        assert!(!key(&mut state, KeyCode::Escape));
 
         // START on OR TYPE AUTHORS opens the prompt
         state.rip.row = 2;
         assert_eq!(press(&mut state, START), Outcome::Opened);
-        assert!(handle_raw_key_event(
-            &mut state,
-            None,
-            Some("Zaia"),
-            &mut effects
-        ));
-        let letter = raw_key(KeyCode::KeyA);
+        assert!(typed(&mut state, "Zaia"));
         assert!(
-            handle_raw_key_event(&mut state, Some(&letter), None, &mut effects),
+            key(&mut state, KeyCode::KeyA),
             "a letter is the prompt's, not a pad button's"
         );
-        let backspace = raw_key(KeyCode::Backspace);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&backspace),
-            None,
-            &mut effects
-        ));
+        assert!(key(&mut state, KeyCode::Backspace));
         // the Enter that opened it, still held, does not close it
-        let mut held = raw_key(KeyCode::Enter);
+        let mut held = key_event(KeyCode::Enter);
         held.repeat = true;
-        assert!(handle_raw_key_event(
+        assert!(super::raw_key(
             &mut state,
-            Some(&held),
-            None,
-            &mut effects
+            &held,
+            Binding::default(),
+            &mut Vec::new()
         ));
         assert!(state.rip.prompt.is_some());
-        let enter = raw_key(KeyCode::Enter);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&enter),
-            None,
-            &mut effects
-        ));
+        assert!(key(&mut state, KeyCode::Enter));
         assert!(state.rip.prompt.is_none());
         assert_eq!(state.rip.typed, "Zai");
 
         // Escape leaves without applying, and so does the pad's BACK
         assert_eq!(press(&mut state, START), Outcome::Opened);
-        handle_raw_key_event(&mut state, None, Some("x"), &mut effects);
-        assert!(handle_raw_key_event(
-            &mut state,
-            Some(&escape),
-            None,
-            &mut effects
-        ));
+        typed(&mut state, "x");
+        assert!(key(&mut state, KeyCode::Escape));
         assert_eq!(state.rip.typed, "Zai");
         assert_eq!(press(&mut state, START), Outcome::Opened);
         assert_eq!(press(&mut state, BACK), Outcome::Moved);
@@ -2692,10 +3221,11 @@ mod tests {
         state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
         state.zone = Zone::Tabs;
 
-        let mut effects = Vec::new();
-        handle_raw_key_event(&mut state, None, Some("rosewood"), &mut effects);
+        typed(&mut state, "rosewood");
         assert_eq!(state.query, "rosewood");
 
+        // up out of the results, and along the strip
+        assert_eq!(press(&mut state, BACK), Outcome::Closed);
         assert_eq!(press(&mut state, RIGHT), Outcome::Moved);
         assert!(!search_field_showing(&state), "a different tab");
         assert!(state.query.is_empty(), "and a different question");
@@ -2749,6 +3279,817 @@ mod tests {
         state.featured_index = FEATURED_COLUMNS - 1;
         assert_eq!(press(&mut state, DOWN), Outcome::Moved);
         assert_eq!(state.zone, Zone::List);
+    }
+
+    // --- the keyboard, as the shell hands it over ------------------------------
+
+    /// A key the keymap gives no button, going down.
+    fn key(state: &mut State, code: KeyCode) -> bool {
+        super::raw_key(state, &key_event(code), Binding::default(), &mut Vec::new())
+    }
+
+    /// Characters from a platform that does not say which key typed them.
+    fn typed(state: &mut State, text: &str) -> bool {
+        text_typed(state, text, None, false, &mut Vec::new())
+    }
+
+    fn event(action: VirtualAction, pressed: bool, at: std::time::Instant) -> InputEvent {
+        InputEvent::new(
+            action,
+            0,
+            pressed,
+            deadsync_core::input::InputSource::Keyboard,
+            at,
+            0,
+            at,
+            at,
+        )
+    }
+
+    /// The shell's keyboard in miniature: a key's raw edge, then -- if the
+    /// browser left it -- the buttons the keymap binds it to; and, on its
+    /// own, the character it typed.
+    struct Keyboard {
+        keymap: Keymap,
+        effects: Vec<ThemeEffect>,
+    }
+
+    impl Keyboard {
+        fn new(binds: &[(VirtualAction, KeyCode)]) -> Self {
+            let mut keymap = Keymap::default();
+            for &(action, _) in binds {
+                let keys: Vec<deadsync_input::InputBinding> = binds
+                    .iter()
+                    .filter(|(bound, _)| *bound == action)
+                    .map(|(_, code)| deadsync_input::InputBinding::Key(*code))
+                    .collect();
+                keymap.bind(action, &keys);
+            }
+            Self {
+                keymap,
+                effects: Vec::new(),
+            }
+        }
+
+        fn binding(&self, code: KeyCode) -> Binding {
+            Binding::of(&self.keymap, code)
+        }
+
+        /// True when the browser took the key, as the shell is told.
+        fn edge(&mut self, state: &mut State, code: KeyCode, pressed: bool, repeat: bool) -> bool {
+            let mut raw = key_event(code);
+            raw.pressed = pressed;
+            raw.repeat = repeat;
+            let binding = self.binding(code);
+            let taken = super::raw_key(state, &raw, binding, &mut self.effects);
+            // The keymap drops a key's repeats, and has nothing to release
+            // for a press it never saw.
+            if !taken && !repeat {
+                let at = std::time::Instant::now();
+                for action in deadsync_input::ALL_VIRTUAL_ACTIONS {
+                    if !action.is_system()
+                        && self
+                            .keymap
+                            .keycode_has_action(code, |bound| bound == action)
+                    {
+                        self.effects
+                            .push(handle_input(state, &event(action, pressed, at)));
+                    }
+                }
+            }
+            taken
+        }
+
+        fn down(&mut self, state: &mut State, code: KeyCode) -> bool {
+            self.edge(state, code, true, false)
+        }
+
+        fn held(&mut self, state: &mut State, code: KeyCode) -> bool {
+            self.edge(state, code, true, true)
+        }
+
+        fn up(&mut self, state: &mut State, code: KeyCode) {
+            self.edge(state, code, false, false);
+        }
+
+        fn text(&mut self, state: &mut State, code: KeyCode, text: &str) -> bool {
+            let binding = self.binding(code);
+            text_typed(state, text, Some((code, binding)), false, &mut self.effects)
+        }
+
+        /// The character again, as the key repeats.
+        fn text_repeat(&mut self, state: &mut State, code: KeyCode, text: &str) -> bool {
+            let binding = self.binding(code);
+            text_typed(state, text, Some((code, binding)), true, &mut self.effects)
+        }
+
+        /// A keystroke, its raw edge ahead of its character.
+        fn stroke(&mut self, state: &mut State, code: KeyCode, text: &str) {
+            self.down(state, code);
+            self.text(state, code, text);
+            self.up(state, code);
+        }
+
+        /// A keystroke whose character arrives first, as the two can.
+        fn stroke_text_first(&mut self, state: &mut State, code: KeyCode, text: &str) {
+            self.text(state, code, text);
+            self.down(state, code);
+            self.up(state, code);
+        }
+    }
+
+    fn tab_at(tab: Tab) -> usize {
+        TABS.iter().position(|t| *t == tab).unwrap()
+    }
+
+    /// A key bound to a button is that button: it moves the cursor and does
+    /// not also carry the reader off to SEARCH -- whichever half of the press
+    /// the platform delivers first. The default keymap's S, Space and Slash
+    /// are buttons too.
+    #[test]
+    fn a_key_bound_to_a_button_is_that_button_and_never_a_search() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p1_up, KeyCode::KeyW),
+            (VirtualAction::p1_down, KeyCode::KeyS),
+            (VirtualAction::p1_center, KeyCode::Space),
+            (VirtualAction::p1_select, KeyCode::Slash),
+        ]);
+        let mut state = browsing(20);
+        state.tab_index = tab_at(Tab::Pad);
+        state.zone = Zone::List;
+        state.cursor = 3;
+
+        keyboard.stroke(&mut state, KeyCode::KeyS, "s");
+        assert_eq!(state.cursor, 4, "DOWN");
+        keyboard.stroke_text_first(&mut state, KeyCode::KeyW, "w");
+        assert_eq!(state.cursor, 3, "UP, its character first");
+        keyboard.stroke(&mut state, KeyCode::Space, " ");
+        keyboard.stroke_text_first(&mut state, KeyCode::Slash, "/");
+        assert_eq!(state::tab(&state), Tab::Pad, "never carried to SEARCH");
+        assert!(state.query.is_empty());
+        assert_eq!(state.zone, Zone::List);
+        assert!(
+            state.key_presses.is_empty(),
+            "every press paired and let go"
+        );
+    }
+
+    /// A key that is no button still starts a search from anywhere, once,
+    /// whichever half of the press comes first -- and in the box a letter
+    /// bound to a pad direction spells.
+    #[test]
+    fn a_key_that_is_no_button_still_starts_a_search() {
+        let mut keyboard = Keyboard::new(&[(VirtualAction::p1_down, KeyCode::KeyS)]);
+        for text_first in [false, true] {
+            let mut state = browsing(20);
+            state.tab_index = tab_at(Tab::Pad);
+            state.zone = Zone::List;
+            if text_first {
+                keyboard.stroke_text_first(&mut state, KeyCode::KeyK, "k");
+            } else {
+                keyboard.stroke(&mut state, KeyCode::KeyK, "k");
+            }
+            assert!(typing_search(&state), "text_first={text_first}");
+            assert_eq!(state.query, "k", "once, text_first={text_first}");
+            keyboard.stroke(&mut state, KeyCode::KeyS, "s");
+            assert_eq!(state.query, "ks", "text_first={text_first}");
+        }
+    }
+
+    /// The press that carries the reader down into the box is not typed into
+    /// it, in either order, nor while it is held; the next press spells.
+    #[test]
+    fn the_press_that_steps_into_the_box_is_not_typed_into_it() {
+        let mut keyboard = Keyboard::new(&[(VirtualAction::p1_down, KeyCode::KeyS)]);
+        for text_first in [false, true] {
+            let mut state = browsing(20);
+            state.tab_index = tab_at(Tab::Search);
+            state.zone = Zone::Tabs;
+            if text_first {
+                keyboard.text(&mut state, KeyCode::KeyS, "s");
+                keyboard.down(&mut state, KeyCode::KeyS);
+            } else {
+                keyboard.down(&mut state, KeyCode::KeyS);
+                keyboard.text(&mut state, KeyCode::KeyS, "s");
+            }
+            assert!(typing_search(&state), "DOWN into the box");
+            assert!(
+                !keyboard.held(&mut state, KeyCode::KeyS),
+                "held, still DOWN's"
+            );
+            keyboard.text_repeat(&mut state, KeyCode::KeyS, "s");
+            keyboard.text(&mut state, KeyCode::KeyS, "s");
+            assert!(state.query.is_empty(), "text_first={text_first}");
+            keyboard.up(&mut state, KeyCode::KeyS);
+            keyboard.stroke(&mut state, KeyCode::KeyS, "s");
+            assert_eq!(state.query, "s", "the next press spells");
+        }
+    }
+
+    /// LEFT on a letter carries the reader onto SEARCH without typing the
+    /// letter, and RIGHT on one carries them off again: on the strip the keys
+    /// are the pad's, so nobody is stuck on the tab.
+    #[test]
+    fn a_bound_left_onto_search_types_nothing_and_right_leaves_again() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p1_left, KeyCode::KeyA),
+            (VirtualAction::p1_right, KeyCode::KeyD),
+        ]);
+        let mut state = browsing(20);
+        state.tab_index = tab_at(Tab::Pad);
+        state.zone = Zone::Tabs;
+        keyboard.stroke(&mut state, KeyCode::KeyA, "a");
+        assert_eq!(state::tab(&state), Tab::Search);
+        assert_eq!(state.zone, Zone::Tabs);
+        assert!(
+            state.query.is_empty(),
+            "the letter that got there is not typed"
+        );
+        keyboard.stroke_text_first(&mut state, KeyCode::KeyD, "d");
+        assert_eq!(state::tab(&state), Tab::Pad, "RIGHT leaves again");
+        assert!(state.query.is_empty());
+    }
+
+    /// In the box the buttons a reader steers by stay theirs, so a cabinet
+    /// whose buttons are all keys can always get back out: START is START and
+    /// BACK is BACK, while a pad direction on a letter spells.
+    #[test]
+    fn in_the_box_start_and_back_still_steer() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p1_back, KeyCode::KeyB),
+            (VirtualAction::p1_start, KeyCode::Digit1),
+            (VirtualAction::p1_up, KeyCode::KeyW),
+        ]);
+        let mut state = browsing(3);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::List;
+        keyboard.stroke(&mut state, KeyCode::KeyR, "r");
+        keyboard.stroke(&mut state, KeyCode::KeyW, "w");
+        assert_eq!(state.query, "rw", "a pad direction spells");
+        keyboard.stroke(&mut state, KeyCode::Digit1, "1");
+        assert_eq!(state.query, "rw", "START is not typed");
+        keyboard.stroke_text_first(&mut state, KeyCode::KeyB, "b");
+        assert_eq!(state.query, "rw", "nor BACK");
+        assert_eq!(state.zone, Zone::Tabs, "BACK climbed out of the box");
+    }
+
+    /// Backspace as BACK edits the box while there is something to take out,
+    /// held too -- and only an empty box makes it BACK, on a fresh press.
+    #[test]
+    fn backspace_as_back_edits_the_box_until_it_is_empty() {
+        let mut keyboard = Keyboard::new(&[(BACK, KeyCode::Backspace)]);
+        let mut state = browsing(3);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::List;
+        keyboard.stroke(&mut state, KeyCode::KeyK, "k");
+        keyboard.stroke(&mut state, KeyCode::KeyY, "y");
+        assert!(keyboard.down(&mut state, KeyCode::Backspace));
+        assert!(
+            keyboard.held(&mut state, KeyCode::Backspace),
+            "and as it repeats"
+        );
+        assert!(state.query.is_empty());
+        assert!(!keyboard.held(&mut state, KeyCode::Backspace));
+        assert_eq!(
+            state.zone,
+            Zone::List,
+            "a held Backspace does not turn into BACK"
+        );
+        keyboard.up(&mut state, KeyCode::Backspace);
+        assert!(
+            !keyboard.down(&mut state, KeyCode::Backspace),
+            "an empty box"
+        );
+        assert_eq!(state.zone, Zone::Tabs, "BACK");
+    }
+
+    /// The second player's pad on the numpad never types -- not into the box,
+    /// and not as a search started from a list -- whatever Num Lock says. A
+    /// numpad nobody plays on types its digits.
+    #[test]
+    fn the_second_players_numpad_never_types() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p2_up, KeyCode::Numpad8),
+            (VirtualAction::p2_down, KeyCode::Numpad2),
+        ]);
+        let mut state = browsing(20);
+        state.tab_index = tab_at(Tab::Pad);
+        state.zone = Zone::List;
+        state.cursor = 5;
+        keyboard.stroke(&mut state, KeyCode::Numpad2, "2");
+        assert_eq!(state.cursor, 6, "P2's DOWN");
+        assert_eq!(state::tab(&state), Tab::Pad, "and no search");
+
+        state.tab_index = tab_at(Tab::Search);
+        keyboard.stroke_text_first(&mut state, KeyCode::Numpad8, "8");
+        assert_eq!(state.cursor, 5, "P2's UP");
+        assert!(state.query.is_empty(), "not a digit");
+
+        let mut bare = Keyboard::new(&[]);
+        bare.stroke(&mut state, KeyCode::Numpad8, "8");
+        assert_eq!(state.query, "8");
+    }
+
+    /// PageUp and PageDown page the list the cursor is in, and nothing else;
+    /// bound to a button, they are that button.
+    #[test]
+    fn page_keys_page_only_the_list_and_only_when_unbound() {
+        let mut state = browsing(30);
+        state.zone = Zone::List;
+        let mut bare = Keyboard::new(&[]);
+        assert!(bare.down(&mut state, KeyCode::PageDown));
+        assert_eq!(state.cursor, visible_rows());
+        state.zone = Zone::Tabs;
+        assert!(
+            !bare.down(&mut state, KeyCode::PageDown),
+            "the cursor is not in the list"
+        );
+        assert_eq!(state.cursor, visible_rows());
+
+        state.zone = Zone::List;
+        let mut bound = Keyboard::new(&[(DOWN, KeyCode::PageDown)]);
+        assert!(!bound.down(&mut state, KeyCode::PageDown), "its button");
+        assert_eq!(state.cursor, visible_rows() + 1, "one row DOWN, not a page");
+    }
+
+    /// A cabinet whose START is a key: it opens a meter's prompt without
+    /// typing into it, takes the answer, and BACK leaves one unchanged.
+    #[test]
+    fn a_prompt_opened_by_a_key_is_answered_by_the_same_key() {
+        let mut keyboard = Keyboard::new(&[(START, KeyCode::Digit1), (BACK, KeyCode::Digit9)]);
+        let mut state = browsing(0);
+        state.tab_index = tab_at(Tab::Rip);
+        state.zone = Zone::Rip;
+        state.rip.row = rip::Row::ALL
+            .iter()
+            .position(|row| *row == rip::Row::Lo)
+            .unwrap();
+        keyboard.stroke(&mut state, KeyCode::Digit1, "1");
+        let text = state.rip.prompt.as_ref().map(|prompt| prompt.text.clone());
+        assert_eq!(text.as_deref(), Some("8"), "opened, with nothing typed");
+        keyboard.stroke(&mut state, KeyCode::Backspace, "\u{8}");
+        keyboard.stroke(&mut state, KeyCode::Digit2, "2");
+        let text = state.rip.prompt.as_ref().map(|prompt| prompt.text.clone());
+        assert_eq!(text.as_deref(), Some("2"));
+        keyboard.stroke_text_first(&mut state, KeyCode::Digit1, "1");
+        assert!(state.rip.prompt.is_none(), "START took the answer");
+        assert_eq!(state.rip.lo, 2);
+
+        keyboard.stroke(&mut state, KeyCode::Digit1, "1");
+        keyboard.stroke(&mut state, KeyCode::Digit2, "2");
+        keyboard.stroke(&mut state, KeyCode::Digit9, "9");
+        assert!(state.rip.prompt.is_none(), "BACK left it");
+        assert_eq!(state.rip.lo, 2, "unchanged");
+    }
+
+    // --- three-key cabinets ---------------------------------------------------
+
+    fn three_key_browsing(results: usize) -> State {
+        let mut state = browsing(results);
+        state.only_dedicated_menu_buttons = true;
+        state.three_key_navigation = true;
+        state
+    }
+
+    fn tap(state: &mut State, action: VirtualAction) -> ThemeEffect {
+        let at = std::time::Instant::now();
+        let effect = handle_input(state, &event(action, true, at));
+        handle_input(state, &event(action, false, at));
+        effect
+    }
+
+    fn next(state: &mut State) {
+        tap(state, RIGHT);
+    }
+
+    fn prev(state: &mut State) {
+        tap(state, LEFT);
+    }
+
+    fn confirm(state: &mut State) {
+        tap(state, START);
+    }
+
+    /// MenuLeft then MenuRight, together: the cabinet's BACK.
+    fn chord(state: &mut State) -> ThemeEffect {
+        let at = std::time::Instant::now();
+        handle_input(state, &event(LEFT, true, at));
+        let effect = handle_input(state, &event(RIGHT, true, at));
+        handle_input(state, &event(LEFT, false, at));
+        handle_input(state, &event(RIGHT, false, at));
+        effect
+    }
+
+    /// LEFT and RIGHT walk the strip and then the rows, START goes in, and
+    /// the chord climbs back a rung with its first button's step put back --
+    /// and leaves from the strip.
+    #[test]
+    fn three_keys_walk_the_strip_and_the_list_and_the_chord_climbs_back() {
+        let mut state = three_key_browsing(20);
+        state.tab_index = tab_at(Tab::Pad);
+        state.zone = Zone::Tabs;
+        next(&mut state);
+        assert_eq!(state::tab(&state), Tab::Keyboard);
+        prev(&mut state);
+        assert_eq!(state::tab(&state), Tab::Pad);
+        state.results = (0..20).collect();
+        confirm(&mut state);
+        assert_eq!(state.zone, Zone::List);
+        next(&mut state);
+        next(&mut state);
+        assert_eq!(state.cursor, 2, "RIGHT is down the list");
+        assert!(state.nav_hold.is_none(), "let go, no longer held");
+        prev(&mut state);
+        assert_eq!(state.cursor, 1);
+
+        chord(&mut state);
+        assert_eq!(state.zone, Zone::Tabs, "BACK");
+        assert_eq!(state.cursor, 1, "with the chord's first step put back");
+        assert_eq!(state::tab(&state), Tab::Pad);
+
+        assert!(matches!(
+            chord(&mut state),
+            ThemeEffect::NavigateNoFade(Screen::Menu)
+        ));
+        assert_eq!(
+            state::tab(&state),
+            Tab::Pad,
+            "the strip's step put back too"
+        );
+    }
+
+    /// The featured grid in reading order: along the top row and into the
+    /// row under it, on to the next page, then out to the list -- and before
+    /// the first card, the strip.
+    #[test]
+    fn three_keys_read_the_featured_grid_in_order() {
+        let mut state = three_key_browsing(5);
+        state.tab_index = tab_at(Tab::Pad);
+        state.featured = (0..FEATURED_VISIBLE + 2).collect();
+        state.zone = Zone::Featured;
+        state.featured_index = FEATURED_COLUMNS - 1;
+        next(&mut state);
+        assert_eq!(featured_row_col(&state), (1, 0), "the row under it");
+        assert_eq!(featured_page(&state), 0);
+
+        state.featured_index = FEATURED_VISIBLE - 1;
+        next(&mut state);
+        assert_eq!(featured_page(&state), 1);
+        assert_eq!(featured_row_col(&state), (0, 0));
+        next(&mut state);
+        next(&mut state);
+        assert_eq!(state.zone, Zone::List, "after the last card");
+
+        state.zone = Zone::Featured;
+        assert!(featured_goto(&mut state, 0, 0, 0));
+        prev(&mut state);
+        assert_eq!(state.zone, Zone::Tabs, "before the first");
+    }
+
+    /// The year strip and the doubles picker carry on into what is under them
+    /// off their far end, and up to the strip off their near one; the foot of
+    /// the left column carries on into the right.
+    #[test]
+    fn three_keys_carry_off_the_ends_of_strips() {
+        let mut state = three_key_browsing(5);
+        state.tab_index = tab_at(Tab::Years);
+        state.zone = Zone::Years;
+        state.year_slot = 0;
+        prev(&mut state);
+        assert_eq!(state.zone, Zone::Tabs);
+        state.zone = Zone::Years;
+        state.year_slot = lo::year_slots() - 1;
+        next(&mut state);
+        assert_eq!(state.zone, Zone::List);
+
+        let mut state = three_key_browsing(0);
+        state.tab_index = tab_at(Tab::Doubles);
+        state.doubles_left = vec![0, 1];
+        state.doubles_right = vec![2, 3];
+        state.zone = Zone::DoublesPick;
+        prev(&mut state);
+        assert_eq!(state.zone, Zone::Tabs, "off the near end");
+        state.zone = Zone::DoublesPick;
+        next(&mut state);
+        assert_eq!(state.doubles_column, 1);
+        next(&mut state);
+        assert_eq!(
+            state.zone,
+            Zone::DoublesRows,
+            "off the far end, into the column"
+        );
+
+        state.doubles_column = 0;
+        state.doubles_window = [0, 0];
+        state.doubles_row = 1;
+        next(&mut state);
+        assert_eq!(state.doubles_column, 1, "the left column's foot");
+        assert_eq!(doubles_cursor(&state), 0);
+    }
+
+    /// The library in reading order, down a column and on; before its first
+    /// pack, the strip.
+    #[test]
+    fn three_keys_read_the_library_down_its_columns() {
+        let mut state = three_key_browsing(0);
+        state.tab_index = tab_at(Tab::Installed);
+        state.installed = (0..30)
+            .map(|n| state::InstalledPack {
+                name: format!("Pack {n}"),
+                lower: format!("pack {n}"),
+                songs: 1,
+                sync: SyncPref::Default,
+                banner: None,
+            })
+            .collect();
+        state.zone = Zone::Installed;
+        state.installed_cursor = lo::INST_PER_COL - 1;
+        next(&mut state);
+        assert_eq!(installed_cell(&state), (1, 0), "the next column's top");
+        state.installed_cursor = 29;
+        next(&mut state);
+        assert_eq!(state.installed_cursor, 29, "nothing after the last");
+        state.installed_cursor = 0;
+        prev(&mut state);
+        assert_eq!(state.zone, Zone::Tabs);
+    }
+
+    /// The sync dialog's choices are one ring, the Pack.ini row a stop for
+    /// each value, and the chord closes it.
+    #[test]
+    fn three_keys_ring_through_the_sync_dialog() {
+        let mut state = three_key_browsing(0);
+        state.tab_index = tab_at(Tab::Installed);
+        state.pack_ini_offsets_on = true;
+        let entry = state::InstalledPack {
+            name: "Pack".to_owned(),
+            lower: "pack".to_owned(),
+            songs: 1,
+            sync: SyncPref::Default,
+            banner: None,
+        };
+        state.installed = vec![entry.clone()];
+        state.zone = Zone::Installed;
+        sync_dialog::open(&mut state, &entry);
+        let choice = |state: &State| {
+            let dialog = state.sync_dialog.as_ref().unwrap();
+            (dialog.action, dialog.record)
+        };
+        assert_eq!(choice(&state).0, SyncAction::Measure);
+        next(&mut state);
+        assert_eq!(choice(&state).0, SyncAction::Shift);
+        next(&mut state);
+        assert_eq!(choice(&state), (SyncAction::PackIni, SyncPref::Itg));
+        next(&mut state);
+        assert_eq!(choice(&state), (SyncAction::PackIni, SyncPref::Null));
+        next(&mut state);
+        assert_eq!(choice(&state).0, SyncAction::Measure, "round again");
+        prev(&mut state);
+        assert_eq!(choice(&state), (SyncAction::PackIni, SyncPref::Null));
+        chord(&mut state);
+        assert!(state.sync_dialog.is_none(), "BACK closed it");
+    }
+
+    /// With no keyboard to type a meter in, START hands LEFT and RIGHT to its
+    /// value; the chord puts the last step back and is done with it.
+    #[test]
+    fn three_keys_change_a_meter_after_start() {
+        let mut state = three_key_browsing(0);
+        state.tab_index = tab_at(Tab::Rip);
+        state.zone = Zone::Rip;
+        state.rip.row = rip::Row::ALL
+            .iter()
+            .position(|row| *row == rip::Row::Lo)
+            .unwrap();
+        let lo = state.rip.lo;
+        confirm(&mut state);
+        assert!(state.rip.adjusting);
+        assert!(state.rip.prompt.is_none(), "no prompt to type into");
+        next(&mut state);
+        next(&mut state);
+        assert_eq!(state.rip.lo, lo + 2);
+        chord(&mut state);
+        assert_eq!(state.rip.lo, lo + 2, "the chord's first step put back");
+        assert!(!state.rip.adjusting, "and done with the value");
+        assert_eq!(state.zone, Zone::Rip, "still on the rows");
+
+        confirm(&mut state);
+        next(&mut state);
+        confirm(&mut state);
+        assert!(!state.rip.adjusting);
+        assert_eq!(state.rip.lo, lo + 3);
+        let row = state.rip.row;
+        next(&mut state);
+        assert_eq!(state.rip.row, row + 1, "RIGHT is down the rows again");
+    }
+
+    /// While a pack is on the table, KEEP and RE-RIP are a stop each on the
+    /// way down the rows and back up.
+    #[test]
+    fn three_keys_stop_at_keep_and_at_rerip() {
+        let mut state = three_key_browsing(0);
+        state.tab_index = tab_at(Tab::Rip);
+        state.zone = Zone::Rip;
+        state.rip.stage = rip::Stage::Choosing;
+        let button = rip::Row::ALL
+            .iter()
+            .position(|row| *row == rip::Row::Button)
+            .unwrap();
+        state.rip.row = button - 1;
+        next(&mut state);
+        assert_eq!(
+            (state.rip.row, state.rip.choice),
+            (button, rip::Choice::Keep)
+        );
+        next(&mut state);
+        assert_eq!(
+            (state.rip.row, state.rip.choice),
+            (button, rip::Choice::ReRip)
+        );
+        next(&mut state);
+        assert_eq!(state.rip.row, button + 1);
+        prev(&mut state);
+        assert_eq!(
+            (state.rip.row, state.rip.choice),
+            (button, rip::Choice::ReRip)
+        );
+        prev(&mut state);
+        assert_eq!(
+            (state.rip.row, state.rip.choice),
+            (button, rip::Choice::Keep)
+        );
+        prev(&mut state);
+        assert_eq!(state.rip.row, button - 1);
+    }
+
+    /// A pack's page: LEFT and RIGHT walk the songs and the button above
+    /// them, START asks what to do with a song, and the menu's choices are
+    /// LEFT and RIGHT too -- until the chord closes it.
+    #[test]
+    fn three_keys_read_a_pack_page() {
+        let mut state = detail_page(&["Song A", "Song B"]);
+        state.only_dedicated_menu_buttons = true;
+        state.three_key_navigation = true;
+        next(&mut state);
+        assert_eq!(state.song_pick, 1);
+        prev(&mut state);
+        prev(&mut state);
+        assert!(state.detail_on_button, "above the first song");
+        next(&mut state);
+        assert!(!state.detail_on_button);
+        confirm(&mut state);
+        assert_eq!(state.song_menu.map(|menu| menu.choice), Some(0));
+        next(&mut state);
+        assert_eq!(state.song_menu.map(|menu| menu.choice), Some(1));
+        chord(&mut state);
+        assert!(state.song_menu.is_none(), "closed");
+        assert_eq!(state.zone, Zone::Detail, "the page stays");
+    }
+
+    /// A stalled frame can hand over a quick tap's press and release before
+    /// its character. The character is still that press's: the DOWN that
+    /// stepped into the box does not type into it afterwards.
+    #[test]
+    fn a_character_after_its_key_came_up_is_still_its_press() {
+        let mut keyboard = Keyboard::new(&[(VirtualAction::p1_down, KeyCode::KeyS)]);
+        let mut state = browsing(20);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::Tabs;
+        keyboard.down(&mut state, KeyCode::KeyS);
+        keyboard.up(&mut state, KeyCode::KeyS);
+        assert!(typing_search(&state), "DOWN into the box");
+        assert!(!keyboard.text(&mut state, KeyCode::KeyS, "s"));
+        assert!(state.query.is_empty(), "not typed into it");
+        assert!(state.key_presses.is_empty(), "paired, and let go");
+
+        // and the next press, in the box, spells -- its character first too
+        keyboard.stroke_text_first(&mut state, KeyCode::KeyS, "s");
+        assert_eq!(state.query, "s");
+    }
+
+    /// Half a press that never finds its other half is not waited for: a
+    /// character whose press went elsewhere is forgotten, and does not throw
+    /// the next press of that key out of step.
+    #[test]
+    fn a_half_press_that_never_pairs_is_forgotten() {
+        let mut keyboard = Keyboard::new(&[(VirtualAction::p1_down, KeyCode::KeyS)]);
+        let mut state = browsing(20);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::Tabs;
+        keyboard.text(&mut state, KeyCode::KeyS, "s");
+        assert_eq!(state.key_presses.len(), 1, "waiting for its press");
+        crate::screens::content_browser::state::update(&mut state, 0.6);
+        assert!(state.key_presses.is_empty(), "no longer");
+
+        keyboard.stroke(&mut state, KeyCode::KeyS, "s");
+        assert!(typing_search(&state), "DOWN into the box");
+        assert!(state.query.is_empty(), "and its own character not typed");
+    }
+
+    /// A meter's prompt takes the numpad's digits whoever plays on them --
+    /// the second player's pad is the numpad out of the box, and its BACK
+    /// is the 0.
+    #[test]
+    fn a_meter_prompt_takes_the_numpads_digits() {
+        let mut keyboard = Keyboard::new(&[
+            (VirtualAction::p2_down, KeyCode::Numpad2),
+            (VirtualAction::p2_back, KeyCode::Numpad0),
+            (START, KeyCode::Enter),
+        ]);
+        let mut state = browsing(0);
+        state.tab_index = tab_at(Tab::Rip);
+        state.zone = Zone::Rip;
+        state.rip.row = rip::Row::ALL
+            .iter()
+            .position(|row| *row == rip::Row::Hi)
+            .unwrap();
+        keyboard.stroke(&mut state, KeyCode::Enter, "\r");
+        keyboard.stroke(&mut state, KeyCode::Backspace, "\u{8}");
+        keyboard.stroke(&mut state, KeyCode::Backspace, "\u{8}");
+        keyboard.stroke(&mut state, KeyCode::Numpad2, "2");
+        keyboard.stroke_text_first(&mut state, KeyCode::Numpad0, "0");
+        let text = state.rip.prompt.as_ref().map(|prompt| prompt.text.clone());
+        assert_eq!(
+            text.as_deref(),
+            Some("20"),
+            "neither P2's DOWN nor its BACK"
+        );
+        keyboard.stroke(&mut state, KeyCode::Enter, "\r");
+        assert_eq!(state.rip.hi, 20);
+    }
+
+    /// A coin is never a character, even in the box: it reaches the keymap,
+    /// which credits it.
+    #[test]
+    fn a_coin_key_is_not_typed() {
+        let mut keyboard = Keyboard::new(&[(VirtualAction::p1_coin, KeyCode::Digit5)]);
+        let mut state = browsing(3);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::List;
+        assert!(
+            !keyboard.down(&mut state, KeyCode::Digit5),
+            "left to the keymap"
+        );
+        keyboard.text(&mut state, KeyCode::Digit5, "5");
+        keyboard.up(&mut state, KeyCode::Digit5);
+        assert!(state.query.is_empty());
+    }
+
+    /// PageDown pages the search results while the box types.
+    #[test]
+    fn page_keys_page_the_search_results() {
+        let mut state = browsing(30);
+        state.tab_index = tab_at(Tab::Search);
+        state.zone = Zone::List;
+        assert!(typing_search(&state));
+        assert!(key(&mut state, KeyCode::PageDown));
+        assert_eq!(state.cursor, visible_rows());
+    }
+
+    /// Three-key navigation is both settings at once, as everywhere else in
+    /// DeadSync: with either alone, LEFT and RIGHT are LEFT and RIGHT, and
+    /// the chord is not BACK.
+    #[test]
+    fn three_keys_need_both_settings() {
+        for (menu_only, three) in [(true, false), (false, true)] {
+            let mut state = browsing(30);
+            state.only_dedicated_menu_buttons = menu_only;
+            state.three_key_navigation = three;
+            state.zone = Zone::List;
+            next(&mut state);
+            assert_eq!(
+                state.cursor,
+                visible_rows(),
+                "a page, menu_only={menu_only}"
+            );
+
+            state.tab_index = tab_at(Tab::Pad);
+            state.zone = Zone::Tabs;
+            assert!(
+                !matches!(chord(&mut state), ThemeEffect::NavigateNoFade(_)),
+                "the chord does not leave, menu_only={menu_only}"
+            );
+        }
+    }
+
+    /// The settings reach the screen through the shell's per-frame handoff.
+    #[test]
+    fn the_menu_button_settings_come_from_the_shell() {
+        let mut state = browsing(0);
+        assert!(!three_key(&state));
+        state::sync_stepmaniaonline(
+            &mut state,
+            state::Services {
+                only_dedicated_menu_buttons: true,
+                three_key_navigation: true,
+                ..state::Services::default()
+            },
+            Vec::new(),
+            None,
+        );
+        assert!(three_key(&state));
+        let policy = sync_dialog::nav_policy(&state);
+        assert!(policy.only_dedicated_menu_buttons && policy.three_key_navigation);
     }
 }
 

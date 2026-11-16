@@ -335,6 +335,10 @@ pub struct Rip {
     pub(super) pick_at: usize,
     pub(super) pick_top: usize,
     pub(super) prompt: Option<Prompt>,
+    /// A meter row whose value LEFT and RIGHT are changing, on a three-key
+    /// cabinet: those are its only buttons that move anything, and there is
+    /// no keyboard for the prompt. START or BACK puts them back on the rows.
+    pub(super) adjusting: bool,
     hold: Option<Hold>,
 
     // --- what the service says ----------------------------------------------
@@ -392,6 +396,7 @@ impl Default for Rip {
             pick_at: 0,
             pick_top: 0,
             prompt: None,
+            adjusting: false,
             hold: None,
             snapshot: Arc::new(RipSnapshot::default()),
             authors: Arc::new(AuthorsSnapshot::default()),
@@ -437,6 +442,7 @@ pub fn rip_refused(state: &mut State, reason: String) {
 pub(super) fn on_enter(rip: &mut Rip) {
     rip.picking = None;
     rip.prompt = None;
+    rip.adjusting = false;
     rip.hold = None;
     rip.toast = None;
     // A request the shell never took was for a visit that is over.
@@ -959,6 +965,20 @@ pub(super) fn press(state: &mut State, key: Key, first: bool) -> Heard {
         return press_picker(&mut state.rip, key, first);
     }
     let row = Row::ALL[state.rip.row.min(Row::ALL.len() - 1)];
+    // A value being changed: LEFT and RIGHT change it, START and BACK are
+    // done with it, and UP or DOWN are done with it and move on.
+    if state.rip.adjusting {
+        match key {
+            Key::Left | Key::Right => {}
+            Key::Start | Key::Back if first => {
+                state.rip.adjusting = false;
+                state.rip.hold = None;
+                return Heard::Change;
+            }
+            Key::Up | Key::Down => state.rip.adjusting = false,
+            _ => return Heard::Nothing,
+        }
+    }
     match key {
         Key::Back => {
             if !first {
@@ -1139,6 +1159,108 @@ fn select(rip: &mut Rip, row: Row) -> Heard {
         _ => return Heard::Invalid,
     }
     Heard::Change
+}
+
+/// START on a three-key cabinet: on a meter row it starts or finishes
+/// changing the value with LEFT and RIGHT, there being no keyboard to type
+/// one in with. None where START is just START.
+pub(super) fn adjust(rip: &mut Rip) -> Option<Heard> {
+    if rip.picking.is_some() || rip.prompt.is_some() {
+        return None;
+    }
+    if rip.adjusting {
+        rip.adjusting = false;
+        rip.hold = None;
+        return Some(Heard::Change);
+    }
+    let row = Row::ALL[rip.row.min(Row::ALL.len() - 1)];
+    if !matches!(row, Row::Lo | Row::Hi) {
+        return None;
+    }
+    rip.adjusting = true;
+    rip.hold = None;
+    Some(Heard::Start)
+}
+
+/// LEFT or RIGHT on a three-key cabinet: down or up the rows, the picker's
+/// too, or the value being changed. KEEP and RE-RIP are a stop each, there
+/// being no LEFT/RIGHT left over to pick one with.
+pub(super) fn three_key_step(state: &mut State, forward: bool) -> Heard {
+    let rip = &mut state.rip;
+    let key = if rip.adjusting && rip.picking.is_none() {
+        if forward { Key::Right } else { Key::Left }
+    } else {
+        if rip.picking.is_none()
+            && rip.stage == Stage::Choosing
+            && Row::ALL.get(rip.row) == Some(&Row::Button)
+        {
+            let next = if forward { Choice::ReRip } else { Choice::Keep };
+            if rip.choice != next {
+                rip.choice = next;
+                return Heard::Change;
+            }
+        }
+        if forward { Key::Down } else { Key::Up }
+    };
+    hold(state, key);
+    let row = state.rip.row;
+    let heard = press(state, key, true);
+    // Onto the pair from above is KEEP, from below RE-RIP: the near one.
+    let rip = &mut state.rip;
+    if rip.picking.is_none()
+        && rip.row != row
+        && rip.stage == Stage::Choosing
+        && Row::ALL.get(rip.row) == Some(&Row::Button)
+    {
+        rip.choice = if forward { Choice::Keep } else { Choice::ReRip };
+    }
+    heard
+}
+
+/// Every held direction let go: a three-key LEFT or RIGHT may have held any
+/// of them.
+pub(super) fn let_go(state: &mut State) {
+    state.rip.hold = None;
+}
+
+/// The tab's cursor and the values a three-key LEFT or RIGHT can change, so
+/// the chord can put one back.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct RipMark {
+    row: usize,
+    choice: Choice,
+    pick_at: usize,
+    pick_top: usize,
+    lo: u32,
+    hi: u32,
+    adjusting: bool,
+}
+
+impl RipMark {
+    pub(super) const fn take(rip: &Rip) -> Self {
+        Self {
+            row: rip.row,
+            choice: rip.choice,
+            pick_at: rip.pick_at,
+            pick_top: rip.pick_top,
+            lo: rip.lo,
+            hi: rip.hi,
+            adjusting: rip.adjusting,
+        }
+    }
+
+    pub(super) fn restore(self, rip: &mut Rip) {
+        rip.row = self.row;
+        rip.choice = self.choice;
+        rip.pick_at = self.pick_at;
+        rip.pick_top = self.pick_top;
+        rip.lo = self.lo;
+        rip.hi = self.hi;
+        rip.adjusting = self.adjusting;
+        if rip.picking.is_some() {
+            clamp_pick(rip);
+        }
+    }
 }
 
 /// Note a direction going down, for the repeat.
@@ -1399,6 +1521,13 @@ pub(super) fn press_prompt(rip: &mut Rip, key: Key) -> Heard {
         }
         _ => Heard::Nothing,
     }
+}
+
+/// Whether the open prompt asks for a number.
+pub(super) fn prompt_numeric(rip: &Rip) -> bool {
+    rip.prompt
+        .as_ref()
+        .is_some_and(|prompt| prompt.kind.numeric())
 }
 
 /// Typed characters into the prompt, up to its limit. A meter's prompt takes

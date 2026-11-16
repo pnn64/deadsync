@@ -33,23 +33,13 @@ fn menu_buffers_browser_full_query_and_rejected_text_do_not_allocate() {
     let mut effects = Vec::new();
     let paste = "a🎵\n".repeat(4096);
     crate::perf::assert_no_churn(|| {
-        assert!(handle_raw_key_event(
-            &mut state,
-            None,
-            Some(&paste),
-            &mut effects
-        ));
+        assert!(text_typed(&mut state, &paste, None, false, &mut effects));
     });
     assert_eq!(state.query.chars().count(), 64);
     assert_eq!(state.query_idle, 7.0);
     assert!(effects.is_empty());
     state.zone = Zone::Detail;
     crate::perf::assert_no_churn(|| {
-        assert!(!handle_raw_key_event(
-            &mut state,
-            None,
-            Some(&paste),
-            &mut effects
-        ));
+        assert!(!text_typed(&mut state, &paste, None, false, &mut effects));
     });
 }

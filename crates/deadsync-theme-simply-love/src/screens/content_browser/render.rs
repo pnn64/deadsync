@@ -29,8 +29,8 @@ use super::state::{
     featured_heading, focused_pack, grid_showing, install_for, installed_catalog_entry,
     installed_page, installed_pages, installed_showing, installed_smo_sync, is_installed,
     list_page, more_mark, rip_showing, row_count, search_capped, search_field_showing,
-    search_running, selected_pack, smo_sync_of, tab, total_pages, visible_rows, window_start,
-    year_at, year_indexing, year_label, years_showing,
+    search_running, selected_pack, smo_sync_of, tab, three_key, total_pages, typing_search,
+    visible_rows, window_start, year_at, year_indexing, year_label, years_showing,
 };
 use super::sync_dialog::{self, PackCheck, SHIFT_MS, SyncAction, SyncDialog, SyncStep};
 use crate::act;
@@ -302,8 +302,13 @@ fn push_reload_dialog(
             diffuse(ink[0], ink[1], ink[2], ink[3]): z(Z_MODAL_TEXT)
         ));
     }
+    let hint = if three_key(state) {
+        "ChooseGoBackThreeKeyHint"
+    } else {
+        "ChooseGoBackHint"
+    };
     actors.push(act!(text:
-        font("miso"): settext(crate::i18n::tr("ContentBrowser", "ChooseGoBackHint")):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", hint)):
         align(0.5, 0.5): xy(cx, cy + 56.0): zoom(0.5): horizalign(center):
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)
@@ -455,7 +460,14 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
                 crate::i18n::tr("ContentBrowser", "MessageInItsPackIniSoTheSameShiftIs").to_string(),
                 [0.66, 0.66, 0.66, 1.0],
             );
-            hint(actors, "START shift    BACK go back");
+            hint(
+                actors,
+                if three_key(state) {
+                    "START shift    LEFT+RIGHT go back"
+                } else {
+                    "START shift    BACK go back"
+                },
+            );
             return;
         }
         SyncStep::Choose => {}
@@ -564,12 +576,15 @@ fn push_sync_dialog(actors: &mut Vec<Actor>, state: &State, dialog: &SyncDialog,
         (note, [0.6, 0.6, 0.6, 1.0])
     };
     body_line(actors, y - ROW_GAP + 12.0, note, rgba);
+    // A three-key cabinet's LEFT and RIGHT ring through every choice, the
+    // Pack.ini row's two values among them.
     hint(
         actors,
-        if dialog.action == SyncAction::PackIni {
-            "UP/DOWN choose    LEFT/RIGHT ITG or NULL    START save    BACK close"
-        } else {
-            "UP/DOWN choose    START go    BACK close"
+        match (three_key(state), dialog.action == SyncAction::PackIni) {
+            (false, true) => "UP/DOWN choose    LEFT/RIGHT ITG or NULL    START save    BACK close",
+            (false, false) => "UP/DOWN choose    START go    BACK close",
+            (true, true) => "LEFT/RIGHT choose    START save    LEFT+RIGHT close",
+            (true, false) => "LEFT/RIGHT choose    START go    LEFT+RIGHT close",
         },
     );
 }
@@ -625,7 +640,10 @@ fn push_remove_confirm(actors: &mut Vec<Actor>, state: &State, name: &str, w: f3
         diffuse(0.88, 0.88, 0.88, 1.0): z(Z_MODAL_TEXT)
     ));
     actors.push(act!(text:
-        font("miso"): settext(crate::i18n::tr("ContentBrowser", "DeletePackHint")):
+        font("miso"): settext(crate::i18n::tr(
+            "ContentBrowser",
+            if three_key(state) { "DeletePackThreeKeyHint" } else { "DeletePackHint" },
+        )):
         align(0.5, 0.5): xy(cx, cy + 48.0): zoom(0.55): horizalign(center):
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)
@@ -682,9 +700,19 @@ fn push_search_field(actors: &mut Vec<Actor>, state: &State, asset_manager: &Ass
     // A single edge along the bottom was not enough: against a screen that is
     // mostly translucent plates, one accent line looks like a divider rather
     // than a focused control, and nothing said where typing would go.
+    //
+    // Only while it is: with the cursor on the strip above, the keys are the
+    // pad's, so the ring is grey and there is no caret until the reader goes
+    // down into it -- or types a key that is no button, which takes them.
+    let typing = typing_search(state);
+    let ring = if typing {
+        [accent[0], accent[1], accent[2], 1.0]
+    } else {
+        [0.32, 0.32, 0.36, 1.0]
+    };
     actors.push(act!(quad:
         align(0.0, 0.0): xy(x - 2.0, y - 2.0): zoomto(field_w + 4.0, field_h + 4.0):
-        diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_PANEL)
+        diffuse(ring[0], ring[1], ring[2], ring[3]): z(Z_PANEL)
     ));
     actors.push(act!(quad:
         align(0.0, 0.0): xy(x, y): zoomto(field_w, field_h):
@@ -696,7 +724,7 @@ fn push_search_field(actors: &mut Vec<Actor>, state: &State, asset_manager: &Ass
     ));
 
     let blink = (state.caret_elapsed * 2.0) as u32;
-    let lit = blink.is_multiple_of(2);
+    let lit = typing && blink.is_multiple_of(2);
     let max_w = field_w - 200.0;
     let (line, alpha) = if state.query.is_empty() {
         (crate::i18n::tr("ContentBrowser", "MessageSearchPacksChartAuthorsAndSongs").to_string(), 0.5)
@@ -1313,7 +1341,14 @@ fn push_list(actors: &mut Vec<Actor>, state: &State) {
         && !page_filling
         && let Some(finding) = more_mark(state)
     {
-        push_more_mark(actors, rows_bottom, list_w, finding, accent);
+        push_more_mark(
+            actors,
+            rows_bottom,
+            list_w,
+            finding,
+            three_key(state),
+            accent,
+        );
     }
 }
 
@@ -1386,12 +1421,14 @@ fn push_row(
 /// The original's three states in one spot: "more" with the down arrow while
 /// a press would fetch another helping, "finding more" while one is being
 /// gathered, and nothing once the list is complete. `rows_bottom` is where the
-/// last drawn row ends.
+/// last drawn row ends. A three-key cabinet's arrow is RIGHT, which is its
+/// DOWN.
 fn push_more_mark(
     actors: &mut Vec<Actor>,
     rows_bottom: f32,
     list_w: f32,
     finding: bool,
+    three_key: bool,
     accent: [f32; 4],
 ) {
     let (label, rgba) = if finding {
@@ -1401,7 +1438,15 @@ fn push_more_mark(
         )
     } else {
         (
-            crate::i18n::tr("ContentBrowser", "MessageMENUDOWNMore").to_string(),
+            crate::i18n::tr(
+                "ContentBrowser",
+                if three_key {
+                    "MessageMENURIGHTMore"
+                } else {
+                    "MessageMENUDOWNMore"
+                },
+            )
+            .to_string(),
             [accent[0], accent[1], accent[2], 1.0],
         )
     };
@@ -2274,6 +2319,9 @@ fn push_footer(actors: &mut Vec<Actor>, state: &State, w: f32) {
 /// What the keys do here, which is different in every zone -- and the reason
 /// the navigation can afford to be unusual at all.
 fn footer_hint(state: &State) -> String {
+    if three_key(state) {
+        return three_key_footer(state);
+    }
     let exit = if state.zone == Zone::Tabs {
         "BACK exit"
     } else if state.zone == Zone::Rip && state.rip.picking.is_some() {
@@ -2321,6 +2369,54 @@ fn footer_hint(state: &State) -> String {
     format!("{}   {}", super::localization::text(body), super::localization::text(exit))
 }
 
+/// The footer on a cabinet with only the three dedicated menu buttons, where
+/// LEFT and RIGHT step through everything and both together go back.
+fn three_key_footer(state: &State) -> String {
+    let exit = if state.zone == Zone::Tabs {
+        "LEFT+RIGHT exit"
+    } else if state.zone == Zone::Rip && state.rip.prompt.is_some() {
+        "LEFT+RIGHT cancel"
+    } else if state.zone == Zone::Rip && (state.rip.picking.is_some() || state.rip.adjusting) {
+        "LEFT+RIGHT done"
+    } else {
+        "LEFT+RIGHT back"
+    };
+    let body = match state.zone {
+        Zone::Detail if state.song_menu.is_some() => "LEFT/RIGHT choose   START go",
+        Zone::Detail if super::preview::chart_showing(state) => {
+            "LEFT/RIGHT difficulty   START stop the preview"
+        }
+        Zone::Detail if super::preview::busy(state) => "LEFT/RIGHT songs   START stop the preview",
+        Zone::Detail if state.detail_on_button => {
+            "START download this pack   RIGHT back to the songs"
+        }
+        Zone::Detail
+            if state
+                .page
+                .page
+                .as_ref()
+                .is_none_or(|page| page.songs.is_empty()) =>
+        {
+            "START download"
+        }
+        Zone::Detail => "LEFT/RIGHT songs   START song options",
+        Zone::Tabs if tab(state) == Tab::Search => "LEFT/RIGHT views   START type a search",
+        Zone::Tabs if tab(state) == Tab::Rip => "LEFT/RIGHT views   START options",
+        Zone::Rip => rip_render::three_key_footer(state),
+        Zone::Tabs => "LEFT/RIGHT views   START open",
+        Zone::Years => "LEFT/RIGHT year   START packs",
+        Zone::Featured => "LEFT/RIGHT packs   START details",
+        Zone::DoublesPick => "LEFT/RIGHT list   START open",
+        Zone::DoublesRows | Zone::List => "LEFT/RIGHT browse   START details",
+        Zone::Installed => "LEFT/RIGHT browse   START sync",
+    };
+    format!(
+        "{}   {}",
+        super::localization::text(body),
+        super::localization::text(exit)
+    )
+}
+
 // --- transitions --------------------------------------------------------------
 
 pub fn get_actors(state: &State, asset_manager: &AssetManager) -> Vec<Actor> {
@@ -2352,6 +2448,50 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A three-key cabinet's footer names its own buttons in every zone, in
+    /// words en.ini has; every other cabinet's is as it was.
+    #[test]
+    fn a_three_key_cabinet_gets_its_own_footer() {
+        let mut state = crate::screens::content_browser::state::init();
+        state.only_dedicated_menu_buttons = true;
+        state.three_key_navigation = true;
+        for zone in [
+            Zone::Tabs,
+            Zone::List,
+            Zone::Featured,
+            Zone::Years,
+            Zone::DoublesPick,
+            Zone::DoublesRows,
+            Zone::Installed,
+            Zone::Detail,
+            Zone::Rip,
+        ] {
+            state.zone = zone;
+            let footer = footer_hint(&state);
+            assert!(!footer.contains("ContentBrowser."), "{zone:?}: {footer}");
+            assert!(footer.contains("LEFT+RIGHT"), "{zone:?}: {footer}");
+            assert!(
+                !footer.contains("UP/DOWN") && !footer.contains("BACK "),
+                "{zone:?}: {footer}"
+            );
+        }
+        state.zone = Zone::Tabs;
+        assert!(footer_hint(&state).ends_with("LEFT+RIGHT exit"));
+        for key in [
+            "ChooseGoBackThreeKeyHint",
+            "DeletePackThreeKeyHint",
+            "ChooseDoneThreeKeyHint",
+            "KeepNameThreeKeyHint",
+            "MessageMENURIGHTMore",
+        ] {
+            let text = crate::i18n::tr("ContentBrowser", key);
+            assert!(!text.starts_with("ContentBrowser."), "{key} is in en.ini");
+        }
+
+        state.three_key_navigation = false;
+        assert!(footer_hint(&state).ends_with("BACK exit"));
+    }
 
     #[test]
     fn commify_groups_from_the_right() {
