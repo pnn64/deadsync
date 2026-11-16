@@ -37,6 +37,61 @@ fn execute(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
         .unwrap_or_else(|e| panic!("{source}\n{e:?}"))
         .to_vec()
 }
+
+#[test]
+fn routine_statistics_have_independent_identity_feed_reset_and_failure() {
+    let mut context = context();
+    context.style_name = "routine".into();
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    execute(
+        &mut runtime,
+        r#"
+        stage=STATSMAN:GetCurStageStats();team=stage:GetRoutineStageStats()
+        p1=stage:GetPlayerStageStats(0);p2=stage:GetPlayerStageStats(1)
+        assert(team==stage:GetRoutineStageStats() and team~=p1 and team~=p2)
+        assert(team:GetCurrentLife()==0 and team:MaxCombo()==0)
+    "#,
+    );
+    let mut frame = SongLuaLiveFrame::default();
+    frame.players[0].actual_points = 10;
+    frame.players[0].recorded_max_combo = 2;
+    frame.players[1].actual_points = -2;
+    frame.players[1].recorded_max_combo = 1;
+    frame.routine = Some(SongLuaLivePlayer {
+        actual_points: 8,
+        possible_points: 25,
+        combo: 2,
+        tap_scores: [0, 0, 0, 0, 1, 0, 0, 0, 0, 4, 0],
+        ..Default::default()
+    });
+    runtime.feed_stage_statistics(&frame).unwrap();
+    runtime.set_live(true);
+    execute(
+        &mut runtime,
+        r#"
+        assert(team:GetActualDancePoints()==8 and team:GetPossibleDancePoints()==25)
+        assert(team:GetCurrentCombo()==2 and team:MaxCombo()==0)
+        assert(p1:MaxCombo()==2 and p2:MaxCombo()==1)
+        assert(team:GetTapNoteScores('W1')==4 and team:GetTapNoteScores('Miss')==1)
+        team:FailPlayer();assert(team:GetFailed() and not p1:GetFailed() and not p2:GetFailed())
+    "#,
+    );
+    assert_eq!(
+        runtime.take_player_writes(),
+        [SongLuaLivePlayerWrite::FailRoutine]
+    );
+    runtime.reset_stage_statistics(&context).unwrap();
+    execute(
+        &mut runtime,
+        "assert(team==stage:GetRoutineStageStats() and not team:GetFailed() and team:GetActualDancePoints()==0)",
+    );
+    context.style_name = "single".into();
+    runtime.reset_stage_statistics(&context).unwrap();
+    execute(
+        &mut runtime,
+        "assert(team:GetPossibleDancePoints()==0 and team:GetCurrentLife()==0 and #team:GetPossibleSteps()==0)",
+    );
+}
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,

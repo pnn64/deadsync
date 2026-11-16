@@ -3056,6 +3056,56 @@ return Def.Actor {}
         assert_eq!(names[1]["results"], serde_json::json!(["double"]));
     }
 
+    #[test]
+    fn routine_point_queries_observe_the_distinct_live_statistics_owner() {
+        use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame, SongLuaLivePlayer,
+            SongLuaNoteskinResolver, compile_song_lua};
+        use std::{fs, sync::Arc};
+        super::start_call_log(10_000).expect("observational logger");
+        let dir = std::env::temp_dir().join(format!("deadsync-routine-query-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let entry = dir.join("default.lua");
+        fs::write(&entry, r#"
+local stage = STATSMAN:GetCurStageStats()
+local p1, p2, team = stage:GetPlayerStageStats(0), stage:GetPlayerStageStats(1), stage:GetRoutineStageStats()
+return Def.ActorFrame { InitCommand = function(self)
+    self:sleep(30)
+    self:SetUpdateFunction(function()
+        for _,stats in ipairs{p1, p2, team} do
+            stats:GetPossibleDancePoints()
+            stats:GetCurrentPossibleDancePoints()
+        end
+    end)
+end }
+"#).unwrap();
+        let mut context = SongLuaCompileContext::new(&dir, "routine query observers");
+        context.live = true;
+        context.defer_initial_live_update = true;
+        context.style_name = "routine".into();
+        context.players[1].enabled = true;
+        let mut compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None).unwrap();
+        for (step, points) in [[10, 15, 25], [20, 25, 45]].into_iter().enumerate() {
+            let stats = |possible| SongLuaLivePlayer {
+                possible_points: possible, current_possible_points: possible - 5,
+                ..Default::default()
+            };
+            let output = compiled.live_scene.as_mut().unwrap().advance(SongLuaLiveFrame {
+                music_seconds: (step + 1) as f64, screen_seconds: (step + 1) as f64,
+                delta_seconds: 1.0, players: [stats(points[0]), stats(points[1])],
+                routine: Some(stats(points[2])), ..Default::default()
+            }).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let queries: Vec<_> = events.iter().filter(|event| matches!(event["operation"].as_str(),
+            Some("PlayerStageStats.GetPossibleDancePoints" | "PlayerStageStats.GetCurrentPossibleDancePoints"))).collect();
+        assert_eq!(queries.iter().map(|event| event["results"][0].as_i64().unwrap()).collect::<Vec<_>>(),
+            [10, 5, 15, 10, 25, 20, 20, 15, 25, 20, 45, 40]);
+        assert!(queries.iter().all(|event| event["phase"] == "callback"));
+    }
+
     fn dynamic_command_observations(enabled: bool) -> Vec<serde_json::Value> {
         use deadsync_song_lua::{SongLuaCompileContext, SongLuaLiveFrame,
             SongLuaNoteskinResolver, compile_song_lua};
@@ -3373,6 +3423,7 @@ end}
                 gameplay_outro: false,
                 chart_attacks: None,
                 players: std::array::from_fn(|_| deadsync_song_lua::SongLuaLivePlayer::default()),
+                routine: None,
             })
             .expect("advance update callback");
         assert!(output.errors.is_empty(), "{:?}", output.errors);

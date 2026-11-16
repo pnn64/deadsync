@@ -149,6 +149,7 @@ include!("feedback.rs");
 include!("holds.rs");
 include!("note_timing.rs");
 include!("rows.rs");
+include!("routine.rs");
 include!("chart_transforms.rs");
 include!("mines.rs");
 include!("replay.rs");

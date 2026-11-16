@@ -8,12 +8,14 @@ pub(super) enum Phase {
     Feed {
         seconds: f64,
         players: [crate::SongLuaLivePlayer; LUA_PLAYERS],
+        routine: Option<crate::SongLuaLivePlayer>,
     },
 }
 #[derive(Default)]
 pub(super) struct State {
     pub pending: Option<Phase>,
     pub players: Option<[crate::SongLuaLivePlayer; LUA_PLAYERS]>,
+    pub routine: Option<crate::SongLuaLivePlayer>,
     pub writes: Vec<SongLuaLivePlayerWrite>,
 }
 
@@ -29,6 +31,7 @@ impl SongRuntime {
         self.statistics_phase(Phase::Feed {
             seconds: frame.screen_seconds,
             players: frame.players,
+            routine: frame.routine,
         })
     }
     /// The host publishes live players after its clock phase, before script updates.

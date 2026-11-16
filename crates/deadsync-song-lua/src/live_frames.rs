@@ -1,6 +1,6 @@
 //! GameState/player host phases shared by retained song playback.
 use super::*;
-use crate::{SongLuaLiveFrame, SongLuaLivePlayer};
+use crate::SongLuaLiveFrame;
 use deadlib_lua::NativeStack;
 
 mod player_options;
@@ -51,7 +51,7 @@ impl SongRuntime {
                 .beat
         });
         self.set_values(beat, frame.music_seconds as f32)?;
-        publish(self, frame.players);
+        publish(self, frame);
         Ok(())
     }
 
@@ -283,7 +283,7 @@ impl SongLiveFrames {
                 )?;
                 stack.set_top(base)
             })?;
-            publish(runtime, frame.players);
+            publish(runtime, frame);
             Ok(beat)
         } else {
             self.prepare(runtime, frame, deltas, outro_started)
@@ -459,7 +459,7 @@ impl SongLiveFrames {
             self.last_beat = beat;
             stack.set_top(base)
         })?;
-        publish(runtime, frame.players);
+        publish(runtime, frame);
         if !outro_started && let Some(windows) = &frame.chart_attacks {
             let master = self.context.players.iter().position(|p| p.enabled);
             for i in 0..LUA_PLAYERS {
@@ -621,7 +621,9 @@ impl SongLiveFrames {
     }
 }
 
-fn publish(runtime: &mut SongRuntime, players: [SongLuaLivePlayer; LUA_PLAYERS]) {
+fn publish(runtime: &mut SongRuntime, frame: &SongLuaLiveFrame) {
+    let players = frame.players;
+    runtime.statistics.lock().unwrap().routine = frame.routine;
     runtime.publish_live_players(players);
     let mut status = runtime.player_status.lock().unwrap();
     for (status, player) in status.iter_mut().zip(players) {
@@ -723,8 +725,14 @@ fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> R
             )?;
         }
         stack.set_top(stack.top() - 1)?;
-        for (i, player) in frame.players.iter().enumerate() {
-            index(stack, batch, i + 2)?;
+        let routine = frame.routine.unwrap_or_default();
+        for (i, player) in frame
+            .players
+            .iter()
+            .chain(std::iter::once(&routine))
+            .enumerate()
+        {
+            index(stack, batch, if i == LUA_PLAYERS { 7 } else { i + 2 })?;
             let stats = stack.top();
             for (key, value) in [
                 (
@@ -732,6 +740,7 @@ fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> R
                     player.possible_points as f64,
                 ),
                 ("__songlua_actual_dance_points", player.actual_points as f64),
+                ("__songlua_max_combo", player.recorded_max_combo as f64),
                 (
                     "__songlua_current_possible_dance_points",
                     player.current_possible_points as f64,

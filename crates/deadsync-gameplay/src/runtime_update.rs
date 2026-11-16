@@ -1859,26 +1859,41 @@ where
         ))
     }
 
-    /// The Routine score both participants earn together, including both
-    /// participants' earlier course songs and full-course totals.
+    /// Routine's own scorekeeper, plus retained course carry from both parts.
     pub fn routine_shared_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
-        if !self.setup.session.play_style.is_routine() {
-            return None;
-        }
+        let routine = self.players_runtime.routine.as_ref()?;
+        let stage = itg_score_inputs_from_display(
+            routine.score_stage(),
+            CourseDisplayCarry::default(),
+            CourseDisplayTotals::default(),
+        );
+        let carry = std::array::from_fn::<_, MAX_PLAYERS, _>(|player| {
+            itg_score_inputs_from_display(
+                ItgScoreStage::default(),
+                self.display_carry_for_player(player),
+                self.display_totals_for_player(player),
+            )
+        });
         Some(shared_itg_score_inputs(
-            self.participant_display_itg_score_inputs(0)?,
-            self.participant_display_itg_score_inputs(1)?,
+            stage,
+            shared_itg_score_inputs(carry[0], carry[1]),
         ))
     }
 
-    /// The Routine score both participants earn in the current song only.
+    /// Current-song team state is independent of the participants' failed flags.
     pub fn routine_shared_stage_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
-        if !self.setup.session.play_style.is_routine() {
-            return None;
-        }
-        Some(shared_itg_score_inputs(
-            self.stage_itg_score_inputs(0)?,
-            self.stage_itg_score_inputs(1)?,
+        let routine = self.players_runtime.routine.as_ref()?;
+        let possible_grade_points = self
+            .stage_totals_for_player(0)
+            .possible_grade_points
+            .saturating_add(self.stage_totals_for_player(1).possible_grade_points);
+        Some(itg_score_inputs_from_display(
+            routine.score_stage(),
+            CourseDisplayCarry::default(),
+            CourseDisplayTotals {
+                possible_grade_points,
+                ..CourseDisplayTotals::default()
+            },
         ))
     }
 
@@ -2134,6 +2149,9 @@ where
             self.setup.num_players,
             judge_start_ns,
         );
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            *routine = RoutineStageStats::default();
+        }
         for player in 0..self.setup.num_players {
             reset_player_runtime_for_practice(
                 &mut self.players_runtime.players[player],

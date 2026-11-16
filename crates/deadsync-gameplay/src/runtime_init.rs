@@ -1211,6 +1211,7 @@ where
         ),
         players_runtime: GameplayPlayersRuntimeState {
             players,
+            routine: play_style.is_routine().then(RoutineStageStats::default),
             column_judgments_active: [true; MAX_PLAYERS],
         },
         display: GameplayDisplayRuntimeState {

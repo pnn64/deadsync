@@ -6169,6 +6169,108 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn routine_team_scoring_has_ordered_callbacks_and_independent_failure() {
+        let mut state = routine_state();
+        let first = state.chart_runtime.note_time_cache_ns[routine_note(&state, 0)];
+        let second = state.chart_runtime.note_time_cache_ns[routine_note(&state, 1)];
+        state.mark_player_stage_failed_from_script(0);
+        assert!(!state.players()[1].stage_failed);
+        assert!(
+            !state
+                .players_runtime
+                .routine
+                .as_ref()
+                .unwrap()
+                .stats
+                .stage_failed
+        );
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capture = seen.clone();
+        state.tap_row_judgment_callback = Some(Box::new(move |state, player, _, _| {
+            let team = &state.players_runtime.routine.as_ref().unwrap().stats;
+            capture
+                .lock()
+                .unwrap()
+                .push((player, team.earned_grade_points, team.combo));
+        }));
+        routine_step(&mut state, &[Lane::Left, Lane::P2Right], first);
+        assert_eq!(*seen.lock().unwrap(), [(0, 0, 0), (1, 5, 1)]);
+        assert_eq!(state.players()[0].earned_grade_points, 0);
+        assert_eq!(state.players()[1].earned_grade_points, 5);
+        assert_eq!(
+            state
+                .players_runtime
+                .routine
+                .as_ref()
+                .unwrap()
+                .stats
+                .earned_grade_points,
+            10
+        );
+        state.mark_routine_stage_failed_from_script();
+        assert!(!state.players()[1].stage_failed);
+        routine_step(&mut state, &[Lane::Down], second);
+        let team = &state.players_runtime.routine.as_ref().unwrap().stats;
+        assert_eq!(
+            (
+                team.earned_grade_points,
+                team.current_possible_points,
+                team.combo
+            ),
+            (10, 15, 3)
+        );
+        assert_eq!(team.judgment_counts, [3, 0, 0, 0, 0, 0]);
+        assert_eq!(team.recorded_max_combo, 0);
+        assert_eq!(state.players()[0].recorded_max_combo, 2);
+        assert_eq!(state.players()[1].recorded_max_combo, 1);
+        assert!((state.routine_shared_stage_itg_score_percent().unwrap() - 0.6666).abs() < 1e-12);
+        assert_eq!(
+            state.routine_shared_itg_score_percent(),
+            state.routine_shared_stage_itg_score_percent()
+        );
+    }
+
+    #[test]
+    fn routine_secondary_scorekeeper_records_holds_mines_and_weighted_checkpoints() {
+        let mut team = RoutineStageStats::default();
+        team.hold(NoteType::Hold, HoldResult::Held);
+        team.mine_hit();
+        team.checkpoint(0, 2, 3, 4);
+        assert_eq!(team.stats.earned_grade_points, 5 - 6 - 8);
+        assert_eq!(team.stats.checkpoints_missed, 4);
+        assert_eq!(team.stats.miss_combo, 4);
+        team.checkpoint(1, 1, 3, 4);
+        assert_eq!(
+            team.stats.miss_combo, 4,
+            "a mixed checkpoint resets the old miss streak"
+        );
+        team.stats.stage_failed = true;
+        let frozen = team.stats.earned_grade_points;
+        team.hold(NoteType::Roll, HoldResult::Held);
+        team.mine_hit();
+        team.checkpoint(1, 0, 3, 4);
+        assert_eq!(team.stats.earned_grade_points, frozen);
+        assert_eq!(
+            (
+                team.stats.holds_held,
+                team.stats.rolls_held,
+                team.stats.mines_hit
+            ),
+            (1, 1, 2)
+        );
+        assert_eq!(
+            (
+                team.stats.combo,
+                team.stats.miss_combo,
+                team.stats.current_possible_points
+            ),
+            (3, 0, 10)
+        );
+        assert_eq!(team.stats.recorded_max_combo, 0);
+        assert!(team.stats.life_history.is_empty());
+    }
+
+    #[test]
     fn routine_life_writes_share_the_meter_but_preserve_individual_history() {
         for style in [GameplayInputPlayStyle::Routine, GameplayInputPlayStyle::PumpRoutine] {
             let mut state = routine_state_for_style(style);
@@ -6277,6 +6379,13 @@ mod runtime_regression_tests {
             state.players_runtime.players[player].scoring_counts =
                 [stage_steps[player], 0, 0, 0, 0, 0];
         }
+        state
+            .players_runtime
+            .routine
+            .as_mut()
+            .unwrap()
+            .stats
+            .scoring_counts = [stage_steps.iter().sum(), 0, 0, 0, 0, 0];
 
         // Individual-song saves keep the current song only.
         assert_eq!(state.routine_shared_stage_itg_score_percent(), Some(1.0));

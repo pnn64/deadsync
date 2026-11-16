@@ -56,6 +56,12 @@ for index,player in ipairs(stage.__songlua_player_stats) do
     hook(player, 'PlayerStageStats', 'GetPossibleDancePoints')
     hook(player, 'PlayerStageStats', 'GetCurrentPossibleDancePoints')
 end
+-- The shared scorekeeper is a separate PlayerStageStats owner. Its native
+-- point getters emit the same observations as the participant getters.
+local routine = stage:GetRoutineStageStats()
+remember(routine, 'PlayerStageStats', 'stage:current/routine')
+hook(routine, 'PlayerStageStats', 'GetPossibleDancePoints')
+hook(routine, 'PlayerStageStats', 'GetCurrentPossibleDancePoints')
 for _,name in ipairs{'GetCurrentSong','GetCurrentSteps','GetCurrentStyle','GetPlayerState',
     'GetSongBeat','IsPlayerEnabled','SetCurrentSteps','GetSongOptionsObject'} do
     hook(gs, 'GameState', name)

@@ -21,7 +21,12 @@ where
     pub fn mark_player_stage_failed_from_script(&mut self, player: usize) {
         if player < self.setup.num_players.min(MAX_PLAYERS) {
             self.players_runtime.players[player].stage_failed = true;
-            self.share_routine_life(player);
+        }
+    }
+
+    pub fn mark_routine_stage_failed_from_script(&mut self) {
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.stats.stage_failed = true;
         }
     }
 
@@ -56,7 +61,6 @@ where
         target.combo_after_miss = source.combo_after_miss;
         target.is_failing = source.is_failing;
         target.fail_time = source.fail_time;
-        target.stage_failed = source.stage_failed;
         target.course_life = source.course_life;
         target.course_submit_life = source.course_submit_life;
         // Each PlayerStageStats owns its own history. Sharing a physical
@@ -453,6 +457,9 @@ where
                     combo_milestones_enabled,
                 );
 
+                if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+                    routine.mine_hit();
+                }
                 self.display.receptor_feedback.clear_lift_glow(column);
                 self.trigger_mine_explosion(column);
                 self.set_last_mine_judgment(player, column, MineResult::Hit);
@@ -616,6 +623,9 @@ where
         let player_update =
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.hold(note_type, update.result);
+        }
         if update.effects.show_judgment {
             self.mark_autoplay_judged(player);
             self.display.hold_feedback.set_hold_judgment(
@@ -684,6 +694,9 @@ where
             scoring_blocked,
         );
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.hold(note_type, update.result);
+        }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
             apply_course_life_event(
@@ -740,6 +753,14 @@ where
         let mut stats = hold_result_stats_state(&self.players_runtime.players[player]);
         apply_hold_result_stats_update(&mut stats, stats_update);
         set_hold_result_stats_state(&mut self.players_runtime.players[player], stats);
+        if !self.autoplay_blocks_scoring()
+            && let Some(routine) = self.players_runtime.routine.as_mut()
+        {
+            routine.hold(
+                self.chart_runtime.notes[note_index].note_type,
+                HoldResult::Missed,
+            );
+        }
         self.record_ghost_judgment(player);
         self.display.hold_feedback.set_hold_judgment(
             column,
@@ -1081,7 +1102,7 @@ where
                 self.trigger_hold_explosion(column);
             }
         }
-        if self.autoplay_blocks_scoring() || self.player_score_is_blocked(player) {
+        if self.autoplay_blocks_scoring() {
             return;
         }
 
@@ -1091,6 +1112,12 @@ where
             &self.source.gameplay_charts[player].timing_segments.combos,
             checkpoint_beat,
         );
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            routine.checkpoint(held, missed, combo_multiplier, miss_combo_multiplier);
+        }
+        if self.player_score_is_blocked(player) {
+            return;
+        }
         let grade = if checkpoint_hit {
             JudgeGrade::Fantastic
         } else {
@@ -1129,6 +1156,8 @@ where
             },
         );
         apply_combo_update(player_runtime, combo_update, combo_milestones_enabled);
+        player_runtime.recorded_max_combo =
+            player_runtime.recorded_max_combo.max(player_runtime.combo);
         self.share_routine_life(player);
         if !checkpoint_hit {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
@@ -1877,6 +1906,15 @@ where
             if update.update_grade_totals {
                 update_itg_grade_totals(p);
             }
+            if let Some(routine) = self.players_runtime.routine.as_mut() {
+                routine.tap_row(
+                    &final_judgment,
+                    plan.note_count,
+                    self.setup.session.play_style.is_pump(),
+                    combo_multiplier,
+                    miss_combo_multiplier,
+                );
+            }
             if plan.apply_life_change {
                 apply_course_life_event(
                     p,
@@ -1886,6 +1924,7 @@ where
                 );
             }
             apply_combo_update(p, update.combo_update, combo_milestones_enabled);
+            p.recorded_max_combo = p.recorded_max_combo.max(p.combo);
             self.share_routine_life(player);
         }
         if plan.show_final_visual {

@@ -69,6 +69,9 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         let selected = call.intern_static(b"live_statistics")?;
         call.raw_table_set(catalog, selected, Value::Table(batch))?;
+        let routine = raw_field(call, catalog, "statistics_routine")?;
+        table(call, routine)?;
+        call.raw_table_set(batch, Value::Number(7.), routine)?;
         {
             let status = call
                 .function_data::<Arc<Mutex<[crate::PlayerStateStatus; LUA_PLAYERS]>>>()

@@ -86,6 +86,8 @@ impl LifeRecordSource {
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
+    /// Largest combo recorded by Player::UpdateComboList, not the scorekeeper.
+    pub recorded_max_combo: u32,
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
@@ -162,6 +164,8 @@ pub struct PlayerRuntime {
 #[derive(Clone, Debug)]
 pub struct GameplayPlayersRuntimeState {
     pub players: [PlayerRuntime; MAX_PLAYERS],
+    /// Separate secondary scorekeeper; it has no input actor or life meter.
+    pub routine: Option<RoutineStageStats>,
     /// Latched once at frame start. `ITGmania` publishes `HealthState_Dead` after
     /// the frame's `JudgmentMessages`, so the judgment that drains life to zero
     /// (and any other judgments in that update) must remain eligible.
@@ -254,6 +258,7 @@ pub fn init_player_runtime() -> PlayerRuntime {
 pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
+        recorded_max_combo: 0,
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,

@@ -24,6 +24,7 @@ pub struct SongLuaLivePlayer {
     pub life_record_latest: Option<f32>,
     pub failed: bool,
     pub combo: u32,
+    pub recorded_max_combo: u32,
     pub miss_combo: u32,
     /// Native TapNoteScore order: None, HitMine, AvoidMine, CheckpointMiss,
     /// Miss, W5, W4, W3, W2, W1, CheckpointHit.
@@ -51,6 +52,7 @@ pub enum SongLuaLivePlayerWrite {
     SetLife { player: usize, life: f32 },
     RecordLife { player: usize, life: f32 },
     Fail { player: usize },
+    FailRoutine,
 }
 
 pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
@@ -68,6 +70,7 @@ pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, 
             SongLuaLivePlayerWrite::Fail { player } => {
                 game.mark_player_stage_failed_from_script(player)
             }
+            SongLuaLivePlayerWrite::FailRoutine => game.mark_routine_stage_failed_from_script(),
         }
     }
 }
@@ -98,6 +101,8 @@ pub struct SongLuaLiveFrame {
     pub chart_attacks:
         Option<[std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>; LUA_PLAYERS]>,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
+    /// Routine's separately ordered scorekeeper, without a life-meter actor.
+    pub routine: Option<SongLuaLivePlayer>,
 }
 
 impl SongLuaLivePlayer {
@@ -113,6 +118,7 @@ impl SongLuaLivePlayer {
             failed: player.stage_failed || player.fail_time.is_some(),
             fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo,
+            recorded_max_combo: player.recorded_max_combo,
             miss_combo: player.miss_combo,
             tap_scores: [
                 0,
@@ -150,6 +156,12 @@ impl SongLuaLiveFrame {
             uptime_seconds: None,
             gameplay_outro: game.mods.attacks.cleared_for_outro,
             chart_attacks: Some(game.mods.attacks.option_windows.clone()),
+            routine: game.routine_shared_stage_itg_score_inputs().map(|score| {
+                SongLuaLivePlayer::from_player(
+                    &game.players_runtime.routine.as_ref().unwrap().stats,
+                    score.possible_grade_points,
+                )
+            }),
             players: std::array::from_fn(|player| {
                 game.stage_itg_score_inputs(player).map_or_else(
                     SongLuaLivePlayer::default,
