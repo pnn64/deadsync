@@ -326,10 +326,11 @@ impl SongRuntime {
                 if let Some(value) = value {
                     player_indices[player] = Some(values.len());
                     values.push(*value);
-                    let state = access
+                    let mut state = access
                         .state(&mut self.vm, *value)
                         .map_err(|e| e.to_string())?;
-                    baseline.push(self.update_pose(*value, state)?);
+                    self.update_pose(*value, &mut state);
+                    baseline.push(state);
                 }
             }
             let mut layers = Vec::new();
@@ -370,12 +371,12 @@ impl SongRuntime {
                 if let Tracked::Player(player) = row.target
                     && let Some(i) = player_indices[player]
                 {
-                    let state = self.update_pose(values[i], replay_states[i])?;
+                    self.update_pose(values[i], &mut replay_states[i]);
+                    let state = replay_states[i];
                     access
                         .write_frame(&mut self.vm, values[i], state)
                         .map_err(|e| e.to_string())?;
                     baseline[i] = state;
-                    replay_states[i] = state;
                     row.actor.initial_state = state;
                 }
             }
@@ -561,7 +562,7 @@ impl SongRuntime {
                 }
                 self.publish_song_tween_frame(screen, &values)?;
                 for (i, &value) in values.iter().enumerate().take(count) {
-                    replay_states[i] = self.update_pose(value, replay_states[i])?;
+                    self.update_pose(value, &mut replay_states[i]);
                 }
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
                 update_states.copy_from_slice(&replay_states);
@@ -903,10 +904,8 @@ impl SongRuntime {
         options.release(&mut self.vm).map_err(|e| e.to_string())?;
         result
     }
-    fn update_pose(&mut self, value: Value, mut state: State) -> Result<State, String> {
-        self.actors
-            .apply_song_replay_pose(&self.vm, value, &mut state);
-        Ok(state)
+    fn update_pose(&self, value: Value, state: &mut State) {
+        self.actors.apply_song_replay_pose(&self.vm, value, state);
     }
     fn update_motion(
         &mut self,

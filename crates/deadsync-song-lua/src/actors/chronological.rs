@@ -1,4 +1,5 @@
 //! Observations used by the production chronological compiler.
+use super::fields::Field;
 use super::*;
 use crate::SongLuaOverlayState as State;
 
@@ -596,10 +597,14 @@ fn effect_time(
             )
         })
     };
-    let value = get_static(call, actor, b"__songlua_state_rainbow")?;
+    let [value, mode] = fields::get_all(
+        call,
+        actor,
+        [Field::STATE_RAINBOW, Field::STATE_EFFECT_MODE],
+    )?;
     let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.0));
     if !rainbow {
-        let value = get_static(call, actor, b"__songlua_state_effect_mode")?;
+        let value = mode;
         let selected = if value == Value::Nil {
             fallback.is_some_and(|s| {
                 !matches!(
@@ -629,12 +634,12 @@ fn effect_time(
             return Ok(None);
         }
     }
-    let value = get_static(call, actor, b"__songlua_state_motion_clock")?;
+    let value = fields::get(call, actor, Field::STATE_MOTION_CLOCK)?;
     let Some(motion) = optional_table(call, value)? else {
         return Ok(fallback.and_then(|s| s.2));
     };
     call.with_roots(&[value], |call| {
-        let value = get_static(call, actor, b"__songlua_state_effect_clock")?;
+        let value = fields::get(call, actor, Field::STATE_EFFECT_CLOCK)?;
         let beat = initial_state::value_text(call, value)?
             .is_some_and(|s| matches!(s.as_str(), "beat" | "beatnooffset"));
         let value = sprites::field(call, motion, "units")?;
@@ -679,6 +684,129 @@ fn field_wrappers(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_motion_reads_observe_raw_and_nested_mutations() {
+        fn execute(runtime: &mut crate::SongRuntime, source: &str) -> Value {
+            runtime
+                .vm
+                .execute(
+                    &deadlib_lua::compile_named(source.as_bytes(), b"=motion mutation").unwrap(),
+                )
+                .unwrap()
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+        }
+        let mut runtime =
+            crate::SongRuntime::new(&crate::SongLuaCompileContext::new(".", "motion mutation"))
+                .unwrap();
+        let declaration = execute(&mut runtime, "return Def.Quad{}");
+        let scene = runtime
+            .actors
+            .instantiate(&mut runtime.vm, declaration)
+            .unwrap();
+        let actor = runtime.actors.root(&runtime.vm, scene).unwrap();
+        runtime.vm.set_global(b"actor", actor).unwrap();
+        let Value::Table(id) = actor else {
+            unreachable!()
+        };
+        assert!(runtime.vm.store_ref().actors.contains_key(&id));
+        let cases = [
+            ("", None),
+            (
+                "actor.__songlua_state_rainbow=true; actor.__songlua_state_motion_clock={units=2}",
+                Some([10., 2.]),
+            ),
+            ("actor.__songlua_state_effect_clock='beat'", Some([20., 2.])),
+            (
+                "actor.__songlua_state_motion_clock.units=3",
+                Some([20., 3.]),
+            ),
+            ("actor.__songlua_state_effect_clock=nil", Some([10., 3.])),
+            ("actor.__songlua_state_rainbow=nil", None),
+            ("actor.__songlua_state_effect_mode='bob'", Some([10., 3.])),
+            (
+                "actor.__songlua_state_motion_clock={units=4}",
+                Some([10., 4.]),
+            ),
+            (
+                "actor.__songlua_state_motion_clock=setmetatable({}, {__index=function() actor.__songlua_state_effect_clock='beat'; collectgarbage('collect'); return 5 end})",
+                Some([10., 5.]),
+            ),
+            ("", Some([20., 5.])),
+            ("actor.__songlua_state_effect_mode=nil", None),
+        ];
+        for (source, expected) in cases {
+            execute(&mut runtime, source);
+            // Read twice so each mutation is also exercised with a warm field cache.
+            for _ in 0..2 {
+                let Answer::Motion(time, _) = runtime
+                    .actors
+                    .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                    .unwrap()
+                else {
+                    panic!("motion answer")
+                };
+                assert_eq!(time, expected, "{source}");
+                // The authored getter changes the next read's clock.
+                if source.contains("__index") {
+                    break;
+                }
+            }
+        }
+        for (source, expected_error) in [
+            ("actor.__songlua_state_rainbow={}", "boolean expected"),
+            (
+                "actor.__songlua_state_rainbow=false; actor.__songlua_state_effect_mode={}",
+                "string expected",
+            ),
+            (
+                "actor.__songlua_state_effect_mode='bob'; actor.__songlua_state_motion_clock=false",
+                "table expected",
+            ),
+            (
+                "actor.__songlua_state_motion_clock={units={}}",
+                "number expected",
+            ),
+        ] {
+            execute(&mut runtime, source);
+            let error = runtime
+                .actors
+                .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                .err()
+                .expect("invalid motion field");
+            assert!(error.to_string().contains(expected_error), "{error}");
+        }
+        execute(&mut runtime, "actor.__songlua_state_motion_clock={units=6}");
+        let Answer::Motion(time, _) = runtime
+            .actors
+            .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+            .unwrap()
+        else {
+            panic!("motion answer")
+        };
+        assert_eq!(time, Some([20., 6.]));
+        execute(
+            &mut runtime,
+            "actor.__songlua_state_rainbow=nil; actor.__songlua_state_effect_mode=nil; actor.__songlua_state_motion_clock=nil",
+        );
+        // Native motion can advance without changing the actor's raw fields.
+        for expected in [None, Some([11., 7.]), Some([12., 8.]), None] {
+            let state = &mut runtime.vm.store().actors.get_mut(&id).unwrap().state.render;
+            state.rainbow = expected.is_some();
+            state.effect_time = expected;
+            let Answer::Motion(time, _) = runtime
+                .actors
+                .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                .unwrap()
+            else {
+                panic!("motion answer")
+            };
+            assert_eq!(time, expected);
+        }
+        runtime.actors.release(&mut runtime.vm, scene).unwrap();
+    }
 
     #[test]
     fn batched_motion_reads_preserve_order_roots_and_getter_errors() {

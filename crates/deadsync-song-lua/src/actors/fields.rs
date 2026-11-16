@@ -129,6 +129,7 @@ fields! {
     plain UPDATE_PREVIOUS = "__songlua_update_previous",
     plain UPDATE_FUNCTION = "__songlua_update_function",
     plain STATE_SPIN = "__songlua_state_spin",
+    plain STATE_MOTION_CLOCK = "__songlua_state_motion_clock",
 }
 
 const WORDS: usize = 2;
