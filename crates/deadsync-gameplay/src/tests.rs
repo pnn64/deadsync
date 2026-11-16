@@ -7190,6 +7190,10 @@ mod tests {
         );
         assert_eq!(
             next_timing_tick_mode(GameplayTimingTickMode::Hit),
+            GameplayTimingTickMode::Beat
+        );
+        assert_eq!(
+            next_timing_tick_mode(GameplayTimingTickMode::Beat),
             GameplayTimingTickMode::Off
         );
 
@@ -7206,6 +7210,10 @@ mod tests {
             Some("Hit Tick")
         );
         assert_eq!(
+            timing_tick_mode_status_line(GameplayTimingTickMode::Beat),
+            Some("Beat Tick")
+        );
+        assert_eq!(
             timing_tick_mode_debug_label(GameplayTimingTickMode::Off),
             "off"
         );
@@ -7216,6 +7224,10 @@ mod tests {
         assert_eq!(
             timing_tick_mode_debug_label(GameplayTimingTickMode::Hit),
             "hit tick"
+        );
+        assert_eq!(
+            timing_tick_mode_debug_label(GameplayTimingTickMode::Beat),
+            "beat tick"
         );
     }
 

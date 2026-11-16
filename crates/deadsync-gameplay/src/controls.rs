@@ -4,6 +4,7 @@ pub enum GameplayTimingTickMode {
     Off,
     Assist,
     Hit,
+    Beat,
 }
 
 #[inline(always)]
@@ -12,7 +13,8 @@ pub const fn next_timing_tick_mode(mode: GameplayTimingTickMode) -> GameplayTimi
     match mode {
         GameplayTimingTickMode::Off => GameplayTimingTickMode::Assist,
         GameplayTimingTickMode::Assist => GameplayTimingTickMode::Hit,
-        GameplayTimingTickMode::Hit => GameplayTimingTickMode::Off,
+        GameplayTimingTickMode::Hit => GameplayTimingTickMode::Beat,
+        GameplayTimingTickMode::Beat => GameplayTimingTickMode::Off,
     }
 }
 
@@ -23,6 +25,7 @@ pub const fn timing_tick_mode_status_line(mode: GameplayTimingTickMode) -> Optio
         GameplayTimingTickMode::Off => None,
         GameplayTimingTickMode::Assist => Some("Assist Tick"),
         GameplayTimingTickMode::Hit => Some("Hit Tick"),
+        GameplayTimingTickMode::Beat => Some("Beat Tick"),
     }
 }
 
@@ -33,6 +36,7 @@ pub const fn timing_tick_mode_debug_label(mode: GameplayTimingTickMode) -> &'sta
         GameplayTimingTickMode::Off => "off",
         GameplayTimingTickMode::Assist => "assist tick",
         GameplayTimingTickMode::Hit => "hit tick",
+        GameplayTimingTickMode::Beat => "beat tick",
     }
 }
 

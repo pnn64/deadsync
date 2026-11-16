@@ -65,6 +65,9 @@ const BACK_OUT_FADE_SECONDS: f32 = 0.4;
 pub const GAMEPLAY_INPUT_BACKLOG_WARN: usize = 128;
 pub const GAMEPLAY_INPUT_LATENCY_WARN_US: u32 = 2_000;
 pub const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
+// ITGmania exposes separate metronome sounds; its fallback aliases both to clap.
+pub const BEAT_TICK_SFX_PATH: &str = "assets/sounds/beat_tick.ogg";
+pub const MEASURE_TICK_SFX_PATH: &str = "assets/sounds/measure_tick.ogg";
 pub const GAMEPLAY_TRACE_SUMMARY_INTERVAL_S: f32 = 1.0;
 pub const GAMEPLAY_TRACE_SLOW_FRAME_US: u32 = 4_000;
 pub const GAMEPLAY_TRACE_PHASE_SPIKE_US: u32 = 1_000;
