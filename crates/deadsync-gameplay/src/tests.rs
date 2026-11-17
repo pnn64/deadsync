@@ -3456,6 +3456,33 @@ mod tests {
     }
 
     #[test]
+    fn attack_mod_levels_read_bare_numbers_like_from_one_mod_string() {
+        // "Looping the Rooms" stealths a lane at 90% so its fakes glow gray.
+        let mods = parse_attack_mods("*1000 90 Stealth4, 90 *500 stealth1, *1000 No Stealth2");
+        assert_eq!(mods.appearance.stealth_cols[3], Some(0.9));
+        assert_eq!(mods.appearance_speed.stealth_cols[3], Some(1000.0));
+        assert_eq!(mods.appearance.stealth_cols[0], Some(0.9));
+        assert_eq!(mods.appearance_speed.stealth_cols[0], Some(500.0));
+        assert_eq!(mods.appearance.stealth_cols[1], Some(0.0));
+        // Each word may set the level; the last one wins.
+        assert_eq!(parse_attack_mods("no 50% stealth").appearance.stealth, Some(0.5));
+        assert_eq!(parse_attack_mods("50 no stealth").appearance.stealth, Some(0.0));
+        assert_eq!(parse_attack_mods("-25 hidden").appearance.hidden, Some(-0.25));
+        // StringToFloat reads the leading number, and "ms" levels are seconds.
+        assert_eq!(parse_attack_mods("30+0% stealth").appearance.stealth, Some(0.3));
+        assert_eq!(parse_attack_mods("250ms stealth").appearance.stealth, Some(0.25));
+        // "90*" is rejected rather than read as an approach speed.
+        assert!(!parse_attack_mods("90* stealth").appearance.any());
+        // A trailing multibyte character must not split the "ms" check.
+        assert_eq!(parse_attack_mods("9€ stealth").appearance.stealth, Some(0.09));
+        // Only the last word names the mod; the level words stay out of it.
+        assert_eq!(
+            parse_attack_mods("*2 1.5x").scroll_speed,
+            Some(ScrollSpeedSetting::XMod(1.5))
+        );
+    }
+
+    #[test]
     fn lane_stealth_approaches_independently_and_boolean_switches_immediately() {
         let mods = parse_attack_mods("*2 75% stealth1, *4 -25% stealth4, *0 stealthpastreceptors");
         assert_eq!(mods.appearance.stealth_cols[0], Some(0.75));

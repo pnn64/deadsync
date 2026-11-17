@@ -8006,22 +8006,66 @@ fn attack_level(percent_value: Option<f32>) -> Option<f32> {
     raw.is_finite().then_some(raw / 100.0)
 }
 
-#[inline(always)]
-fn parse_attack_percent_prefix(token: &str) -> (Option<f32>, &str) {
-    let Some(idx) = token.find('%') else {
-        return (None, token);
-    };
-    let value = token[..idx].trim().parse::<f32>().ok();
-    (value, token[idx + 1..].trim())
+/// The number `strtof` reads from the start of `text` ("90%" reads 90), or
+/// `None` when no number starts there.
+fn float_prefix(text: &str) -> Option<f32> {
+    text.parse::<f32>().ok().or_else(|| {
+        (1..text.len())
+            .rev()
+            .find_map(|end| text.get(..end)?.parse::<f32>().ok())
+    })
 }
 
-#[inline(always)]
-fn parse_attack_level_token(token: &str) -> (Option<f32>, &str) {
-    let token = token.trim();
-    if token.len() >= 3 && token[..3].eq_ignore_ascii_case("no ") {
-        return (Some(0.0), token[3..].trim());
+/// RageUtil's StringToFloat: a non-finite or missing number reads as zero.
+fn itg_string_to_float(text: &str) -> f32 {
+    float_prefix(text).filter(|value| value.is_finite()).unwrap_or(0.0)
+}
+
+/// One comma-separated mod, read as `PlayerOptions::FromOneModString` reads it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct AttackModWords<'a> {
+    approach_speed: f32,
+    /// `None` leaves the default level of 100%.
+    percent: Option<f32>,
+    name: &'a str,
+}
+
+/// Every word may set the level ("no", or a number with or without '%') or
+/// the approach speed ("*N"), in any order, the last of each winning. The
+/// final word names the mod. A bare number such as "90 stealth" is a level,
+/// not part of the name. Returns `None` for a mod that native rejects.
+fn parse_attack_mod_words(token: &str) -> Option<AttackModWords<'_>> {
+    let mut words = AttackModWords {
+        approach_speed: 1.0,
+        percent: None,
+        name: "",
+    };
+    for word in token.split_ascii_whitespace() {
+        words.name = word;
+        if word.eq_ignore_ascii_case("no") {
+            words.percent = Some(0.0);
+        } else if word.starts_with(|ch: char| ch.is_ascii_digit() || ch == '-') {
+            let ms_at = word.len().saturating_sub(2);
+            if word.get(ms_at..).is_some_and(|tail| tail.eq_ignore_ascii_case("ms")) {
+                // Milliseconds become a level in seconds.
+                words.percent = Some(itg_string_to_float(&word[..ms_at]) / 10.0);
+            } else if word.ends_with('*') {
+                // Native rejects "123*" (meant as "*123") and skips the mod.
+                return None;
+            } else {
+                words.percent = Some(itg_string_to_float(word));
+            }
+        } else if let Some(speed) = word.strip_prefix('*')
+            && let Some(speed) = float_prefix(speed)
+        {
+            words.approach_speed = if speed.is_finite() {
+                speed.max(0.0)
+            } else {
+                1.0
+            };
+        }
     }
-    parse_attack_percent_prefix(token)
+    (!words.name.is_empty()).then_some(words)
 }
 
 #[inline(always)]
@@ -8985,16 +9029,19 @@ pub fn parse_attack_mods(mods: &str) -> ParsedAttackMods {
     let mut out = ParsedAttackMods::default();
     let mut key_buffer = [0u8; ATTACK_KEY_STACK_BYTES];
     for token in mods.split(',') {
-        let (approach_speed, token) = parse_attack_approach_prefix(token);
-        if token.is_empty() {
+        let Some(AttackModWords {
+            approach_speed,
+            percent: percent_value,
+            name,
+        }) = parse_attack_mod_words(token)
+        else {
             continue;
-        }
-        if let Some(scroll_speed) = parse_attack_scroll_override(token) {
+        };
+        if let Some(scroll_speed) = parse_attack_scroll_override(name) {
             out.scroll_speed = Some(scroll_speed);
             continue;
         }
-        let (percent_value, token_key) = parse_attack_level_token(token);
-        let key = buffered_attack_token_key(token_key, &mut key_buffer);
+        let key = buffered_attack_token_key(name, &mut key_buffer);
         let key = key.as_str();
         if key.is_empty() {
             continue;
