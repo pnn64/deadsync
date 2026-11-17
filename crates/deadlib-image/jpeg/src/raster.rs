@@ -554,7 +554,7 @@ impl Plan<'_> {
                     for by in 0..l.v {
                         for bx in 0..l.h {
                             let last =
-                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i])?;
+                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i], 8, false)?;
                             let column = mx * l.h + bx;
                             window.put(i, my, slot, by, column, &mut cache, &mut output, |target, stride| {
                                 if last == 0 {

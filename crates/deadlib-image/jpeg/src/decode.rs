@@ -476,6 +476,9 @@ pub(crate) fn decode_scan(
         )
     };
     let mut bits = Bits::new(entropy);
+    // Sequential Huffman scans use the faster reader; acceptance is identical.
+    let mut reader = (progression.is_none() && !frame.process.is_arithmetic())
+        .then(|| crate::fast::Reader::new(entropy));
     let mut arithmetic = if frame.process.is_arithmetic() {
         Some((
             Arithmetic::new(entropy)?,
@@ -498,7 +501,11 @@ pub(crate) fn decode_scan(
                 statistics.reset();
                 classes.fill(0);
             } else {
-                bits.restart(restart)?;
+                if let Some(reader) = &mut reader {
+                    reader.restart(restart)?;
+                } else {
+                    bits.restart(restart)?;
+                }
             }
             restart = (restart + 1) & 7;
             predictors.fill(0);
@@ -558,10 +565,10 @@ pub(crate) fn decode_scan(
                             frame.precision,
                             frame.process.is_differential(),
                         )?;
-                    } else {
-                        sequential_block(
+                    } else if let Some(reader) = &mut reader {
+                        crate::fast::block(
                             block,
-                            &mut bits,
+                            reader,
                             tables[dc].as_ref().unwrap(),
                             tables[ac].as_ref().unwrap(),
                             &mut predictors[j],
@@ -578,6 +585,8 @@ pub(crate) fn decode_scan(
     }
     if let Some((coder, _, _)) = arithmetic {
         coder.finish()?;
+    } else if let Some(reader) = reader {
+        reader.finish()?;
     } else {
         bits.finish()?;
     }
@@ -587,52 +596,6 @@ pub(crate) fn decode_scan(
         }
         if progression.is_none() {
             components[i].successive_approximation.fill(0);
-        }
-    }
-    Ok(())
-}
-
-fn sequential_block(
-    block: &mut [i16; 64],
-    bits: &mut Bits<'_>,
-    dc: &Huffman,
-    ac: &Huffman,
-    predictor: &mut i32,
-    precision: u8,
-    differential: bool,
-) -> Result<()> {
-    let size = dc.decode(bits)?;
-    if size > precision + 3 {
-        return Err(Error::Invalid("DC magnitude category"));
-    }
-    *predictor += bits.receive(size)?;
-    if *predictor < -(1 << (precision + 3)) || *predictor >= 1 << (precision + 3) {
-        return Err(Error::Invalid("DC coefficient range"));
-    }
-    block[0] = *predictor as i16;
-    let mut k = 1;
-    while k < 64 {
-        let rs = ac.decode(bits)?;
-        let run = (rs >> 4) as usize;
-        let size = rs & 15;
-        if size == 0 {
-            if run == 0 {
-                break;
-            }
-            if run != 15 {
-                return Err(Error::Invalid("sequential AC run symbol"));
-            }
-            k += 16;
-            if k > 64 {
-                return Err(Error::Invalid("AC zero run exceeds block"));
-            }
-        } else {
-            k += run;
-            if k >= 64 || size > precision + 2 + u8::from(differential) {
-                return Err(Error::Invalid("AC run or magnitude"));
-            }
-            block[ZIGZAG[k]] = bits.receive(size)? as i16;
-            k += 1;
         }
     }
     Ok(())

@@ -198,8 +198,10 @@ fn long_symbol(table: &Huffman, peek: i32) -> Result<(u32, u32)> {
     Err(Error::Invalid("unassigned Huffman code"))
 }
 
-/// Decode one sequential 8-bit block. Returns the largest zigzag index
-/// written, so zero identifies a DC-only block. `block` must start zeroed.
+/// Decode one sequential block. Returns the largest zigzag index written, so
+/// zero identifies a DC-only block. `block` must start zeroed. Magnitude
+/// categories reach precision + 3 bits, so a symbol never exceeds the 32
+/// bits that `fill` guarantees.
 #[inline(always)]
 pub(crate) fn block(
     block: &mut [i16; 64],
@@ -207,16 +209,18 @@ pub(crate) fn block(
     dc: &Huffman,
     ac: &Huffman,
     predictor: &mut i32,
+    precision: u8,
+    differential: bool,
 ) -> Result<usize> {
     reader.fill();
     let size = symbol(dc, reader)?;
-    if size > 11 {
+    if size > u32::from(precision) + 3 {
         return Err(Error::Invalid("DC magnitude category"));
     }
     if size != 0 {
         *predictor += reader.receive(size);
     }
-    if *predictor < -(1 << 11) || *predictor >= 1 << 11 {
+    if *predictor < -(1 << (precision + 3)) || *predictor >= 1 << (precision + 3) {
         return Err(Error::Invalid("DC coefficient range"));
     }
     block[0] = *predictor as i16;
@@ -251,7 +255,7 @@ pub(crate) fn block(
             }
         } else {
             k += run;
-            if k >= 64 || size > 10 {
+            if k >= 64 || size > u32::from(precision) + 2 + u32::from(differential) {
                 return Err(Error::Invalid("AC run or magnitude"));
             }
             block[ZIGZAG[k]] = reader.receive(size) as i16;
