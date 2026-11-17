@@ -375,13 +375,15 @@ impl Window {
     }
 
     /// Reconstruct block column `bx`, block row `by` within MCU row `my`, of
-    /// component `i` through `idct(target, stride)`.
+    /// component `i` through `idct(target, stride)`. `slot` is `my % slots`,
+    /// computed once per MCU row: a per-block division showed in profiles.
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn put(
         &self,
         i: usize,
         my: usize,
+        slot: usize,
         by: usize,
         bx: usize,
         cache: &mut [u8],
@@ -390,8 +392,7 @@ impl Window {
     ) {
         if !self.gray {
             let l = self.layouts[i];
-            let start =
-                l.offset + (my % l.slots) * l.band_rows * l.stride + by * 8 * l.stride + bx * 8;
+            let start = l.offset + slot * l.band_rows * l.stride + by * 8 * l.stride + bx * 8;
             return idct(&mut cache[start..], l.stride);
         }
         let (x, y) = (bx * 8, my * 8);
@@ -537,6 +538,7 @@ impl Plan<'_> {
         let mut restart = 0;
         let mut block = [0i16; 64];
         for my in 0..window.rows {
+            let slot = my % window.layouts[0].slots;
             for mx in 0..window.cols {
                 let mcu = my * window.cols + mx;
                 if self.interval != 0 && mcu != 0 && mcu % self.interval == 0 {
@@ -554,7 +556,7 @@ impl Plan<'_> {
                             let last =
                                 fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i])?;
                             let column = mx * l.h + bx;
-                            window.put(i, my, by, column, &mut cache, &mut output, |target, stride| {
+                            window.put(i, my, slot, by, column, &mut cache, &mut output, |target, stride| {
                                 if last == 0 {
                                     idct8_dc(block[0], quant, target, stride);
                                 } else {
@@ -595,6 +597,7 @@ fn from_coefficients(
         FloatQuant::new(image.components.get(i).map_or(&[0; 64], |c| &c.quantization))
     });
     for my in 0..window.rows {
+        let slot = my % window.layouts[0].slots;
         for (i, c) in image.components.iter().enumerate() {
             let quant = &quants[i];
             let v = window.layouts[i].v;
@@ -605,7 +608,7 @@ fn from_coefficients(
                 }
                 for bx in 0..c.width.div_ceil(8) {
                     let block = &c.blocks[row * c.blocks_wide + bx];
-                    window.put(i, my, by, bx, &mut cache, &mut output, |target, stride| {
+                    window.put(i, my, slot, by, bx, &mut cache, &mut output, |target, stride| {
                         idct8_auto(block, quant, target, stride);
                     });
                 }

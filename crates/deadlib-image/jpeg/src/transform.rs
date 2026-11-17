@@ -133,15 +133,23 @@ pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], strid
     }
     // Rows go to a contiguous block first: stores `stride` apart would stop
     // the second pass from vectorizing across rows.
-    let mut pixels = [0u8; 64];
+    let mut samples = [0f32; 64];
     for y in 0..8 {
         let mut row: [f32; 8] = work[y * 8..y * 8 + 8].try_into().unwrap();
         // Level shift and rounding bias enter with the DC term.
         row[0] += 128.5;
-        let samples = aan_line(row);
-        for x in 0..8 {
-            pixels[y * 8 + x] = samples[x].clamp(0.0, 255.0) as u8;
-        }
+        samples[y * 8..y * 8 + 8].copy_from_slice(&aan_line(row));
+    }
+    write_samples(&samples, out, stride);
+}
+
+/// Truncate, clamp and store samples. A separate contiguous loop keeps the
+/// conversion vectorized; fused into the row pass it compiled to scalar code.
+#[inline(always)]
+fn write_samples(samples: &[f32; 64], out: &mut [u8], stride: usize) {
+    let mut pixels = [0u8; 64];
+    for (pixel, &sample) in pixels.iter_mut().zip(samples) {
+        *pixel = sample.clamp(0.0, 255.0) as u8;
     }
     for (y, row) in pixels.as_chunks::<8>().0.iter().enumerate() {
         out[y * stride..y * stride + 8].copy_from_slice(row);
@@ -194,18 +202,13 @@ pub(crate) fn idct8_quarter(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8
             work[y * 4 + u] = value;
         }
     }
-    let mut pixels = [0u8; 64];
+    let mut samples = [0f32; 64];
     for y in 0..8 {
         let mut row: [f32; 4] = work[y * 4..y * 4 + 4].try_into().unwrap();
         row[0] += 128.5;
-        let samples = aan_half(row);
-        for x in 0..8 {
-            pixels[y * 8 + x] = samples[x].clamp(0.0, 255.0) as u8;
-        }
+        samples[y * 8..y * 8 + 8].copy_from_slice(&aan_half(row));
     }
-    for (y, row) in pixels.as_chunks::<8>().0.iter().enumerate() {
-        out[y * stride..y * stride + 8].copy_from_slice(row);
-    }
+    write_samples(&samples, out, stride);
 }
 
 /// Reconstruct with the cheapest exact transform for the block's support.
@@ -390,7 +393,7 @@ mod tests {
                     state ^= state << 13;
                     state ^= state >> 17;
                     state ^= state << 5;
-                    if case % 2 == 0 || state % 3 == 0 {
+                    if case % 2 == 0 || state.is_multiple_of(3) {
                         block[v * 8 + u] = (state >> 16) as i16 >> (case % 13);
                     }
                 }

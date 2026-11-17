@@ -48,10 +48,19 @@ fn time(name: &str, mut decode: impl FnMut()) {
 fn main() {
     cycles::pin();
     let bytes = std::fs::read(std::env::args_os().nth(1).expect("JPEG path")).unwrap();
-    // `stages FILE N` only repeats the pixel API, for sampling profilers.
+    // `stages FILE N [zune]` only repeats one decoder, for sampling profilers.
     if let Some(n) = std::env::args().nth(2) {
+        let zune = std::env::args().nth(3).as_deref() == Some("zune");
         for _ in 0..n.parse::<u32>().unwrap() {
-            black_box(deadlib_image_jpeg::decode(black_box(&bytes), Limits::default()).unwrap());
+            if zune {
+                let options = zune_core::options::DecoderOptions::default()
+                    .jpeg_set_out_colorspace(zune_core::colorspace::ColorSpace::RGB);
+                let cursor = zune_core::bytestream::ZCursor::new(black_box(&bytes));
+                let mut decoder = zune_jpeg::JpegDecoder::new_with_options(cursor, options);
+                black_box(decoder.decode().unwrap());
+            } else {
+                black_box(deadlib_image_jpeg::decode(black_box(&bytes), Limits::default()).unwrap());
+            }
         }
         return;
     }
