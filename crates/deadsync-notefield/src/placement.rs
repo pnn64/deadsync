@@ -179,6 +179,7 @@ struct NotefieldCameraKey {
     skew: u32,
     reverse: bool,
     wrapper: [u32; 16],
+    vanish: Option<[u32; 2]>,
 }
 
 impl NotefieldCameraKey {
@@ -191,6 +192,7 @@ impl NotefieldCameraKey {
         skew: f32,
         reverse: bool,
         wrapper: Matrix4,
+        vanish: Option<[f32; 2]>,
     ) -> Self {
         Self {
             screen_w: screen_w.to_bits(),
@@ -201,6 +203,7 @@ impl NotefieldCameraKey {
             skew: skew.to_bits(),
             reverse,
             wrapper: wrapper.to_cols_array().map(f32::to_bits),
+            vanish: vanish.map(|center| center.map(f32::to_bits)),
         }
     }
 }
@@ -227,11 +230,19 @@ pub struct NotefieldCameraCache {
     view: Option<Matrix4>,
     stats: NotefieldCameraCacheStats,
     wrapper: Matrix4,
+    vanish: Option<[f32; 2]>,
 }
 
 impl NotefieldCameraCache {
     pub fn set_wrapper(&mut self, wrapper: Matrix4) {
         self.wrapper = wrapper;
+    }
+
+    /// Player::PushPlayerMatrix centers the menu perspective on the Player's
+    /// own X and receptor midline. A Lua-moved Player supplies that center
+    /// here; `None` keeps the field's layout position.
+    pub fn set_vanish_center(&mut self, center: Option<[f32; 2]>) {
+        self.vanish = center;
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -254,12 +265,13 @@ impl NotefieldCameraCache {
             skew,
             reverse,
             self.wrapper,
+            self.vanish,
         );
         if self.key == Some(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return self.camera;
         }
-        let camera = notefield_camera(
+        let camera = notefield_camera_at(
             screen_w,
             screen_h,
             playfield_center_x,
@@ -268,6 +280,7 @@ impl NotefieldCameraCache {
             skew,
             reverse,
             self.wrapper,
+            self.vanish,
         );
         self.key = Some(key);
         self.camera = camera.map(|(projection, _)| projection);
@@ -332,6 +345,8 @@ impl NotefieldCameraCache {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn notefield_camera(
     screen_w: f32,
     screen_h: f32,
@@ -342,10 +357,41 @@ pub(crate) fn notefield_camera(
     reverse: bool,
     wrapper: Matrix4,
 ) -> Option<(Matrix4, Matrix4)> {
+    notefield_camera_at(
+        screen_w,
+        screen_h,
+        playfield_center_x,
+        center_y,
+        tilt,
+        skew,
+        reverse,
+        wrapper,
+        None,
+    )
+}
+
+/// `vanish_center` replaces the layout X and receptor midline that
+/// Player::PushPlayerMatrix passes to LoadMenuPerspective. The field geometry
+/// keeps its layout pivot; a moved Player's transform is applied separately.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn notefield_camera_at(
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    center_y: f32,
+    tilt: f32,
+    skew: f32,
+    reverse: bool,
+    wrapper: Matrix4,
+    vanish_center: Option<[f32; 2]>,
+) -> Option<(Matrix4, Matrix4)> {
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
-    let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
-    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, center_y)?;
+    let [vanish_center_x, vanish_y] = vanish_center
+        .filter(|center| center.iter().all(|value| value.is_finite()))
+        .unwrap_or([playfield_center_x, center_y]);
+    let vanish_x = sm_scale(skew, 0.1, 1.0, vanish_center_x, half_w);
+    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, vanish_y)?;
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
     let tilt = tilt.clamp(-1.0, 1.0);
@@ -751,7 +797,7 @@ mod tests {
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
         LayoutMiniIndicatorPosition, NotefieldCameraCache, ZmodLayoutParams, field_layout,
-        notefield_camera,
+        notefield_camera, notefield_camera_at,
     };
     use deadsync_core::input::MAX_COLS;
     use deadsync_theme::{
@@ -777,6 +823,32 @@ mod tests {
         assert_eq!(matrix_bits(second), matrix_bits(expected));
         assert_eq!(cache.stats().rebuilds, 1);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_cache_tracks_player_vanish_center() {
+        let mut cache = NotefieldCameraCache::default();
+        let layout = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false).unwrap();
+        cache.set_vanish_center(Some([332.0, 655.0]));
+        let moved = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false).unwrap();
+        let expected = notefield_camera_at(
+            854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY, Some([332.0, 655.0]),
+        )
+        .map(|(projection, _)| projection);
+        assert_eq!(matrix_bits(Some(moved)), matrix_bits(expected));
+        assert_eq!(cache.stats().rebuilds, 2);
+        // The screen plane is unchanged; depth now recedes toward the Player.
+        let project = |camera: glam::Mat4, point: glam::Vec3| {
+            let clip = camera * point.extend(1.0);
+            glam::Vec2::new(clip.x, clip.y) / clip.w
+        };
+        let flat = glam::Vec3::new(-150.0, 60.0, 0.0);
+        assert!((project(layout, flat) - project(moved, flat)).length() <= 0.000_1);
+        let deep = glam::Vec3::new(-150.0, 60.0, 120.0);
+        assert!((project(layout, deep) - project(moved, deep)).length() > 0.01);
+        cache.set_vanish_center(None);
+        let restored = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false);
+        assert_eq!(matrix_bits(restored), matrix_bits(Some(layout)));
     }
 
     #[test]

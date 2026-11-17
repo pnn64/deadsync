@@ -5736,6 +5736,7 @@ pub fn draw_field(
         request.capture,
         request.wrapper,
         request.wrapper_visible,
+        request.player_position,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
         &state.practice_timing_labels[player_idx],

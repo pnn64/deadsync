@@ -1183,6 +1183,7 @@ mod tests {
             song_lua: NotefieldSongLuaView {
                 wrapper: glam::Mat4::IDENTITY,
                 wrapper_visible: true,
+                player_position: None,
                 note_hides,
                 column_offsets: &[],
                 column_splines: &[],

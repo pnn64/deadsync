@@ -288,6 +288,8 @@ fn player_segments_keep_underlay_and_native_child_order() {
                 zoom_x: 1.0,
                 zoom_y: 1.0,
                 zoom_z: 1.0,
+                target_z: 0.0,
+                wrappers: Matrix4::IDENTITY,
             };
             capture_player_source(
                 &mut scratch.notefield_actor_scratch[0],
@@ -3048,6 +3050,8 @@ fn transformed_player_fixture() -> SongLuaCaptureTransform {
         zoom_x: 0.9,
         zoom_y: 1.1,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     }
 }
 
@@ -3135,6 +3139,14 @@ fn player_transform_cache_rebuilds_for_every_plan_source() {
         },
         SongLuaCaptureTransform {
             zoom_z: 0.9,
+            ..base
+        },
+        SongLuaCaptureTransform {
+            target_z: 40.0,
+            ..base
+        },
+        SongLuaCaptureTransform {
+            wrappers: Matrix4::from_scale(Vector3::new(1.0, 1.0, 2.0)),
             ..base
         },
     ];
@@ -3255,6 +3267,8 @@ fn direct_player_segments_respect_fallback_boundaries() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     assert_eq!(
         player_actor_assembly_for_transform(false, true, identity),
@@ -3316,6 +3330,22 @@ fn direct_player_segments_respect_fallback_boundaries() {
         ),
         PlayerActorAssembly::DirectTransform { .. }
     ));
+    for transform in [
+        SongLuaCaptureTransform {
+            target_z: 40.0,
+            ..identity
+        },
+        SongLuaCaptureTransform {
+            wrappers: Matrix4::from_scale(Vector3::new(1.0, 1.0, 2.0)),
+            ..identity
+        },
+    ] {
+        assert!(!song_lua_player_transform_is_direct_identity(transform));
+        assert!(matches!(
+            player_actor_assembly_for_transform(false, true, transform),
+            PlayerActorAssembly::DirectTransform { .. }
+        ));
+    }
     assert!(matches!(
         player_actor_assembly_for_transform(
             false,
@@ -3351,8 +3381,10 @@ fn dynamic_player_transforms_have_zero_legacy_fallbacks() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
-    let transforms: [SongLuaCaptureTransform; 14] = std::array::from_fn(|source| {
+    let transforms: [SongLuaCaptureTransform; 16] = std::array::from_fn(|source| {
         let mut transform = identity;
         match source {
             0 => transform.z_shift = 900,
@@ -3369,6 +3401,8 @@ fn dynamic_player_transforms_have_zero_legacy_fallbacks() {
             11 => transform.zoom_x = 0.9,
             12 => transform.zoom_y = 1.1,
             13 => transform.zoom_z = 0.9,
+            14 => transform.target_z = 40.0,
+            15 => transform.wrappers = Matrix4::from_scale(Vector3::new(1.0, 1.0, 2.0)),
             _ => unreachable!("fixed transform source domain"),
         }
         transform
@@ -3834,6 +3868,8 @@ fn song_lua_note_field_proxy_source_preserves_camera_transform() {
         1.0,
         1.0,
         1.0,
+        0.0,
+        Matrix4::IDENTITY,
     );
 
     let Some(Actor::CameraPush { view_proj }) = out.first() else {
@@ -6577,6 +6613,8 @@ fn assert_kenpo_motion(wrapped: bool) {
                 zoom_x: 1.0,
                 zoom_y: 1.0,
                 zoom_z: 1.0,
+                target_z: 0.0,
+                wrappers: Matrix4::IDENTITY,
             },
             &mut scratch,
         )
@@ -6741,6 +6779,8 @@ fn song_lua_hud_proxy_flattens_identity_capture_without_retaining_it() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
 
     let proxy =
@@ -6816,6 +6856,8 @@ fn identity_proxy_capture_reuses_source_with_origin_offset() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     let mut captured_scratch = SharedActorFrameScratch::with_capacity(5);
     let captured =
@@ -6908,6 +6950,8 @@ fn note_field_proxy_drops_player_camera_scope() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     let mut scratch = SharedActorFrameScratch::with_capacity(3);
 
@@ -6937,6 +6981,8 @@ fn direct_field_proxy_cancels_player_translation_and_layer_z() {
         zoom_x: 0.875,
         zoom_y: 1.125,
         zoom_z: 0.75,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     assert!(song_lua_player_transform_is_direct_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));
@@ -7063,6 +7109,8 @@ fn field_proxy_overflow_keeps_actor_and_direct_draw_inside_camera() {
         zoom_x: 1.0,
         zoom_y: 1.0,
         zoom_z: 1.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     let mut scratch = SharedActorFrameScratch::with_capacity(4);
     let source = prepare_field_proxy_source(&actors, &draws, Some(camera), transform, &mut scratch)
@@ -7093,6 +7141,8 @@ fn direct_hud_proxy_cancels_player_translation_and_layer_z() {
         zoom_x: 0.875,
         zoom_y: 1.125,
         zoom_z: 0.75,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
     };
     assert!(song_lua_player_transform_is_direct_hud_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));

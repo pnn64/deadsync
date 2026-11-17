@@ -35,7 +35,7 @@ pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
-    PreparedNotefield, PreparedNotefieldNotes, prepare_notefield,
+    PreparedNotefield, PreparedNotefieldNotes, SongLuaPlayerPosition, prepare_notefield,
 };
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
@@ -79,6 +79,7 @@ pub use placement::{
 pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
     song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+    song_lua_screen_matrix_to_world,
 };
 pub use timing_labels::{TimingLabelStyle, TimingSegmentLabel};
 pub use transforms::{
@@ -159,7 +160,9 @@ pub(crate) use placement::{
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets, player_metric_y,
 };
 #[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, notefield_camera, zmod_layout_ys};
+use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
+#[cfg(test)]
+use placement::notefield_camera;
 pub(crate) use receptors::{
     ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,

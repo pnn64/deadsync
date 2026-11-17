@@ -633,6 +633,7 @@ pub(crate) fn compose_frame(
     capture_requests: ProxyCaptureRequests,
     field_wrapper: glam::Mat4,
     field_wrapper_visible: bool,
+    player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
     timing_labels: &[deadsync_notefield::TimingSegmentLabel],
@@ -852,6 +853,7 @@ pub(crate) fn compose_frame(
         song_lua: NotefieldSongLuaView {
             wrapper: field_wrapper,
             wrapper_visible: field_wrapper_visible,
+            player_position,
             column_splines: if show_song_visuals {
                 &state.song_lua_visuals().column_splines[player_idx]
             } else {

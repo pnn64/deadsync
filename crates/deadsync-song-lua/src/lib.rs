@@ -6344,6 +6344,9 @@ pub struct SongLuaCapturedActor {
     /// NoteField wrappers retain their own pose; they never modify Player.
     /// Baked on the song-loading worker, with no Lua calls during gameplay.
     pub note_field_frames: Vec<SongLuaNoteFieldFrame>,
+    /// The Player's own wrapper states (`AddWrapperState`), drawn outside the
+    /// Player's transform. Baked like `note_field_frames`.
+    pub player_wrapper_frames: Vec<SongLuaNoteFieldFrame>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

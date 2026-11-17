@@ -7187,4 +7187,138 @@ return Def.ActorFrame{}
             .join()
             .expect("song-lua actor build regression thread should finish");
     }
+
+    /// Dyscontrolled Galaxy's pad section (beats 34.5-43) moves and tilts
+    /// PlayerP1, translates it in Z, and zooms its wrapper state in Z while
+    /// Bumpy gives every note depth. Native draws the notefield through that
+    /// whole chain under a perspective centered on the Player's own X/Y.
+    /// The song-Lua replay compares only authored actors, so these engine
+    /// note draws need the native notefield trace.
+    #[test]
+    fn dyscontrolled_pad_notes_match_native_player_wrapper_geometry() {
+        let native: serde_json::Value = serde_json::from_slice(&zstd::stream::decode_all(
+            include_bytes!("../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-pad-native.json.zst").as_slice(),
+        ).unwrap()).unwrap();
+        assert_eq!(native["oracle"], "itgmania_notefield_render_trace");
+        assert_eq!(native["input"]["window_visible"], false);
+        assert_eq!(native["input"]["player_options"], "m690, -10% mini, cel");
+        assert_eq!(native["input"]["native_source"]["revision"], "663525dcb86eb570d0ef6a2e209678436660ae26");
+        assert_eq!(native["input"]["native_source"]["modified_src"], false);
+        // Screen-target model origins of every drawn tap, per native frame.
+        let mut native_frames = std::collections::BTreeMap::<u32, Vec<[f32; 3]>>::new();
+        for sample in native["model_geometry_samples"].as_array().unwrap() {
+            let state = &sample["state"];
+            if state["render_target"] != 0 || state["mesh_index"] != 0 {
+                continue;
+            }
+            let beat = state["note_context"]["draw_beat"].as_f64().unwrap() as f32;
+            if !(34.6..42.9).contains(&beat) {
+                continue;
+            }
+            let clip: Vec<f64> = serde_json::from_value(state["anchors_clip"][0].clone()).unwrap();
+            let point = [
+                ((1.0 + clip[0] / clip[3]) * 427.0) as f32,
+                ((1.0 - clip[1] / clip[3]) * 240.0) as f32,
+                clip[3] as f32,
+            ];
+            // Each tap draws its model layers at one origin.
+            let notes = native_frames.entry(beat.to_bits()).or_default();
+            if !notes.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+                notes.push(point);
+            }
+        }
+        let mut native_frames: Vec<(f32, Vec<[f32; 3]>)> = native_frames
+            .into_iter()
+            .map(|(beat, notes)| (f32::from_bits(beat), notes))
+            .collect();
+        native_frames.sort_by(|a, b| a.0.total_cmp(&b.0));
+        assert!(native_frames.len() > 150, "native pad frames: {}", native_frames.len());
+        let fixture = song_fixture::from_source("Dyscontrolled Galaxy/steps.sm");
+        let simfile = fixture.simfile.clone();
+        std::thread::Builder::new().stack_size(256 << 20).spawn(move || {
+            with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1, true, false, || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1280, 720);
+                let profiles = std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    scroll_speed: ScrollSpeedSetting::MMod(690.0),
+                    mini_percent: -10,
+                    ..Default::default()
+                });
+                // The native capture uses OpenGL; the song branches on renderer.
+                let mut state = build_test_state_with_renderer(&simfile, GameplayViewport::design(),
+                    GameplaySession::default(), profiles, "OpenGL");
+                state.set_live_autoplay_enabled(true);
+                let assets = fixture_assets();
+                let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+                let tap_handles: std::collections::HashSet<_> = ns.notes.iter()
+                    .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let timing = state.gameplay.gameplay_chart(0).unwrap().timing.clone();
+                let step = |state: &mut screen_gameplay::State, at: f32, delta: f32| {
+                    let music = deadsync_core::song_time::song_time_ns_from_seconds(at);
+                    let host = (f64::from(at) * 1e9) as u64 + 1_000_000;
+                    state.set_current_music_time_ns(music);
+                    screen_gameplay::update(state, delta, deadsync_gameplay::GameplayAudioSnapshot {
+                        stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                            music_nanos: music,
+                            has_music_mapping: true,
+                            valid_at_host_nanos: host,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }, || host, &mut Vec::new());
+                    let output = state.take_song_lua_output();
+                    assert!(output.errors.is_empty(), "Lua frame failed: {:?}", output.errors);
+                };
+                let mut now = 0.0f32;
+                let mut compared = 0;
+                for (beat, expected) in native_frames.iter().step_by(4) {
+                    let target = timing.get_time_for_beat_exact(*beat);
+                    while now + 1.0 / 60.0 < target {
+                        now += 1.0 / 60.0;
+                        step(&mut state, now, 1.0 / 60.0);
+                    }
+                    step(&mut state, target, target - now);
+                    now = target;
+                    let frame = compose_fixture_frame(&mut state, &assets, &metrics, &mut Vec::new(),
+                        &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default());
+                    assert!(frame.render_targets.is_empty(), "pad section draws the Player to the screen");
+                    let mut actual: Vec<[f32; 3]> = Vec::new();
+                    for op in &frame.ops {
+                        let DrawOp::TexturedMesh(run) = op else { continue };
+                        if !tap_handles.contains(&run.texture_handle) {
+                            continue;
+                        }
+                        let camera = frame.cameras.get(run.camera as usize).copied()
+                            .unwrap_or_else(|| metrics.projection());
+                        for instance in &frame.tmesh_instances[run.instance_start as usize
+                            ..(run.instance_start + run.instance_count) as usize]
+                        {
+                            let clip = camera * instance.transform().w_axis;
+                            let point = [427.0 + clip.x / clip.w * 427.0, 240.0 - clip.y / clip.w * 240.0, clip.w];
+                            // Each tap draws its model parts at one origin.
+                            if !actual.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+                                actual.push(point);
+                            }
+                        }
+                    }
+                    assert_eq!(actual.len(), expected.len(),
+                        "taps at beat {beat}: deadsync {actual:?} vs native {expected:?}");
+                    for note in expected {
+                        let distance = |p: &[f32; 3]| (p[0] - note[0]).hypot(p[1] - note[1]);
+                        let nearest = actual.iter().min_by(|a, b| distance(a).total_cmp(&distance(b))).unwrap();
+                        assert!(
+                            distance(nearest) < 0.5 && (nearest[2] - note[2]).abs() < 0.5,
+                            "native tap at beat {beat}: {note:?}, nearest deadsync {nearest:?}"
+                        );
+                    }
+                    compared += 1;
+                }
+                assert!(compared > 40, "compared pad frames: {compared}");
+            });
+        }).unwrap().join().unwrap();
+    }
 }

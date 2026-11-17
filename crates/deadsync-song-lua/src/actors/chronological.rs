@@ -19,7 +19,9 @@ pub(crate) enum Answer {
     Active(bool),
     Motion(Option<[f32; 2]>, Option<[f32; 3]>),
     Mask(u16),
-    Field(Option<Vec<State>>),
+    /// NoteField wrappers (`None` without a NoteField), then the Player's own
+    /// wrappers. Both are ordered outermost first.
+    Field(Option<Vec<State>>, Vec<State>),
 }
 #[derive(Clone)]
 struct Read {
@@ -242,7 +244,10 @@ fn read_actor(call: &mut HostCall<'_>, actor: TableId, query: Query) -> Result<A
             Answer::Motion(time, spin)
         }
         Query::Mask => Answer::Mask(mask(call, actor)?),
-        Query::Field(clock) => Answer::Field(field_wrappers(call, actor, clock)?),
+        Query::Field(clock) => Answer::Field(
+            field_wrappers(call, actor, clock)?,
+            wrapper_states(call, actor, clock)?,
+        ),
     })
 }
 fn boolean(call: &HostCall<'_>, value: Value) -> Result<Option<bool>, Error> {
@@ -661,24 +666,31 @@ fn field_wrappers(
     let Some(field) = optional_table(call, value)? else {
         return Ok(None);
     };
-    call.with_roots(&[value], |call| {
-        let mut states = Vec::new();
-        visit_wrappers(call, field, false, true, |call, id| {
-            ensure(call, id)?;
-            let mut state = initial_state::read(call, id)?;
-            replay_pose(call.store(), id, &mut state);
-            if let Some(spin) = render_spin(call, id)? {
-                [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
-                state.spin_baked = true;
-            }
-            if let Some(time) = effect_time(call, id, clock)? {
-                state.effect_time = Some(time);
-            }
-            states.push(state);
-            Ok(false)
-        })?;
-        Ok(Some(states))
-    })
+    call.with_roots(&[value], |call| wrapper_states(call, field, clock).map(Some))
+}
+
+/// The current render pose of each wrapper state of `actor`, outermost first.
+fn wrapper_states(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    clock: [f32; 2],
+) -> Result<Vec<State>, Error> {
+    let mut states = Vec::new();
+    visit_wrappers(call, actor, false, true, |call, id| {
+        ensure(call, id)?;
+        let mut state = initial_state::read(call, id)?;
+        replay_pose(call.store(), id, &mut state);
+        if let Some(spin) = render_spin(call, id)? {
+            [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
+            state.spin_baked = true;
+        }
+        if let Some(time) = effect_time(call, id, clock)? {
+            state.effect_time = Some(time);
+        }
+        states.push(state);
+        Ok(false)
+    })?;
+    Ok(states)
 }
 
 #[cfg(test)]

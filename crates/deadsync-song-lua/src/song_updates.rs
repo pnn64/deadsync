@@ -996,36 +996,23 @@ impl SongRuntime {
             if !matches!(row.target, Tracked::Player(_)) {
                 continue;
             }
-            let Answer::Field(states) = self
+            let Answer::Field(field_states, player_states) = self
                 .actors
                 .chronological_read(&mut self.vm, value, Query::Field(clock))
                 .map_err(|e| e.to_string())?
             else {
                 unreachable!()
             };
-            let Some(states) = states else { continue };
-            let frames = &mut row.actor.note_field_frames;
-            if (states.is_empty() && frames.is_empty())
-                || frames.last().is_some_and(|f| f.wrappers.as_ref() == states)
-            {
-                continue;
+            if let Some(states) = field_states {
+                append_wrapper_frame(&mut row.actor.note_field_frames, states, prior, clock, bytes)?;
             }
-            let additional = states.len() * std::mem::size_of::<State>()
-                + 2 * std::mem::size_of::<crate::SongLuaNoteFieldFrame>();
-            *bytes = bytes.saturating_add(additional);
-            if *bytes > 256 * 1024 * 1024 {
-                return Err("NoteField wrapper capture exceeds 256 MiB".into());
-            }
-            if let Some(previous) = frames.last().filter(|f| f.second < prior) {
-                frames.push(crate::SongLuaNoteFieldFrame {
-                    second: prior,
-                    wrappers: previous.wrappers.clone(),
-                });
-            }
-            frames.push(crate::SongLuaNoteFieldFrame {
-                second: clock[0],
-                wrappers: states.into(),
-            });
+            append_wrapper_frame(
+                &mut row.actor.player_wrapper_frames,
+                player_states,
+                prior,
+                clock,
+                bytes,
+            )?;
         }
         Ok(())
     }
@@ -1366,4 +1353,37 @@ fn finish_samples<M: crate::perframe::ModState>(
         );
     }
     (eases, column_transforms)
+}
+
+/// Record a wrapper pose only when it changes. A hold sample at `prior` keeps
+/// the previous pose until the change, so playback interpolation stays exact.
+fn append_wrapper_frame(
+    frames: &mut Vec<crate::SongLuaNoteFieldFrame>,
+    states: Vec<State>,
+    prior: f32,
+    clock: [f32; 2],
+    bytes: &mut usize,
+) -> Result<(), String> {
+    if (states.is_empty() && frames.is_empty())
+        || frames.last().is_some_and(|f| f.wrappers.as_ref() == states)
+    {
+        return Ok(());
+    }
+    let additional = states.len() * std::mem::size_of::<State>()
+        + 2 * std::mem::size_of::<crate::SongLuaNoteFieldFrame>();
+    *bytes = bytes.saturating_add(additional);
+    if *bytes > 256 * 1024 * 1024 {
+        return Err("Wrapper capture exceeds 256 MiB".into());
+    }
+    if let Some(previous) = frames.last().filter(|f| f.second < prior) {
+        frames.push(crate::SongLuaNoteFieldFrame {
+            second: prior,
+            wrappers: previous.wrappers.clone(),
+        });
+    }
+    frames.push(crate::SongLuaNoteFieldFrame {
+        second: clock[0],
+        wrappers: states.into(),
+    });
+    Ok(())
 }

@@ -61,6 +61,7 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
                 capture: ProxyCaptureRequests::default(),
                 wrapper: Matrix4::IDENTITY,
                 wrapper_visible: true,
+                player_position: None,
             },
             &mut scratch.notefield_camera_cache,
             &mut scratch.notefield_actor_scratch[player],
@@ -115,6 +116,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
                     zoom_x: transform.zoom_x,
                     zoom_y: transform.zoom_y,
                     zoom_z: transform.zoom_z,
+                    target_z: transform.z,
+                    wrappers: Matrix4::IDENTITY,
                 },
             )
         };

@@ -32,6 +32,28 @@ pub struct SongLuaPlayerTransformRequest {
     pub zoom_x: f32,
     pub zoom_y: f32,
     pub zoom_z: f32,
+    /// Player Z, toward the camera. Native BeginDraw translates by it.
+    pub target_z: f32,
+    /// The Player's wrapper states (`AddWrapperState`), outermost first, as one
+    /// native screen-space matrix (Y down, origin at the top-left).
+    pub wrappers: Matrix4,
+}
+
+/// Map a native screen-space matrix (Y down, origin at the top-left) into the
+/// Y-up world space centered on the screen used by Player transforms.
+#[must_use]
+pub fn song_lua_screen_matrix_to_world(
+    matrix: Matrix4,
+    screen_width: f32,
+    screen_height: f32,
+) -> Matrix4 {
+    let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    let half = Vector3::new(0.5 * screen_width, 0.5 * screen_height, 0.0);
+    Matrix4::from_translation(Vector3::new(-half.x, half.y, 0.0))
+        * flip
+        * matrix
+        * flip
+        * Matrix4::from_translation(Vector3::new(half.x, -half.y, 0.0))
 }
 
 #[must_use]
@@ -121,7 +143,12 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         zoom_x,
         zoom_y,
         zoom_z,
+        target_z,
+        wrappers,
     } = request;
+    if !target_z.is_finite() || !wrappers.is_finite() {
+        return None;
+    }
     if !screen_width.is_finite()
         || !screen_height.is_finite()
         || !screen_center_y.is_finite()
@@ -184,6 +211,8 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         && (zoom_z - 1.0).abs() <= f32::EPSILON
         && translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
+        && target_z.abs() <= f32::EPSILON
+        && wrappers == Matrix4::IDENTITY
     {
         return None;
     }
@@ -196,8 +225,15 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
     let rotation_z_deg = -rotation_z_deg;
     let skew_x = -skew_x;
     let skew_y = -skew_y;
+    // Actor::Draw begins the highest-index wrapper first, outside the Player.
+    let wrappers = if wrappers == Matrix4::IDENTITY {
+        Matrix4::IDENTITY
+    } else {
+        song_lua_screen_matrix_to_world(wrappers, screen_width, screen_height)
+    };
     Some(
-        Matrix4::from_translation(Vector3::new(translate_x, translate_y, 0.0))
+        wrappers
+            * Matrix4::from_translation(Vector3::new(translate_x, translate_y, target_z))
             * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
             * Matrix4::from_rotation_x(rotation_x_deg.to_radians())
             * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
@@ -241,6 +277,8 @@ mod tests {
             zoom_x: 1.0,
             zoom_y: 1.0,
             zoom_z: 1.0,
+            target_z: 0.0,
+            wrappers: Matrix4::IDENTITY,
         }
     }
 
@@ -339,6 +377,23 @@ mod tests {
     }
 
     #[test]
+    fn player_transform_translates_z_and_applies_wrappers_outside() {
+        let mut request = request();
+        request.target_z = 40.0;
+        let matrix = song_lua_player_transform_matrix(request).expect("Z alone moves the Player");
+        let origin = matrix.transform_point3(Vector3::ZERO);
+        assert!((origin - Vector3::new(0.0, 0.0, 40.0)).length() <= 0.000_1, "{origin}");
+
+        // A native wrapper (Y down, top-left origin) zooms Z outside the
+        // Player's own translation, then moves right and down the screen.
+        request.wrappers = Matrix4::from_translation(Vector3::new(100.0, 30.0, 0.0))
+            * Matrix4::from_scale(Vector3::new(1.0, 1.0, 2.0));
+        let matrix = song_lua_player_transform_matrix(request).expect("wrapped Player");
+        let origin = matrix.transform_point3(Vector3::ZERO);
+        assert!((origin - Vector3::new(100.0, -30.0, 80.0)).length() <= 0.000_1, "{origin}");
+    }
+
+    #[test]
     fn player_transform_combined_order_matches_legacy_matrix() {
         let request = SongLuaPlayerTransformRequest {
             screen_width: 1000.0,
@@ -354,6 +409,8 @@ mod tests {
             zoom_x: 1.2,
             zoom_y: 0.8,
             zoom_z: 1.5,
+            target_z: 0.0,
+            wrappers: Matrix4::IDENTITY,
         };
         let actual = song_lua_player_transform_matrix(request)
             .expect("combined transform should produce a player matrix");

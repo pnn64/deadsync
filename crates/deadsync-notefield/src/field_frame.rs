@@ -1959,6 +1959,16 @@ fn resolve_field_camera<S>(
     let center_y = f32::midpoint(field.receptor_y_normal, field.receptor_y_reverse);
     let perspective = request.visual.perspective;
     cache.set_wrapper(request.song_lua.wrapper);
+    // The receptor midline follows the Player's Y; the layout Player sits at
+    // the screen's vertical center.
+    cache.set_vanish_center(request.song_lua.player_position.map(|position| {
+        [
+            position
+                .x
+                .map_or(field.playfield_center_x, |x| field.playfield_center_x + x - field.layout_center_x),
+            center_y + position.y - 0.5 * request.geometry.screen_height,
+        ]
+    }));
     cache.resolve(
         request.geometry.screen_width,
         request.geometry.screen_height,

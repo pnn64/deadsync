@@ -4168,6 +4168,10 @@ struct SongLuaCaptureTransform {
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
+    /// Player Z translation (BeginDraw), toward the camera.
+    target_z: f32,
+    /// Native screen-space matrix of the Player's wrapper states.
+    wrappers: Matrix4,
 }
 
 #[inline(always)]
@@ -4354,6 +4358,8 @@ fn song_lua_render_captured_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
             );
         })
         .map(|source| [source])
@@ -4454,6 +4460,8 @@ fn prepare_flat_proxy_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
             );
         })
         .map(|source| [source])?;
@@ -4518,6 +4526,8 @@ fn prepare_field_proxy_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
             );
         })
         .map(|source| [source])?;
@@ -4579,6 +4589,8 @@ fn capture_player_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
             );
             append_song_lua_player_transform(
                 std::iter::empty(),
@@ -4601,6 +4613,8 @@ fn capture_player_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
             );
         })
         .map(|source| [source])
@@ -12399,6 +12413,8 @@ fn append_song_lua_player_transform<F, H>(
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
+    target_z: f32,
+    wrappers: Matrix4,
 ) where
     F: IntoIterator<Item = Actor>,
     H: IntoIterator<Item = Actor>,
@@ -12424,6 +12440,8 @@ fn append_song_lua_player_transform<F, H>(
         zoom_x,
         zoom_y,
         zoom_z,
+        target_z,
+        wrappers,
     }) else {
         out.reserve(field_len.saturating_add(hud_len));
         for actor in hud_actors.into_iter().map(fold_y) {
@@ -12574,6 +12592,8 @@ fn song_lua_player_transform_has_identity_geometry_with_metrics(
         && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
         && (transform.target_x - transform.playfield_center_x).abs() <= f32::EPSILON
         && (metrics.screen_center_y - transform.target_y).abs() <= f32::EPSILON
+        && transform.target_z.abs() <= f32::EPSILON
+        && transform.wrappers == Matrix4::IDENTITY
 }
 
 #[inline(always)]
@@ -12606,6 +12626,8 @@ fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform)
         && transform.zoom_x.is_finite()
         && transform.zoom_y.is_finite()
         && transform.zoom_z.is_finite()
+        && transform.target_z.is_finite()
+        && transform.wrappers.is_finite()
 }
 
 #[inline(always)]
@@ -12654,6 +12676,8 @@ fn song_lua_player_camera_suffix(transform: SongLuaCaptureTransform) -> Option<M
         zoom_x: transform.zoom_x,
         zoom_y: transform.zoom_y,
         zoom_z: transform.zoom_z,
+        target_z: transform.target_z,
+        wrappers: transform.wrappers,
     })
 }
 
@@ -12686,7 +12710,8 @@ struct PlayerActorAssemblyKey {
     blend: Option<BlendMode>,
     metrics: [u32; 3],
     tint: [u32; 4],
-    geometry: [u32; 11],
+    geometry: [u32; 12],
+    wrappers: [u32; 16],
 }
 
 impl PlayerActorAssemblyKey {
@@ -12719,7 +12744,9 @@ impl PlayerActorAssemblyKey {
                 transform.zoom_x.to_bits(),
                 transform.zoom_y.to_bits(),
                 transform.zoom_z.to_bits(),
+                transform.target_z.to_bits(),
             ],
+            wrappers: transform.wrappers.to_cols_array().map(f32::to_bits),
         }
     }
 }
@@ -13334,6 +13361,8 @@ fn player_actor_assembly_for_transform_with_metrics(
         zoom_x: transform.zoom_x,
         zoom_y: transform.zoom_y,
         zoom_z: transform.zoom_z,
+        target_z: transform.target_z,
+        wrappers: transform.wrappers,
     });
     match (field_camera_suffix, x_fold) {
         (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
@@ -14405,13 +14434,25 @@ pub struct FieldFrame {
     pub capture: ProxyCaptureRequests,
     pub wrapper: Matrix4,
     pub wrapper_visible: bool,
+    /// A Lua-moved Player's own position, which centers the field perspective.
+    pub player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
 }
 
 fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) -> (Matrix4, bool) {
-    let frames = &actor.note_field_frames;
+    let (matrix, _, visible) = song_lua_wrapper_chain(&actor.note_field_frames, clock);
+    (matrix, visible)
+}
+
+/// Sample a baked wrapper chain: its native screen-space matrix (outermost
+/// first), the diffuse Actor::Draw hands inward, and whether every wrapper
+/// draws (an invisible or transparent wrapper aborts the wrapped draw).
+fn song_lua_wrapper_chain(
+    frames: &[crate::SongLuaNoteFieldFrame],
+    clock: [f32; 2],
+) -> (Matrix4, [f32; 4], bool) {
     let next = frames.partition_point(|frame| frame.second <= clock[0]);
     let Some(from) = next.checked_sub(1).map(|index| &frames[index]) else {
-        return (Matrix4::IDENTITY, true);
+        return (Matrix4::IDENTITY, [1.0; 4], true);
     };
     let to = frames.get(next).unwrap_or(from);
     let t = if to.second > from.second {
@@ -14420,6 +14461,7 @@ fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) 
         0.0
     };
     let mut matrix = Matrix4::IDENTITY;
+    let mut tint = [1.0; 4];
     let mut visible = true;
     for (index, &initial) in from.wrappers.iter().enumerate() {
         let mut state = initial;
@@ -14430,9 +14472,11 @@ fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) 
             crate::overlay_state_lerp(&mut state, &delta, t);
         }
         visible &= state.draw_visible() && state.diffuse[3] > 0.0;
-        matrix *= song_lua_draw_matrix(state, clock).0;
+        let (model, diffuse) = song_lua_draw_matrix(state, clock);
+        matrix *= model;
+        tint = std::array::from_fn(|channel| tint[channel] * diffuse[channel]);
     }
-    (matrix, visible)
+    (matrix, tint, visible)
 }
 
 const fn hidden_gameplay_hud_layers(
@@ -14963,10 +15007,41 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let song_lua_now = state.current_music_time_display();
+            let song_lua_clock = [song_lua_now, state.current_beat_display()];
             let (field_wrapper, field_wrapper_visible) = if show_song_visuals {
-                song_lua_field_wrapper(player_actor, [song_lua_now, state.current_beat_display()])
+                song_lua_field_wrapper(player_actor, song_lua_clock)
             } else {
                 (Matrix4::IDENTITY, true)
+            };
+            // Player::PushPlayerMatrix centers the field perspective on the
+            // Player's own GetX/GetY, so both are needed before the field draws.
+            let lua_player_state = show_song_visuals.then(|| {
+                song_lua_player_render_state(
+                    state,
+                    player_idx,
+                    &mut song_lua_player_message_state_cache[player_idx],
+                )
+            });
+            let player_transform = if apply_attacks {
+                state.song_lua_player_transform(player_idx)
+            } else {
+                deadsync_gameplay::SongLuaPlayerTransform::default()
+            };
+            let (player_wrappers, player_wrapper_tint, player_wrappers_visible) =
+                if show_song_visuals {
+                    song_lua_wrapper_chain(&player_actor.player_wrapper_frames, song_lua_clock)
+                } else {
+                    (Matrix4::IDENTITY, [1.0; 4], true)
+                };
+            let player_position = deadsync_notefield::SongLuaPlayerPosition {
+                x: player_transform.x.or_else(|| {
+                    lua_player_state
+                        .filter(|_| !notefield_view.force_center_1player)
+                        .map(|player_state| player_state.x)
+                }),
+                y: player_transform.y.unwrap_or_else(|| {
+                    lua_player_state.map_or_else(screen_center_y, |player_state| player_state.y)
+                }),
             };
             let (judgment_visible, combo_visible) = if show_song_visuals {
                 let judgment_visible = song_lua_child_visible(
@@ -15002,6 +15077,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 FieldFrame {
                     wrapper: field_wrapper,
                     wrapper_visible: field_wrapper_visible,
+                    player_position: Some(player_position),
                     player: player_idx,
                     placement,
                     judgment_visible,
@@ -15044,24 +15120,13 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 underlay_draws: 0,
                 ..hud_parts
             };
-            let player_state = if show_song_visuals {
-                song_lua_player_render_state(
-                    state,
-                    player_idx,
-                    &mut song_lua_player_message_state_cache[player_idx],
-                )
-            } else {
-                SongLuaOverlayState {
-                    x: layout_center_x,
-                    y: screen_center_y(),
-                    ..SongLuaOverlayState::default()
-                }
-            };
-            let player_transform = if apply_attacks {
-                state.song_lua_player_transform(player_idx)
-            } else {
-                deadsync_gameplay::SongLuaPlayerTransform::default()
-            };
+            let mut player_state = lua_player_state.unwrap_or(SongLuaOverlayState {
+                x: layout_center_x,
+                y: screen_center_y(),
+                ..SongLuaOverlayState::default()
+            });
+            // Actor::Draw aborts inside an invisible or transparent wrapper.
+            player_state.visible &= player_wrappers_visible;
             let song_lua_active =
                 show_song_visuals && !state.song().foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
@@ -15096,7 +15161,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             };
             let capture_transform = SongLuaCaptureTransform {
                 z_shift,
-                tint: player_state.diffuse,
+                // Wrappers pass their diffuse inward as the Player's internal diffuse.
+                tint: std::array::from_fn(|channel| {
+                    player_state.diffuse[channel] * player_wrapper_tint[channel]
+                }),
                 blend: player_blend,
                 playfield_center_x: layout_center_x,
                 target_x,
@@ -15109,6 +15177,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 zoom_x,
                 zoom_y,
                 zoom_z,
+                target_z: player_state.z + player_transform.z,
+                wrappers: player_wrappers,
             };
             let direct_x_fold = song_lua_player_x_fold(capture_transform);
             let proxy_field_camera = field_camera;
@@ -15282,6 +15352,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                         zoom_x: 1.0,
                         zoom_y: 1.0,
                         zoom_z: 1.0,
+                        target_z: 0.0,
+                        wrappers: Matrix4::IDENTITY,
                     };
                     prepare_proxy_source(source, ProxyCapturePart::Field, local, scratch)
                 })

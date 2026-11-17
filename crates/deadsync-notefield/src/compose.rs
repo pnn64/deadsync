@@ -168,6 +168,17 @@ pub struct NotefieldSongLuaView<'a> {
     /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
     pub wrapper: glam::Mat4,
     pub wrapper_visible: bool,
+    /// A Lua-moved Player's own position. Player::PushPlayerMatrix centers
+    /// the field's perspective there rather than at the layout.
+    pub player_position: Option<SongLuaPlayerPosition>,
+}
+
+/// A Player's own `GetX`/`GetY` in screen space. `x` is `None` when the
+/// layout overrides the Player's X (a forced centered field).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongLuaPlayerPosition {
+    pub x: Option<f32>,
+    pub y: f32,
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
