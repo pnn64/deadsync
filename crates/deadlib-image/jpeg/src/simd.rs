@@ -48,6 +48,7 @@ pub(crate) fn portable<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
+#[cfg(any(test, target_arch = "x86_64"))]
 #[inline(always)]
 fn portable_forced() -> bool {
     #[cfg(test)]
