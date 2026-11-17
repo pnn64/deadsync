@@ -201,7 +201,7 @@ impl Tables {
         input: &'a [u8],
         limits: Limits,
     ) -> Result<crate::CoefficientImage<'a>> {
-        crate::decode::decode_with_tables(input, limits, self)
+        crate::decode::decode_with_tables(input, limits, self, None)
     }
     pub fn decode_lossless<'a>(
         &mut self,

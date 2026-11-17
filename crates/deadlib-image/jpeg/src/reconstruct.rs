@@ -144,7 +144,7 @@ impl CoefficientImage<'_> {
         }
     }
 
-    fn validate_grid(&self) -> Result<()> {
+    pub(crate) fn validate_grid(&self) -> Result<()> {
         let f = &self.frame;
         if f.width == 0
             || f.height == 0
@@ -571,6 +571,43 @@ pub(crate) fn infer_components_with_hints(
         (4, Some(2)) => ColorSpace::Ycck,
         (4, None | Some(0)) => ColorSpace::Cmyk,
         _ => ColorSpace::Unknown,
+    }
+}
+
+/// Color hints from metadata before the first scan, matching
+/// [`infer_components`] and [`infer_cmyk_polarity`] without retaining segments.
+#[derive(Default)]
+pub(crate) struct ColorHints {
+    jfif: bool,
+    adobe: Option<u8>,
+    inverted: bool,
+}
+
+impl ColorHints {
+    pub fn observe(&mut self, marker: u8, data: &[u8]) {
+        self.jfif |= marker == 0xe0 && data.len() >= 14 && data.starts_with(b"JFIF\0");
+        let segment = MetadataSegment {
+            marker,
+            data,
+            offset: 0,
+            preceding_scans: 0,
+        };
+        if let Some(adobe) = segment.adobe().ok().flatten() {
+            self.adobe = Some(adobe.transform);
+            self.inverted |= adobe.transform == 0 || adobe.transform == 2;
+        }
+    }
+
+    pub fn color(&self, components: &[ComponentSpec]) -> ColorSpace {
+        infer_components_with_hints(components, self.jfif, self.adobe)
+    }
+
+    pub fn polarity(&self) -> CmykPolarity {
+        if self.inverted {
+            CmykPolarity::AdobeInverted
+        } else {
+            CmykPolarity::Conventional
+        }
     }
 }
 

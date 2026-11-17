@@ -3,10 +3,10 @@ use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader, Table};
 use crate::transform::{FloatQuant, idct8, idct8_dc};
 use crate::reconstruct::{
-    cmyk_to_rgb, infer_components_with_hints, ycbcr_row, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
+    ColorHints, cmyk_to_rgb, infer_components_with_hints, ycbcr_row, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
 };
 use crate::{
-    CmykPolarity, ColorSpace, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
+    CmykPolarity, CoefficientImage, ColorSpace, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
     Process, Result, Tables, Upsampling,
 };
 use deadlib_image::{ColorType, Image, Samples};
@@ -42,9 +42,18 @@ pub fn decode_with_upsampling(input: &[u8], limits: Limits, method: Upsampling) 
             }
         }
     }
-    crate::decode_coefficients(input, limits)?
-        .reconstruct()?
-        .to_image(method)
+    // Pixel output needs only color hints, not retained metadata segments.
+    let mut hints = ColorHints::default();
+    let image =
+        crate::decode::decode_with_tables(input, limits, &mut Tables::new(), Some(&mut hints))?;
+    let color = hints.color(&image.frame.components);
+    if image.frame.precision == 8 && color != ColorSpace::Unknown {
+        return from_coefficients(&image, color, hints.polarity(), limits, method);
+    }
+    let mut planes = image.reconstruct()?;
+    planes.color_space = color;
+    planes.cmyk_polarity = hints.polarity();
+    planes.to_image(method)
 }
 
 struct Plan<'a> {
@@ -230,233 +239,217 @@ struct Layout {
     offset: usize,
     h: usize,
     v: usize,
+    slots: usize,
 }
 
-impl Plan<'_> {
-    fn decode(&self, limits: Limits, method: Upsampling) -> Result<Image> {
-        let width = usize::from(self.frame.width);
-        let height = usize::from(self.frame.height);
+/// Circular MCU rows per component. Centered vertical interpolation can touch
+/// the previous and next MCU row, including fractional sampling grids, so it
+/// keeps three slots and emission trails reconstruction by one row. Without
+/// vertical subsampling, or with nearest sampling, every source row lies in
+/// the current MCU row: one slot suffices and rows emit immediately (a zero
+/// vertical weight may still read an in-bounds neighbor). Storage is
+/// independent of the image height. Grayscale blocks go straight to the output.
+struct Window {
+    width: usize,
+    height: usize,
+    components: usize,
+    color: ColorSpace,
+    polarity: CmykPolarity,
+    gray: bool,
+    count: usize,
+    cols: usize,
+    rows: usize,
+    max_h: usize,
+    max_v: usize,
+    layouts: [Layout; 4],
+    cache_bytes: usize,
+    delay: usize,
+}
+
+impl Window {
+    fn new(
+        frame: &FrameHeader,
+        color: ColorSpace,
+        polarity: CmykPolarity,
+        limits: Limits,
+        method: Upsampling,
+    ) -> Result<Self> {
+        let width = usize::from(frame.width);
+        let height = usize::from(frame.height);
         let pixels = width * height;
         if pixels > limits.max_pixels {
             return Err(Error::LimitExceeded("pixels"));
         }
-        let gray = self.color == ColorSpace::Grayscale;
-        let channels = if gray { 1 } else { 3 };
+        let gray = color == ColorSpace::Grayscale;
         let count = pixels
-            .checked_mul(channels)
+            .checked_mul(if gray { 1 } else { 3 })
             .ok_or(Error::LimitExceeded("output storage"))?;
-        let max_h = self
-            .frame
-            .components
-            .iter()
-            .map(|c| usize::from(c.horizontal_sampling))
-            .max()
-            .unwrap();
-        let max_v = self
-            .frame
-            .components
-            .iter()
-            .map(|c| usize::from(c.vertical_sampling))
-            .max()
-            .unwrap();
-        let cols = width.div_ceil(if gray { 8 } else { 8 * max_h });
-        let rows = height.div_ceil(if gray { 8 } else { 8 * max_v });
+        let factor = |f: fn(&crate::ComponentSpec) -> u8| {
+            frame.components.iter().map(|c| usize::from(f(c))).max().unwrap()
+        };
+        let (max_h, max_v) = if gray {
+            (1, 1)
+        } else {
+            (factor(|c| c.horizontal_sampling), factor(|c| c.vertical_sampling))
+        };
+        let cols = width.div_ceil(8 * max_h);
+        let rows = height.div_ceil(8 * max_v);
+        let neighbors = method == Upsampling::Linear
+            && frame
+                .components
+                .iter()
+                .any(|c| usize::from(c.vertical_sampling) != max_v);
+        let slots = if neighbors { 3 } else { 1 };
         let mut cache_bytes = 0;
-        // Centered interpolation can touch the previous and next MCU row,
-        // including fractional sampling grids. Three circular slots let us
-        // delay emission by one row while keeping storage independent of height.
-        let layouts: [Layout; 4] = core::array::from_fn(|i| {
-            let Some(spec) = self.frame.components.get(i) else {
+        let layouts = core::array::from_fn(|i| {
+            let Some(spec) = frame.components.get(i) else {
                 return Layout::default();
             };
-            let h = if gray {
-                1
+            let (h, v) = if gray {
+                (1, 1)
             } else {
-                usize::from(spec.horizontal_sampling)
-            };
-            let v = if gray {
-                1
-            } else {
-                usize::from(spec.vertical_sampling)
+                (
+                    usize::from(spec.horizontal_sampling),
+                    usize::from(spec.vertical_sampling),
+                )
             };
             let layout = Layout {
-                width: (width * h).div_ceil(if gray { 1 } else { max_h }),
-                height: (height * v).div_ceil(if gray { 1 } else { max_v }),
+                width: (width * h).div_ceil(max_h),
+                height: (height * v).div_ceil(max_v),
                 stride: cols * h * 8,
                 band_rows: v * 8,
                 offset: cache_bytes,
                 h,
                 v,
+                slots,
             };
             if !gray {
-                cache_bytes += layout.stride * layout.band_rows * 3;
+                cache_bytes += layout.stride * layout.band_rows * slots;
             }
             layout
         });
-        let storage = count
-            .checked_add(cache_bytes)
-            .and_then(|n| n.checked_add(self.metadata_bytes))
-            .and_then(|n| {
-                n.checked_add(
-                    self.frame.components.capacity() * core::mem::size_of::<crate::ComponentSpec>(),
-                )
-            })
+        Ok(Self {
+            width,
+            height,
+            components: frame.components.len(),
+            color,
+            polarity,
+            gray,
+            count,
+            cols,
+            rows,
+            max_h,
+            max_v,
+            layouts,
+            cache_bytes,
+            delay: usize::from(neighbors),
+        })
+    }
+
+    /// Reserve output and window storage once `retained` caller-held bytes
+    /// are counted against the memory limit.
+    fn allocate(&self, retained: usize, limits: Limits) -> Result<(Vec<u8>, Vec<u8>)> {
+        let storage = self
+            .count
+            .checked_add(self.cache_bytes)
+            .and_then(|n| n.checked_add(retained))
             .ok_or(Error::LimitExceeded("pixel decoding storage"))?;
         if storage > limits.max_memory_bytes {
             return Err(Error::LimitExceeded("pixel decoding storage"));
         }
         let mut output = Vec::new();
         output
-            .try_reserve_exact(count)
+            .try_reserve_exact(self.count)
             .map_err(|_| Error::Allocation)?;
-        if gray {
-            output.resize(count, 0);
+        if self.gray {
+            output.resize(self.count, 0);
         }
         let mut cache = Vec::new();
         cache
-            .try_reserve_exact(cache_bytes)
+            .try_reserve_exact(self.cache_bytes)
             .map_err(|_| Error::Allocation)?;
-        cache.resize(cache_bytes, 0);
-        let n = self.frame.components.len();
-        let tables: [Option<Table>; 8] = core::array::from_fn(|t| {
-            self.selected[..n]
-                .iter()
-                .any(|&(dc, ac)| dc == t || ac == t)
-                .then(|| Table::new(self.tables.huffman[t].as_ref().unwrap()))
-        });
-        let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
-            FloatQuant::new(&self.frame.components.get(i).map_or([0; 64], |spec| {
-                self.tables.quant[usize::from(spec.quantization_table)]
-                    .as_ref()
-                    .unwrap()
-                    .values
-            }))
-        });
-        let mut reader = Reader::new(self.entropy);
-        let mut predictors = [0; 4];
-        let mut restart = 0;
-        let mut block = [0i16; 64];
+        cache.resize(self.cache_bytes, 0);
+        Ok((output, cache))
+    }
+
+    /// Reconstruct block column `bx`, block row `by` within MCU row `my`, of
+    /// component `i` through `idct(target, stride)`.
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    fn put(
+        &self,
+        i: usize,
+        my: usize,
+        by: usize,
+        bx: usize,
+        cache: &mut [u8],
+        output: &mut [u8],
+        idct: impl FnOnce(&mut [u8], usize),
+    ) {
+        if !self.gray {
+            let l = self.layouts[i];
+            let start =
+                l.offset + (my % l.slots) * l.band_rows * l.stride + by * 8 * l.stride + bx * 8;
+            return idct(&mut cache[start..], l.stride);
+        }
+        let (x, y) = (bx * 8, my * 8);
+        if x + 8 <= self.width && y + 8 <= self.height {
+            return idct(&mut output[y * self.width + x..], self.width);
+        }
         let mut edge = [0u8; 64];
-        for my in 0..rows {
-            for mx in 0..cols {
-                let mcu = my * cols + mx;
-                if self.interval != 0 && mcu != 0 && mcu % self.interval == 0 {
-                    reader.restart(restart)?;
-                    restart = (restart + 1) & 7;
-                    predictors.fill(0);
-                }
-                for i in 0..n {
-                    let c = layouts[i];
-                    let dc = tables[self.selected[i].0].as_ref().unwrap();
-                    let ac = tables[self.selected[i].1].as_ref().unwrap();
-                    let quant = &quants[i];
-                    for by in 0..c.v {
-                        for bx in 0..c.h {
-                            let last =
-                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i])?;
-                            let (x, y) = (mx * 8, my * 8);
-                            let inside = x + 8 <= width && y + 8 <= height;
-                            let (target, stride) = if !gray {
-                                let start = c.offset
-                                    + (my % 3) * c.band_rows * c.stride
-                                    + by * 8 * c.stride
-                                    + mx * c.h * 8
-                                    + bx * 8;
-                                (&mut cache[start..], c.stride)
-                            } else if inside {
-                                (&mut output[y * width + x..], width)
-                            } else {
-                                (&mut edge[..], 8)
-                            };
-                            if last == 0 {
-                                idct8_dc(block[0], quant, target, stride);
-                                block[0] = 0;
-                            } else {
-                                idct8(&block, quant, target, stride);
-                                block = [0; 64];
-                            }
-                            if gray && !inside {
-                                let w = (width - x).min(8);
-                                for row in 0..(height - y).min(8) {
-                                    output[(y + row) * width + x..(y + row) * width + x + w]
-                                        .copy_from_slice(&edge[row * 8..row * 8 + w]);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            reader.check()?;
-            if !gray && my > 0 {
-                self.emit(
-                    &cache,
-                    &layouts,
-                    (my - 1) * max_v * 8,
-                    max_v * 8,
-                    method,
-                    &mut output,
-                );
-            }
+        idct(&mut edge, 8);
+        let w = (self.width - x).min(8);
+        for row in 0..(self.height - y).min(8) {
+            output[(y + row) * self.width + x..][..w].copy_from_slice(&edge[row * 8..row * 8 + w]);
         }
-        if !gray {
-            self.emit(
-                &cache,
-                &layouts,
-                (rows - 1) * max_v * 8,
-                max_v * 8,
-                method,
-                &mut output,
-            );
+    }
+
+    /// After MCU row `my` is reconstructed, emit every row now complete.
+    fn advance(&self, cache: &[u8], my: usize, method: Upsampling, out: &mut Vec<u8>) {
+        if !self.gray && my >= self.delay {
+            let row = my - self.delay;
+            self.emit(cache, row * self.max_v * 8, self.max_v * 8, method, out);
         }
-        reader.finish()?;
-        debug_assert_eq!(output.len(), count);
-        Ok(Image {
-            width: width as u32,
-            height: height as u32,
-            color_type: if gray {
+    }
+
+    /// Emit the delayed last MCU row, if any.
+    fn flush(&self, cache: &[u8], method: Upsampling, out: &mut Vec<u8>) {
+        if !self.gray && self.delay == 1 {
+            let row = self.rows - 1;
+            self.emit(cache, row * self.max_v * 8, self.max_v * 8, method, out);
+        }
+    }
+
+    fn finish(&self, output: Vec<u8>) -> Image {
+        debug_assert_eq!(output.len(), self.count);
+        Image {
+            width: self.width as u32,
+            height: self.height as u32,
+            color_type: if self.gray {
                 ColorType::Grayscale
             } else {
                 ColorType::Rgb
             },
             bit_depth: 8,
             samples: Samples::U8(output),
-        })
+        }
     }
 
-    fn emit(
-        &self,
-        cache: &[u8],
-        layout: &[Layout; 4],
-        start: usize,
-        rows: usize,
-        method: Upsampling,
-        out: &mut Vec<u8>,
-    ) {
-        let width = usize::from(self.frame.width);
-        let height = usize::from(self.frame.height);
-        let max_h = layout[..self.frame.components.len()]
-            .iter()
-            .map(|c| c.h)
-            .max()
-            .unwrap();
-        let max_v = layout[..self.frame.components.len()]
-            .iter()
-            .map(|c| c.v)
-            .max()
-            .unwrap();
-        let full = layout[..3].iter().all(|c| c.h == max_h && c.v == max_v);
+    fn emit(&self, cache: &[u8], start: usize, rows: usize, method: Upsampling, out: &mut Vec<u8>) {
+        let (width, height, max_h, max_v) = (self.width, self.height, self.max_h, self.max_v);
+        let full = self.layouts[..3].iter().all(|c| c.h == max_h && c.v == max_v);
         // 4:2:0 and 4:2:2: half-width chroma, half or full height.
-        let half = layout[0].h == max_h
-            && layout[0].v == max_v
-            && layout[1].h * 2 == max_h
-            && (layout[1].v * 2 == max_v || layout[1].v == max_v)
-            && layout[2].h == layout[1].h
-            && layout[2].v == layout[1].v;
-        let half_height = layout[1].v * 2 == max_v;
+        let half = self.layouts[0].h == max_h
+            && self.layouts[0].v == max_v
+            && self.layouts[1].h * 2 == max_h
+            && (self.layouts[1].v * 2 == max_v || self.layouts[1].v == max_v)
+            && self.layouts[2].h == self.layouts[1].h
+            && self.layouts[2].v == self.layouts[1].v;
+        let half_height = self.layouts[1].v * 2 == max_v;
         for y in start..(start + rows).min(height) {
             let samplers: [Row<'_>; 4] = core::array::from_fn(|i| {
-                if i < self.frame.components.len() {
-                    Row::new(cache, layout[i], y, max_h, max_v, method)
+                if i < self.components {
+                    Row::new(cache, self.layouts[i], y, self.max_h, self.max_v, method)
                 } else {
                     Row::empty()
                 }
@@ -493,7 +486,7 @@ impl Plan<'_> {
             } else {
                 for x in 0..width {
                     let values = core::array::from_fn(|i| {
-                        if i < self.frame.components.len() {
+                        if i < self.components {
                             samplers[i].sample(x)
                         } else {
                             0
@@ -511,6 +504,116 @@ impl Plan<'_> {
             }
         }
     }
+}
+
+impl Plan<'_> {
+    fn decode(&self, limits: Limits, method: Upsampling) -> Result<Image> {
+        let window = Window::new(&self.frame, self.color, self.polarity, limits, method)?;
+        let retained = self.metadata_bytes
+            + self.frame.components.capacity() * core::mem::size_of::<crate::ComponentSpec>();
+        let (mut output, mut cache) = window.allocate(retained, limits)?;
+        let n = self.frame.components.len();
+        let tables: [Option<Table>; 8] = core::array::from_fn(|t| {
+            self.selected[..n]
+                .iter()
+                .any(|&(dc, ac)| dc == t || ac == t)
+                .then(|| Table::new(self.tables.huffman[t].as_ref().unwrap()))
+        });
+        let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
+            FloatQuant::new(&self.frame.components.get(i).map_or([0; 64], |spec| {
+                self.tables.quant[usize::from(spec.quantization_table)]
+                    .as_ref()
+                    .unwrap()
+                    .values
+            }))
+        });
+        let mut reader = Reader::new(self.entropy);
+        let mut predictors = [0; 4];
+        let mut restart = 0;
+        let mut block = [0i16; 64];
+        for my in 0..window.rows {
+            for mx in 0..window.cols {
+                let mcu = my * window.cols + mx;
+                if self.interval != 0 && mcu != 0 && mcu % self.interval == 0 {
+                    reader.restart(restart)?;
+                    restart = (restart + 1) & 7;
+                    predictors.fill(0);
+                }
+                for i in 0..n {
+                    let l = window.layouts[i];
+                    let dc = tables[self.selected[i].0].as_ref().unwrap();
+                    let ac = tables[self.selected[i].1].as_ref().unwrap();
+                    let quant = &quants[i];
+                    for by in 0..l.v {
+                        for bx in 0..l.h {
+                            let last =
+                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i])?;
+                            let column = mx * l.h + bx;
+                            window.put(i, my, by, column, &mut cache, &mut output, |target, stride| {
+                                if last == 0 {
+                                    idct8_dc(block[0], quant, target, stride);
+                                } else {
+                                    idct8(&block, quant, target, stride);
+                                }
+                            });
+                            if last == 0 {
+                                block[0] = 0;
+                            } else {
+                                block = [0; 64];
+                            }
+                        }
+                    }
+                }
+            }
+            reader.check()?;
+            window.advance(&cache, my, method, &mut output);
+        }
+        window.flush(&cache, method, &mut output);
+        reader.finish()?;
+        Ok(window.finish(output))
+    }
+}
+
+/// Pixels from stored coefficients (progressive, multi-scan and arithmetic
+/// 8-bit images): blocks go through the row window instead of full planes.
+fn from_coefficients(
+    image: &CoefficientImage<'_>,
+    color: ColorSpace,
+    polarity: CmykPolarity,
+    limits: Limits,
+    method: Upsampling,
+) -> Result<Image> {
+    image.validate_grid()?;
+    let window = Window::new(&image.frame, color, polarity, limits, method)?;
+    let (mut output, mut cache) = window.allocate(image.memory_bytes, limits)?;
+    let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
+        FloatQuant::new(image.components.get(i).map_or(&[0; 64], |c| &c.quantization))
+    });
+    for my in 0..window.rows {
+        for (i, c) in image.components.iter().enumerate() {
+            let quant = &quants[i];
+            let v = window.layouts[i].v;
+            for by in 0..v {
+                let row = my * v + by;
+                if row >= c.height.div_ceil(8) {
+                    break;
+                }
+                for bx in 0..c.width.div_ceil(8) {
+                    let block = &c.blocks[row * c.blocks_wide + bx];
+                    window.put(i, my, by, bx, &mut cache, &mut output, |target, stride| {
+                        if block[1..].iter().all(|&v| v == 0) {
+                            idct8_dc(block[0], quant, target, stride);
+                        } else {
+                            idct8(block, quant, target, stride);
+                        }
+                    });
+                }
+            }
+        }
+        window.advance(&cache, my, method, &mut output);
+    }
+    window.flush(&cache, method, &mut output);
+    Ok(window.finish(output))
 }
 
 #[derive(Clone, Copy)]
@@ -559,7 +662,7 @@ impl<'a> Row<'a> {
         };
         let get = |y: usize| {
             let start = c.offset
-                + (y / c.band_rows % 3) * c.band_rows * c.stride
+                + (y / c.band_rows % c.slots) * c.band_rows * c.stride
                 + y % c.band_rows * c.stride;
             &cache[start..start + c.width]
         };

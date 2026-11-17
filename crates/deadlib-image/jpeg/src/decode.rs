@@ -156,19 +156,21 @@ pub(crate) fn allocate_components(
 /// Accepts sequential/progressive Huffman/arithmetic DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
-    decode_with_tables(input, limits, &mut Tables::new())
+    decode_with_tables(input, limits, &mut Tables::new(), None)
 }
 pub(crate) fn decode_with_tables<'a>(
     input: &'a [u8],
     limits: Limits,
     tables: &mut Tables,
+    mut hints: Option<&mut crate::reconstruct::ColorHints>,
 ) -> Result<CoefficientImage<'a>> {
     let mut reader = MarkerReader::new(input)?;
     let Tables { quant, huffman } = tables;
     let mut conditioning = Conditioning::default();
     let mut frame = None;
     let mut components = Vec::new();
-    let mut seen = Vec::new();
+    // At most 255 frame components; a stack array avoids an allocation.
+    let mut seen = [false; 256];
     let mut memory_bytes = 0usize;
     let mut metadata = Vec::new();
     let mut metadata_bytes = 0usize;
@@ -218,13 +220,20 @@ pub(crate) fn decode_with_tables<'a>(
                 {
                     return Err(Error::LimitExceeded("metadata and coefficients"));
                 }
-                metadata.try_reserve(1).map_err(|_| Error::Allocation)?;
-                metadata.push(MetadataSegment {
-                    marker,
-                    data,
-                    offset,
-                    preceding_scans: scans,
-                });
+                // Pixel output keeps only the color hints, with identical limits.
+                if let Some(hints) = hints.as_deref_mut() {
+                    if scans == 0 {
+                        hints.observe(marker, data);
+                    }
+                } else {
+                    metadata.try_reserve(1).map_err(|_| Error::Allocation)?;
+                    metadata.push(MetadataSegment {
+                        marker,
+                        data,
+                        offset,
+                        preceding_scans: scans,
+                    });
+                }
             }
             Event::Segment { marker, data, .. } if Process::try_from(marker).is_ok() => {
                 if frame.is_some() {
@@ -262,14 +271,13 @@ pub(crate) fn decode_with_tables<'a>(
                             ..limits
                         },
                     )?;
-                    seen.resize(frame.components.len(), false);
                 }
                 decode_scan(
                     header,
                     entropy,
                     frame,
                     &mut components,
-                    &mut seen,
+                    &mut seen[..frame.components.len()],
                     quant,
                     huffman,
                     interval,
@@ -296,7 +304,7 @@ pub(crate) fn decode_with_tables<'a>(
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
-    if scans == 0 || seen.iter().any(|&v| !v) {
+    if scans == 0 || seen[..frame.components.len()].iter().any(|&v| !v) {
         return Err(Error::Invalid("missing component scan"));
     }
     Ok(CoefficientImage {
