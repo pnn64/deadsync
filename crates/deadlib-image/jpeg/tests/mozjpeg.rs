@@ -34,8 +34,10 @@ fn pinned_mozjpeg_coefficients_quantizers_and_float_idct() {
         let expected = std::fs::read(path.with_extension("planes")).unwrap();
         let samples: Vec<_> = planes.components.iter().flat_map(|c| &c.samples).collect();
         assert_eq!(expected.len(), samples.len() * 2);
+        // 8-bit planes follow jidctflt exactly; other precisions may differ by one.
+        let tolerance = u16::from(image.frame.precision != 8);
         for (pair, &value) in expected.as_chunks::<2>().0.iter().zip(samples) {
-            assert!(u16::from_le_bytes(*pair).abs_diff(value) <= 1, "{path:?}");
+            assert!(u16::from_le_bytes(*pair).abs_diff(value) <= tolerance, "{path:?}");
         }
     }
     for process in [

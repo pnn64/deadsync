@@ -584,7 +584,7 @@ pub(crate) fn decode_scan(
     Ok(())
 }
 
-pub(crate) fn sequential_block(
+fn sequential_block(
     block: &mut [i16; 64],
     bits: &mut Bits<'_>,
     dc: &Huffman,

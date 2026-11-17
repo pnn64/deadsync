@@ -32,8 +32,121 @@ const BASIS: [[i64; 8]; 8] = [
 #[path = "../tests/support/t83_transform.rs"]
 mod t83_transform;
 
-pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
+/// Hierarchical frames keep the exact Q20 transform: lossless corrections are
+/// exact only against the encoder's reference reconstruction.
+pub(crate) fn idct_exact(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
     idct_mode(block, quant, Some(precision))
+}
+
+pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
+    if precision == 8 {
+        let mut out = [0u8; 64];
+        idct8(block, &FloatQuant::new(quant), &mut out, 8);
+        return out.map(u16::from);
+    }
+    idct_mode(block, quant, Some(precision))
+}
+
+// 8-bit samples use libjpeg's floating-point AAN inverse DCT (jidctflt.c,
+// the JDCT_FLOAT reference used by the C oracles) with its operation order,
+// f64-derived constants, folded 1/8 scale and truncation after +128.5.
+// Rust evaluates every f32 operation exactly once in IEEE single precision,
+// so vectorized and scalar evaluation produce identical samples.
+// libjpeg's decimal literals, rounded through f64 like the C constants.
+#[allow(clippy::approx_constant)]
+const R2: f32 = 1.414213562f64 as f32;
+const C2: f32 = 1.847759065f64 as f32;
+const C2_MINUS_C6: f32 = 1.082392200f64 as f32;
+const C2_PLUS_C6: f32 = 2.613125930f64 as f32;
+
+/// Dequantization multipliers with AAN row/column scales and the 1/8 descale.
+pub(crate) struct FloatQuant([f32; 64]);
+
+impl FloatQuant {
+    pub fn new(quant: &[u16; 64]) -> Self {
+        const AAN: [f64; 8] = [
+            1.0,
+            1.387039845,
+            1.306562965,
+            1.175875602,
+            1.0,
+            0.785694958,
+            0.541196100,
+            0.275899379,
+        ];
+        Self(core::array::from_fn(|i| {
+            (f64::from(quant[i]) * AAN[i / 8] * AAN[i % 8] * 0.125) as f32
+        }))
+    }
+}
+
+#[inline(always)]
+fn aan_line(x: [f32; 8]) -> [f32; 8] {
+    let tmp10 = x[0] + x[4];
+    let tmp11 = x[0] - x[4];
+    let tmp13 = x[2] + x[6];
+    let tmp12 = (x[2] - x[6]) * R2 - tmp13;
+    let tmp0 = tmp10 + tmp13;
+    let tmp3 = tmp10 - tmp13;
+    let tmp1 = tmp11 + tmp12;
+    let tmp2 = tmp11 - tmp12;
+    let z13 = x[5] + x[3];
+    let z10 = x[5] - x[3];
+    let z11 = x[1] + x[7];
+    let z12 = x[1] - x[7];
+    let tmp7 = z11 + z13;
+    let tmp11 = (z11 - z13) * R2;
+    let z5 = (z10 + z12) * C2;
+    let tmp10 = z5 - z12 * C2_MINUS_C6;
+    let tmp12 = z5 - z10 * C2_PLUS_C6;
+    let tmp6 = tmp12 - tmp7;
+    let tmp5 = tmp11 - tmp6;
+    let tmp4 = tmp10 - tmp5;
+    [
+        tmp0 + tmp7,
+        tmp1 + tmp6,
+        tmp2 + tmp5,
+        tmp3 + tmp4,
+        tmp3 - tmp4,
+        tmp2 - tmp5,
+        tmp1 - tmp6,
+        tmp0 - tmp7,
+    ]
+}
+
+/// Reconstruct one 8-bit block into `out` rows `stride` bytes apart.
+// Plain counted loops over flat arrays keep both passes vectorized under
+// baseline SSE2; value-array formulations left whole passes scalar.
+#[inline]
+pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let mut input = [0f32; 64];
+    for i in 0..64 {
+        input[i] = f32::from(block[i]) * quant.0[i];
+    }
+    // Columns first, as in jidctflt.
+    let mut work = [0f32; 64];
+    for u in 0..8 {
+        let column = aan_line(core::array::from_fn(|v| input[v * 8 + u]));
+        for (y, value) in column.into_iter().enumerate() {
+            work[y * 8 + u] = value;
+        }
+    }
+    for y in 0..8 {
+        let mut row: [f32; 8] = work[y * 8..y * 8 + 8].try_into().unwrap();
+        // Level shift and rounding bias enter with the DC term.
+        row[0] += 128.5;
+        let target: &mut [u8; 8] = (&mut out[y * stride..y * stride + 8]).try_into().unwrap();
+        *target = aan_line(row).map(|v| v.clamp(0.0, 255.0) as u8);
+    }
+}
+
+/// DC-only blocks reduce exactly to one sample in every position.
+#[inline]
+pub(crate) fn idct8_dc(dc: i16, quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let value = (f32::from(dc) * quant.0[0] + 128.5).clamp(0.0, 255.0) as u8;
+    for y in 0..8 {
+        out[y * stride..y * stride + 8].fill(value);
+    }
 }
 
 /// Annex J residuals have no inverse level shift or unsigned sample clipping.

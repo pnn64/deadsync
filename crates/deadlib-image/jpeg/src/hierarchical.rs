@@ -660,7 +660,7 @@ pub(crate) fn visit_component(
                     let values = if frame.frame.process.is_differential() {
                         crate::transform::idct_differential(block, &c.quantization)
                     } else {
-                        crate::transform::idct(block, &c.quantization, frame.frame.precision)
+                        crate::transform::idct_exact(block, &c.quantization, frame.frame.precision)
                     };
                     for y in 0..(c.height - by * 8).min(8) {
                         for x in 0..(c.width - bx * 8).min(8) {

@@ -1,16 +1,16 @@
 use crate::{Error, Result};
 
-const LOOK_BITS: u8 = 9;
+pub(crate) const LOOK_BITS: u8 = 9;
 
 /// Canonical JPEG Huffman decoder: a flat prefix lookup and bounded fallback.
 #[derive(Clone)]
 pub(crate) struct Huffman {
     counts: [u8; 16],
     symbol_count: u16,
-    lookup: [u16; 1 << LOOK_BITS],
-    max_code: [i32; 17],
-    offsets: [i32; 17],
-    values: [u8; 256],
+    pub(crate) lookup: [u16; 1 << LOOK_BITS],
+    pub(crate) max_code: [i32; 17],
+    pub(crate) offsets: [i32; 17],
+    pub(crate) values: [u8; 256],
 }
 
 impl Huffman {

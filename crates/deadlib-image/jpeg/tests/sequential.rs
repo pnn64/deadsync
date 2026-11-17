@@ -65,11 +65,14 @@ fn pinned_libjpeg_turbo_coefficients_and_idct_planes() {
         let planes = image.reconstruct().unwrap();
         let expected = std::fs::read(path.with_extension("planes")).unwrap();
         let mut pos = 0;
+        // 8-bit planes follow jidctflt exactly; other precisions use the
+        // exact Q20 transform and may differ from the float oracle by one.
+        let tolerance = u16::from(image.frame.precision != 8);
         for c in &planes.components {
             for &v in &c.samples {
                 let reference = short(&expected, &mut pos);
                 assert!(
-                    v.abs_diff(reference) <= 1,
+                    v.abs_diff(reference) <= tolerance,
                     "{}: {v} vs {reference}",
                     path.display()
                 );

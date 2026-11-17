@@ -48,6 +48,13 @@ fn time(name: &str, mut decode: impl FnMut()) {
 fn main() {
     cycles::pin();
     let bytes = std::fs::read(std::env::args_os().nth(1).expect("JPEG path")).unwrap();
+    // `stages FILE N` only repeats the pixel API, for sampling profilers.
+    if let Some(n) = std::env::args().nth(2) {
+        for _ in 0..n.parse::<u32>().unwrap() {
+            black_box(deadlib_image_jpeg::decode(black_box(&bytes), Limits::default()).unwrap());
+        }
+        return;
+    }
     let coefficients = decode_coefficients(&bytes, Limits::default()).unwrap();
     let planes = coefficients.reconstruct().unwrap();
     println!(
@@ -69,6 +76,21 @@ fn main() {
     });
     time("color", || {
         black_box(planes.to_image(Upsampling::Linear).unwrap());
+    });
+    time("raster", || {
+        black_box(deadlib_image_jpeg::decode(black_box(&bytes), Limits::default()).unwrap());
+    });
+    time("zune", || {
+        let options = zune_core::options::DecoderOptions::default()
+            .jpeg_set_out_colorspace(zune_core::colorspace::ColorSpace::RGB);
+        black_box(
+            zune_jpeg::JpegDecoder::new_with_options(
+                zune_core::bytestream::ZCursor::new(black_box(&bytes)),
+                options,
+            )
+            .decode()
+            .unwrap(),
+        );
     });
     time("complete", || {
         black_box(

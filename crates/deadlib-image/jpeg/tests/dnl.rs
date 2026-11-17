@@ -567,45 +567,37 @@ fn word(data: &[u8], position: &mut usize) -> usize {
     *position += 4;
     value as usize
 }
+/// Native sample snapshots pin implementation-defined IDCT rounding. Set
+/// `DEADLIB_JPEG_REPIN` to rewrite them after an intentional transform change.
 fn sample_expectation(
-    data: &[u8],
+    path: &std::path::Path,
     p: u8,
     w: u16,
     h: u16,
     components: &[deadlib_image_jpeg::ComponentPlane],
 ) {
-    assert_eq!(&data[..4], b"JLP1");
-    let mut pos = 4;
-    assert_eq!(
-        [
-            word(data, &mut pos),
-            word(data, &mut pos),
-            word(data, &mut pos),
-            word(data, &mut pos)
-        ],
-        [p as usize, w as usize, h as usize, components.len()]
-    );
+    let mut actual = b"JLP1".to_vec();
+    for value in [p as usize, w as usize, h as usize, components.len()] {
+        actual.extend((value as u32).to_le_bytes());
+    }
     for c in components {
-        let fields = std::array::from_fn::<_, 5, _>(|_| word(data, &mut pos));
-        assert_eq!(
-            fields,
-            [
-                c.spec.id as usize,
-                c.spec.horizontal_sampling as usize,
-                c.spec.vertical_sampling as usize,
-                c.width,
-                c.height
-            ]
-        );
+        for value in [
+            c.spec.id as usize,
+            c.spec.horizontal_sampling as usize,
+            c.spec.vertical_sampling as usize,
+            c.width,
+            c.height,
+        ] {
+            actual.extend((value as u32).to_le_bytes());
+        }
         for &value in &c.samples {
-            assert_eq!(
-                u16::from_le_bytes(data[pos..pos + 2].try_into().unwrap()),
-                value
-            );
-            pos += 2;
+            actual.extend(value.to_le_bytes());
         }
     }
-    assert_eq!(pos, data.len());
+    if std::env::var_os("DEADLIB_JPEG_REPIN").is_some() {
+        std::fs::write(path, &actual).unwrap();
+    }
+    assert!(actual == std::fs::read(path).unwrap(), "{}", path.display());
 }
 fn coefficient_expectation(
     data: &[u8],
@@ -701,7 +693,7 @@ fn pinned_dnl_sources_cover_all_processes_and_malformed_boundaries() {
                         components,
                     ),
                     HierarchicalData::Lossless { components, .. } => sample_expectation(
-                        &std::fs::read(path.with_extension(format!("frame-{i}.samples"))).unwrap(),
+                        &path.with_extension(format!("frame-{i}.samples")),
                         frame.frame.precision,
                         frame.frame.width,
                         frame.frame.height,
@@ -710,7 +702,7 @@ fn pinned_dnl_sources_cover_all_processes_and_malformed_boundaries() {
                 }
             }
             sample_expectation(
-                &expected,
+                &path.with_extension("samples"),
                 model.header.precision,
                 model.header.width,
                 model.header.height,
@@ -719,7 +711,7 @@ fn pinned_dnl_sources_cover_all_processes_and_malformed_boundaries() {
         } else if lossless {
             let model = decode_lossless(&bytes, Limits::default()).unwrap();
             sample_expectation(
-                &expected,
+                &path.with_extension("samples"),
                 model.frame.precision,
                 model.frame.width,
                 model.frame.height,
@@ -737,7 +729,7 @@ fn pinned_dnl_sources_cover_all_processes_and_malformed_boundaries() {
                 &model.components,
             );
             sample_expectation(
-                &expected,
+                &path.with_extension("samples"),
                 model.frame.precision,
                 model.frame.width,
                 model.frame.height,

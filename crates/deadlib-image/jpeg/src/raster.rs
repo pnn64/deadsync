@@ -1,6 +1,7 @@
 //! Pixel output without retaining full-image coefficients for sequential scans.
-use crate::decode::{parse_huffman, parse_quant, sequential_block};
-use crate::entropy::Bits;
+use crate::decode::{parse_huffman, parse_quant};
+use crate::fast::{self, Reader, Table};
+use crate::transform::{FloatQuant, idct8, idct8_dc};
 use crate::reconstruct::{
     cmyk_to_rgb, infer_components_with_hints, rgb8, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
 };
@@ -316,62 +317,76 @@ impl Plan<'_> {
             .try_reserve_exact(cache_bytes)
             .map_err(|_| Error::Allocation)?;
         cache.resize(cache_bytes, 0);
-        let mut bits = Bits::new(self.entropy);
+        let n = self.frame.components.len();
+        let tables: [Option<Table>; 8] = core::array::from_fn(|t| {
+            self.selected[..n]
+                .iter()
+                .any(|&(dc, ac)| dc == t || ac == t)
+                .then(|| Table::new(self.tables.huffman[t].as_ref().unwrap()))
+        });
+        let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
+            FloatQuant::new(&self.frame.components.get(i).map_or([0; 64], |spec| {
+                self.tables.quant[usize::from(spec.quantization_table)]
+                    .as_ref()
+                    .unwrap()
+                    .values
+            }))
+        });
+        let mut reader = Reader::new(self.entropy);
         let mut predictors = [0; 4];
         let mut restart = 0;
-        let n = self.frame.components.len();
+        let mut block = [0i16; 64];
+        let mut edge = [0u8; 64];
         for my in 0..rows {
             for mx in 0..cols {
                 let mcu = my * cols + mx;
                 if self.interval != 0 && mcu != 0 && mcu % self.interval == 0 {
-                    bits.restart(restart)?;
+                    reader.restart(restart)?;
                     restart = (restart + 1) & 7;
                     predictors.fill(0);
                 }
                 for i in 0..n {
                     let c = layouts[i];
-                    let (dc, ac) = self.selected[i];
-                    let quant = &self.tables.quant
-                        [usize::from(self.frame.components[i].quantization_table)]
-                    .as_ref()
-                    .unwrap()
-                    .values;
+                    let dc = tables[self.selected[i].0].as_ref().unwrap();
+                    let ac = tables[self.selected[i].1].as_ref().unwrap();
+                    let quant = &quants[i];
                     for by in 0..c.v {
                         for bx in 0..c.h {
-                            let mut block = [0; 64];
-                            sequential_block(
-                                &mut block,
-                                &mut bits,
-                                self.tables.huffman[dc].as_ref().unwrap(),
-                                self.tables.huffman[ac].as_ref().unwrap(),
-                                &mut predictors[i],
-                                8,
-                                false,
-                            )?;
-                            let samples = crate::transform::idct(&block, quant, 8).map(|v| v as u8);
-                            if gray {
-                                let x = mx * 8;
-                                let y = my * 8;
-                                let w = (width - x).min(8);
-                                for row in 0..(height - y).min(8) {
-                                    output[(y + row) * width + x..(y + row) * width + x + w]
-                                        .copy_from_slice(&samples[row * 8..row * 8 + w]);
-                                }
-                            } else {
+                            let last =
+                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i])?;
+                            let (x, y) = (mx * 8, my * 8);
+                            let inside = x + 8 <= width && y + 8 <= height;
+                            let (target, stride) = if !gray {
                                 let start = c.offset
                                     + (my % 3) * c.band_rows * c.stride
                                     + by * 8 * c.stride
                                     + mx * c.h * 8
                                     + bx * 8;
-                                for row in 0..8 {
-                                    cache[start + row * c.stride..start + row * c.stride + 8]
-                                        .copy_from_slice(&samples[row * 8..row * 8 + 8]);
+                                (&mut cache[start..], c.stride)
+                            } else if inside {
+                                (&mut output[y * width + x..], width)
+                            } else {
+                                (&mut edge[..], 8)
+                            };
+                            if last == 0 {
+                                idct8_dc(block[0], quant, target, stride);
+                                block[0] = 0;
+                            } else {
+                                idct8(&block, quant, target, stride);
+                                block = [0; 64];
+                            }
+                            if gray && !inside {
+                                let w = (width - x).min(8);
+                                for row in 0..(height - y).min(8) {
+                                    output[(y + row) * width + x..(y + row) * width + x + w]
+                                        .copy_from_slice(&edge[row * 8..row * 8 + w]);
                                 }
                             }
                         }
                     }
                 }
             }
+            reader.check()?;
             if !gray && my > 0 {
                 self.emit(
                     &cache,
@@ -393,7 +408,7 @@ impl Plan<'_> {
                 &mut output,
             );
         }
-        bits.finish()?;
+        reader.finish()?;
         debug_assert_eq!(output.len(), count);
         Ok(Image {
             width: width as u32,

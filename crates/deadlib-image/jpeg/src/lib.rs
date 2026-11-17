@@ -11,6 +11,7 @@ mod decode;
 mod dnl;
 mod encode;
 mod entropy;
+mod fast;
 mod exif;
 mod hierarchical;
 mod hierarchical_encode;

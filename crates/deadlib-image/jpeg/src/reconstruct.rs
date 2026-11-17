@@ -1,4 +1,4 @@
-use crate::transform::idct;
+use crate::transform::{FloatQuant, idct, idct8};
 use crate::{CoefficientImage, ComponentSpec, Error, FrameHeader, Limits, MetadataSegment, Result};
 use deadlib_image::{ColorType, Image, Samples};
 
@@ -99,13 +99,17 @@ impl CoefficientImage<'_> {
                 .try_reserve_exact(c.width * c.height)
                 .map_err(|_| Error::Allocation)?;
             samples.resize(c.width * c.height, 0);
+            let float_quant = (self.frame.precision == 8).then(|| FloatQuant::new(&c.quantization));
             for by in 0..c.height.div_ceil(8) {
                 for bx in 0..c.width.div_ceil(8) {
-                    let pixels = idct(
-                        &c.blocks[by * c.blocks_wide + bx],
-                        &c.quantization,
-                        self.frame.precision,
-                    );
+                    let block = &c.blocks[by * c.blocks_wide + bx];
+                    let pixels = if let Some(quant) = &float_quant {
+                        let mut out = [0u8; 64];
+                        idct8(block, quant, &mut out, 8);
+                        out.map(u16::from)
+                    } else {
+                        idct(block, &c.quantization, self.frame.precision)
+                    };
                     let cols = (c.width - bx * 8).min(8);
                     for y in 0..(c.height - by * 8).min(8) {
                         let dst = (by * 8 + y) * c.width + bx * 8;
