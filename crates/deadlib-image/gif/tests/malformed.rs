@@ -44,6 +44,40 @@ fn every_truncation_and_every_stream_split() {
         assert_eq!(blocks, expected.blocks);
     }
 }
+
+#[test]
+fn recycled_pixels_cannot_complete_an_underfilled_image() {
+    let base = tiny();
+    let mut bytes = base[..base.len() - 1].to_vec();
+    bytes.extend_from_slice(&base[19..30]); // Another descriptor and minimum.
+    bytes.extend_from_slice(&[1, 0x2c, 0, 0x3b]); // CLEAR, EOI: no pixel.
+    assert!(decode(&bytes).is_err());
+    for chunk in [1, 7, bytes.len()] {
+        let mut decoder = Decoder::default();
+        let mut frames = 0;
+        let mut at = 0;
+        loop {
+            let end = (at + chunk).min(bytes.len());
+            match decoder.update(&bytes[at..end]) {
+                Err(error) => {
+                    assert_eq!(error, Error::Invalid("incomplete LZW image"));
+                    break;
+                }
+                Ok(progress) => {
+                    assert!(progress.consumed > 0);
+                    at += progress.consumed;
+                    if let Some(Event::Block(Block::Frame(frame))) = progress.event {
+                        frames += 1;
+                        assert_eq!(frame.indices, [1]);
+                        decoder.recycle_frame(frame);
+                    }
+                }
+            }
+        }
+        assert_eq!(frames, 1);
+        assert!(decoder.finish().is_err());
+    }
+}
 #[test]
 fn reject_invalid_syntax_dimensions_indices_and_controls() {
     let base = tiny();
@@ -341,4 +375,41 @@ fn longest_dictionary_chain_and_exact_output_limits() {
     assert_eq!(out.len(), size);
     assert!(out.iter().all(|&v| v == 0));
     assert!(lzw::decode(&packed, 2, size - 1).is_err());
+}
+
+#[test]
+fn lzw_clear_and_reset_preserve_an_existing_output_prefix() {
+    let packed = pack(&[4, 0, 6, 7, 4, 1, 6, 7, 5], 2);
+    let prefix = vec![0xff; 70001];
+    for chunk in [1, 3, packed.len()] {
+        let mut decoder = lzw::Decoder::new();
+        decoder.reset(2).unwrap();
+        let mut output = prefix.clone();
+        for bytes in packed.chunks(chunk) {
+            decoder
+                .update(bytes, &mut output, prefix.len() + 12)
+                .unwrap();
+        }
+        assert!(decoder.ended());
+        assert_eq!(&output[..prefix.len()], prefix);
+        assert_eq!(
+            &output[prefix.len()..],
+            &[0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]
+        );
+
+        // Reuse the compact table with a different literal alphabet and an
+        // output prefix spanning earlier decode epochs.
+        let pixels: Vec<_> = (0..5000).map(|i| (i * 71) as u8).collect();
+        let encoded = lzw::encode(&pixels, 8).unwrap();
+        let start = output.len();
+        decoder.reset(8).unwrap();
+        for bytes in encoded.chunks(chunk) {
+            decoder
+                .update(bytes, &mut output, start + pixels.len())
+                .unwrap();
+        }
+        assert!(decoder.ended());
+        assert_eq!(&output[start..], pixels);
+        assert_eq!(&output[..prefix.len()], prefix);
+    }
 }

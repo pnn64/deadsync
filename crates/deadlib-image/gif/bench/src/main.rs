@@ -82,6 +82,7 @@ mod cycles {
 
 use deadlib_image_gif as native;
 use image::AnimationDecoder;
+use rgb::FromSlice;
 const CODECS: [&str; 7] = [
     "native-retained",
     "gif-retained",
@@ -109,6 +110,34 @@ fn compositor(header: &native::Header) -> native::Compositor {
         },
     )
     .unwrap()
+}
+fn blit(screen: &mut gif_dispose::Screen, frame: &gif::Frame<'_>, pixels: &[u8]) {
+    screen
+        .blit(
+            frame.palette.as_deref().map(<[u8]>::as_rgb),
+            frame.dispose,
+            frame.left,
+            frame.top,
+            imgref::ImgRef::new(pixels, frame.width as usize, frame.height as usize),
+            frame.transparent,
+        )
+        .unwrap();
+}
+fn gif_stream(bytes: &[u8], rgba: bool) {
+    let mut reader = indexed(bytes);
+    let mut screen = rgba.then(|| gif_dispose::Screen::new_decoder(&reader));
+    let mut pixels = Vec::new();
+    while reader.next_frame_info().unwrap().is_some() {
+        pixels.resize(reader.buffer_size(), 0);
+        reader.read_into_buffer(&mut pixels).unwrap();
+        let frame = reader.current_frame_info().unwrap();
+        if let Some(screen) = &mut screen {
+            blit(screen, frame, &pixels);
+            black_box(screen.pixels_rgba());
+        } else {
+            black_box((frame, &pixels));
+        }
+    }
 }
 fn verify(bytes: &[u8]) -> Result<Stats, String> {
     let actual = native::decode(bytes).map_err(|e| format!("native strict rejection: {e}"))?;
@@ -141,6 +170,9 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
         .map(|p| p.iter().flatten().copied().collect());
     assert_eq!(global.as_deref(), reader.global_palette());
     let mut screen = gif_dispose::Screen::new_decoder(&reader);
+    let mut buffered = indexed(bytes);
+    let mut buffered_screen = gif_dispose::Screen::new_decoder(&buffered);
+    let mut buffer = Vec::new();
     let mut render = compositor(&actual.header);
     let mut image_frames = image::codecs::gif::GifDecoder::new(Cursor::new(bytes))
         .unwrap()
@@ -151,6 +183,15 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
     };
     for frame in actual.frames() {
         let expected = reader.read_next_frame().unwrap().unwrap();
+        assert!(buffered.next_frame_info().unwrap().is_some());
+        buffer.resize(buffered.buffer_size(), 0);
+        buffered.read_into_buffer(&mut buffer).unwrap();
+        assert_eq!(frame.indices, buffer);
+        blit(
+            &mut buffered_screen,
+            buffered.current_frame_info().unwrap(),
+            &buffer,
+        );
         assert_eq!(
             (frame.left, frame.top, frame.width, frame.height),
             (expected.left, expected.top, expected.width, expected.height)
@@ -187,6 +228,8 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
                 .all(|(a, b)| *a == [b.r, b.g, b.b, b.a])
         );
         assert_eq!(pixels.rgba.len(), expected_rgba.0.len() * 4);
+        let buffered_rgba = buffered_screen.pixels_rgba().to_contiguous_buf();
+        assert_eq!(expected_rgba.0, buffered_rgba.0);
         let image = image_frames.next().unwrap().unwrap();
         assert_eq!(pixels.rgba, image.buffer().as_raw());
         let (num, denom) = image.delay().numer_denom_ms();
@@ -195,6 +238,7 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
         stats.total_pixels += frame.indices.len();
     }
     assert!(reader.read_next_frame().unwrap().is_none());
+    assert!(buffered.next_frame_info().unwrap().is_none());
     assert!(image_frames.next().is_none());
     Ok(stats)
 }
@@ -238,30 +282,18 @@ fn decode(codec: usize, bytes: &[u8]) {
             black_box(native::decode(black_box(bytes)).unwrap());
         }
         1 => {
-            let mut reader = indexed(black_box(bytes));
+            let reader = indexed(black_box(bytes));
             let global = reader.global_palette().map(<[u8]>::to_vec);
             let mut frames = Vec::new();
-            while let Some(frame) = reader.read_next_frame().unwrap() {
-                frames.push(frame.clone());
+            for frame in reader {
+                frames.push(frame.unwrap());
             }
             black_box((global, frames));
         }
         2 => native_stream(black_box(bytes), false),
-        3 => {
-            let mut reader = indexed(black_box(bytes));
-            while let Some(frame) = reader.read_next_frame().unwrap() {
-                black_box(frame);
-            }
-        }
+        3 => gif_stream(black_box(bytes), false),
         4 => native_stream(black_box(bytes), true),
-        5 => {
-            let mut reader = indexed(black_box(bytes));
-            let mut screen = gif_dispose::Screen::new_decoder(&reader);
-            while let Some(frame) = reader.read_next_frame().unwrap() {
-                screen.blit_frame(frame).unwrap();
-                black_box(screen.pixels_rgba());
-            }
-        }
+        5 => gif_stream(black_box(bytes), true),
         6 => {
             let decoder =
                 image::codecs::gif::GifDecoder::new(Cursor::new(black_box(bytes))).unwrap();

@@ -28,7 +28,14 @@ and at most one event. Submit the unconsumed suffix again after every event.
 `Decoder::finish` verifies receipt of the trailer. Frames can be returned through
 `recycle_frame` to reuse their allocation. The LZW dictionary references the
 already decoded image, avoiding a separate prefix-chain expansion buffer.
+Its compact dictionary is allocated from the frame's output bound and reused
+across frames and CLEAR codes. Interlaced decoding permutes rows in place using
+one saved row instead of another frame-sized pixel buffer.
 `Encoder<W: Write>` writes one block at a time and reuses compression buffers.
+
+The separate [benchmark workspace](bench/README.md) measures complete animation
+decodes against the Rust `gif` and `image` crates, including allocation counts
+and Windows CPU cycles. It adds no dependencies to the production codec.
 
 Resource limits apply cumulatively to input, metadata (including sub-block
 storage overhead), graphics, frame count and block count. Dimensions are checked

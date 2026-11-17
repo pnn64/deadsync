@@ -1,2 +1,5 @@
 fuzz/*.sh text eol=lf
 tests/fixtures/**/*.gif binary
+*.py text eol=lf
+# Preserve hashed benchmark evidence and raw tool diagnostics byte-for-byte.
+bench/results/** -text -whitespace

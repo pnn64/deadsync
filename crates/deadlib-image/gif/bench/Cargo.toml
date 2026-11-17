@@ -13,6 +13,8 @@ allocations = []
 deadlib-image-gif = { path = ".." }
 gif = "=0.14.2"
 gif-dispose = "=6.0.0"
+imgref = "=1.12.3"
+rgb = "=0.8.53"
 image = { version = "=0.25.10", default-features = false, features = ["gif"] }
 
 [profile.release]

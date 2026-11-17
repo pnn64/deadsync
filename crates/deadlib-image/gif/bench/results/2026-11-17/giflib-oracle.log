@@ -1,0 +1,20 @@
+wsl :      Locking 2 packages to highest Rust 1.101.0-nightly compatible versions
+At line:17 char:1
++ wsl -d Debian -- bash -lc 'DEADLIB_GIFLIB_ORACLE=/tmp/deadlib-gif-ora ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (     Locking 2 ...atible versions:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling deadlib-image v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image)
+   Compiling deadlib-image-gif v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/gif)
+   Compiling gif-oracle-check v0.0.0 (/tmp/gif-oracle-check-20261117)
+    Finished `release` profile [optimized] target(s) in 2.29s
+     Running tests/giflib.rs 
+(/tmp/gif-oracle-check-20261117/target/release/build/gif-oracle-check/75cea6d0af09ffff/out/giflib-75cea6d0af09ffff)
+
+running 1 test
+giflib cases: 73; 64 independent encoder rewrites, 256 generated frames
+test giflib_native_indices_palettes_controls_and_encoder ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+

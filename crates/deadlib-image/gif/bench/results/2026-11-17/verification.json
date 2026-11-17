@@ -1,0 +1,67 @@
+{
+  "test_sources": [
+    {
+      "path": "crates/deadlib-image/gif/tests/animation.rs",
+      "sha256": "83ad07bbaa8e0b37db887ad94ab56b2f6465239ce144c75e3e75ac9ff044dce6"
+    },
+    {
+      "path": "crates/deadlib-image/gif/tests/corpus.rs",
+      "sha256": "0b88fff278ee65af37bdd83465a09614769f89cba4616787258f7e6c14d65251"
+    },
+    {
+      "path": "crates/deadlib-image/gif/tests/giflib.rs",
+      "sha256": "fd23477e6943e03a9b32f1a113547ad0060bc5719020805b4b343f1cd9f451c6"
+    },
+    {
+      "path": "crates/deadlib-image/gif/tests/malformed.rs",
+      "sha256": "79be1fe8993236f92bd5ba727924666bb7b6cb914c2d8fb9a194372b087c5162"
+    },
+    {
+      "path": "crates/deadlib-image/gif/tests/native.rs",
+      "sha256": "831350815b3acad1c0727429ecbc17b85cb101e52b176b7d83b9dc18ce2ae9f7"
+    },
+    {
+      "path": "crates/deadlib-image/gif/tests/oracle/oracle.c",
+      "sha256": "db23e74ef44fbb0dc0d07bbddc380cd19b5fb2bff1d413108481d4021f0ae71f"
+    }
+  ],
+  "checks": [
+    {
+      "command": "cargo test -p deadlib-image-gif --release --locked --offline --target-dir target/gif-verification-20261117",
+      "passed": 23,
+      "ignored": 1,
+      "log": "windows-x64-tests.log"
+    },
+    {
+      "command": "cargo test -p deadlib-image-gif --release --locked --offline --target i686-pc-windows-msvc --target-dir target/gif-verification-20261117-x86",
+      "passed": 23,
+      "ignored": 1,
+      "log": "windows-x86-tests.log"
+    },
+    {
+      "command": "cargo check -p deadlib-image-gif --lib --release --locked --offline --target aarch64-pc-windows-msvc --target-dir target/gif-verification-20261117-arm64",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy -p deadlib-image-gif --all-targets --release --locked --offline --target-dir target/gif-verification-20261117 -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --all-targets --all-features --release --locked --offline --target-dir target/gif-decode-bench -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "check": "giflib oracle via an isolated Cargo test wrapper to avoid unrelated root workspace Git dependency resolution",
+      "passed": 1,
+      "cases": 73,
+      "independent_encoder_rewrites": 64,
+      "generated_frames": 256,
+      "log": "giflib-oracle.log"
+    },
+    {
+      "check": "ASan with native-crate feedback, audited compiler invocations and compiled object sections",
+      "executions": 200000,
+      "manifest": "fuzz/manifest.json"
+    }
+  ]
+}

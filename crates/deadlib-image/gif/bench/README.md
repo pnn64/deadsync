@@ -4,13 +4,22 @@ This development-only workspace compares `deadlib-image-gif`, `gif 0.14.2`,
 `gif-dispose 6.0.0`, and `image 0.25.10`. It adds no production dependencies.
 The lock file pins the reference implementations and their dependencies.
 
+Retained measurements, scope, and known exceptions are in [RESULTS.md](RESULTS.md).
+
 Run from the repository root:
 
 ```powershell
+cargo run --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --release --locked --bin generate -- target/gif-generated-20261117
 cargo build --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --release --locked --target-dir target/gif-decode-bench
 $env:GIF_BENCH_MS = '80'
-target/gif-decode-bench/release/gif-decode-bench.exe assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples
+target/gif-decode-bench/release/gif-decode-bench.exe assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples target/gif-generated-20261117
 ```
+
+`generate` writes 128 reproducible inputs using both the native and Rust `gif`
+encoders. They cover all power-of-two palette sizes, tiny images, flat colors,
+bands, random data, interlacing, one- and seven-byte image sub-blocks, local
+palettes, transparent frames, rectangles, and all defined disposal methods.
+Every generated file is decoded and checked against its intended indexed frames.
 
 Arguments accept GIF files or directories, searched recursively. Before measuring
 each input, the harness compares indexed frames, palettes, controls, and complete
@@ -28,11 +37,11 @@ The seven modes decode every frame, including output destruction:
 | Mode | Output and ownership |
 | --- | --- |
 | `native-retained` | Native whole-file decode, retaining frames and extension metadata. |
-| `gif-retained` | Indexed `gif` decode, cloning frames and the global palette into owned storage. |
+| `gif-retained` | Indexed `gif` iterator, moving owned frames into retained storage and copying the global palette. |
 | `native-stream` | Native frame events, recycling frame buffers after consumption. |
-| `gif-stream` | Indexed `gif` frames, consuming borrowed buffers before the next frame. |
+| `gif-stream` | Indexed `gif` decode through `read_into_buffer`, reusing caller-owned pixel storage. |
 | `native-rgba` | Native streaming decode and transparent-background compositing into a reusable canvas. |
-| `gif-rgba` | Indexed `gif` decode and `gif-dispose` compositing into a reusable canvas. |
+| `gif-rgba` | Indexed `gif` decode through `read_into_buffer` and `gif-dispose` compositing, reusing pixel and canvas buffers. |
 | `image-rgba` | `image` animation iterator, consuming each owned RGBA frame. |
 
 Retention and output ownership differ between these APIs. In particular, the
@@ -53,7 +62,7 @@ Build a separate binary for allocation measurements:
 
 ```powershell
 cargo build --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --release --locked --features allocations --target-dir target/gif-alloc-bench
-target/gif-alloc-bench/release/gif-decode-bench.exe assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples
+target/gif-alloc-bench/release/gif-decode-bench.exe assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples target/gif-generated-20261117
 ```
 
 Its calibrated allocator forwards requests to `System`. `alloc_calls` counts
@@ -63,5 +72,7 @@ neither peak live memory nor RSS. Timing columns are zero in this build. The
 measurement-only unsafe code handles Windows FFI and allocator forwarding;
 production GIF decoding remains safe Rust.
 
-This harness establishes a comparison workflow. No performance result or
-optimization claim is recorded yet.
+`python crates/deadlib-image/gif/bench/summarize.py timings.tsv allocations.tsv --output summary.json`
+requires all seven modes and exactly matched input sets. It reports geometric
+mean native/reference ratios, totals, and every individual loss, both overall
+and separately for repository assets, upstream fixtures, and generated images.

@@ -23,3 +23,24 @@ RUSTFLAGS='-Cdebuginfo=1 -Cpasses=sancov-module -Cllvm-args=-sanitizer-coverage-
 Seed decode with `../tests/fixtures/image-gif` and encoder-generated files.
 `cargo run -p deadlib-image-gif --example seed_fuzz -- <directory>` generates
 deterministic GIF and LZW seeds. Keep generated corpora and logs under `target/`.
+
+For an audited ASan run with feedback restricted to the native image crates,
+run from the repository root on Linux after installing cargo-fuzz and caching
+the locked fuzz dependencies:
+
+```sh
+python3 crates/deadlib-image/gif/scripts/fuzz_native.py \
+  --cargo-fuzz /path/to/cargo-fuzz \
+  --seed-archive crates/deadlib-image/gif/bench/results/2026-11-17/fuzz/seeds.zip \
+  --target-dir /tmp/gif-fuzz-build --output-dir /tmp/gif-fuzz-evidence \
+  --runs 100000
+```
+
+Use fresh output and target directories. The archive includes deterministic
+encoder seeds, upstream fixtures, and independently encoded benchmark inputs.
+The runner retains commands, source/binary/seed hashes, execution counts, and
+compiler invocation records. It audits compiled object sections to confirm that
+the harness and reference crates provide no SanitizerCoverage feedback while
+retaining ASan checks. Native-crate standard-library monomorphizations can
+contribute feedback, so this is not a source-only coverage report or proof of
+conformance. Saved results include the initial seeds and final grown corpora.

@@ -55,6 +55,8 @@ dependencies = [
  "gif",
  "gif-dispose",
  "image",
+ "imgref",
+ "rgb",
 ]
 
 [[package]]

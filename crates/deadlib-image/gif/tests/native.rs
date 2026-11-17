@@ -133,8 +133,15 @@ fn reference_encoder_native_decoder_and_lzw_saturation() {
 fn arbitrary_input_boundaries_and_recycling() {
     let mut g = Gif::new(Header::new(17, 13));
     g.header.global_palette = Some(palette(16));
-    for i in 0..5 {
-        let mut f = Frame::new(17, 13, pixels(221, 16, i + 1));
+    for (i, (width, height)) in [(17, 13), (1, 1), (3, 2), (17, 13), (9, 7)]
+        .into_iter()
+        .enumerate()
+    {
+        let mut f = Frame::new(
+            width,
+            height,
+            pixels(width as usize * height as usize, 16, i as u32 + 1),
+        );
         f.interlaced = i % 2 == 0;
         g.blocks.push(Block::Frame(f));
     }
