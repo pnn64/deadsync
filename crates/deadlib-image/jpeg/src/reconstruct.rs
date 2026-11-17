@@ -703,6 +703,7 @@ pub(crate) fn emit_chunk(out: &mut Vec<u8>, rgb: &[u8; CHUNK * 3], pixels: usize
 }
 
 /// Full-resolution 8-bit YCbCr to interleaved RGB.
+#[inline(always)]
 pub(crate) fn ycbcr_row<T: Copy + Into<i32>>(luma: &[T], cb: &[T], cr: &[T], out: &mut Vec<u8>) {
     let mut rgb = [0; CHUNK * 3];
     for start in (0..luma.len()).step_by(CHUNK) {
@@ -719,6 +720,7 @@ pub(crate) fn ycbcr_row<T: Copy + Into<i32>>(luma: &[T], cb: &[T], cr: &[T], out
 /// `weights` blend two chroma rows vertically (summing to four), and the
 /// result stays unrounded until one final rounding, exactly the generic
 /// bilinear sample. Edges replicate the first and last chroma samples.
+#[inline(always)]
 pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
     luma: &[T],
     cb: [&[T]; 2],

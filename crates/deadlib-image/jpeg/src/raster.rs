@@ -1,6 +1,7 @@
 //! Pixel output without retaining full-image coefficients for sequential scans.
 use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader};
+use crate::simd::Kernel;
 use crate::transform::{FloatQuant, idct8_auto, idct8_dc};
 use crate::reconstruct::{
     ColorHints, CHUNK, cmyk_to_rgb, emit_chunk, infer_components_with_hints, ycbcr_chunk, ycbcr_row, ycbcr420_row,
@@ -374,9 +375,10 @@ impl Window {
         Ok((output, cache))
     }
 
-    /// Reconstruct block column `bx`, block row `by` within MCU row `my`, of
-    /// component `i` through `idct(target, stride)`. `slot` is `my % slots`,
-    /// computed once per MCU row: a per-block division showed in profiles.
+    /// Reconstruct `block` as block column `bx`, block row `by` within MCU row
+    /// `my`, of component `i`. `slot` is `my % slots`, computed once per MCU
+    /// row: a per-block division showed in profiles. No closure is involved,
+    /// so the transform inlines into AVX2-dispatched callers.
     #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     fn put(
@@ -388,19 +390,22 @@ impl Window {
         bx: usize,
         cache: &mut [u8],
         output: &mut [u8],
-        idct: impl FnOnce(&mut [u8], usize),
+        block: &[i16; 64],
+        quant: &FloatQuant,
+        dc_only: bool,
     ) {
         if !self.gray {
             let l = self.layouts[i];
             let start = l.offset + slot * l.band_rows * l.stride + by * 8 * l.stride + bx * 8;
-            return idct(&mut cache[start..], l.stride);
+            return reconstruct(block, quant, dc_only, &mut cache[start..], l.stride);
         }
         let (x, y) = (bx * 8, my * 8);
         if x + 8 <= self.width && y + 8 <= self.height {
-            return idct(&mut output[y * self.width + x..], self.width);
+            let target = &mut output[y * self.width + x..];
+            return reconstruct(block, quant, dc_only, target, self.width);
         }
         let mut edge = [0u8; 64];
-        idct(&mut edge, 8);
+        reconstruct(block, quant, dc_only, &mut edge, 8);
         let w = (self.width - x).min(8);
         for row in 0..(self.height - y).min(8) {
             output[(y + row) * self.width + x..][..w].copy_from_slice(&edge[row * 8..row * 8 + w]);
@@ -439,6 +444,25 @@ impl Window {
     }
 
     fn emit(&self, cache: &[u8], start: usize, rows: usize, method: Upsampling, out: &mut Vec<u8>) {
+        crate::simd::dispatch(EmitKernel {
+            window: self,
+            cache,
+            start,
+            rows,
+            method,
+            out,
+        });
+    }
+
+    #[inline(always)]
+    fn emit_body(
+        &self,
+        cache: &[u8],
+        start: usize,
+        rows: usize,
+        method: Upsampling,
+        out: &mut Vec<u8>,
+    ) {
         let (width, height, max_h, max_v) = (self.width, self.height, self.max_h, self.max_v);
         let full = self.layouts[..3].iter().all(|c| c.h == max_h && c.v == max_v);
         // 4:2:0 and 4:2:2: half-width chroma, half or full height.
@@ -520,6 +544,15 @@ impl Window {
 
 impl Plan<'_> {
     fn decode(&self, limits: Limits, method: Upsampling) -> Result<Image> {
+        crate::simd::dispatch(SequentialKernel {
+            plan: self,
+            limits,
+            method,
+        })
+    }
+
+    #[inline(always)]
+    fn decode_body(&self, limits: Limits, method: Upsampling) -> Result<Image> {
         let window = Window::new(&self.frame, self.color, self.polarity, limits, method)?;
         let retained = self.metadata_bytes
             + self.frame.components.capacity() * core::mem::size_of::<crate::ComponentSpec>();
@@ -556,13 +589,18 @@ impl Plan<'_> {
                             let last =
                                 fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i], 8, false)?;
                             let column = mx * l.h + bx;
-                            window.put(i, my, slot, by, column, &mut cache, &mut output, |target, stride| {
-                                if last == 0 {
-                                    idct8_dc(block[0], quant, target, stride);
-                                } else {
-                                    idct8_auto(&block, quant, target, stride);
-                                }
-                            });
+                            window.put(
+                                i,
+                                my,
+                                slot,
+                                by,
+                                column,
+                                &mut cache,
+                                &mut output,
+                                &block,
+                                quant,
+                                last == 0,
+                            );
                             if last == 0 {
                                 block[0] = 0;
                             } else {
@@ -590,6 +628,78 @@ fn from_coefficients(
     limits: Limits,
     method: Upsampling,
 ) -> Result<Image> {
+    crate::simd::dispatch(CoefficientKernel {
+        image,
+        color,
+        polarity,
+        limits,
+        method,
+    })
+}
+
+struct SequentialKernel<'p, 'a> {
+    plan: &'p Plan<'a>,
+    limits: Limits,
+    method: Upsampling,
+}
+
+impl Kernel for SequentialKernel<'_, '_> {
+    type Output = Result<Image>;
+    #[inline(always)]
+    fn run(self) -> Result<Image> {
+        self.plan.decode_body(self.limits, self.method)
+    }
+}
+
+struct CoefficientKernel<'i, 'a> {
+    image: &'i CoefficientImage<'a>,
+    color: ColorSpace,
+    polarity: CmykPolarity,
+    limits: Limits,
+    method: Upsampling,
+}
+
+impl Kernel for CoefficientKernel<'_, '_> {
+    type Output = Result<Image>;
+    #[inline(always)]
+    fn run(self) -> Result<Image> {
+        from_coefficients_body(self.image, self.color, self.polarity, self.limits, self.method)
+    }
+}
+
+struct EmitKernel<'w, 'c, 'o> {
+    window: &'w Window,
+    cache: &'c [u8],
+    start: usize,
+    rows: usize,
+    method: Upsampling,
+    out: &'o mut Vec<u8>,
+}
+
+impl Kernel for EmitKernel<'_, '_, '_> {
+    type Output = ();
+    #[inline(always)]
+    fn run(self) {
+        let EmitKernel {
+            window,
+            cache,
+            start,
+            rows,
+            method,
+            out,
+        } = self;
+        window.emit_body(cache, start, rows, method, out);
+    }
+}
+
+#[inline(always)]
+fn from_coefficients_body(
+    image: &CoefficientImage<'_>,
+    color: ColorSpace,
+    polarity: CmykPolarity,
+    limits: Limits,
+    method: Upsampling,
+) -> Result<Image> {
     image.validate_grid()?;
     let window = Window::new(&image.frame, color, polarity, limits, method)?;
     let (mut output, mut cache) = window.allocate(image.memory_bytes, limits)?;
@@ -608,9 +718,7 @@ fn from_coefficients(
                 }
                 for bx in 0..c.width.div_ceil(8) {
                     let block = &c.blocks[row * c.blocks_wide + bx];
-                    window.put(i, my, slot, by, bx, &mut cache, &mut output, |target, stride| {
-                        idct8_auto(block, quant, target, stride);
-                    });
+                    window.put(i, my, slot, by, bx, &mut cache, &mut output, block, quant, false);
                 }
             }
         }
@@ -618,6 +726,15 @@ fn from_coefficients(
     }
     window.flush(&cache, method, &mut output);
     Ok(window.finish(output))
+}
+
+#[inline(always)]
+fn reconstruct(block: &[i16; 64], quant: &FloatQuant, dc_only: bool, out: &mut [u8], stride: usize) {
+    if dc_only {
+        idct8_dc(block[0], quant, out, stride);
+    } else {
+        idct8_auto(block, quant, out, stride);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -642,6 +759,7 @@ impl<'a> Row<'a> {
             method: Upsampling::Nearest,
         }
     }
+    #[inline(always)]
     fn new(
         cache: &'a [u8],
         c: Layout,
@@ -683,6 +801,7 @@ impl<'a> Row<'a> {
     /// Interpolated samples for `x` in `start..start + out.len()`. The source
     /// position advances by `2h` per pixel instead of dividing per sample;
     /// power-of-two denominators shift. Every sum is non-negative.
+    #[inline(always)]
     fn fill(&self, start: usize, out: &mut [i16]) {
         let last = self.top.len() as i32 - 1;
         if self.method == Upsampling::Nearest {

@@ -60,7 +60,7 @@ const C2_MINUS_C6: f32 = 1.082392200f64 as f32;
 const C2_PLUS_C6: f32 = 2.613125930f64 as f32;
 
 /// Dequantization multipliers with AAN row/column scales and the 1/8 descale.
-pub(crate) struct FloatQuant([f32; 64]);
+pub(crate) struct FloatQuant(pub(crate) [f32; 64]);
 
 impl FloatQuant {
     pub fn new(quant: &[u16; 64]) -> Self {
@@ -117,7 +117,7 @@ fn aan_line(x: [f32; 8]) -> [f32; 8] {
 /// Reconstruct one 8-bit block into `out` rows `stride` bytes apart.
 // Plain counted loops over flat arrays keep both passes vectorized under
 // baseline SSE2; value-array formulations left whole passes scalar.
-#[inline]
+#[inline(always)]
 pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
     let mut input = [0f32; 64];
     for i in 0..64 {
@@ -187,7 +187,7 @@ fn aan_half(x: [f32; 4]) -> [f32; 8] {
 }
 
 /// [`idct8`] for blocks whose nonzero coefficients lie in the top-left 4x4.
-#[inline]
+#[inline(always)]
 pub(crate) fn idct8_quarter(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
     let mut input = [0f32; 32];
     for v in 0..4 {
@@ -221,7 +221,9 @@ pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], 
             .iter()
             .fold(0, |acc, row| acc | row[4] | row[5] | row[6] | row[7]);
     if outside != 0 {
-        idct8(block, quant, out, stride);
+        if !crate::simd::idct8(block, &quant.0, [R2, C2, C2_MINUS_C6, C2_PLUS_C6], out, stride) {
+            idct8(block, quant, out, stride);
+        }
     } else if block[1..32].iter().fold(0, |acc, &v| acc | v) == 0 {
         idct8_dc(block[0], quant, out, stride);
     } else {
@@ -230,7 +232,7 @@ pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], 
 }
 
 /// DC-only blocks reduce exactly to one sample in every position.
-#[inline]
+#[inline(always)]
 pub(crate) fn idct8_dc(dc: i16, quant: &FloatQuant, out: &mut [u8], stride: usize) {
     let value = (f32::from(dc) * quant.0[0] + 128.5).clamp(0.0, 255.0) as u8;
     for y in 0..8 {
@@ -405,6 +407,28 @@ mod tests {
             idct8(&block, &quant, &mut full, 8);
             idct8_auto(&block, &quant, &mut sparse, 8);
             assert_eq!(full, sparse, "{block:?}");
+        }
+    }
+    #[test]
+    fn dispatched_inverse_transform_matches_the_portable_one() {
+        let mut state = 0x2545_f491u32;
+        for case in 0..100_000u32 {
+            let mut next = || {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state
+            };
+            let quant = FloatQuant::new(&core::array::from_fn(|_| 1 + (next() % 255) as u16));
+            let shift = case % 16;
+            let block: [i16; 64] = core::array::from_fn(|_| {
+                let v = next();
+                if v % 4 == 0 { (v >> 16) as i16 >> shift } else { 0 }
+            });
+            let (mut dispatched, mut portable) = ([0u8; 64], [0u8; 64]);
+            idct8_auto(&block, &quant, &mut dispatched, 8);
+            crate::simd::portable(|| idct8_auto(&block, &quant, &mut portable, 8));
+            assert_eq!(dispatched, portable, "{block:?}");
         }
     }
     #[test]

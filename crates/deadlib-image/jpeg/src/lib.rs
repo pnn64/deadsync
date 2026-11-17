@@ -2,7 +2,8 @@
 //!
 //! JPEG-specific precision, component and coefficient types live here because
 //! the shared image model has no 12-bit, CMYK or subsampled representation.
-#![forbid(unsafe_code)]
+// Unsafe code is limited to runtime CPU dispatch in `simd`.
+#![deny(unsafe_code)]
 
 mod abbreviated;
 mod arithmetic;
@@ -29,6 +30,7 @@ mod pyramid;
 mod raster;
 mod reconstruct;
 mod scan_encode;
+mod simd;
 mod stream_abbreviated;
 mod stream_encode;
 mod tables;
