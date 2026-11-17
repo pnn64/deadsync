@@ -1,13 +1,13 @@
-# JPEG decoder measurements (in progress)
+# JPEG decoder measurements
 
-This isolated development workspace compares the native codec with `zune-jpeg
-0.5.15`, `jpeg-decoder 0.3.2` (default features), and `image 0.25.10`. It adds no
-production dependencies. The performance goal remains open.
+This isolated workspace compares the native codec with `zune-jpeg 0.5.15`,
+`jpeg-decoder 0.3.2` (default features), and `image 0.25.10`. It adds no
+production dependencies. Current numbers are in [RESULTS.md](RESULTS.md).
 
-`native` now measures the public pixel-output `decode` API. Sequential 8-bit
-single-scan inputs use bounded MCU-row storage; other modes preserve the native
-reconstruction path. Pixel snapshots verify equivalence with the original
-coefficient/plane/conversion pipeline.
+`native` measures the public pixel-output `decode` API. Every 8-bit DCT process
+reconstructs into a bounded MCU-row window; sequential single-scan images decode
+straight into it. `PIXELS` diagnostics compare samples with each reference;
+snapshot replay (below) compares two native builds byte for byte.
 
 Run from the repository root:
 
@@ -52,7 +52,8 @@ $env:JPEG_BASELINE_DIR = 'target/jpeg-original-pixels'
 
 Use the identical sorted input set for capture and replay; snapshots are indexed
 by file ordinal. This verifies unchanged native pixels independently of the
-rounding differences between reference implementations.
+rounding differences between reference implementations. Snapshots taken before
+the float IDCT (commit e9d898a5e) differ by at most one sample level.
 
 Build allocation measurements separately:
 
@@ -69,7 +70,8 @@ in the instrumented binary. Every mode receives an untimed warmup, so the
 reference global worker pool is initialized before per-decode measurement.
 
 `cargo run --manifest-path crates/deadlib-image/jpeg/bench/Cargo.toml --release --bin stages -- <file.jpg>`
-profiles coefficient decoding, reconstruction, color conversion, and the full
-native pipeline separately. On Windows it also pins the process and reports
+profiles coefficient decoding, reconstruction, color conversion, the pixel API
+and zune-jpeg separately. `stages <file.jpg> N` repeats only the pixel API and
+`stages <file.jpg> N zune` only zune-jpeg, for sampling profilers. On Windows it also pins the process and reports
 process-wide cycles. All benchmark unsafe code is measurement FFI or allocator
 forwarding; production still forbids unsafe code.

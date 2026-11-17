@@ -1,19 +1,35 @@
 # deadlib-image-jpeg
 
 Currently implemented: native marker parsing, canonical Huffman decoding with
-a nine-bit lookup, sequential SOF0/SOF1 and progressive SOF2 coefficient
-reconstruction, 8/12-bit
-integer IDCT, restart intervals, interleaved and separate component scans,
-component subsampling, borrowed APPn/COM preservation, native component planes,
+a nine-bit lookup (plus a combined AC run/magnitude lookup for sequential
+scans), sequential SOF0/SOF1 and progressive SOF2 coefficient reconstruction,
+restart intervals, interleaved and separate component scans, component
+subsampling, borrowed APPn/COM preservation, native component planes,
 grayscale/RGB/YCbCr interpretation and centered chroma interpolation.
+
+8-bit DCT samples use libjpeg's floating-point AAN inverse transform
+(`jidctflt`) with its operation order, constants and rounding, evaluated in
+IEEE single precision; samples match libjpeg-turbo and mozjpeg `JDCT_FLOAT`
+reference planes exactly. 12-bit and hierarchical frames use an exact Q20
+integer transform; hierarchical encoder references depend on it.
 
 `decode(jpeg, Limits::default())` returns owned shared gray/RGB pixels with
 centered linear chroma interpolation; `decode_with_upsampling` also accepts
-`Upsampling::Nearest`. Sequential 8-bit single-scan decoding reconstructs blocks
-into three rolling MCU rows, bounding intermediate storage by width. Progressive,
-arithmetic, higher-precision, lossless, and hierarchical inputs use their native
+`Upsampling::Nearest`. Every 8-bit DCT process reconstructs blocks into a
+window of one or three MCU rows (three only for vertically subsampled linear
+interpolation), bounding intermediate storage by width: sequential single-scan
+images decode straight into the window; progressive, multi-scan and arithmetic
+images feed it from stored coefficients without full-resolution planes. Pixel
+decoding keeps only JFIF/Adobe color hints rather than metadata segments.
+Higher-precision, lossless and hierarchical inputs use their native
 reconstruction paths. The coefficient and planar APIs below retain their
 precision, component, and metadata representations.
+
+Production code forbids `unsafe`; speed comes from code shaped for baseline
+SSE2 autovectorization (flat IDCT loops, 16-bit color arithmetic that LLVM
+lowers to `pmulhw`/`pmaddwd`) and an eight-byte Huffman bit reader whose
+acceptance matches the strict reader exactly. See the
+[benchmark results](bench/RESULTS.md).
 
 Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
