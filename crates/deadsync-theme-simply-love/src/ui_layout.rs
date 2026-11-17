@@ -37,9 +37,18 @@ impl UILayoutType {
     }
 }
 
+/// Returns the scale needed to fit text within a maximum logical width.
+///
+/// The result is `1.0` when the text already fits, and `0.0` when the maximum
+/// width is non-positive.
+#[must_use]
+pub fn clamp_text_scale(text_width: f32, max_text_width: f32) -> f32 {
+    (max_text_width.max(0.0) / text_width.max(f32::EPSILON)).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::UILayoutType;
+    use super::{UILayoutType, clamp_text_scale};
 
     #[test]
     fn classifies_aspect_ratio_boundaries() {
@@ -79,5 +88,13 @@ mod tests {
             UILayoutType::from_aspect_ratio(f32::NAN),
             UILayoutType::Squareish
         );
+    }
+
+    #[test]
+    fn text_scale_is_one_when_fitting_and_clamped_when_overflowing() {
+        assert_eq!(clamp_text_scale(80.0, 100.0), 1.0);
+        assert_eq!(clamp_text_scale(200.0, 100.0), 0.5);
+        assert_eq!(clamp_text_scale(0.0, 100.0), 1.0);
+        assert_eq!(clamp_text_scale(80.0, 0.0), 0.0);
     }
 }

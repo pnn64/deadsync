@@ -9,7 +9,7 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
-use crate::ui_layout::UILayoutType;
+use crate::ui_layout::{self, UILayoutType};
 use crate::views::SelectFlowRuntimeView;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
@@ -198,11 +198,7 @@ fn choice_label_right_x(choice: Choice) -> f32 {
 fn cursor_layout(base_width: f32, choice_zoom: f32) -> (f32, f32) {
     let text_width = base_width * choice_zoom;
     let max_text_width = CURSOR_MAX_W - CURSOR_LABEL_PADDING;
-    let text_scale = if text_width > max_text_width {
-        max_text_width / text_width
-    } else {
-        1.0
-    };
+    let text_scale = ui_layout::clamp_text_scale(text_width, max_text_width);
     let cursor_width =
         (text_width.mul_add(text_scale, CURSOR_LABEL_PADDING)).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
     (text_scale, cursor_width)
