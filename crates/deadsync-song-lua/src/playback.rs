@@ -12996,6 +12996,9 @@ struct SongLuaScreenCaptureOriginals {
 #[derive(Clone, Copy, Debug)]
 pub struct GameplayActorSegments {
     insert: usize,
+    /// End of ScreenGameplay-owned actors. System actors and later application
+    /// overlays use the ordinary screen camera instead of chart transforms.
+    screen_actor_end: usize,
     players: [Option<PlayerActorSegment>; 2],
     direct_proxy_len: usize,
     underlay_visible: bool,
@@ -13050,6 +13053,7 @@ impl GameplayActorSegments {
         actors: &'a [Actor],
     ) -> impl Clone + Iterator<Item = ActorSegment<'a>> + 'a {
         let scratch = state;
+        let (actors, system_actors) = actors.split_at(self.screen_actor_end.min(actors.len()));
         GameplayActorSegmentIter {
             owner: self,
             scratch,
@@ -13065,6 +13069,7 @@ impl GameplayActorSegments {
             pending_actor_end: 0,
             projection_index: 0,
         }
+        .chain((!system_actors.is_empty()).then(|| ActorSegment::new(system_actors)))
     }
 }
 
@@ -16016,10 +16021,12 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             SONG_LUA_FOREGROUND_DEPTH,
         );
     }
+    let screen_actor_end = actors.len();
     if !hide_overlay_hud {
         // These are separate top-screen actors in ITGmania. Append them only
         // after every ScreenGameplay/song-local layer so ActorProxy/AFT effects
-        // cannot capture or post-process them.
+        // cannot capture or post-process them. The segment boundary also keeps
+        // their camera independent of ScreenGameplay's transform.
         let system_start = actors.len();
         draw_layer(ScreenLayer::System, actors, layout);
         for actor in &mut actors[system_start..] {
@@ -16029,6 +16036,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let direct_proxy_len = song_lua_direct_proxies.len();
     GameplayActorSegments {
         insert: segment_insert,
+        screen_actor_end,
         players: segment_players,
         direct_proxy_len,
         underlay_visible: !hide_underlay_hud && retain_underlay_original,

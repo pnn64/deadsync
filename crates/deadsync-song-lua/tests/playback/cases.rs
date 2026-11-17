@@ -306,6 +306,7 @@ fn player_segments_keep_underlay_and_native_child_order() {
         };
         let segments = GameplayActorSegments {
             insert: 0,
+            screen_actor_end: 0,
             direct_proxy_len: 0,
             underlay_visible: true,
             screen_projection: Matrix4::IDENTITY,

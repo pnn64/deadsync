@@ -194,11 +194,13 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             1000,
         ));
     }
+    let screen_actor_end = actors.len();
     if !view.hide_gameplay_hud {
         draw_layer(ScreenLayer::System, actors, layout);
     }
     GameplayActorSegments {
         insert,
+        screen_actor_end,
         players,
         direct_proxy_len: 0,
         underlay_visible: !view.hide_gameplay_hud,

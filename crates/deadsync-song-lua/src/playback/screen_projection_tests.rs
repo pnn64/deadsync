@@ -246,6 +246,7 @@ fn screen_projection_separates_field_and_hud_for_direct_and_captured_players() {
         }
         let owner = GameplayActorSegments {
             insert: 0,
+            screen_actor_end: 0,
             players: [
                 Some(PlayerActorSegment {
                     player: 0,
@@ -345,9 +346,9 @@ fn mesh() -> Actor {
 }
 
 #[test]
-fn screen_projection_ranges_preserve_default_spans_and_player_boundary() {
+fn screen_projection_ranges_preserve_player_and_system_boundaries() {
     let metrics = Metrics::centered(640.0, 480.0);
-    let actors = [mesh(), mesh(), mesh(), mesh()];
+    let actors = [mesh(), mesh(), mesh(), mesh(), mesh(), mesh()];
     let mut scratch = FrameScratch::default();
     scratch.song_lua_screen_projection_ranges = vec![
         SongLuaScreenProjectionRange {
@@ -361,6 +362,7 @@ fn screen_projection_ranges_preserve_default_spans_and_player_boundary() {
     ];
     let owner = GameplayActorSegments {
         insert: 2,
+        screen_actor_end: 4,
         players: [None, None],
         direct_proxy_len: 0,
         underlay_visible: false,
@@ -386,10 +388,21 @@ fn screen_projection_ranges_preserve_default_spans_and_player_boundary() {
         ActorSegment::new(&actors[1..2]),
         ActorSegment::new(&actors[2..3]).with_projection(&owner.screen_projection),
         ActorSegment::new(&actors[3..4]),
+        ActorSegment::new(&actors[4..6]),
     ]);
     assert_eq!(
         deadlib_render_core::frame_compare::compare_render_frames_semantic(&actual, &expected),
         Ok(()),
+    );
+    let unbounded = GameplayActorSegments {
+        screen_actor_end: actors.len(),
+        ..owner
+    };
+    let inherited = compose(unbounded.segments(&scratch, &actors).collect());
+    assert!(
+        deadlib_render_core::frame_compare::compare_render_frames_semantic(&inherited, &expected)
+            .is_err(),
+        "including application overlays in the chart span must change their rendered positions"
     );
 }
 

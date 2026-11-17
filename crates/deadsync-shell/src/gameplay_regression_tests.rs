@@ -4595,6 +4595,224 @@ return Def.ActorFrame{
     }
 
     #[test]
+    fn f3_stats_stay_fixed_during_song_lua_screen_transforms() {
+        std::thread::Builder::new()
+            .name("stats-screen-boundary".into())
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                with_session(
+                    profile_data::PlayStyle::Single,
+                    profile_data::PlayerSide::P1,
+                    true,
+                    false,
+                    || {
+                        use deadsync_theme_simply_love::screens::components::shared::stats_overlay;
+
+                        let metrics = space::Metrics::centered(640.0, 480.0);
+                        space::set_current_metrics(metrics);
+                        space::set_current_window_px(640, 480);
+                        space::set_overscan(0, 0, 0, 0);
+                        let simfile = write_fixture(
+                            "stats-screen-boundary",
+                            generated_pipeline_song_lua_simfile(),
+                        );
+                        let lua_dir = simfile.parent().unwrap().join("lua");
+                        fs::create_dir_all(&lua_dir).unwrap();
+                        fs::write(lua_dir.join("default.lua"), r#"
+local function update_screen()
+    local screen = SCREENMAN:GetTopScreen()
+    local beat = GAMESTATE:GetSongBeat()
+    if beat < 1 then
+        screen:xy(0, 0):rotationx(0):rotationy(0):rotationz(0):zoom(1):fov(0)
+    else
+        screen:xy(210, -95):rotationx(28):rotationy(-35):rotationz(67):fov(70)
+        screen:zoom(beat < 3 and 0.45 or 0)
+    end
+end
+return Def.ActorFrame {
+    OnCommand=function(self)
+        self:sleep(10)
+        update_screen()
+        self:SetUpdateFunction(update_screen)
+    end,
+    Def.Quad {
+        OnCommand=function(self)
+            self:xy(80, 100):zoomto(20, 12):diffuse({0.31, 0.57, 0.83, 1})
+        end,
+    },
+}
+"#).unwrap();
+                        let assets = fixture_assets();
+                        let backend = deadlib_render_core::BackendType::Software;
+                        let mut stats = Vec::new();
+                        stats_overlay::push(&mut stats, backend, 240.0, 12345, None);
+                        assert!(actor_tree_has_text(&stats, &format!("240 FPS\n12345 VPF\n{backend}")));
+                        let reference = compose::build_passes(
+                            [compose::ActorSegment::new(&stats)].into_iter(),
+                            &[],
+                            [0.0, 0.0, 0.0, 1.0],
+                            &metrics,
+                            assets.fonts(),
+                            10.0,
+                            &mut compose::TextLayoutCache::default(),
+                            &mut compose::ComposeScratch::default(),
+                            &FIXTURE_TEXTURES,
+                            None,
+                        );
+                        // Text uses textured-mesh batches. Flatten the actual
+                        // rendered vertices so batching and the quad's change
+                        // from a sprite to a perspective mesh do not matter.
+                        let clip_vertices = |frame: &deadlib_render_core::RenderFrame| {
+                            let mut vertices = Vec::new();
+                            for op in &frame.ops {
+                                let (camera_id, texture, blend) = match op {
+                                    DrawOp::Sprite(run) => (run.camera, run.texture_handle, run.blend),
+                                    DrawOp::Mesh(run) => (run.camera, 0, run.blend),
+                                    DrawOp::TexturedMesh(run) => (run.camera, run.texture_handle, run.blend),
+                                };
+                                let camera = frame.cameras.get(camera_id as usize).copied()
+                                    .unwrap_or_else(|| metrics.projection());
+                                let mut push = |position: [f32; 4], color: [f32; 4]| {
+                                    vertices.push((camera.mul_vec4(position.into()).to_array(),
+                                        camera.to_cols_array(), color, texture, blend));
+                                };
+                                match op {
+                                    DrawOp::Sprite(run) => {
+                                        for sprite in &frame.sprite_instances[run.instance_start as usize
+                                            ..(run.instance_start + run.instance_count) as usize]
+                                        {
+                                            let [sin, cos] = sprite.rot_sin_cos;
+                                            let [offset_sin, offset_cos] = sprite.local_offset_rot_sin_cos;
+                                            let [offset_x, offset_y] = sprite.local_offset;
+                                            let center_x = sprite.center[0] + offset_cos * offset_x - offset_sin * offset_y;
+                                            let center_y = sprite.center[1] + offset_sin * offset_x + offset_cos * offset_y;
+                                            for [x, y] in [
+                                                [-0.5, -0.5], [0.5, -0.5], [0.5, 0.5],
+                                                [-0.5, -0.5], [0.5, 0.5], [-0.5, 0.5],
+                                            ] {
+                                                let x = x * sprite.size[0];
+                                                let y = y * sprite.size[1];
+                                                push([center_x + cos * x - sin * y,
+                                                    center_y + sin * x + cos * y,
+                                                    sprite.center[2], 1.0], sprite.tint);
+                                            }
+                                        }
+                                    }
+                                    DrawOp::Mesh(run) => {
+                                        for vertex in &frame.mesh_vertices[run.vertex_start as usize
+                                            ..(run.vertex_start + run.vertex_count) as usize]
+                                        {
+                                            push([vertex.pos[0], vertex.pos[1], 0.0, 1.0], vertex.color);
+                                        }
+                                    }
+                                    DrawOp::TexturedMesh(run) => {
+                                        let geometry = &frame.tmesh_geometries[run.geometry as usize];
+                                        for instance in &frame.tmesh_instances[run.instance_start as usize
+                                            ..(run.instance_start + run.instance_count) as usize]
+                                        {
+                                            for vertex in geometry.vertices.iter() {
+                                                let position = instance.transform().mul_vec4(
+                                                    [vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0].into());
+                                                push(position.to_array(), std::array::from_fn(|axis|
+                                                    vertex.color[axis] * instance.tint[axis]));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            vertices
+                        };
+                        let expected = clip_vertices(&reference);
+                        assert!(expected.len() > 10 * 6, "real stats must compose more than ten visible glyph quads");
+                        for (clip, _, _, _, _) in &expected {
+                            assert!(clip.iter().all(|value| value.is_finite()) && clip[3] > 0.0);
+                            assert!(clip[0].abs() < clip[3] && clip[1].abs() < clip[3],
+                                "stats glyph remains inside the viewport: {clip:?}");
+                        }
+
+                        for live in [false, true] {
+                            let mut state = build_test_state_with_lua_mode(
+                                &simfile,
+                                GameplayViewport::new(640.0, 480.0),
+                                GameplaySession::default(),
+                                std::array::from_fn(|_| profile_data::Profile::default()),
+                                "Software",
+                                Some(6.0),
+                                live,
+                            );
+                            assert_eq!(state.song_lua.is_some(), live);
+                            let mut marker_control = None;
+                            for seconds in [0.25, 0.75, 1.75] {
+                                set_fixture_time(&mut state, seconds);
+                                let mut actors = Vec::new();
+                                let segments = crate::gameplay_runtime::push_actors(
+                                    &mut actors,
+                                    &mut state,
+                                    &assets,
+                                    screen_gameplay::ActorViewOverride::default(),
+                                    123.0,
+                                    deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
+                                );
+                                // Match the application: F3 is appended after
+                                // gameplay returns its chart-owned segments.
+                                stats_overlay::push(&mut actors, backend, 240.0, 12345, None);
+                                let frame = compose::build_passes(
+                                    segments.segments(state.song_frame(), &actors),
+                                    state.render_targets(),
+                                    [0.0, 0.0, 0.0, 1.0],
+                                    &metrics,
+                                    assets.fonts(),
+                                    10.0,
+                                    &mut compose::TextLayoutCache::default(),
+                                    &mut compose::ComposeScratch::default(),
+                                    &FIXTURE_TEXTURES,
+                                    Some(state.actor_resources()),
+                                );
+                                let actual = clip_vertices(&frame);
+                                assert!(actual.len() >= expected.len());
+                                // F3 is the final, highest-layer text in this
+                                // fixture. Compare glyph geometry and resolved
+                                // cameras, not the unchanged source Actor XY.
+                                assert_eq!(&actual[actual.len() - expected.len()..], expected.as_slice(),
+                                    "F3 glyphs moved with TopScreen: live={live}, seconds={seconds}");
+                                let marker: Vec<_> = actual.iter().filter(|(_, _, color, _, _)| {
+                                    // Native actor colors use eight-bit channels
+                                    // in the composed frame.
+                                    color.iter().zip([0.31, 0.57, 0.83, 1.0])
+                                        .all(|(actual, expected)| (*actual - expected).abs() <= 1.0 / 255.0)
+                                }).map(|(clip, _, _, _, _)| *clip).collect();
+                                let marker_bounds = (!marker.is_empty()).then(|| {
+                                    let mut bounds = [[f32::INFINITY; 4], [f32::NEG_INFINITY; 4]];
+                                    for point in &marker {
+                                        for axis in 0..4 {
+                                            assert!(point[axis].is_finite());
+                                            bounds[0][axis] = bounds[0][axis].min(point[axis]);
+                                            bounds[1][axis] = bounds[1][axis].max(point[axis]);
+                                        }
+                                    }
+                                    bounds
+                                });
+                                if seconds == 0.25 {
+                                    assert_eq!(marker.len(), 6, "the chart marker must actually render");
+                                    marker_control = marker_bounds;
+                                } else {
+                                    if seconds == 0.75 {
+                                        assert_eq!(marker.len(), 6, "the transformed chart marker must still render");
+                                    }
+                                    assert_ne!(marker_bounds, marker_control,
+                                        "the chart must still move/collapse: live={live}, seconds={seconds}");
+                                }
+                            }
+                        }
+                    },
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
     fn late_foreground_keeps_shared_gameplay_tracks() {
         with_session(
             profile_data::PlayStyle::Single,
