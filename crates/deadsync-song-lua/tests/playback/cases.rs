@@ -290,6 +290,7 @@ fn player_segments_keep_underlay_and_native_child_order() {
                 zoom_z: 1.0,
                 target_z: 0.0,
                 wrappers: Matrix4::IDENTITY,
+                field_camera_parts: None,
             };
             capture_player_source(
                 &mut scratch.notefield_actor_scratch[0],
@@ -313,6 +314,8 @@ fn player_segments_keep_underlay_and_native_child_order() {
                     player: 0,
                     assembly,
                     field_camera: None,
+                    field_screen_projection: Matrix4::IDENTITY,
+                    captured_field_range: None,
                     manual_hud_draw: false,
                     hud_parts: deadsync_notefield::NotefieldHudParts {
                         combo_actors: 1,
@@ -3052,6 +3055,7 @@ fn transformed_player_fixture() -> SongLuaCaptureTransform {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     }
 }
 
@@ -3251,6 +3255,143 @@ fn transformed_field_camera_cache_follows_both_source_generations() {
 }
 
 #[test]
+fn player_rotation_precedes_note_field_wrapper_for_direct_and_captured_fields() {
+    let mut camera_cache = NotefieldCameraCache::default();
+    let base = camera_cache
+        .resolve(
+            screen_width(),
+            screen_height(),
+            screen_center_x(),
+            screen_center_y(),
+            0.0,
+            0.0,
+            false,
+        )
+        .unwrap();
+    let rotation_x = -18.103_003_f32;
+    let player_zoom_z = 2.344_708_7;
+    let mini_zoom = 0.845_871;
+    for rotation_y in [0.0, 37.0, -420.0] {
+        for field_zoom_z in [0.0, 1.182_213_4, 4.0] {
+            let child = Matrix4::from_scale(Vector3::new(1.0, 1.0, field_zoom_z));
+            camera_cache.set_wrapper(child);
+            let original = camera_cache
+                .resolve(
+                    screen_width(),
+                    screen_height(),
+                    screen_center_x(),
+                    screen_center_y(),
+                    0.0,
+                    0.0,
+                    false,
+                )
+                .unwrap();
+            let transform = SongLuaCaptureTransform {
+                z_shift: 0,
+                tint: [1.0; 4],
+                blend: None,
+                playfield_center_x: screen_center_x(),
+                target_x: screen_center_x(),
+                target_y: screen_center_y(),
+                rotation_x,
+                rotation_y,
+                rotation_z: 0.0,
+                skew_x: 0.0,
+                skew_y: 0.0,
+                zoom_x: 1.0,
+                zoom_y: 1.0,
+                zoom_z: 1.0,
+                target_z: 0.0,
+                wrappers: Matrix4::from_scale(Vector3::new(1.0, 1.0, player_zoom_z)),
+                field_camera_parts: camera_cache.camera_parts(),
+            };
+            // Actor::Draw enters Player's wrapper/pose before drawing NoteField,
+            // whose wrapper encloses only the child (ITGmania Actor.cpp:430-463,
+            // Player.cpp:1804-1807). Child zoomZ cannot scale Z created by Player X
+            // rotation. This is visible during Dyscontrolled Galaxy's beat 43 reset.
+            let expected = base
+                * Matrix4::from_scale(Vector3::new(1.0, 1.0, player_zoom_z))
+                * Matrix4::from_rotation_x(rotation_x.to_radians())
+                * Matrix4::from_rotation_y(-rotation_y.to_radians())
+                * child;
+            let direct = song_lua_direct_field_camera(Some(original), transform).unwrap();
+            let actors = vec![
+                Actor::CameraPush {
+                    view_proj: original,
+                },
+                test_source_actor(),
+                Actor::CameraPop,
+            ];
+            let mut direct_actors = actors.clone();
+            let mut assembly = player_actor_assembly_for_transform(false, true, transform);
+            let split_camera = prepare_player_field_camera(
+                &mut assembly,
+                Some(original),
+                transform.field_camera_parts,
+                &mut direct_actors,
+            );
+            let PlayerActorAssembly::DirectTransform {
+                root_camera,
+                field_camera_suffix,
+                ..
+            } = assembly
+            else {
+                panic!("expected non-identity Player pose");
+            };
+            let mut combined_cache = PlayerFieldCameraCache::default();
+            let flat = combined_cache.resolve(
+                camera_cache.generation(),
+                1,
+                split_camera,
+                root_camera,
+                field_camera_suffix,
+            );
+            let Actor::CameraPush { view_proj } = direct_actors[0] else {
+                panic!("expected retained field camera");
+            };
+            let actor = view_proj * field_camera_suffix;
+            let mut captured_actors = actors;
+            let mut scratch = SharedActorFrameScratch::with_capacity(8);
+            let captured = capture_player_source(
+                &mut captured_actors,
+                &mut Vec::new(),
+                0,
+                transform,
+                &mut scratch,
+            )
+            .unwrap();
+            let Actor::CameraPush {
+                view_proj: captured_camera,
+            } = song_lua_captured_segment_actors(&captured[0])[0]
+            else {
+                panic!("expected captured field camera");
+            };
+            for camera in [direct, flat, actor, captured_camera] {
+                assert!(camera.is_finite(), "child zoomZ {field_zoom_z}");
+                for point in [
+                    glam::Vec4::W,
+                    glam::Vec4::new(32.0 * mini_zoom, 0.0, 0.0, 0.0),
+                    glam::Vec4::new(0.0, -32.0 * mini_zoom, 0.0, 0.0),
+                    glam::Vec4::new(0.0, 0.0, 32.0 * mini_zoom, 0.0),
+                ] {
+                    let error = (camera * point - expected * point).abs().max_element();
+                    assert!(
+                        error < 0.002,
+                        "child zoomZ {field_zoom_z}, clip error {error}"
+                    );
+                }
+                let y_basis = camera * glam::Vec4::new(0.0, -32.0 * mini_zoom, 0.0, 0.0);
+                let expected_w = 32.0 * mini_zoom * player_zoom_z * rotation_x.to_radians().sin();
+                assert!(
+                    (y_basis.w - expected_w).abs() < 0.000_2,
+                    "child zoomZ {field_zoom_z} must not scale rotation depth: {y_basis:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn direct_player_segments_respect_fallback_boundaries() {
     let identity = SongLuaCaptureTransform {
         z_shift: 0,
@@ -3269,6 +3410,7 @@ fn direct_player_segments_respect_fallback_boundaries() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     assert_eq!(
         player_actor_assembly_for_transform(false, true, identity),
@@ -3355,7 +3497,7 @@ fn direct_player_segments_respect_fallback_boundaries() {
                 ..identity
             },
         ),
-        PlayerActorAssembly::DirectFold { .. }
+        PlayerActorAssembly::DirectTransform { .. }
     ));
 }
 
@@ -3383,6 +3525,7 @@ fn dynamic_player_transforms_have_zero_legacy_fallbacks() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     let transforms: [SongLuaCaptureTransform; 16] = std::array::from_fn(|source| {
         let mut transform = identity;
@@ -3421,7 +3564,6 @@ fn dynamic_player_transforms_have_zero_legacy_fallbacks() {
     assert!(assemblies.into_iter().all(|assembly| matches!(
         assembly,
         PlayerActorAssembly::DirectZ { .. }
-            | PlayerActorAssembly::DirectFold { .. }
             | PlayerActorAssembly::DirectTransform { .. }
     )));
     assert_eq!(
@@ -3870,6 +4012,7 @@ fn song_lua_note_field_proxy_source_preserves_camera_transform() {
         1.0,
         0.0,
         Matrix4::IDENTITY,
+        None,
     );
 
     let Some(Actor::CameraPush { view_proj }) = out.first() else {
@@ -4261,7 +4404,6 @@ fn song_lua_direct_proxies_record_exact_overlay_insertions() {
                 draw_end: 9,
                 target: [160.0, 240.0],
                 tint: [1.0; 4],
-                x_fold: None,
                 camera: Some(Matrix4::IDENTITY),
                 player_camera: None,
             }),
@@ -4274,7 +4416,6 @@ fn song_lua_direct_proxies_record_exact_overlay_insertions() {
                 draw_end: 4,
                 target: [213.0, 240.0],
                 tint: [1.0; 4],
-                x_fold: None,
                 camera: None,
                 player_camera: None,
             }),
@@ -4287,7 +4428,6 @@ fn song_lua_direct_proxies_record_exact_overlay_insertions() {
                 draw_end: 1,
                 target: [213.0, 240.0],
                 tint: [1.0; 4],
-                x_fold: None,
                 camera: None,
                 player_camera: None,
             }),
@@ -6615,6 +6755,7 @@ fn assert_kenpo_motion(wrapped: bool) {
                 zoom_z: 1.0,
                 target_z: 0.0,
                 wrappers: Matrix4::IDENTITY,
+                field_camera_parts: None,
             },
             &mut scratch,
         )
@@ -6781,6 +6922,7 @@ fn song_lua_hud_proxy_flattens_identity_capture_without_retaining_it() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
 
     let proxy =
@@ -6858,6 +7000,7 @@ fn identity_proxy_capture_reuses_source_with_origin_offset() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     let mut captured_scratch = SharedActorFrameScratch::with_capacity(5);
     let captured =
@@ -6952,6 +7095,7 @@ fn note_field_proxy_drops_player_camera_scope() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     let mut scratch = SharedActorFrameScratch::with_capacity(3);
 
@@ -6983,6 +7127,7 @@ fn direct_field_proxy_cancels_player_translation_and_layer_z() {
         zoom_z: 0.75,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     assert!(song_lua_player_transform_is_direct_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));
@@ -7049,7 +7194,7 @@ fn direct_field_proxy_cancels_player_translation_and_layer_z() {
     let direct_style = FlatProxyStyle::new(
         transform.tint,
         proxy_state.diffuse,
-        song_lua_player_x_fold(transform),
+        None,
     );
     let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
         &draws,
@@ -7111,6 +7256,7 @@ fn field_proxy_overflow_keeps_actor_and_direct_draw_inside_camera() {
         zoom_z: 1.0,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     let mut scratch = SharedActorFrameScratch::with_capacity(4);
     let source = prepare_field_proxy_source(&actors, &draws, Some(camera), transform, &mut scratch)
@@ -7143,6 +7289,7 @@ fn direct_hud_proxy_cancels_player_translation_and_layer_z() {
         zoom_z: 0.75,
         target_z: 0.0,
         wrappers: Matrix4::IDENTITY,
+        field_camera_parts: None,
     };
     assert!(song_lua_player_transform_is_direct_hud_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));
@@ -7207,7 +7354,7 @@ fn direct_hud_proxy_cancels_player_translation_and_layer_z() {
     let direct_style = FlatProxyStyle::new(
         transform.tint,
         proxy_state.diffuse,
-        song_lua_player_x_fold(transform),
+        None,
     );
     let direct_frame = compose(ActorSegment::flat_proxy_styled_with_cameras(
         &draws,
@@ -7254,7 +7401,6 @@ fn transformed_player_proxy_flattens_depth_before_perspective() {
             draw_end: 1,
             target: [0.0, 0.0],
             tint: [1.0; 4],
-            x_fold: None,
             camera: Some(base * suffix),
             player_camera: Some(SongLuaDirectPlayerCamera { base, suffix }),
         },

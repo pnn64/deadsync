@@ -272,6 +272,12 @@ where
             return GameplayAction::None;
         }
 
+        // Player::UpdateHoldNotes runs before CrossedRows, and GameLoop
+        // dispatches physical input after updating the screen. A newly judged
+        // head becomes visually active on the next unpaused update, even though
+        // its score and hold life are already live in this update.
+        self.hold_runtime.snapshot_active_holds_for_render();
+
         let autoplay_started = if trace_enabled {
             Some(Instant::now())
         } else {
@@ -1177,6 +1183,18 @@ where
         );
     }
 
+    /// Override only the next option-approach refresh with captured native input.
+    /// ITGmania ModsGroup samples an independent RageTimer for each player.
+    /// Screen, audio, actor, and judgment clocks retain their normal deltas.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_player_option_clock_deltas(&mut self, deltas: [f32; MAX_PLAYERS]) {
+        assert!(
+            deltas.iter().all(|delta| delta.is_finite() && *delta >= 0.0),
+            "native player option clock deltas must be finite and nonnegative",
+        );
+        self.mods.replay_player_option_clock_deltas = Some(deltas);
+    }
+
     pub fn refresh_player_attacks(&mut self, player: usize, now: f32, delta_time: f32) {
         if player >= self.setup.num_players || player >= MAX_PLAYERS {
             return;
@@ -1423,6 +1441,17 @@ where
             .active_holds
             .get(col)
             .and_then(Option::as_ref)
+    }
+
+    /// The live hold whose head had been judged before this frame's input.
+    #[inline(always)]
+    pub fn active_hold_for_render(&self, col: usize) -> Option<&ActiveHold> {
+        self.active_hold(col).filter(|hold| {
+            // Native Pump does not require stepping on the hold head, so its
+            // hold render flags can become active within the same update.
+            self.setup.session.play_style.is_pump()
+                || self.hold_runtime.render_hold_notes[col] == Some(hold.note_index)
+        })
     }
 
     #[inline(always)]
@@ -2157,6 +2186,10 @@ where
     }
 
     fn reset_practice_attacks(&mut self) {
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.mods.replay_player_option_clock_deltas = None;
+        }
         let base_appearance = std::array::from_fn(|player| {
             if player < self.setup.num_players {
                 base_appearance_effects(&self.profiles_runtime.profiles[player])

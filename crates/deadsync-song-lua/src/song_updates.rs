@@ -384,6 +384,7 @@ impl SongRuntime {
             let baseline_columns = self.read_song_note_column_transform_samples()?;
             let frames = crate::perframe::update_function_replay_beats(context, start, end);
             let actor_frames = crate::perframe::reference_actor_frames(context);
+            let screen_actor_frames = crate::perframe::reference_screen_actor_frames(context)?;
             let sample_count = frames.len();
             let mut sample_beats = buffer(start, sample_count);
             let rate = f64::from(song_music_rate(context));
@@ -427,6 +428,19 @@ impl SongRuntime {
             let mut current = replay_states.clone();
             if !self.set_song_replay_frames(screen, &frames, actor_frames.as_deref()) {
                 return Err("song replay timeline was rejected".into());
+            }
+            if let Some(screen_actor_frames) = &screen_actor_frames
+                && !self
+                    .actors
+                    .set_compiler_screen_actor_frames(
+                        &mut self.vm,
+                        screen,
+                        root,
+                        screen_actor_frames,
+                    )
+                    .map_err(|e| e.to_string())?
+            {
+                return Err("screen actor replay timeline was rejected".into());
             }
             let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
             let start_time = frame_time(start, start_seconds);
@@ -1247,13 +1261,19 @@ fn finish_samples<M: crate::perframe::ModState>(
         let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
         let (mod_start, mod_end, mod_unit) = if let Some(timing) = &context.song_timing {
             let origin = timing.get_time_for_beat_exact(0.0);
-            let start = sample_seconds[index] + origin;
+            // Captured clocks already include global calibration. Second
+            // windows apply it at the gameplay boundary, so encode these
+            // sampled Player, option and column windows in authored seconds
+            // first. Absolute wrapper and overlay tracks keep their raw clock.
+            let calibration = context.global_offset_seconds * timing.global_offset_rate();
+            let authored_second = |second| (second + origin) + calibration;
+            let start = authored_second(sample_seconds[index]);
             (
                 start,
                 sample_seconds
                     .get(index + 1)
                     .copied()
-                    .map_or_else(|| start.next_up(), |second| second + origin),
+                    .map_or_else(|| start.next_up(), authored_second),
                 SongLuaTimeUnit::Second,
             )
         } else if use_mod_clock {

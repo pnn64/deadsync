@@ -170,7 +170,10 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
         let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
         let color = request.pulse_color;
         let alpha = color[3] * draw.tint[3] * request.receptor_alpha;
-        if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON
+        if draw.visible
+            && alpha > f32::EPSILON
+            && size[0] * request.field_zoom.signum() > f32::EPSILON
+            && size[1] * request.field_zoom.signum() > f32::EPSILON
         {
             let frame = slot.frame_index(request.elapsed, request.beat);
             let uv = slot.uv_for_frame_at(frame, request.elapsed);
@@ -237,7 +240,7 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
             base_size[0] * draw.zoom[0].max(0.0),
             base_size[1] * draw.zoom[1].max(0.0),
         ];
-        if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
+        if size[0].abs() <= f32::EPSILON || size[1].abs() <= f32::EPSILON {
             return;
         }
         let frame = slot.frame_index(request.elapsed, request.beat);
@@ -319,7 +322,10 @@ pub(crate) fn compose_receptor_draws<'a, S, F, P>(
                 base_size[0] * zoom * draw.zoom[0],
                 base_size[1] * zoom * draw.zoom[1],
             ];
-            if draw.visible && size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+            if draw.visible
+                && size[0] * request.field_zoom.signum() > f32::EPSILON
+                && size[1] * request.field_zoom.signum() > f32::EPSILON
+            {
                 let frame = slot.frame_index(request.elapsed, request.beat);
                 let uv = slot.uv_for_frame_at(frame, request.elapsed);
                 let center = draw_center(
@@ -405,7 +411,11 @@ fn compose_receptor_overlay<S, F>(
     let base_size = effect_size(slot, request.field_zoom, request.effect_zoom);
     let size = [base_size[0] * draw.zoom[0], base_size[1] * draw.zoom[1]];
     let alpha = opacity * draw.tint[3] * request.receptor_alpha;
-    if draw.visible && alpha > f32::EPSILON && size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+    if draw.visible
+        && alpha > f32::EPSILON
+        && size[0] * request.field_zoom.signum() > f32::EPSILON
+        && size[1] * request.field_zoom.signum() > f32::EPSILON
+    {
         let frame = slot.frame_index(request.elapsed, request.beat);
         let uv = slot.uv_for_frame_at(frame, request.elapsed);
         let center = draw_center(
@@ -444,9 +454,11 @@ fn compose_receptor_overlay<S, F>(
 
 fn effect_size<S: NoteskinSlot>(slot: &S, field_zoom: f32, effect_zoom: f32) -> [f32; 2] {
     let size = slot.logical_size();
+    // Effect inversion has its own rotation/UV handling below. Mini is the
+    // parent scale and must retain its sign in the geometry, including Models.
     [
-        (size[0] * field_zoom * effect_zoom).abs(),
-        (size[1] * field_zoom * effect_zoom).abs(),
+        (size[0] * field_zoom * effect_zoom).abs() * field_zoom.signum(),
+        (size[1] * field_zoom * effect_zoom).abs() * field_zoom.signum(),
     ]
 }
 
@@ -488,13 +500,14 @@ fn append_receptor_sprite<S, F>(
     S: NoteskinSlot,
     F: Fn(&S) -> SpriteSource,
 {
-    let size = [
+    let signed_size = [
         draw.size[0] * draw.zoom[0].abs(),
         draw.size[1] * draw.zoom[1].abs(),
     ];
+    let size = signed_size.map(f32::abs);
     let offset = [
-        (0.5 - draw.align[0]) * size[0],
-        (0.5 - draw.align[1]) * size[1],
+        (0.5 - draw.align[0]) * signed_size[0],
+        (0.5 - draw.align[1]) * signed_size[1],
     ];
     let (sin, cos) = draw.rotation_z_deg.to_radians().sin_cos();
     draws.push(FlatDraw::Sprite(FlatSprite {
@@ -509,8 +522,8 @@ fn append_receptor_sprite<S, F>(
         tint: draw.tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         uv_rect: draw.uv,
-        flip_x: draw.zoom[0] < 0.0,
-        flip_y: draw.zoom[1] < 0.0,
+        flip_x: (draw.zoom[0] < 0.0) ^ (signed_size[0] < 0.0),
+        flip_y: (draw.zoom[1] < 0.0) ^ (signed_size[1] < 0.0),
         fade: [0.0; 4],
         blend: draw.blend,
         rot_x_deg: draw.rotation_x_deg,
@@ -1139,6 +1152,38 @@ mod tests {
         assert_eq!(*blend, BlendMode::Alpha);
         assert_eq!(*rot_y_deg, 7.0);
         assert_eq!(*rot_z_deg, -102.0);
+    }
+
+    #[test]
+    fn receptor_and_hold_geometry_preserve_small_signed_mini_scale() {
+        let target = TestSlot::sprite("target");
+        let hold = TestSlot::model("hold");
+        let pulse = pulse();
+        for zoom in [0.0, 0.005, -0.005] {
+            let mut request = request(Some(&target), Some(&hold), &pulse);
+            request.field_zoom = zoom;
+            let mut draws = Vec::new();
+            compose_receptor_draws(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                || None,
+                &texture_source,
+            );
+            if zoom == 0.0 {
+                assert!(draws.is_empty(), "collapsed feedback keeps zero-area culling");
+                continue;
+            }
+            let [FlatDraw::Sprite(receptor), FlatDraw::TexturedMesh(held)] = draws.as_slice() else {
+                panic!("one receptor and one retained hold Model expected: {draws:?}")
+            };
+            assert_eq!(receptor.center, [10.0, 20.0]);
+            assert_eq!(receptor.size, [64.0 * zoom.abs(); 2]);
+            assert_eq!((receptor.flip_x, receptor.flip_y), (zoom < 0.0, zoom < 0.0));
+            let basis = held.local_transform.transform_vector3(glam::Vec3::new(1.0, 2.0, 3.0));
+            let expected = glam::Vec3::new(zoom, -2.0 * zoom, 3.0 * zoom);
+            assert!((basis - expected).abs().max_element() < 0.000001);
+        }
     }
 
     #[test]

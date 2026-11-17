@@ -5851,6 +5851,9 @@ pub struct GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta> {
     pub song_lua_fail_types: [Option<crate::GameplayFailType>; MAX_PLAYERS],
     /// Current PlayerOptions already advanced by the retained Lua runtime.
     pub song_lua_player_options: [Option<SongLuaPlayerOptions>; MAX_PLAYERS],
+    /// Independent native ModsGroup timers for the next diagnostic refresh.
+    #[cfg(any(test, feature = "test-support"))]
+    replay_player_option_clock_deltas: Option<[f32; MAX_PLAYERS]>,
     pub attacks: GameplayAttackRuntimeState,
     pub expand_seconds: [f32; MAX_PLAYERS],
 }

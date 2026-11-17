@@ -723,8 +723,7 @@ pub(crate) fn compose_frame(
         let runtime_profile = &state.profiles()[player_idx];
         let mini =
             effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        let zoom = mini.mul_add(-0.5, 1.0);
-        if zoom.abs() < 0.01 { 0.01 } else { zoom }
+        mini.mul_add(-0.5, 1.0)
     };
     // Canonical composition applies current DrawSize, Tilt, Mini, and the
     // Centered/Boomerang extension to these unscaled theme metrics.
@@ -933,7 +932,7 @@ pub(crate) fn compose_frame(
             }
             let col = col_start + local_col;
             let showing = state
-                .active_hold(col)
+                .active_hold_for_render(col)
                 .filter(|active| {
                     request
                         .chart
@@ -958,7 +957,7 @@ pub(crate) fn compose_frame(
             });
             hold_emitters[local_col].update(elapsed_screen, showing, emitter);
             NotefieldLaneFeedback {
-                active_hold: state.active_hold(col),
+                active_hold: state.active_hold_for_render(col),
                 hold_emitter: hold_emitters[local_col],
                 receptor_bop_zoom: if options.hide_targets {
                     0.0

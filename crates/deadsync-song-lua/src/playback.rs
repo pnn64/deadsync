@@ -16,7 +16,7 @@ use deadlib_present::actors::{
     TextAttributes, TextContent,
 };
 use deadlib_present::anim::EffectState;
-use deadlib_present::compose::{ActorSegment, ActorXFold, FlatProxyStyle, TextLayoutCache};
+use deadlib_present::compose::{ActorSegment, FlatProxyStyle, TextLayoutCache};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render_core::{
@@ -34,7 +34,6 @@ use deadsync_notefield::{
     ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride, actor_from_flat_draw,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
-    song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::ModelDrawState;
 use deadsync_noteskin::NoteskinSlot;
@@ -2674,7 +2673,6 @@ struct SongLuaDirectProxySource {
     draw_end: usize,
     target: [f32; 2],
     tint: [f32; 4],
-    x_fold: Option<ActorXFold>,
     camera: Option<Matrix4>,
     player_camera: Option<SongLuaDirectPlayerCamera>,
 }
@@ -3560,7 +3558,14 @@ fn song_lua_screen_projection(
             ),
         )
     });
-    let camera = (projection * view).as_dmat4();
+    song_lua_camera_world_projection(projection * view, model)
+}
+
+fn song_lua_camera_world_projection(camera: Matrix4, model: Matrix4) -> Matrix4 {
+    if model == Matrix4::IDENTITY {
+        return Matrix4::IDENTITY;
+    }
+    let camera = camera.as_dmat4();
     // Perspective depth and W are nearly equal at the screen plane. Inverting
     // that camera in f32 amplifies cancellation into visible clip-coordinate
     // errors. Keep the native f32 coefficients, but calculate this change of
@@ -4172,6 +4177,9 @@ struct SongLuaCaptureTransform {
     target_z: f32,
     /// Native screen-space matrix of the Player's wrapper states.
     wrappers: Matrix4,
+    /// Menu camera and child NoteField model, kept apart so Player precedes
+    /// the child's wrappers and tilt even when either has zero zoom.
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
 }
 
 #[inline(always)]
@@ -4360,6 +4368,7 @@ fn song_lua_render_captured_source(
                 transform.zoom_z,
                 transform.target_z,
                 transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])
@@ -4462,6 +4471,7 @@ fn prepare_flat_proxy_source(
                 transform.zoom_z,
                 transform.target_z,
                 transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])?;
@@ -4528,6 +4538,7 @@ fn prepare_field_proxy_source(
                 transform.zoom_z,
                 transform.target_z,
                 transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])?;
@@ -4591,6 +4602,7 @@ fn capture_player_source(
                 transform.zoom_z,
                 transform.target_z,
                 transform.wrappers,
+                transform.field_camera_parts,
             );
             append_song_lua_player_transform(
                 std::iter::empty(),
@@ -4615,6 +4627,7 @@ fn capture_player_source(
                 transform.zoom_z,
                 transform.target_z,
                 transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])
@@ -4656,6 +4669,34 @@ fn song_lua_captured_segment_actors(segment: &[Actor]) -> &[Actor] {
         ] => children,
         _ => segment,
     }
+}
+
+fn song_lua_captured_camera_range(actors: &[Actor], camera: Matrix4) -> Option<[usize; 2]> {
+    for (start, actor) in actors.iter().enumerate() {
+        match actor {
+            Actor::Camera { view_proj, .. } if *view_proj == camera => {
+                return Some([start, start + 1]);
+            }
+            Actor::CameraPush { view_proj } if *view_proj == camera => {
+                let mut depth = 1usize;
+                for (offset, actor) in actors[start + 1..].iter().enumerate() {
+                    match actor {
+                        Actor::CameraPush { .. } => depth += 1,
+                        Actor::CameraPop => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some([start, start + offset + 2]);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn song_lua_note_field_proxy_actors(segment: &[Actor]) -> &[Actor] {
@@ -5538,7 +5579,7 @@ fn song_lua_direct_proxy(
         draw_end: source.draw_end,
         offset,
         z,
-        style: FlatProxyStyle::new(source.tint, state.diffuse, source.x_fold),
+        style: FlatProxyStyle::new(source.tint, state.diffuse, None),
         blend: song_lua_overlay_blend(state.blend),
         enclosing_camera,
         camera,
@@ -12393,17 +12434,11 @@ fn append_song_lua_player_transform<F, H>(
     zoom_z: f32,
     target_z: f32,
     wrappers: Matrix4,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
 ) where
     F: IntoIterator<Item = Actor>,
     H: IntoIterator<Item = Actor>,
 {
-    let fold_y = |actor| {
-        if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
-            song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)
-        } else {
-            actor
-        }
-    };
     let Some(player_transform) = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
         screen_width: screen_width(),
         screen_height: screen_height(),
@@ -12412,6 +12447,7 @@ fn append_song_lua_player_transform<F, H>(
         target_x,
         target_y,
         rotation_x_deg,
+        rotation_y_deg,
         rotation_z_deg,
         skew_x,
         skew_y,
@@ -12422,10 +12458,10 @@ fn append_song_lua_player_transform<F, H>(
         wrappers,
     }) else {
         out.reserve(field_len.saturating_add(hud_len));
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
         }
-        for actor in field_actors.into_iter().map(fold_y) {
+        for actor in field_actors {
             push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
         }
         return;
@@ -12446,10 +12482,10 @@ fn append_song_lua_player_transform<F, H>(
             blend,
             z_shift,
         );
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
-        for actor in field_actors.into_iter().map(fold_y) {
+        for actor in field_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
         push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
@@ -12467,12 +12503,12 @@ fn append_song_lua_player_transform<F, H>(
             blend,
             z_shift,
         );
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
     }
     let mut field_camera_depth = 0usize;
-    for actor in field_actors.into_iter().map(fold_y) {
+    for actor in field_actors {
         match actor {
             Actor::Camera {
                 view_proj,
@@ -12485,7 +12521,10 @@ fn append_song_lua_player_transform<F, H>(
                 push_song_lua_capture_actor(
                     out,
                     Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
+                        view_proj: field_camera_parts.map_or_else(
+                            || view_proj * player_transform,
+                            |(camera, model)| camera * (player_transform * model),
+                        ),
                     },
                     tint,
                     blend,
@@ -12504,7 +12543,10 @@ fn append_song_lua_player_transform<F, H>(
                 push_song_lua_capture_actor(
                     out,
                     Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
+                        view_proj: field_camera_parts.map_or_else(
+                            || view_proj * player_transform,
+                            |(camera, model)| camera * (player_transform * model),
+                        ),
                     },
                     tint,
                     blend,
@@ -12609,19 +12651,6 @@ fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform)
 }
 
 #[inline(always)]
-fn song_lua_player_x_fold(transform: SongLuaCaptureTransform) -> Option<ActorXFold> {
-    (transform.playfield_center_x.is_finite()
-        && transform.rotation_y.is_finite()
-        && transform.rotation_y.abs() > f32::EPSILON)
-        .then(|| {
-            ActorXFold::new(
-                transform.playfield_center_x,
-                transform.rotation_y.to_radians().cos(),
-            )
-        })
-}
-
-#[inline(always)]
 fn song_lua_player_transform_is_direct_hud_proxy(transform: SongLuaCaptureTransform) -> bool {
     song_lua_player_transform_is_direct_proxy(transform)
 }
@@ -12632,8 +12661,19 @@ fn song_lua_direct_field_camera(
     transform: SongLuaCaptureTransform,
 ) -> Option<Matrix4> {
     let player_transform = song_lua_player_camera_suffix(transform);
+    song_lua_field_camera_with_player(field_camera, transform.field_camera_parts, player_transform)
+}
+
+fn song_lua_field_camera_with_player(
+    field_camera: Option<Matrix4>,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
+    player_transform: Option<Matrix4>,
+) -> Option<Matrix4> {
     match (field_camera, player_transform) {
-        (Some(camera), Some(player_transform)) => Some(camera * player_transform),
+        (Some(camera), Some(player_transform)) => Some(field_camera_parts.map_or_else(
+            || camera * player_transform,
+            |(camera, model)| camera * (player_transform * model),
+        )),
         (None, Some(player_transform)) => Some(song_lua_player_root_camera(player_transform)),
         (camera, None) => camera,
     }
@@ -12648,6 +12688,7 @@ fn song_lua_player_camera_suffix(transform: SongLuaCaptureTransform) -> Option<M
         target_x: transform.target_x,
         target_y: transform.target_y,
         rotation_x_deg: transform.rotation_x,
+        rotation_y_deg: transform.rotation_y,
         rotation_z_deg: transform.rotation_z,
         skew_x: transform.skew_x,
         skew_y: transform.skew_y,
@@ -12666,18 +12707,39 @@ enum PlayerActorAssembly {
     DirectZ {
         z_shift: i16,
     },
-    DirectFold {
-        z_shift: i16,
-        x_fold: ActorXFold,
-    },
     DirectTransform {
         z_shift: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
         root_camera: Matrix4,
         field_camera_suffix: Matrix4,
-        x_fold: Option<ActorXFold>,
     },
+}
+
+/// Retain the camera/Player/NoteField boundary for both actor and flat draws.
+/// Native Actor::Draw enters Player before the child's wrapper states. Keeping
+/// the child model on the suffix also supports singular authored field zooms.
+fn prepare_player_field_camera(
+    assembly: &mut PlayerActorAssembly,
+    field_camera: Option<Matrix4>,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
+    field_actors: &mut [Actor],
+) -> Option<Matrix4> {
+    let PlayerActorAssembly::DirectTransform { field_camera_suffix, .. } = assembly else {
+        return field_camera;
+    };
+    let (Some(original), Some((camera, model))) = (field_camera, field_camera_parts) else {
+        return field_camera;
+    };
+    for actor in field_actors {
+        if let Actor::Camera { view_proj, .. } | Actor::CameraPush { view_proj } = actor
+            && *view_proj == original
+        {
+            *view_proj = camera;
+        }
+    }
+    *field_camera_suffix *= model;
+    Some(camera)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12905,6 +12967,8 @@ struct PlayerActorSegment {
     player: usize,
     assembly: PlayerActorAssembly,
     field_camera: Option<Matrix4>,
+    field_screen_projection: Matrix4,
+    captured_field_range: Option<[usize; 2]>,
     manual_hud_draw: bool,
     hud_parts: deadsync_notefield::NotefieldHudParts,
 }
@@ -13074,9 +13138,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
             return None;
         }
         if matches!(segment.assembly, PlayerActorAssembly::Captured) {
-            if part != 0 {
-                return None;
-            }
             debug_assert!(self.scratch.notefield_flat_draw_scratch[player].is_empty());
             debug_assert!(self.scratch.notefield_hud_flat_draw_scratch[player].is_empty());
             let source = self
@@ -13085,6 +13146,19 @@ impl<'a> GameplayActorSegmentIter<'a> {
                 .as_ref()
                 .and_then(|scratch| scratch.player_source(player, SONG_LUA_PLAYER_PROXY_SOURCE))
                 .expect("player proxy capture has song-lifetime backing");
+            let source = if let Some([start, end]) = segment.captured_field_range {
+                let actors = song_lua_captured_segment_actors(source);
+                match part {
+                    0 => &actors[..start],
+                    1 => &actors[start..end],
+                    2 => &actors[end..],
+                    _ => return None,
+                }
+            } else if part == 0 {
+                source
+            } else {
+                return None;
+            };
             return Some(ActorSegment::new(source));
         }
         let hud = &self.scratch.notefield_hud_actor_scratch[player];
@@ -13112,25 +13186,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                         segment.field_camera.as_ref(),
                     ),
             ),
-            (PlayerActorAssembly::DirectFold { z_shift, x_fold }, 0) => {
-                let hud = if segment.manual_hud_draw {
-                    ActorSegment::shifted(hud, *z_shift)
-                } else {
-                    ActorSegment::folded(hud, *z_shift, *x_fold)
-                };
-                Some(hud.with_flat_draws(hud_draws, None))
-            }
-            (PlayerActorAssembly::DirectFold { z_shift, x_fold }, 1) => Some(
-                ActorSegment::folded(
-                    &self.scratch.notefield_actor_scratch[player],
-                    *z_shift,
-                    *x_fold,
-                )
-                .with_flat_draws(
-                    &self.scratch.notefield_flat_draw_scratch[player],
-                    segment.field_camera.as_ref(),
-                ),
-            ),
             (
                 PlayerActorAssembly::DirectTransform {
                     z_shift,
@@ -13138,7 +13193,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     blend,
                     root_camera,
                     field_camera_suffix: _,
-                    x_fold,
                 },
                 0,
             ) => {
@@ -13153,7 +13207,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                             *blend,
                             root_camera,
                             &Matrix4::IDENTITY,
-                            *x_fold,
+                            None,
                         ),
                         Some(root_camera),
                     )
@@ -13167,7 +13221,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     blend,
                     root_camera,
                     field_camera_suffix,
-                    x_fold,
                 },
                 1,
             ) => Some(
@@ -13178,7 +13231,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     *blend,
                     root_camera,
                     field_camera_suffix,
-                    *x_fold,
+                    None,
                 )
                 .with_flat_draws(
                     &self.scratch.notefield_flat_draw_scratch[player],
@@ -13187,7 +13240,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
             ),
             (PlayerActorAssembly::Captured | PlayerActorAssembly::Hidden, _)
             | (PlayerActorAssembly::DirectZ { .. }, _)
-            | (PlayerActorAssembly::DirectFold { .. }, _)
             | (PlayerActorAssembly::DirectTransform { .. }, _) => None,
         }
     }
@@ -13234,8 +13286,13 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                         let Some(segment) = self.owner.players[player].as_ref() else {
                             continue;
                         };
-                        if let Some(segment) = self.player_segment(segment, part) {
-                            return Some(segment.with_projection(&self.owner.screen_projection));
+                        if let Some(draw) = self.player_segment(segment, part) {
+                            let projection = if part == 1 {
+                                &segment.field_screen_projection
+                            } else {
+                                &self.owner.screen_projection
+                            };
+                            return Some(draw.with_projection(projection));
                         }
                     }
                     self.phase = 2;
@@ -13324,7 +13381,6 @@ fn player_actor_assembly_for_transform_with_metrics(
     {
         return assembly;
     }
-    let x_fold = song_lua_player_x_fold(transform);
     let field_camera_suffix = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
         screen_width: metrics.screen_width,
         screen_height: metrics.screen_height,
@@ -13333,6 +13389,7 @@ fn player_actor_assembly_for_transform_with_metrics(
         target_x: transform.target_x,
         target_y: transform.target_y,
         rotation_x_deg: transform.rotation_x,
+        rotation_y_deg: transform.rotation_y,
         rotation_z_deg: transform.rotation_z,
         skew_x: transform.skew_x,
         skew_y: transform.skew_y,
@@ -13342,20 +13399,15 @@ fn player_actor_assembly_for_transform_with_metrics(
         target_z: transform.target_z,
         wrappers: transform.wrappers,
     });
-    match (field_camera_suffix, x_fold) {
-        (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
+    match field_camera_suffix {
+        Some(field_camera_suffix) => PlayerActorAssembly::DirectTransform {
             z_shift: transform.z_shift,
             tint: transform.tint,
             blend: transform.blend,
             root_camera: song_lua_player_root_camera_with_metrics(field_camera_suffix, metrics),
             field_camera_suffix,
-            x_fold,
         },
-        (None, Some(x_fold)) => PlayerActorAssembly::DirectFold {
-            z_shift: transform.z_shift,
-            x_fold,
-        },
-        (None, None) => PlayerActorAssembly::DirectZ {
+        None => PlayerActorAssembly::DirectZ {
             z_shift: transform.z_shift,
         },
     }
@@ -14720,17 +14772,25 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             ),
         );
     }
-    let screen_projection = song_lua_visuals
+    let screen_state = song_lua_visuals
         .screen_overlay_index
         .and_then(|index| song_lua_overlay_state_scratch.get(index))
         .filter(|_| show_song_visuals)
-        .map_or(Matrix4::IDENTITY, |screen| {
-            song_lua_screen_projection(
-                *screen,
-                [song_lua_space_width, song_lua_space_height],
-                [song_lua_now, state.current_beat()],
-            )
-        });
+        .copied();
+    let screen_projection = screen_state.map_or(Matrix4::IDENTITY, |screen| {
+        song_lua_screen_projection(
+            screen,
+            [song_lua_space_width, song_lua_space_height],
+            [song_lua_now, state.current_beat()],
+        )
+    });
+    let screen_world = screen_state.map_or(Matrix4::IDENTITY, |screen| {
+        deadsync_notefield::song_lua_screen_matrix_to_world(
+            song_lua_draw_matrix(screen, [song_lua_now, state.current_beat()]).0,
+            screen_width(),
+            screen_height(),
+        )
+    });
     let mut manual_requests = SongLuaScreenProxyRequests::default();
     if show_song_visuals {
         // Release the bank about to be reused before refilling its source
@@ -14977,6 +15037,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let mut manual_player_sources: [Option<SongLuaManualPlayerSource>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut player_hud_parts = [deadsync_notefield::NotefieldHudParts::default(); MAX_PLAYERS];
+    let mut player_field_screen_projections = [screen_projection; MAX_PLAYERS];
+    let mut captured_player_field_ranges = [None; MAX_PLAYERS];
     let mut build_player_bundle =
         |player_idx: usize, placement: FieldPlacement, requests: SongLuaPlayerProxyRequests| {
             let field_scratch = &mut notefield_actor_scratch[player_idx];
@@ -15152,8 +15214,16 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 zoom_z,
                 target_z: player_state.z + player_transform.z,
                 wrappers: player_wrappers,
+                field_camera_parts: notefield_camera_cache[player_idx].camera_parts(),
             };
-            let direct_x_fold = song_lua_player_x_fold(capture_transform);
+            // Player replaces the camera for NoteField while ScreenGameplay's
+            // world transform remains on the stack. Use the pure menu camera;
+            // the child model can contain a singular authored zoom.
+            player_field_screen_projections[player_idx] = capture_transform
+                .field_camera_parts
+                .map_or(screen_projection, |(camera, _)| {
+                    song_lua_camera_world_projection(camera, screen_world)
+                });
             let proxy_field_camera = field_camera;
             if manual_requests.players[player_idx].player {
                 let scratch = song_lua_proxy_actor_scratch
@@ -15168,10 +15238,16 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     &mut scratch.banks[scratch.active_bank].players[player_idx],
                 ));
             }
-            let assembly = player_actor_assembly_cache[player_idx].resolve(
+            let mut assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player && !direct_player_candidates[player_idx],
                 player_state.draw_visible() && !covering_proxy_requests.players[player_idx].player,
                 capture_transform,
+            );
+            let assembly_field_camera = prepare_player_field_camera(
+                &mut assembly,
+                field_camera,
+                capture_transform.field_camera_parts,
+                field_scratch,
             );
             let field_camera = match assembly {
                 PlayerActorAssembly::DirectTransform {
@@ -15181,7 +15257,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 } => Some(player_field_camera_cache[player_idx].resolve(
                     field_camera_generation,
                     player_actor_assembly_cache[player_idx].generation(),
-                    field_camera,
+                    assembly_field_camera,
                     root_camera,
                     field_camera_suffix,
                 )),
@@ -15199,11 +15275,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 .then(|| song_lua_player_camera_suffix(capture_transform))
                 .flatten();
             let direct_hud_camera = direct_camera_suffix.map(song_lua_player_root_camera);
-            let direct_field_camera = match (proxy_field_camera, direct_camera_suffix) {
-                (Some(camera), Some(suffix)) => Some(camera * suffix),
-                (None, Some(suffix)) => Some(song_lua_player_root_camera(suffix)),
-                (camera, None) => camera,
-            };
+            let direct_field_camera = song_lua_field_camera_with_player(
+                proxy_field_camera,
+                capture_transform.field_camera_parts,
+                direct_camera_suffix,
+            );
             let captured_player_source = if requests.player && !direct_player {
                 let scratch = song_lua_proxy_actor_scratch
                     .as_mut()
@@ -15232,6 +15308,29 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             } else {
                 None
             };
+            if matches!(assembly, PlayerActorAssembly::Captured)
+                && screen_world != Matrix4::IDENTITY
+                && let Some(source) = &captured_player_source
+            {
+                let camera = if song_lua_player_transform_is_direct_identity(capture_transform) {
+                    proxy_field_camera
+                } else {
+                    song_lua_field_camera_with_player(
+                        proxy_field_camera,
+                        capture_transform.field_camera_parts,
+                        song_lua_player_camera_suffix(capture_transform),
+                    )
+                };
+                // Keep the source local for ActorProxy consumers. Only the
+                // ordinary Player draw separates its closed field camera scope
+                // from the Combo/Judgment spans that retain the screen camera.
+                captured_player_field_ranges[player_idx] = camera.and_then(|camera| {
+                    song_lua_captured_camera_range(
+                        song_lua_captured_segment_actors(&source[0]),
+                        camera,
+                    )
+                });
+            }
             let player_source = captured_player_source.map(PreparedProxySource::new);
             let direct_player_source = direct_player
                 .then(|| {
@@ -15247,7 +15346,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: hud_parts.combo_draws,
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_hud_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
                                 base: root_base,
@@ -15260,11 +15358,16 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: flat_draw_scratch.len(),
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_field_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
-                                base: proxy_field_camera.unwrap_or(root_base),
-                                suffix,
+                                base: capture_transform.field_camera_parts.map_or_else(
+                                    || proxy_field_camera.unwrap_or(root_base),
+                                    |(camera, _)| camera,
+                                ),
+                                suffix: capture_transform.field_camera_parts.map_or(
+                                    suffix,
+                                    |(_, model)| suffix * model,
+                                ),
                             }),
                         },
                         SongLuaDirectProxySource {
@@ -15273,7 +15376,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: hud_flat_draw_scratch.len(),
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_hud_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
                                 base: root_base,
@@ -15299,7 +15401,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_field_camera,
                     player_camera: None,
                 });
@@ -15327,6 +15428,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                         zoom_z: 1.0,
                         target_z: 0.0,
                         wrappers: Matrix4::IDENTITY,
+                        field_camera_parts: None,
                     };
                     prepare_proxy_source(source, ProxyCapturePart::Field, local, scratch)
                 })
@@ -15378,7 +15480,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_hud_camera,
                     player_camera: None,
                 });
@@ -15415,7 +15516,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_hud_camera,
                     player_camera: None,
                 });
@@ -15689,6 +15789,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 player: 1,
                 assembly: p2_actor_assembly,
                 field_camera: p2_field_camera,
+                field_screen_projection: player_field_screen_projections[1],
+                captured_field_range: captured_player_field_ranges[1],
                 hud_parts: player_hud_parts[1],
                 manual_hud_draw: show_song_visuals
                     && song_lua_visuals.player_actors[1].manual_hud_draw,
@@ -15707,6 +15809,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             player: 0,
             assembly: p1_actor_assembly,
             field_camera: p1_field_camera,
+            field_screen_projection: player_field_screen_projections[0],
+            captured_field_range: captured_player_field_ranges[0],
             hud_parts: player_hud_parts[0],
             manual_hud_draw: show_song_visuals && song_lua_visuals.player_actors[0].manual_hud_draw,
         });

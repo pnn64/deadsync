@@ -110,7 +110,11 @@ pub fn refresh_active_attack_masks<Profile, OverlayActor, CapturedActor, StateDe
 ) where
     Profile: GameplayProfileData,
 {
+    #[cfg(any(test, feature = "test-support"))]
+    let option_deltas = state.mods.replay_player_option_clock_deltas.take();
     for player in 0..state.setup.num_players {
+        #[cfg(any(test, feature = "test-support"))]
+        let delta_time = option_deltas.map_or(delta_time, |deltas| deltas[player]);
         let now = state.visible_music_time_seconds(player);
         state.refresh_player_attacks(player, now, delta_time);
     }

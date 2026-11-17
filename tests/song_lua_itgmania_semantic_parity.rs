@@ -718,6 +718,7 @@ fn copy_baked_layer<T: Clone>(source: &deadsync_song_lua::CompiledSongLua<T>) ->
     copy.screen_overlay_index = source.screen_overlay_index;
     copy.overlay_eases = source.overlay_eases.clone();
     copy.overlay_update_unit = source.overlay_update_unit;
+    copy.overlay_capture_calibration_seconds = source.overlay_capture_calibration_seconds;
     copy.overlay_updates = source.overlay_updates.clone();
     copy.overlay_writes = source.overlay_writes.clone();
     copy.boolean_writes = source.boolean_writes.clone();

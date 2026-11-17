@@ -2535,6 +2535,11 @@ pub struct SongLuaCompileContext {
     /// These are external clocks, never expected actor states or draw results.
     #[cfg(feature = "test-support")]
     pub compile_clock_inputs: Vec<[f64; 3]>,
+    /// Optional Screen::Update actor deltas, aligned with compile_clock_inputs.
+    /// Empty keeps its existing actor delta for every root. When supplied,
+    /// screen/Player trees use these deltas and song layers retain the triplets.
+    #[cfg(feature = "test-support")]
+    pub compile_screen_actor_deltas: Vec<f32>,
     pub music_length_seconds: f32,
     /// Whole-song note bounds resolved at catalog load, independently of
     /// audio duration. Note times include the load offset; hints stay absolute.
@@ -2620,6 +2625,8 @@ impl SongLuaCompileContext {
             host_clock_inputs: Vec::new(),
             #[cfg(feature = "test-support")]
             compile_clock_inputs: Vec::new(),
+            #[cfg(feature = "test-support")]
+            compile_screen_actor_deltas: Vec::new(),
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),
@@ -3032,6 +3039,9 @@ pub struct CompiledSongLua<OverlayActor> {
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     /// Clock shared by rendered update samples; pauses need distinct song seconds.
     pub overlay_update_unit: SongLuaTimeUnit,
+    /// Global calibration already present in raw music-clock overlay and draw
+    /// captures. Runtime rebasing applies only the difference from this bake.
+    pub overlay_capture_calibration_seconds: f32,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
     /// Setter arguments retained only for reference audits; rendered tracks may tween them.
     #[cfg(feature = "test-support")]
@@ -3079,6 +3089,12 @@ impl<A: std::fmt::Debug> std::fmt::Debug for CompiledSongLua<A> {
         out.field("screen_overlay_index", &self.screen_overlay_index);
         out.field("overlay_eases", &self.overlay_eases);
         out.field("overlay_update_unit", &self.overlay_update_unit);
+        if self.overlay_capture_calibration_seconds != 0.0 {
+            out.field(
+                "overlay_capture_calibration_seconds",
+                &self.overlay_capture_calibration_seconds,
+            );
+        }
         out.field("overlay_updates", &self.overlay_updates);
         #[cfg(feature = "test-support")]
         out.field("overlay_writes", &self.overlay_writes);
@@ -3134,6 +3150,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             screen_overlay_index: None,
             overlay_eases: Vec::new(),
             overlay_update_unit: SongLuaTimeUnit::Beat,
+            overlay_capture_calibration_seconds: 0.0,
             overlay_updates: Vec::new(),
             #[cfg(feature = "test-support")]
             overlay_writes: Vec::new(),

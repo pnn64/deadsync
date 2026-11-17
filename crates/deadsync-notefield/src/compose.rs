@@ -267,6 +267,8 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub beat_factor: f32,
     pub(crate) beat_y_factor: f32,
     pub col_offsets: [f32; MAX_COLS],
+    pub(crate) unzoomed_col_offsets: [f32; MAX_COLS],
+    /// ArrowEffects evaluates horizontal motion before NoteField's Mini scale.
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_z_bounds: [TornadoBounds; MAX_COLS],
@@ -809,32 +811,33 @@ fn prepare_notes<'a, S>(
     };
     let timing = request.chart.timing?;
     let num_cols = frame_plan.num_cols;
-    let mut col_offsets = [0.0; MAX_COLS];
+    let mut unzoomed_col_offsets = [0.0; MAX_COLS];
     fill_lane_col_offsets(
-        &mut col_offsets,
+        &mut unzoomed_col_offsets,
         Some(base.column_xs.as_slice()),
         num_cols,
         request.visual.spacing_multiplier,
-        field_zoom,
+        1.0,
     );
+    let col_offsets = unzoomed_col_offsets.map(|offset| offset * field_zoom);
     let mut invert_distances = [0.0; MAX_COLS];
     let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
     compute_active_note_geometry(
         &request.visual.visual,
-        &col_offsets[..num_cols],
+        &unzoomed_col_offsets[..num_cols],
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
     let mut tornado_z_bounds = [TornadoBounds::default(); MAX_COLS];
     if request.visual.visual.tornado_z != 0.0 {
         crate::transforms::compute_tornado_z_bounds(
-            &col_offsets[..num_cols],
+            &unzoomed_col_offsets[..num_cols],
             &mut tornado_z_bounds[..num_cols],
         );
     }
     let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
     compute_tornado_lane_caches(
-        &col_offsets[..num_cols],
+        &unzoomed_col_offsets[..num_cols],
         &tornado_bounds[..num_cols],
         request.visual.visual.tornado,
         &mut tornado_lane_caches[..num_cols],
@@ -920,6 +923,7 @@ fn prepare_notes<'a, S>(
             request.visual.visual.beat_y_mult,
         ),
         col_offsets,
+        unzoomed_col_offsets,
         invert_distances,
         tornado_bounds,
         tornado_z_bounds,

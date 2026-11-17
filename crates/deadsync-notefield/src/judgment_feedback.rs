@@ -54,12 +54,13 @@ pub(crate) struct TapJudgmentFeedback<'a> {
     pub rotation_deg: f32,
 }
 
-/// Geometry borrowed from note preparation for this frame's active lane span.
+/// Pre-Mini geometry borrowed from note preparation for the active lane span.
 pub(crate) struct HoldIndicatorGeometry<'a> {
     pub col_offsets: &'a [f32],
     pub invert: &'a [f32],
     pub tornado: &'a [TornadoBounds],
     pub beat_factor: f32,
+    pub field_zoom: f32,
 }
 
 pub(crate) struct JudgmentFeedbackRequest<'a> {
@@ -219,13 +220,14 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
     let mut fallback_offsets;
     let mut fallback_invert;
     let mut fallback_tornado;
-    let (col_offsets, invert, tornado, beat_push) =
+    let (col_offsets, invert, tornado, beat_push, field_zoom) =
         if let Some(geometry) = request.prepared_geometry.as_ref() {
             (
                 geometry.col_offsets,
                 geometry.invert,
                 geometry.tornado,
                 geometry.beat_factor,
+                geometry.field_zoom,
             )
         } else {
             fallback_offsets = [0.0; MAX_COLS];
@@ -236,7 +238,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 request.noteskin_column_xs,
                 num_cols,
                 request.spacing_multiplier,
-                request.field_zoom,
+                1.0,
             );
             compute_active_note_geometry(
                 &request.visual,
@@ -254,6 +256,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                     request.visual.beat_offset,
                     request.visual.beat_mult,
                 ),
+                request.field_zoom,
             )
         };
 
@@ -270,7 +273,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 continue;
             }
             let xy = [
-                indicator_x(request, i, beat_push, col_offsets, invert, tornado),
+                indicator_x(request, i, beat_push, col_offsets, invert, tornado, field_zoom),
                 player_metric_y(
                     request.screen_center_y,
                     request.field_center_y,
@@ -299,7 +302,7 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
                 HoldResult::LetGo | HoldResult::Missed => 1,
             };
             let xy = [
-                indicator_x(request, i, beat_push, col_offsets, invert, tornado),
+                indicator_x(request, i, beat_push, col_offsets, invert, tornado, field_zoom),
                 player_metric_y(
                     request.screen_center_y,
                     request.field_center_y,
@@ -327,9 +330,11 @@ fn indicator_x(
     col_offsets: &[f32],
     invert: &[f32],
     tornado: &[TornadoBounds],
+    field_zoom: f32,
 ) -> f32 {
-    hold_indicator_column_x(
-        request.playfield_center_x,
+    // Player::Update applies Mini after GetXPos, independently of HUD zoom.
+    let offset = hold_indicator_column_x(
+        0.0,
         local_col,
         beat_push,
         request.arrow_effect_time,
@@ -378,7 +383,8 @@ fn indicator_x(
             ..NoteXParams::default()
         },
         request.visual.tiny,
-    )
+    );
+    request.playfield_center_x + offset * field_zoom
 }
 
 fn append_indicator_sprite(
@@ -914,6 +920,31 @@ mod tests {
     }
 
     #[test]
+    fn mini_hold_indicator_x_matches_native_player_scaling() {
+        let mut request = empty_request(&[], &[]);
+        request.arrow_effect_time = 0.0;
+        request.visual.drunk = 1.0;
+        request.visual.flip = 0.5;
+        request.visual.tiny = 1.0;
+        let columns = [-96.0, -32.0, 32.0, 96.0];
+        // Native GetXPos at col 0, time/travel zero: 100% Drunk adds 32,
+        // 50% Flip cancels the -96 lane offset, then 100% Tiny halves X.
+        // Player.cpp1000-1004 applies Mini to the resulting 16 pixels.
+        for zoom in [0.0, 0.005, -0.005, 0.75, 1.0, -0.5] {
+            let actual = indicator_x(
+                &request,
+                0,
+                0.0,
+                &columns,
+                &[0.0; 4],
+                &[TornadoBounds::default(); 4],
+                zoom,
+            );
+            assert_eq!(actual, request.playfield_center_x + 16.0 * zoom);
+        }
+    }
+
+    #[test]
     fn prepared_hold_geometry_matches_fallback_draws_bitwise() {
         let holds = [Some(HoldJudgmentRenderInfo {
             result: HoldResult::LetGo,
@@ -957,7 +988,7 @@ mod tests {
                         let mut offsets = [0.0; MAX_COLS];
                         let mut invert = [0.0; MAX_COLS];
                         let mut tornado = [TornadoBounds::default(); MAX_COLS];
-                        fill_lane_col_offsets(&mut offsets, columns, num_cols, 1.17, 0.73);
+                        fill_lane_col_offsets(&mut offsets, columns, num_cols, 1.17, 1.0);
                         compute_active_note_geometry(
                             &request.visual,
                             &offsets[..num_cols],
@@ -973,6 +1004,7 @@ mod tests {
                                 request.visual.beat_offset,
                                 request.visual.beat_mult,
                             ),
+                            field_zoom: request.field_zoom,
                         });
                         // Prepared geometry must bypass all fallback calculations.
                         request.spacing_multiplier = f32::NAN;
@@ -1019,7 +1051,7 @@ mod tests {
         let tornado = [TornadoBounds::default(); 4];
         let beat_push = 12.0;
 
-        let actual = indicator_x(&request, 1, beat_push, &col_offsets, &invert, &tornado);
+        let actual = indicator_x(&request, 1, beat_push, &col_offsets, &invert, &tornado, 1.0);
         let params = NoteXParams {
             screen_height: request.screen_height,
             tornado: request.visual.tornado,

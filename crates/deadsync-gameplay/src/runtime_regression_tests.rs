@@ -1545,6 +1545,24 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn live_notefield_mini_preserves_zero_and_small_signed_scale() {
+        let mut state = regression_state();
+        // Player::Update/PlayerNoteFieldPositioner use 1 - Mini / 2;
+        // the +0.01 guard belongs only to ArrowEffects' reverse divisor.
+        for (mini_percent, expected) in [(199.0, 0.005), (200.0, 0.0), (201.0, -0.005)] {
+            state.mods.attacks.mini_percent[0] = Some(mini_percent);
+            state.refresh_live_notefield_options(180.0);
+            let actual = state.field_zoom_for_player(0);
+            assert!(
+                (actual - expected).abs() < 0.0000001,
+                "Mini {mini_percent}: field scale {actual}, expected {expected}"
+            );
+            assert!(state.display.notefield_motion.scroll_pixels_per_second(0) > 0.0);
+            assert!(state.display.notefield_motion.scroll_travel_time(0).is_finite());
+        }
+    }
+
+    #[test]
     fn stable_notefield_refresh_rearms_for_profile_rate_and_bpm_changes() {
         let mut state = regression_state();
         let bpm = state.clock.song_position.current_bpm;
@@ -3032,6 +3050,249 @@ mod runtime_regression_tests {
         state.mods.attacks.cleared_for_outro = true;
         state.set_gameplay_paused(true);
         assert!(!state.control.paused, "native ignores pause requests during outro");
+    }
+
+    #[test]
+    fn native_player_option_clocks_do_not_replace_gameplay_clocks() {
+        let make_state = || {
+            regression_state_with_session(GameplaySession {
+                play_style: GameplayInputPlayStyle::Versus,
+                joined_sides: [true, true],
+                ..GameplaySession::default()
+            })
+        };
+        let mut state = make_state();
+        let mut control = make_state();
+        assert_eq!(state.setup.num_players, 2);
+        let music = state.chart_runtime.note_time_cache_ns[0] + 10_000_000;
+        for runtime in [&mut state, &mut control] {
+            for appearance in &mut runtime.mods.attacks.current_appearance {
+                appearance.sudden_offset = -1.0;
+            }
+            runtime.progress.stage.autoplay_enabled = true;
+            // Start before the head so this exercises a normal audio advance,
+            // without the first-frame guard rejecting a jump from preroll.
+            runtime.set_current_music_time_ns(music - 20_000_000);
+        }
+        let assert_gameplay_clocks_match = |state: &State, control: &State| {
+            assert_eq!(
+                state.current_music_time_ns(),
+                control.current_music_time_ns()
+            );
+            assert_eq!(
+                state.clock.song_position.current_music_time_display,
+                control.clock.song_position.current_music_time_display,
+            );
+            assert_eq!(
+                state.boundary.total_elapsed_in_screen,
+                control.boundary.total_elapsed_in_screen,
+            );
+            assert_eq!(state.mods.expand_seconds, control.mods.expand_seconds);
+            for (actual, expected) in state
+                .chart_runtime
+                .notes
+                .iter()
+                .zip(&control.chart_runtime.notes)
+            {
+                let judgment = |note: &Note| {
+                    note.result
+                        .as_ref()
+                        .map(|result| (result.grade, result.time_error_music_ns))
+                };
+                assert_eq!(
+                    judgment(actual),
+                    judgment(expected),
+                    "judgment retains the song clock"
+                );
+            }
+        };
+        let snapshot = GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot {
+                music_nanos: music,
+                music_seconds_per_second: 0.0,
+                has_music_mapping: true,
+                valid_at: Instant::now(),
+                valid_at_host_nanos: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let screen_start = state.boundary.total_elapsed_in_screen;
+        state.set_player_option_clock_deltas([0.25, 0.5]);
+        state.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        control.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        assert_gameplay_clocks_match(&state, &control);
+        assert_eq!(state.mods.attacks.appearance[0].sudden_offset, -0.75);
+        assert_eq!(state.mods.attacks.appearance[1].sudden_offset, -0.5);
+        assert_eq!(control.mods.attacks.appearance[0].sudden_offset, -0.875);
+        assert_eq!(control.mods.attacks.appearance[1].sudden_offset, -0.875);
+        assert_eq!(state.current_music_time_ns(), music);
+        assert_eq!(state.boundary.total_elapsed_in_screen - screen_start, 0.125);
+        assert_eq!(state.mods.expand_seconds, [0.125; MAX_PLAYERS]);
+        let head = state.chart_runtime.notes[0].result.as_ref().unwrap();
+        assert_eq!(head.grade, JudgeGrade::Fantastic);
+
+        // A captured timer is one-shot. The following ordinary update uses its
+        // screen delta independently for both players, even if audio is still.
+        state.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        control.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        assert_gameplay_clocks_match(&state, &control);
+        assert_eq!(state.mods.attacks.appearance[0].sudden_offset, -0.625);
+        assert_eq!(state.mods.attacks.appearance[1].sudden_offset, -0.375);
+        assert_eq!(state.boundary.total_elapsed_in_screen - screen_start, 0.25);
+        assert_eq!(state.mods.expand_seconds, [0.25; MAX_PLAYERS]);
+
+        state.set_player_option_clock_deltas([0.0, 0.0]);
+        state.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        control.update_gameplay_frame(0.125, snapshot, "unused", || 1);
+        assert_gameplay_clocks_match(&state, &control);
+        assert_eq!(state.mods.attacks.appearance[0].sudden_offset, -0.625);
+        assert_eq!(state.mods.attacks.appearance[1].sudden_offset, -0.375);
+        assert_eq!(state.current_music_time_ns(), music);
+        assert_eq!(state.boundary.total_elapsed_in_screen - screen_start, 0.375);
+        assert_eq!(state.mods.expand_seconds, [0.375; MAX_PLAYERS]);
+    }
+
+    #[test]
+    fn native_player_option_clocks_reset_and_reject_invalid_input() {
+        let mut state = regression_state();
+        state.set_player_option_clock_deltas([0.5, 0.25]);
+        state.reset_practice_playback(0.0);
+        state.mods.attacks.current_appearance[0].sudden_offset = -1.0;
+        refresh_active_attack_masks(&mut state, 0.125);
+        assert_eq!(
+            state.mods.attacks.appearance[0].sudden_offset, -0.875,
+            "a seek clears an unconsumed native timer"
+        );
+
+        for player in 0..MAX_PLAYERS {
+            for invalid in [-0.01, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                state.mods.attacks.current_appearance[0].sudden_offset = -1.0;
+                state.set_player_option_clock_deltas([0.25, 0.5]);
+                let mut deltas = [0.25, 0.5];
+                deltas[player] = invalid;
+                let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    state.set_player_option_clock_deltas(deltas);
+                }));
+                assert!(rejected.is_err(), "invalid player {player} delta {invalid}");
+                refresh_active_attack_masks(&mut state, 0.125);
+                assert_eq!(
+                    state.mods.attacks.appearance[0].sudden_offset, -0.75,
+                    "a rejected override must not replace the last valid input"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hold_render_activation_follows_native_update_order() {
+        for autoplay in [false, true] {
+            for note_type in [NoteType::Hold, NoteType::Roll] {
+                let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+                state.chart_runtime.notes[0].note_type = note_type;
+                state.progress.stage.autoplay_enabled = autoplay;
+                state.apply_global_offset_delta(-state.global_offset_seconds());
+                let start = state.chart_runtime.note_time_cache_ns[0];
+                state.set_current_music_time_ns(start - 10_000_000);
+                if !autoplay {
+                    assert!(
+                        state.queue_pending_input_edge(
+                            0,
+                            test_input_edge_at(Lane::Left, true, start),
+                        )
+                    );
+                }
+                let snapshot = GameplayAudioSnapshot {
+                    stream_clock: GameplayStreamClockSnapshot {
+                        music_nanos: start + 10_000_000,
+                        music_seconds_per_second: 0.0,
+                        has_music_mapping: true,
+                        valid_at: Instant::now(),
+                        valid_at_host_nanos: 1,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+                state.update_gameplay_frame(0.02, snapshot, "unused", || 1);
+                assert_eq!(
+                    state.chart_runtime.notes[0].result.as_ref().unwrap().grade,
+                    JudgeGrade::Fantastic,
+                    "input is scored immediately: autoplay={autoplay}, type={note_type:?}",
+                );
+                let life = state.active_hold(0).unwrap().life;
+                assert!(life > 0.0, "hold simulation is already live");
+                let judgment_count = state.players_runtime.players[0]
+                    .judgment_counts
+                    .iter()
+                    .sum::<u32>();
+                assert!(state.active_hold_for_render(0).is_none());
+                assert_eq!(
+                    hold_head_render_flags(state.active_hold_for_render(0), 1.02, 1.0),
+                    (false, false),
+                    "a new head keeps scrolling until the next native hold update",
+                );
+
+                state.set_gameplay_paused(true);
+                state.update_gameplay_frame(0.25, snapshot, "unused", || 1);
+                assert_eq!(state.active_hold(0).unwrap().life, life);
+                assert!(state.active_hold_for_render(0).is_none());
+
+                state.set_gameplay_paused(false);
+                state.update_gameplay_frame(0.01, snapshot, "unused", || 1);
+                assert_eq!(state.active_hold_for_render(0).unwrap().note_index, 0);
+                assert_eq!(
+                    hold_head_render_flags(state.active_hold_for_render(0), 1.02, 1.0),
+                    (true, true),
+                );
+                assert_eq!(
+                    state.players_runtime.players[0]
+                        .judgment_counts
+                        .iter()
+                        .sum::<u32>(),
+                    judgment_count,
+                    "visual activation cannot score the head again",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hold_render_activation_restores_and_resets_with_practice() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        let end = state.chart_runtime.hold_end_time_cache_ns[0];
+        state.start_active_hold(0, 0, start, end, start);
+        assert!(state.active_hold_for_render(0).is_none());
+        let restored = state.active_hold(0).unwrap().clone();
+        state.set_active_hold(0, Some(restored.clone()));
+        assert_eq!(state.active_hold_for_render(0).unwrap().note_index, 0);
+        assert!(state.active_hold_for_render(MAX_COLS).is_none());
+
+        state.clear_active_holds();
+        assert!(state.active_hold_for_render(0).is_none());
+        state.start_active_hold(0, 0, start, end, start);
+        assert!(
+            state.active_hold_for_render(0).is_none(),
+            "clearing drops the old identity"
+        );
+        state.set_active_hold(0, Some(restored));
+        state.reset_practice_playback(song_time_ns_to_seconds(start));
+        assert!(state.active_hold(0).is_none());
+        state.start_active_hold(0, 0, start, end, start);
+        assert!(
+            state.active_hold_for_render(0).is_none(),
+            "a seek cannot inherit activation"
+        );
+
+        let mut pump = hold_regression_state(GameplayInputPlayStyle::PumpSingle);
+        let start = pump.chart_runtime.note_time_cache_ns[0];
+        let end = pump.chart_runtime.hold_end_time_cache_ns[0];
+        pump.start_active_hold(0, 0, start, end, start);
+        assert_eq!(
+            pump.active_hold_for_render(0).unwrap().note_index,
+            0,
+            "native Pump does not require a judged head before activation"
+        );
     }
 
     #[test]

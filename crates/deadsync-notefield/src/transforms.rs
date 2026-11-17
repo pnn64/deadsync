@@ -684,6 +684,23 @@ pub(crate) fn square_wave_offset(y: f32, amount: f32, offset: f32, period: f32) 
         }
 }
 
+/// ArrowEffects evaluates depth before Player's uniform Mini scale. Travel in
+/// the prepared field already includes that scale; lane geometry stays native.
+pub(crate) fn note_world_z_with_field_zoom(
+    scaled_y: f32,
+    field_zoom: f32,
+    move_z: f32,
+    frame_cache: NoteDepthFrameCache,
+    lane_cache: LaneNoteTransformCache,
+) -> f32 {
+    if field_zoom == 0.0 {
+        // Uniform zero zoom collapses depth too; no phase can be recovered
+        // from the collapsed travel, and none affects the resulting position.
+        return 0.0;
+    }
+    (move_z + note_world_z_cached(scaled_y / field_zoom, frame_cache, lane_cache)) * field_zoom
+}
+
 pub(crate) fn note_world_z_cached(
     y: f32,
     frame_cache: NoteDepthFrameCache,
@@ -1729,6 +1746,42 @@ pub(crate) fn note_x_offset_cached(
     base * tiny_scale + move_x_cache.get(local_col).copied().unwrap_or(0.0)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn note_x_offset_with_field_zoom_cached(
+    local_col: usize,
+    scaled_y: f32,
+    field_zoom: f32,
+    beat_factor_value: f32,
+    elapsed: f32,
+    col_offsets: &[f32],
+    invert: &[f32],
+    tornado: &[TornadoBounds],
+    tornado_cache: &[TornadoLaneCache],
+    move_x_cache: &[f32],
+    params: NoteXParams,
+    tiny_scale: f32,
+) -> f32 {
+    // GetXPos consumes GetYOffset before Mini. PlayerNoteFieldPositioner then
+    // scales the complete X coordinate, including Tiny and MoveX. Keep column
+    // bounds in that native space too: signed Mini reflects the finished arc.
+    if field_zoom == 0.0 {
+        return 0.0;
+    }
+    note_x_offset_cached(
+        local_col,
+        scaled_y / field_zoom,
+        beat_factor_value,
+        elapsed,
+        col_offsets,
+        invert,
+        tornado,
+        tornado_cache,
+        move_x_cache,
+        params,
+        tiny_scale,
+    ) * field_zoom
+}
+
 pub(crate) fn fill_static_note_x_offsets(
     num_cols: usize,
     col_offsets: &[f32],
@@ -1849,8 +1902,9 @@ pub(crate) fn note_appearance_cache(
         hidden_end.is_finite() && hidden_start.is_finite() && hidden_denom.is_finite();
     let sudden_bounds_finite =
         sudden_end.is_finite() && sudden_start.is_finite() && sudden_denom.is_finite();
-    let hidden_active = params.hidden > f32::EPSILON;
-    let sudden_active = params.sudden > f32::EPSILON;
+    // Native fades are signed: negative Hidden/Sudden can counteract Stealth.
+    let hidden_active = !params.hidden.is_nan() && params.hidden != 0.0;
+    let sudden_active = !params.sudden.is_nan() && params.sudden != 0.0;
     let stealth_active = (!params.stealth.is_nan() && params.stealth != 0.0)
         || (!params.stealth_col.is_nan() && params.stealth_col != 0.0);
     let blink_active = params.blink > f32::EPSILON;
@@ -2314,8 +2368,8 @@ pub(crate) fn appearance_note_actor_alpha_from_alpha(percent_visible: f32) -> f3
 }
 
 pub(crate) fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {
-    appearance.hidden > f32::EPSILON
-        || appearance.sudden > f32::EPSILON
+    (!appearance.hidden.is_nan() && appearance.hidden != 0.0)
+        || (!appearance.sudden.is_nan() && appearance.sudden != 0.0)
         || appearance.random_vanish > f32::EPSILON
 }
 
@@ -2357,6 +2411,142 @@ pub(crate) fn fill_move_col_extras(values: &[f32], out: &mut [f32]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mini_x_effects_match_native_vectors() {
+        let native: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/itgmania-song-lua-micro/bounce-tornado-motion.json"
+        ))
+        .expect("independently compiled native Tornado and Bounce positions");
+        let vectors = native["vectors"].as_array().expect("native vectors");
+        assert_eq!(vectors.len(), 108);
+        for vector in vectors {
+            let value = |name: &str| vector[name].as_f64().expect("native float") as f32;
+            let count = vector["columns"].as_u64().unwrap() as usize;
+            let col = vector["column"].as_u64().unwrap() as usize;
+            let columns = if count == 2 {
+                &[-32.0, 32.0][..]
+            } else {
+                &[-96.0, -32.0, 32.0, 96.0][..]
+            };
+            let params = NoteXParams {
+                screen_height: 480.0,
+                tornado: value("tornado"),
+                tornado_offset: value("tornado_offset"),
+                tornado_period: value("tornado_period"),
+                bounce: value("bounce"),
+                bounce_offset: value("bounce_offset"),
+                bounce_period: value("bounce_period"),
+                drunk: 1.5,
+                drunk_speed: 0.25,
+                drunk_offset: 0.5,
+                drunk_period: -0.125,
+                ..Default::default()
+            };
+            let mut bounds = [TornadoBounds::default(); 4];
+            compute_tornado_bounds(columns, &mut bounds[..count]);
+            let mut caches = [TornadoLaneCache::default(); 4];
+            compute_tornado_lane_caches(columns, &bounds, params.tornado, &mut caches);
+            let travel = value("travel");
+            // ArrowEffects.cpp CalculateDrunkAngle/GetXPos, with time 2,
+            // frequency 0.2/10 and amplitude 64*0.5. Add this independent
+            // source-derived term to the native Tornado/Bounce observation.
+            let drunk = 1.5
+                * ((2.5 + col as f32 * 0.3 + travel * 8.75 / 480.0).cos() * 32.0);
+            let native_x = (value("x") + drunk) * 0.5 + 32.0;
+            for zoom in [0.0, 0.005, -0.005, 0.25, 0.75, 1.0, -0.5] {
+                let actual = note_x_offset_with_field_zoom_cached(
+                    col,
+                    travel * zoom,
+                    zoom,
+                    0.0,
+                    2.0,
+                    columns,
+                    &[0.0; 4],
+                    &bounds,
+                    &caches,
+                    &[32.0; 4],
+                    params,
+                    0.5,
+                );
+                assert!(
+                    (actual - native_x * zoom).abs() < 0.0002,
+                    "Mini scale {zoom}, {vector}: actual={actual}, native={native_x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn dyscontrolled_mini_preserves_native_bumpy_phase_before_wrapper_zoom() {
+        // Native CalculateBumpyAngle/GetZPos at 2000% Bumpy. The chart's
+        // minizoom wrapper cancels Mini's Z scale, not its input phase.
+        let cache = lane_note_transform_cache(
+            0.0,
+            VisualEffectParams {
+                bumpy: 20.0,
+                ..Default::default()
+            },
+        );
+        let frame = note_depth_frame_cache(0.0, 0.0, 0.0, 480.0);
+        for (native_travel, native_z) in [(16.0, 673.176_76), (64.0, -605.442), (128.0, 791.486_6)]
+        {
+            for field_zoom in [0.25, 0.75, 1.0, -0.25] {
+                let z = note_world_z_with_field_zoom(
+                    native_travel * field_zoom,
+                    field_zoom,
+                    0.0,
+                    frame,
+                    cache,
+                );
+                assert!((z - native_z * field_zoom).abs() < 0.0001);
+                assert!((z / field_zoom - native_z).abs() < 0.0001);
+            }
+        }
+        assert_eq!(
+            note_world_z_with_field_zoom(0.0, 0.0, 64.0, frame, cache),
+            0.0
+        );
+        assert_eq!(
+            note_world_z_with_field_zoom(0.0, 0.25, 64.0, frame, cache),
+            16.0
+        );
+    }
+
+    #[test]
+    fn dyscontrolled_star_negative_fades_reveal_notes_around_stealth_band() {
+        // Dyscontrolled Galaxy beats 72-96 give P2 -1000% Hidden/Sudden and
+        // 1000% Stealth. Native ArrowGetPercentVisible adds both signed fades
+        // before subtracting Stealth, revealing the rows outside the band.
+        let appearance = NoteAlphaParams {
+            hidden: -10.0,
+            hidden_offset: 4.4,
+            sudden: -10.0,
+            sudden_offset: -4.8,
+            stealth: 10.0,
+            stealth_past_receptors: true,
+            ..Default::default()
+        };
+        let cache = note_appearance_cache(0.0, 0.5, appearance);
+        for (y, expected) in [(100.0, 1.0), (114.0, 0.5), (160.0, 0.0), (240.0, 1.0)] {
+            let visible = appearance_note_alpha_cached(y, y, &cache);
+            assert!((visible - expected).abs() < 0.0001, "y={y}: {visible}");
+        }
+        for (y, expected_alpha) in [(100.0, 1.0), (160.0, 0.0), (240.0, 1.0)] {
+            let (alpha, glow) = appearance_note_alpha_glow_cached(y, y, &cache);
+            assert_eq!(alpha, expected_alpha, "tap alpha at y={y}");
+            assert!(glow.abs() < 0.0001, "tap glow at y={y}: {glow}");
+        }
+        assert!(appearance_needs_rows(appearance));
+        assert!(appearance_needs_rows(NoteAlphaParams {
+            hidden: -1.0,
+            ..Default::default()
+        }));
+        assert!(appearance_needs_rows(NoteAlphaParams {
+            sudden: -1.0,
+            ..Default::default()
+        }));
+    }
 
     #[test]
     fn expand_matches_native_phase_and_travel() {
@@ -2493,6 +2683,19 @@ mod tests {
                     (actual - value(key)).abs() < 0.0001,
                     "{key}: {vector}; actual={actual}"
                 );
+                for field_zoom in [0.25, -0.5] {
+                    let scaled = note_world_z_with_field_zoom(
+                        travel * field_zoom,
+                        field_zoom,
+                        0.0,
+                        frame,
+                        cache,
+                    );
+                    assert!(
+                        (scaled - value(key) * field_zoom).abs() < 0.0001,
+                        "{key} Mini scale {field_zoom}: {vector}; actual={scaled}"
+                    );
+                }
             }
             let x_params = NoteXParams {
                 sawtooth: value("sawtooth"),

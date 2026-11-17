@@ -65,6 +65,259 @@ fn screen_zoom_precedes_child_camera_and_depth_range() {
     }
 }
 
+fn assert_clip_camera(actual: Matrix4, expected: Matrix4) {
+    assert!(actual.is_finite());
+    for point in [
+        Vector4::W,
+        Vector4::new(32.0, 0.0, 0.0, 1.0),
+        Vector4::new(0.0, -32.0, 0.0, 1.0),
+        Vector4::new(0.0, 0.0, 32.0, 1.0),
+    ] {
+        let actual = actual * point;
+        let expected = expected * point;
+        for axis in 0..4 {
+            // The stored f32 conjugation contains nearly cancelling clip-Z/W
+            // terms. Bound that XY rounding separately from native depth, then
+            // also require its projected error to stay below 1/16 of a pixel.
+            let tolerance = if axis < 2 { 0.125 } else { 0.005 };
+            assert!(
+                (actual[axis] - expected[axis]).abs() < tolerance,
+                "axis={axis}, point={point:?}: {actual:?} != {expected:?}"
+            );
+        }
+        let actual_pixel = Vector2::new(actual.x / actual.w * 427.0, actual.y / actual.w * 240.0);
+        let expected_pixel = Vector2::new(
+            expected.x / expected.w * 427.0,
+            expected.y / expected.w * 240.0,
+        );
+        let pixel_error = (actual_pixel - expected_pixel).length();
+        assert!(
+            pixel_error < 1.0 / 16.0,
+            "point={point:?}: projected error {pixel_error} pixels"
+        );
+    }
+}
+
+fn screen_player_transform(camera_parts: Option<(Matrix4, Matrix4)>) -> SongLuaCaptureTransform {
+    SongLuaCaptureTransform {
+        z_shift: 900,
+        tint: [1.0; 4],
+        blend: None,
+        playfield_center_x: 427.0,
+        target_x: -32.0,
+        target_y: 0.0,
+        rotation_x: 17.0,
+        rotation_y: -25.0,
+        rotation_z: 0.0,
+        skew_x: 0.0,
+        skew_y: 0.0,
+        zoom_x: 1.0,
+        zoom_y: 1.0,
+        zoom_z: 2.0,
+        target_z: 0.0,
+        wrappers: Matrix4::IDENTITY,
+        field_camera_parts: camera_parts,
+    }
+}
+
+#[test]
+fn screen_world_precedes_player_camera_with_singular_field_zoom() {
+    let size = [854.0, 480.0];
+    deadlib_present::space::set_current_metrics(Metrics::centered(size[0], size[1]));
+    let mut cache = NotefieldCameraCache::default();
+    cache.set_vanish_center(Some([-32.0, 0.0]));
+    for child_zoom_z in [0.0, 1.0, 4.0] {
+        cache.set_wrapper(Matrix4::from_scale(Vector3::new(1.0, 1.0, child_zoom_z)));
+        let field = cache
+            .resolve(854.0, 480.0, 427.0, 240.0, 0.0, 0.0, false)
+            .unwrap();
+        let (camera, model) = cache.camera_parts().unwrap();
+        let transform = screen_player_transform(cache.camera_parts());
+        let player = song_lua_player_camera_suffix(transform).unwrap();
+        for fov in [None, Some(90.0)] {
+            let screen = SongLuaOverlayState {
+                x: 427.0,
+                y: 240.0,
+                fov,
+                ..Default::default()
+            };
+            let world = deadsync_notefield::song_lua_screen_matrix_to_world(
+                song_lua_draw_matrix(screen, [0.0; 2]).0,
+                size[0],
+                size[1],
+            );
+            let prefix = song_lua_camera_world_projection(camera, world);
+            // Actor::BeginDraw retains ScreenGameplay on the world stack;
+            // Player::PushPlayerMatrix replaces only the camera. The native
+            // order is camera * Screen * Player * NoteField, even when the
+            // child zoom is zero and cannot be inverted.
+            let expected = camera * (world * (player * model));
+            let direct =
+                song_lua_field_camera_with_player(Some(field), cache.camera_parts(), Some(player))
+                    .unwrap();
+            assert_clip_camera(prefix * direct, expected);
+            if child_zoom_z != 0.0 && fov.is_none() {
+                let old = song_lua_screen_projection(screen, size, [0.0; 2]) * direct;
+                assert!(
+                    (old * Vector4::new(0.0, 0.0, 32.0, 1.0)
+                        - expected * Vector4::new(0.0, 0.0, 32.0, 1.0))
+                    .abs()
+                    .max_element()
+                        > 1.0,
+                    "a screen-space translation cannot substitute for the native world order"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn screen_projection_separates_field_and_hud_for_direct_and_captured_players() {
+    let metrics = Metrics::centered(854.0, 480.0);
+    deadlib_present::space::set_current_metrics(metrics);
+    let screen = SongLuaOverlayState {
+        x: 427.0,
+        y: 240.0,
+        ..Default::default()
+    };
+    let world = Matrix4::from_translation(Vector3::new(427.0, -240.0, 0.0));
+    let screen_projection = song_lua_screen_projection(screen, [854.0, 480.0], [0.0; 2]);
+    let mut cache = NotefieldCameraCache::default();
+    cache.set_vanish_center(Some([-32.0, 0.0]));
+    cache.set_wrapper(Matrix4::from_scale(Vector3::new(1.0, 1.0, 3.0)));
+    let field = cache
+        .resolve(854.0, 480.0, 427.0, 240.0, 0.0, 0.0, false)
+        .unwrap();
+    let (camera, model) = cache.camera_parts().unwrap();
+    let transform = screen_player_transform(cache.camera_parts());
+    let player = song_lua_player_camera_suffix(transform).unwrap();
+    let local_field = camera * (player * model);
+    let expected_field = camera * (world * (player * model));
+    let expected_hud = song_lua_player_root_camera(Matrix4::IDENTITY) * (world * player);
+    for captured in [false, true] {
+        let mut scratch = FrameScratch::default();
+        scratch.notefield_actor_scratch[0] = vec![
+            Actor::CameraPush { view_proj: field },
+            mesh(),
+            Actor::CameraPop,
+        ];
+        scratch.notefield_hud_actor_scratch[0] = vec![mesh(), mesh()];
+        let mut assembly = player_actor_assembly_for_transform(captured, true, transform);
+        let mut field_camera = prepare_player_field_camera(
+            &mut assembly,
+            Some(field),
+            cache.camera_parts(),
+            &mut scratch.notefield_actor_scratch[0],
+        );
+        if let PlayerActorAssembly::DirectTransform {
+            root_camera,
+            field_camera_suffix,
+            ..
+        } = assembly
+        {
+            field_camera = Some(PlayerFieldCameraCache::default().resolve(
+                0,
+                0,
+                field_camera,
+                root_camera,
+                field_camera_suffix,
+            ));
+        }
+        let mut captured_field_range = None;
+        if captured {
+            let mut proxies = SongLuaProxyActorScratch::new(1);
+            let source = capture_player_source(
+                &mut scratch.notefield_actor_scratch[0],
+                &mut scratch.notefield_hud_actor_scratch[0],
+                1,
+                transform,
+                proxies.player(0, SONG_LUA_PLAYER_PROXY_SOURCE).unwrap(),
+            )
+            .unwrap();
+            captured_field_range = song_lua_captured_camera_range(
+                song_lua_captured_segment_actors(&source[0]),
+                local_field,
+            );
+            assert!(
+                captured_field_range.is_some(),
+                "capture retains one balanced field scope"
+            );
+            scratch.song_lua_proxy_actor_scratch = Some(proxies);
+        }
+        let owner = GameplayActorSegments {
+            insert: 0,
+            players: [
+                Some(PlayerActorSegment {
+                    player: 0,
+                    assembly,
+                    field_camera,
+                    field_screen_projection: song_lua_camera_world_projection(camera, world),
+                    captured_field_range,
+                    manual_hud_draw: false,
+                    hud_parts: deadsync_notefield::NotefieldHudParts {
+                        combo_actors: 1,
+                        ..Default::default()
+                    },
+                }),
+                None,
+            ],
+            direct_proxy_len: 0,
+            underlay_visible: false,
+            screen_projection,
+        };
+        let frame = deadlib_present::compose::build_passes(
+            owner.segments(&scratch, &[]),
+            &[],
+            [0.0; 4],
+            &metrics,
+            &font::FontMap::default(),
+            0.0,
+            &mut TextLayoutCache::default(),
+            &mut ComposeScratch::default(),
+            &NullTextureContext,
+            None,
+        );
+        let cameras = frame
+            .ops
+            .iter()
+            .map(|op| {
+                let deadlib_render_core::DrawOp::Mesh(run) = op else {
+                    panic!("mesh draw")
+                };
+                frame.cameras[run.camera as usize]
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            cameras.len(),
+            3,
+            "Combo, NoteField, Judgment retain their order"
+        );
+        for (actual, expected) in
+            cameras
+                .into_iter()
+                .zip([expected_hud, expected_field, expected_hud])
+        {
+            assert_clip_camera(actual, expected);
+        }
+        if let Some([start, _]) = captured_field_range {
+            let source = scratch
+                .song_lua_proxy_actor_scratch
+                .as_ref()
+                .unwrap()
+                .player_source(0, SONG_LUA_PLAYER_PROXY_SOURCE)
+                .unwrap();
+            let Actor::CameraPush { view_proj } = song_lua_captured_segment_actors(source)[start]
+            else {
+                panic!("retained local field camera");
+            };
+            assert_eq!(
+                view_proj, local_field,
+                "ActorProxy source stays independent of Screen"
+            );
+        }
+    }
+}
+
 fn mesh() -> Actor {
     Actor::Mesh {
         align: [0.0; 2],

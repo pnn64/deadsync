@@ -330,13 +330,13 @@ where
         vertex_color_encoding: Default::default(),
         center: request.sprite_center,
         world_z: request.world_z,
-        size: request.size,
+        size: request.size.map(f32::abs),
         source: sprite_source(slot),
         tint: request.tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         uv_rect: request.uv,
-        flip_x: slot.sprite_def().mirror_h,
-        flip_y: slot.sprite_def().mirror_v,
+        flip_x: slot.sprite_def().mirror_h ^ (request.size[0] < 0.0),
+        flip_y: slot.sprite_def().mirror_v ^ (request.size[1] < 0.0),
         fade: request.draw.fade,
         blend: request.blend,
         rot_x_deg: request.draw.rot[0],
@@ -403,6 +403,52 @@ pub(crate) fn compose_flat_note_layer<S, F>(
     }
 }
 
+/// Appends authored actors in order, collecting each Model's diffuse passes
+/// before its glow passes while keeping adjacent actor boundaries intact.
+pub(crate) fn compose_flat_note_layers<S: NoteskinSlot>(
+    draws: &mut Vec<FlatDraw>,
+    slots: &[S],
+    mut compose: impl FnMut(usize, &S, &mut Vec<FlatDraw>),
+) {
+    let mut start = 0;
+    while start < slots.len() {
+        let actor = slots[start].model_actor_id();
+        let mut end = start + 1;
+        if let Some(actor) = actor {
+            while end < slots.len() && slots[end].model_actor_id() == Some(actor) {
+                end += 1;
+            }
+        }
+        let draw_start = draws.len();
+        for (index, slot) in slots[start..end].iter().enumerate() {
+            compose(start + index, slot, draws);
+        }
+        if end - start > 1 {
+            partition_model_diffuse_before_glow(&mut draws[draw_start..]);
+        }
+        start = end;
+    }
+}
+
+/// Model::DrawPrimitives draws every material's diffuse pass, then every glow
+/// pass. Stable in-place partitioning keeps mesh order without allocating a
+/// per-note draw buffer, and never moves a pass across another actor boundary.
+fn partition_model_diffuse_before_glow(draws: &mut [FlatDraw]) -> usize {
+    if draws.len() < 2 {
+        return usize::from(draws.first().is_some_and(|draw| match draw {
+            FlatDraw::TexturedMesh(mesh) => !(mesh.tint[3] <= 0.0 && mesh.glow[3] > 0.0),
+            FlatDraw::Sprite(sprite) => !(sprite.tint[3] <= 0.0 && sprite.glow[3] > 0.0),
+            _ => true,
+        }));
+    }
+    let middle = draws.len() / 2;
+    let (left, right) = draws.split_at_mut(middle);
+    let left_diffuse = partition_model_diffuse_before_glow(left);
+    let right_diffuse = partition_model_diffuse_before_glow(right);
+    draws[left_diffuse..middle + right_diffuse].rotate_left(middle - left_diffuse);
+    left_diffuse + right_diffuse
+}
+
 /// Appends every authored mine layer in order, substituting a gradient only
 /// for the legacy texture fallback's first layer.
 pub(crate) fn compose_flat_mine_layers<S, F, Z>(
@@ -438,12 +484,9 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
     } else {
         false
     };
-    for (index, slot) in request
-        .layers
-        .iter()
-        .enumerate()
-        .skip(usize::from(use_gradient))
-    {
+    let layer_start = usize::from(use_gradient);
+    compose_flat_note_layers(draws, &request.layers[layer_start..], |index, slot, draws| {
+        let index = index + layer_start;
         compose_flat_mine_slot(
             draws,
             model_cache,
@@ -455,7 +498,7 @@ pub(crate) fn compose_flat_mine_layers<S, F, Z>(
             },
             sprite_source,
         );
-    }
+    });
     if let Some(mesh) = draws[mine_start..].iter_mut().find_map(|draw| match draw {
         FlatDraw::TexturedMesh(mesh)
             if mesh.depth_test && (mesh.tint[3] > 0.0 || mesh.glow[3] > 0.0001) =>
@@ -1302,7 +1345,8 @@ use crate::style::MAX_NOTES_AFTER;
 mod tests {
     use super::{
         LaneWindowCursor, MineLayerRequest, NoteLayerRequest, ScrollTravelRequest,
-        compose_flat_mine_layers, compose_flat_note_layer, hold_overlaps_visible_window,
+        compose_flat_mine_layers, compose_flat_note_layer, compose_flat_note_layers,
+        hold_overlaps_visible_window,
         lane_hold_window_bounds_by_note_row_from_cursor,
         lane_window_bounds_by_note_row_from_cursor, random_speed_lane_seed, random_speed_seed,
         random_speed_seed_from_lane_seed, scroll_travel, song_time_ns_delta_seconds,
@@ -1327,6 +1371,9 @@ mod tests {
     struct GlowSlot {
         def: SpriteDefinition,
         model: Option<ModelMesh>,
+        model_actor: Option<Arc<()>>,
+        sprite_mesh: bool,
+        cull_back: bool,
         texture: Arc<str>,
         draw: ModelDrawState,
         frame_count: usize,
@@ -1341,6 +1388,9 @@ mod tests {
                     ..SpriteDefinition::default()
                 },
                 model: None,
+                model_actor: None,
+                sprite_mesh: false,
+                cull_back: true,
                 texture: Arc::from("glow-slot"),
                 draw: ModelDrawState::default(),
                 frame_count: 1,
@@ -1380,6 +1430,18 @@ mod tests {
 
         fn model(&self) -> Option<&ModelMesh> {
             self.model.as_ref()
+        }
+
+        fn model_actor_id(&self) -> Option<usize> {
+            self.model_actor.as_ref().map(|actor| Arc::as_ptr(actor) as usize)
+        }
+
+        fn model_is_sprite_mesh(&self) -> bool {
+            self.sprite_mesh
+        }
+
+        fn model_cull_back(&self) -> bool {
+            self.cull_back
         }
 
         fn base_rot_sin_cos(&self) -> [f32; 2] {
@@ -1552,6 +1614,33 @@ mod tests {
     }
 
     #[test]
+    fn flat_note_sprite_preserves_small_signed_mini_scale() {
+        let mut slot = GlowSlot::sprite();
+        slot.def.mirror_h = true;
+        for zoom in [0.0, 0.005, -0.005] {
+            let mut request = layer_request(&slot);
+            request.size = [64.0 * zoom; 2];
+            let mut draws = Vec::new();
+            compose_flat_note_layer(
+                &mut draws,
+                &mut ModelMeshCache::default(),
+                request,
+                &|_| SpriteSource::static_texture("flat-layer"),
+            );
+            assert_eq!(draws.len(), 2, "diffuse and glow share the signed scale");
+            for draw in draws {
+                let FlatDraw::Sprite(sprite) = draw else {
+                    panic!("sprite notes retain their presentation path")
+                };
+                assert_eq!(sprite.size, [64.0 * zoom.abs(); 2]);
+                assert_eq!(sprite.flip_x, !(zoom < 0.0));
+                assert_eq!(sprite.flip_y, zoom < 0.0);
+                assert_eq!(sprite.center, [30.0, 40.0]);
+            }
+        }
+    }
+
+    #[test]
     fn note_layer_model_reuses_cached_geometry_for_diffuse_and_glow() {
         let slot = GlowSlot::model();
         let mut draws = Vec::new();
@@ -1613,6 +1702,149 @@ mod tests {
         assert_eq!(glow.blend, mesh.blend);
         assert_eq!(glow.depth_test, mesh.depth_test);
         assert_eq!(glow.z, mesh.z);
+    }
+
+    #[test]
+    fn note_model_meshes_emit_all_diffuse_before_all_glow() {
+        let actor = Arc::new(());
+        let layers = ["cells", "scroller"].map(|texture| {
+            let mut slot = named_slot(GlowSlot::model(), texture);
+            slot.model_actor = Some(Arc::clone(&actor));
+            slot
+        });
+        let mut draws = Vec::new();
+        let mut cache = ModelMeshCache::default();
+        compose_flat_note_layers(&mut draws, &layers, |_, slot, draws| {
+            compose_flat_note_layer(draws, &mut cache, layer_request(slot), &|_| {
+                panic!("model-backed note layers must retain their geometry")
+            });
+        });
+
+        let passes: Vec<_> = draws
+            .iter()
+            .map(|draw| {
+                let FlatDraw::TexturedMesh(mesh) = draw else {
+                    panic!("Model material must emit a mesh")
+                };
+                let glow = mesh.glow[3] > 0.0;
+                assert_eq!(mesh.tint[3], if glow { 0.0 } else { 0.5 });
+                assert_eq!(mesh.glow[3], if glow { 0.75 } else { 0.0 });
+                assert!(mesh.depth_test && mesh.depth_write);
+                (mesh.texture.texture_key().unwrap(), glow)
+            })
+            .collect();
+        // Model::DrawPrimitives visits every mesh in each material pass.
+        assert_eq!(
+            passes,
+            [
+                ("cells", false),
+                ("scroller", false),
+                ("cells", true),
+                ("scroller", true),
+            ]
+        );
+    }
+
+    #[test]
+    fn note_model_passes_preserve_adjacent_actors_sharing_assets() {
+        let actors = [Arc::new(()), Arc::new(())];
+        let shared_model = GlowSlot::model().model.unwrap();
+        let shared_texture: Arc<str> = Arc::from("shared-model-texture");
+        let mut layers = [
+            GlowSlot::sprite(),
+            GlowSlot::model(),
+            GlowSlot::model(),
+            GlowSlot::model(),
+            GlowSlot::model(),
+            GlowSlot::sprite(),
+        ];
+        for (index, slot) in layers.iter_mut().enumerate() {
+            slot.texture = Arc::clone(&shared_texture);
+            slot.actor_frame_child = true;
+            if slot.model.is_some() {
+                // Both adjacent Models use the same retained asset; only their
+                // per-actor identities distinguish their draw boundaries.
+                slot.model = Some(shared_model.clone());
+                slot.model_actor = Some(Arc::clone(&actors[(index - 1) / 2]));
+            }
+        }
+        let mut draws = Vec::new();
+        let mut cache = ModelMeshCache::default();
+        compose_flat_note_layers(&mut draws, &layers, |index, slot, draws| {
+            let mut request = layer_request(slot);
+            request.model_center[0] = index as f32;
+            request.sprite_center[0] = index as f32;
+            compose_flat_note_layer(draws, &mut cache, request, &|slot| {
+                SpriteSource::Texture(Arc::clone(&slot.texture))
+            });
+        });
+        let passes: Vec<_> = draws
+            .iter()
+            .map(|draw| match draw {
+                FlatDraw::TexturedMesh(mesh) => (mesh.offset[0] as usize, mesh.glow[3] > 0.0),
+                FlatDraw::Sprite(sprite) => (sprite.center[0] as usize, sprite.glow[3] > 0.0),
+                draw => panic!("unexpected note layer {draw:?}"),
+            })
+            .collect();
+        assert_eq!(
+            passes,
+            [
+                (0, false),
+                (0, true),
+                (1, false),
+                (2, false),
+                (1, true),
+                (2, true),
+                (3, false),
+                (4, false),
+                (3, true),
+                (4, true),
+                (5, false),
+                (5, true),
+            ]
+        );
+    }
+
+    #[test]
+    fn tap_models_preserve_depth_and_xyz_while_sprite_masks_stay_flat() {
+        for sprite_mesh in [false, true] {
+            let mut slot = GlowSlot::model();
+            slot.sprite_mesh = sprite_mesh;
+            // A two-sided native Model still uses depth; culling is independent.
+            slot.cull_back = false;
+            let mut draws = Vec::new();
+            let mut cache = ModelMeshCache::with_capacity(1);
+            for _ in 0..2 {
+                let mut request = layer_request(&slot);
+                request.size = [64.0; 2];
+                request.model_rotation_z_deg = 0.0;
+                request.draw.pos = [3.0, -5.0, 7.0];
+                request.draw.zoom = [2.0, 3.0, 4.0];
+                compose_flat_note_layer(&mut draws, &mut cache, request, &|_| {
+                    panic!("retained mesh must not resolve a sprite source")
+                });
+            }
+            assert_eq!(draws.len(), 4, "two taps with diffuse and glow passes");
+            for draw in draws {
+                let FlatDraw::TexturedMesh(mesh) = draw else {
+                    panic!("retained note geometry must remain a mesh")
+                };
+                assert_eq!(mesh.depth_test, !sprite_mesh);
+                assert_eq!(mesh.depth_write, !sprite_mesh);
+                assert!(
+                    !mesh.clear_depth && !mesh.clear_depth_after,
+                    "tap depth persists between notes and the foreground scene"
+                );
+                assert_eq!(mesh.cull_mode, deadlib_render_core::CullMode::None);
+                assert_eq!(mesh.offset, [10.0, 20.0]);
+                assert_eq!(mesh.world_z, 9.0);
+                assert_eq!(
+                    mesh.local_transform * glam::Vec4::new(1.0, 2.0, 3.0, 1.0),
+                    glam::Vec4::new(5.0, -1.0, 19.0, 1.0),
+                    "model XYZ is projected by the shared field camera",
+                );
+            }
+        }
     }
 
     fn named_slot(mut slot: GlowSlot, key: &'static str) -> GlowSlot {
@@ -1918,7 +2150,16 @@ mod tests {
                             "frame" => (frame_size, 140, 0.8),
                             _ => unreachable!(),
                         };
-                        assert_eq!(sprite.size.map(f32::to_bits), size.map(f32::to_bits));
+                        let signed_size = [
+                            if sprite.flip_x { -sprite.size[0] } else { sprite.size[0] },
+                            if sprite.flip_y { -sprite.size[1] } else { sprite.size[1] },
+                        ];
+                        // Zero-area draws may normalize -0.0 to +0.0. Keep
+                        // finite, nonzero and invalid-size propagation exact.
+                        let geometry_bits = |value: f32| {
+                            if value == 0.0 { 0 } else { value.to_bits() }
+                        };
+                        assert_eq!(signed_size.map(geometry_bits), size.map(geometry_bits));
                         assert_eq!(sprite.z, z);
                         assert_eq!(sprite.center, [30.0, 40.0]);
                         assert_eq!(sprite.world_z, 9.0);

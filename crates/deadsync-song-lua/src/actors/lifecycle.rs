@@ -779,9 +779,9 @@ fn assign_orders(
     }
 }
 
-fn enter_phase(store: &mut Store, order: usize, delta: f32) {
+fn enter_phase(store: &mut Store, actor: TableId, order: usize, delta: f32) {
     if let Some(clock) = &mut store.replay_clock {
-        clock.enter(order, delta);
+        clock.enter(actor, order, delta);
     }
 }
 
@@ -836,11 +836,11 @@ fn advance_node(
     }
     let delta = if node.owned {
         let delta = delta * call.store().actors[&actor].update_rate;
-        enter_phase(call.store(), node.order, delta);
+        enter_phase(call.store(), actor, node.order, delta);
         effects::advance(call, actor, delta)?;
         advance_queue(call, actor, delta, span)?;
         capture::advance_ready(call, actor)?;
-        enter_phase(call.store(), node.order, delta);
+        enter_phase(call.store(), actor, node.order, delta);
         let consumed = call
             .store()
             .replay_clock
@@ -879,7 +879,7 @@ fn advance_node(
     }
     sprite_animation::advance(call, actor, material_delta)?;
     models::advance_materials(call.store(), actor, material_delta);
-    enter_phase(call.store(), node.callback_order, delta);
+    enter_phase(call.store(), actor, node.callback_order, delta);
     let function = get_static(call, actor, b"__songlua_update_function")?;
     if children_active && function != Value::Nil {
         if !matches!(function, Value::Function(_) | Value::Native(_)) {

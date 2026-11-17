@@ -341,6 +341,27 @@ pub(crate) fn reference_actor_frames(_context: &SongLuaCompileContext) -> Option
     None
 }
 
+pub(crate) fn reference_screen_actor_frames(
+    _context: &SongLuaCompileContext,
+) -> Result<Option<Vec<[f32; 2]>>, String> {
+    #[cfg(feature = "test-support")]
+    if !_context.compile_screen_actor_deltas.is_empty() {
+        if _context.compile_screen_actor_deltas.len() != _context.compile_clock_inputs.len() {
+            return Err("screen actor deltas must align with compiler clock inputs".into());
+        }
+        let mut frames = reference_actor_frames(_context)
+            .ok_or("screen actor deltas require compiler clock inputs")?;
+        for (frame, &delta) in frames.iter_mut().zip(&_context.compile_screen_actor_deltas) {
+            if !delta.is_finite() || delta < 0.0 {
+                return Err("screen actor deltas must be finite and nonnegative".into());
+            }
+            frame[0] = delta;
+        }
+        return Ok(Some(frames));
+    }
+    Ok(None)
+}
+
 #[must_use]
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
     let step = update_function_sample_step(end - start);

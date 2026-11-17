@@ -122,10 +122,9 @@ where
             let mini_percent = effective_mini_percent_for_player(self, player);
             let mini = self.profiles_runtime.profiles[player]
                 .effective_mini_value_with_visual_mask(visual_mask, mini_percent);
-            let mut field_zoom = mini.mul_add(-0.5, 1.0);
-            if field_zoom.abs() < 0.01 {
-                field_zoom = 0.01;
-            }
+            // Player applies raw Mini scale. ArrowEffects clamps only the
+            // divisor used to position the reverse receptor row.
+            let field_zoom = mini.mul_add(-0.5, 1.0);
 
             let perspective = effective_perspective_effects_for_player(self, player);
             let draw_scale = self.profiles_runtime.profiles[player]

@@ -617,11 +617,38 @@ pub(crate) mod tests {
         until_beat: Option<f32>,
         live_diagnostic: bool,
     ) -> screen_gameplay::State {
-        // Fixture charts are loaded at zero global offset below. Compile and
-        // play with that same clock rather than the cabinet default (-8 ms).
-        let config = GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
+        build_test_state_with_lua_mode_and_clocks(
+            simfile,
+            viewport,
+            session,
+            player_profiles,
+            renderer,
+            until_beat,
+            live_diagnostic,
+            None,
+            None,
+        )
+    }
+
+    fn build_test_state_with_lua_mode_and_clocks(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+        until_beat: Option<f32>,
+        live_diagnostic: bool,
+        configure_compile_clocks: Option<&dyn Fn(&mut deadsync_song_lua::SongLuaCompileContext)>,
+        config_override: Option<GameplayConfig>,
+    ) -> screen_gameplay::State {
+        // Ordinary fixtures use zero global offset. Native-oracle fixtures can
+        // supply recorded preferences consistently to parsing and playback.
+        let config = config_override.unwrap_or(GameplayConfig {
+            global_offset_seconds: 0.0,
+            ..Default::default()
+        });
         let song = Arc::new(
-            deadsync_simfile::app_runtime::parse_song_for_test(simfile, 0.0)
+            deadsync_simfile::app_runtime::parse_song_for_test(simfile, config.global_offset_seconds)
                 .expect("generated gameplay fixture should parse"),
         );
         let chart_ix = song
@@ -630,7 +657,9 @@ pub(crate) mod tests {
             .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
             .unwrap_or(0);
         let gameplay_chart = Arc::new(
-            deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_ix], 0.0)
+            deadsync_simfile::app_runtime::load_gameplay_charts(
+                &song, &[chart_ix], config.global_offset_seconds,
+            )
                 .expect("generated gameplay fixture chart should load")
                 .remove(0),
         );
@@ -656,7 +685,7 @@ pub(crate) mod tests {
             hud,
             ..Default::default()
         };
-        let prepared = if until_beat.is_none() {
+        let prepared = if until_beat.is_none() && configure_compile_clocks.is_none() {
             crate::gameplay_entry::prepare_song_lua(
                 &song,
                 &charts,
@@ -700,6 +729,9 @@ pub(crate) mod tests {
             .expect("production Lua context");
             if let Some(beat) = until_beat {
                 context.music_length_seconds = gameplay_charts[0].timing.get_time_for_beat_exact(beat);
+            }
+            if let Some(configure_clocks) = configure_compile_clocks {
+                configure_clocks(&mut context);
             }
             deadsync_song_lua::playback::prepare_song_lua(
                 &song,
@@ -921,13 +953,30 @@ pub(crate) mod tests {
         view: screen_gameplay::ActorViewOverride,
         texture_ctx: &T,
     ) -> deadlib_render_core::RenderFrame {
+        compose_fixture_frame_with_view_and_clock(
+            state, assets, metrics, actors, text_cache, scratch, view, texture_ctx, None,
+        )
+    }
+
+    #[expect(clippy::too_many_arguments, reason = "native frame inputs remain explicit")]
+    fn compose_fixture_frame_with_view_and_clock<T: TextureContext + ?Sized>(
+        state: &mut screen_gameplay::State,
+        assets: &deadlib_assets::AssetManager,
+        metrics: &space::Metrics,
+        actors: &mut Vec<deadlib_present::actors::Actor>,
+        text_cache: &mut compose::TextLayoutCache,
+        scratch: &mut compose::ComposeScratch,
+        view: screen_gameplay::ActorViewOverride,
+        texture_ctx: &T,
+        game_time: Option<f64>,
+    ) -> deadlib_render_core::RenderFrame {
         actors.clear();
         let segments = crate::gameplay_runtime::push_actors(
             actors,
             state,
             assets,
             view,
-            123.0,
+            game_time.unwrap_or(123.0),
             deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(),
         );
         let actor_segments = segments.segments(state.song_frame(), actors);
@@ -937,7 +986,7 @@ pub(crate) mod tests {
             [0.0, 0.0, 0.0, 1.0],
             metrics,
             assets.fonts(),
-            10.0,
+            game_time.map_or(10.0, |time| time as f32),
             text_cache,
             scratch,
             texture_ctx,
@@ -4999,18 +5048,31 @@ return Def.ActorFrame{
             beat: f32,
             name: &str,
         ) -> usize {
+            self.capture_named_at_game_time(state, metrics, beat, name, None)
+        }
+
+        fn capture_named_at_game_time(
+            &mut self,
+            state: &mut screen_gameplay::State,
+            metrics: &space::Metrics,
+            beat: f32,
+            name: &str,
+            game_time: Option<f64>,
+        ) -> usize {
             let textures = CaptureTextureContext {
                 assets: &self.assets,
                 keys: Default::default(),
             };
-            let frame = compose_fixture_frame_with_textures(
+            let frame = compose_fixture_frame_with_view_and_clock(
                 state,
                 &self.assets,
                 metrics,
                 &mut Vec::new(),
                 &mut compose::TextLayoutCache::default(),
                 &mut compose::ComposeScratch::default(),
+                screen_gameplay::ActorViewOverride::default(),
                 &textures,
+                game_time,
             );
             let missing = missing_capture_texture_keys(&textures, &self.assets);
             drop(frame);
@@ -5018,14 +5080,16 @@ return Def.ActorFrame{
             for key in missing {
                 ensure_gpu_capture_texture(&mut self.assets, &mut self.backend, &key, None).unwrap();
             }
-            let mut frame = compose_fixture_frame_with_textures(
+            let mut frame = compose_fixture_frame_with_view_and_clock(
                 state,
                 &self.assets,
                 metrics,
                 &mut Vec::new(),
                 &mut compose::TextLayoutCache::default(),
                 &mut compose::ComposeScratch::default(),
+                screen_gameplay::ActorViewOverride::default(),
                 self.assets.texture_context(),
+                game_time,
             );
             let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
             let taps: std::collections::HashSet<_> = ns
@@ -5110,6 +5174,27 @@ return Def.ActorFrame{
                 .zip(no_taps.pixels())
                 .filter(|(a, b)| a != b)
                 .count();
+            if name == "dyscontrolled" {
+                // Native pad captures place the landing taps in this design-space
+                // region. Exclude flying arrows that could survive while the pad
+                // hides the landing taps.
+                let [left, right] = [360.0, 470.0]
+                    .map(|x| (x * image.width() as f32 / 854.0) as u32);
+                let [top, bottom] = [150.0, 260.0]
+                    .map(|y| (y * image.height() as f32 / 480.0) as u32);
+                let landing_pixels = image
+                    .enumerate_pixels()
+                    .zip(no_taps.pixels())
+                    .filter(|((x, y, a), b)| {
+                        (left..right).contains(x) && (top..bottom).contains(y) && a != b
+                    })
+                    .count();
+                eprintln!("Dyscontrolled GPU beat {beat}: {landing_pixels} tap pixels over the pad");
+                assert!(
+                    landing_pixels > 100,
+                    "landing arrows must remain visible above the pad at beat {beat}"
+                );
+            }
             eprintln!("{name} GPU beat {beat}: {changed} visible tap pixels");
             changed
         }
@@ -7225,13 +7310,30 @@ return Def.ActorFrame{}
         assert_eq!(native["oracle"], "itgmania_notefield_render_trace");
         assert_eq!(native["input"]["window_visible"], false);
         assert_eq!(native["input"]["player_options"], "m690, -10% mini, cel");
-        assert_eq!(native["input"]["native_source"]["revision"], "663525dcb86eb570d0ef6a2e209678436660ae26");
+        assert_eq!(
+            native["input"]["native_source"]["revision"],
+            "663525dcb86eb570d0ef6a2e209678436660ae26"
+        );
         assert_eq!(native["input"]["native_source"]["modified_src"], false);
         assert_eq!(native["input"]["scene_draws"], true);
-        assert_eq!(native["capabilities"]["native_receptor_geometry_protocol"], 1);
-        for field in ["dropped_model_geometry_samples", "dropped_drawable_samples",
-            "dropped_receptor_visits", "dropped_script_errors"]
-        {
+        assert_eq!(native["capabilities"]["native_fast_note_rendering"], true);
+        for field in [
+            "fast_note_rendering_requested",
+            "fast_note_rendering",
+            "fast_note_rendering_at_end",
+        ] {
+            assert_eq!(native["input"][field], true, "native depth policy: {field}");
+        }
+        assert_eq!(
+            native["capabilities"]["native_receptor_geometry_protocol"],
+            1
+        );
+        for field in [
+            "dropped_model_geometry_samples",
+            "dropped_drawable_samples",
+            "dropped_receptor_visits",
+            "dropped_script_errors",
+        ] {
             assert_eq!(native[field], 0, "incomplete native capture: {field}");
         }
         assert!(native["script_errors"].as_array().unwrap().is_empty());
@@ -7241,12 +7343,16 @@ return Def.ActorFrame{}
         let mut native_pad_order = std::collections::BTreeMap::<u64, u64>::new();
         for sample in native["model_geometry_samples"].as_array().unwrap() {
             let state = &sample["state"];
-            if state["render_target"] == 0 && state["mesh_index"] == 0
-                && state["mesh_name"] == "Plane04" && state["note_context"].is_null()
+            if state["render_target"] == 0
+                && state["mesh_index"] == 0
+                && state["mesh_name"] == "Plane04"
+                && state["note_context"].is_null()
             {
                 let update = sample["update_sequence"].as_u64().unwrap();
                 let order = state["native_draw_sequence"].as_u64().unwrap();
-                native_pad_order.entry(update).and_modify(|first| *first = (*first).min(order))
+                native_pad_order
+                    .entry(update)
+                    .and_modify(|first| *first = (*first).min(order))
                     .or_insert(order);
             }
         }
@@ -7254,23 +7360,43 @@ return Def.ActorFrame{}
         for sample in native["drawable_samples"].as_array().unwrap() {
             let state = &sample["state"];
             let context = &state["note_context"];
-            if context["kind"] != "receptor" || context["player"] != 0 || state["render_target"] != 0 {
+            if context["kind"] != "receptor"
+                || context["player"] != 0
+                || state["render_target"] != 0
+            {
                 continue;
             }
             let beat = context["draw_beat"].as_f64().unwrap() as f32;
-            if !(34.6..42.9).contains(&beat) { continue; }
+            if !(34.6..42.9).contains(&beat) {
+                continue;
+            }
             let update = sample["update_sequence"].as_u64().unwrap();
-            let pad_order = native_pad_order.get(&update).expect("native pad draw in receptor frame");
-            assert!(state["native_draw_sequence"].as_u64().unwrap() < *pad_order,
-                "native receptors draw before the foreground pad at beat {beat}");
+            let pad_order = native_pad_order
+                .get(&update)
+                .expect("native pad draw in receptor frame");
+            assert!(
+                state["native_draw_sequence"].as_u64().unwrap() < *pad_order,
+                "native receptors draw before the foreground pad at beat {beat}"
+            );
             let vertices = sample["vertices"].as_array().unwrap();
             assert_eq!(vertices.len(), 4, "Cel receptor Sprite submits one quad");
-            let clip: [f64; 4] = std::array::from_fn(|axis| vertices.iter()
-                .map(|vertex| vertex[3 + axis].as_f64().unwrap()).sum::<f64>() / 4.0);
-            let point = [((1.0 + clip[0] / clip[3]) * 427.0) as f32,
-                ((1.0 - clip[1] / clip[3]) * 240.0) as f32, clip[3] as f32];
+            let clip: [f64; 4] = std::array::from_fn(|axis| {
+                vertices
+                    .iter()
+                    .map(|vertex| vertex[3 + axis].as_f64().unwrap())
+                    .sum::<f64>()
+                    / 4.0
+            });
+            let point = [
+                ((1.0 + clip[0] / clip[3]) * 427.0) as f32,
+                ((1.0 - clip[1] / clip[3]) * 240.0) as f32,
+                clip[3] as f32,
+            ];
             let receptors = native_receptors.entry(beat.to_bits()).or_default();
-            if !receptors.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+            if !receptors
+                .iter()
+                .any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01))
+            {
                 receptors.push(point);
             }
         }
@@ -7279,17 +7405,24 @@ return Def.ActorFrame{}
             let state = &visit["state"];
             let beat = state["note_context"]["draw_beat"].as_f64().unwrap();
             if (35.5..42.9).contains(&beat) && state["render_target"] == 0 {
-                assert_eq!(state["base_alpha"], 1.0, "native Dark has ended at beat {beat}");
+                assert_eq!(
+                    state["base_alpha"], 1.0,
+                    "native Dark has ended at beat {beat}"
+                );
                 assert_eq!(state["visible"], true);
                 visible_native_visits += 1;
             }
         }
-        assert!(visible_native_visits > 500, "native receptor visits: {visible_native_visits}");
+        assert!(
+            visible_native_visits > 500,
+            "native receptor visits: {visible_native_visits}"
+        );
         // Screen-target model origins of every drawn tap, per native frame.
         let mut native_frames = std::collections::BTreeMap::<u32, Vec<[f32; 3]>>::new();
         for sample in native["model_geometry_samples"].as_array().unwrap() {
             let state = &sample["state"];
-            if state["render_target"] != 0 || state["mesh_index"] != 0
+            if state["render_target"] != 0
+                || state["mesh_index"] != 0
                 || state["note_context"]["kind"] != "actor"
             {
                 continue;
@@ -7306,7 +7439,10 @@ return Def.ActorFrame{}
             ];
             // Each tap draws its model layers at one origin.
             let notes = native_frames.entry(beat.to_bits()).or_default();
-            if !notes.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+            if !notes
+                .iter()
+                .any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01))
+            {
                 notes.push(point);
             }
         }
@@ -7315,7 +7451,11 @@ return Def.ActorFrame{}
             .map(|(beat, notes)| (f32::from_bits(beat), notes))
             .collect();
         native_frames.sort_by(|a, b| a.0.total_cmp(&b.0));
-        assert!(native_frames.len() > 150, "native pad frames: {}", native_frames.len());
+        assert!(
+            native_frames.len() > 150,
+            "native pad frames: {}",
+            native_frames.len()
+        );
         let fixture = song_fixture::from_source("Dyscontrolled Galaxy/steps.sm");
         let simfile = fixture.simfile.clone();
         std::thread::Builder::new().stack_size(256 << 20).spawn(move || {
@@ -7329,9 +7469,9 @@ return Def.ActorFrame{}
                     mini_percent: -10,
                     ..Default::default()
                 });
-                // The native capture uses OpenGL; the song branches on renderer.
+                // Compare the native OpenGL geometry with the user's renderer.
                 let mut state = build_test_state_with_renderer(&simfile, GameplayViewport::design(),
-                    GameplaySession::default(), profiles, "OpenGL");
+                    GameplaySession::default(), profiles, "Vulkan (wgpu)");
                 state.set_live_autoplay_enabled(true);
                 let mut assets = fixture_assets();
                 let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
@@ -7484,14 +7624,9 @@ return Def.ActorFrame{}
                         && next_capture < 3 && *beat >= [36.0, 39.0, 42.0][next_capture]
                     {
                         let pixels = capture.capture_named(&mut state, &metrics, *beat, "dyscontrolled");
-                        if next_capture < 2 {
-                            assert!(pixels > 100, "thrown notes must remain visible at beat {beat}");
-                        } else {
-                            // ITGmania defaults FastNoteRendering to false (PrefsManager.cpp),
-                            // so NoteDisplay.cpp clears depth after every tap. At this sample
-                            // near beat 42, the later foreground pad covers every on-screen tap.
-                            assert_eq!(pixels, 0, "foreground pad fully occludes taps at beat {beat}");
-                        }
+                        // With the captured FastNoteRendering setting, Model depth
+                        // survives until the pad draw and keeps nearer taps visible.
+                        assert!(pixels > 100, "thrown notes must remain visible at beat {beat}");
                         next_capture += 1;
                     }
                     compared += 1;
@@ -7502,6 +7637,1144 @@ return Def.ActorFrame{}
                     assert_eq!(next_capture, 3, "all requested pad captures must run");
                 }
                 eprintln!("Dyscontrolled Galaxy matched native geometry and draw order in {compared} frames");
+            });
+        }).unwrap().join().unwrap();
+    }
+
+    type NativeClipProbe = (usize, bool, [[f32; 4]; 4]);
+
+    /// A native Vibrate draw consumes unrecorded random inputs. Admit only one
+    /// bounded XY translation shared by every submitted mesh in that frame;
+    /// scale, rotation, depth, W, relative note positions, and counts stay exact.
+    /// This aligns observations for comparison and never changes renderer inputs.
+    fn native_clip_translation_within_bounds(
+        expected: &[NativeClipProbe],
+        actual: &[NativeClipProbe],
+        bounds: [f32; 2],
+    ) -> Option<[f32; 2]> {
+        if expected.len() != actual.len()
+            || !bounds
+                .into_iter()
+                .all(|bound| bound.is_finite() && bound >= 0.0)
+            || !expected
+                .iter()
+                .all(|probe| probe.2.iter().flatten().all(|value| value.is_finite()))
+        {
+            return None;
+        }
+        let Some(first) = expected.first() else {
+            return Some([0.0; 2]);
+        };
+        for candidate in actual
+            .iter()
+            .filter(|candidate| candidate.0 == first.0 && candidate.1 == first.1)
+        {
+            let shift = [
+                candidate.2[0][0] - first.2[0][0],
+                candidate.2[0][1] - first.2[0][1],
+            ];
+            if !(0..2).all(|axis| shift[axis].is_finite() && shift[axis].abs() <= bounds[axis]) {
+                continue;
+            }
+            let delta = [shift[0], shift[1], 0.0, 0.0];
+            let mut used = vec![false; actual.len()];
+            let matches = expected.iter().all(|native| {
+                let closest = actual
+                    .iter()
+                    .enumerate()
+                    .filter(|(index, value)| {
+                        !used[*index] && value.0 == native.0 && value.1 == native.1
+                    })
+                    .map(|(index, value)| {
+                        let error = if value.2.iter().flatten().all(|value| value.is_finite()) {
+                            (0..4)
+                                .flat_map(|anchor| {
+                                    (0..4).map(move |axis| {
+                                        (value.2[anchor][axis]
+                                            - native.2[anchor][axis]
+                                            - delta[axis])
+                                            .abs()
+                                    })
+                                })
+                                .fold(0.0f32, f32::max)
+                        } else {
+                            f32::INFINITY
+                        };
+                        (index, error)
+                    })
+                    .min_by(|a, b| a.1.total_cmp(&b.1));
+                if let Some((index, error)) = closest
+                    && error < 0.5
+                {
+                    used[index] = true;
+                    true
+                } else {
+                    false
+                }
+            });
+            if matches {
+                return Some(shift);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn native_shake_comparison_rejects_geometry_and_visibility_errors() {
+        let anchors = [
+            [0.0, 0.0, 10.0, 11.0],
+            [32.0, 0.0, 10.0, 11.0],
+            [0.0, 32.0, 10.0, 11.0],
+            [0.0, 0.0, 42.0, 43.0],
+        ];
+        let expected = [(0, false, anchors), (1, true, anchors)];
+        let mut actual = expected;
+        for (_, _, probes) in &mut actual {
+            for probe in probes {
+                probe[0] += 12.0;
+                probe[1] -= 8.0;
+            }
+        }
+        assert_eq!(
+            native_clip_translation_within_bounds(&expected, &actual, [20.0; 2]),
+            Some([12.0, -8.0])
+        );
+        assert!(native_clip_translation_within_bounds(&expected, &actual, [5.0; 2]).is_none());
+        assert!(
+            native_clip_translation_within_bounds(&expected, &actual[..1], [20.0; 2]).is_none()
+        );
+        let mut distorted = actual;
+        distorted[1].2[1][0] += 2.0;
+        assert!(native_clip_translation_within_bounds(&expected, &distorted, [20.0; 2]).is_none());
+        let mut misplaced = actual;
+        for probe in &mut misplaced[1].2 {
+            probe[1] += 2.0;
+        }
+        assert!(native_clip_translation_within_bounds(&expected, &misplaced, [20.0; 2]).is_none());
+        let mut wrong_depth = actual;
+        for (_, _, probes) in &mut wrong_depth {
+            for probe in probes {
+                probe[2] += 2.0;
+            }
+        }
+        assert!(
+            native_clip_translation_within_bounds(&expected, &wrong_depth, [20.0; 2]).is_none()
+        );
+        let mut invalid_native = expected;
+        invalid_native[0].2[1][0] = f32::NAN;
+        assert!(
+            native_clip_translation_within_bounds(&invalid_native, &actual, [20.0; 2]).is_none()
+        );
+    }
+
+    #[test]
+    fn dyscontrolled_post_pad_matches_native_two_player_taps() {
+        dyscontrolled_post_pad_matches_native_taps(
+            include_bytes!(
+                "../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-post-pad-native.json.zst"
+            ),
+            true,
+        );
+    }
+
+    #[test]
+    fn dyscontrolled_post_pad_matches_native_single_player_taps() {
+        dyscontrolled_post_pad_matches_native_taps(
+            include_bytes!(
+                "../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-post-pad-single-native.json.zst"
+            ),
+            false,
+        );
+    }
+
+    /// The post-pad Mini/Bumpy transition and signed Hidden/Sudden modifiers
+    /// exercise Single P1 and Versus. In Versus's stars section P2 remains
+    /// visible during frames where P1 has no submitted taps. The geometric oracle
+    /// compares both meshes, material visibility and pass order with native
+    /// input clocks during compilation and playback; no native actor state is
+    /// imported. Optional GPU probes also exercise ordinary production Baked
+    /// compilation with its default clock.
+    fn dyscontrolled_post_pad_matches_native_taps(native_bytes: &[u8], versus: bool) {
+        let player_count = if versus { 2 } else { 1 };
+        let mode_name = if versus { "Versus" } else { "Single P1" };
+        #[derive(serde::Deserialize)]
+        struct NativeSource {
+            revision: String,
+            modified_src: bool,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativePlayer {
+            player: String,
+            noteskin: String,
+            mini: f32,
+            preferred_visual_delay_seconds: f32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativePreferences {
+            global_offset_seconds: f32,
+            default_sync_offset: String,
+            visual_delay_seconds: f32,
+            music_rate: f32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeCatalogPreferences {
+            initialization: String,
+            global_offset_seconds: f32,
+            music_rate: f32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeInput {
+            window_visible: bool,
+            player_options: String,
+            players: Vec<NativePlayer>,
+            preferences: NativePreferences,
+            catalog_preferences: NativeCatalogPreferences,
+            native_source: NativeSource,
+            fast_note_rendering_requested: bool,
+            fast_note_rendering: bool,
+            fast_note_rendering_at_end: bool,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeCapabilities {
+            native_fast_note_rendering: bool,
+            native_song_position_clocks: bool,
+            native_option_clock_deltas: bool,
+            native_pre_theme_preferences: bool,
+            native_model_render_state_protocol: u32,
+            native_model_render_state_backend: String,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeOptionDeltas {
+            song: f32,
+            players: [f32; 2],
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeUpdate {
+            sequence: u64,
+            delta: f32,
+            beat: f32,
+            seconds: f32,
+            song_beat: f32,
+            visible_beat: f32,
+            visible_seconds: f32,
+            wall_seconds: f64,
+            option_deltas: NativeOptionDeltas,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeContext {
+            kind: String,
+            player: usize,
+            column: u32,
+            draw_beat: f32,
+            note_beat: f32,
+            part: u32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeMaterial {
+            diffuse: [f32; 4],
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeBlend {
+            enabled: bool,
+            src_rgb: u32,
+            dst_rgb: u32,
+            src_alpha: u32,
+            dst_alpha: u32,
+            equation_rgb: u32,
+            equation_alpha: u32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeDepth {
+            test_enabled: bool,
+            write: bool,
+            function: u32,
+            range: [f32; 2],
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeCull {
+            enabled: bool,
+            face: u32,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeTexture {
+            unit: u32,
+            enabled: bool,
+            mode: i32,
+            texture: Option<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeRenderState {
+            backend: String,
+            lighting: bool,
+            current_color: [f32; 4],
+            material: NativeMaterial,
+            blend: NativeBlend,
+            depth: NativeDepth,
+            cull: NativeCull,
+            textures: Vec<NativeTexture>,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeModelState {
+            render_target: u64,
+            native_draw_sequence: u64,
+            mesh_index: u32,
+            mesh_name: String,
+            note_context: Option<NativeContext>,
+            anchors_clip: [[f32; 4]; 4],
+            render_state: NativeRenderState,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeModelSample {
+            update_sequence: u64,
+            geometry: u64,
+            state: NativeModelState,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeGeometry {
+            id: u64,
+            vertices: Vec<[f32; 3]>,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeReceptorVisit {
+            update_sequence: u64,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeCapture {
+            oracle: String,
+            input: NativeInput,
+            capabilities: NativeCapabilities,
+            dropped_model_geometry_samples: u64,
+            dropped_drawable_samples: u64,
+            dropped_receptor_visits: u64,
+            dropped_script_errors: u64,
+            script_errors: Vec<serde_json::Value>,
+            update_frames: Vec<NativeUpdate>,
+            model_geometry_meshes: Vec<NativeGeometry>,
+            model_geometry_samples: Vec<NativeModelSample>,
+            receptor_visits: Vec<NativeReceptorVisit>,
+        }
+        #[derive(Clone, Debug)]
+        struct NativeTap {
+            player: usize,
+            column: u32,
+            note_beat: f32,
+            part: u32,
+            mesh: usize,
+            draw_sequence: u64,
+            tint: [f32; 4],
+            texture_mask: bool,
+            texture: String,
+            blend: deadlib_render_core::BlendMode,
+            depth_test: bool,
+            depth_write: bool,
+            cull_mode: f32,
+            // Origin and 32-unit X/Y/Z probes in native OpenGL clip space.
+            anchors: [[f32; 4]; 4],
+        }
+        #[derive(Debug)]
+        struct ActualTap {
+            ordinal: usize,
+            mesh: usize,
+            anchors: [[f32; 4]; 4],
+            tint: [f32; 4],
+            texture_mask: bool,
+            texture: String,
+            blend: deadlib_render_core::BlendMode,
+            depth_test: bool,
+            depth_write: bool,
+            cull_mode: f32,
+        }
+        let texture_name = |name: &str| {
+            // Model residency uses a distinct key for the same source image.
+            deadsync_assets::textures::texture_source_key(name)
+                .replace('\\', "/")
+                .rsplit('/')
+                .next()
+                .unwrap()
+                .to_ascii_lowercase()
+        };
+        #[derive(Clone)]
+        struct NativeFrame {
+            beat: f32,
+            taps: Vec<NativeTap>,
+        }
+        // Read only the needed channels from the large native trace. In
+        // particular, do not retain every Lua actor snapshot in a JSON Value.
+        let decoder = zstd::stream::read::Decoder::new(native_bytes).unwrap();
+        let native: NativeCapture =
+            serde_json::from_reader(std::io::BufReader::new(decoder)).unwrap();
+        assert_eq!(native.oracle, "itgmania_notefield_render_trace");
+        assert!(!native.input.window_visible);
+        assert_eq!(native.input.player_options, "m690, -10% mini, cel");
+        assert_eq!(
+            native.input.native_source.revision,
+            "663525dcb86eb570d0ef6a2e209678436660ae26"
+        );
+        assert!(!native.input.native_source.modified_src);
+        assert!(native.capabilities.native_fast_note_rendering);
+        assert!(native.capabilities.native_song_position_clocks);
+        assert!(native.capabilities.native_option_clock_deltas);
+        assert!(native.capabilities.native_pre_theme_preferences);
+        assert_eq!(native.capabilities.native_model_render_state_protocol, 1);
+        assert_eq!(
+            native.capabilities.native_model_render_state_backend,
+            "opengl"
+        );
+        assert_eq!(
+            native.input.preferences.default_sync_offset,
+            "SyncOffset_ITG"
+        );
+        assert_eq!(native.input.preferences.visual_delay_seconds, 0.0);
+        assert_eq!(native.input.preferences.music_rate, 1.0);
+        assert!((native.input.preferences.global_offset_seconds + 0.008).abs() < 0.000001);
+        assert_eq!(
+            native.input.catalog_preferences.initialization,
+            "native-catalog-note-time-calculation"
+        );
+        assert_eq!(
+            native.input.catalog_preferences.global_offset_seconds,
+            native.input.preferences.global_offset_seconds
+        );
+        assert_eq!(
+            native.input.catalog_preferences.music_rate,
+            native.input.preferences.music_rate
+        );
+        for update in &native.update_frames {
+            assert_eq!(
+                update.beat, update.visible_beat,
+                "legacy geometry beat aliases the visible clock"
+            );
+            assert_eq!(
+                update.seconds, update.visible_seconds,
+                "zero visual delay in this capture"
+            );
+            assert_eq!(
+                update.song_beat, update.visible_beat,
+                "zero visual delay in this capture"
+            );
+            assert!(
+                [
+                    update.seconds,
+                    update.song_beat,
+                    update.visible_seconds,
+                    update.visible_beat
+                ]
+                .into_iter()
+                .all(f32::is_finite)
+            );
+            assert!(
+                std::iter::once(update.option_deltas.song)
+                    .chain(update.option_deltas.players)
+                    .all(|delta| delta.is_finite() && delta >= 0.0),
+                "native option approach clocks at update {}",
+                update.sequence
+            );
+        }
+        assert!(
+            native.input.fast_note_rendering_requested
+                && native.input.fast_note_rendering
+                && native.input.fast_note_rendering_at_end,
+            "native Model depth must persist between taps"
+        );
+        assert_eq!(
+            native.input.players.len(),
+            player_count,
+            "native {mode_name} joined players"
+        );
+        for (index, player) in native.input.players.iter().enumerate() {
+            assert_eq!(player.player, format!("PlayerNumber_P{}", index + 1));
+            assert_eq!(player.noteskin, "cel");
+            assert!((player.mini + 0.1).abs() < 1e-6);
+            assert_eq!(player.preferred_visual_delay_seconds, 0.0);
+        }
+        assert_eq!(
+            [
+                native.dropped_model_geometry_samples,
+                native.dropped_drawable_samples,
+                native.dropped_receptor_visits,
+                native.dropped_script_errors
+            ],
+            [0; 4]
+        );
+        assert!(
+            native.script_errors.is_empty(),
+            "native script errors: {:?}",
+            native.script_errors
+        );
+
+        // Receptor visits prove that native actually drew these frames even
+        // when the chart intentionally submitted no taps for either player.
+        let drawn_updates: std::collections::HashSet<_> = native
+            .receptor_visits
+            .iter()
+            .map(|visit| visit.update_sequence)
+            .collect();
+        let mut frames: std::collections::BTreeMap<u64, NativeFrame> = native
+            .update_frames
+            .iter()
+            .filter(|update| {
+                (43.0..104.0).contains(&update.visible_beat)
+                    && drawn_updates.contains(&update.sequence)
+            })
+            .map(|update| {
+                (
+                    update.sequence,
+                    NativeFrame {
+                        beat: update.visible_beat,
+                        taps: Vec::new(),
+                    },
+                )
+            })
+            .collect();
+        assert!(
+            frames.len() > if versus { 2_300 } else { 1_400 },
+            "native {mode_name} post-pad draw coverage: {}",
+            frames.len()
+        );
+        let geometries: std::collections::HashMap<_, _> = native
+            .model_geometry_meshes
+            .into_iter()
+            .map(|geometry| (geometry.id, geometry.vertices))
+            .collect();
+        let mut checked_geometries = std::collections::HashSet::new();
+        let mut native_vertices: [Option<Vec<[f32; 3]>>; 2] = [None, None];
+        for sample in native.model_geometry_samples {
+            let state = sample.state;
+            let Some(context) = state.note_context else {
+                continue;
+            };
+            // Cel redirects hold/roll heads to the same tap Model. Native
+            // NotePart_Tap is 0 and NotePart_HoldHead is 4 (NoteDisplay.h).
+            // They share geometry and texture in the composed frame, so match
+            // both without discarding either player's overlapping submissions.
+            if context.kind != "actor"
+                || !matches!(context.part, 0 | 4)
+                || state.render_target != 0
+                || !(43.0..104.0).contains(&context.draw_beat)
+            {
+                continue;
+            }
+            let mesh = state.mesh_index as usize;
+            assert!(mesh < 2, "Cel Model mesh {mesh}: {}", state.mesh_name);
+            assert_eq!(state.mesh_name, ["cells", "scroller"][mesh]);
+            if checked_geometries.insert(sample.geometry) {
+                let vertices = geometries
+                    .get(&sample.geometry)
+                    .expect("native Cel geometry");
+                if let Some(expected) = &native_vertices[mesh] {
+                    assert_eq!(
+                        vertices, expected,
+                        "Cel's unskinned mesh {mesh} is shared by every tap"
+                    );
+                } else {
+                    native_vertices[mesh] = Some(vertices.clone());
+                }
+            }
+            assert!(context.player < player_count && context.column < 4);
+            let update = &native.update_frames[(sample.update_sequence - 1) as usize];
+            assert_eq!(update.sequence, sample.update_sequence);
+            assert!((update.visible_beat - context.draw_beat).abs() < 0.0001);
+            let frame = frames
+                .get_mut(&sample.update_sequence)
+                .expect("native tap update has independent draw coverage");
+            assert!((frame.beat - context.draw_beat).abs() < 0.0001);
+            assert!(
+                frame
+                    .taps
+                    .last()
+                    .is_none_or(|previous| previous.draw_sequence < state.native_draw_sequence),
+                "native Model pass order must preserve actual draw sequence"
+            );
+            // Keep native submission multiplicity: diffuse/glow can draw the
+            // same mesh twice, and distinct players can overlap exactly.
+            // A unit basis alone allows a visibly wrong scale within the origin
+            // tolerance. Extend the captured native basis to an arrow-sized span.
+            let anchors = std::array::from_fn(|anchor| {
+                std::array::from_fn(|axis| {
+                    state.anchors_clip[0][axis]
+                        + 32.0 * (state.anchors_clip[anchor][axis] - state.anchors_clip[0][axis])
+                })
+            });
+            let render = state.render_state;
+            assert_eq!(render.backend, "opengl");
+            assert!(!render.lighting, "Cel uses native unlit material color");
+            // SetMaterial's unlit color includes ambient/emissive RGB. Its
+            // alpha is diffuse alpha; native glow can exceed one before the
+            // fixed-function pipeline clamps it. Model colors are floats.
+            let tint = render.current_color.map(|value| value.clamp(0.0, 1.0));
+            assert!((tint[3] - render.material.diffuse[3].clamp(0.0, 1.0)).abs() < 0.00001);
+            assert!(render.blend.enabled);
+            assert_eq!(
+                [render.blend.equation_rgb, render.blend.equation_alpha],
+                [32774; 2]
+            );
+            assert_eq!([render.blend.src_alpha, render.blend.dst_alpha], [1, 771]);
+            let blend = match (render.blend.src_rgb, render.blend.dst_rgb) {
+                (770, 771) => deadlib_render_core::BlendMode::Alpha,
+                (770, 1) => deadlib_render_core::BlendMode::Add,
+                other => panic!("unexpected native Cel blend: {other:?}"),
+            };
+            assert_eq!(render.depth.function, 515, "native GL_LEQUAL Model depth");
+            // Native SetZBias reserves the first 5% at the default bias. This
+            // shared monotone depth mapping does not alter model clip geometry.
+            assert_eq!(render.depth.range, [0.05, 1.0]);
+            let cull_mode = if !render.cull.enabled {
+                0.0
+            } else {
+                match render.cull.face {
+                    1029 => 1.0,
+                    1028 => 2.0,
+                    face => panic!("unexpected native cull face {face}"),
+                }
+            };
+            let texture = render
+                .textures
+                .iter()
+                .find(|texture| texture.unit == 0)
+                .unwrap();
+            assert!(texture.enabled && matches!(texture.mode, 0 | 1));
+            assert!(
+                render
+                    .textures
+                    .iter()
+                    .filter(|texture| texture.unit > 0)
+                    .all(|texture| !texture.enabled),
+                "Cel has no additive texture stage"
+            );
+            frame.taps.push(NativeTap {
+                player: context.player,
+                column: context.column,
+                note_beat: context.note_beat,
+                part: context.part,
+                mesh,
+                draw_sequence: state.native_draw_sequence,
+                tint,
+                texture_mask: texture.mode == 1,
+                texture: texture_name(texture.texture.as_deref().expect("native bound texture")),
+                blend,
+                depth_test: render.depth.test_enabled,
+                depth_write: render.depth.write,
+                cull_mode,
+                anchors,
+            });
+        }
+        let unique_counts = |frame: &NativeFrame| -> [usize; 2] {
+            std::array::from_fn(|player| {
+                frame
+                    .taps
+                    .iter()
+                    .filter(|tap| tap.player == player)
+                    .map(|tap| (tap.column, tap.note_beat.to_bits(), tap.part))
+                    .collect::<std::collections::HashSet<_>>()
+                    .len()
+            })
+        };
+        let p2_star_frames = frames
+            .values()
+            .filter(|frame| (72.0..96.0).contains(&frame.beat))
+            .filter(|frame| unique_counts(frame)[1] != 0)
+            .count();
+        let p2_star_taps: usize = frames
+            .values()
+            .filter(|frame| (72.0..96.0).contains(&frame.beat))
+            .map(|frame| unique_counts(frame)[1])
+            .sum();
+        if versus {
+            assert!(
+                p2_star_frames > 500 && p2_star_taps > 1_000,
+                "native P2 stars coverage: {p2_star_frames} frames, {p2_star_taps} taps"
+            );
+        } else {
+            assert_eq!((p2_star_frames, p2_star_taps), (0, 0));
+        }
+        let probes: Vec<f32> = [43.25, 43.5, 43.75]
+            .into_iter()
+            .chain((88..=104).map(|half| half as f32 * 0.5))
+            .chain((53..=71).map(|beat| beat as f32))
+            .chain((72..=96).map(|beat| beat as f32))
+            // Fractional zoom/flip, Tornado/Dizzy reversals, and the authored
+            // collapse to zero Player zoom must survive between integer beats.
+            .chain([
+                78.25, 78.5, 78.75, 86.5, 86.75, 87.25, 87.5, 87.75, 94.25, 94.5, 94.75,
+            ])
+            .chain((!versus).then_some(79.25))
+            .chain((!versus).then_some(91.25))
+            .chain([98.0, 100.0, 102.0, 103.5])
+            .collect();
+        let mut selected = std::collections::BTreeMap::new();
+        for probe in probes {
+            let (&sequence, frame) = frames
+                .iter()
+                .find(|(_, frame)| frame.beat >= probe)
+                .unwrap_or_else(|| panic!("native tap frame at beat {probe}"));
+            assert!(
+                frame.beat - probe < 0.1,
+                "native frame gap near beat {probe}: {}",
+                frame.beat
+            );
+            selected.insert(sequence, frame.clone());
+        }
+        assert_eq!(selected.len(), if versus { 79 } else { 81 });
+        // Mini reaches 200% at beat64. Integer-only probes can miss the brief
+        // interval where native field scale is below the reverse divisor's
+        // safety threshold. Retain every observed frame around that collapse.
+        let collapse_frames: Vec<_> = frames
+            .iter()
+            .filter(|(_, frame)| (63.95..=64.05).contains(&frame.beat))
+            .collect();
+        assert!(
+            collapse_frames.len() >= 2,
+            "native coverage around zero Mini scale"
+        );
+        for (&sequence, frame) in collapse_frames {
+            selected.insert(sequence, frame.clone());
+        }
+        drop(frames);
+        let native_vertices =
+            native_vertices.map(|vertices| vertices.expect("both native Cel meshes"));
+        assert!(native_vertices.iter().all(|vertices| !vertices.is_empty()));
+        let updates = native.update_frames;
+        let native_preferences = native.input.preferences;
+        // Default/Game mod timers use process elapsed time, independently of
+        // the song and actor delta clocks. Ordinary playback below advances
+        // that clock naturally from the same song-start epoch.
+        let first_active = updates
+            .iter()
+            .find(|update| update.song_beat >= 0.0)
+            .expect("native song-start clock");
+        let game_time_origin = first_active.wall_seconds
+            - f64::from(first_active.seconds / native_preferences.music_rate);
+        let fixture = song_fixture::from_source("Dyscontrolled Galaxy/steps.sm");
+        let simfile = fixture.simfile.clone();
+        std::thread::Builder::new().stack_size(256 << 20).spawn(move || {
+            let play_style = if versus {
+                profile_data::PlayStyle::Versus
+            } else {
+                profile_data::PlayStyle::Single
+            };
+            with_session(play_style, profile_data::PlayerSide::P1, true, versus, || {
+                let metrics = space::Metrics::centered(854.0, 480.0);
+                space::set_current_metrics(metrics);
+                space::set_current_window_px(1600, 900);
+                let profiles = || std::array::from_fn(|_| profile_data::Profile {
+                    noteskin: profile_data::NoteSkin::new("cel"),
+                    scroll_speed: ScrollSpeedSetting::MMod(690.0),
+                    mini_percent: -10,
+                    ..Default::default()
+                });
+                let session = || GameplaySession {
+                    play_style: if versus {
+                        deadsync_gameplay::GameplayInputPlayStyle::Versus
+                    } else {
+                        deadsync_gameplay::GameplayInputPlayStyle::Single
+                    },
+                    joined_sides: [true, versus],
+                    ..Default::default()
+                };
+                // Use the preferences observed by the native renderer.
+                // Production context/runtime apply ITG's group sync offset once;
+                // do not shift the chart or captured music timestamps manually.
+                let native_config = || GameplayConfig {
+                    global_offset_seconds: native_preferences.global_offset_seconds,
+                    visual_delay_seconds: native_preferences.visual_delay_seconds,
+                    machine_pack_ini_offsets: true,
+                    machine_default_sync_pref: deadsync_chart::SyncPref::Itg,
+                    ..Default::default()
+                };
+                let native_clocks = |context: &mut deadsync_song_lua::SongLuaCompileContext| {
+                    let rate = deadsync_song_lua::song_music_rate(context);
+                    let timing = context.song_timing.as_ref().expect("chart timing");
+                    let origin = timing.get_time_for_beat_exact(0.0);
+                    assert!((origin - 0.059).abs() < 0.000001,
+                        "native timing origin includes global and ITG sync offsets: {origin}");
+                    let mut previous_actor_time = timing.get_song_time_for_beat(0.0, rate);
+                    let mut inputs = vec![[f64::from(origin), 0.0, 0.0]];
+                    let mut screen_deltas = vec![0.0];
+                    // Match generated_foreground_clock_inputs in the semantic
+                    // harness. Foreground.cpp advances actors by music-time
+                    // differences, not the screen's update delta. Its initial
+                    // beat-zero sample precedes every active captured frame.
+                    // These are inputs only: Lua still computes all actor and
+                    // modifier state, including authored sleep(0.02) queues.
+                    for update in updates.iter().filter(|update| update.song_beat >= 0.0) {
+                        let music = f64::from(update.seconds);
+                        assert!(music.is_finite() && update.song_beat.is_finite()
+                            && music > inputs.last().unwrap()[0],
+                            "increasing native foreground clock at update {}", update.sequence);
+                        let delta = (update.seconds - previous_actor_time).max(0.0) / rate;
+                        inputs.push([music, f64::from(update.song_beat), f64::from(delta)]);
+                        // Player/wrapper tweens advance on Screen::Update's
+                        // delta; Foreground replaces that with music elapsed.
+                        screen_deltas.push(update.delta);
+                        previous_actor_time = update.seconds;
+                    }
+                    assert!(inputs.len() > 2);
+                    context.compile_clock_inputs = inputs;
+                    context.compile_screen_actor_deltas = screen_deltas;
+                };
+                let mut state = build_test_state_with_lua_mode_and_clocks(
+                    &simfile, GameplayViewport::design(), session(), profiles(),
+                    "Vulkan (wgpu)", None, false, Some(&native_clocks), Some(native_config()));
+                assert!((state.gameplay.timing().get_time_for_beat_exact(0.0) - 0.059).abs() < 0.000001,
+                    "runtime timing matches the native compiler clock");
+                state.set_live_autoplay_enabled(true);
+                let mut assets = fixture_assets();
+                let mut tap_textures = std::collections::HashMap::new();
+                for player in 0..player_count {
+                    let ns = state.noteskin_assets.noteskin[player].as_ref().unwrap();
+                    for (slot, layers) in ns.notes.iter().zip(&ns.note_layers) {
+                        assert_eq!(layers.len(), native_vertices.len());
+                        assert_eq!(layers[0].texture_key(), slot.texture_key());
+                        // Cells and scroller share a PNG: the latter's animated
+                        // texture INI refers to Tap Note parts too. Geometry,
+                        // rather than texture identity, distinguishes the meshes.
+                        for (mesh, (layer, vertices)) in layers.iter().zip(&native_vertices).enumerate() {
+                            let model = layer.model.as_ref().expect("Cel tap Model mesh");
+                            // MilkShape XYZ is retained verbatim. Rotation and
+                            // Y conversion belong to the instance matrix.
+                            assert!(!layer.def.mirror_h && !layer.def.mirror_v);
+                            assert_eq!(model.vertices.len(), vertices.len());
+                            assert!(model.vertices.iter().zip(vertices).all(|(actual, native)|
+                                (0..3).all(|axis| (actual.pos[axis] - native[axis]).abs() < 0.00001)),
+                                "Cel mesh {mesh} uses native model coordinates");
+                            let key = layer.texture_key();
+                            tap_textures.insert(FIXTURE_TEXTURES.texture_handle(key), texture_name(key));
+                        }
+                    }
+                }
+                assert!(!tap_textures.is_empty());
+                let visuals = state.gameplay.song_lua_visuals();
+                for overlay in visuals.overlays.iter().chain(
+                    visuals.background_visual_layers.iter().chain(&visuals.foreground_visual_layers)
+                        .flat_map(|layer| &layer.overlays),
+                ) {
+                    let deadsync_assets::song_lua::SongLuaOverlayKind::Model { layers } = &overlay.kind
+                        else { continue; };
+                    for layer in layers.iter() {
+                        for key in std::iter::once(&layer.texture_key).chain(layer.additive.as_ref()).chain(
+                            layer.texture_frames.iter().chain(layer.additive_frames.iter())
+                                .filter_map(|frame| frame.texture_key.as_ref()),
+                        ) { assets.reserve_texture_handle(key.to_string()); }
+                    }
+                }
+                #[cfg(target_os = "windows")]
+                let mut capture = std::env::var_os("DEADSYNC_DYSCONTROLLED_CAPTURE_DIR")
+                    .map(|output| SongLuaNotePixelCapture::new(&state, &metrics, PathBuf::from(output)));
+                #[cfg(target_os = "windows")]
+                let mut next_capture = 0;
+                let mut compared = 0;
+                let mut compared_p2_taps = 0;
+                let mut max_clip_error = 0.0f32;
+                let mut max_pixel_error = 0.0f32;
+                let mut bounded_shake_frames = 0;
+                let mut parity_errors = Vec::<(f32, String)>::new();
+                let last_sequence = *selected.last_key_value().unwrap().0;
+                state.set_current_music_time_ns(deadsync_core::song_time::song_time_ns_from_seconds(
+                    updates.first().expect("native preroll update").seconds));
+                for update in updates {
+                    if update.sequence > last_sequence { break; }
+                    // Native deltas and music positions are separate clocks;
+                    // replay both, including preroll and modifier approaches.
+                    let music = deadsync_core::song_time::song_time_ns_from_seconds(update.seconds);
+                    let host = (update.wall_seconds * 1e9) as u64;
+                    // ModsGroup::Update samples its own timer before the screen
+                    // update. Reuse that observed input only for option approach.
+                    state.gameplay.set_player_option_clock_deltas(update.option_deltas.players);
+                    screen_gameplay::update(&mut state, update.delta, deadsync_gameplay::GameplayAudioSnapshot {
+                        stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                            music_nanos: music, has_music_mapping: true, valid_at_host_nanos: host,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }, || host, &mut Vec::new());
+                    // Pin presentation after the normal update. Resetting it
+                    // before update makes the display smoother add this frame's
+                    // delta twice. This setter leaves attack approach history
+                    // intact; each captured delta advances modifiers only once.
+                    state.set_current_music_time_ns(music);
+                    let output = state.take_song_lua_output();
+                    assert!(output.errors.is_empty(), "Lua update {} at beat {}: {:?}",
+                        update.sequence, update.beat, output.errors);
+                    let Some(expected) = selected.get(&update.sequence) else { continue; };
+                    let beat = expected.beat;
+                    let frame = compose_fixture_frame_with_view_and_clock(
+                        &mut state, &assets, &metrics, &mut Vec::new(),
+                        &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default(),
+                        screen_gameplay::ActorViewOverride::default(), &FIXTURE_TEXTURES,
+                        Some(update.wall_seconds));
+                    assert!(frame.render_targets.is_empty(), "post-pad Player screen draws at beat {beat}");
+                    let cel_geometries: Vec<_> = frame.tmesh_geometries.iter().map(|geometry| {
+                        let vertices = geometry.vertices.as_ref();
+                        let mesh = native_vertices.iter().position(|native| vertices.len() == native.len()
+                            && vertices.iter().zip(native).all(|(actual, native)|
+                                (0..3).all(|axis| (actual.pos[axis] - native[axis]).abs() < 0.00001)));
+                        if mesh.is_some() {
+                            // Model material color is carried by instance.tint;
+                            // hidden vertex alpha must not evade that comparison.
+                            assert!(vertices.iter().all(|vertex| vertex.color == [1.0; 4]));
+                        }
+                        mesh
+                    }).collect();
+                    let mut actual = Vec::<ActualTap>::new();
+                    for op in &frame.ops {
+                        let DrawOp::TexturedMesh(run) = op else { continue; };
+                        let Some(texture) = tap_textures.get(&run.texture_handle) else { continue; };
+                        let Some(mesh) = cel_geometries[run.geometry as usize] else { continue; };
+                        let camera = frame.cameras.get(run.camera as usize).copied()
+                            .unwrap_or_else(|| metrics.projection());
+                        for instance in &frame.tmesh_instances[run.instance_start as usize
+                            ..(run.instance_start + run.instance_count) as usize]
+                        {
+                            let matrix = camera * instance.transform();
+                            actual.push(ActualTap {
+                                ordinal: actual.len(),
+                                mesh,
+                                anchors: [matrix.w_axis.to_array(),
+                                    (matrix.w_axis + 32.0 * matrix.x_axis).to_array(),
+                                    (matrix.w_axis + 32.0 * matrix.y_axis).to_array(),
+                                    (matrix.w_axis + 32.0 * matrix.z_axis).to_array()],
+                                tint: instance.tint,
+                                texture_mask: instance.texture_mask != 0.0,
+                                texture: texture.clone(),
+                                blend: run.blend,
+                                depth_test: run.depth_test,
+                                depth_write: run.depth_write,
+                                cull_mode: instance.cull_mode,
+                            });
+                        }
+                    }
+                    let counts = unique_counts(expected);
+                    if actual.len() != expected.taps.len() {
+                        parity_errors.push((beat, format!(
+                            "update {}: native unique P1/P2 {counts:?}; tap/hold-head submissions {} vs native {}",
+                            update.sequence, actual.len(), expected.taps.len())));
+                        compared += 1;
+                        continue;
+                    }
+                    let mut frame_error = None;
+                    let clip_translation = if (102.01..103.8).contains(&beat) {
+                        // The chart's TopScreen Vibrate magnitude is bounded
+                        // by 30 native pixels in X/Y; GetZoom stays 1 here.
+                        // Actor::PreDraw consumes independent randomf(-1,1)
+                        // values, which this fixture does not record. Allow
+                        // only their bounded common world translation, through
+                        // Player's 45-degree menu camera. Every relative mesh
+                        // basis/position and all Z/W remain strict below.
+                        let focal = 1.0 / (45.0_f32.to_radians() * 0.5).tan();
+                        let bounds = [60.0 * focal, 60.0 * focal * 854.0 / 480.0];
+                        let expected_probes: Vec<_> = expected.taps.iter()
+                            .map(|tap| (tap.mesh, tap.texture_mask, tap.anchors)).collect();
+                        let actual_probes: Vec<_> = actual.iter()
+                            .map(|tap| (tap.mesh, tap.texture_mask, tap.anchors)).collect();
+                        bounded_shake_frames += 1;
+                        native_clip_translation_within_bounds(&expected_probes, &actual_probes, bounds)
+                            .unwrap_or_else(|| {
+                                frame_error = Some(format!(
+                                    "update {}: geometry cannot be matched by one bounded native screen-shake translation",
+                                    update.sequence));
+                                [0.0; 2]
+                            })
+                    } else {
+                        [0.0; 2]
+                    };
+                    let clip_translation = [clip_translation[0], clip_translation[1], 0.0, 0.0];
+                    let mut last_draw_by_note = std::collections::HashMap::new();
+                    for tap in &expected.taps {
+                        let distance = |anchors: &[[f32; 4]; 4]| (0..4).flat_map(|anchor|
+                            (0..4).map(move |axis| (anchors[anchor][axis] - tap.anchors[anchor][axis]
+                                - clip_translation[axis]).abs()))
+                            .fold(0.0f32, f32::max);
+                        let ordering = |a: &ActualTap, b: &ActualTap| {
+                            let identity = |candidate: &ActualTap|
+                                candidate.mesh == tap.mesh && candidate.texture_mask == tap.texture_mask;
+                            identity(b).cmp(&identity(a))
+                                .then_with(|| distance(&a.anchors).total_cmp(&distance(&b.anchors)))
+                                .then_with(|| a.ordinal.cmp(&b.ordinal))
+                        };
+                        let index = actual.iter().enumerate().min_by(|(_, a), (_, b)| ordering(a, b))
+                            .map(|(index, _)| index).unwrap();
+                        let nearest = actual.swap_remove(index);
+                        let error = distance(&nearest.anchors);
+                        if !(nearest.anchors.iter().flatten().all(|value| value.is_finite()) && error < 0.5
+                            && (0..4).all(|anchor| nearest.anchors[anchor][3].signum() == tap.anchors[anchor][3].signum()))
+                        {
+                            frame_error.get_or_insert_with(|| format!(
+                                "update {}, native {tap:?}, actual {nearest:?}, max clip error {error}", update.sequence));
+                        }
+                        if nearest.mesh != tap.mesh || nearest.texture_mask != tap.texture_mask
+                            || nearest.texture != tap.texture || nearest.blend != tap.blend
+                            || nearest.depth_test != tap.depth_test || nearest.depth_write != tap.depth_write
+                            || nearest.cull_mode != tap.cull_mode
+                            || !(0..4).all(|axis| (nearest.tint[axis] - tap.tint[axis]).abs() < 0.0001)
+                        {
+                            frame_error.get_or_insert_with(|| format!(
+                                "native material/pass state {tap:?}, actual {nearest:?}"));
+                        }
+                        let key = (tap.player, tap.column, tap.note_beat.to_bits(), tap.part);
+                        if let Some(previous) = last_draw_by_note.insert(key, nearest.ordinal)
+                            && previous >= nearest.ordinal
+                        {
+                            frame_error.get_or_insert_with(|| format!(
+                                "native Model mesh/pass order for {key:?}: actual draw {previous} precedes {}", nearest.ordinal));
+                        }
+                        max_clip_error = max_clip_error.max(error);
+                        // Both use OpenGL clip coordinates. Check origin and
+                        // axis probes so scale/rotation errors cannot hide behind
+                        // a correct center, while Z/W retain camera-side evidence.
+                        for (anchor, (actual, native)) in nearest.anchors.iter().zip(&tap.anchors).enumerate() {
+                            if native[3] > 0.0 && (0..3).all(|axis| native[axis].abs() < native[3]) {
+                                let x_error = 427.0 * ((actual[0] - clip_translation[0]) / actual[3] - native[0] / native[3]);
+                                let y_error = 240.0 * ((actual[1] - clip_translation[1]) / actual[3] - native[1] / native[3]);
+                                let pixels = x_error.hypot(y_error);
+                                if !pixels.is_finite() || pixels >= 0.5 {
+                                    frame_error.get_or_insert_with(|| format!(
+                                        "visible basis {anchor}, native {tap:?}, actual {nearest:?}, pixel error {pixels}"));
+                                }
+                                max_pixel_error = max_pixel_error.max(pixels);
+                            }
+                        }
+                    }
+                    if let Some(error) = frame_error {
+                        parity_errors.push((beat, error));
+                    }
+                    if (72.0..=96.1).contains(&beat) { compared_p2_taps += counts[1]; }
+                    #[cfg(target_os = "windows")]
+                    if let Some(capture) = capture.as_mut()
+                        && parity_errors.is_empty()
+                        && next_capture < 6 && beat >= [46.0, 54.0, 74.0, 80.0, 88.0, 96.0][next_capture]
+                    {
+                        let prefix = if versus {
+                            "dyscontrolled-native-clock"
+                        } else {
+                            "dyscontrolled-single-native-clock"
+                        };
+                        let pixels = capture.capture_named_at_game_time(
+                            &mut state, &metrics, beat, prefix, Some(update.wall_seconds));
+                        if expected.taps.is_empty() {
+                            assert_eq!(pixels, 0, "native submits no tap/hold-head models at beat {beat}");
+                        } else if expected.taps.iter().any(|tap| tap.tint[3] > 1.0 / 256.0 && tap.anchors[0][3] > 0.0
+                            && (0..3).all(|axis| tap.anchors[0][axis].abs() < tap.anchors[0][3]))
+                        {
+                            assert!(pixels > 100, "native-visible post-pad taps at beat {beat}: {pixels} pixels");
+                        }
+                        next_capture += 1;
+                    }
+                    compared += 1;
+                }
+                assert_eq!(compared, selected.len());
+                assert!(parity_errors.is_empty(),
+                    "native parity failures at beats {:?}; max clip error {max_clip_error}, max pixel error {max_pixel_error}; examples across sections: {:?}",
+                    parity_errors.iter().map(|(beat, _)| *beat).collect::<Vec<_>>(),
+                    [43.0..68.0, 68.0..72.0, 72.0..80.0, 80.0..86.0,
+                        86.0..90.0, 90.0..98.0, 98.0..104.0].into_iter()
+                        .filter_map(|section| parity_errors.iter().find(|(beat, _)| section.contains(beat)))
+                        .collect::<Vec<_>>());
+                if versus {
+                    assert!(compared_p2_taps > 100, "compared P2 stars taps: {compared_p2_taps}");
+                } else {
+                    assert_eq!(compared_p2_taps, 0);
+                }
+                #[cfg(target_os = "windows")]
+                if capture.is_some() { assert_eq!(next_capture, 6, "all post-pad captures must run"); }
+                eprintln!("Dyscontrolled Galaxy {mode_name} post-pad matched {compared} frames and {compared_p2_taps} P2 stars taps; {bounded_shake_frames} frames allow only bounded common screen shake; max clip residual {max_clip_error}, max pixel residual {max_pixel_error}");
+                #[cfg(target_os = "windows")]
+                if let Some(capture) = capture.as_mut() {
+                    // Reuse the GPU backend/EventLoop and identical texture
+                    // keys. This state takes the ordinary production Baked path,
+                    // with no imported clocks, and advances at normal 60 Hz.
+                    drop(state);
+                    let mut production = build_test_state_with_lua_mode_and_clocks(&simfile,
+                        GameplayViewport::design(), session(), profiles(), "Vulkan (wgpu)",
+                        None, false, None, Some(native_config()));
+                    production.set_live_autoplay_enabled(true);
+                    production.set_current_music_time_ns(0);
+                    let timing = production.gameplay.timing().clone();
+                    assert!((timing.get_time_for_beat_exact(0.0) - 0.059).abs() < 0.000001,
+                        "production Baked timing uses the same native preferences");
+                    let step = |state: &mut screen_gameplay::State, at: f32, delta: f32| {
+                        let music = deadsync_core::song_time::song_time_ns_from_seconds(at);
+                        let host = (f64::from(at) * 1e9) as u64 + 1_000_000;
+                        screen_gameplay::update(state, delta, deadsync_gameplay::GameplayAudioSnapshot {
+                            stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                                music_nanos: music, has_music_mapping: true, valid_at_host_nanos: host,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }, || host, &mut Vec::new());
+                        state.set_current_music_time_ns(music);
+                        let output = state.take_song_lua_output();
+                        assert!(output.errors.is_empty(), "production Baked Lua at {at}s: {:?}", output.errors);
+                    };
+                    let mut now = 0.0f32;
+                    let mut positive_captures = 0;
+                    let mut empty_captures = 0;
+                    let mut observational_captures = 0;
+                    let probes: &[(f32, Option<bool>)] = if versus {
+                        &[
+                            (46.0, Some(true)),
+                            (54.0, Some(true)),
+                            (66.0, Some(false)),
+                            (74.0, Some(true)),
+                            (80.0, Some(true)),
+                            (88.0, Some(true)),
+                            (96.0, Some(true)),
+                        ]
+                    } else {
+                        &[
+                            (46.0, Some(true)),
+                            (54.0, Some(true)),
+                            (66.0, Some(false)),
+                            (74.0, Some(true)),
+                            // Native P1 is empty throughout 78.54..80.06 and
+                            // 90.77..92.07. Probe inside those intervals.
+                            (79.25, Some(false)),
+                            (80.0, None),
+                            (88.0, Some(true)),
+                            (91.25, Some(false)),
+                            // Reset boundaries depend on callback cadence;
+                            // retain these images without a pixel assertion.
+                            (96.0, None),
+                        ]
+                    };
+                    for &(beat, should_show_taps) in probes {
+                        let evidence = selected.values().find(|frame| frame.beat >= beat).unwrap();
+                        assert!(evidence.beat - beat < 0.1);
+                        if should_show_taps == Some(true) {
+                            assert!(evidence.taps.iter().any(|tap| tap.tint[3] > 1.0 / 256.0 && tap.anchors[0][3] > 0.0
+                                && (0..3).all(|axis| tap.anchors[0][axis].abs() < tap.anchors[0][3])),
+                                "native evidence for visible production taps at beat {beat}");
+                        } else if should_show_taps == Some(false) {
+                            assert!(evidence.taps.is_empty(), "native empty interval at beat {beat}");
+                        }
+                        let target = timing.get_time_for_beat_exact(beat);
+                        while now + 1.0 / 60.0 < target {
+                            now += 1.0 / 60.0;
+                            step(&mut production, now, 1.0 / 60.0);
+                        }
+                        step(&mut production, target, target - now);
+                        now = target;
+                        let prefix = if versus {
+                            "dyscontrolled-production"
+                        } else {
+                            "dyscontrolled-single-production"
+                        };
+                        let pixels = capture.capture_named_at_game_time(
+                            &mut production, &metrics, beat, prefix,
+                            Some(game_time_origin + f64::from(target / native_preferences.music_rate)));
+                        if should_show_taps == Some(true) {
+                            assert!(pixels > 100, "production Baked taps at beat {beat}: {pixels} pixels");
+                            positive_captures += 1;
+                        } else if should_show_taps == Some(false) {
+                            assert_eq!(pixels, 0, "production Baked empty interval at beat {beat}");
+                            empty_captures += 1;
+                        } else {
+                            observational_captures += 1;
+                        }
+                    }
+                    assert_eq!(positive_captures, if versus { 6 } else { 4 });
+                    assert_eq!(empty_captures, if versus { 1 } else { 3 });
+                    assert_eq!(observational_captures, if versus { 0 } else { 2 });
+                }
             });
         }).unwrap().join().unwrap();
     }

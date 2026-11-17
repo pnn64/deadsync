@@ -92,7 +92,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
         let target_x =
             song_lua_player_target_x(transform.x, base_x, layout_center_x, view.notefield);
         let target_y = transform.y.unwrap_or(base_y);
-        let assembly = if transform == deadsync_gameplay::SongLuaPlayerTransform::default()
+        let field_camera_parts = scratch.notefield_camera_cache[player].camera_parts();
+        let mut assembly = if transform == deadsync_gameplay::SongLuaPlayerTransform::default()
             && target_x == layout_center_x
             && target_y == screen_center_y()
         {
@@ -118,9 +119,19 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
                     zoom_z: transform.zoom_z,
                     target_z: transform.z,
                     wrappers: Matrix4::IDENTITY,
+                    field_camera_parts,
                 },
             )
         };
+        // Native chart attacks still place Player outside NoteField's tilt.
+        // Share the camera boundary used by scripted fields even without Lua
+        // wrapper states, so attack rotations/translations keep native order.
+        field_camera = prepare_player_field_camera(
+            &mut assembly,
+            field_camera,
+            field_camera_parts,
+            &mut scratch.notefield_actor_scratch[player],
+        );
         if let PlayerActorAssembly::DirectTransform {
             root_camera,
             field_camera_suffix,
@@ -139,6 +150,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
             player,
             assembly,
             field_camera,
+            field_screen_projection: Matrix4::IDENTITY,
+            captured_field_range: None,
             manual_hud_draw: false,
             hud_parts: deadsync_notefield::NotefieldHudParts {
                 underlay_actors: 0,

@@ -10459,7 +10459,8 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "song_lua_player_skew_x_matrix",
         "song_lua_player_skew_y_matrix",
         "song_lua_player_transform_matrix",
-        "song_lua_player_y_fold_actor",
+        "song_lua_screen_matrix_to_world",
+        "SongLuaPlayerPosition",
         "SongLuaPlayerTransformRequest",
         "StreamProgressLookup",
         "TapJudgmentAnimation",
@@ -10638,8 +10639,7 @@ fn song_playback_transforms_use_canonical_notefield_owner() {
     for definition in [
         "pub const fn song_lua_player_skew_x_matrix",
         "pub const fn song_lua_player_skew_y_matrix",
-        "fn song_lua_fold_x_around_pivot",
-        "pub fn song_lua_player_y_fold_actor",
+        "pub rotation_y_deg: f32",
         "pub fn song_lua_player_transform_matrix",
     ] {
         assert!(
@@ -10664,7 +10664,7 @@ fn song_playback_transforms_use_canonical_notefield_owner() {
     for delegation in [
         "song_lua_player_skew_x_matrix(skew_x)",
         "song_lua_player_skew_y_matrix(skew_y)",
-        "song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)",
+        "rotation_y_deg: transform.rotation_y",
         "song_lua_player_transform_matrix(SongLuaPlayerTransformRequest",
     ] {
         assert!(

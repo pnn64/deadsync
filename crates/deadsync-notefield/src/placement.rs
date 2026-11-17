@@ -228,6 +228,7 @@ pub struct NotefieldCameraCache {
     key: Option<NotefieldCameraKey>,
     camera: Option<Matrix4>,
     view: Option<Matrix4>,
+    camera_parts: Option<(Matrix4, Matrix4)>,
     stats: NotefieldCameraCacheStats,
     wrapper: Matrix4,
     vanish: Option<[f32; 2]>,
@@ -271,7 +272,7 @@ impl NotefieldCameraCache {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return self.camera;
         }
-        let camera = notefield_camera_at(
+        let camera = notefield_camera_parts_at(
             screen_w,
             screen_h,
             playfield_center_x,
@@ -283,14 +284,23 @@ impl NotefieldCameraCache {
             self.vanish,
         );
         self.key = Some(key);
-        self.camera = camera.map(|(projection, _)| projection);
-        self.view = camera.map(|(_, view)| view);
+        self.camera = camera.map(|(projection, view, model)| projection * (view * model));
+        self.view = camera.map(|(_, view, model)| view * model);
+        self.camera_parts = camera.map(|(projection, view, model)| (projection * view, model));
         self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
         self.camera
     }
 
     pub(crate) fn eye_camera(&self) -> Option<(Matrix4, Matrix4)> {
         self.camera.zip(self.view)
+    }
+
+    /// Keep the menu camera separate from NoteField's local wrapper and tilt.
+    /// Player's actor transform belongs between them, including when a child
+    /// wrapper has zero zoom and its model matrix cannot be inverted.
+    #[must_use]
+    pub const fn camera_parts(&self) -> Option<(Matrix4, Matrix4)> {
+        self.camera_parts
     }
 
     /// Player::Draw installs a fresh menu camera using that draw's GetX/GetY.
@@ -373,6 +383,7 @@ pub(crate) fn notefield_camera(
 /// `vanish_center` replaces the layout X and receptor midline that
 /// Player::PushPlayerMatrix passes to LoadMenuPerspective. The field geometry
 /// keeps its layout pivot; a moved Player's transform is applied separately.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn notefield_camera_at(
     screen_w: f32,
@@ -385,6 +396,33 @@ pub(crate) fn notefield_camera_at(
     wrapper: Matrix4,
     vanish_center: Option<[f32; 2]>,
 ) -> Option<(Matrix4, Matrix4)> {
+    let (projection, view, model) = notefield_camera_parts_at(
+        screen_w,
+        screen_h,
+        playfield_center_x,
+        center_y,
+        tilt,
+        skew,
+        reverse,
+        wrapper,
+        vanish_center,
+    )?;
+    let eye = view * model;
+    Some((projection * eye, eye))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn notefield_camera_parts_at(
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    center_y: f32,
+    tilt: f32,
+    skew: f32,
+    reverse: bool,
+    wrapper: Matrix4,
+    vanish_center: Option<[f32; 2]>,
+) -> Option<(Matrix4, Matrix4, Matrix4)> {
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
     let [vanish_center_x, vanish_y] = vanish_center
@@ -423,8 +461,7 @@ pub(crate) fn notefield_camera_at(
     let wrapper = Matrix4::from_translation(Vector3::new(pivot_x, 0.0, 0.0))
         * flip * wrapper * flip
         * Matrix4::from_translation(Vector3::new(-pivot_x, 0.0, 0.0));
-    let eye = view * world_to_screen * wrapper * field;
-    Some((proj * eye, eye))
+    Some((proj, view * world_to_screen, wrapper * field))
 }
 
 fn menu_camera(
@@ -694,20 +731,29 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
             1.0
         }
     });
+    // ArrowGetReverseShiftAndScale divides by +0.01 near zero, while Player
+    // still applies the raw signed Mini zoom. Only the reverse/centered shift
+    // uses this ratio; authored column offsets keep their ordinary Mini scale.
+    let reverse_shift_scale = if f64::from(request.field_zoom.abs()) < 0.01 {
+        Some(request.field_zoom / 0.01)
+    } else {
+        None
+    };
     let column_receptor_ys = from_fn(|i| {
         if i >= request.num_cols {
             return receptor_y_normal;
         }
-        request.song_lua_column_y_offsets[i].mul_add(
-            request.field_zoom,
-            field_receptor_y(
-                column_reverse_percent[i],
-                centered_percent,
-                receptor_y_normal,
-                receptor_y_reverse,
-                receptor_y_centered,
-            ),
-        )
+        let receptor_y = field_receptor_y(
+            column_reverse_percent[i],
+            centered_percent,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        );
+        let receptor_y = reverse_shift_scale.map_or(receptor_y, |scale| {
+            (receptor_y - receptor_y_centered).mul_add(scale, receptor_y_centered)
+        });
+        request.song_lua_column_y_offsets[i].mul_add(request.field_zoom, receptor_y)
     });
 
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
@@ -1325,6 +1371,47 @@ mod tests {
         assert_near(layout.receptor_y_centered, 250.0);
         for receptor_y in &layout.column_receptor_ys[..4] {
             assert_near(*receptor_y, 115.27);
+        }
+    }
+
+    #[test]
+    fn near_zero_mini_preserves_native_reverse_shift_and_column_offsets() {
+        // Native uses q as the NoteField scale but +0.01 as the reverse
+        // divisor when abs(q) < 0.01. The C++ comparison promotes the float
+        // zoom to double: the nearest f32 to 0.01 is still inside that guard.
+        for (zoom, reverse_ratio) in [
+            (0.0, 0.0),
+            (0.005, 0.5),
+            (-0.005, -0.5),
+            (0.01, 1.0),
+            (-0.01, -1.0),
+            (0.010000001, 1.0),
+            (-0.010000001, 1.0),
+            (1.0, 1.0),
+        ] {
+            for centered in [0.0, 0.4, 1.0, 1.4] {
+                let mut request = request();
+                request.field_zoom = zoom;
+                request.centered_scroll = centered;
+                request.notefield_offset_y = 10.0;
+                request.column_reverse_percent[..4].copy_from_slice(&[0.0, 0.25, 1.0, -0.1]);
+                request.song_lua_column_y_offsets[..4].copy_from_slice(&[8.0, -16.0, 32.0, 0.0]);
+                let layout = field_layout(request);
+                for col in 0..4 {
+                    // Theme reverse span is 270, centered at Y=260. Keep
+                    // authored column translation outside the divisor guard.
+                    let reverse = request.column_reverse_percent[col];
+                    let expected = 260.0
+                        + 135.0 * (2.0 * reverse - 1.0) * (1.0 - centered) * reverse_ratio
+                        + request.song_lua_column_y_offsets[col] * zoom;
+                    assert_near(layout.column_receptor_ys[col], expected);
+                }
+                let baseline = field_layout(FieldLayoutRequest {
+                    field_zoom: 1.0,
+                    ..request
+                });
+                assert_eq!(layout.hud_layout, baseline.hud_layout);
+            }
         }
     }
 

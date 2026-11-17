@@ -505,10 +505,11 @@ fn compose_judgment<S>(
             visual: request.visual.visual,
             noteskin_column_xs,
             prepared_geometry: prepared.notes.as_ref().map(|notes| HoldIndicatorGeometry {
-                col_offsets: &notes.col_offsets[..prepared.frame_plan.num_cols],
+                col_offsets: &notes.unzoomed_col_offsets[..prepared.frame_plan.num_cols],
                 invert: &notes.invert_distances[..prepared.frame_plan.num_cols],
                 tornado: &notes.tornado_bounds[..prepared.frame_plan.num_cols],
                 beat_factor: notes.beat_factor,
+                field_zoom: prepared.field_zoom,
             }),
             num_cols: prepared.frame_plan.num_cols,
             spacing_multiplier: request.visual.spacing_multiplier,

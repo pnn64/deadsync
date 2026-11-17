@@ -78,7 +78,7 @@ pub use placement::{
 };
 pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
-    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
     song_lua_screen_matrix_to_world,
 };
 pub use timing_labels::{TimingLabelStyle, TimingSegmentLabel};
@@ -173,7 +173,7 @@ pub(crate) use transforms::{
     appearance_note_alpha_glow_cached, beat_factor, compute_active_note_geometry,
     compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
     fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
-    note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
+    note_appearance_cache, note_depth_frame_cache, note_x_offset,
     note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom_cached,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
     visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
@@ -187,7 +187,7 @@ use transforms::{
     visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
-pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
+pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds, note_world_z_cached};
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource, TextAlign};

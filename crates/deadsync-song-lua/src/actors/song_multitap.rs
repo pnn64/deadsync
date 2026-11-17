@@ -22,6 +22,7 @@ pub(super) struct Plan {
     pub(super) roots: TableId,
     jobs: Vec<Job>,
     orders: Arc<FxHashMap<TableId, usize>>,
+    screen_actors: Arc<FxHashSet<TableId>>,
     counter: usize,
     slots: Vec<(usize, Option<usize>)>,
     actor_count: usize,
@@ -57,6 +58,33 @@ struct Advance {
 }
 
 impl Actors {
+    pub(crate) fn compiler_screen_actors(
+        &self,
+        vm: &mut Vm,
+        root: Value,
+    ) -> Result<Arc<FxHashSet<TableId>>, Error> {
+        let callback = vm.new_host_function(
+            |call| {
+                let root = table(call, call.captures()[2])?;
+                build(call, root, false)?;
+                Ok(())
+            },
+            &[
+                Value::Table(self.registry),
+                Value::Table(self.helpers),
+                root,
+            ],
+        )?;
+        vm.call(callback, &[])?;
+        Ok(vm
+            .store()
+            .multitap_plan
+            .as_ref()
+            .unwrap()
+            .screen_actors
+            .clone())
+    }
+
     pub(crate) fn advance_compiler_replay(
         &self,
         vm: &mut Vm,
@@ -162,6 +190,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
         let guard = call.store();
         guard.replay_clock.as_mut().and_then(|clock| {
             clock.orders = plan.orders.clone();
+            clock.screen_actors = plan.screen_actors.clone();
             clock.phase.take()
         })
     };
@@ -179,12 +208,22 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                             call.call(entry, &[Value::Table(actor)])?;
                         }
                     }
-                    let (mut incoming, mut span) =
-                        parent.map_or((Some(delta), Some(delta as f32)), |p| match source {
+                    let (mut incoming, mut span) = parent.map_or_else(
+                        || {
+                            let (delta, span) = call
+                                .store_ref()
+                                .replay_clock
+                                .as_ref()
+                                .and_then(|clock| clock.root_delta(actor))
+                                .unwrap_or((delta, delta as f32));
+                            (Some(delta), Some(span))
+                        },
+                        |p| match source {
                             DeltaSource::Children => deltas[p].children,
                             DeltaSource::Wrappers => deltas[p].wrappers,
                             DeltaSource::Columns => deltas[p].input,
-                        });
+                        },
+                    );
                     // Nothing writes to the actor between these reads.
                     let [inactive, own, hibernating, left] = fields::get_all(
                         call,
@@ -259,7 +298,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         deltas[slot].wrappers.1,
                     );
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(call.store(), order, d as f32);
+                        phase(call.store(), actor, order, d as f32);
                         if call.store().actors.contains_key(&actor) {
                             effects::advance(call, actor, d as f32)?;
                             lifecycle::advance_queue(
@@ -277,13 +316,13 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 Job::Recurring(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(call.store(), order, d as f32);
+                        phase(call.store(), actor, order, d as f32);
                         recurring_update(call, actor, d as f32)?;
                     }
                 }
                 Job::Callback(_, order) => {
                     if let Some(d) = deltas[slot].children.0 {
-                        phase(call.store(), order, d as f32);
+                        phase(call.store(), actor, order, d as f32);
                         callback(call, actor, d)?;
                         #[cfg(feature = "test-support")]
                         live_observation::observe(call, actor)?;
@@ -302,9 +341,9 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
 fn truthy(value: Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
-fn phase(store: &mut Store, order: usize, delta: f32) {
+fn phase(store: &mut Store, actor: TableId, order: usize, delta: f32) {
     if let Some(clock) = &mut store.replay_clock {
-        clock.enter(order, delta);
+        clock.enter(actor, order, delta);
     }
 }
 // `hibernating` and `left` are the actor's theme hibernation flag and its
@@ -597,6 +636,7 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
             roots,
             jobs: Vec::new(),
             orders: Arc::new(FxHashMap::default()),
+            screen_actors: Arc::default(),
             counter: 0,
             slots: Vec::new(),
             actor_count: 0,
@@ -658,10 +698,14 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
                 }
             }
         }
+        let mut screen_actors: FxHashSet<_> = plan.jobs.iter().map(|job| job.actor()).collect();
         collect(call, &mut plan, root, None, DeltaSource::Children)?;
         for actor in after {
+            let start = plan.jobs.len();
             collect(call, &mut plan, actor, None, DeltaSource::Children)?;
+            screen_actors.extend(plan.jobs[start..].iter().map(|job| job.actor()));
         }
+        plan.screen_actors = Arc::new(screen_actors);
         if top != Value::Nil {
             plan.jobs
                 .push(Job::Callback(table(call, top)?, plan.counter));
