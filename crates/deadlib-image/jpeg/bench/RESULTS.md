@@ -107,8 +107,28 @@ coefficient and sample fixtures, truncation/mutation acceptance against the
 strict decoder, sparse and dispatched IDCT equivalence tests (200,000 and
 100,000 blocks), and the exhaustive color test through both dispatch modes.
 Strict Clippy passes for the crate and the benchmark workspace. The full
-suite also passes with `--cfg deadlib_image_jpeg_portable`. Physical CPUs
-without AVX2 and non-x86 architectures were not timed.
+suite also passes with `--cfg deadlib_image_jpeg_portable`, and 47 tests pass
+on i686. Physical CPUs without AVX2 and non-x86 architectures were not timed.
+
+**Sanitizer fuzzing.** Two AddressSanitizer campaigns (Linux x86-64 under WSL,
+nightly 1.101, cargo-fuzz with debug assertions) ran the
+[`decode` target](../fuzz/README.md): the bounded pixel decoder must equal the
+portable coefficient/plane/image pipeline in acceptance and pixels. Coverage
+feedback came only from the native image crates, which the object audit
+confirmed; both campaigns started from the same 591 fixture and asset seeds.
+
+| Campaign | Executions | Seconds | Edges (start, end) | Corpus (start, end) | Failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AVX2 dispatch | 200,000 | 2,317 | 3,479, 4,151 | 371, 1,436 | 0 |
+| `--cfg deadlib_image_jpeg_portable` | 200,000 | 2,613 | 3,917, 4,680 | 371, 1,445 | 0 |
+
+No ASan report, panic, overflow or oracle mismatch occurred, and every
+recorded source hash matches the committed files. This is evidence, not a
+proof: feedback includes native-crate standard-library monomorphizations, and
+the oracle cannot detect errors shared by both pipelines (the C-oracle and
+T.83 tests cover those).
+([summary](results/linux-x86_64-20261117-fuzz/asan-summary.json), manifests
+and logs alongside.)
 
 Raw data: [timing run 1](results/windows-x86_64-20261117-avx2/timing-run1.tsv),
 [timing run 2](results/windows-x86_64-20261117-avx2/timing-run2.tsv),
