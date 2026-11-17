@@ -25,10 +25,12 @@ Higher-precision, lossless and hierarchical inputs use their native
 reconstruction paths. The coefficient and planar APIs below retain their
 precision, component, and metadata representations.
 
-Production code forbids `unsafe`; speed comes from code shaped for baseline
-SSE2 autovectorization (flat IDCT loops, 16-bit color arithmetic that LLVM
-lowers to `pmulhw`/`pmaddwd`) and an eight-byte Huffman bit reader whose
-acceptance matches the strict reader exactly. See the
+Production code denies `unsafe` outside the `simd` dispatch module. Hot
+kernels are portable Rust shaped for vectorization (flat IDCT loops, 16-bit
+color arithmetic that LLVM lowers to `pmulhw`/`pmaddwd`); on x86-64 CPUs with
+AVX2 they run inside an AVX2-compiled wrapper, and the float IDCT has an
+explicit AVX2 kernel. Both builds produce identical samples. An eight-byte
+Huffman bit reader's acceptance matches the strict reader exactly. See the
 [benchmark results](bench/RESULTS.md).
 
 Progressive decoding includes spectral selection, DC/AC successive
