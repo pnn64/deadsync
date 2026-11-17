@@ -9,8 +9,8 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
-use crate::views::SelectFlowRuntimeView;
 use crate::ui_layout::UILayoutType;
+use crate::views::SelectFlowRuntimeView;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
@@ -503,8 +503,8 @@ pub fn push_actors(
         (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
     for (i, label) in labels.iter().take(state.flow.choice_count()).enumerate() {
         let (x, y) = root_pt(-160.0, mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0));
-        let zoom = state.flow.choice_zoom(i);
-        let t = ((zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
+        let choice_zoom = state.flow.choice_zoom(i);
+        let t = ((choice_zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
 
         let rgb = [
             (label_selected[0] - label_unselected[0]).mul_add(t, label_unselected[0]),
@@ -517,7 +517,7 @@ pub fn push_actors(
             settext(Arc::clone(label)):
             align(1.0, 0.5):
             xy(x, y):
-            zoom(zoom):
+            zoom(choice_zoom * root_scale):
             diffuse(rgb[0], rgb[1], rgb[2], label_alpha):
             horizalign(right)
         ));

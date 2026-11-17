@@ -402,7 +402,7 @@ fn menu_actors(
 ) -> Result<Vec<Actor>> {
     match name {
         "title" => Ok(title_actors()),
-        "profile-select" => Ok(profile_select_actors(assets, player_variant)),
+        "profile-select" => Ok(profile_select_actors(assets)),
         "style-select" => Ok(style_select_actors(player_variant)),
         "mode-select" => Ok(mode_select_actors(assets, player_variant)),
         "song-select" => Ok(preview.song_select_actors(
@@ -428,14 +428,23 @@ fn title_actors() -> Vec<Actor> {
     screens::menu::get_actors(&screens::menu::init(), None, 1.0)
 }
 
-fn profile_select_actors(
-    assets: &AssetManager,
-    player_variant: Option<PlayerVariant>,
-) -> Vec<Actor> {
-    let mut state = screens::select_profile::init(views::ProfilePickerView::default());
-    if let Some(variant) = player_variant {
-        screens::select_profile::set_joined(&mut state, variant.joined[0], variant.joined[1]);
-    }
+fn profile_select_actors(assets: &AssetManager) -> Vec<Actor> {
+    let mut view = views::ProfilePickerView::default();
+    let mut preview_profile = view.guest.clone();
+    preview_profile.id = "menu-preview".to_owned();
+    preview_profile.display_name = "Dummy Profile".to_owned();
+    preview_profile.total_songs_played = 42;
+    view.profiles.push(preview_profile);
+    view.default_profiles = [
+        deadsync_profile::ActiveProfile::Local {
+            id: "menu-preview".to_owned(),
+        },
+        deadsync_profile::ActiveProfile::Guest,
+    ];
+    let mut state = screens::select_profile::init(view);
+    screens::select_profile::set_joined(&mut state, true, true);
+    let _ = screens::select_profile::get_actors(&state, assets, 1.0);
+    deadlib_present::runtime::tick(CAPTURE_TIME);
     screens::select_profile::get_actors(&state, assets, 1.0)
 }
 

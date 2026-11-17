@@ -13,7 +13,7 @@ use deadsync_assets::noteskin::{self, Noteskin};
 
 use crate::color;
 use deadlib_present::actors::{self, Actor};
-use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_width};
 use deadlib_render_core::BlendMode;
 use deadsync_config::theme::GameFlag;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -59,6 +59,7 @@ const FRAME_W_JOIN: f32 = FRAME_BASE_W * 0.9;
 const FRAME_H: f32 = 214.0;
 const FRAME_BORDER: f32 = 2.0;
 const FRAME_CX_OFF: f32 = 150.0;
+const FRAME_EDGE_MARGIN: f32 = 8.0;
 const FRAME_IN_CROP_DUR: f32 = 0.30; // SL: smooth(0.3):cropbottom(0)
 const OVERLAY_IN_DELAY: f32 = 0.30; // SL: sleep(0.3)
 const OVERLAY_IN_DUR: f32 = 0.10; // SL: linear(0.1)
@@ -1896,8 +1897,9 @@ fn push_box_actors_with_model_cache(
 
     // IMPORTANT: Apply shake as a post-transform so the frame's explicit tween salt
     // stays stable and the crop-in tweens do not restart every frame.
-    let p1_cx = cx - FRAME_CX_OFF;
-    let p2_cx = cx + FRAME_CX_OFF;
+    let frame_cx_off = frame_center_offset(screen_width());
+    let p1_cx = cx - frame_cx_off;
+    let p2_cx = cx + frame_cx_off;
     let p1_shake_dx = shake_x(state.p1_shake_t);
     let p2_shake_dx = shake_x(state.p2_shake_t);
 
@@ -2096,6 +2098,12 @@ fn push_box_actors_with_model_cache(
     }
 }
 
+fn frame_center_offset(width: f32) -> f32 {
+    let frame_outer_w = FRAME_W_SCROLLER + FRAME_BORDER;
+    let max_offset = ((width - frame_outer_w) * 0.5 - FRAME_EDGE_MARGIN).max(0.0);
+    FRAME_CX_OFF.min(max_offset)
+}
+
 pub fn push_box_actors_with_z(
     actors: &mut Vec<Actor>,
     state: &State,
@@ -2260,6 +2268,18 @@ mod tests {
             ],
             three_key_navigation: true,
         }
+    }
+
+    #[test]
+    fn profile_frames_fit_square_and_wide_layouts() {
+        let frame_outer_w = FRAME_W_SCROLLER + FRAME_BORDER;
+        for width in [480.0, 500.0, 640.0, 960.0] {
+            let offset = frame_center_offset(width);
+            assert!(offset + frame_outer_w * 0.5 <= width * 0.5 - FRAME_EDGE_MARGIN);
+        }
+        assert!(frame_center_offset(480.0) < FRAME_CX_OFF);
+        assert_eq!(frame_center_offset(640.0), FRAME_CX_OFF);
+        assert_eq!(frame_center_offset(960.0), FRAME_CX_OFF);
     }
 
     #[test]
