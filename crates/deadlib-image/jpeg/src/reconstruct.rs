@@ -823,19 +823,30 @@ mod tests {
     use super::*;
     #[test]
     fn chunked_color_conversion_matches_fixed_point_for_every_input() {
-        let luma: [i16; CHUNK] = core::array::from_fn(|i| i as i16);
-        let mut out = [0; CHUNK * 3];
-        for cb in 0..256 {
-            for cr in 0..256 {
-                for base in (0..256).step_by(CHUNK) {
-                    let y = luma.map(|v| v + base as i16);
-                    ycbcr_chunk(&y, &[cb as i16; CHUNK], &[cr as i16; CHUNK], &mut out);
-                    for (i, rgb) in out.as_chunks::<3>().0.iter().enumerate() {
-                        assert_eq!(*rgb, rgb8(i32::from(y[i]), [cb, cr]), "{cb} {cr}");
+        // Through dispatch, so the AVX2-compiled kernel (where available) is
+        // checked as well as the portable one.
+        struct Exhaustive;
+        impl crate::simd::Kernel for Exhaustive {
+            type Output = ();
+            #[inline(always)]
+            fn run(self) {
+                let luma: [i16; CHUNK] = core::array::from_fn(|i| i as i16);
+                let mut out = [0; CHUNK * 3];
+                for cb in 0..256 {
+                    for cr in 0..256 {
+                        for base in (0..256).step_by(CHUNK) {
+                            let y = luma.map(|v| v + base as i16);
+                            ycbcr_chunk(&y, &[cb as i16; CHUNK], &[cr as i16; CHUNK], &mut out);
+                            for (i, rgb) in out.as_chunks::<3>().0.iter().enumerate() {
+                                assert_eq!(*rgb, rgb8(i32::from(y[i]), [cb, cr]), "{cb} {cr}");
+                            }
+                        }
                     }
                 }
             }
         }
+        crate::simd::dispatch(Exhaustive);
+        crate::simd::portable(|| crate::simd::dispatch(Exhaustive));
     }
     #[test]
     fn paired_chroma_interpolation_matches_generic_siting_and_rounding() {
