@@ -1,0 +1,22 @@
+[package]
+name = "gif-decode-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+allocations = []
+
+[dependencies]
+deadlib-image-gif = { path = ".." }
+gif = "=0.14.2"
+gif-dispose = "=6.0.0"
+image = { version = "=0.25.10", default-features = false, features = ["gif"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
