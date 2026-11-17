@@ -1,7 +1,7 @@
 //! Pixel output without retaining full-image coefficients for sequential scans.
 use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader};
-use crate::transform::{FloatQuant, idct8, idct8_dc};
+use crate::transform::{FloatQuant, idct8_auto, idct8_dc};
 use crate::reconstruct::{
     ColorHints, CHUNK, cmyk_to_rgb, emit_chunk, infer_components_with_hints, ycbcr_chunk, ycbcr_row, ycbcr420_row,
     ycck_to_cmyk,
@@ -558,7 +558,7 @@ impl Plan<'_> {
                                 if last == 0 {
                                     idct8_dc(block[0], quant, target, stride);
                                 } else {
-                                    idct8(&block, quant, target, stride);
+                                    idct8_auto(&block, quant, target, stride);
                                 }
                             });
                             if last == 0 {
@@ -606,11 +606,7 @@ fn from_coefficients(
                 for bx in 0..c.width.div_ceil(8) {
                     let block = &c.blocks[row * c.blocks_wide + bx];
                     window.put(i, my, by, bx, &mut cache, &mut output, |target, stride| {
-                        if block[1..].iter().all(|&v| v == 0) {
-                            idct8_dc(block[0], quant, target, stride);
-                        } else {
-                            idct8(block, quant, target, stride);
-                        }
+                        idct8_auto(block, quant, target, stride);
                     });
                 }
             }

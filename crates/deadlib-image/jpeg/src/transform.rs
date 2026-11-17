@@ -148,6 +148,84 @@ pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], strid
     }
 }
 
+/// `aan_line` with inputs 4..8 zero. Dropping exact zero terms can only change
+/// the sign of a zero, which never reaches a nonzero sum or the +128.5
+/// output, so samples are identical.
+#[inline(always)]
+fn aan_half(x: [f32; 4]) -> [f32; 8] {
+    let tmp12 = x[2] * R2 - x[2];
+    let tmp0 = x[0] + x[2];
+    let tmp3 = x[0] - x[2];
+    let tmp1 = x[0] + tmp12;
+    let tmp2 = x[0] - tmp12;
+    let tmp7 = x[1] + x[3];
+    let tmp11 = (x[1] - x[3]) * R2;
+    let z5 = (x[1] - x[3]) * C2;
+    let tmp10 = z5 - x[1] * C2_MINUS_C6;
+    let tmp12 = z5 + x[3] * C2_PLUS_C6;
+    let tmp6 = tmp12 - tmp7;
+    let tmp5 = tmp11 - tmp6;
+    let tmp4 = tmp10 - tmp5;
+    [
+        tmp0 + tmp7,
+        tmp1 + tmp6,
+        tmp2 + tmp5,
+        tmp3 + tmp4,
+        tmp3 - tmp4,
+        tmp2 - tmp5,
+        tmp1 - tmp6,
+        tmp0 - tmp7,
+    ]
+}
+
+/// [`idct8`] for blocks whose nonzero coefficients lie in the top-left 4x4.
+#[inline]
+pub(crate) fn idct8_quarter(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let mut input = [0f32; 32];
+    for v in 0..4 {
+        for u in 0..8 {
+            input[v * 8 + u] = f32::from(block[v * 8 + u]) * quant.0[v * 8 + u];
+        }
+    }
+    let mut work = [0f32; 32];
+    for u in 0..4 {
+        let column = aan_half(core::array::from_fn(|v| input[v * 8 + u]));
+        for (y, value) in column.into_iter().enumerate() {
+            work[y * 4 + u] = value;
+        }
+    }
+    let mut pixels = [0u8; 64];
+    for y in 0..8 {
+        let mut row: [f32; 4] = work[y * 4..y * 4 + 4].try_into().unwrap();
+        row[0] += 128.5;
+        let samples = aan_half(row);
+        for x in 0..8 {
+            pixels[y * 8 + x] = samples[x].clamp(0.0, 255.0) as u8;
+        }
+    }
+    for (y, row) in pixels.as_chunks::<8>().0.iter().enumerate() {
+        out[y * stride..y * stride + 8].copy_from_slice(row);
+    }
+}
+
+/// Reconstruct with the cheapest exact transform for the block's support.
+#[inline(always)]
+pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let outside = block[32..].iter().fold(0, |acc, &v| acc | v)
+        | block[..32]
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .fold(0, |acc, row| acc | row[4] | row[5] | row[6] | row[7]);
+    if outside != 0 {
+        idct8(block, quant, out, stride);
+    } else if block[1..32].iter().fold(0, |acc, &v| acc | v) == 0 {
+        idct8_dc(block[0], quant, out, stride);
+    } else {
+        idct8_quarter(block, quant, out, stride);
+    }
+}
+
 /// DC-only blocks reduce exactly to one sample in every position.
 #[inline]
 pub(crate) fn idct8_dc(dc: i16, quant: &FloatQuant, out: &mut [u8], stride: usize) {
@@ -299,6 +377,31 @@ mod tests {
                 (state >> 26) as i64 - (1 << 37)
             });
             assert_eq!(inverse_line(input), matrix(input));
+        }
+    }
+    #[test]
+    fn sparse_inverse_transforms_match_the_full_transform() {
+        let quant = FloatQuant::new(&core::array::from_fn(|i| 1 + (i as u16 * 37) % 97));
+        let mut state = 0x9e37_79b9u32;
+        for case in 0..200_000 {
+            let mut block = [0i16; 64];
+            for v in 0..4 {
+                for u in 0..4 {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    if case % 2 == 0 || state % 3 == 0 {
+                        block[v * 8 + u] = (state >> 16) as i16 >> (case % 13);
+                    }
+                }
+            }
+            if case % 5 == 0 {
+                block[1..].fill(0);
+            }
+            let (mut full, mut sparse) = ([0u8; 64], [0u8; 64]);
+            idct8(&block, &quant, &mut full, 8);
+            idct8_auto(&block, &quant, &mut sparse, 8);
+            assert_eq!(full, sparse, "{block:?}");
         }
     }
     #[test]
