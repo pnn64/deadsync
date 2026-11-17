@@ -924,7 +924,7 @@ impl Transport for Http<'_> {
 }
 
 /// `bytes a-b/total` as `(a, b + 1, total)`.
-fn parse_content_range(value: &str) -> Option<(u64, u64, u64)> {
+pub(crate) fn parse_content_range(value: &str) -> Option<(u64, u64, u64)> {
     let value = value.trim();
     let rest = value
         .get(..5)
@@ -956,7 +956,7 @@ fn multipart_boundary(content_type: &str) -> Option<String> {
 }
 
 /// A strong validator, or nothing. A weak one may not be used in `If-Range`.
-fn strong_etag(tag: Option<&str>) -> Option<String> {
+pub(crate) fn strong_etag(tag: Option<&str>) -> Option<String> {
     tag.map(str::trim)
         .filter(|tag| !tag.is_empty() && !tag.starts_with("W/"))
         .map(str::to_owned)

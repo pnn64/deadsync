@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use std::thread;
+use std::time::Duration;
 use zip::ZipArchive;
 
 pub const WEBSITE_URL: &str = "https://stepmaniaonline.net/";
@@ -852,21 +853,267 @@ fn install_pack(job: &DownloadJob) -> Result<PathBuf, StepManiaOnlineError> {
     result
 }
 
-fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepManiaOnlineError> {
-    let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
-    download_archive_from(pack, archive_path, &url)
+/// How a pack download rides out a connection that drops or goes quiet.
+#[derive(Clone, Copy, Debug)]
+struct Resume<'a> {
+    /// The wait before each try in a row that brings nothing new. A try that
+    /// brings more starts the list over, so a long download over a line that
+    /// keeps dropping still finishes, while a line that is down for good
+    /// gives up after the last wait.
+    delays: &'a [Duration],
+    /// How long the server may send nothing before the connection counts as
+    /// dropped. A connection that died without closing -- a network change,
+    /// a router that forgot it -- would otherwise hold the download still
+    /// forever.
+    stall: Duration,
 }
 
-fn download_archive_from(pack: &PackInfo, archive_path: &Path, url: &str) -> Result<u64, StepManiaOnlineError> {
-    let response = network::get_streaming_agent()
-        .get(url)
-        .call()
-        .map_err(network::error_from_ureq)?;
-    let mut body = response.into_body();
+const PACK_RESUME: Resume<'static> = Resume {
+    delays: &[
+        Duration::from_secs(1),
+        Duration::from_secs(2),
+        Duration::from_secs(4),
+        Duration::from_secs(8),
+        Duration::from_secs(15),
+        Duration::from_secs(30),
+    ],
+    stall: Duration::from_secs(30),
+};
+
+fn download_archive(pack: &PackInfo, archive_path: &Path) -> Result<u64, StepManiaOnlineError> {
+    let url = format!("{DOWNLOAD_URL_PREFIX}/{}/", pack.id);
+    download_archive_from(pack, archive_path, &url, PACK_RESUME)
+}
+
+fn download_archive_from(
+    pack: &PackInfo,
+    archive_path: &Path,
+    url: &str,
+    resume: Resume<'_>,
+) -> Result<u64, StepManiaOnlineError> {
+    let body = ResumableBody::open(network::get_streaming_agent(), url, resume)?;
     // Use the decoded body's length; a raw Content-Length can describe an
     // HTTP-compressed representation instead of the ZIP we write to disk.
-    let content_length = body.content_length();
-    write_archive_download(pack, archive_path, body.as_reader(), content_length)
+    let content_length = body.length;
+    write_archive_download(pack, archive_path, body, content_length)
+}
+
+/// A download body that rides out its connection dropping or going quiet
+/// partway: it asks the server for the rest, from the first byte not yet
+/// read, and carries on. A drop used to throw away everything fetched so
+/// far -- on a pack of a gigabyte or more, often most of the download -- and
+/// the player had to start again from nothing.
+///
+/// The rest is asked for with `Range`, guarded by `If-Range` with the first
+/// response's ETag, so a pack that changed in the meantime comes back whole
+/// rather than as the new pack's tail on the old one's head. That, a range
+/// that starts anywhere but where the body stopped, or a refusal ends the
+/// download with the error that dropped it, as does running out of waits.
+struct ResumableBody<'a> {
+    agent: network::HttpAgent,
+    url: &'a str,
+    resume: Resume<'a>,
+    reader: Box<dyn Read>,
+    /// The first response's strong ETag, which `If-Range` sends back.
+    etag: Option<String>,
+    /// The whole body's length, once a response has said.
+    length: Option<u64>,
+    /// Bytes handed on so far, which is where the next range starts.
+    read: u64,
+    /// Tries in a row that brought nothing new.
+    misses: usize,
+}
+
+/// Why a resume did not pick the body up again.
+enum Reopen {
+    /// The request itself failed: worth another try after the next wait.
+    Again(std::io::Error),
+    /// The server answered, but not with the rest.
+    Refused(String),
+}
+
+impl<'a> ResumableBody<'a> {
+    fn open(
+        agent: network::HttpAgent,
+        url: &'a str,
+        resume: Resume<'a>,
+    ) -> Result<Self, network::NetworkError> {
+        let reply = get_from(&agent, url, resume.stall, 0, None)?;
+        Ok(Self {
+            etag: crate::pack_archive::strong_etag(reply.etag.as_deref()),
+            length: reply.length,
+            reader: reply.body,
+            agent,
+            url,
+            resume,
+            read: 0,
+            misses: 0,
+        })
+    }
+
+    /// Wait, then pick the body up where it stopped; or, once the waits run
+    /// out or the server will not continue, hand back why it stopped.
+    fn pick_up(&mut self, mut error: std::io::Error) -> std::io::Result<()> {
+        loop {
+            let Some(&delay) = self.resume.delays.get(self.misses) else {
+                return Err(std::io::Error::new(
+                    error.kind(),
+                    format!("the connection kept dropping ({error})"),
+                ));
+            };
+            self.misses += 1;
+            log::warn!(
+                "Download from {} stopped after {} bytes ({error}); asking for the rest in {delay:?}.",
+                self.url,
+                self.read
+            );
+            thread::sleep(delay);
+            match self.reopen() {
+                Ok(reader) => {
+                    self.reader = reader;
+                    return Ok(());
+                }
+                Err(Reopen::Again(next)) => error = next,
+                Err(Reopen::Refused(reason)) => {
+                    return Err(std::io::Error::new(
+                        error.kind(),
+                        format!(
+                            "the connection dropped ({error}) and the download could not resume: {reason}"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    fn reopen(&mut self) -> Result<Box<dyn Read>, Reopen> {
+        let reply = match get_from(
+            &self.agent,
+            self.url,
+            self.resume.stall,
+            self.read,
+            self.etag.as_deref(),
+        ) {
+            Ok(reply) => reply,
+            // The server meant it; asking again would not change its answer.
+            Err(network::NetworkError::HttpStatus(status))
+                if !matches!(status, 429 | 500..=599) =>
+            {
+                return Err(Reopen::Refused(format!("http status {status}")));
+            }
+            Err(error) => return Err(Reopen::Again(std::io::Error::other(error))),
+        };
+        if reply.status != 206 {
+            return Err(Reopen::Refused(
+                "the server sent the pack from the start".to_string(),
+            ));
+        }
+        let Some((start, _, total)) = reply
+            .content_range
+            .as_deref()
+            .and_then(crate::pack_archive::parse_content_range)
+        else {
+            return Err(Reopen::Refused(
+                "the server did not say which bytes it sent".to_string(),
+            ));
+        };
+        if start != self.read || self.length.is_some_and(|length| length != total) {
+            return Err(Reopen::Refused(format!(
+                "asked for bytes {}- of {:?}, got {start}- of {total}",
+                self.read, self.length
+            )));
+        }
+        self.length = Some(total);
+        log::info!(
+            "Download from {} picked up again at byte {}.",
+            self.url,
+            self.read
+        );
+        Ok(reply.body)
+    }
+}
+
+impl Read for ResumableBody<'_> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            let error = match self.reader.read(buf) {
+                // A range the server ended before the whole: ask for more.
+                Ok(0)
+                    if !buf.is_empty() && self.length.is_some_and(|length| self.read < length) =>
+                {
+                    std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "the server sent part of the rest",
+                    )
+                }
+                Ok(read) => {
+                    if read > 0 {
+                        self.read += read as u64;
+                        self.misses = 0;
+                    }
+                    return Ok(read);
+                }
+                Err(error) => error,
+            };
+            self.pick_up(error)?;
+        }
+    }
+}
+
+/// What one GET of a download brought back.
+struct Reply {
+    status: u16,
+    etag: Option<String>,
+    content_range: Option<String>,
+    /// The decoded body's length, when the server gave one.
+    length: Option<u64>,
+    body: Box<dyn Read>,
+}
+
+/// GET `url` from byte `from` on, under `If-Range: etag` when there is one.
+/// It gives up on a server gone quiet for `stall`, so a connection that died
+/// without closing reads as a dropped one.
+fn get_from(
+    agent: &network::HttpAgent,
+    url: &str,
+    stall: Duration,
+    from: u64,
+    etag: Option<&str>,
+) -> Result<Reply, network::NetworkError> {
+    let mut request = agent
+        .get(url)
+        .config()
+        .timeout_per_read(Some(stall))
+        .build();
+    if from > 0 {
+        request = request
+            .header("Range", format!("bytes={from}-"))
+            // A range is a range of the file as stored. Under a compressed
+            // transfer it would be a range of something else.
+            .header("Accept-Encoding", "identity");
+        if let Some(etag) = etag {
+            request = request.header("If-Range", etag);
+        }
+    }
+    let response = request.call().map_err(network::error_from_ureq)?;
+    let header = |name: &str| {
+        response
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    };
+    let etag = header("etag");
+    let content_range = header("content-range");
+    let status = response.status().as_u16();
+    let body = response.into_body();
+    Ok(Reply {
+        status,
+        etag,
+        content_range,
+        length: body.content_length(),
+        body: Box::new(body.into_reader()),
+    })
 }
 
 fn write_archive_download(
@@ -1628,12 +1875,240 @@ mod tests {
         // A stale catalog size must not override the actual HTTP body length.
         pack.size_bytes = 103_325_333;
 
-        let downloaded = download_archive_from(&pack, &archive, &url).expect("download generated pack");
+        let downloaded = download_archive_from(&pack, &archive, &url, PACK_RESUME).expect("download generated pack");
         server.join().unwrap();
         assert_eq!(downloaded, fs::metadata(&archive).unwrap().len());
         extract_archive(&archive, &staging, downloaded).expect("extract generated pack");
         assert_eq!(fs::read(staging.join("Song/song.ssc")).unwrap(), b"#TITLE:Generated;");
         assert_eq!(fs::read(staging.join("Song/music.ogg")).unwrap(), b"audio");
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    /// Resume waits short enough for a test; the stall is long enough that a
+    /// busy machine never trips it by accident.
+    const QUICK_RESUME: Resume<'static> = Resume {
+        delays: &[Duration::ZERO, Duration::ZERO],
+        stall: Duration::from_secs(2),
+    };
+
+    type Reply = Box<dyn FnOnce(&mut std::net::TcpStream) + Send>;
+
+    /// A local server that answers one connection per entry of `replies`, in
+    /// order, each on its own thread so a reply that goes quiet holds up no
+    /// other, and gives back each request's head, lowercased.
+    fn serve_in_turn(replies: Vec<Reply>) -> (String, thread::JoinHandle<Vec<String>>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/download/pack/327/", listener.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            let mut connections = Vec::new();
+            for reply in replies {
+                let (mut stream, _) = listener.accept().unwrap();
+                connections.push(thread::spawn(move || {
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(10)))
+                        .unwrap();
+                    let mut head = Vec::new();
+                    let mut byte = [0];
+                    while !head.ends_with(b"\r\n\r\n") {
+                        stream.read_exact(&mut byte).unwrap();
+                        head.push(byte[0]);
+                        assert!(head.len() < 8192);
+                    }
+                    reply(&mut stream);
+                    String::from_utf8(head).unwrap().to_ascii_lowercase()
+                }));
+            }
+            connections
+                .into_iter()
+                .map(|connection| connection.join().unwrap())
+                .collect()
+        });
+        (url, server)
+    }
+
+    /// Answers 200 for all of `bytes`, sends the first `upto` of them, then
+    /// either hangs up or, given `quiet`, holds the connection open silently.
+    fn reply_then_drop(
+        bytes: &Arc<Vec<u8>>,
+        upto: usize,
+        etag: &'static str,
+        quiet: Option<Duration>,
+    ) -> Reply {
+        let bytes = Arc::clone(bytes);
+        Box::new(move |stream| {
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: {etag}\r\nConnection: close\r\n\r\n",
+                bytes.len()
+            )
+            .unwrap();
+            stream.write_all(&bytes[..upto]).unwrap();
+            stream.flush().unwrap();
+            if let Some(quiet) = quiet {
+                thread::sleep(quiet);
+            }
+        })
+    }
+
+    /// Answers 206 with `bytes[from..to]` of the whole. The body may go
+    /// unread -- a refused answer is hung up on -- so a failed write is fine.
+    fn reply_range(bytes: &Arc<Vec<u8>>, from: usize, to: usize) -> Reply {
+        let bytes = Arc::clone(bytes);
+        Box::new(move |stream| {
+            write!(
+                stream,
+                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nContent-Range: bytes {from}-{}/{}\r\nConnection: close\r\n\r\n",
+                to - from,
+                to - 1,
+                bytes.len()
+            )
+            .unwrap();
+            let _ = stream.write_all(&bytes[from..to]);
+        })
+    }
+
+    /// A pack archive big enough to take several reads, with a song in it.
+    fn resumable_pack(root: &Path) -> Arc<Vec<u8>> {
+        let source = root.join("source.zip");
+        // Scrambled bytes, so deflate can't shrink the archive to one read.
+        let audio: Vec<u8> = (0..300_000u32)
+            .map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8)
+            .collect();
+        write_zip(
+            &source,
+            &[
+                ("Resumed Pack/Song/song.ssc", b"#TITLE:Resumed;"),
+                ("Resumed Pack/Song/music.ogg", &audio),
+            ],
+        );
+        Arc::new(fs::read(&source).unwrap())
+    }
+
+    #[test]
+    fn pack_download_picks_up_where_a_dropped_connection_left_off() {
+        let root = temp_dir("resumed-http-pack");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let bytes = resumable_pack(&root);
+        let (first, second, whole) = (bytes.len() / 3, bytes.len() * 2 / 3, bytes.len());
+        // Dropped a third of the way in; then a range the server ends at two
+        // thirds, which has to be asked on from; then the rest.
+        let (url, server) = serve_in_turn(vec![
+            reply_then_drop(&bytes, first, "\"v1\"", None),
+            reply_range(&bytes, first, second),
+            reply_range(&bytes, second, whole),
+        ]);
+        let archive = root.join("download.zip");
+        let staging = root.join("staging");
+        let pack = pack(327, "Resumed Pack", None, None);
+
+        let downloaded = download_archive_from(&pack, &archive, &url, QUICK_RESUME)
+            .expect("the download resumes");
+        let heads = server.join().unwrap();
+        assert!(!heads[0].contains("\r\nrange:"));
+        assert!(heads[1].contains(&format!("\r\nrange: bytes={first}-\r\n")));
+        assert!(heads[1].contains("\r\nif-range: \"v1\"\r\n"));
+        assert!(heads[1].contains("\r\naccept-encoding: identity\r\n"));
+        assert!(heads[2].contains(&format!("\r\nrange: bytes={second}-\r\n")));
+        assert_eq!(downloaded, whole as u64);
+        assert_eq!(fs::read(&archive).unwrap(), *bytes);
+        extract_archive(&archive, &staging, downloaded).expect("extract the resumed pack");
+        assert_eq!(
+            fs::read(staging.join("Song/song.ssc")).unwrap(),
+            b"#TITLE:Resumed;"
+        );
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    fn pack_download_picks_up_after_the_server_goes_quiet() {
+        let root = temp_dir("stalled-http-pack");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let bytes = resumable_pack(&root);
+        let half = bytes.len() / 2;
+        let resume = Resume {
+            stall: Duration::from_millis(250),
+            ..QUICK_RESUME
+        };
+        let (url, server) = serve_in_turn(vec![
+            reply_then_drop(&bytes, half, "\"v1\"", Some(Duration::from_secs(3))),
+            reply_range(&bytes, half, bytes.len()),
+        ]);
+        let archive = root.join("download.zip");
+        let pack = pack(327, "Resumed Pack", None, None);
+
+        download_archive_from(&pack, &archive, &url, resume).expect("the download resumes");
+        let heads = server.join().unwrap();
+        assert!(heads[1].contains(&format!("\r\nrange: bytes={half}-\r\n")));
+        assert_eq!(fs::read(&archive).unwrap(), *bytes);
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    fn pack_download_gives_up_on_a_connection_that_keeps_dropping() {
+        let root = temp_dir("dropping-http-pack");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let bytes = resumable_pack(&root);
+        // One answer, then a hang-up for each of the two waits.
+        let (url, server) = serve_in_turn(vec![
+            reply_then_drop(&bytes, bytes.len() / 3, "\"v1\"", None),
+            Box::new(|_| {}),
+            Box::new(|_| {}),
+        ]);
+        let archive = root.join("download.zip");
+        let pack = pack(327, "Resumed Pack", None, None);
+
+        let error = download_archive_from(&pack, &archive, &url, QUICK_RESUME).unwrap_err();
+        assert_eq!(server.join().unwrap().len(), 3);
+        assert!(
+            error.to_string().contains("the connection kept dropping"),
+            "{error}"
+        );
+
+        fs::remove_dir_all(root).expect("clean fixture root");
+    }
+
+    #[test]
+    fn pack_download_never_stitches_an_answer_that_is_not_the_rest() {
+        let root = temp_dir("restitched-http-pack");
+        fs::create_dir_all(&root).expect("create fixture root");
+        let bytes = resumable_pack(&root);
+        let third = bytes.len() / 3;
+        let changed = Arc::new(bytes.iter().rev().copied().collect::<Vec<u8>>());
+        let whole_again: Reply = {
+            let changed = Arc::clone(&changed);
+            Box::new(move |stream| {
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: \"v2\"\r\nConnection: close\r\n\r\n",
+                    changed.len()
+                )
+                .unwrap();
+                let _ = stream.write_all(&changed);
+            })
+        };
+        let cases: [(Reply, &str); 2] = [
+            // The pack changed, so If-Range brought the new one back whole.
+            (whole_again, "the server sent the pack from the start"),
+            // A range that starts somewhere else.
+            (reply_range(&changed, 0, third), "got 0-"),
+        ];
+        for (reply, reason) in cases {
+            let (url, server) =
+                serve_in_turn(vec![reply_then_drop(&bytes, third, "\"v1\"", None), reply]);
+            let archive = root.join("download.zip");
+            let pack = pack(327, "Resumed Pack", None, None);
+
+            let error = download_archive_from(&pack, &archive, &url, QUICK_RESUME).unwrap_err();
+            server.join().unwrap();
+            let message = error.to_string();
+            assert!(message.contains("could not resume"), "{message}");
+            assert!(message.contains(reason), "{message}");
+            assert_eq!(fs::read(&archive).unwrap(), bytes[..third]);
+            fs::remove_file(&archive).unwrap();
+        }
 
         fs::remove_dir_all(root).expect("clean fixture root");
     }
