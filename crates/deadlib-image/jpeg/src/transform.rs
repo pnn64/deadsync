@@ -214,6 +214,13 @@ pub(crate) fn idct8_quarter(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8
 /// Reconstruct with the cheapest exact transform for the block's support.
 #[inline(always)]
 pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    if block[1..].iter().fold(0, |acc, &v| acc | v) == 0 {
+        return idct8_dc(block[0], quant, out, stride);
+    }
+    // With AVX2 the full transform is cheaper than the reduced portable one.
+    if crate::simd::idct8(block, &quant.0, [R2, C2, C2_MINUS_C6, C2_PLUS_C6], out, stride) {
+        return;
+    }
     let outside = block[32..].iter().fold(0, |acc, &v| acc | v)
         | block[..32]
             .as_chunks::<8>()
@@ -221,11 +228,7 @@ pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], 
             .iter()
             .fold(0, |acc, row| acc | row[4] | row[5] | row[6] | row[7]);
     if outside != 0 {
-        if !crate::simd::idct8(block, &quant.0, [R2, C2, C2_MINUS_C6, C2_PLUS_C6], out, stride) {
-            idct8(block, quant, out, stride);
-        }
-    } else if block[1..32].iter().fold(0, |acc, &v| acc | v) == 0 {
-        idct8_dc(block[0], quant, out, stride);
+        idct8(block, quant, out, stride);
     } else {
         idct8_quarter(block, quant, out, stride);
     }
