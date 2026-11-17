@@ -423,7 +423,7 @@ pub(super) fn submenu_cursor_dest(
     }
     let selected_row = state.sub_selected.min(total_rows - 1);
     let row_mid_y = row_mid_y_for_cursor(state, selected_row, total_rows, selected_row, s, list_y);
-    let value_zoom = SUBMENU_VALUE_ZOOM;
+    let value_zoom = SUBMENU_VALUE_ZOOM * s;
     let label_bg_w = SUB_LABEL_COL_W * s;
     let item_col_left = list_x + label_bg_w;
     let item_col_w = list_w - label_bg_w;
@@ -433,7 +433,7 @@ pub(super) fn submenu_cursor_dest(
     if selected_row == total_rows - 1 {
         let exit_label = tr("Common", "Exit");
         let (draw_w, text_h) = measure_text_box(asset_manager, &exit_label, value_zoom);
-        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h, INLINE_SPACING);
+        let (ring_w, ring_h) = ring_size_for_text(draw_w, text_h, INLINE_SPACING * s);
         return Some((single_center_x, row_mid_y, ring_w, ring_h));
     }
     let row_idx = submenu_visible_row_to_actual(state, kind, selected_row)?;
@@ -448,14 +448,14 @@ pub(super) fn submenu_cursor_dest(
         .unwrap_or(0)
         .min(layout.texts.len().saturating_sub(1));
 
-    let draw_w = layout.widths[selected_choice];
+    let draw_w = layout.widths[selected_choice] * s;
     let center_x = if row.inline && layout.inline_row {
         let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-        choice_inner_left + layout.centers[selected_choice]
+        choice_inner_left + layout.centers[selected_choice] * s
     } else {
         single_center_x
     };
-    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h, layout.inline_spacing);
+    let (ring_w, ring_h) = ring_size_for_text(draw_w, layout.text_h * s, layout.inline_spacing * s);
     Some((center_x, row_mid_y, ring_w, ring_h))
 }
 
@@ -651,7 +651,7 @@ pub fn push_actors(
     let select_color_texture = visual_assets.select_color;
     let [select_color_w, select_color_h] = visual_assets.select_color_size;
     let select_color_aspect = select_color_w as f32 / select_color_h.max(1) as f32;
-    let select_color_zoom = HEART_ZOOM * (566.0 / select_color_h.max(1) as f32);
+    let select_color_zoom = HEART_ZOOM * (566.0 / select_color_h.max(1) as f32) * s;
 
     // Separator immediately to the RIGHT of the rows, aligned to the FIRST row top
     actors.push(act!(quad:
@@ -756,7 +756,7 @@ pub fn push_actors(
                 actors.push(act!(text:
                     align(0.0, 0.5):
                     xy(text_x, row_mid_y):
-                    zoom(ITEM_TEXT_ZOOM):
+                    zoom(ITEM_TEXT_ZOOM * s):
                     diffuse(color_t[0], color_t[1], color_t[2], color_t[3]):
                     font("miso"):
                     settext(label):
@@ -844,7 +844,7 @@ pub fn push_actors(
                     actors.push(act!(text:
                         align(0.0, 0.5):
                         xy(text_x, row_mid_y):
-                        zoom(ITEM_TEXT_ZOOM):
+                        zoom(ITEM_TEXT_ZOOM * s):
                         diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
                         font("miso"):
                         settext(label):
@@ -872,7 +872,7 @@ pub fn push_actors(
                                 actors.push(act!(text:
                                     align(1.0, 0.5):
                                     xy(value_x, row_mid_y):
-                                    zoom(ITEM_TEXT_ZOOM):
+                                    zoom(ITEM_TEXT_ZOOM * s):
                                     diffuse(value_color[0], value_color[1], value_color[2], value_color[3]):
                                     font("miso"):
                                     settext(choices[choice_idx].clone().into_owned()):
@@ -946,7 +946,7 @@ pub fn push_actors(
                         .unwrap_or(0)
                         .min(layout.centers.len().saturating_sub(1));
                     SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w)
-                        + layout.centers[sel_idx]
+                        + layout.centers[sel_idx] * s
                 };
 
                 let row_h = ROW_H * s;
@@ -1029,7 +1029,7 @@ pub fn push_actors(
                         actors.push(act!(text:
                             align(0.0, 0.5):
                             xy(label_text_x, row_mid_y):
-                            zoom(ITEM_TEXT_ZOOM):
+                            zoom(ITEM_TEXT_ZOOM * s):
                             diffuse(title_color[0], title_color[1], title_color[2], title_color[3]):
                             font("miso"):
                             settext(label):
@@ -1042,7 +1042,7 @@ pub fn push_actors(
                             borrow_submenu_row_layout(state, asset_manager, kind, actual_row_idx)
                             && !layout.texts.is_empty()
                         {
-                            let value_zoom = layout.value_zoom;
+                            let value_zoom = layout.value_zoom * s;
                             let selected_choice = choice_indices
                                 .get(actual_row_idx)
                                 .copied()
@@ -1081,7 +1081,8 @@ pub fn push_actors(
                             if layout.inline_row {
                                 for (idx, choice) in layout.texts.iter().enumerate() {
                                     let x = choice_inner_left
-                                        + layout.x_positions.get(idx).copied().unwrap_or_default();
+                                        + layout.x_positions.get(idx).copied().unwrap_or_default()
+                                            * s;
                                     let is_choice_selected = idx == selected_choice;
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
@@ -1119,13 +1120,13 @@ pub fn push_actors(
                                         let icon_w =
                                             layout.widths.get(idx).copied().unwrap_or(
                                                 COLOR_CHOICE_ICON_H * select_color_aspect,
-                                            );
+                                            ) * s;
                                         let mut tint = color::decorative_rgba(idx as i32);
                                         tint[3] *= row_alpha;
                                         actors.push(act!(sprite_static(select_color_texture):
                                             align(0.5, 0.5):
                                             xy(x + icon_w * 0.5, row_mid_y):
-                                            setsize(icon_w, COLOR_CHOICE_ICON_H):
+                                            setsize(icon_w, COLOR_CHOICE_ICON_H * s):
                                             diffuse(tint[0], tint[1], tint[2], tint[3])
                                         ));
                                     } else {
@@ -1145,7 +1146,7 @@ pub fn push_actors(
                                 choice_color[3] *= row_alpha;
                                 let choice_center_x = calc_row_center_x(row_idx);
                                 let draw_w =
-                                    layout.widths.get(selected_choice).copied().unwrap_or(40.0);
+                                    layout.widths.get(selected_choice).copied().unwrap_or(40.0) * s;
                                 selected_left_x = Some(choice_center_x - draw_w * 0.5);
                                 if is_color_choice_row {
                                     let mut tint = color::decorative_rgba(selected_choice as i32);
@@ -1153,7 +1154,7 @@ pub fn push_actors(
                                     actors.push(act!(sprite_static(select_color_texture):
                                         align(0.5, 0.5):
                                         xy(choice_center_x, row_mid_y):
-                                        setsize(draw_w, COLOR_CHOICE_ICON_H):
+                                        setsize(draw_w, COLOR_CHOICE_ICON_H * s):
                                         diffuse(tint[0], tint[1], tint[2], tint[3])
                                     ));
                                 } else {
@@ -1179,7 +1180,8 @@ pub fn push_actors(
                             if layout.inline_row && is_multi_toggle_row {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
                                 let offset = widescale(3.0, 4.0);
-                                let underline_y = layout.text_h.mul_add(0.5, row_mid_y) + offset;
+                                let underline_y =
+                                    (layout.text_h * s).mul_add(0.5, row_mid_y) + offset;
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
@@ -1198,9 +1200,11 @@ pub fn push_actors(
                                         continue;
                                     }
                                     let underline_left_x = choice_inner_left
-                                        + layout.x_positions.get(idx).copied().unwrap_or_default();
+                                        + layout.x_positions.get(idx).copied().unwrap_or_default()
+                                            * s;
                                     let underline_w =
-                                        layout.widths.get(idx).copied().unwrap_or(40.0).ceil();
+                                        (layout.widths.get(idx).copied().unwrap_or(40.0) * s)
+                                            .ceil();
                                     actors.push(act!(quad:
                                         align(0.0, 0.5):
                                         xy(underline_left_x, underline_y):
@@ -1211,14 +1215,13 @@ pub fn push_actors(
                                 }
                             } else if let Some(sel_left_x) = selected_left_x {
                                 let line_thickness = widescale(2.0, 2.5).round().max(1.0);
-                                let underline_w = layout
-                                    .widths
-                                    .get(selected_choice)
-                                    .copied()
-                                    .unwrap_or(40.0)
-                                    .ceil();
+                                let underline_w =
+                                    (layout.widths.get(selected_choice).copied().unwrap_or(40.0)
+                                        * s)
+                                        .ceil();
                                 let offset = widescale(3.0, 4.0);
-                                let underline_y = layout.text_h.mul_add(0.5, row_mid_y) + offset;
+                                let underline_y =
+                                    (layout.text_h * s).mul_add(0.5, row_mid_y) + offset;
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
@@ -1278,7 +1281,7 @@ pub fn push_actors(
                     } else {
                         // Exit row: centered "Exit" text in the items column.
                         let label = tr("Common", "Exit");
-                        let value_zoom = SUBMENU_VALUE_ZOOM;
+                        let value_zoom = SUBMENU_VALUE_ZOOM * s;
                         let mut choice_color = if is_active { col_white } else { sl_gray };
                         choice_color[3] *= row_alpha;
                         let center_x = calc_row_center_x(row_idx);
@@ -1373,7 +1376,7 @@ pub fn push_actors(
                     actors.push(act!(text:
                         align(0.0, 0.0):
                         xy(desc_x + title_side_pad, cursor_y):
-                        zoom(DESC_TITLE_ZOOM):
+                        zoom(DESC_TITLE_ZOOM * s):
                         diffuse(1.0, 1.0, 1.0, 1.0):
                         font("miso"): settext(text):
                         horizalign(left)
@@ -1386,7 +1389,7 @@ pub fn push_actors(
                     actors.push(act!(text:
                         align(0.0, 0.0):
                         xy(bullet_x, cursor_y):
-                        zoom(DESC_BODY_ZOOM):
+                        zoom(DESC_BODY_ZOOM * s):
                         diffuse(1.0, 1.0, 1.0, 1.0):
                         font("miso"): settext(text):
                         horizalign(left)

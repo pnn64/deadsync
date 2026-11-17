@@ -346,9 +346,6 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
     if widths.is_empty() {
         return false;
     }
-    if is_wide() {
-        return true;
-    }
     let total_w = spacing.mul_add(
         widths.len().saturating_sub(1) as f32,
         widths.iter().copied().sum::<f32>(),

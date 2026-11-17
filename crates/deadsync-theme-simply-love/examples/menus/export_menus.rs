@@ -1,6 +1,7 @@
 //! Export the Simply Love menu screens for the available display presets.
 mod export_menus_viewer;
 mod preview_content;
+mod screenshot_options;
 use crate::export_support;
 
 use deadlib_assets::AssetManager;
@@ -221,7 +222,9 @@ fn export(
     println!(
         "Exported {} PNGs. Gallery: {}",
         options.sizes.len()
-            * (MENUS.len() - 1 + PLAYER_VARIANT_MENUS.len() * (PLAYER_VARIANTS.len() + 2)),
+            * (MENUS.len() - 2
+                + PLAYER_VARIANT_MENUS.len() * (PLAYER_VARIANTS.len() + 2)
+                + screenshot_options::PAGES.len()),
         output.join("index.html").display()
     );
     Ok(())
@@ -249,7 +252,7 @@ fn export_resolution(
     backend.set_default_projection(metrics.projection());
     let mut captures = export_support::CaptureBatch::default();
     for &(name, _) in MENUS {
-        if name != "song-select" {
+        if name != "song-select" && name != "options" {
             export_menu(
                 name,
                 None,
@@ -300,6 +303,15 @@ fn export_resolution(
             }
         }
     }
+    screenshot_options::export_resolution(
+        backend,
+        assets,
+        size,
+        output,
+        metrics,
+        &mut captures,
+        &mut timer,
+    )?;
     timer.record_captures(captures.finish(backend, size)?);
     timer.report("menu", size, None);
     Ok(())
@@ -417,7 +429,6 @@ fn menu_actors(
             player_variant.map(|variant| variant.joined),
         )),
         "key-bindings" => Ok(key_bindings_actors(assets)),
-        "options" => Ok(options_actors(assets)),
         "player-options" => Ok(player_options_actors(song, assets)),
         "content-browser" => Ok(content_browser_actors(assets)),
         _ => Err(format!("unknown menu {name}").into()),
@@ -481,30 +492,6 @@ fn key_bindings_actors(assets: &AssetManager) -> Vec<Actor> {
 
 fn content_browser_actors(assets: &AssetManager) -> Vec<Actor> {
     screens::content_browser::get_actors(&screens::content_browser::init(), assets)
-}
-
-fn options_actors(assets: &AssetManager) -> Vec<Actor> {
-    let mut graphics = deadsync_theme::views::GraphicsOptionsView::default();
-    graphics.aspect_ratio = 16.0 / 9.0;
-    let init = views::OptionsInitView {
-        config: deadsync_config::app_config::Config::default(),
-        judgment_palettes: deadsync_config::judgment_palettes::JudgmentPaletteCatalog::new(
-            theme::color::JUDGMENT_PRESET,
-        ),
-        updater_capabilities: Default::default(),
-        app_paths: Default::default(),
-        audio: Default::default(),
-        graphics,
-        song_packs: Vec::new(),
-        pack_sync: Default::default(),
-        noteskins: Default::default(),
-        machine_player_options: Default::default(),
-        smx_assignment: Default::default(),
-        smx_gifs: Default::default(),
-        score_import_profiles: Vec::new(),
-        bookkeeping: Default::default(),
-    };
-    screens::options::get_actors(&screens::options::init(init), assets, 1.0)
 }
 
 fn player_options_actors(song: Arc<deadsync_chart::SongData>, assets: &AssetManager) -> Vec<Actor> {
