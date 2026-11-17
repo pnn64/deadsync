@@ -1,4 +1,5 @@
 //! Observations used by the production chronological compiler.
+use super::fields::Field;
 use super::*;
 use crate::SongLuaOverlayState as State;
 
@@ -22,16 +23,15 @@ pub(crate) enum Answer {
 }
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     query: Query,
-    output: Arc<Mutex<Option<Answer>>>,
+    output: Arc<Mutex<Vec<Answer>>>,
 }
 impl Actors {
-    pub(crate) fn apply_song_replay_pose(&self, value: Value, state: &mut State) -> bool {
+    pub(crate) fn apply_song_replay_pose(&self, vm: &Vm, value: Value, state: &mut State) -> bool {
         let Value::Table(id) = value else {
             return false;
         };
-        let store = self.store.lock().unwrap();
+        let store = vm.store_ref();
         let Some(actor) = store
             .actors
             .get(&id)
@@ -42,16 +42,16 @@ impl Actors {
         actor.current.write_to(state);
         true
     }
-    pub(crate) fn wrapper_parent(&self, actor: TableId) -> Option<TableId> {
-        self.store
-            .lock()
-            .unwrap()
-            .actors
-            .get(&actor)
-            .and_then(|a| a.parent)
+    pub(crate) fn wrapper_parent(&self, vm: &mut Vm, actor: TableId) -> Option<TableId> {
+        vm.store().actors.get(&actor).and_then(|a| a.parent)
     }
-    pub(crate) fn replace_song_capture_indices(&self, screen: ActorScene, values: &[Value]) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn replace_song_capture_indices(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        values: &[Value],
+    ) {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -74,8 +74,12 @@ impl Actors {
             })
             .collect();
     }
-    pub(crate) fn song_message_advances(&self, screen: ActorScene) -> Vec<((usize, String), f32)> {
-        self.store.lock().unwrap().scenes[&screen.id]
+    pub(crate) fn song_message_advances(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+    ) -> Vec<((usize, String), f32)> {
+        vm.store().scenes[&screen.id]
             .song_session
             .as_ref()
             .unwrap()
@@ -93,33 +97,51 @@ impl Actors {
         actor: Value,
         query: Query,
     ) -> Result<Answer, Error> {
-        let output = Arc::new(Mutex::new(None));
-        let function = vm.new_host_function_with_data(
-            read,
-            &[
-                Value::Table(self.registry),
-                Value::Table(self.helpers),
-                actor,
-            ],
-            Read {
-                store: self.store.clone(),
-                query,
-                output: output.clone(),
-            },
-        )?;
-        vm.call(function, &[])?;
-        Ok(output.lock().unwrap().take().unwrap())
+        let mut output = Vec::new();
+        self.chronological_read_many(vm, &[actor], query, &mut output)?;
+        Ok(output.pop().unwrap())
     }
-    pub(crate) fn models_active(&self) -> bool {
-        self.store
-            .lock()
-            .unwrap()
+    /// Keep actor order and authored getter behavior while sharing rooted host
+    /// calls across a frame's observations. Reuse the caller's result buffer.
+    pub(crate) fn chronological_read_many(
+        &self,
+        vm: &mut Vm,
+        actors: &[Value],
+        query: Query,
+        answers: &mut Vec<Answer>,
+    ) -> Result<(), Error> {
+        answers.clear();
+        let output = Arc::new(Mutex::new(std::mem::take(answers)));
+        // Lua closures allow 255 captures; the first two belong to the host.
+        let mut captures = Vec::with_capacity(actors.len().min(253) + 2);
+        captures.extend([Value::Table(self.registry), Value::Table(self.helpers)]);
+        let result = (|| {
+            for actors in actors.chunks(253) {
+                captures.truncate(2);
+                captures.extend_from_slice(actors);
+                let function = vm.new_host_function_with_data(
+                    read,
+                    &captures,
+                    Read {
+                        query,
+                        output: output.clone(),
+                    },
+                )?;
+                vm.call(function, &[])?;
+            }
+            Ok(())
+        })();
+        *answers = std::mem::take(&mut *output.lock().unwrap());
+        result
+    }
+    pub(crate) fn models_active(&self, vm: &mut Vm) -> bool {
+        vm.store()
             .actors
             .values()
             .any(|a| a.model_materials.iter().any(Option::is_some))
     }
-    pub(crate) fn begin_song_wrapper_capture(&self, screen: ActorScene, start: usize) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn begin_song_wrapper_capture(&self, vm: &mut Vm, screen: ActorScene, start: usize) {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -136,8 +158,12 @@ impl Actors {
             rows: Vec::new(),
         });
     }
-    pub(crate) fn new_song_wrappers(&self, screen: ActorScene) -> Vec<(TableId, TableId, State)> {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn new_song_wrappers(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+    ) -> Vec<(TableId, TableId, State)> {
+        let store = vm.store();
         let capture = store
             .scenes
             .get_mut(&screen.id)
@@ -157,11 +183,10 @@ impl Actors {
     }
     pub(crate) fn finish_song_wrapper_capture(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Vec<(TableId, TableId, State)> {
-        self.store
-            .lock()
-            .unwrap()
+        vm.store()
             .scenes
             .get_mut(&screen.id)
             .unwrap()
@@ -175,8 +200,8 @@ impl Actors {
             .take()
             .map_or_else(Vec::new, |wrappers| wrappers.rows)
     }
-    pub(crate) fn end_song_update_capture(&self, screen: ActorScene) {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn end_song_update_capture(&self, vm: &mut Vm, screen: ActorScene) {
+        let store = vm.store();
         if store
             .replay_frame
             .is_some_and(|(owner, _)| owner == screen.id)
@@ -195,23 +220,30 @@ impl Actors {
 }
 fn read(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Read>().unwrap().clone();
-    let actor = table(call, call.captures()[2])?;
-    let answer = match data.query {
-        Query::Active => Answer::Active(active(call, &data.store, actor)?),
+    // A getter may call back into Lua; never hold the output lock across it.
+    let mut answers = std::mem::take(&mut *data.output.lock().unwrap());
+    for index in 2..call.captures().len() {
+        let actor = table(call, call.captures()[index])?;
+        answers.push(read_actor(call, actor, data.query)?);
+    }
+    *data.output.lock().unwrap() = answers;
+    Ok(())
+}
+fn read_actor(call: &mut HostCall<'_>, actor: TableId, query: Query) -> Result<Answer, Error> {
+    Ok(match query {
+        Query::Active => Answer::Active(active(call, actor)?),
         Query::Motion(clock, include_spin) => {
-            let time = effect_time(call, &data.store, actor, clock)?;
+            let time = effect_time(call, actor, clock)?;
             let spin = if include_spin {
-                render_spin(call, &data.store, actor)?
+                render_spin(call, actor)?
             } else {
                 None
             };
             Answer::Motion(time, spin)
         }
-        Query::Mask => Answer::Mask(mask(call, &data.store, actor)?),
-        Query::Field(clock) => Answer::Field(field_wrappers(call, &data.store, actor, clock)?),
-    };
-    *data.output.lock().unwrap() = Some(answer);
-    Ok(())
+        Query::Mask => Answer::Mask(mask(call, actor)?),
+        Query::Field(clock) => Answer::Field(field_wrappers(call, actor, clock)?),
+    })
 }
 fn boolean(call: &HostCall<'_>, value: Value) -> Result<Option<bool>, Error> {
     match value {
@@ -227,8 +259,8 @@ fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, 
         table(call, value).map(Some)
     }
 }
-fn replay_pose(store: &Shared, actor: TableId, state: &mut State) {
-    let store = store.lock().unwrap();
+fn replay_pose(store: &mut Store, actor: TableId, state: &mut State) {
+    let store = &mut *store;
     if let Some(actor) = store
         .actors
         .get(&actor)
@@ -237,18 +269,17 @@ fn replay_pose(store: &Shared, actor: TableId, state: &mut State) {
         actor.current.write_to(state);
     }
 }
-pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if store
-        .lock()
-        .unwrap()
+pub(super) fn ensure(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if call
+        .store()
         .actors
         .get(&actor)
         .is_some_and(|a| a.capture.is_none() && a.replay.is_some())
     {
         return Ok(());
     }
-    let state = initial_state::read(call, store, actor)?;
-    let mut store = store.lock().unwrap();
+    let state = initial_state::read(call, actor)?;
+    let store = call.store();
     if !store.playback {
         return Ok(());
     }
@@ -265,7 +296,6 @@ pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) ->
     if let Some(clock) = store.replay_clock.as_mut() {
         clock.promote(actor);
     }
-    drop(store);
     if live {
         // A copied loading definition exports raw metadata. Once the native
         // replay owns those values, remove the mirrors just as initial live
@@ -287,13 +317,12 @@ pub(super) fn ensure(call: &mut HostCall<'_>, store: &Shared, actor: TableId) ->
 }
 pub(super) fn created(
     call: &mut HostCall<'_>,
-    store: &Shared,
     owner: TableId,
     wrapper: TableId,
 ) -> Result<(), Error> {
-    ensure(call, store, wrapper)?;
+    ensure(call, wrapper)?;
     let context = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         store.replay_frame.and_then(|(scene, _)| {
             let capture = store
                 .scenes
@@ -306,8 +335,8 @@ pub(super) fn created(
         })
     };
     let Some(scene) = context else { return Ok(()) };
-    let initial = initial_state::read(call, store, wrapper)?;
-    let mut store = store.lock().unwrap();
+    let initial = initial_state::read(call, wrapper)?;
+    let store = call.store();
     let capture = store
         .scenes
         .get_mut(&scene)
@@ -327,7 +356,6 @@ pub(super) fn created(
 }
 fn visit_wrappers(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     ordinary: bool,
     reverse: bool,
@@ -336,16 +364,14 @@ fn visit_wrappers(
     let value = if ordinary {
         sprites::field(call, actor, "__songlua_wrappers")?
     } else {
-        get(call, actor, b"__songlua_wrappers")?
+        get_static(call, actor, b"__songlua_wrappers")?
     };
     let array = optional_table(call, value)?;
     call.with_roots(&[value], |call| {
         let len = if let Some(array) = array {
             call.raw_table_len(array)?
         } else {
-            store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get(&actor)
                 .map_or(0, |a| a.wrappers.len())
@@ -358,9 +384,7 @@ fn visit_wrappers(
             let value = if let Some(array) = array {
                 call.raw_table_get(array, Value::Number(index as f64))?
             } else {
-                store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get(&actor)
                     .and_then(|a| a.wrappers.get(index - 1))
@@ -379,12 +403,10 @@ fn visit_wrappers(
     })
 }
 
-fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<bool, Error> {
-    let sleep = get(call, actor, b"__songlua_hibernate_seconds")?;
+fn active(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
+    let sleep = get_static(call, actor, b"__songlua_hibernate_seconds")?;
     let sleeping = if sleep == Value::Nil {
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get(&actor)
             .is_some_and(|a| a.hibernate > 0.)
@@ -405,34 +427,31 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
     }
     let recurring = sprites::field(call, actor, "__songlua_recurring_update_command")?;
     if if recurring == Value::Nil {
-        capture::has_recurring(store, actor)
+        capture::has_recurring(call.store(), actor)
     } else {
         initial_state::value_text(call, recurring)?.is_some()
     } {
         return Ok(true);
     }
-    let clock = get(call, actor, b"__songlua_state_motion_clock")?;
+    let clock = get_static(call, actor, b"__songlua_state_motion_clock")?;
     if optional_table(call, clock)?.is_some()
-        || store
-            .lock()
-            .unwrap()
+        || call
+            .store()
             .actors
             .get(&actor)
             .is_some_and(effects::has_motion)
     {
         return Ok(true);
     }
-    let deferred = get(call, actor, b"__songlua_command_queue_deferred")?;
+    let deferred = get_static(call, actor, b"__songlua_command_queue_deferred")?;
     if if deferred == Value::Nil {
-        capture::deferred(store, actor)
+        capture::deferred(call.store(), actor)
     } else {
         !matches!(deferred, Value::Boolean(false))
     } {
         return Ok(true);
     }
-    if visit_wrappers(call, store, actor, true, false, |call, row| {
-        active(call, store, row)
-    })? {
+    if visit_wrappers(call, actor, true, false, |call, row| active(call, row))? {
         return Ok(true);
     }
     let mut index = 1;
@@ -442,26 +461,25 @@ fn active(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<boo
             break;
         }
         if let Value::Table(child) = value
-            && call.with_roots(&[value], |call| active(call, store, child))?
+            && call.with_roots(&[value], |call| active(call, child))?
         {
             return Ok(true);
         }
         index += 1;
     }
-    let stream = store
-        .lock()
-        .unwrap()
+    let stream = call
+        .store()
         .actors
         .get(&actor)
         .filter(|a| a.state.class == "SongMeterDisplay")
         .and_then(|a| a.children.first())
         .copied();
     if let Some(stream) = stream {
-        return active(call, store, stream);
+        return active(call, stream);
     }
     Ok(false)
 }
-fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, Error> {
+fn mask(call: &mut HostCall<'_>, actor: TableId) -> Result<u16, Error> {
     let mut mask = 0;
     let mut block = |call: &mut HostCall<'_>, block: TableId| -> Result<(), Error> {
         for (i, key) in crate::perframe::PLAYER_TRANSFORM_CAPTURE_KEYS
@@ -494,7 +512,7 @@ fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, 
             Ok(())
         })?;
     }
-    let guard = store.lock().unwrap();
+    let guard = call.store();
     if let Some(a) = guard.actors.get(&actor) {
         let fields = a.capture.as_ref().map_or(0, |c| c.transform_fields);
         // Capture uses one extra slot for uniform zoom; the renderer has one
@@ -521,11 +539,10 @@ fn mask(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<u16, 
 }
 pub(super) fn render_spin(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<Option<[f32; 3]>, Error> {
     let fallback = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard
             .actors
             .get(&actor)
@@ -543,7 +560,7 @@ pub(super) fn render_spin(
                 ]
             })
     };
-    let value = get(call, actor, b"__songlua_state_spin")?;
+    let value = fields::get(call, actor, fields::Field::STATE_SPIN)?;
     let Some(pose) = optional_table(call, value)? else {
         return Ok(fallback);
     };
@@ -566,26 +583,32 @@ pub(super) fn render_spin(
 }
 fn effect_time(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     clock: [f32; 2],
 ) -> Result<Option<[f32; 2]>, Error> {
     let fallback = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.actors.get(&actor).map(|a| {
-            let mut state = a.state.render;
-            effects::render_time(a, clock, &mut state);
-            state
+            let state = &a.state.render;
+            (
+                state.rainbow,
+                state.effect_mode,
+                effects::render_effect_time(a, clock, state),
+            )
         })
     };
-    let value = get(call, actor, b"__songlua_state_rainbow")?;
-    let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.rainbow));
+    let [value, mode] = fields::get_all(
+        call,
+        actor,
+        [Field::STATE_RAINBOW, Field::STATE_EFFECT_MODE],
+    )?;
+    let rainbow = boolean(call, value)?.unwrap_or_else(|| fallback.is_some_and(|s| s.0));
     if !rainbow {
-        let value = get(call, actor, b"__songlua_state_effect_mode")?;
+        let value = mode;
         let selected = if value == Value::Nil {
             fallback.is_some_and(|s| {
                 !matches!(
-                    s.effect_mode,
+                    s.1,
                     deadlib_present::anim::EffectMode::None
                         | deadlib_present::anim::EffectMode::Spin
                 )
@@ -611,12 +634,12 @@ fn effect_time(
             return Ok(None);
         }
     }
-    let value = get(call, actor, b"__songlua_state_motion_clock")?;
+    let value = fields::get(call, actor, Field::STATE_MOTION_CLOCK)?;
     let Some(motion) = optional_table(call, value)? else {
-        return Ok(fallback.and_then(|s| s.effect_time));
+        return Ok(fallback.and_then(|s| s.2));
     };
     call.with_roots(&[value], |call| {
-        let value = get(call, actor, b"__songlua_state_effect_clock")?;
+        let value = fields::get(call, actor, Field::STATE_EFFECT_CLOCK)?;
         let beat = initial_state::value_text(call, value)?
             .is_some_and(|s| matches!(s.as_str(), "beat" | "beatnooffset"));
         let value = sprites::field(call, motion, "units")?;
@@ -631,34 +654,236 @@ fn effect_time(
 
 fn field_wrappers(
     call: &mut HostCall<'_>,
-    store: &Shared,
     player: TableId,
     clock: [f32; 2],
 ) -> Result<Option<Vec<State>>, Error> {
-    let children = native_children::named_children(call, player)?;
-    call.with_roots(&[children], |call| {
-        let children = table(call, children)?;
-        let value = get(call, children, b"NoteField")?;
-        let Some(field) = optional_table(call, value)? else {
-            return Ok(None);
-        };
-        call.with_roots(&[value], |call| {
-            let mut states = Vec::new();
-            visit_wrappers(call, store, field, false, true, |call, id| {
-                ensure(call, store, id)?;
-                let mut state = initial_state::read(call, store, id)?;
-                replay_pose(store, id, &mut state);
-                if let Some(spin) = render_spin(call, store, id)? {
-                    [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
-                    state.spin_baked = true;
-                }
-                if let Some(time) = effect_time(call, store, id, clock)? {
-                    state.effect_time = Some(time);
-                }
-                states.push(state);
-                Ok(false)
-            })?;
-            Ok(Some(states))
-        })
+    let value = native_children::named_child(call, player, b"NoteField")?;
+    let Some(field) = optional_table(call, value)? else {
+        return Ok(None);
+    };
+    call.with_roots(&[value], |call| {
+        let mut states = Vec::new();
+        visit_wrappers(call, field, false, true, |call, id| {
+            ensure(call, id)?;
+            let mut state = initial_state::read(call, id)?;
+            replay_pose(call.store(), id, &mut state);
+            if let Some(spin) = render_spin(call, id)? {
+                [state.rot_x_deg, state.rot_y_deg, state.rot_z_deg] = spin;
+                state.spin_baked = true;
+            }
+            if let Some(time) = effect_time(call, id, clock)? {
+                state.effect_time = Some(time);
+            }
+            states.push(state);
+            Ok(false)
+        })?;
+        Ok(Some(states))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owned_motion_reads_observe_raw_and_nested_mutations() {
+        fn execute(runtime: &mut crate::SongRuntime, source: &str) -> Value {
+            runtime
+                .vm
+                .execute(
+                    &deadlib_lua::compile_named(source.as_bytes(), b"=motion mutation").unwrap(),
+                )
+                .unwrap()
+                .first()
+                .copied()
+                .unwrap_or(Value::Nil)
+        }
+        let mut runtime =
+            crate::SongRuntime::new(&crate::SongLuaCompileContext::new(".", "motion mutation"))
+                .unwrap();
+        let declaration = execute(&mut runtime, "return Def.Quad{}");
+        let scene = runtime
+            .actors
+            .instantiate(&mut runtime.vm, declaration)
+            .unwrap();
+        let actor = runtime.actors.root(&runtime.vm, scene).unwrap();
+        runtime.vm.set_global(b"actor", actor).unwrap();
+        let Value::Table(id) = actor else {
+            unreachable!()
+        };
+        assert!(runtime.vm.store_ref().actors.contains_key(&id));
+        let cases = [
+            ("", None),
+            (
+                "actor.__songlua_state_rainbow=true; actor.__songlua_state_motion_clock={units=2}",
+                Some([10., 2.]),
+            ),
+            ("actor.__songlua_state_effect_clock='beat'", Some([20., 2.])),
+            (
+                "actor.__songlua_state_motion_clock.units=3",
+                Some([20., 3.]),
+            ),
+            ("actor.__songlua_state_effect_clock=nil", Some([10., 3.])),
+            ("actor.__songlua_state_rainbow=nil", None),
+            ("actor.__songlua_state_effect_mode='bob'", Some([10., 3.])),
+            (
+                "actor.__songlua_state_motion_clock={units=4}",
+                Some([10., 4.]),
+            ),
+            (
+                "actor.__songlua_state_motion_clock=setmetatable({}, {__index=function() actor.__songlua_state_effect_clock='beat'; collectgarbage('collect'); return 5 end})",
+                Some([10., 5.]),
+            ),
+            ("", Some([20., 5.])),
+            ("actor.__songlua_state_effect_mode=nil", None),
+        ];
+        for (source, expected) in cases {
+            execute(&mut runtime, source);
+            // Read twice so each mutation is also exercised with a warm field cache.
+            for _ in 0..2 {
+                let Answer::Motion(time, _) = runtime
+                    .actors
+                    .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                    .unwrap()
+                else {
+                    panic!("motion answer")
+                };
+                assert_eq!(time, expected, "{source}");
+                // The authored getter changes the next read's clock.
+                if source.contains("__index") {
+                    break;
+                }
+            }
+        }
+        for (source, expected_error) in [
+            ("actor.__songlua_state_rainbow={}", "boolean expected"),
+            (
+                "actor.__songlua_state_rainbow=false; actor.__songlua_state_effect_mode={}",
+                "string expected",
+            ),
+            (
+                "actor.__songlua_state_effect_mode='bob'; actor.__songlua_state_motion_clock=false",
+                "table expected",
+            ),
+            (
+                "actor.__songlua_state_motion_clock={units={}}",
+                "number expected",
+            ),
+        ] {
+            execute(&mut runtime, source);
+            let error = runtime
+                .actors
+                .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                .err()
+                .expect("invalid motion field");
+            assert!(error.to_string().contains(expected_error), "{error}");
+        }
+        execute(&mut runtime, "actor.__songlua_state_motion_clock={units=6}");
+        let Answer::Motion(time, _) = runtime
+            .actors
+            .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+            .unwrap()
+        else {
+            panic!("motion answer")
+        };
+        assert_eq!(time, Some([20., 6.]));
+        execute(
+            &mut runtime,
+            "actor.__songlua_state_rainbow=nil; actor.__songlua_state_effect_mode=nil; actor.__songlua_state_motion_clock=nil",
+        );
+        // Native motion can advance without changing the actor's raw fields.
+        for expected in [None, Some([11., 7.]), Some([12., 8.]), None] {
+            let state = &mut runtime.vm.store().actors.get_mut(&id).unwrap().state.render;
+            state.rainbow = expected.is_some();
+            state.effect_time = expected;
+            let Answer::Motion(time, _) = runtime
+                .actors
+                .chronological_read(&mut runtime.vm, actor, Query::Motion([10., 20.], false))
+                .unwrap()
+            else {
+                panic!("motion answer")
+            };
+            assert_eq!(time, expected);
+        }
+        runtime.actors.release(&mut runtime.vm, scene).unwrap();
+    }
+
+    #[test]
+    fn batched_motion_reads_preserve_order_roots_and_getter_errors() {
+        let mut runtime =
+            crate::SongRuntime::new(&crate::SongLuaCompileContext::new(".", "motion reads"))
+                .unwrap();
+        let source = br#"
+            last = 0
+            fail = false
+            local actors = {}
+            for i = 1, 600 do
+                actors[i] = {
+                    __songlua_state_rainbow = true,
+                    __songlua_state_effect_clock = 'beat',
+                    __songlua_state_motion_clock = setmetatable({}, {
+                        __index = function(_, key)
+                            assert(key == 'units' and last + 1 == i)
+                            last = i
+                            if i == 253 or i == 254 then collectgarbage('collect') end
+                            if fail and i == 254 then return {} end
+                            return i
+                        end,
+                    }),
+                    __songlua_state_spin = { baked = true, rotation = {i, i+1, i+2} },
+                }
+            end
+            return actors
+        "#;
+        let value = runtime
+            .vm
+            .execute(&deadlib_lua::compile_named(source, b"=motion reads").unwrap())
+            .unwrap()[0];
+        let root = runtime.vm.pin(value).unwrap();
+        let Value::Table(table) = value else {
+            unreachable!()
+        };
+        let actors = (1..=600)
+            .map(|i| {
+                runtime
+                    .vm
+                    .raw_table_get(table, Value::Number(i as f64))
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let mut answers = Vec::new();
+        for failed in [false, true, false] {
+            let setup = if failed {
+                b"last=0; fail=true".as_slice()
+            } else {
+                b"last=0; fail=false".as_slice()
+            };
+            runtime
+                .vm
+                .execute(&deadlib_lua::compile_named(setup, b"=reset motion reads").unwrap())
+                .unwrap();
+            let result = runtime.actors.chronological_read_many(
+                &mut runtime.vm,
+                &actors,
+                Query::Motion([10., 20.], true),
+                &mut answers,
+            );
+            if failed {
+                assert!(result.unwrap_err().to_string().contains("number expected"));
+                assert_eq!(runtime.vm.get_global(b"last").unwrap(), Value::Number(254.));
+                continue;
+            }
+            result.unwrap();
+            assert_eq!(answers.len(), actors.len());
+            for (i, answer) in answers.iter().enumerate() {
+                let &Answer::Motion(time, spin) = answer else {
+                    panic!("motion answer")
+                };
+                let n = (i + 1) as f32;
+                assert_eq!(time, Some([20., n]));
+                assert_eq!(spin, Some([n, n + 1., n + 2.]));
+            }
+        }
+        runtime.vm.unpin(root).unwrap();
+    }
 }

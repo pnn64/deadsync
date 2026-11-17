@@ -1277,7 +1277,6 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             _ => native_gameplay::Scope::Full,
         };
         let outcome = std::panic::catch_unwind(|| {
-            let fixture_hash = hash_file(path);
             let mut tar = tar::Archive::new(archive_reader(path));
             let mut members = tar.entries().expect("candidate members");
             let member = members.next().expect("candidate manifest").expect("read candidate manifest");
@@ -1293,6 +1292,10 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
                 local_only: false, aliases: Vec::new(), retained_version: false,
             };
             let archive = extract_archive(&entry, path);
+            // Extraction verifies the archive against its content-addressed
+            // filename before opening any members. Reuse that verified digest
+            // instead of hashing the same archive twice before the replay.
+            let fixture_hash = entry.sha256.clone();
             validate_archive(&entry, &archive);
             assert_eq!(archive.manifest.itgmania.execution, "native_gameplay",
                 "candidate replay requires a native gameplay archive");
@@ -1523,8 +1526,7 @@ fn replay_native_archive(
     use std::io::Write as _;
     use std::sync::atomic::Ordering;
     let trace_path = archive.root.join(&archive.manifest.chart.trace);
-    let trace: Value = serde_json::from_slice(&fs::read(&trace_path).expect("read native gameplay trace"))
-        .expect("parse native gameplay trace");
+    let trace = read_extracted_native_trace(archive);
     assert_eq!(trace["harness_version"], archive.manifest.harness_version);
     assert_eq!(trace["schema_version"], archive.manifest.oracle_schema_version);
     for (key, expected) in [
@@ -1580,6 +1582,25 @@ fn replay_native_archive(
     native_gameplay::archive_passes(scope, &report)
 }
 
+fn read_extracted_native_trace(archive: &ExtractedArchive) -> Value {
+    let path = archive.root.join(&archive.manifest.chart.trace);
+    let file = File::open(&path).expect("open native gameplay trace");
+    let owned = path.canonicalize().expect("resolve native gameplay trace")
+        .starts_with(archive.root.canonicalize().expect("resolve extraction directory"));
+    if !owned {
+        // Keep the ordinary reader for paths outside our private extraction:
+        // their contents could change while being read, so mapping is unsafe.
+        return serde_json::from_reader(std::io::BufReader::new(file))
+            .expect("parse native gameplay trace");
+    }
+    // SAFETY: this is the completed extraction in our owned temporary directory.
+    // No replay/Lua code runs until parsing finishes, and this function neither
+    // writes nor truncates the file. The mapping is dropped before returning;
+    // the deserialized Value owns its strings and survives archive cleanup.
+    let mapped = unsafe { memmap2::Mmap::map(&file) }.expect("map native gameplay trace");
+    serde_json::from_slice(&mapped).expect("parse native gameplay trace")
+}
+
 #[test]
 fn uncompressed_candidates_retain_member_validation() {
     let compressed = archive_root().join("cbfe9d3319b3bb86aaacf56961ba890ba6fc6d245fb7e8a7b832c316a5ee9150.tar.zst");
@@ -1598,10 +1619,26 @@ fn uncompressed_candidates_retain_member_validation() {
         compressed_bytes: fs::metadata(&candidate).unwrap().len(), local_only: false,
         aliases: Vec::new(), retained_version: false,
     };
-    let archive = extract_archive(&entry, &candidate);
+    let mut archive = extract_archive(&entry, &candidate);
     validate_archive(&entry, &archive);
+    let expected: Value = serde_json::from_reader(std::io::BufReader::new(
+        File::open(archive.root.join(&archive.manifest.chart.trace)).unwrap())).unwrap();
+    let mapped = read_extracted_native_trace(&archive);
+    assert_eq!(mapped, expected);
     fs::write(archive.root.join(&archive.manifest.chart.trace), b"corrupt trace").unwrap();
     assert!(std::panic::catch_unwind(|| validate_archive(&entry, &archive)).is_err());
+    assert!(std::panic::catch_unwind(|| read_extracted_native_trace(&archive)).is_err());
+    let external = temp.path().join("external-trace.json");
+    fs::write(&external, br#"{"outside_extraction":true}"#).unwrap();
+    archive.manifest.chart.trace = external.to_string_lossy().into_owned();
+    assert_eq!(read_extracted_native_trace(&archive), serde_json::json!({"outside_extraction":true}));
+    drop(archive);
+    assert_eq!(mapped, expected, "parsed values must outlive the mapping and extraction");
+    let mut damaged = fs::read(&candidate).unwrap();
+    damaged[0] ^= 1;
+    fs::write(&candidate, damaged).unwrap();
+    assert!(std::panic::catch_unwind(|| extract_archive(&entry, &candidate)).is_err(),
+        "same-size corruption must still fail the pre-extraction content hash");
 }
 
 #[test]

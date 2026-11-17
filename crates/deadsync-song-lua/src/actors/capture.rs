@@ -301,40 +301,33 @@ impl Capture {
     }
 }
 
-pub(super) fn write(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    delta: Delta,
-    immediate: bool,
-) {
-    let mut guard = store.lock().unwrap();
+pub(super) fn write(call: &mut HostCall<'_>, id: TableId, delta: Delta, immediate: bool) {
+    let guard = call.store();
     let scope = guard.capture_scope;
     let fallback = song_pose::mode(&guard, id);
     if let Some(actor) = guard.actors.get_mut(&id) {
         record(actor, &delta, immediate, scope, fallback);
     }
-    drop(guard);
     #[cfg(feature = "test-support")]
-    song_messages::pose_write(call, store, id, &delta);
-    if !song_pose::record(call, store, id, &delta) {
-        song_messages::record(call, store, id, &delta);
+    song_messages::pose_write(call, id, &delta);
+    if !song_pose::record(call, id, &delta) {
+        song_messages::record(call, id, &delta);
     }
-    song_immediate::delta(call, store, id, &delta, immediate);
-    song_media::delta(call, store, id, &delta);
+    song_immediate::delta(call, id, &delta, immediate);
+    song_media::delta(call, id, &delta);
 }
 
 /// Frame publication also supplies command blocks during construction/probes.
 /// Capture::write already retains its delta, so its frame path skips this hook.
 pub(super) fn retain_render_update(
-    store: &Shared,
+    store: &mut Store,
     id: TableId,
     target: crate::SongLuaOverlayUpdateTarget,
     value: &crate::SongLuaOverlayUpdateValue,
     immediate: bool,
 ) {
     use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
-    let mut guard = store.lock().unwrap();
+    let guard = &mut *store;
     if !guard.preparing || guard.replay_frame.is_some() {
         return;
     }
@@ -565,8 +558,8 @@ pub(super) fn advance_spin(actor: &mut Actor, elapsed: f32, delta: f32) {
 
 /// Record an actual successful write, including writes equal to the old value.
 /// Comparing snapshots would lose those writes and change later composition.
-pub(super) fn property(call: &mut HostCall<'_>, store: &Shared, id: TableId, name: &str) {
-    let mut guard = store.lock().unwrap();
+pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
+    let guard = call.store();
     let fallback = song_pose::mode(&guard, id);
     let scope = guard.capture_scope;
     let immediate_visibility = scope.is_some()
@@ -737,20 +730,19 @@ pub(super) fn property(call: &mut HostCall<'_>, store: &Shared, id: TableId, nam
         _ => return,
     }
     record(actor, &delta, immediate, scope, fallback);
-    drop(guard);
     #[cfg(feature = "test-support")]
-    song_messages::pose_write(call, store, id, &delta);
-    if !song_pose::record(call, store, id, &delta) {
-        song_messages::record(call, store, id, &delta);
+    song_messages::pose_write(call, id, &delta);
+    if !song_pose::record(call, id, &delta) {
+        song_messages::record(call, id, &delta);
     }
-    song_immediate::delta(call, store, id, &delta, immediate);
-    song_media::delta(call, store, id, &delta);
+    song_immediate::delta(call, id, &delta, immediate);
+    song_media::delta(call, id, &delta);
 }
 
 // Once a fallback actor queues during an update, that queue belongs to frame
 // advancement. Captured commands outside the update instead drain synchronously.
-pub(super) fn enter_replay_queue(store: &Shared, actor: TableId) {
-    let mut guard = store.lock().unwrap();
+pub(super) fn enter_replay_queue(store: &mut Store, actor: TableId) {
+    let guard = &mut *store;
     // Full-timeline preparation retains its fallback capture and command queue.
     // Streamed preparation continues to use the ordinary queue below.
     if guard.replay_clock.is_some() {
@@ -774,18 +766,13 @@ pub(super) fn enter_replay_queue(store: &Shared, actor: TableId) {
     }
 }
 
-pub(super) fn queue(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: Vec<u8>,
-) -> Result<bool, Error> {
-    action_capture::prepare(call, store, actor)?;
-    enter_replay_queue(store, actor);
+pub(super) fn queue(call: &mut HostCall<'_>, actor: TableId, name: Vec<u8>) -> Result<bool, Error> {
+    action_capture::prepare(call, actor)?;
+    enter_replay_queue(call.store(), actor);
     let mut command_field = name.clone();
     command_field.extend_from_slice(b"Command");
     let overflow = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let target = &guard.actors[&actor];
         !target.active_commands.contains(&command_field)
             && target.capture.as_ref().is_some_and(|capture| {
@@ -798,17 +785,17 @@ pub(super) fn queue(
             })
     };
     if overflow {
-        lifecycle::finish(call, store, actor)?;
+        lifecycle::finish(call, actor)?;
     }
     let full_capture = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.replay_clock.is_some() && guard.actors[&actor].capture.is_some()
     };
     if full_capture {
         song_messages::timing(call, actor, 0., None)?;
     }
     let drain = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let startup = guard.startup_queues.is_some();
         let self_queue = guard.actors[&actor]
             .active_commands
@@ -848,22 +835,18 @@ pub(super) fn queue(
         capture.pending.push_back((name, capture.cursor));
         startup || actor.active_commands.is_empty()
     };
-    if store.lock().unwrap().replay_frame.is_some() {
+    if call.store().replay_frame.is_some() {
         song_messages::timing(call, actor, 0., None)?;
     }
     if drain {
-        drain_commands(call, store, actor)?;
+        drain_commands(call, actor)?;
     }
     Ok(true)
 }
 
-pub(super) fn advance_ready(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn advance_ready(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let ready = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard.actors[&actor].registered
             && guard
                 .replay_clock
@@ -873,19 +856,15 @@ pub(super) fn advance_ready(
     if !ready {
         return Ok(());
     }
-    match drain_commands(call, store, actor) {
-        Err(error) => diagnostics::report(call, store, actor, diagnostics::Callback::Queue, error),
+    match drain_commands(call, actor) {
+        Err(error) => diagnostics::report(call, actor, diagnostics::Callback::Queue, error),
         Ok(()) => Ok(()),
     }
 }
 
-pub(super) fn drain_commands(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn drain_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let pending = guard
             .actors
             .get(&actor)
@@ -900,7 +879,7 @@ pub(super) fn drain_commands(
     }
     loop {
         let (next, clock_time) = {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             if !guard
                 .actors
                 .get(&actor)
@@ -946,7 +925,7 @@ pub(super) fn drain_commands(
             captured_start
         };
         let (prior, previous_dispatch, previous_clock, was_recurring, remainder, cursor) = {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             let mut previous_clock = guard.replay_clock.as_ref().and_then(|c| c.dispatch);
             let mut seconds = None;
             let mut cursor = None;
@@ -999,7 +978,7 @@ pub(super) fn drain_commands(
                 )
             })();
             if let Err(error) = result {
-                let mut guard = store.lock().unwrap();
+                let guard = call.store();
                 guard.capture_scope = prior;
                 guard.replay_dispatch = previous_dispatch;
                 if let Some(clock) = &mut guard.replay_clock {
@@ -1012,27 +991,24 @@ pub(super) fn drain_commands(
         // when its command edits the scene and forces a collection.
         #[cfg(feature = "test-support")]
         {
-            store.lock().unwrap().audit_queued_depth += 1;
+            call.store().audit_queued_depth += 1;
         }
         let result = call.with_roots(&[Value::Table(actor)], |call| {
             if let Some(message) = name.strip_prefix(b"!") {
-                messages::queued(call, store, message)
+                messages::queued(call, message)
             } else {
                 let mut field = name.clone();
                 field.extend_from_slice(b"Command");
-                let previous = store
-                    .lock()
-                    .unwrap()
+                let previous = call
+                    .store()
                     .actors
                     .get_mut(&actor)
                     .unwrap()
                     .active_commands
                     .remove(&field);
-                let result = dispatch(call, store, actor, &name);
+                let result = dispatch(call, actor, &name);
                 if previous {
-                    store
-                        .lock()
-                        .unwrap()
+                    call.store()
                         .actors
                         .get_mut(&actor)
                         .unwrap()
@@ -1043,7 +1019,7 @@ pub(super) fn drain_commands(
             }
         });
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             guard.capture_scope = prior;
             guard.replay_dispatch = previous_dispatch;
             #[cfg(feature = "test-support")]
@@ -1055,10 +1031,9 @@ pub(super) fn drain_commands(
             }
         }
         result?;
-        song_pose::advance_position(call, store, actor)?;
-        let recurring = store
-            .lock()
-            .unwrap()
+        song_pose::advance_position(call, actor)?;
+        let recurring = call
+            .store()
             .actors
             .get(&actor)
             .and_then(|a| a.capture.as_ref())
@@ -1067,22 +1042,17 @@ pub(super) fn drain_commands(
             && recurring
             && let Some(remainder) = remainder
         {
-            recurring::advance(call, store, actor, remainder)?;
-            if let Some(clock) = &mut store.lock().unwrap().replay_clock {
+            recurring::advance(call, actor, remainder)?;
+            if let Some(clock) = &mut call.store().replay_clock {
                 clock.mark_recurring(actor);
             }
         }
     }
 }
 
-fn dispatch(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &[u8],
-) -> Result<(), Error> {
+fn dispatch(call: &mut HostCall<'_>, actor: TableId, name: &[u8]) -> Result<(), Error> {
     {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let start = guard.capture_scope.unwrap_or(0.);
         if let Some(capture) = guard
             .actors
@@ -1094,19 +1064,17 @@ fn dispatch(
             capture.cursor = start;
         }
     }
-    native_children::run_command(call, store, actor, name, None)?;
+    native_children::run_command(call, actor, name, None)?;
     let kind = sprites::field(call, actor, "__songlua_actor_type")?;
     if matches!(kind, Value::String(id) if matches!(call.string_bytes(id), Some(b"ActorFrame" | b"ActorFrameTexture" | b"TopScreen")))
     {
-        native_children::with_children(call, actor, |call, child| {
-            dispatch(call, store, child, name)
-        })?;
+        native_children::with_children(call, actor, |call, child| dispatch(call, child, name))?;
     }
     Ok(())
 }
 
-pub(super) fn command_start(store: &Shared, actor: TableId) -> Option<(f32, f64)> {
-    let mut guard = store.lock().unwrap();
+pub(super) fn command_start(store: &mut Store, actor: TableId) -> Option<(f32, f64)> {
+    let guard = &mut *store;
     let capture = guard.actors.get_mut(&actor)?.capture.as_mut()?;
     Some((
         std::mem::replace(&mut capture.active_start, capture.cursor),
@@ -1114,11 +1082,9 @@ pub(super) fn command_start(store: &Shared, actor: TableId) -> Option<(f32, f64)
     ))
 }
 
-pub(super) fn command_end(store: &Shared, actor: TableId, previous: Option<(f32, f64)>) {
+pub(super) fn command_end(store: &mut Store, actor: TableId, previous: Option<(f32, f64)>) {
     if let Some(previous) = previous
         && let Some(capture) = store
-            .lock()
-            .unwrap()
             .actors
             .get_mut(&actor)
             .and_then(|a| a.capture.as_mut())
@@ -1130,7 +1096,7 @@ pub(super) fn command_end(store: &Shared, actor: TableId, previous: Option<(f32,
 impl Actors {
     pub(crate) fn begin_preparation(&self, vm: &mut Vm) -> Result<bool, Error> {
         {
-            let guard = self.store.lock().unwrap();
+            let guard = vm.store();
             if guard.preparing
                 || guard.playback
                 || guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
@@ -1140,7 +1106,7 @@ impl Actors {
         }
         let function = vm.rooted(self.prepare_definitions)?;
         vm.call(function, &[])?;
-        let mut guard = self.store.lock().unwrap();
+        let guard = vm.store();
         guard.preparing = true;
         guard.constructing_capture = true;
         Ok(true)
@@ -1156,18 +1122,15 @@ impl Actors {
         let (roots, pin) = retained::values(vm, queued.iter().copied().map(Value::Table))?;
         let function = vm.new_host_function_with_data(
             |call| {
-                let (store, queued) = call
-                    .function_data::<(Shared, Vec<TableId>)>()
-                    .unwrap()
-                    .clone();
-                run_discovery(call, &store, queued)
+                let queued = call.function_data::<Vec<TableId>>().unwrap().clone();
+                run_discovery(call, queued)
             },
             &[
                 Value::Table(self.registry),
                 Value::Table(self.helpers),
                 Value::Table(roots),
             ],
-            (self.store.clone(), queued),
+            queued,
         );
         vm.unpin(pin)?;
         let function = function?;
@@ -1175,63 +1138,55 @@ impl Actors {
         Ok(())
     }
 
-    pub(crate) fn command_capture(&self, actor: Value) -> Option<ActorCommandCapture> {
+    pub(crate) fn command_capture(&self, vm: &mut Vm, actor: Value) -> Option<ActorCommandCapture> {
         let Value::Table(actor) = actor else {
             return None;
         };
-        let mut guard = self.store.lock().unwrap();
+        let guard = vm.store();
         let capture = guard.actors.get_mut(&actor)?.capture.as_mut()?;
         Some(capture.snapshot())
     }
 
-    pub(crate) fn captured_blocks(&self, actor: Value) -> Option<Vec<Block>> {
+    pub(crate) fn captured_blocks(&self, vm: &mut Vm, actor: Value) -> Option<Vec<Block>> {
         let Value::Table(actor) = actor else {
             return None;
         };
-        let mut guard = self.store.lock().unwrap();
+        let guard = vm.store();
         Some(guard.actors.get_mut(&actor)?.capture.as_mut()?.blocks())
     }
 }
 
-pub(super) fn discover_startup(call: &mut HostCall<'_>, store: &Shared) -> Result<(), Error> {
-    let queued = store.lock().unwrap().startup_queues.take();
+pub(super) fn discover_startup(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let queued = call.store().startup_queues.take();
     let Some(queued) = queued else {
         return Ok(());
     };
-    run_discovery(call, store, queued)
+    run_discovery(call, queued)
 }
 
-fn run_discovery(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    queued: Vec<TableId>,
-) -> Result<(), Error> {
-    let previous = std::mem::replace(&mut store.lock().unwrap().startup_discovery, true);
+fn run_discovery(call: &mut HostCall<'_>, queued: Vec<TableId>) -> Result<(), Error> {
+    let previous = std::mem::replace(&mut call.store().startup_discovery, true);
     let roots = queued.iter().copied().map(Value::Table).collect::<Vec<_>>();
     let result = call.with_roots(&roots, |call| {
         for actor in queued {
-            drain_commands(call, store, actor)?;
+            drain_commands(call, actor)?;
         }
         Ok(())
     });
-    store.lock().unwrap().startup_discovery = previous;
+    call.store().startup_discovery = previous;
     result
 }
 
-pub(super) fn has_recurring(store: &Shared, actor: TableId) -> bool {
+pub(super) fn has_recurring(store: &mut Store, actor: TableId) -> bool {
     store
-        .lock()
-        .unwrap()
         .actors
         .get(&actor)
         .and_then(|actor| actor.capture.as_ref())
         .is_some_and(|capture| capture.recurring.command.is_some())
 }
 
-pub(super) fn deferred(store: &Shared, actor: TableId) -> bool {
+pub(super) fn deferred(store: &mut Store, actor: TableId) -> bool {
     store
-        .lock()
-        .unwrap()
         .actors
         .get(&actor)
         .and_then(|a| a.capture.as_ref())

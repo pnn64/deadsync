@@ -8,7 +8,7 @@ pub(super) fn handler(call: &mut HostCall<'_>) -> Result<TableId, Error> {
     call.with_roots(&[Value::Table(owner)], |call| {
         let spline = spline(call)?;
         set(call, owner, "__songlua_spline", Value::Table(spline))?;
-        let mode = call.try_intern(b"NoteColumnSplineMode_Disabled")?;
+        let mode = call.intern_static(b"NoteColumnSplineMode_Disabled")?;
         set(call, owner, "__songlua_spline_mode", mode)?;
         set(
             call,

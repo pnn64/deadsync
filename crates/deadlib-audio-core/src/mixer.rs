@@ -42,6 +42,7 @@ impl MixBus {
 /// callback only performs bounded atomic loads; it never locks or allocates.
 pub struct MixControls {
     stream_gain: AtomicU32,
+    stream_paused: AtomicBool,
     bus_gains: [AtomicU32; MAX_MIX_BUSES],
     bus_generations: [AtomicU64; MAX_MIX_BUSES],
 }
@@ -51,6 +52,7 @@ impl MixControls {
     pub fn new() -> Self {
         Self {
             stream_gain: AtomicU32::new(1.0f32.to_bits()),
+            stream_paused: AtomicBool::new(false),
             bus_gains: std::array::from_fn(|_| AtomicU32::new(1.0f32.to_bits())),
             bus_generations: std::array::from_fn(|_| AtomicU64::new(0)),
         }
@@ -65,6 +67,16 @@ impl MixControls {
     #[inline(always)]
     pub fn stream_gain(&self) -> f32 {
         f32::from_bits(self.stream_gain.load(Ordering::Acquire))
+    }
+
+    /// Suspend music consumption while device callbacks and sound effects continue.
+    /// Returns whether the state changed.
+    pub fn set_stream_paused(&self, paused: bool) -> bool {
+        self.stream_paused.swap(paused, Ordering::AcqRel) != paused
+    }
+
+    pub fn stream_paused(&self) -> bool {
+        self.stream_paused.load(Ordering::Acquire)
     }
 
     #[inline(always)]

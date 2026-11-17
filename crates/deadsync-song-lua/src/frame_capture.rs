@@ -38,6 +38,9 @@ pub(crate) struct CaptureFrameArgs<'a, H: std::hash::BuildHasher> {
     pub baseline: &'a [SongLuaOverlayState],
     pub from_states: &'a [SongLuaOverlayState],
     pub update_states: &'a mut [SongLuaOverlayState],
+    // Compiler scratch starts from to_states on first use per actor. False
+    // preserves independently prepared updates supplied by the public API.
+    pub initialize_updates: bool,
     pub to_states: &'a mut [SongLuaOverlayState],
     pub restored_indices: &'a [usize],
     pub tracks: &'a mut Vec<SongLuaOverlayUpdateTrack>,
@@ -477,6 +480,7 @@ pub(crate) fn set_overlay_state_update_value(
 // Track indices stay stable because update tracks are append-only during capture.
 #[derive(Default)]
 pub(crate) struct OverlaySampleScratch {
+    initialized_updates: Vec<bool>,
     pub(crate) completed: Vec<SongLuaScheduledOverlaySample>,
     pub(crate) blocked_actors: Vec<bool>,
     pub(crate) reset_indices: Vec<usize>,
@@ -738,6 +742,7 @@ pub(crate) fn capture_update_overlay_samples(
         baseline,
         from_states,
         update_states,
+        initialize_updates,
         to_states,
         restored_indices,
         tracks,
@@ -751,6 +756,14 @@ pub(crate) fn capture_update_overlay_samples(
 
     let source_len = source.actor_count();
     let chronological = source.chronological();
+    // The compiler's update buffer is scratch: copy only actors whose state
+    // capture will read or modify. Prepared callers retain their own values.
+    scratch.initialized_updates.clear();
+    if initialize_updates {
+        scratch
+            .initialized_updates
+            .resize(update_states.len(), false);
+    }
     if chronological {
         scratch.completed.clear();
         scratch.blocked_actors.resize(source_len, false);
@@ -779,6 +792,12 @@ pub(crate) fn capture_update_overlay_samples(
         // can put a trailing zero-time state just before its preceding tween;
         // sorting completed endpoints would then restore the wrong state.
         for sample in &scratch.completed {
+            initialize_update_state(
+                update_states,
+                to_states,
+                &mut scratch.initialized_updates,
+                sample.overlay_index,
+            );
             set_overlay_state_update_value(
                 &mut update_states[sample.overlay_index],
                 sample.target,
@@ -801,6 +820,14 @@ pub(crate) fn capture_update_overlay_samples(
             );
         }
     } else {
+        for sample in scheduled_samples.iter() {
+            initialize_update_state(
+                update_states,
+                to_states,
+                &mut scratch.initialized_updates,
+                sample.overlay_index,
+            );
+        }
         merge_completed_scheduled_overlay_samples_into(
             tracks,
             track_indices,
@@ -819,6 +846,7 @@ pub(crate) fn capture_update_overlay_samples(
     scratch.message_targets.clear();
     scratch.retargeted_states.clear();
     let OverlaySampleScratch {
+        initialized_updates,
         reset_indices,
         stopped_indices,
         captured_tracks,
@@ -832,6 +860,7 @@ pub(crate) fn capture_update_overlay_samples(
                 return Ok(());
             };
             debug_assert!(overlay_index < source_len);
+            initialize_update_state(update_states, to_states, initialized_updates, overlay_index);
             reset_indices.push(overlay_index);
             if tween_reset {
                 stopped_indices.push(overlay_index);
@@ -987,6 +1016,22 @@ pub(crate) fn capture_update_overlay_samples(
         source.reset(overlay_index)?;
     }
     Ok(())
+}
+
+fn initialize_update_state(
+    updates: &mut [SongLuaOverlayState],
+    states: &[SongLuaOverlayState],
+    initialized: &mut [bool],
+    index: usize,
+) {
+    if let Some(ready) = initialized.get_mut(index)
+        && !*ready
+    {
+        if let Some(state) = states.get(index) {
+            updates[index] = *state;
+        }
+        *ready = true;
+    }
 }
 
 #[cfg_attr(test, derive(Clone))]

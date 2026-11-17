@@ -13,7 +13,7 @@ fn indexed_n(
     let end = prefix.len() + suffix.len();
     key[..prefix.len()].copy_from_slice(prefix.as_bytes());
     key[prefix.len()..end].copy_from_slice(suffix.as_bytes());
-    n(
+    n_named(
         call,
         state,
         std::str::from_utf8(&key[..end]).expect("ASCII modifier key"),

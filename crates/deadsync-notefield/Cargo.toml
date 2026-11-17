@@ -12,7 +12,7 @@ deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-theme = { path = "../deadsync-theme" }
-glam = "0.34.1"
+glam = "0.34.3"
 twox-hash = "2.1.5"
 
 [dev-dependencies]

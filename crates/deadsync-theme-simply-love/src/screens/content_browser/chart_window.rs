@@ -22,7 +22,9 @@ use deadsync_online::smo_songs::{PreviewChart, PreviewPhase};
 use super::preview::{self, ARROW_PX, MAX_LANES, PX_PER_SECOND, Preview};
 use super::render::{accent, format_bytes};
 use super::spinner;
-use super::state::{SmoSync, State, focused_pack, install_for, is_installed, smo_sync_of};
+use super::state::{
+    SmoSync, State, focused_pack, install_for, is_installed, smo_sync_of, three_key,
+};
 use crate::act;
 use crate::color;
 use crate::screens::components::shared::noteskin_draw;
@@ -573,7 +575,13 @@ fn push_chips(
     }
     if charts.len() > 1 {
         actors.push(act!(text:
-            font("miso"): settext("&MENUUP;&MENUDOWN;".to_owned()):
+            // A three-key cabinet steps the difficulty with LEFT and RIGHT.
+            font("miso"): settext(if three_key(state) {
+                "&MENULEFT;&MENURIGHT;"
+            } else {
+                "&MENUUP;&MENUDOWN;"
+            }
+            .to_owned()):
             align(1.0, 0.5): xy(cx - row_w * 0.5 - 5.0, y): zoom(0.34): horizalign(right):
             diffuse(0.75, 0.75, 0.75, alpha): z(Z_WINDOW_TEXT)
         ));
@@ -760,7 +768,11 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
             diffuse(ink, ink, ink, 1.0): z(Z_MENU_TEXT)
         ));
     }
-    let hint = if menu.choice == 0 && known.as_ref().is_some_and(|charts| charts.len() > 1) {
+    // A three-key cabinet has no UP/DOWN to pick the difficulty with here;
+    // the preview's own LEFT and RIGHT step it once it plays.
+    let hint = if three_key(state) {
+        "LEFT/RIGHT choose    START go    LEFT+RIGHT cancel"
+    } else if menu.choice == 0 && known.as_ref().is_some_and(|charts| charts.len() > 1) {
         "LEFT/RIGHT choose    UP/DOWN difficulty    START go    BACK cancel"
     } else {
         "LEFT/RIGHT choose    START go    BACK cancel"

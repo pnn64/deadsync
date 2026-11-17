@@ -27,7 +27,7 @@ impl SongRuntime {
                 .map_err(|e| e.to_string())?;
             owner = Some(session.pin);
             let random = self.random.preserve();
-            self.actors.set_ease_probe_active(true);
+            self.actors.set_ease_probe_active(&mut self.vm, true);
             let body = self
                 .vm
                 .call(function, &[Value::Number(1.)])
@@ -35,7 +35,7 @@ impl SongRuntime {
                 .and_then(|v| self.vm.pin(v).map(|pin| returned = Some(pin)));
             drop(random);
             // Native removes the marker rather than restoring a nested one.
-            self.actors.set_ease_probe_active(false);
+            self.actors.set_ease_probe_active(&mut self.vm, false);
             let read = self
                 .actors
                 .finish_ease_probe(&mut self.vm, &session)

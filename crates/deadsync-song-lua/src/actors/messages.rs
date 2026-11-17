@@ -16,7 +16,7 @@ pub(super) enum MessageOp {
     Host,
 }
 
-pub(super) fn install(vm: &mut Vm, store: &Shared, captures: &[Value]) -> Result<Root, Error> {
+pub(super) fn install(vm: &mut Vm, captures: &[Value]) -> Result<Root, Error> {
     let manager = vm.try_new_table()?;
     let Value::Table(helpers) = captures[1] else {
         unreachable!()
@@ -30,18 +30,15 @@ pub(super) fn install(vm: &mut Vm, store: &Shared, captures: &[Value]) -> Result
         ("Broadcast", MessageOp::Broadcast),
         ("SetLogging", MessageOp::Logging),
     ] {
-        install_method(vm, manager, name, Op::Message(op), store, captures)?;
+        install_method(vm, manager, name, Op::Message(op), captures)?;
     }
     vm.set_global(b"MESSAGEMAN", Value::Table(manager))?;
     vm.set_global(
         crate::SONG_LUA_SIDE_EFFECT_COUNT_KEY.as_bytes(),
         Value::Number(0.0),
     )?;
-    let callback = vm.new_host_function_with_data(
-        super::callback,
-        captures,
-        Binding::new(store, Op::Message(MessageOp::Host)),
-    )?;
+    let callback =
+        vm.new_host_function_with_data(super::callback, captures, Op::Message(MessageOp::Host))?;
     vm.pin(callback)
 }
 
@@ -83,27 +80,17 @@ pub(super) fn record(
     })
 }
 
-pub(super) fn callback(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    op: MessageOp,
-) -> Result<(), Error> {
+pub(super) fn callback(call: &mut HostCall<'_>, op: MessageOp) -> Result<(), Error> {
     if matches!(op, MessageOp::Host) {
         let name =
             command_name(call, arg(call, 0)).ok_or_else(|| call.error(b"message name expected"))?;
         // Internal manager bindings share the native guarded ScriptError path.
         if arg(call, 4) == Value::Boolean(true) {
             let text = String::from_utf8_lossy(&name);
-            return framebuffers::report(call, store, &text);
+            return framebuffers::report(call, &text);
         }
         let params = (arg(call, 1) == Value::Boolean(true)).then(|| arg(call, 2));
-        return dispatch(
-            call,
-            store,
-            &name,
-            params,
-            arg(call, 3) == Value::Boolean(true),
-        );
+        return dispatch(call, &name, params, arg(call, 3) == Value::Boolean(true));
     }
     if matches!(op, MessageOp::Logging) {
         side_effect(call)?;
@@ -119,18 +106,18 @@ pub(super) fn callback(
             side_effect(call)?;
             let has_params = matches!(params, Some(Value::Table(_)));
             record(call, &name, has_params)?;
-            live_sources::capture(call, store, &name, params)?;
+            live_sources::capture(call, &name, params)?;
             let suppressed = global(
                 call,
                 crate::SONG_LUA_SUPPRESS_BROADCAST_KEY.as_bytes(),
                 true,
             )?;
             if has_params || matches!(suppressed, Value::Nil | Value::Boolean(false)) {
-                dispatch(call, store, &name, params, true)?;
+                dispatch(call, &name, params, true)?;
             }
             #[cfg(feature = "test-support")]
             {
-                let observations = store.lock().unwrap().observations.clone();
+                let observations = call.store().observations.clone();
                 let globals = helper(call, 5)?;
                 observations.state_call(
                     call,
@@ -144,17 +131,16 @@ pub(super) fn callback(
     call.push(helper(call, MANAGER_HELPER)?)
 }
 
-pub(super) fn queued(call: &mut HostCall<'_>, store: &Shared, message: &[u8]) -> Result<(), Error> {
+pub(super) fn queued(call: &mut HostCall<'_>, message: &[u8]) -> Result<(), Error> {
     record(call, message, true)?;
     let params = Value::Table(call.try_new_table()?);
     call.with_roots(&[params], |call| {
-        dispatch(call, store, message, Some(params), true)
+        dispatch(call, message, Some(params), true)
     })
 }
 
 pub(super) fn dispatch(
     call: &mut HostCall<'_>,
-    store: &Shared,
     message: &[u8],
     params: Option<Value>,
     normalize: bool,
@@ -162,7 +148,7 @@ pub(super) fn dispatch(
     if std::str::from_utf8(message).is_ok_and(|message| message.trim().is_empty()) {
         return Ok(());
     }
-    song_capture::broadcast(call, store, message, params.is_some())?;
+    song_capture::broadcast(call, message, params.is_some())?;
     let active_key = call.try_intern(ACTIVE)?;
     let globals = table(call, helper(call, 5)?)?;
     let previous = call.raw_table_get(globals, active_key)?;
@@ -172,11 +158,11 @@ pub(super) fn dispatch(
         |call| {
             call.raw_table_set(globals, active_key, name)?;
             let previous_message = std::mem::replace(
-                &mut store.lock().unwrap().active_message,
+                &mut call.store().active_message,
                 std::str::from_utf8(message).ok().map(str::to_owned),
             );
-            let result = deliver(call, store, message, params, normalize);
-            store.lock().unwrap().active_message = previous_message;
+            let result = deliver(call, message, params, normalize);
+            call.store().active_message = previous_message;
             // Raw restoration also works after a fatal instruction limit.
             call.raw_table_set(globals, active_key, previous)?;
             result
@@ -186,7 +172,6 @@ pub(super) fn dispatch(
 
 fn deliver(
     call: &mut HostCall<'_>,
-    store: &Shared,
     message: &[u8],
     params: Option<Value>,
     normalize: bool,
@@ -194,7 +179,7 @@ fn deliver(
     let field = [message, b"MessageCommand"].concat();
     let key = call.try_intern(&field)?;
     call.with_roots(&[key], |call| {
-        let order = store.lock().unwrap().actor_order.clone();
+        let order = call.store().actor_order.clone();
         let mut actors = Vec::new();
         for actor in order {
             let function = call.table_get(Value::Table(actor), key)?;
@@ -211,7 +196,7 @@ fn deliver(
         #[cfg(feature = "test-support")]
         {
             let (ranks, paths) = {
-                let store = store.lock().unwrap();
+                let store = call.store();
                 (store.message_ranks.clone(), store.message_paths.clone())
             };
             let mut known = Vec::new();
@@ -224,7 +209,7 @@ fn deliver(
                     let rank = paths.get(&path).copied();
                     if rank.is_none() {
                         let gap = format!("missing captured subscriber identity for {path}");
-                        let mut store = store.lock().unwrap();
+                        let store = call.store();
                         if store.message_coverage_seen.insert(gap.clone()) {
                             store.message_coverage.push(gap);
                         }
@@ -251,19 +236,16 @@ fn deliver(
         for (_, actor) in actors {
             // A broadcast is synchronous even when the same handler is already
             // active. Direct playcommand keeps its separate recursion guard.
-            let was_active = store
-                .lock()
-                .unwrap()
+            let was_active = call
+                .store()
                 .actors
                 .get_mut(&actor)
                 .unwrap()
                 .active_commands
                 .remove(&field);
-            let result = run_named(call, store, actor, &name, params);
+            let result = run_named(call, actor, &name, params);
             if was_active {
-                store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get_mut(&actor)
                     .unwrap()
@@ -271,7 +253,7 @@ fn deliver(
                     .insert(field.clone());
             }
             result?;
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             if guard.replay_clock.is_some() {
                 for entry in &mut guard.deferred_messages {
                     if entry.actor == actor && entry.command.as_bytes() == field {

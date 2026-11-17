@@ -30,9 +30,9 @@ pub(crate) const TARGETS: &[Target] = &[
 
 // Each call represents one successful setter write, including equal values.
 // Compound setters call this in native order instead of comparing snapshots.
-pub(super) fn record(call: &mut HostCall<'_>, store: &Shared, id: TableId, key: &str) {
+pub(super) fn record(call: &mut HostCall<'_>, id: TableId, key: &str) {
     let delta = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let state = &guard.actors[&id].state.render;
         let mut delta = Delta::default();
         match key {
@@ -67,11 +67,11 @@ pub(super) fn record(call: &mut HostCall<'_>, store: &Shared, id: TableId, key: 
         }
         delta
     };
-    capture::write(call, store, id, delta, false);
+    capture::write(call, id, delta, false);
 }
 
-pub(super) fn delta(call: &mut HostCall<'_>, store: &Shared, id: TableId, delta: &Delta) {
-    if song_immediate::context(&store.lock().unwrap(), id).is_none() {
+pub(super) fn delta(call: &mut HostCall<'_>, id: TableId, delta: &Delta) {
+    if song_immediate::context(&call.store(), id).is_none() {
         return;
     }
     let mut state = crate::SongLuaOverlayState::default();
@@ -80,7 +80,6 @@ pub(super) fn delta(call: &mut HostCall<'_>, store: &Shared, id: TableId, delta:
         if delta.has_update_target(target) {
             song_properties::record(
                 call,
-                store,
                 id,
                 target,
                 crate::perframe::overlay_state_update_value(&state, target),

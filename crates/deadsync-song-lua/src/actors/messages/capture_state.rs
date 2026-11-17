@@ -17,13 +17,12 @@ fn scalar(value: Value) -> bool {
 impl Snapshot {
     pub(super) fn capture(
         call: &mut HostCall<'_>,
-        store: &Shared,
         actor: TableId,
         retained: TableId,
     ) -> Result<Self, Error> {
         let raw = state_snapshot::raw_copy_mutable(call, actor)?;
         call.raw_table_set(retained, Value::Number(1.), Value::Table(raw))?;
-        let saved = function_capture::Saved::read(store, actor, raw)
+        let saved = function_capture::Saved::read(call.store_ref(), actor, raw)
             .ok_or_else(|| call.error(b"capture actor is not owned by this runtime"))?;
         let roots = call.try_new_table()?;
         call.raw_table_set(retained, Value::Number(2.), Value::Table(roots))?;
@@ -43,12 +42,7 @@ impl Snapshot {
             names,
         })
     }
-    pub(super) fn restore(
-        self,
-        call: &mut HostCall<'_>,
-        store: &Shared,
-        raw: bool,
-    ) -> Result<(), Error> {
+    pub(super) fn restore(self, call: &mut HostCall<'_>, raw: bool) -> Result<(), Error> {
         let globals = helper(call, 5)?;
         let output: Removals = Arc::new(Mutex::new(None));
         let scan = call.new_host_function_with_data(
@@ -71,8 +65,8 @@ impl Snapshot {
             }
         }
         state_snapshot::restore_mutable(call, self.actor, self.raw, raw)?;
-        self.saved.restore_mutable(store);
-        lifecycle::invalidate_plans(call, store)
+        self.saved.restore_mutable(call.store());
+        lifecycle::invalidate_plans(call)
     }
 }
 type ScalarRows = (Vec<(Value, Value)>, HashSet<String>);

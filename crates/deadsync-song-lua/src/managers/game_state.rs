@@ -3,6 +3,7 @@ use super::catalog::{arg, float, raw, text};
 use super::fields::{Field, array, object, set};
 use super::*;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 mod helpers;
 pub(crate) mod scene;
 mod selection;
@@ -13,13 +14,24 @@ struct Setup {
     #[cfg(feature = "test-support")]
     observations: crate::observations::Observations,
 }
-#[derive(Clone)]
 struct Metadata {
-    enabled: [bool; crate::LUA_PLAYERS],
+    roster: Arc<Roster>,
+    game_name: &'static str,
     screen_x: [f32; crate::LUA_PLAYERS],
+    versus_player_screen_x: Option<[f32; crate::LUA_PLAYERS]>,
     display_bpms: [f32; 2],
     rate: f32,
     center_y: f32,
+}
+struct Roster {
+    joined: AtomicU8,
+    master: AtomicU8,
+}
+impl Roster {
+    fn enabled(&self) -> [bool; crate::LUA_PLAYERS] {
+        let bits = self.joined.load(Ordering::Relaxed);
+        std::array::from_fn(|i| bits & (1 << i) != 0)
+    }
 }
 #[derive(Clone)]
 struct Binding {
@@ -150,14 +162,24 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         .clone();
     let context = setup.context;
     let metadata = Arc::new(Metadata {
-        enabled: context.players.each_ref().map(|p| p.enabled),
+        roster: Arc::new(Roster {
+            joined: AtomicU8::new(context.players.iter().enumerate().fold(0, |bits, (i, p)| bits | (u8::from(p.enabled) << i))),
+            master: AtomicU8::new(context.players.iter().position(|p| p.enabled).unwrap_or(crate::LUA_PLAYERS) as u8),
+        }),
+        game_name: if crate::song_lua_style_info(&context.style_name).steps_type.starts_with("StepsType_Pump_") {
+            "pump"
+        } else {
+            "dance"
+        },
         screen_x: context.players.each_ref().map(|p| p.screen_x),
+        versus_player_screen_x: context.versus_player_screen_x,
         display_bpms: context.song_display_bpms,
         rate: crate::song_music_rate(&context),
         center_y: context.screen_height.max(1.0) * 0.5,
     });
     let globals = table(call, call.captures()[1])?;
     let catalog = table(call, call.captures()[4])?;
+    bind(call, catalog, "player_roster", &[], &metadata)?;
     let slots = object(call, |call, slots| {
         let song = raw(call, catalog, "song")?;
         let current = slot(call, [song])?;
@@ -175,7 +197,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             let current = slot(call, values)?;
             set(slots, key, current, call)?;
         }
-        let name = call.try_intern(b"SortOrder_Group")?;
+        let name = call.intern_static(b"SortOrder_Group")?;
         let current = slot(call, [name])?;
         set(slots, "sort", current, call)
     })?;
@@ -201,14 +223,10 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             constant_field(call, class, "Env", env)?;
             bind(call, globals, "getenv", &[Value::Table(env)], &metadata)?;
             bind(call, globals, "setenv", &[Value::Table(env)], &metadata)?;
-            let enabled = array(
-                call,
-                (0..crate::LUA_PLAYERS)
-                    .filter(|i| metadata.enabled[*i])
-                    .map(crate::player_number_name),
-            )?;
-            constant_field(call, class, "GetEnabledPlayers", enabled)?;
-            constant_field(call, class, "GetHumanPlayers", enabled)?;
+            for name in ["GetEnabledPlayers", "GetHumanPlayers", "GetMasterPlayerNumber", "GetNumSidesJoined", "GetNumPlayersEnabled"] {
+                bind(call, class, name, &[], &metadata)?;
+            }
+            bind(call, class, "JoinPlayer", &[style, call.captures()[7]], &metadata)?;
             let players = raw(call, catalog, "player_states")?;
             let players = table(call, players)?;
             let states = [
@@ -227,7 +245,6 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                 "ResetPlayerOptions",
                 "SetPreferredDifficulty",
                 "UnjoinPlayer",
-                "JoinPlayer",
                 "SaveProfiles",
             ] {
                 bind(call, class, name, &[], &metadata)?;
@@ -239,22 +256,11 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                 &[Value::Boolean(true)],
                 &metadata,
             )?;
-            let master = metadata.enabled.iter().position(|v| *v).unwrap_or(0);
-            constant_field(
-                call,
-                class,
-                "GetMasterPlayerNumber",
-                crate::player_number_name(master),
-            )?;
-            let count = metadata.enabled.iter().filter(|v| **v).count();
-            for name in ["GetNumSidesJoined", "GetNumPlayersEnabled"] {
-                constant_field(call, class, name, count)?;
-            }
             constant_field(call, class, "IsCourseMode", false)?;
             let course = raw(call, catalog, "course")?;
             constant_field(call, class, "GetCurrentCourse", course)?;
             let game = object(call, |call, game| {
-                constant_field(call, game, "GetName", "dance")
+                constant_field(call, game, "GetName", metadata.game_name)
             })?;
             constant_field(call, class, "GetCurrentGame", game)?;
             for (name, value) in [
@@ -303,6 +309,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                 slots,
                 &context,
                 call.captures()[7],
+                metadata.roster.clone(),
             )?;
             Ok(())
         })?;
@@ -373,6 +380,54 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
     let name = binding.name;
     let meta = &binding.metadata;
     match name {
+        "player_roster" => {
+            for enabled in meta.roster.enabled() { call.push(Value::Boolean(enabled))?; }
+            Ok(())
+        }
+        "GetEnabledPlayers" | "GetHumanPlayers" => {
+            let players = array(call, meta.roster.enabled().into_iter().enumerate()
+                .filter(|(_, enabled)| *enabled).map(|(i, _)| crate::player_number_name(i)))?;
+            call.push(Value::Table(players))
+        }
+        "GetNumSidesJoined" | "GetNumPlayersEnabled" => {
+            call.push(Value::Number(meta.roster.joined.load(Ordering::Relaxed).count_ones() as f64))
+        }
+        "GetMasterPlayerNumber" => {
+            let master = meta.roster.master.load(Ordering::Relaxed) as usize;
+            let value = if master < crate::LUA_PLAYERS {
+                call.try_intern(crate::player_number_name(master).as_bytes())?
+            } else { Value::Nil };
+            call.push(value)
+        }
+        "JoinPlayer" => {
+            let player = required_player(call, arg(call, 0))?;
+            let before = meta.roster.joined.load(Ordering::Relaxed);
+            let style = super::player_options::current_style(call);
+            // The dance single steps type has single/versus styles. A second
+            // side cannot join a double/solo style without a compatible style.
+            if before != 0 && (before.count_ones() >= 2 || !matches!(style.as_str(), "single" | "versus" | "couple" | "routine")) {
+                return call.push(call.arguments()[0]);
+            }
+            let joined = before | (1 << player);
+            meta.roster.joined.store(joined, Ordering::Relaxed);
+            let master = meta.roster.master.load(Ordering::Relaxed) as usize;
+            if master >= crate::LUA_PLAYERS {
+                meta.roster.master.store(player as u8, Ordering::Relaxed);
+            }
+            if matches!(style.as_str(), "single" | "versus") && !(player == 0 && style == "versus") {
+                let style = super::utility::style(call, if joined.count_ones() == 2 { "versus" } else { "single" })?;
+                let slot = table(call, call.captures()[4])?;
+                call.raw_table_set(slot, Value::Number(1.0), Value::Table(style))?;
+            }
+            effect(call)?;
+            let params = object(call, |call, params| set(params, "Player", crate::player_number_name(player), call))?;
+            call.with_roots(&[Value::Table(params)], |call| {
+                let message = call.try_intern(b"PlayerJoined")?;
+                call.call(call.captures()[5], &[message, Value::Boolean(true), Value::Table(params), Value::Boolean(true)])?;
+                Ok(())
+            })?;
+            call.push(call.arguments()[0])
+        }
         "GetCurrentSong" | "GetCurrentStyle" | "GetCurrentSteps" | "GetCurrentTrail" => {
             let index = match name {
                 "GetCurrentSteps" => required_player(call, arg(call, 0))?,
@@ -400,13 +455,13 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
                 call,
                 call.arguments().first().copied().unwrap_or(Value::Nil),
             ) else {
-                let empty = call.try_intern(b"")?;
+                let empty = call.intern_static(b"")?;
                 return call.push(empty);
             };
             let state = call.captures()[index + 4];
             let method = get(call, state, "GetPlayerOptionsString")?;
             let method = function(call, method)?;
-            let level = call.try_intern(b"ModsLevel_Preferred")?;
+            let level = call.intern_static(b"ModsLevel_Preferred")?;
             let result = call
                 .call(method, &[state, level])?
                 .first()
@@ -442,7 +497,7 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
                 arg(call, 0)
             };
             call.push(Value::Boolean(
-                player(call, value).is_some_and(|i| meta.enabled[i]),
+                player(call, value).is_some_and(|i| meta.roster.enabled()[i]),
             ))
         }
         "IsEventMode" => {
@@ -456,7 +511,13 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
         "SetCurrentSong" | "SetCurrentStyle" | "SetCurrentTrail" => {
             let slot = table(call, call.captures()[4])?;
             if name == "SetCurrentStyle" {
-                let key = text(call, arg(call, 0)).unwrap_or_else(|| "single".into());
+                let mut key = text(call, arg(call, 0)).unwrap_or_else(|| "single".into());
+                // Native resolves a style string within the current game.
+                // Retain pump's internal key so subsequent scene projections
+                // keep its five/ten-column metadata after a Lua style change.
+                if meta.game_name == "pump" && matches!(key.as_str(), "single" | "versus" | "double" | "couple" | "routine") {
+                    key.insert_str(0, "pump-");
+                }
                 let value = super::utility::style(call, &key)?;
                 call.raw_table_set(slot, Value::Number(1.0), Value::Table(value))?;
             } else if name == "SetCurrentSong" {
@@ -474,8 +535,7 @@ fn binding(call: &mut HostCall<'_>) -> Result<(), Error> {
         "AddStageToPlayer"
         | "ResetPlayerOptions"
         | "SetPreferredDifficulty"
-        | "UnjoinPlayer"
-        | "JoinPlayer" => {
+        | "UnjoinPlayer" => {
             effect(call)?;
             call.push(Value::Boolean(true))
         }

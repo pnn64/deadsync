@@ -6,19 +6,17 @@ pub(super) type Statistics = Arc<Mutex<super::super::statistics::State>>;
 
 pub(super) fn update(
     call: &mut HostCall<'_>,
-    store: &Shared,
     statistics: &Statistics,
     catalog: TableId,
     actor: TableId,
 ) -> Result<(), Error> {
-    holds(call, store, statistics, actor)?;
-    judgment(call, store, statistics, actor)?;
-    note_field_zoom(call, store, catalog, actor)
+    holds(call, statistics, actor)?;
+    judgment(call, statistics, actor)?;
+    note_field_zoom(call, catalog, actor)
 }
 
-fn raw(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
-    let key = call.try_intern(name.as_bytes())?;
-    call.raw_table_get(actor, key)
+fn raw(call: &mut HostCall<'_>, actor: TableId, name: &'static str) -> Result<Value, Error> {
+    get_static(call, actor, name.as_bytes())
 }
 fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, Error> {
     if value == Value::Nil {
@@ -46,7 +44,7 @@ fn player(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<usize>, Erro
 fn optional_float(
     call: &mut HostCall<'_>,
     owner: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<f32>, Error> {
     let value = raw(call, owner, key)?;
     if value == Value::Nil {
@@ -59,8 +57,7 @@ fn truthy(value: Value) -> bool {
     !matches!(value, Value::Nil | Value::Boolean(false))
 }
 fn child(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<Value, Error> {
-    let children = native_children::named_children(call, actor)?;
-    call.with_roots(&[children], |call| raw(call, table(call, children)?, name))
+    native_children::named_child(call, actor, name.as_bytes())
 }
 fn invoke(
     call: &mut HostCall<'_>,
@@ -69,7 +66,7 @@ fn invoke(
     args: &[Value],
 ) -> Result<Value, Error> {
     call.with_roots(args, |call| {
-        let function = sprites::field(call, actor, name)?;
+        let function = sprites::field_named(call, actor, name)?;
         if !matches!(function, Value::Function(_) | Value::Native(_)) {
             return Err(call.error(format!("{name} function expected").as_bytes()));
         }
@@ -92,12 +89,7 @@ fn numeric_method(
     invoke(call, actor, name, &[Value::Number(n)]).map(|_| ())
 }
 
-fn holds(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    statistics: &Statistics,
-    actor: TableId,
-) -> Result<(), Error> {
+fn holds(call: &mut HostCall<'_>, statistics: &Statistics, actor: TableId) -> Result<(), Error> {
     let Some(player) = player(call, actor)? else {
         return Ok(());
     };
@@ -147,7 +139,7 @@ fn holds(
                         deadsync_rules::note::HoldResult::LetGo => 1.,
                         deadsync_rules::note::HoldResult::Missed => return Ok(()),
                     };
-                    chronological::ensure(call, store, sprite)?;
+                    chronological::ensure(call, sprite)?;
                     for name in ["stoptweening", "stopeffect"] {
                         invoke(call, sprite, name, &[])?;
                     }
@@ -179,12 +171,7 @@ fn holds(
     })
 }
 
-fn judgment(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    statistics: &Statistics,
-    actor: TableId,
-) -> Result<(), Error> {
+fn judgment(call: &mut HostCall<'_>, statistics: &Statistics, actor: TableId) -> Result<(), Error> {
     let Some(player) = player(call, actor)? else {
         return Ok(());
     };
@@ -222,7 +209,7 @@ fn judgment(
             return Ok(());
         };
         call.with_roots(&[Value::Table(sprite)], |call| {
-            chronological::ensure(call, store, sprite)?;
+            chronological::ensure(call, sprite)?;
             let globals = table(call, helper(call, 5)?)?;
             let sl = raw(call, globals, "SL")?;
             let sl = table(call, sl)?;
@@ -283,12 +270,7 @@ fn judgment(
     })
 }
 
-fn note_field_zoom(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    catalog: TableId,
-    actor: TableId,
-) -> Result<(), Error> {
+fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) -> Result<(), Error> {
     let Some(player) = player(call, actor)? else {
         return Ok(());
     };
@@ -316,7 +298,7 @@ fn note_field_zoom(
                 break;
             }
             let name = ["zoom_x", "zoom_y", "zoom_z"][axis];
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             if let Some(node) = guard.actors.get_mut(&field) {
                 let dest = node.destination_mut();
                 match axis {
@@ -324,17 +306,15 @@ fn note_field_zoom(
                     1 => dest.zoom_y = zoom,
                     _ => dest.zoom_z = zoom,
                 }
-                drop(guard);
                 let mut delta = crate::SongLuaOverlayStateDelta::default();
                 match axis {
                     0 => delta.zoom_x = Some(zoom),
                     1 => delta.zoom_y = Some(zoom),
                     _ => delta.zoom_z = Some(zoom),
                 }
-                capture::write(call, store, field, delta, false);
+                capture::write(call, field, delta, false);
             } else {
-                drop(guard);
-                song_replay::raw_set(
+                song_replay::raw_set_named(
                     call,
                     field,
                     &format!("__songlua_state_{name}"),

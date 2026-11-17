@@ -4,10 +4,10 @@ use crate::SongLuaProxyTarget;
 use sprites::{field, set};
 
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> Result<(), Error> {
-    let methods = get(call, actor, b"__songlua_bound_methods")?;
+    let methods = get_static(call, actor, b"__songlua_bound_methods")?;
     let methods = if methods == Value::Nil {
         let methods = call.try_new_table()?;
-        let key = call.try_intern(b"__songlua_bound_methods")?;
+        let key = call.intern_static(b"__songlua_bound_methods")?;
         call.raw_table_set(actor, key, Value::Table(methods))?;
         methods
     } else {
@@ -17,11 +17,11 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> R
     // it through the class table. Captures keep the owner and its target alive.
     let captures = [Value::Table(actor), call.captures()[1]];
     let setter = call.new_host_function(set_target, &captures)?;
-    let key = call.try_intern(b"SetTarget")?;
+    let key = call.intern_static(b"SetTarget")?;
     call.raw_table_set(methods, key, setter)?;
     if proxy {
         let getter = call.new_host_function(get_target, &captures)?;
-        let key = call.try_intern(b"GetTarget")?;
+        let key = call.intern_static(b"GetTarget")?;
         call.raw_table_set(methods, key, getter)?;
     }
     Ok(())
@@ -30,7 +30,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> R
 fn optional_integer(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<i64>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {
@@ -53,7 +53,7 @@ fn set_target(call: &mut HostCall<'_>) -> Result<(), Error> {
     let Value::Table(target) = arg(call, 1) else {
         return Err(call.error(b"ActorProxy.SetTarget requires an Actor"));
     };
-    let kind = get(call, target, b"__songlua_actor_type")?;
+    let kind = get_static(call, target, b"__songlua_actor_type")?;
     if kind == Value::Nil {
         return Err(call.error(b"ActorProxy.SetTarget requires an Actor"));
     }
@@ -103,7 +103,7 @@ fn set_target(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 fn get_target(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, call.captures()[0])?;
-    let target = get(call, actor, b"__songlua_proxy_target_actor")?;
+    let target = get_static(call, actor, b"__songlua_proxy_target_actor")?;
     call.push(target)
 }
 

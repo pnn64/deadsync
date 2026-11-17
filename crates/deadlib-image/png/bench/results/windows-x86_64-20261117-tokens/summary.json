@@ -1,0 +1,656 @@
+[
+  {
+    "input": "timing-run1.tsv",
+    "sha256": "436e7a577f2adbfadc3bfe2b7e4b7ae11571446112b883b2bcfcd88a1c419fbf",
+    "groups": {
+      "all": {
+        "cases": 89,
+        "totals": {
+          "native": {
+            "ns": 142701383,
+            "thread_cycles": 312206468,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 139267214,
+            "thread_cycles": 304740804,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 139654580,
+            "thread_cycles": 305602402,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 138036600,
+            "thread_cycles": 302065938,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.8305411780265552,
+              "native_wins": 67
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7383945657614795,
+              "native_wins": 67
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.016235249028569,
+              "native_wins": 50
+            }
+          }
+        }
+      },
+      "formats": {
+        "cases": 60,
+        "totals": {
+          "native": {
+            "ns": 7361520,
+            "thread_cycles": 16129531,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 9199229,
+            "thread_cycles": 20153811,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 9859458,
+            "thread_cycles": 21598174,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 8067879,
+            "thread_cycles": 17675606,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7630170529451933,
+              "native_wins": 53
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6505829350822033,
+              "native_wins": 54
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9835379105736796,
+              "native_wins": 37
+            }
+          }
+        }
+      },
+      "photos": {
+        "cases": 24,
+        "totals": {
+          "native": {
+            "ns": 119190631,
+            "thread_cycles": 260722904,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 115542612,
+            "thread_cycles": 252769060,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 114372580,
+            "thread_cycles": 250220036,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 115788813,
+            "thread_cycles": 253322280,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0250351648293858,
+              "native_wins": 12
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0357678508209662,
+              "native_wins": 11
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0231846227904648,
+              "native_wins": 12
+            }
+          }
+        }
+      },
+      "assets": {
+        "cases": 5,
+        "totals": {
+          "native": {
+            "ns": 16149232,
+            "thread_cycles": 35354033,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 14525373,
+            "thread_cycles": 31817933,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 15422542,
+            "thread_cycles": 33784192,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 14179908,
+            "thread_cycles": 31068052,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.8368966254419056,
+              "native_wins": 2
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6647272704878481,
+              "native_wins": 2
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.4562141876280665,
+              "native_wins": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "input": "timing-run2.tsv",
+    "sha256": "4bf1ad0524f0d70b369f65a238302458117b23a672fc8ef73bd9686a5175b5b6",
+    "groups": {
+      "all": {
+        "cases": 89,
+        "totals": {
+          "native": {
+            "ns": 138805548,
+            "thread_cycles": 303555087,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 134122211,
+            "thread_cycles": 293368638,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 136858129,
+            "thread_cycles": 299286535,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 133427686,
+            "thread_cycles": 291745410,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.84424085871641,
+              "native_wins": 68
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7453133531942021,
+              "native_wins": 68
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0325656478510188,
+              "native_wins": 50
+            }
+          }
+        }
+      },
+      "formats": {
+        "cases": 60,
+        "totals": {
+          "native": {
+            "ns": 7014035,
+            "thread_cycles": 15345531,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 8610259,
+            "thread_cycles": 18835759,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 9302563,
+            "thread_cycles": 20348595,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 7590595,
+            "thread_cycles": 16604449,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7783384778780167,
+              "native_wins": 54
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.663377830701033,
+              "native_wins": 54
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0028325352041334,
+              "native_wins": 37
+            }
+          }
+        }
+      },
+      "photos": {
+        "cases": 24,
+        "totals": {
+          "native": {
+            "ns": 116606265,
+            "thread_cycles": 255003484,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 111722548,
+            "thread_cycles": 244369190,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 112727590,
+            "thread_cycles": 246533328,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 112451560,
+            "thread_cycles": 245874860,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0362979248825501,
+              "native_wins": 12
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0266446345704965,
+              "native_wins": 12
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0303252786750294,
+              "native_wins": 12
+            }
+          }
+        }
+      },
+      "assets": {
+        "cases": 5,
+        "totals": {
+          "native": {
+            "ns": 15185248,
+            "thread_cycles": 33206072,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 13789404,
+            "thread_cycles": 30163689,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 14827976,
+            "thread_cycles": 32404612,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 13385531,
+            "thread_cycles": 29266101,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.837053284330312,
+              "native_wins": 2
+            }
+          },
+          "image": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6481631447408225,
+              "native_wins": 2
+            }
+          },
+          "png-packed": {
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.481551253655445,
+              "native_wins": 1
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "input": "allocations.tsv",
+    "sha256": "848887a809eda1786901d3d6272d87cabce4699914fd8fdefad272270c71ba8c",
+    "groups": {
+      "all": {
+        "cases": 89,
+        "totals": {
+          "native": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 284,
+            "requested_bytes": 44093707
+          },
+          "png": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 1057,
+            "requested_bytes": 66057037
+          },
+          "image": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 1122,
+            "requested_bytes": 65708107
+          },
+          "png-packed": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 1016,
+            "requested_bytes": 62132357
+          }
+        },
+        "native_vs": {
+          "png": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.24278112351655248,
+              "native_wins": 89
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.4839325648911061,
+              "native_wins": 89
+            }
+          },
+          "image": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.22639008110415637,
+              "native_wins": 89
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.46421157273211694,
+              "native_wins": 89
+            }
+          },
+          "png-packed": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.2564685815303815,
+              "native_wins": 89
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.5843553377007255,
+              "native_wins": 80
+            }
+          }
+        }
+      },
+      "formats": {
+        "cases": 60,
+        "totals": {
+          "native": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 126,
+            "requested_bytes": 8537064
+          },
+          "png": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 523,
+            "requested_bytes": 19556630
+          },
+          "image": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 571,
+            "requested_bytes": 17805630
+          },
+          "png-packed": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 483,
+            "requested_bytes": 16108718
+          }
+        },
+        "native_vs": {
+          "png": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.23175256772810054,
+              "native_wins": 60
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.41363071433245147,
+              "native_wins": 60
+            }
+          },
+          "image": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.21258372614129123,
+              "native_wins": 60
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.3971548671236622,
+              "native_wins": 60
+            }
+          },
+          "png-packed": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.25103058443566073,
+              "native_wins": 60
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.5377858095650199,
+              "native_wins": 52
+            }
+          }
+        }
+      },
+      "photos": {
+        "cases": 24,
+        "totals": {
+          "native": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 120,
+            "requested_bytes": 28329048
+          },
+          "png": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 458,
+            "requested_bytes": 38236440
+          },
+          "image": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 482,
+            "requested_bytes": 38257176
+          },
+          "png-packed": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 458,
+            "requested_bytes": 38236440
+          }
+        },
+        "native_vs": {
+          "png": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.2625599113223923,
+              "native_wins": 24
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.7408913584696422,
+              "native_wins": 24
+            }
+          },
+          "image": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.24943474824087097,
+              "native_wins": 24
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.7404897835254508,
+              "native_wins": 24
+            }
+          },
+          "png-packed": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.2625599113223923,
+              "native_wins": 24
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.7408913584696422,
+              "native_wins": 24
+            }
+          }
+        }
+      },
+      "assets": {
+        "cases": 5,
+        "totals": {
+          "native": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 38,
+            "requested_bytes": 7227595
+          },
+          "png": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 76,
+            "requested_bytes": 8263967
+          },
+          "image": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 69,
+            "requested_bytes": 9645301
+          },
+          "png-packed": {
+            "ns": 0,
+            "thread_cycles": 0,
+            "alloc_calls": 75,
+            "requested_bytes": 7787199
+          }
+        },
+        "native_vs": {
+          "png": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.29122889519426176,
+              "native_wins": 5
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.41209295361585796,
+              "native_wins": 5
+            }
+          },
+          "image": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.3024879455204433,
+              "native_wins": 5
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.32087356045243426,
+              "native_wins": 5
+            }
+          },
+          "png-packed": {
+            "alloc_calls": {
+              "native_over_reference_geomean": 0.2963412953107105,
+              "native_wins": 5
+            },
+            "requested_bytes": {
+              "native_over_reference_geomean": 0.5066605289982331,
+              "native_wins": 4
+            }
+          }
+        }
+      }
+    }
+  }
+]

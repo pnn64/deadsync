@@ -663,7 +663,8 @@ impl Vm {
                 .sum::<usize>()
             + self.patterns.storage_bytes();
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
-            + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
+            + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>()
+            + self.static_strings.heap_bytes();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<ByteString>()
             + self.tables.live_len() * std::mem::size_of::<Table>()
             + self.functions.live_len() * std::mem::size_of::<Closure>()
@@ -754,6 +755,7 @@ impl Vm {
         self.frames[owner].pc = 0;
         self.frames[owner].vararg_start = 0;
     }
+    #[inline]
     fn gc_debt(&self) -> usize {
         self.strings
             .bytes
@@ -972,6 +974,8 @@ impl Vm {
         }
     }
 
+    // Runs at every frame entry: the test stays inline and the work does not.
+    #[inline]
     pub(super) fn maybe_gc(&mut self) -> Result<(), Error> {
         self.gc.pending = false;
         if !self.gc.stopped
@@ -979,18 +983,24 @@ impl Vm {
             && !self.gc.closing
             && self.gc.last_live.saturating_add(self.gc_debt()) >= self.gc.threshold
         {
-            if self.advance_gc_some(self.gc_step_budget(0))? {
-                if self.gc.finalizers.is_empty() {
-                    self.finish_gc_cycle();
-                } else {
-                    if let Err(error) = self.push_finalizers(false) {
-                        self.defer_gc_until_allocation();
-                        return Err(error);
-                    }
-                }
+            return self.step_gc();
+        }
+        Ok(())
+    }
+    #[cold]
+    #[inline(never)]
+    fn step_gc(&mut self) -> Result<(), Error> {
+        if self.advance_gc_some(self.gc_step_budget(0))? {
+            if self.gc.finalizers.is_empty() {
+                self.finish_gc_cycle();
             } else {
-                self.defer_gc_until_allocation();
+                if let Err(error) = self.push_finalizers(false) {
+                    self.defer_gc_until_allocation();
+                    return Err(error);
+                }
             }
+        } else {
+            self.defer_gc_until_allocation();
         }
         Ok(())
     }
@@ -1291,6 +1301,9 @@ impl Vm {
             }
         };
         self.tables[slot_index(id.0)].trace = TableTrace::Pending(weak_keys, weak_values);
+        if !weak_keys || !weak_values {
+            self.tables[slot_index(id.0)].retire_native_keys_in_trace_slice(cursor, 64);
+        }
         let table = &self.tables[slot_index(id.0)];
         let (next, pairs) = table.trace_slice(cursor, 64);
         // Resume after children: a wide table needs only one pending slice and
@@ -1332,6 +1345,10 @@ impl Vm {
         self.gc.closed.clear();
         self.protect_new_allocations(false);
         self.strings.bytes.clear_marks();
+        // Strings have no references to trace; marking them here keeps them.
+        for id in self.static_strings.strings() {
+            self.strings.bytes.mark(id.0);
+        }
         self.tables.clear_marks();
         self.functions.clear_marks();
         self.upvalues.clear_marks();
@@ -1533,6 +1550,7 @@ impl Vm {
                     self.tables[index]
                         .set(*key, Value::Nil)
                         .expect("existing key");
+                    self.tables[index].retire_native_key(*key);
                 }
                 let Some(next) = next else { break };
                 cursor = next;

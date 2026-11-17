@@ -8,25 +8,21 @@ pub(crate) struct Scope {
     snapshots: Vec<Snapshot>,
 }
 impl Actors {
-    pub(crate) fn begin_command_locals(&self) -> Option<Scope> {
-        self.store
-            .lock()
-            .unwrap()
-            .command_locals
-            .replace(Scope::default())
+    pub(crate) fn begin_command_locals(&self, vm: &mut Vm) -> Option<Scope> {
+        vm.store().command_locals.replace(Scope::default())
     }
     pub(crate) fn restore_command_locals(
         &self,
         vm: &mut Vm,
         previous: Option<Scope>,
     ) -> Result<(), Error> {
-        let current = self.store.lock().unwrap().command_locals.take().unwrap();
+        let current = vm.store().command_locals.take().unwrap();
         if let Some(mut previous) = previous {
             // Nested stability probes let locals advance across attempts. The
             // outermost scope undoes snapshots backwards so the earliest wins.
             previous.functions.extend(current.functions);
             previous.snapshots.extend(current.snapshots);
-            self.store.lock().unwrap().command_locals = Some(previous);
+            vm.store().command_locals = Some(previous);
         } else {
             let mut snapshots = current.snapshots;
             while let Some(saved) = snapshots.pop() {
@@ -43,26 +39,19 @@ impl Actors {
         Ok(())
     }
 }
-pub(super) fn capture(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    function: Value,
-) -> Result<(), Error> {
+pub(super) fn capture(call: &mut HostCall<'_>, function: Value) -> Result<(), Error> {
     let Value::Function(id) = function else {
         return Ok(());
     };
-    let preserve = store
-        .lock()
-        .unwrap()
+    let preserve = call
+        .store()
         .command_locals
         .as_mut()
         .is_some_and(|scope| scope.functions.insert(id));
     if preserve {
         let owner = table(call, call.captures()[0])?;
         let saved = Snapshot::capture_locals(call, owner, function)?;
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .command_locals
             .as_mut()
             .expect("command scope remains active during snapshot")

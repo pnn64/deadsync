@@ -1,11 +1,38 @@
 # deadlib-image-jpeg
 
 Currently implemented: native marker parsing, canonical Huffman decoding with
-a nine-bit lookup, sequential SOF0/SOF1 and progressive SOF2 coefficient
-reconstruction, 8/12-bit
-integer IDCT, restart intervals, interleaved and separate component scans,
-component subsampling, borrowed APPn/COM preservation, native component planes,
+a nine-bit lookup (plus a combined AC run/magnitude lookup for sequential
+scans), sequential SOF0/SOF1 and progressive SOF2 coefficient reconstruction,
+restart intervals, interleaved and separate component scans, component
+subsampling, borrowed APPn/COM preservation, native component planes,
 grayscale/RGB/YCbCr interpretation and centered chroma interpolation.
+
+8-bit DCT samples use libjpeg's floating-point AAN inverse transform
+(`jidctflt`) with its operation order, constants and rounding, evaluated in
+IEEE single precision; samples match libjpeg-turbo and mozjpeg `JDCT_FLOAT`
+reference planes exactly. 12-bit and hierarchical frames use an exact Q20
+integer transform; hierarchical encoder references depend on it.
+
+`decode(jpeg, Limits::default())` returns owned shared gray/RGB pixels with
+centered linear chroma interpolation; `decode_with_upsampling` also accepts
+`Upsampling::Nearest`. Every 8-bit DCT process reconstructs blocks into a
+window of one or three MCU rows (three only for vertically subsampled linear
+interpolation), bounding intermediate storage by width: sequential single-scan
+images decode straight into the window; progressive, multi-scan and arithmetic
+images feed it from stored coefficients without full-resolution planes. Pixel
+decoding keeps only JFIF/Adobe color hints rather than metadata segments.
+Higher-precision, lossless and hierarchical inputs use their native
+reconstruction paths. The coefficient and planar APIs below retain their
+precision, component, and metadata representations.
+
+Production code denies `unsafe` outside the `simd` dispatch module. Hot
+kernels are portable Rust shaped for vectorization (flat IDCT loops, 16-bit
+color arithmetic that LLVM lowers to `pmulhw`/`pmaddwd`); on x86-64 CPUs with
+AVX2 they run inside an AVX2-compiled wrapper, and the float IDCT has an
+explicit AVX2 kernel. Both builds produce identical samples. An eight-byte
+Huffman bit reader's acceptance matches the strict reader exactly. See the
+[benchmark results](bench/RESULTS.md).
+
 Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
 progressions retain the precision available for each band.
@@ -124,7 +151,9 @@ management. Metadata bytes are preserved without modification by default.
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
-allocator high-water mark; allocation instrumentation remains planned.
+allocator high-water mark. The separate [benchmark workspace](bench/README.md)
+measures process-wide CPU cycles and allocation calls/bytes against the Rust
+`image`, `zune-jpeg`, and `jpeg-decoder` crates.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Incremental input, single-channel table-first paired output,
 additional encoder scan strategies, and the broader validation

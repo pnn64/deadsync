@@ -27,7 +27,7 @@ use crate::song::{
 };
 
 // Retain native Lua background effect definitions independently of media layers.
-pub const SONG_CACHE_VERSION: u8 = 73;
+pub const SONG_CACHE_VERSION: u8 = 74;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -289,6 +289,7 @@ pub struct SerializableSongForegroundChange {
 pub struct SerializableSongBackgroundLuaChange {
     pub start_beat: f32,
     pub path: String,
+    pub source: String,
     pub effect: String,
     pub color1: Option<[f32; 4]>,
     pub layer: u8,
@@ -447,6 +448,7 @@ impl From<&SongBackgroundLuaChange> for SerializableSongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: change.path.to_string_lossy().into_owned(),
+            source: change.source.to_string_lossy().into_owned(),
             effect: change.effect.clone(),
             color1: change.color1,
             layer: change.layer,
@@ -462,6 +464,7 @@ impl From<SerializableSongBackgroundLuaChange> for SongBackgroundLuaChange {
         Self {
             start_beat: change.start_beat,
             path: PathBuf::from(change.path),
+            source: PathBuf::from(change.source),
             effect: change.effect,
             color1: change.color1,
             layer: change.layer,

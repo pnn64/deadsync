@@ -28,7 +28,6 @@ struct Output {
 }
 #[derive(Clone)]
 struct Run {
-    store: Shared,
     selected: Vec<(usize, TableId)>,
     output: Arc<Mutex<Output>>,
     action: Option<function_action::Scope>,
@@ -53,7 +52,7 @@ impl Actors {
         random: &RandomState,
         action: Option<function_action::Scope>,
     ) -> (Result<SongActorFunctionBlocks, Error>, bool, Option<Root>) {
-        let _broadcasts = song_capture::pause_preparation_broadcasts(&self.store);
+        let broadcasts = song_capture::pause_preparation_broadcasts(vm.store());
         let output = Arc::new(Mutex::new(Output::default()));
         let mut returned = None;
         let result = (|| {
@@ -75,7 +74,6 @@ impl Actors {
                     captures.push(Value::Table(action.retained));
                 }
                 let data = Run {
-                    store: self.store.clone(),
                     selected: actors,
                     output: output.clone(),
                     action,
@@ -91,7 +89,7 @@ impl Actors {
                 let finish = vm.new_host_function_with_data(finish, &captures, data)?;
                 vm.raw_table_set(retained, Value::Number(13.), finish)?;
                 vm.call(start, &[])?;
-                let previous_locals = self.begin_command_locals();
+                let previous_locals = self.begin_command_locals(vm);
                 let random = random.preserve();
                 let args = arg
                     .map(|n| Value::Number(f64::from(n)))
@@ -105,7 +103,7 @@ impl Actors {
                     // Native reads touched actor identities and snapshots before
                     // restoring command locals. Later cleanup activity belongs
                     // outside that frozen set of probe results.
-                    let mut guard = self.store.lock().unwrap();
+                    let guard = vm.store();
                     let state = guard.action_capture.as_mut().unwrap();
                     let frozen = State {
                         retained: state.retained,
@@ -137,7 +135,7 @@ impl Actors {
             {
                 let mut out = output.lock().unwrap();
                 if out.activated && !out.deactivated {
-                    self.store.lock().unwrap().action_capture = out.previous.take();
+                    vm.store().action_capture = out.previous.take();
                     out.deactivated = true;
                 }
             }
@@ -150,6 +148,7 @@ impl Actors {
         if result.is_err() {
             out.blocks.clear();
         }
+        song_capture::resume_preparation_broadcasts(vm.store(), broadcasts);
         (result, restored, returned)
     }
 }
@@ -179,28 +178,20 @@ fn begin(call: &mut HostCall<'_>) -> Result<(), Error> {
         seen: HashSet::new(),
         saved: Vec::new(),
     };
-    let previous = data.store.lock().unwrap().action_capture.replace(state);
+    let previous = call.store().action_capture.replace(state);
     let mut output = data.output.lock().unwrap();
     output.previous = previous;
     output.activated = true;
     Ok(())
 }
 /// Setter preflight. Structural and queue/tween operations use prepare directly.
-pub(super) fn prepare_write(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
-    super::ease_probe::actor(call, store, actor)?;
-    prepare(call, store, actor)
+pub(super) fn prepare_write(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    super::ease_probe::actor(call, actor)?;
+    prepare(call, actor)
 }
-pub(super) fn prepare(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn prepare(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let tables = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let Some(state) = guard.action_capture.as_mut() else {
             return Ok(());
         };
@@ -217,9 +208,7 @@ pub(super) fn prepare(
     call.raw_table_set(tables.1, Value::Table(actor), Value::Boolean(true))?;
     let count = call.raw_table_len(tables.0)? + 1;
     call.raw_table_set(tables.0, Value::Number(count as f64), Value::Table(actor))?;
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .action_capture
         .as_mut()
         .unwrap()
@@ -236,22 +225,20 @@ pub(super) fn prepare(
             call.raw_table_set(tables.2, Value::Number(count as f64), Value::Table(row))
         })
     })?;
-    let saved = function_capture::Saved::read(store, actor, raw);
-    store
-        .lock()
-        .unwrap()
+    let saved = function_capture::Saved::read(call.store_ref(), actor, raw);
+    call.store()
         .action_capture
         .as_mut()
         .unwrap()
         .saved
         .push((actor, raw, saved));
-    function_capture::reset(call, store, actor)
+    function_capture::reset(call, actor)
 }
 fn deactivate(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Run>().unwrap().clone();
     {
         let mut output = data.output.lock().unwrap();
-        let mut store = data.store.lock().unwrap();
+        let store = call.store();
         store.action_capture = output.previous.take();
         output.deactivated = true;
     }
@@ -273,10 +260,8 @@ fn finish(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut blocks = Vec::new();
     for (index, actor) in &data.selected {
         if state.seen.contains(actor)
-            && let Some(capture) = data
-                .store
-                .lock()
-                .unwrap()
+            && let Some(capture) = call
+                .store()
                 .actors
                 .get_mut(actor)
                 .and_then(|a| a.capture.as_mut())
@@ -291,15 +276,15 @@ fn finish(call: &mut HostCall<'_>) -> Result<(), Error> {
         action.before_actor_restore(call)?;
     }
     for actor in state.order {
-        function_capture::reset(call, &data.store, actor)?;
+        function_capture::reset(call, actor)?;
     }
     for (actor, raw, saved) in state.saved {
         state_snapshot::restore_raw(call, actor, raw, restore_raw)?;
         if let Some(saved) = saved {
-            saved.restore(&data.store);
+            saved.restore(call.store());
         }
     }
-    lifecycle::invalidate_plans(call, &data.store)?;
+    lifecycle::invalidate_plans(call)?;
     if let Some(action) = &data.action {
         action.after_actor_restore(call)?;
     }

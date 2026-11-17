@@ -2,7 +2,8 @@
 //!
 //! JPEG-specific precision, component and coefficient types live here because
 //! the shared image model has no 12-bit, CMYK or subsampled representation.
-#![forbid(unsafe_code)]
+// Unsafe code is limited to runtime CPU dispatch in `simd`.
+#![deny(unsafe_code)]
 
 mod abbreviated;
 mod arithmetic;
@@ -11,6 +12,7 @@ mod decode;
 mod dnl;
 mod encode;
 mod entropy;
+mod fast;
 mod exif;
 mod hierarchical;
 mod hierarchical_encode;
@@ -25,8 +27,10 @@ mod output;
 mod pixel_encode;
 mod progressive;
 mod pyramid;
+mod raster;
 mod reconstruct;
 mod scan_encode;
+mod simd;
 mod stream_abbreviated;
 mod stream_encode;
 mod tables;
@@ -67,6 +71,7 @@ pub use pyramid::{
     encode_hierarchical_planes, encode_hierarchical_planes_with_metadata,
     encode_hierarchical_samples, encode_hierarchical_samples_with_metadata,
 };
+pub use raster::{decode, decode_with_upsampling};
 pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };

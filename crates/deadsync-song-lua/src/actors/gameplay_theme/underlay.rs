@@ -135,14 +135,14 @@ fn attach(
     name: Option<&str>,
 ) -> Result<TableId, Error> {
     let actor = own(call, data, definition)?;
-    parent(call, &data.store, actor, underlay)?;
-    initialize(call, &data.store, actor)?;
+    parent(call, actor, underlay)?;
+    initialize(call, actor)?;
     if lookup {
         owned_lookup(call, actor)?;
     }
     let name = match name {
         Some(name) => name.as_bytes().to_vec(),
-        None => actor_name(call, &data.store, actor)?,
+        None => actor_name(call, actor)?,
     };
     let children = registry(call, underlay)?;
     call.with_roots(&[children], |call| {
@@ -160,9 +160,7 @@ fn attach(
             Value::Number((count + 1) as f64),
             Value::Table(actor),
         )?;
-        data.store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&underlay)
             .unwrap()
@@ -170,6 +168,29 @@ fn attach(
             .push(actor);
     }
     Ok(actor)
+}
+
+fn remove_score_placeholder(
+    call: &mut HostCall<'_>,
+    underlay: TableId,
+    name: &str,
+) -> Result<TableId, Error> {
+    let placeholder = named(call, underlay, name)?;
+    let mut children = call.store().actors[&underlay].children.clone();
+    children.retain(|&child| child != placeholder);
+    let count = call.raw_table_len(underlay)?;
+    for index in 1..=count {
+        let value = children
+            .get(index - 1)
+            .copied()
+            .map(Value::Table)
+            .unwrap_or(Value::Nil);
+        call.raw_table_set(underlay, Value::Number(index as f64), value)?;
+    }
+    call.store().actors.get_mut(&underlay).unwrap().children = children;
+    let registry = registry(call, underlay)?;
+    set(call, table(call, registry)?, name, Value::Nil)?;
+    Ok(placeholder)
 }
 
 // These theme phases call the raw Begin/On handlers directly, without the
@@ -189,95 +210,132 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
     let environment = environment(call)?;
     call.with_roots(&[environment], |call| {
         let globals = table(call, helper(call, 5)?)?;
-        let screen = get(call, globals, b"__songlua_top_screen")?;
+        let screen = get_static(call, globals, b"__songlua_top_screen")?;
         let screen = table(call, screen)?;
         let underlay = named(call, screen, "Underlay")?;
         let game = member(call, globals, "GAMESTATE")?;
         let players = invoke(call, game, "GetHumanPlayers", &[])?;
         table(call, players)?;
         call.with_roots(&[players], |call| {
-            data.store
-                .lock()
-                .unwrap()
-                .startup_queues
-                .get_or_insert_with(Vec::new);
+            call.store().startup_queues.get_or_insert_with(Vec::new);
             source::evaluate(call, source::UTF8, Value::Table(globals), &[])?;
             source::evaluate(call, source::TEXT_HELPERS, Value::Table(globals), &[])?;
-            steps_displays::initialize(call, &data.store, screen)?;
-            for index in 1.. {
-                let value =
-                    call.raw_table_get(table(call, players)?, Value::Number(index as f64))?;
-                if value == Value::Nil {
-                    break;
+            source::evaluate(call, source::SCORE_REDRAW, Value::Table(globals), &[])?;
+            let factory = field(call, globals, "CreateScoreRedrawQueue")?;
+            let redraw = call.call(factory, &[players])?.to_vec();
+            call.with_roots(&redraw, |call| {
+                let request_redraw = redraw[0];
+                invoke(call, underlay, "SetUpdateFunction", &[redraw[1]])?;
+                steps_displays::initialize(call, screen)?;
+                for index in 1.. {
+                    let value =
+                        call.raw_table_get(table(call, players)?, Value::Number(index as f64))?;
+                    if value == Value::Nil {
+                        break;
+                    }
+                    let Some(player) = player(call, value) else {
+                        continue;
+                    };
+                    let child = named(call, screen, &format!("PlayerOptionsP{}", player + 1))?;
+                    let game = member(call, globals, "GAMESTATE")?;
+                    // ScreenGameplay::LoadNextSong initializes this hidden text
+                    // from the selected Steps, including non-Edit descriptions.
+                    let steps = invoke(call, game, "GetCurrentSteps", &[value])?;
+                    if steps != Value::Nil {
+                        call.with_roots(&[steps], |call| {
+                            let text = invoke(call, table(call, steps)?, "GetDescription", &[])?;
+                            call.with_roots(&[text], |call| {
+                                let description = named(
+                                    call,
+                                    screen,
+                                    &format!("StepsDescriptionP{}", player + 1),
+                                )?;
+                                set(call, description, "Text", text)
+                            })
+                        })?;
+                    }
+                    let state = invoke(call, game, "GetPlayerState", &[value])?;
+                    call.with_roots(&[state], |call| {
+                        let level = call.intern_static(b"ModsLevel_Current")?;
+                        let text = invoke(
+                            call,
+                            table(call, state)?,
+                            "GetPlayerOptionsString",
+                            &[level],
+                        )?;
+                        let text = assets::text(call, text)?;
+                        let text = call.try_intern(text.as_bytes())?;
+                        set(call, child, "Text", text)
+                    })?;
                 }
-                let Some(player) = player(call, value) else {
-                    continue;
-                };
-                let child = named(call, screen, &format!("PlayerOptionsP{}", player + 1))?;
-                let game = member(call, globals, "GAMESTATE")?;
-                let state = invoke(call, game, "GetPlayerState", &[value])?;
-                call.with_roots(&[state], |call| {
-                    let level = call.try_intern(b"ModsLevel_Current")?;
-                    let text = invoke(
-                        call,
-                        table(call, state)?,
-                        "GetPlayerOptionsString",
-                        &[level],
-                    )?;
-                    let text = assets::text(call, text)?;
-                    let text = call.try_intern(text.as_bytes())?;
-                    set(call, child, "Text", text)
-                })?;
-            }
-            let mut panes = Vec::new();
-            for index in 1.. {
-                let player =
-                    call.raw_table_get(table(call, players)?, Value::Number(index as f64))?;
-                if player == Value::Nil {
-                    break;
+                let mut panes = Vec::new();
+                for index in 1.. {
+                    let player =
+                        call.raw_table_get(table(call, players)?, Value::Number(index as f64))?;
+                    if player == Value::Nil {
+                        break;
+                    }
+                    let score_name = crate::underlay_score_name(
+                        self::player(call, player).expect("native human player"),
+                    );
+                    let placeholder = remove_score_placeholder(call, underlay, score_name)?;
+                    call.with_roots(&[Value::Table(placeholder)], |call| {
+                        let score = source::evaluate(
+                            call,
+                            source::SCORE,
+                            Value::Table(globals),
+                            &[player, request_redraw],
+                        )?;
+                        if score != Value::Nil {
+                            let actor = attach(call, data, underlay, score, true, None)?;
+                            crate::actors::underlay::copy_tags(call, placeholder, actor)?;
+                            panes.push(actor);
+                        }
+                        Ok(())
+                    })?;
+                    let danger =
+                        source::evaluate(call, source::DANGER, Value::Table(globals), &[player])?;
+                    if danger != Value::Nil {
+                        panes.push(attach(call, data, underlay, danger, false, None)?);
+                    }
+                    let pane = step(call, environment, "default.lua", &[player])?;
+                    if pane != Value::Nil {
+                        panes.push(attach(call, data, underlay, pane, true, None)?);
+                    }
+                    let container = note_field(call, "default.lua", &[player])?;
+                    panes.push(attach(call, data, underlay, container, true, None)?);
                 }
-                let danger =
-                    source::evaluate(call, source::DANGER, Value::Table(globals), &[player])?;
-                if danger != Value::Nil {
-                    panes.push(attach(call, data, underlay, danger, false, None)?);
+                let meter = source::evaluate(call, source::SONG_INFO, Value::Table(globals), &[])?;
+                panes.push(attach(
+                    call,
+                    data,
+                    underlay,
+                    meter,
+                    true,
+                    Some("SongMeter"),
+                )?);
+                reorder(call, underlay)?;
+                set(
+                    call,
+                    underlay,
+                    "__songlua_owned_child_lookup",
+                    Value::Boolean(true),
+                )?;
+                for &pane in &panes {
+                    command(call, pane, b"BeginCommand")?;
                 }
-                let pane = step(call, environment, "default.lua", &[player])?;
-                if pane != Value::Nil {
-                    panes.push(attach(call, data, underlay, pane, true, None)?);
+                for &pane in &panes {
+                    command(call, pane, b"OnCommand")?;
                 }
-                let container = note_field(call, "default.lua", &[player])?;
-                panes.push(attach(call, data, underlay, container, true, None)?);
-            }
-            let meter = source::evaluate(call, source::SONG_INFO, Value::Table(globals), &[])?;
-            panes.push(attach(
-                call,
-                data,
-                underlay,
-                meter,
-                true,
-                Some("SongMeter"),
-            )?);
-            reorder(call, data, underlay)?;
-            set(
-                call,
-                underlay,
-                "__songlua_owned_child_lookup",
-                Value::Boolean(true),
-            )?;
-            for &pane in &panes {
-                command(call, pane, b"BeginCommand")?;
-            }
-            for &pane in &panes {
-                command(call, pane, b"OnCommand")?;
-            }
-            // Keep normal listener delivery; this internal song-change event
-            // does not record an authored Broadcast or increment its counter.
-            messages::dispatch(call, &data.store, b"CurrentSongChanged", None, false)
+                // Keep normal listener delivery; this internal song-change event
+                // does not record an authored Broadcast or increment its counter.
+                messages::dispatch(call, b"CurrentSongChanged", None, false)
+            })
         })
     })
 }
 
-fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<(), Error> {
+fn reorder(call: &mut HostCall<'_>, underlay: TableId) -> Result<(), Error> {
     const ORDER: &[&[u8]] = &[
         b"DangerP1",
         b"StepStatsPaneP1",
@@ -299,8 +357,8 @@ fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<()
     ];
     let mut children = Vec::new();
     native_children::with_children(call, underlay, |call, child| {
-        let name = actor_name(call, &data.store, child).unwrap_or_default();
-        let role = get(call, child, b"__songlua_underlay_role")
+        let name = actor_name(call, child).unwrap_or_default();
+        let role = get_static(call, child, b"__songlua_underlay_role")
             .ok()
             .and_then(|value| {
                 if value == Value::Nil {
@@ -324,12 +382,7 @@ fn reorder(call: &mut HostCall<'_>, data: &Load, underlay: TableId) -> Result<()
             Value::Table(child),
         )?;
     }
-    data.store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&underlay)
-        .unwrap()
-        .children = children.into_iter().map(|(_, child)| child).collect();
+    call.store().actors.get_mut(&underlay).unwrap().children =
+        children.into_iter().map(|(_, child)| child).collect();
     Ok(())
 }

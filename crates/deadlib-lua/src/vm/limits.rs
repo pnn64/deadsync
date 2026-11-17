@@ -19,7 +19,10 @@ impl Vm {
     }
     #[inline]
     pub(super) fn check_calls(&mut self) -> Result<(), Error> {
-        self.reserve_frames(1)?;
+        // With spare capacity, reserving one more frame changes nothing.
+        if self.frames.len() == self.frames.capacity() {
+            self.reserve_frames(1)?;
+        }
         // Physical frames include internal continuations, so this upper bound
         // avoids walking ordinary stacks without counting helpers as Lua calls.
         if self.frames.len() + 1 < usize::from(self.call_slots) {

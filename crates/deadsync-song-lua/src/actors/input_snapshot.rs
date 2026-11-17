@@ -244,22 +244,23 @@ fn raw_global(stack: &mut NativeStack<'_, '_>, key: &[u8]) -> Result<Value, Erro
 // identities; never execute a user lookup, assignment hook or callback body.
 fn setter_targets(
     stack: &mut NativeStack<'_, '_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<[Option<(scalar_methods::Setter, TableId)>; 3], Error> {
     use scalar_methods::{Method, Setter};
-    let identity = |function| store.lock().unwrap().scalar_methods.identity(function);
+    fn identity(stack: &NativeStack<'_, '_>, function: Value) -> Option<scalar_methods::Method> {
+        stack.store_ref().scalar_methods.identity(function)
+    }
     let mut selected = [None; 3];
     let mut inherit = [false; 3];
     let lookup = if let Some(mt) = metatable(stack, actor)? {
         let assign = raw(stack, mt, b"__newindex")?;
-        if assign != Value::Nil && identity(assign) != Some(Method::Assign) {
+        if assign != Value::Nil && identity(stack, assign) != Some(Method::Assign) {
             return Ok([None; 3]);
         }
         let lookup = raw(stack, mt, b"__index")?;
         if lookup == Value::Nil {
             false
-        } else if identity(lookup) == Some(Method::Lookup) {
+        } else if identity(stack, lookup) == Some(Method::Lookup) {
             true
         } else {
             return Ok([None; 3]);
@@ -270,7 +271,7 @@ fn setter_targets(
     for (index, setter) in Setter::ALL.into_iter().enumerate() {
         let value = raw(stack, actor, setter.name().as_bytes())?;
         match value {
-            Value::Function(_) | Value::Native(_) => selected[index] = identity(value),
+            Value::Function(_) | Value::Native(_) => selected[index] = identity(stack, value),
             Value::Nil => inherit[index] = lookup,
             _ => {}
         }
@@ -325,7 +326,7 @@ fn setter_targets(
                     }
                     match raw(stack, class, setter.name().as_bytes())? {
                         value @ (Value::Function(_) | Value::Native(_)) => {
-                            found[index] = identity(value);
+                            found[index] = identity(stack, value);
                             pending[index] = false;
                         }
                         Value::Nil => {}
@@ -358,7 +359,7 @@ fn setter_targets(
                 continue;
             }
             let function = raw(stack, methods, setter.name().as_bytes())?;
-            if let Some(Method::Bound(operation, target)) = identity(function) {
+            if let Some(Method::Bound(operation, target)) = identity(stack, function) {
                 forwards[setter as usize] = Some((operation, target));
             }
         }
@@ -379,7 +380,6 @@ fn setter_targets(
 )]
 fn compile_with_updates(
     stack: &mut NativeStack<'_, '_>,
-    store: &Shared,
     inputs: &[Value],
     actors: &[TableId],
     states: &[SongLuaOverlayState],
@@ -506,7 +506,7 @@ fn compile_with_updates(
             continue;
         }
         visited[index] = true;
-        let targets = setter_targets(stack, store, tables[index]).ok()?;
+        let targets = setter_targets(stack, tables[index]).ok()?;
         let mut motion = None;
         'method: for (requested, selected) in scalar_methods::Setter::ALL.into_iter().zip(targets) {
             let Some((setter, identity)) = selected else {
@@ -521,7 +521,7 @@ fn compile_with_updates(
                     _ => {
                         // Implement against Rust's canonical queue/effect owner,
                         // plus the same raw override checks as the native gate.
-                        let ready = position_ready(stack, store, tables[target]).ok()?;
+                        let ready = position_ready(stack, tables[target]).ok()?;
                         motion = Some((target, ready));
                         ready
                     }
@@ -535,7 +535,7 @@ fn compile_with_updates(
             {
                 let method = raw(stack, mt, b"__newindex").ok()?;
                 if method != Value::Nil
-                    && store.lock().unwrap().scalar_methods.identity(method)
+                    && stack.store().scalar_methods.identity(method)
                         != Some(scalar_methods::Method::Assign)
                 {
                     continue 'method;
@@ -659,13 +659,9 @@ fn compile_with_updates(
     })
 }
 
-fn position_ready(
-    stack: &mut NativeStack<'_, '_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<bool, Error> {
+fn position_ready(stack: &mut NativeStack<'_, '_>, actor: TableId) -> Result<bool, Error> {
     {
-        let guard = store.lock().unwrap();
+        let guard = stack.store();
         let Some(actor) = guard.actors.get(&actor) else {
             return Ok(false);
         };
@@ -695,13 +691,9 @@ fn position_ready(
     Ok(!raw(stack, actor, b"__songlua_state_rainbow")?.is_truthy())
 }
 
-fn advance_ready(
-    stack: &mut NativeStack<'_, '_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<bool, Error> {
+fn advance_ready(stack: &mut NativeStack<'_, '_>, actor: TableId) -> Result<bool, Error> {
     {
-        let guard = store.lock().unwrap();
+        let guard = stack.store();
         if guard.actors.get(&actor).is_some_and(|actor| {
             !actor.queue.is_empty() || !effects::snapshot_position_ready(actor)
         }) {
@@ -731,11 +723,10 @@ impl Actors {
         if !matches!(root, Value::Table(_)) {
             return Ok(());
         }
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             |call| {
-                let store = call.function_data::<Shared>().unwrap().clone();
                 let actor = table(call, call.captures()[2])?;
-                lifecycle::retained_plan(call, &store, actor)?;
+                lifecycle::retained_plan(call, actor)?;
                 Ok(())
             },
             &[
@@ -743,7 +734,6 @@ impl Actors {
                 Value::Table(self.helpers),
                 root,
             ],
-            self.store.clone(),
         )?;
         vm.call(function, &[]).map(|_| ())
     }
@@ -758,7 +748,7 @@ impl Actors {
         tracked: &[(SongLuaTrackedActorTarget, Value, SongLuaOverlayState)],
     ) -> Option<CompiledActorInteractions> {
         {
-            let guard = self.store.lock().unwrap();
+            let guard = vm.store();
             if !guard.playback || guard.action_capture.is_some() {
                 return None;
             }
@@ -769,7 +759,7 @@ impl Actors {
         let Value::Table(root) = root else {
             return None;
         };
-        let plan = lifecycle::cached_for_root(&self.store, root)?;
+        let plan = lifecycle::cached_for_root(vm.store(), root)?;
         let actor_table = |value| {
             if let Value::Table(table) = value {
                 Some(table)
@@ -795,17 +785,9 @@ impl Actors {
                     .push(Value::Table(lifecycle::plan_roots(&plan)))
                     .ok()?;
                 let source = lifecycle::callback_jobs(&plan, root, |actor| {
-                    advance_ready(stack, &self.store, actor).unwrap_or(false)
+                    advance_ready(stack, actor).unwrap_or(false)
                 })?;
-                update::compile_source(
-                    stack,
-                    &self.store,
-                    functions,
-                    &source,
-                    &actors,
-                    states,
-                    &tracked,
-                )
+                update::compile_source(stack, functions, &source, &actors, states, &tracked)
             })();
             stack.set_top(top)?;
             Ok(result)
@@ -823,7 +805,7 @@ impl Actors {
         tracked: &[(SongLuaTrackedActorTarget, Value, SongLuaOverlayState)],
     ) -> Option<CompiledActorInputs> {
         {
-            let guard = self.store.lock().unwrap();
+            let guard = vm.store();
             if !guard.playback || guard.action_capture.is_some() {
                 return None;
             }
@@ -852,16 +834,7 @@ impl Actors {
             {
                 None
             } else {
-                compile_with_updates(
-                    stack,
-                    &self.store,
-                    functions,
-                    &actors,
-                    states,
-                    &tracked,
-                    &[],
-                    &[],
-                )
+                compile_with_updates(stack, functions, &actors, states, &tracked, &[], &[])
             };
             stack.set_top(top)?;
             Ok(result)

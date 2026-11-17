@@ -139,6 +139,7 @@ where
     }
 
     pub fn finish_gameplay_if_ready(&mut self, trace_enabled: bool) -> Option<GameplayAction> {
+        if self.control.paused { return None; }
         let now = self.total_elapsed_in_screen();
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
             if !self.profiles_runtime.profiles[player].golf_scoring_enabled() { continue; }
@@ -263,11 +264,20 @@ where
             phase_timings.pre_notes_us = elapsed_us_since(started);
         }
 
+        if self.control.paused {
+            // Native Player still updates its actor children, but skips note
+            // judgments and hold/roll decay. Physical held state remains live.
+            process_input_edges(self, trace_enabled, &mut phase_timings, song_clock);
+            self.finalize_update_trace(delta_time, music_time_sec, frame_trace_started, phase_timings);
+            return GameplayAction::None;
+        }
+
         let autoplay_started = if trace_enabled {
             Some(Instant::now())
         } else {
             None
         };
+        let previous_roll_notes = self.autoplay_roll_frame_notes();
         self.run_autoplay_or_replay_frame(music_time_ns);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
@@ -288,6 +298,7 @@ where
 
         self.run_post_input_gameplay_phases(
             previous_music_time_ns,
+            &previous_roll_notes,
             music_time_ns,
             music_time_sec,
             delta_time,
@@ -331,6 +342,17 @@ where
             phase_timings,
         );
         GameplayAction::None
+    }
+
+    pub fn set_gameplay_paused(&mut self, paused: bool) {
+        if self.control.paused == paused || (paused && self.mods.attacks.cleared_for_outro) {
+            return;
+        }
+        self.control.paused = paused;
+        self.control.exit_input.hold_to_exit_key = None;
+        self.control.exit_input.hold_to_exit_start = None;
+        self.control.exit_input.hold_to_exit_aborted_at = None;
+        self.push_audio_command(GameplayAudioCommand::PauseMusic(paused));
     }
 
     #[inline(always)]
@@ -424,6 +446,68 @@ where
         for ix in update.schedule_start..update.schedule_end {
             let clap_row = self.control.assist_clap.rows[ix];
             self.schedule_assist_clap_row(clap_row, assist_tick_sfx_path);
+        }
+    }
+
+    pub fn schedule_beat_tick_row(&mut self, beat_row: usize) {
+        let Some(music_seconds) =
+            beat_tick_music_seconds_for_row(
+                &self.timing_runtime.timing,
+                beat_row,
+            )
+        else {
+            return;
+        };
+
+        self.push_audio_command(
+            GameplayAudioCommand::PlayAssistTickAtMusicTime {
+                path: beat_tick_sfx_for_row(&self.timing_runtime.timing, beat_row),
+                music_seconds,
+            },
+        );
+    }
+
+    pub fn run_beat_tick(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        slope: f32,
+        assist_sfx_generation: u64,
+    ) {
+        let global_offset =
+            self.clock.offsets.global_offset_seconds() * self.music_rate();
+
+        let song_row =
+            self.timing_runtime.time_to_beat_caches.beat_tick_row_no_offset(
+                &self.timing_runtime.timing,
+                global_offset,
+                music_time_ns,
+            );
+
+        let future_row =
+            self.timing_runtime.time_to_beat_caches.beat_tick_future_row(
+                &self.timing_runtime.timing,
+                global_offset,
+                self.clock.audio_clock.output_delay_seconds(),
+                music_time_ns,
+                slope,
+                song_row,
+            );
+
+        let timeline_reset = self
+            .control
+            .beat_tick
+            .begin_enabled_update(assist_sfx_generation);
+
+        let update = self.control.beat_tick.schedule_update(
+            song_row,
+            future_row,
+            true,
+            timeline_reset,
+        );
+
+        for ix in update.schedule_start..update.schedule_end {
+            let beat_row = self.control.beat_tick.rows[ix];
+            self.schedule_beat_tick_row(beat_row);
         }
     }
 
@@ -1143,6 +1227,9 @@ where
         if player_idx >= self.setup.num_players {
             return AccelEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_accel_effects(false, profile_mask_bits, options.accel);
+        }
         effective_attack_accel_effects(
             self.player_attack_base_cleared(player_idx),
             profile_mask_bits,
@@ -1159,6 +1246,9 @@ where
         if player_idx >= self.setup.num_players {
             return VisualEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_visual_effects(false, profile_mask_bits, options.visual);
+        }
         effective_attack_visual_effects(
             self.player_attack_base_cleared(player_idx),
             profile_mask_bits,
@@ -1171,6 +1261,9 @@ where
         if player_idx >= self.setup.num_players {
             return AppearanceEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return options.appearance;
+        }
         self.mods.attacks.appearance[player_idx]
     }
 
@@ -1178,6 +1271,9 @@ where
     pub fn effective_visibility_effects_for_player(&self, player_idx: usize) -> VisibilityEffects {
         if player_idx >= self.setup.num_players {
             return VisibilityEffects::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_visibility_effects(options.visibility);
         }
         effective_attack_visibility_effects(self.mods.attacks.visibility[player_idx])
     }
@@ -1199,6 +1295,9 @@ where
         if player_idx >= self.setup.num_players {
             return ScrollEffects::default();
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_scroll_effects(false, base_scroll, options.scroll);
+        }
         effective_attack_scroll_effects(
             self.player_attack_base_cleared(player_idx),
             base_scroll,
@@ -1214,6 +1313,9 @@ where
     ) -> PerspectiveEffects {
         if player_idx >= self.setup.num_players {
             return PerspectiveEffects::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_attack_perspective_effects(false, base_perspective, options.perspective);
         }
         effective_attack_perspective_effects(
             self.player_attack_base_cleared(player_idx),
@@ -1231,6 +1333,9 @@ where
         if player_idx >= self.setup.num_players {
             return 0.0;
         }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return effective_mini_percent(options.mini_percent, base_mini_percent, false);
+        }
         effective_mini_percent(
             self.mods.attacks.mini_percent[player_idx],
             base_mini_percent,
@@ -1246,6 +1351,9 @@ where
     ) -> ScrollSpeedSetting {
         if player_idx >= self.setup.num_players {
             return ScrollSpeedSetting::default();
+        }
+        if let Some(options) = &self.mods.song_lua_player_options[player_idx] {
+            return options.scroll_speed.unwrap_or(base_scroll_speed);
         }
         effective_attack_scroll_speed(
             self.player_attack_base_cleared(player_idx),
@@ -1813,26 +1921,41 @@ where
         ))
     }
 
-    /// The Routine score both participants earn together, including both
-    /// participants' earlier course songs and full-course totals.
+    /// Routine's own scorekeeper, plus retained course carry from both parts.
     pub fn routine_shared_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
-        if !self.setup.session.play_style.is_routine() {
-            return None;
-        }
+        let routine = self.players_runtime.routine.as_ref()?;
+        let stage = itg_score_inputs_from_display(
+            routine.score_stage(),
+            CourseDisplayCarry::default(),
+            CourseDisplayTotals::default(),
+        );
+        let carry = std::array::from_fn::<_, MAX_PLAYERS, _>(|player| {
+            itg_score_inputs_from_display(
+                ItgScoreStage::default(),
+                self.display_carry_for_player(player),
+                self.display_totals_for_player(player),
+            )
+        });
         Some(shared_itg_score_inputs(
-            self.participant_display_itg_score_inputs(0)?,
-            self.participant_display_itg_score_inputs(1)?,
+            stage,
+            shared_itg_score_inputs(carry[0], carry[1]),
         ))
     }
 
-    /// The Routine score both participants earn in the current song only.
+    /// Current-song team state is independent of the participants' failed flags.
     pub fn routine_shared_stage_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
-        if !self.setup.session.play_style.is_routine() {
-            return None;
-        }
-        Some(shared_itg_score_inputs(
-            self.stage_itg_score_inputs(0)?,
-            self.stage_itg_score_inputs(1)?,
+        let routine = self.players_runtime.routine.as_ref()?;
+        let possible_grade_points = self
+            .stage_totals_for_player(0)
+            .possible_grade_points
+            .saturating_add(self.stage_totals_for_player(1).possible_grade_points);
+        Some(itg_score_inputs_from_display(
+            routine.score_stage(),
+            CourseDisplayCarry::default(),
+            CourseDisplayTotals {
+                possible_grade_points,
+                ..CourseDisplayTotals::default()
+            },
         ))
     }
 
@@ -2088,6 +2211,9 @@ where
             self.setup.num_players,
             judge_start_ns,
         );
+        if let Some(routine) = self.players_runtime.routine.as_mut() {
+            *routine = RoutineStageStats::default();
+        }
         for player in 0..self.setup.num_players {
             reset_player_runtime_for_practice(
                 &mut self.players_runtime.players[player],
@@ -2107,6 +2233,8 @@ where
 
         let song_row = self.assist_row_no_offset(judge_start_music_time);
         self.control.assist_clap.reset_for_row(song_row);
+        let beat_row = self.beat_tick_row_no_offset_ns(judge_start_ns);
+        self.control.beat_tick.reset_for_row(beat_row);
         self.boundary.total_elapsed_in_screen = 0.0;
     }
 
@@ -2166,6 +2294,20 @@ where
     #[inline(always)]
     pub fn assist_row_no_offset(&mut self, music_time: f32) -> i32 {
         self.assist_row_no_offset_ns(song_time_ns_from_seconds(music_time))
+    }
+
+    pub fn beat_tick_row_no_offset_ns(
+        &mut self,
+        music_time_ns: SongTimeNs,
+    ) -> i32 {
+        self.timing_runtime
+            .time_to_beat_caches
+            .beat_tick_row_no_offset(
+                &self.timing_runtime.timing,
+                self.clock.offsets.global_offset_seconds()
+                    * self.music_rate(),
+                music_time_ns,
+            )
     }
 
     #[inline(always)]
@@ -2831,7 +2973,10 @@ where
 
         let song_row = self.assist_row_no_offset(now_music_time);
         self.reset_assist_clap_for_row(song_row);
-
+        let beat_row = self.beat_tick_row_no_offset_ns(
+            song_time_ns_from_seconds(now_music_time),
+        );
+        self.control.beat_tick.reset_for_row(beat_row);
         log::debug!(
             "Timing ticks set to {} (F7).",
             timing_tick_mode_debug_label(mode)

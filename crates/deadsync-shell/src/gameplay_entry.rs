@@ -196,6 +196,11 @@ pub fn apply_song_lua_reload(
 ) -> Result<bool, String> {
     let Some(steps) = prepared.loaded_steps() else { return Ok(false); };
     let mut selected_session = session.clone();
+    if let Some(players) = prepared.loaded_players() {
+        selected_session.joined_sides = if session.p2_runtime_player() {
+            [players[1], players[0]]
+        } else { players };
+    }
     if let Some(style) = prepared.loaded_style() {
         use deadsync_gameplay::GameplayInputPlayStyle as Style;
         selected_session.play_style = match (session.play_style.is_pump(), style) {
@@ -204,16 +209,18 @@ pub fn apply_song_lua_reload(
             (false, "versus") => Style::Versus,
             (false, "couple") => Style::Couple,
             (false, "routine") => Style::Routine,
-            (true, "single") => Style::PumpSingle,
-            (true, "double") => Style::PumpDouble,
-            (true, "versus") => Style::PumpVersus,
-            (true, "couple") => Style::PumpCouple,
-            (true, "routine") => Style::PumpRoutine,
+            // Compiled scenes retain the game-qualified key so their column
+            // metadata survives projection; Lua styles also expose bare names.
+            (true, "single" | "pump-single") => Style::PumpSingle,
+            (true, "double" | "pump-double") => Style::PumpDouble,
+            (true, "versus" | "pump-versus") => Style::PumpVersus,
+            (true, "couple" | "pump-couple") => Style::PumpCouple,
+            (true, "routine" | "pump-routine") => Style::PumpRoutine,
             _ => return Err(format!("Lua reload selected unsupported style {style}")),
         };
-        // GameState::SetCurrentStyle preserves joined sides and rejects styles
-        // that require a different number of them.
-        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+        // Authored JoinPlayer mutations belong to the retained
+        // session; validate the selected style against the newly loaded roster.
+        if selected_session.play_style.player_count() != selected_session.joined_sides.iter().filter(|joined| **joined).count() {
             return Err(format!("Lua reload style {style} is incompatible with joined sides"));
         }
     }
@@ -262,6 +269,9 @@ pub fn song_lua_context(
     );
     context.random_seed = random_seed;
     context.live = live;
+    context.theme_combo_font_directory = Some(deadsync_assets::resolve_asset_path(
+        "assets/fonts/_combo",
+    ));
     // The screen owns the first clocked Update(0), after audio is initialized.
     context.defer_initial_live_update = live;
     context.screen_loading = live;
@@ -560,6 +570,51 @@ mod tests {
                 prepared.take_live_scene().unwrap().is_none(),
                 "ordinary song in {mode:?} mode"
             );
+        }
+    }
+
+    #[test]
+    fn pump_preparation_applies_its_retained_game_qualified_style() {
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        crate::tests::init_paths();
+        let dir = tempfile::tempdir().unwrap();
+        let simfile = dir.path().join("pump.ssc");
+        std::fs::write(dir.path().join("main.lua"), "return Def.ActorFrame {}").unwrap();
+        for (style, kind, notes) in [
+            (Style::PumpSingle, "single", "10000\n00000\n00100\n00000"),
+            (Style::PumpVersus, "single", "10000\n00000\n00100\n00000"),
+            (Style::PumpDouble, "double", "1000000000\n0000000000\n0000000010\n0000000000"),
+            (Style::PumpCouple, "couple", "1000000000\n0000000000\n0000000010\n0000000000"),
+            (Style::PumpRoutine, "routine", "1000000000\n0000000000\n0000000000\n0000000000\n&\n0000000000\n0000000000\n0000000010\n0000000000"),
+        ] {
+            std::fs::write(&simfile, format!(
+                "#TITLE:Pump preparation;#BPMS:0=120;#FGCHANGES:0=main.lua=1=0=0=1;\n\
+                 #NOTEDATA:;#STEPSTYPE:pump-{kind};#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{notes}\n;"
+            )).unwrap();
+            let song = deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0).unwrap();
+            let mut session = deadsync_gameplay::GameplaySession {
+                play_style: style,
+                joined_sides: [true, style.player_count() == 2],
+                ..Default::default()
+            };
+            let mut charts = std::array::from_fn(|_| Arc::new(song.charts[0].clone()));
+            let payload = Arc::new(deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[0], 0.0).unwrap().remove(0));
+            let mut payloads = [payload.clone(), payload];
+            let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+            let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+            let config = deadsync_gameplay::GameplayConfig { global_offset_seconds: 0.0, ..Default::default() };
+            let prepared = prepare_song_lua(&song, &charts,
+                std::array::from_fn(|p| &payloads[p].timing), &profiles, &scroll, 1.0,
+                deadsync_gameplay::GameplayViewport::design(), (1280, 720), 16.0 / 9.0,
+                1.0, &session, &config, "Software", 1,
+                deadsync_config::options::SongLuaMode::Runtime, None);
+            assert!(prepared.compile_succeeded(), "{style:?} compilation");
+            assert!(prepared.loaded_style().unwrap().starts_with("pump-"));
+            assert!(apply_song_lua_reload(&song, &mut charts, &mut payloads, &prepared,
+                &mut session, 0.0).unwrap(), "{style:?} selection was applied");
+            assert_eq!(session.play_style, style);
+            assert_eq!(session.joined_sides, [true, style.player_count() == 2]);
+            assert!(charts.iter().all(|chart| chart.chart_type == format!("pump-{kind}")));
         }
     }
 

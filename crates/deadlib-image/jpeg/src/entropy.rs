@@ -1,16 +1,20 @@
 use crate::{Error, Result};
 
-const LOOK_BITS: u8 = 9;
+pub(crate) const LOOK_BITS: u8 = 9;
 
 /// Canonical JPEG Huffman decoder: a flat prefix lookup and bounded fallback.
 #[derive(Clone)]
 pub(crate) struct Huffman {
     counts: [u8; 16],
     symbol_count: u16,
-    lookup: [u16; 1 << LOOK_BITS],
-    max_code: [i32; 17],
-    offsets: [i32; 17],
-    values: [u8; 256],
+    pub(crate) lookup: [u16; 1 << LOOK_BITS],
+    pub(crate) max_code: [i32; 17],
+    pub(crate) offsets: [i32; 17],
+    pub(crate) values: [u8; 256],
+    /// Sequential AC lookup that also decodes the magnitude when code and
+    /// magnitude bits fit the prefix: `value << 8 | run << 4 | length`,
+    /// zero otherwise. Magnitudes are limited to seven bits to fit i16.
+    pub(crate) ac: [i16; 1 << LOOK_BITS],
 }
 
 impl Huffman {
@@ -28,6 +32,7 @@ impl Huffman {
             max_code: [-1; 17],
             offsets: [0; 17],
             values: [0; 256],
+            ac: [0; 1 << LOOK_BITS],
         };
         table.values[..count].copy_from_slice(symbols);
         let mut code = 0u32;
@@ -46,14 +51,36 @@ impl Huffman {
                 let shift = LOOK_BITS as usize - length;
                 for j in 0..n as usize {
                     let start = ((code as usize) + j) << shift;
+                    let symbol = symbols[index + j];
                     table.lookup[start..start + (1 << shift)]
-                        .fill(((length as u16) << 8) | symbols[index + j] as u16);
+                        .fill(((length as u16) << 8) | symbol as u16);
+                    table.fill_ac(start, length, symbol);
                 }
             }
             index += n as usize;
             code = (code + n) << 1;
         }
         Ok(table)
+    }
+
+    /// Fill the combined AC entries under one code whose prefix range
+    /// starts at `start`: each magnitude pattern covers a contiguous range.
+    fn fill_ac(&mut self, start: usize, length: usize, symbol: u8) {
+        let (run, size) = (i32::from(symbol >> 4), usize::from(symbol & 15));
+        if size == 0 || size > 7 || length + size > LOOK_BITS as usize {
+            return;
+        }
+        let free = LOOK_BITS as usize - length - size;
+        for bits in 0..1i32 << size {
+            let value = if bits < 1 << (size - 1) {
+                bits + 1 - (1 << size)
+            } else {
+                bits
+            };
+            let entry = (value << 8 | run << 4 | (length + size) as i32) as i16;
+            let at = start + ((bits as usize) << free);
+            self.ac[at..at + (1 << free)].fill(entry);
+        }
     }
 
     pub(crate) fn definition(&self) -> (&[u8; 16], &[u8]) {
@@ -185,6 +212,38 @@ impl<'a> Bits<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn word_refills_match_an_independent_bit_reader_with_stuffing() {
+        let mut state = 0x12345678u32;
+        let raw: Vec<_> = (0..4096)
+            .map(|i| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                if i % 17 == 0 { 255 } else { state as u8 }
+            })
+            .collect();
+        let stuffed: Vec<_> = raw
+            .iter()
+            .flat_map(|&v| if v == 255 { vec![255, 0] } else { vec![v] })
+            .collect();
+        for start in 0..16 {
+            let mut bits = Bits::new(&stuffed);
+            let mut at = 0;
+            let mut turn = start;
+            while at < raw.len() * 8 {
+                let n = (1 + turn % 16).min(raw.len() * 8 - at);
+                let mut expected = 0u32;
+                for bit in at..at + n {
+                    expected = expected << 1 | u32::from((raw[bit / 8] >> (7 - bit % 8)) & 1);
+                }
+                assert_eq!(bits.read(n as u8).unwrap(), expected);
+                at += n;
+                turn += 7;
+            }
+            bits.finish().unwrap();
+        }
+    }
     #[test]
     fn all_code_lengths_fast_and_slow() {
         let counts = [1; 16];

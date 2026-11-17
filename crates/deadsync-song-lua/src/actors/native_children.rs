@@ -2,6 +2,22 @@
 use super::*;
 use sprites::set;
 
+// Match IdenticalChildrenSingleApplier in ActorFrame.cpp. Keeping this bridge
+// native also preserves the authored caller seen by the command observer.
+pub(super) fn group_forward(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let function = call.new_host_function(apply_group, &[arg(call, 0)])?;
+    call.push(function)
+}
+
+fn apply_group(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let group = table(call, arg(call, 0))?;
+    let last = call.raw_table_len(group)?;
+    let actor = call.raw_table_get(group, Value::Number(last as f64))?;
+    let mut args = call.arguments().to_vec();
+    args[0] = actor;
+    call.call_and_return(call.captures()[0], &args)
+}
+
 pub(super) fn install_helpers(vm: &mut Vm, actor: TableId, helpers: TableId) -> Result<(), Error> {
     let setup = compile_named(
         include_bytes!("native_children.lua"),
@@ -9,7 +25,7 @@ pub(super) fn install_helpers(vm: &mut Vm, actor: TableId, helpers: TableId) -> 
     )?;
     let setup = vm.execute(&setup)?[0];
     let root = vm.pin(setup)?;
-    let key = vm.try_intern(b"GetName")?;
+    let key = vm.intern_static(b"GetName")?;
     let get_name = vm.raw_table_get(actor, key)?;
     let group = vm.raw_table_get(helpers, Value::Number(3.0))?;
     let functions = vm.call(setup, &[group, get_name])?.to_vec();
@@ -39,12 +55,164 @@ pub(super) fn named_children(call: &mut HostCall<'_>, actor: TableId) -> Result<
     Ok(call.call(function, &[Value::Table(actor)])?[0])
 }
 
-pub(super) fn remove(
+/// One entry of the snapshot [`named_children`] builds: `named_children(actor)[name]`.
+///
+/// The Lua helper defines the result. The usual shape is read here without
+/// building that snapshot; every other shape runs the helper.
+pub(super) fn named_child(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
-    all: bool,
-) -> Result<(), Error> {
+    name: &[u8],
+) -> Result<Value, Error> {
+    if let Some(child) = find_named(call, actor, name)? {
+        return Ok(child);
+    }
+    let children = named_children(call, actor)?;
+    call.with_roots(&[children], |call| get(call, table(call, children)?, name))
+}
+
+/// A host-owned lookup snapshot whose duplicate groups retain instance fields.
+/// Public lookups continue to use `named_child` and `named_children`.
+pub(super) fn host_child(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    name: &[u8],
+) -> Result<Value, Error> {
+    if let Some(child) = find_named(call, actor, name)? {
+        return Ok(child);
+    }
+    let function = helper_function(call, b"native_named_children")?;
+    let children = call.call(function, &[Value::Table(actor), Value::Boolean(true)])?[0];
+    call.with_roots(&[children], |call| get(call, table(call, children)?, name))
+}
+
+// Whether the helper's `isgroup` holds for a table, or `None` when a
+// `__metatable` field or a metatable of the metatable takes part in its answer.
+fn is_group(call: &mut HostCall<'_>, value: TableId) -> Result<Option<bool>, Error> {
+    let Some(metatable) = call.raw_metatable(value)? else {
+        return Ok(Some(false));
+    };
+    if get_static(call, metatable, b"__metatable")? != Value::Nil {
+        return Ok(None);
+    }
+    let group = match get_static(call, metatable, b"__songlua_child_group")? {
+        Value::Nil if call.raw_metatable(metatable)?.is_some() => None,
+        Value::Nil | Value::Boolean(false) => Some(false),
+        _ => Some(true),
+    };
+    Ok(group)
+}
+
+// The helper's result for one name, where it is a value the registry or the
+// child array already holds. `None` leaves the helper to run: for a registry
+// it would create, a name it would export as a new group, every error it would
+// raise, and children whose `GetName` is more than the stored name.
+pub(super) fn find_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    name: &[u8],
+) -> Result<Option<Value>, Error> {
+    let wanted = call.try_intern(name)?;
+    let mut found = Value::Nil;
+    if matches!(
+        get_static(call, actor, b"__songlua_owned_child_lookup")?,
+        Value::Nil | Value::Boolean(false)
+    ) {
+        let Value::Table(registry) = get_static(call, actor, b"__songlua_children")? else {
+            return Ok(None);
+        };
+        if let Some(metatable) = call.raw_metatable(registry)? {
+            if get_static(call, metatable, b"__metatable")? != Value::Nil {
+                return Ok(None);
+            }
+            // The creation order only orders the snapshot; it must be a table.
+            match get_static(call, metatable, b"__songlua_child_names")? {
+                Value::Table(_) => {}
+                Value::Nil if call.raw_metatable(metatable)?.is_none() => {}
+                _ => return Ok(None),
+            }
+        }
+        let mut key = Value::Nil;
+        while let Some((next, value)) = call.raw_table_next(registry, key)? {
+            key = next;
+            let Value::Table(entry) = value else {
+                if key == wanted {
+                    found = value;
+                }
+                continue;
+            };
+            let Some(group) = is_group(call, entry)? else {
+                return Ok(None);
+            };
+            if !group {
+                if key == wanted {
+                    found = value;
+                }
+                continue;
+            }
+            // Every group is checked, as the snapshot copies all of them. A
+            // group exports its member when all of its members are that one.
+            let mut only = Value::Nil;
+            for index in 1.. {
+                match call.raw_table_get(entry, Value::Number(index as f64))? {
+                    Value::Nil => break,
+                    member @ Value::Table(_) if only == Value::Nil || only == member => {
+                        only = member;
+                    }
+                    Value::Table(_) if key != wanted => {}
+                    _ => return Ok(None),
+                }
+            }
+            if key == wanted {
+                if only == Value::Nil {
+                    return Ok(None);
+                }
+                found = only;
+            }
+        }
+    }
+    let mut swept = false;
+    for index in 1.. {
+        let child = match call.raw_table_get(actor, Value::Number(index as f64))? {
+            Value::Nil => break,
+            Value::Table(child) => child,
+            _ => continue,
+        };
+        // `GetName` runs for every table child and sweeps retired scenes first.
+        if !swept {
+            swept = true;
+            if call.store_ref().collected_scenes.pending() {
+                retirement::sweep(call.store());
+            }
+        }
+        let Some(node) = call.store_ref().actors.get(&child) else {
+            return Ok(None);
+        };
+        if node.raw_instance
+            || node.pending_init
+            || node.offline_instance
+            || node.state.class == "OptionRow"
+        {
+            return Ok(None);
+        }
+        if node.state.name != name {
+            continue;
+        }
+        match found {
+            Value::Table(old) if old == child => {
+                if is_group(call, old)? != Some(false) {
+                    return Ok(None);
+                }
+            }
+            // A second child of that name joins or builds a group.
+            Value::Table(_) => return Ok(None),
+            _ => found = Value::Table(child),
+        }
+    }
+    Ok(Some(found))
+}
+
+pub(super) fn remove(call: &mut HostCall<'_>, actor: TableId, all: bool) -> Result<(), Error> {
     let name = if all {
         Value::Nil
     } else {
@@ -78,30 +246,20 @@ pub(super) fn remove(
                 for index in 1..=call.raw_table_len(actor)? {
                     if let Value::Table(child) =
                         call.raw_table_get(actor, Value::Number(index as f64))?
-                        && store.lock().unwrap().actors.contains_key(&child)
+                        && call.store().actors.contains_key(&child)
                     {
                         children.push(child);
                     }
                 }
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&actor)
-                    .unwrap()
-                    .children = children;
-                lifecycle::invalidate_plans(call, store)
+                call.store().actors.get_mut(&actor).unwrap().children = children;
+                lifecycle::invalidate_plans(call)
             })();
             result.and(synced)
         })
     })
 }
 
-pub(super) fn children(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<Vec<TableId>, Error> {
+pub(super) fn children(call: &mut HostCall<'_>, actor: TableId) -> Result<Vec<TableId>, Error> {
     let function = helper_function(call, b"native_children")?;
     let values = call.call(function, &[Value::Table(actor)])?[0];
     call.with_roots(&[values], |call| {
@@ -110,7 +268,7 @@ pub(super) fn children(
         for i in 1..=call.raw_table_len(values)? {
             let value = call.raw_table_get(values, Value::Number(i as f64))?;
             let id = table(call, value)?;
-            if !store.lock().unwrap().actors.contains_key(&id) {
+            if !call.store().actors.contains_key(&id) {
                 return Err(call.error(b"native child is not owned by this runtime"));
             }
             result.push(id);
@@ -121,16 +279,15 @@ pub(super) fn children(
 
 pub(super) fn state(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<crate::SongLuaOverlayState, Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         let is_group = helper_function(call, b"native_is_group")?;
         if call.call(is_group, &[Value::Table(actor)])?[0] == Value::Boolean(true) {
             return Ok(crate::SongLuaOverlayState::default());
         }
     }
-    let store = store.lock().unwrap();
+    let store = call.store_ref();
     let actor = store
         .actors
         .get(&actor)
@@ -177,14 +334,9 @@ pub(super) fn group_members(
     Ok(members)
 }
 
-pub(super) fn adopt(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    parent: TableId,
-) -> Result<(), Error> {
+pub(super) fn adopt(call: &mut HostCall<'_>, actor: TableId, parent: TableId) -> Result<(), Error> {
     set(call, actor, "__songlua_parent", Value::Table(parent))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(parent);
     }
     Ok(())
@@ -192,19 +344,18 @@ pub(super) fn adopt(
 
 pub(super) fn adopt_declared(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     parent: TableId,
 ) -> Result<(), Error> {
-    let kind = call.try_intern(b"__songlua_actor_type")?;
+    let kind = call.intern_static(b"__songlua_actor_type")?;
     let value = call.raw_table_get(parent, kind)?;
     if value == Value::Nil {
         return Ok(());
     }
     assets::text(call, value)?;
-    let key = call.try_intern(b"__songlua_parent")?;
+    let key = call.intern_static(b"__songlua_parent")?;
     call.raw_table_set(actor, key, Value::Table(parent))?;
-    if let Some(actor) = store.lock().unwrap().actors.get_mut(&actor) {
+    if let Some(actor) = call.store().actors.get_mut(&actor) {
         actor.parent = Some(parent);
     }
     Ok(())
@@ -212,7 +363,6 @@ pub(super) fn adopt_declared(
 
 pub(super) fn group_lifecycle(
     call: &mut HostCall<'_>,
-    store: &Shared,
     group: TableId,
     startup: bool,
 ) -> Result<(), Error> {
@@ -221,9 +371,7 @@ pub(super) fn group_lifecycle(
         // A fresh group forwards the lifecycle guard to its last child, just
         // like any other instance field. Authored children have already run.
         if children.last().is_some_and(|child| {
-            store
-                .lock()
-                .unwrap()
+            call.store()
                 .actors
                 .get(child)
                 .is_some_and(|a| if startup { a.started } else { a.initialized })
@@ -231,18 +379,18 @@ pub(super) fn group_lifecycle(
             return Ok(());
         }
         if startup && let Some((function, _)) = command(call, group, b"On")? {
-            run_actor_function(call, store, group, function, None)?;
+            run_actor_function(call, group, function, None)?;
         }
         for child in children {
-            adopt_declared(call, store, child, group)?;
+            adopt_declared(call, child, group)?;
             if startup {
-                lifecycle::startup(call, store, child)?;
+                lifecycle::startup(call, child)?;
             } else {
-                initialize(call, store, child)?;
+                initialize(call, child)?;
             }
         }
         if !startup && let Some((function, _)) = command(call, group, b"Init")? {
-            run_actor_function(call, store, group, function, None)?;
+            run_actor_function(call, group, function, None)?;
         }
         Ok(())
     })
@@ -269,23 +417,21 @@ pub(super) fn with_children(
 
 pub(super) fn run_command(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
 ) -> Result<(), Error> {
-    run_command_with_drain(call, store, actor, name, params, true)
+    run_command_with_drain(call, actor, name, params, true)
 }
 pub(super) fn run_command_with_drain(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &[u8],
     params: Option<Value>,
     drain: bool,
 ) -> Result<(), Error> {
-    if store.lock().unwrap().actors.contains_key(&actor) {
-        return run_named_with_drain(call, store, actor, name, params, drain);
+    if call.store().actors.contains_key(&actor) {
+        return run_named_with_drain(call, actor, name, params, drain);
     }
     // These setters accept a table receiver, and native named registries can
     // contain plain callback tables. Preserve their guard without treating an
@@ -316,14 +462,13 @@ pub(super) fn run_command_with_drain(
                     }
                     call.table_set(active, key, Value::Boolean(true))?;
                     #[cfg(feature = "test-support")]
-                    let observed_command = song_messages::update_command(store, &command_field);
+                    let observed_command =
+                        song_messages::update_command(call.store(), &command_field);
                     let result = (|| {
                         let theme = theme_callback(call, function)?;
-                        let observed =
-                            command_observed(call, store, actor, &command_field, function)?;
+                        let observed = command_observed(call, actor, &command_field, function)?;
                         match run_callback(
                             call,
-                            store,
                             actor,
                             function,
                             params,
@@ -331,14 +476,14 @@ pub(super) fn run_command_with_drain(
                             Some(&command_field),
                         ) {
                             Err(error) if theme && error.kind() == ErrorKind::Runtime => {
-                                store.lock().unwrap().diagnostics.push(error.to_string());
+                                call.store().diagnostics.push(error.to_string());
                                 Ok(())
                             }
                             result => result,
                         }
                     })();
                     #[cfg(feature = "test-support")]
-                    song_messages::restore_command(store, observed_command);
+                    song_messages::restore_command(call.store(), observed_command);
                     call.table_set(active, key, Value::Nil)?;
                     result
                 })

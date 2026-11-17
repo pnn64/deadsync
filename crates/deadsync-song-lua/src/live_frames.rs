@@ -1,7 +1,10 @@
 //! GameState/player host phases shared by retained song playback.
 use super::*;
-use crate::{SongLuaLiveFrame, SongLuaLivePlayer};
+use crate::SongLuaLiveFrame;
 use deadlib_lua::NativeStack;
+
+mod player_options;
+pub(crate) use player_options::OptionSnapshots;
 
 #[derive(Default)]
 struct Attacks {
@@ -48,7 +51,7 @@ impl SongRuntime {
                 .beat
         });
         self.set_values(beat, frame.music_seconds as f32)?;
-        publish(self, frame.players);
+        publish(self, frame);
         Ok(())
     }
 
@@ -56,6 +59,11 @@ impl SongRuntime {
         &mut self,
         player: usize,
     ) -> Result<Option<deadsync_gameplay::GameplayFailType>, Error> {
+        // Raw reads decide the usual case. Anything else, including an option
+        // state that the stack path below creates, takes that path.
+        if let Some(fail_type) = self.read_fail_type(player)? {
+            return Ok(fail_type);
+        }
         let catalog = self.vm.rooted(self.catalog)?;
         self.vm.with_native_stack(|s| {
             let base = s.top();
@@ -96,6 +104,32 @@ impl SongRuntime {
                 .transpose()?;
             s.set_top(base)?;
             Ok(value)
+        })
+    }
+
+    /// The fail type when Song's option state, and Current's when Song names
+    /// none, are tables holding a number or nothing as `failsetting`, and the
+    /// number names a fail type; `None` otherwise.
+    fn read_fail_type(
+        &mut self,
+        player: usize,
+    ) -> Result<Option<Option<deadsync_gameplay::GameplayFailType>>, Error> {
+        let Some(levels) = player_levels(&mut self.vm, self.catalog, player)? else {
+            return Ok(None);
+        };
+        let Some(mut value) = fail_setting(&mut self.vm, levels, 3)? else {
+            return Ok(None);
+        };
+        if value.is_none() {
+            match fail_setting(&mut self.vm, levels, 4)? {
+                None => return Ok(None),
+                Some(Some(_)) => value = Some(0.),
+                Some(None) => {}
+            }
+        }
+        Ok(match value {
+            None => Some(None),
+            Some(value) => deadsync_gameplay::GameplayFailType::from_value(value).map(Some),
         })
     }
 
@@ -230,6 +264,7 @@ impl SongLiveFrames {
         deltas: Option<[f32; LUA_PLAYERS + 1]>,
         outro_started: bool,
     ) -> Result<f64, Error> {
+        runtime.screen.state.lock().unwrap().gameplay_outro = outro_started || frame.gameplay_outro;
         let owners = self.owners(runtime)?;
         if let Some(beat) = self.prepared.take() {
             feed(runtime, owners, frame)?;
@@ -248,7 +283,7 @@ impl SongLiveFrames {
                 )?;
                 stack.set_top(base)
             })?;
-            publish(runtime, frame.players);
+            publish(runtime, frame);
             Ok(beat)
         } else {
             self.prepare(runtime, frame, deltas, outro_started)
@@ -424,7 +459,7 @@ impl SongLiveFrames {
             self.last_beat = beat;
             stack.set_top(base)
         })?;
-        publish(runtime, frame.players);
+        publish(runtime, frame);
         if !outro_started && let Some(windows) = &frame.chart_attacks {
             let master = self.context.players.iter().position(|p| p.enabled);
             for i in 0..LUA_PLAYERS {
@@ -586,7 +621,9 @@ impl SongLiveFrames {
     }
 }
 
-fn publish(runtime: &mut SongRuntime, players: [SongLuaLivePlayer; LUA_PLAYERS]) {
+fn publish(runtime: &mut SongRuntime, frame: &SongLuaLiveFrame) {
+    let players = frame.players;
+    runtime.statistics.lock().unwrap().routine = frame.routine;
     runtime.publish_live_players(players);
     let mut status = runtime.player_status.lock().unwrap();
     for (status, player) in status.iter_mut().zip(players) {
@@ -604,8 +641,47 @@ fn require_table(stack: &NativeStack<'_, '_>, index: usize) -> Result<(), Error>
         Err(stack.error(b"live frame table expected"))
     }
 }
-fn read(stack: &mut NativeStack<'_, '_>, owner: usize, key: &str, raw: bool) -> Result<(), Error> {
-    stack.push_bytes(key.as_bytes())?;
+// A player's ModsGroup levels by raw reads, as the stack paths find them, or
+// `None` when a step on the way is not a table.
+fn player_levels(vm: &mut Vm, catalog: Root, player: usize) -> Result<Option<TableId>, Error> {
+    let Value::Table(catalog) = vm.rooted(catalog)? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"player_options")?;
+    let Value::Table(players) = vm.raw_table_get(catalog, key)? else {
+        return Ok(None);
+    };
+    match vm.raw_table_get(players, Value::Number((player + 1) as f64))? {
+        Value::Table(levels) => Ok(Some(levels)),
+        _ => Ok(None),
+    }
+}
+// One level's `failsetting`: `Some(None)` when its option state holds none,
+// `None` when the level or its state is not a table or the value is not a
+// number.
+fn fail_setting(vm: &mut Vm, levels: TableId, level: usize) -> Result<Option<Option<f32>>, Error> {
+    let Value::Table(owner) = vm.raw_table_get(levels, Value::Number(level as f64))? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"__songlua_player_option_state")?;
+    let Value::Table(state) = vm.raw_table_get(owner, key)? else {
+        return Ok(None);
+    };
+    let key = vm.intern_static(b"failsetting")?;
+    Ok(match vm.raw_table_get(state, key)? {
+        Value::Nil => Some(None),
+        Value::Number(value) => Some(Some(value as f32)),
+        _ => None,
+    })
+}
+fn read(
+    stack: &mut NativeStack<'_, '_>,
+    owner: usize,
+    key: &'static str,
+    raw: bool,
+) -> Result<(), Error> {
+    let key = stack.intern_static(key.as_bytes())?;
+    stack.push(key)?;
     stack.get_table(owner as isize, raw)
 }
 fn index(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<(), Error> {
@@ -615,11 +691,15 @@ fn index(stack: &mut NativeStack<'_, '_>, owner: usize, index: usize) -> Result<
 fn write(
     stack: &mut NativeStack<'_, '_>,
     owner: usize,
-    key: &str,
+    key: &'static str,
     value: Value,
     raw: bool,
 ) -> Result<(), Error> {
-    stack.push_bytes(key.as_bytes())?;
+    if raw {
+        return stack.raw_set_static(owner as isize, key.as_bytes(), value);
+    }
+    let key = stack.intern_static(key.as_bytes())?;
+    stack.push(key)?;
     stack.push(value)?;
     stack.set_table(owner as isize, raw)
 }
@@ -628,22 +708,31 @@ fn runtime_table(stack: &mut NativeStack<'_, '_>, globals: usize) -> Result<(), 
     require_table(stack, stack.top())
 }
 fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> Result<(), Error> {
+    let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
     runtime.vm.with_native_stack(|stack| {
         let base = stack.top();
         stack.push(owners)?;
         let batch = stack.top();
         index(stack, batch, 1)?;
         let stage = stack.top();
-        write(
-            stack,
-            stage,
-            "__songlua_gameplay_seconds",
-            Value::Number(frame.screen_seconds),
-            true,
-        )?;
+        if !paused {
+            write(
+                stack,
+                stage,
+                "__songlua_gameplay_seconds",
+                Value::Number(frame.screen_seconds),
+                true,
+            )?;
+        }
         stack.set_top(stack.top() - 1)?;
-        for (i, player) in frame.players.iter().enumerate() {
-            index(stack, batch, i + 2)?;
+        let routine = frame.routine.unwrap_or_default();
+        for (i, player) in frame
+            .players
+            .iter()
+            .chain(std::iter::once(&routine))
+            .enumerate()
+        {
+            index(stack, batch, if i == LUA_PLAYERS { 7 } else { i + 2 })?;
             let stats = stack.top();
             for (key, value) in [
                 (
@@ -651,6 +740,7 @@ fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> R
                     player.possible_points as f64,
                 ),
                 ("__songlua_actual_dance_points", player.actual_points as f64),
+                ("__songlua_max_combo", player.recorded_max_combo as f64),
                 (
                     "__songlua_current_possible_dance_points",
                     player.current_possible_points as f64,

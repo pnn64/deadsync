@@ -6,14 +6,13 @@ type Output = Arc<Mutex<Option<(bool, Result<Option<Json>, String>)>>>;
 
 pub(super) fn capture(
     call: &mut HostCall<'_>,
-    store: &Shared,
     name: &[u8],
     params: Option<Value>,
 ) -> Result<(), Error> {
-    if store.lock().unwrap().live_sources.is_none() {
+    if call.store().live_sources.is_none() {
         return Ok(());
     }
-    let in_song_callback = store.lock().unwrap().song_callback_depth != 0;
+    let in_song_callback = call.store().song_callback_depth != 0;
     let output: Output = Arc::new(Mutex::new(None));
     let run = call.new_host_function_with_data(
         |call| {
@@ -69,7 +68,7 @@ pub(super) fn capture(
         return Ok(());
     }
     let [beat, music] = effects::values(call, false).unwrap_or([0.; 2]);
-    if let Some(rows) = &mut store.lock().unwrap().live_sources {
+    if let Some(rows) = &mut call.store().live_sources {
         rows.push(crate::SongLuaLiveBroadcast {
             beat,
             music_seconds: music as f64,

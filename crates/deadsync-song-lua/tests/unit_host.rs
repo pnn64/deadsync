@@ -694,7 +694,7 @@ fn indexed_actor_capture_blocks_preserve_source_indices() {
     assert_eq!(blocks[0].1[0].delta.x, Some(12.0));
     for actor in &values {
         assert!(
-            test_support::captured_blocks(&host, *actor)
+            test_support::captured_blocks(&mut host, *actor)
                 .unwrap()
                 .is_empty()
         );
@@ -861,7 +861,7 @@ fn capture_actor_message_commands_extracts_startup_sound_blocks() {
     let (mut host, _scene, values) = capture_fixture(1);
     let actor = values[0];
     assert!(test_support::rust_seed_message_sound_block(
-        &host, actor, true
+        &mut host, actor, true
     ));
     let captured = host.capture_song_actor_message_commands(actor).unwrap();
     assert_eq!(captured.commands.len(), 1);

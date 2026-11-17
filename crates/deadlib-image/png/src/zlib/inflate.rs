@@ -134,6 +134,8 @@ impl Inflater {
             pos: 0,
             word: self.word,
             count: self.bit_count,
+            chunks: &[],
+            prior: 0,
         };
         let result = self.run(&mut bits, output);
         self.word = bits.word;

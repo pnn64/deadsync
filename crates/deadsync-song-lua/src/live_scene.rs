@@ -40,6 +40,7 @@ pub struct SongLiveScene {
     tracked: Vec<(SongLuaTrackedActorTarget, Value)>,
     states: Vec<SongLuaOverlayState>,
     tracked_states: Vec<SongLuaOverlayState>,
+    state_scratch: Arc<Mutex<[Vec<SongLuaOverlayState>; 2]>>,
     targets: Vec<(usize, crate::SongLuaLiveTarget)>,
     visual_targets: rustc_hash::FxHashMap<usize, crate::SongLuaLiveTarget>,
     entry_paths: Vec<PathBuf>,
@@ -71,7 +72,7 @@ impl SongRuntime {
     /// selected statistics survive until the new scene selects its own owners.
     pub fn begin_live_song_load(&mut self) {
         self.statistics.lock().unwrap().players = None;
-        self.actors.begin_live_load();
+        self.actors.begin_live_load(&mut self.vm);
         self.begin_screen_request_capture();
     }
 }
@@ -92,7 +93,7 @@ impl SongLiveScene {
         let runtime = &mut *guard;
         if !context.live
             || runtime.actor_scene_root(b.screen).is_none()
-            || !runtime.actors.has_live_load()
+            || !runtime.actors.has_live_load(&mut runtime.vm)
         {
             return Err(error(runtime,b"live scene requires an active live screen and begin_live_song_load before construction"));
         }
@@ -151,6 +152,7 @@ impl SongLiveScene {
             tracked: b.tracked,
             states: Vec::new(),
             tracked_states: Vec::new(),
+            state_scratch: Default::default(),
             targets: Vec::new(),
             visual_targets: Default::default(),
             entry_paths: b.entry_paths,
@@ -239,6 +241,7 @@ impl SongLiveScene {
     }
     pub fn note_gameplay_outro_after_actors(&mut self) {
         self.outro_started = true;
+        self.runtime.access().screen.state.lock().unwrap().gameplay_outro = true;
     }
     pub fn outro_off_dispatched(&self) -> bool {
         self.outro_reset && !self.off_pending
@@ -329,7 +332,8 @@ impl SongLiveScene {
         self.outro_started |= frame.gameplay_outro;
         self.last_music = frame.music_seconds as f32;
         self.read_states(runtime)?;
-        if let Err(e) = self.frames.finish_health_update(runtime) {
+        let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
+        if !paused && let Err(e) = self.frames.finish_health_update(runtime) {
             let batch = runtime.vm.rooted(self.retained)?;
             runtime
                 .actors
@@ -448,12 +452,17 @@ impl SongLiveScene {
     }
     fn read_states(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
         let batch = runtime.vm.rooted(self.retained)?;
-        let mut states =
-            runtime
-                .actors
-                .live_phase(&mut runtime.vm, self.screen, batch, Phase::States)?;
-        self.tracked_states = states.split_off(self.actors.len());
-        self.states = states;
+        runtime.actors.live_phase(
+            &mut runtime.vm,
+            self.screen,
+            batch,
+            Phase::States(self.state_scratch.clone()),
+        )?;
+        // Publish both lists together; failed reads leave the last snapshot
+        // intact. The old vectors become scratch for the next successful read.
+        let mut scratch = self.state_scratch.lock().unwrap();
+        std::mem::swap(&mut self.states, &mut scratch[0]);
+        std::mem::swap(&mut self.tracked_states, &mut scratch[1]);
         Ok(())
     }
     fn off(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
@@ -461,17 +470,17 @@ impl SongLiveScene {
         runtime
             .actors
             .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off)
-            .map(|_| ())
     }
     fn take_output(&mut self, runtime: &mut SongRuntime) -> Result<SongLuaLiveOutput, Error> {
+        let gameplay_pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
         let (request, source_requests) = runtime.take_screen_requests();
-        let broadcasts = runtime.actors.take_song_broadcasts();
-        let source_broadcasts = runtime.actors.take_live_sources();
+        let broadcasts = runtime.actors.take_song_broadcasts(&mut runtime.vm);
+        let source_broadcasts = runtime.actors.take_live_sources(&mut runtime.vm);
         let sounds = runtime.take_prepared_sounds();
         let actor_sounds = runtime.take_actor_sounds();
-        let errors = runtime.actors.take_callback_errors();
+        let errors = runtime.actors.take_callback_errors(&mut runtime.vm);
         #[cfg(feature = "test-support")]
-        let coverage_gaps = runtime.actors.take_message_coverage();
+        let coverage_gaps = runtime.actors.take_message_coverage(&mut runtime.vm);
         #[cfg(not(feature = "test-support"))]
         let coverage_gaps = Vec::new();
         let batch = runtime.vm.rooted(self.retained)?;
@@ -492,6 +501,7 @@ impl SongLiveScene {
             .take_live_draw_frames(&mut runtime.vm, &sources)
             .map_err(|e| error(runtime, e.as_bytes()))?;
         Ok(SongLuaLiveOutput {
+            gameplay_pauses,
             actor_sounds,
             request,
             source_requests,
@@ -525,9 +535,10 @@ fn draw_source(t: SongLuaTrackedActorTarget) -> crate::SongLuaDrawSource {
 #[cfg(feature = "test-support")]
 impl SongLiveScene {
     pub(crate) fn fixture_end_update_capture(&self) {
-        self.runtime
-            .access()
+        let mut guard = self.runtime.access();
+        let runtime = &mut *guard;
+        runtime
             .actors
-            .end_song_update_capture(self.screen)
+            .end_song_update_capture(&mut runtime.vm, self.screen)
     }
 }

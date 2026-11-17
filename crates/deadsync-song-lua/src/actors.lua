@@ -208,16 +208,10 @@ end
     local function group(actors)
         return setmetatable(actors, {__songlua_child_group=true, __index=function(t, key)
             if tonumber(key) then return rawget(t, key) end
-            -- Production resolves the last child's instance member at lookup,
-            -- then resolves it again at invocation and forwards every result.
+            -- ActorFrame.cpp captures the class member at lookup, bypassing
+            -- instance fields. Its C closure selects the last child at call time.
             local actor = rawget(t, #t)
-            if not actor then return nil end
-            local member = actor[key]
-            if type(member)~='function' then return member end
-            return function(self, ...)
-                local last=self[#self]
-                return last[key](last, ...)
-            end
+            return methods.ChildGroupForward(lookup(actor, key))
         end})
     end
     local function raw_children(actor)

@@ -102,7 +102,7 @@ impl SongRuntime {
         result
     }
 
-    fn option_operation(&mut self, name: &str, arguments: &[Value]) -> Result<(), Error> {
+    fn option_operation(&mut self, name: &'static str, arguments: &[Value]) -> Result<(), Error> {
         let mut roots = smallvec::SmallVec::<[Root; 3]>::new();
         let result = (|| {
             for &value in arguments {
@@ -111,11 +111,11 @@ impl SongRuntime {
             let Value::Table(catalog) = self.vm.rooted(self.catalog)? else {
                 unreachable!()
             };
-            let key = self.vm.try_intern(b"option_operations")?;
+            let key = self.vm.intern_static(b"option_operations")?;
             let Value::Table(operations) = self.vm.raw_table_get(catalog, key)? else {
                 unreachable!()
             };
-            let key = self.vm.try_intern(name.as_bytes())?;
+            let key = self.vm.intern_static(name.as_bytes())?;
             let function = self.vm.raw_table_get(operations, key)?;
             self.vm.call(function, arguments).map(|_| ())
         })();

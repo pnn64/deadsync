@@ -41,7 +41,20 @@ pub(super) const SPRITE_METHODS: &[&str] = &[
     "set_use_effect_clock_for_texcoords",
 ];
 
-pub(super) fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
+pub(super) fn field(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Value, Error> {
+    let key = call.intern_static(key.as_bytes())?;
+    call.table_get(Value::Table(actor), key)
+}
+// `field` for a name built at run time.
+pub(super) fn field_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &str,
+) -> Result<Value, Error> {
     let key = call.try_intern(key.as_bytes())?;
     call.table_get(Value::Table(actor), key)
 }
@@ -70,7 +83,7 @@ pub(super) fn number(call: &mut HostCall<'_>, value: Value) -> Result<f64, Error
 fn optional_number(
     call: &mut HostCall<'_>,
     actor: TableId,
-    key: &str,
+    key: &'static str,
 ) -> Result<Option<f32>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {
@@ -87,7 +100,11 @@ fn uint(call: &mut HostCall<'_>, value: Value) -> Result<u32, Error> {
         Err(call.error(b"unsigned integer out of range"))
     }
 }
-fn optional_uint(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Option<u32>, Error> {
+fn optional_uint(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    key: &'static str,
+) -> Result<Option<u32>, Error> {
     let value = field(call, actor, key)?;
     if value == Value::Nil {
         Ok(None)
@@ -137,7 +154,7 @@ fn put_vector(
     call.with_roots(&[value], |call| set(call, actor, key, value))
 }
 pub(super) fn default_texture(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, Error> {
-    let key = call.try_intern(b"__songlua_default_texture")?;
+    let key = call.intern_static(b"__songlua_default_texture")?;
     Ok(!matches!(
         call.raw_table_get(actor, key)?,
         Value::Nil | Value::Boolean(false)
@@ -245,13 +262,9 @@ pub(super) fn frame_size(
             .map(|(w, h)| [w, h]),
     )
 }
-pub(super) fn refresh_size(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn refresh_size(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let image = frame_size(call, actor)?;
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     let actor = store.actors.get_mut(&actor).unwrap();
     actor.state.size = actor
         .state
@@ -275,21 +288,14 @@ pub(super) fn is_video(call: &mut HostCall<'_>, actor: TableId) -> Result<bool, 
     Ok(assets::field(call, actor, b"Texture")?
         .is_some_and(|s| crate::is_song_lua_video_path(Path::new(s.trim()))))
 }
-pub(super) fn decode(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    enabled: bool,
-) -> Result<(), Error> {
+pub(super) fn decode(call: &mut HostCall<'_>, actor: TableId, enabled: bool) -> Result<(), Error> {
     set(
         call,
         actor,
         "__songlua_state_decode_movie",
         Value::Boolean(enabled),
     )?;
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&actor)
         .unwrap()
@@ -300,33 +306,31 @@ pub(super) fn decode(
 }
 pub(super) fn initialize(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     template: bool,
 ) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_theme_path_actor")?;
+    let key = call.intern_static(b"__songlua_theme_path_actor")?;
     let theme_actor = call.raw_table_get(actor, key)? == Value::Boolean(true);
     // create_theme_path_actor fills Texture after constructing the empty
     // Sprite. It leaves the decoder field and movie metadata unset; its getter
     // can still infer a movie from Texture while the initial render flag is false.
     if !theme_actor {
         let enabled = is_video(call, actor)?;
-        decode(call, store, actor, enabled)?;
+        decode(call, actor, enabled)?;
         movie_size(call, actor)?;
     }
-    let bound = store.lock().unwrap().actors[&actor].state.class == "Banner"
+    let bound = call.store().actors[&actor].state.class == "Banner"
         || field(call, actor, "Texture")? != Value::Nil;
     if !template {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
         render.sprite_animate = !theme_actor;
         render.sprite_texture = bound;
     }
-    refresh_size(call, store, actor)
+    refresh_size(call, actor)
 }
 pub(super) fn set_texture(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     value: Value,
     clear: bool,
@@ -336,7 +340,7 @@ pub(super) fn set_texture(
     {
         let retained = match value {
             Value::Table(texture) => {
-                let key = call.try_intern(b"__songlua_native_type")?;
+                let key = call.intern_static(b"__songlua_native_type")?;
                 let kind = call.raw_table_get(texture, key)?;
                 if kind == Value::Nil {
                     None
@@ -355,14 +359,13 @@ pub(super) fn set_texture(
             raw_set(call, actor, "__songlua_amv_texture_handle", retained)?;
         }
     }
-    set_texture_value(call, store, actor, value, clear)
+    set_texture_value(call, actor, value, clear)
 }
 
 // A proxy's path updates the rendered binding without replacing the proxy
 // retained by SetTexture. Only a new public string/nil load clears that handle.
 fn set_texture_value(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     value: Value,
     clear: bool,
@@ -379,7 +382,7 @@ fn set_texture_value(
             )?;
             set(call, actor, "__songlua_aft_capture_name", Value::Nil)?;
             let video = is_video(call, actor)?;
-            decode(call, store, actor, video)?;
+            decode(call, actor, video)?;
         }
         Value::Table(texture) => {
             if default_texture(call, texture)? {
@@ -391,7 +394,7 @@ fn set_texture_value(
                 )?;
                 set(call, actor, "Texture", Value::Nil)?;
                 set(call, actor, "__songlua_aft_capture_name", Value::Nil)?;
-                decode(call, store, actor, false)?;
+                decode(call, actor, false)?;
             } else if let Some(name) = assets::field(call, texture, b"__songlua_aft_capture_name")?
             {
                 raw_set(
@@ -404,12 +407,12 @@ fn set_texture_value(
                 set(call, actor, "__songlua_aft_capture_name", name)?;
                 set(call, actor, "Texture", Value::Nil)?;
                 let video = is_video(call, actor)?;
-                decode(call, store, actor, video)?;
+                decode(call, actor, video)?;
             } else if let Some(path) =
                 assets::field(call, texture, b"__songlua_texture_path")?.filter(|p| !p.is_empty())
             {
                 let path = call.try_intern(path.as_bytes())?;
-                set_texture_value(call, store, actor, path, false)?;
+                set_texture_value(call, actor, path, false)?;
             }
         }
         Value::Nil if clear => {
@@ -421,27 +424,26 @@ fn set_texture_value(
             )?;
             set(call, actor, "Texture", Value::Nil)?;
             set(call, actor, "__songlua_aft_capture_name", Value::Nil)?;
-            decode(call, store, actor, false)?;
+            decode(call, actor, false)?;
         }
         _ => {}
     }
     Ok(())
 }
-fn size(store: &Shared, actor: TableId, size: [f32; 2]) {
-    let mut store = store.lock().unwrap();
+fn size(store: &mut Store, actor: TableId, size: [f32; 2]) {
+    let store = &mut *store;
     let actor = store.actors.get_mut(&actor).unwrap();
     actor.state.size = size;
     actor.state.render.size = Some(size);
 }
 fn state(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     index: u32,
     clear_rect: bool,
 ) -> Result<(), Error> {
     if clear_rect {
-        action_capture::prepare_write(call, store, actor)?;
+        action_capture::prepare_write(call, actor)?;
     }
     set(
         call,
@@ -457,7 +459,7 @@ fn state(
             Value::Nil,
         )?;
     }
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let instance = guard.actors.get_mut(&actor).unwrap();
     if clear_rect {
         for clock in instance.model_materials.iter_mut().flatten() {
@@ -469,11 +471,9 @@ fn state(
     if clear_rect {
         render.custom_texture_rect = None;
     }
-    drop(guard);
     if clear_rect {
         capture::write(
             call,
-            store,
             actor,
             crate::SongLuaOverlayStateDelta {
                 sprite_state_index: Some(index),
@@ -483,7 +483,7 @@ fn state(
         );
         // Native SetState marks the current block when it clears its rectangle,
         // including a timed block with no other captured delta fields.
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let queued = guard.capture_scope.is_some();
         if let Some(capture) = guard
             .actors
@@ -495,23 +495,11 @@ fn state(
     }
     Ok(())
 }
-fn rect(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    rect: [f32; 4],
-) -> Result<(), Error> {
-    action_capture::prepare_write(call, store, actor)?;
-    state(
-        call,
-        store,
-        actor,
-        crate::SONG_LUA_SPRITE_STATE_CLEAR,
-        false,
-    )?;
+fn rect(call: &mut HostCall<'_>, actor: TableId, rect: [f32; 4]) -> Result<(), Error> {
+    action_capture::prepare_write(call, actor)?;
+    state(call, actor, crate::SONG_LUA_SPRITE_STATE_CLEAR, false)?;
     capture::write(
         call,
-        store,
         actor,
         crate::SongLuaOverlayStateDelta {
             sprite_state_index: Some(crate::SONG_LUA_SPRITE_STATE_CLEAR),
@@ -521,22 +509,19 @@ fn rect(
     );
     song_properties::record(
         call,
-        store,
         actor,
         crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
         crate::SongLuaOverlayUpdateValue::U32(crate::SONG_LUA_SPRITE_STATE_CLEAR),
     );
     put_vector(call, actor, "__songlua_state_custom_texture_rect", &rect)?;
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&actor)
         .unwrap()
         .state
         .render
         .custom_texture_rect = Some(rect);
-    song_media::record(call, store, actor, "custom_texture_rect");
+    song_media::record(call, actor, "custom_texture_rect");
     Ok(())
 }
 fn current_rect(call: &mut HostCall<'_>, actor: TableId) -> Result<[f32; 4], Error> {
@@ -567,14 +552,14 @@ pub(super) fn visit_states(
     actor: TableId,
     mut visit: impl FnMut(crate::SongLuaSpriteState),
 ) -> Result<(), Error> {
-    let key = call.try_intern(b"__songlua_state_sprite_default_states")?;
+    let key = call.intern_static(b"__songlua_state_sprite_default_states")?;
     if !matches!(
         call.raw_table_get(actor, key)?,
         Value::Nil | Value::Boolean(false)
     ) {
         return Ok(());
     }
-    let key = call.try_intern(b"Frames")?;
+    let key = call.intern_static(b"Frames")?;
     let frames = call.raw_table_get(actor, key)?;
     if frames != Value::Nil {
         let frames_table = table(call, frames)?;
@@ -597,10 +582,17 @@ pub(super) fn visit_states(
         })?;
     } else {
         for i in 0i32.. {
-            let Some(frame) = optional_uint(call, actor, &format!("Frame{i:04}"))? else {
+            let frame = field_named(call, actor, &format!("Frame{i:04}"))?;
+            if frame == Value::Nil {
                 break;
+            }
+            let frame = uint(call, frame)?;
+            let delay = field_named(call, actor, &format!("Delay{i:04}"))?;
+            let delay = if delay == Value::Nil {
+                0.1
+            } else {
+                number(call, delay)? as f32
             };
-            let delay = optional_number(call, actor, &format!("Delay{i:04}"))?.unwrap_or(0.1);
             visit(crate::SongLuaSpriteState { frame, delay });
         }
     }
@@ -608,7 +600,6 @@ pub(super) fn visit_states(
 }
 fn capture(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     previous: Option<PathBuf>,
 ) -> Result<(), Error> {
@@ -622,10 +613,9 @@ fn capture(
         return Ok(());
     };
     if previous.as_ref() != Some(&path) {
-        state(call, store, actor, 0, false)?;
+        state(call, actor, 0, false)?;
         capture::write(
             call,
-            store,
             actor,
             crate::SongLuaOverlayStateDelta {
                 sprite_state_index: Some(0),
@@ -652,14 +642,14 @@ fn capture(
             seconds.map_or(Value::Nil, |n| Value::Number(n as f64)),
         )?;
     }
-    let Some(queued) = store.lock().unwrap().sound_capture else {
+    let Some(queued) = call.store().sound_capture else {
         return Ok(());
     };
     if !queued {
         let second = effects::values(call, false)?[1];
         let states = states(call, actor)?;
         let epoch = optional_number(call, actor, "__songlua_state_sprite_texture_epoch")?;
-        let key = call.try_intern(b"__songlua_state_sprite_frame_sheet")?;
+        let key = call.intern_static(b"__songlua_state_sprite_frame_sheet")?;
         let value = call.raw_table_get(actor, key)?;
         let frame_sheet = if value == Value::Nil {
             None
@@ -673,7 +663,7 @@ fn capture(
             })?)
         };
         let owner = call.object_pointer(Value::Table(actor)).unwrap() as u64;
-        store.lock().unwrap().sprite_textures.push((
+        call.store().sprite_textures.push((
             owner,
             crate::SongLuaSpriteTexture {
                 second,
@@ -690,7 +680,7 @@ fn capture(
     {
         let (cols, rows) = sheet(call, actor)?.unwrap_or((1, 1));
         let second = effects::values(call, false)?[1];
-        store.lock().unwrap().judgment_textures.push((
+        call.store().judgment_textures.push((
             player as usize,
             crate::SongLuaJudgmentTexture {
                 second,
@@ -706,15 +696,14 @@ fn capture(
 }
 pub(super) fn load(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     value: Value,
     preserve: bool,
 ) -> Result<(), Error> {
-    action_capture::prepare(call, store, actor)?;
+    action_capture::prepare(call, actor)?;
     let previous = assets::texture_path(call, actor)?;
     if preserve {
-        let key = call.try_intern(b"__songlua_state_sprite_frame_sheet")?;
+        let key = call.intern_static(b"__songlua_state_sprite_frame_sheet")?;
         let existing = call.raw_table_get(actor, key)?;
         if existing == Value::Nil {
             store_sheet(call, actor)?;
@@ -722,7 +711,7 @@ pub(super) fn load(
             table(call, existing)?;
         }
     }
-    set_texture(call, store, actor, value, !preserve)?;
+    set_texture(call, actor, value, !preserve)?;
     if !preserve {
         raw_set(
             call,
@@ -744,10 +733,9 @@ pub(super) fn load(
         frame_size(call, actor)?
     };
     if let Some(dimensions) = dimensions {
-        size(store, actor, dimensions);
+        size(call.store(), actor, dimensions);
         capture::write(
             call,
-            store,
             actor,
             crate::SongLuaOverlayStateDelta {
                 size: Some(dimensions),
@@ -760,9 +748,7 @@ pub(super) fn load(
         let bound = default_texture(call, actor)?
             || assets::field(call, actor, b"__songlua_aft_capture_name")?.is_some()
             || assets::texture_path(call, actor)?.is_some();
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -777,7 +763,6 @@ pub(super) fn load(
         )?;
         capture::write(
             call,
-            store,
             actor,
             crate::SongLuaOverlayStateDelta {
                 sprite_texture: Some(bound),
@@ -786,9 +771,7 @@ pub(super) fn load(
             true,
         );
     } else if dimensions.is_some() {
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -803,7 +786,6 @@ pub(super) fn load(
         )?;
         capture::write(
             call,
-            store,
             actor,
             crate::SongLuaOverlayStateDelta {
                 sprite_texture: Some(true),
@@ -812,65 +794,55 @@ pub(super) fn load(
             true,
         );
     }
-    capture(call, store, actor, previous)
+    capture(call, actor, previous)
 }
 
 pub(super) fn texture_parameter(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     name: &str,
     value: Value,
 ) -> Result<(), Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         return Err(call.error(b"texture owner has been released"));
     }
     if name == "loop" {
         let value = boolish(call, value).unwrap_or(true);
-        action_capture::prepare_write(call, store, actor)?;
+        action_capture::prepare_write(call, actor)?;
         set(
             call,
             actor,
             "__songlua_state_sprite_loop",
             Value::Boolean(value),
         )?;
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
             .state
             .render
             .sprite_loop = value;
-        song_media::record(call, store, actor, "sprite_loop");
+        song_media::record(call, actor, "sprite_loop");
     } else if let Some(value) = float_scalar(call, value, false) {
-        action_capture::prepare_write(call, store, actor)?;
+        action_capture::prepare_write(call, actor)?;
         set(
             call,
             actor,
             "__songlua_state_sprite_playback_rate",
             Value::Number(value as f64),
         )?;
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
             .state
             .render
             .sprite_playback_rate = value;
-        song_media::record(call, store, actor, "sprite_playback_rate");
+        song_media::record(call, actor, "sprite_playback_rate");
     }
     Ok(())
 }
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     match name {
         "Load" | "LoadFromCached" | "SetTexture" => {
@@ -879,18 +851,18 @@ pub(super) fn method(
             } else {
                 value
             };
-            load(call, store, actor, value, name == "SetTexture")?;
+            load(call, actor, value, name == "SetTexture")?;
         }
         "LoadBanner" | "LoadBackground" => {
             let value = call
                 .coerce_string(value)?
                 .ok_or_else(|| call.error(b"string expected"))?;
             call.with_roots(&[Value::String(value)], |call| {
-                load(call, store, actor, Value::String(value), false)
+                load(call, actor, Value::String(value), false)
             })?;
             return call.push(call.arguments().last().copied().unwrap_or(Value::Nil));
         }
-        "GetTexture" => return textures::get(call, store, actor),
+        "GetTexture" => return textures::get(call, actor),
         "GetNumStates" => {
             let count = crate::sprite_frame_count(sheet(call, actor)?);
             return call.push(Value::Number(count as f64));
@@ -907,20 +879,19 @@ pub(super) fn method(
                 && (0.0..=u32::MAX as f64).contains(&n)
                 && n.fract() == 0.0
             {
-                state(call, store, actor, n as u32, true)?;
+                state(call, actor, n as u32, true)?;
             }
         }
         "animate" | "texturewrapping" => {
             let enabled = boolish(call, value).unwrap_or(true);
-            action_capture::prepare_write(call, store, actor)?;
-            let mut guard = store.lock().unwrap();
+            action_capture::prepare_write(call, actor)?;
+            let guard = call.store();
             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
             if name == "animate" {
                 render.sprite_animate = enabled;
             } else {
                 render.texture_wrapping = enabled;
             }
-            drop(guard);
             let key = if name == "animate" {
                 "sprite_animate"
             } else {
@@ -929,7 +900,6 @@ pub(super) fn method(
             if name == "texturewrapping" {
                 super::host_compat::raw_flag(
                     call,
-                    store,
                     actor,
                     "__songlua_state_texture_wrapping",
                     enabled,
@@ -942,10 +912,10 @@ pub(super) fn method(
                     Value::Boolean(enabled),
                 )?;
             }
-            song_media::record(call, store, actor, key);
+            song_media::record(call, actor, key);
         }
-        "loop" | "rate" => texture_parameter(call, store, actor, name, value)?,
-        "SetDecodeMovie" => decode(call, store, actor, boolish(call, value).unwrap_or(true))?,
+        "loop" | "rate" => texture_parameter(call, actor, name, value)?,
+        "SetDecodeMovie" => decode(call, actor, boolish(call, value).unwrap_or(true))?,
         "GetDecodeMovie" => {
             let value = field(call, actor, "__songlua_state_decode_movie")?;
             let fallback = is_video(call, actor)?;
@@ -963,23 +933,21 @@ pub(super) fn method(
         "SetAllStateDelays" => {
             if let Some(delay) = float_scalar(call, value, false) {
                 let delay = delay.max(0.0);
-                action_capture::prepare_write(call, store, actor)?;
+                action_capture::prepare_write(call, actor)?;
                 set(
                     call,
                     actor,
                     "__songlua_state_sprite_state_delay",
                     Value::Number(delay as f64),
                 )?;
-                store
-                    .lock()
-                    .unwrap()
+                call.store()
                     .actors
                     .get_mut(&actor)
                     .unwrap()
                     .state
                     .render
                     .sprite_state_delay = delay;
-                song_media::record(call, store, actor, "sprite_state_delay");
+                song_media::record(call, actor, "sprite_state_delay");
             }
         }
         "GetAnimationLengthSeconds" => {
@@ -1002,7 +970,6 @@ pub(super) fn method(
                 let count = crate::sprite_frame_count(sheet(call, actor)?);
                 state(
                     call,
-                    store,
                     actor,
                     crate::sprite_animation_state_at(seconds, delay, count),
                     true,
@@ -1041,31 +1008,29 @@ pub(super) fn method(
                     Value::Number(length as f64),
                 )?;
                 if let Some(delay) = first_delay {
-                    action_capture::prepare_write(call, store, actor)?;
+                    action_capture::prepare_write(call, actor)?;
                     set(
                         call,
                         actor,
                         "__songlua_state_sprite_state_delay",
                         Value::Number(delay as f64),
                     )?;
-                    store
-                        .lock()
-                        .unwrap()
+                    call.store()
                         .actors
                         .get_mut(&actor)
                         .unwrap()
                         .state
                         .render
                         .sprite_state_delay = delay;
-                    song_media::record(call, store, actor, "sprite_state_delay");
+                    song_media::record(call, actor, "sprite_state_delay");
                 }
-                state(call, store, actor, first.unwrap_or(0), true)?;
+                state(call, actor, first.unwrap_or(0), true)?;
             }
         }
         "customtexturerect" | "SetCustomImageRect" => {
             let values =
                 [1, 2, 3, 4].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
-            rect(call, store, actor, values)?;
+            rect(call, actor, values)?;
         }
         "stretchtexcoords" | "addimagecoords" => {
             let upload = if name == "addimagecoords" {
@@ -1084,27 +1049,26 @@ pub(super) fn method(
                 Some(crate::offset_texture_rect(current, delta))
             };
             if let Some(next) = next {
-                rect(call, store, actor, next)?;
+                rect(call, actor, next)?;
             }
         }
         "texturetranslate" | "texcoordvelocity" => {
             let value = [1, 2].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
-            action_capture::prepare_write(call, store, actor)?;
-            let mut guard = store.lock().unwrap();
+            action_capture::prepare_write(call, actor)?;
+            let guard = call.store();
             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
             if name == "texturetranslate" {
                 render.texcoord_offset = Some(value);
             } else {
                 render.texcoord_velocity = Some(value);
             }
-            drop(guard);
             let key = if name == "texturetranslate" {
                 "texcoord_offset"
             } else {
                 "texcoord_velocity"
             };
             put_vector(call, actor, &format!("__songlua_state_{key}"), &value)?;
-            song_media::record(call, store, actor, key);
+            song_media::record(call, actor, key);
         }
         "CropTo" | "scaletoclipped" => {
             let (Some(w), Some(h)) = (
@@ -1115,9 +1079,9 @@ pub(super) fn method(
             };
             let target = [w, h];
             if name == "scaletoclipped" {
-                action_capture::prepare_write(call, store, actor)?;
-                size(store, actor, target);
-                capture::property(call, store, actor, "size");
+                action_capture::prepare_write(call, actor)?;
+                size(call.store(), actor, target);
+                capture::property(call, actor, "size");
             } else if target.iter().all(|n| n.is_finite() && *n > 0.0) {
                 let source = match frame_size(call, actor)? {
                     Some(size) => Some(size),
@@ -1126,18 +1090,17 @@ pub(super) fn method(
                 if let Some(source) = source
                     && let Some(crop) = crate::crop_texture_rect(source, target)
                 {
-                    action_capture::prepare_write(call, store, actor)?;
-                    size(store, actor, target);
-                    capture::property(call, store, actor, "size");
-                    rect(call, store, actor, crop)?;
-                    let mut guard = store.lock().unwrap();
+                    action_capture::prepare_write(call, actor)?;
+                    size(call.store(), actor, target);
+                    capture::property(call, actor, "size");
+                    rect(call, actor, crop)?;
+                    let guard = call.store();
                     let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
                     pose.zoom = 1.0;
                     pose.zoom_x = 1.0;
                     pose.zoom_y = 1.0;
                     pose.zoom_z = 1.0;
-                    drop(guard);
-                    capture::property(call, store, actor, "zoom");
+                    capture::property(call, actor, "zoom");
                 }
             }
         }

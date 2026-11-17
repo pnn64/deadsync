@@ -226,7 +226,11 @@ pub(super) fn source(call: &mut HostCall<'_>, value: Value) -> Result<Option<Vec
     }
 }
 
-fn range_value(call: &mut HostCall<'_>, state: TableId, key: &str) -> Result<Option<i32>, Error> {
+fn range_value(
+    call: &mut HostCall<'_>,
+    state: TableId,
+    key: &'static str,
+) -> Result<Option<i32>, Error> {
     match field(call, state, key) {
         Ok(value) => Ok(integer_scalar(call, value)),
         // Production ignores ordinary authored errors in First/Num getters.
@@ -311,12 +315,7 @@ pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<Act
     }))
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     match name {
         "SetVertices" => {
@@ -399,17 +398,17 @@ pub(super) fn method(
             }
         }
         "LoadTexture" => {
-            super::action_capture::prepare(call, store, actor)?;
+            super::action_capture::prepare(call, actor)?;
             if value == Value::Nil {
-                sprites::set_texture(call, store, actor, value, true)?;
-                let key = call.try_intern(b"__songlua_default_texture")?;
+                sprites::set_texture(call, actor, value, true)?;
+                let key = call.intern_static(b"__songlua_default_texture")?;
                 call.raw_table_set(actor, key, Value::Boolean(true))?;
             } else {
                 let path = call
                     .coerce_string(value)?
                     .ok_or_else(|| call.error(b"LoadTexture: string expected"))?;
                 call.with_roots(&[Value::String(path)], |call| {
-                    sprites::set_texture(call, store, actor, Value::String(path), false)
+                    sprites::set_texture(call, actor, Value::String(path), false)
                 })?;
             }
         }
@@ -422,7 +421,7 @@ pub(super) fn method(
         | "GetDecodeMovie"
         | "SetDecodeMovie"
         | "SetTexture"
-        | "GetTexture" => return sprites::method(call, store, actor, name),
+        | "GetTexture" => return sprites::method(call, actor, name),
         _ => {
             return Err(call.error(
                 format!("native actor method {name} has no semantic implementation").as_bytes(),

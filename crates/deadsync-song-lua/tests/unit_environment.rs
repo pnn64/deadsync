@@ -120,3 +120,88 @@ const ORIGINAL_ENV_METAMETHOD: &str = r#"return function(_, key)
             if key == 'disabled' then return false end
             if key == 'fault' then error('environment read fault') end
         end"#;
+
+// Global reads made by a chunk's own code, through plain tables, inherited
+// tables, a function handler and a broken target.
+const ENVIRONMENT_READS: &str = r#"
+local rawset, setmetatable, pcall, type, tostring, table = rawset, setmetatable, pcall, type, tostring, table
+local out = {}
+local function note(label, value)
+    out[#out + 1] = label .. '=' .. type(value) .. ':' .. tostring(value)
+end
+local function failure(label, read)
+    out[#out + 1] = label .. '=' .. tostring((pcall(read)))
+end
+local proxy = __songlua_current_chunk_env
+note('builtin', math.pi); note('missing', missing_name); note('boolean key', proxy[true])
+assigned = 5; switched = false
+note('assigned', assigned); note('switched', switched)
+local target = {present = 42, disabled = false, math = 'shadow'}
+rawset(proxy, '__songlua_env_target', target)
+note('present', present); note('disabled', disabled); note('shadowed', math)
+note('fallback', string.len('four')); note('absent', assigned)
+setmetatable(target, {__index = {inherited = 7, disabled = true}})
+note('inherited', inherited); note('own before inherited', disabled)
+note('still fallback', string.len('four'))
+local calls = 0
+setmetatable(target, {__index = function(_, key)
+    calls = calls + 1
+    if key == 'computed' then return 'made' end
+    if key == 'fault' then error('fault') end
+end})
+note('computed', computed); note('through function', string.len('four')); note('calls', calls)
+failure('fault', function() return fault end)
+rawset(proxy, '__songlua_env_target', false)
+failure('no target', function() return present end)
+return table.concat(out, '\n')
+"#;
+
+fn environment_reads(limit: bool) -> String {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("reads.lua");
+    std::fs::write(&path, ENVIRONMENT_READS).unwrap();
+    let mut host = SongRuntime::new(&SongLuaCompileContext::new(
+        dir.path(),
+        "environment read resolution",
+    ))
+    .unwrap();
+    if limit {
+        // An instruction limit sends every read to the handler.
+        host.vm_mut().set_instruction_limit(Some(u64::MAX));
+    }
+    let Value::String(text) = host.execute_file(&path, &[]).unwrap()[0] else {
+        panic!("environment observations")
+    };
+    String::from_utf8(host.vm_mut().string_bytes(text).unwrap().to_vec()).unwrap()
+}
+
+#[test]
+fn inline_environment_reads_match_the_handler() {
+    let inline = environment_reads(false);
+    let handler = environment_reads(true);
+    assert_eq!(inline, handler);
+    // Spot checks keep the comparison from passing on two empty or broken runs.
+    for expected in [
+        "missing=nil:nil",
+        "boolean key=nil:nil",
+        "assigned=number:5",
+        "switched=boolean:false",
+        "present=number:42",
+        "disabled=boolean:false",
+        "shadowed=string:shadow",
+        "fallback=number:4",
+        "inherited=number:7",
+        "own before inherited=boolean:false",
+        "still fallback=number:4",
+        "computed=string:made",
+        "through function=number:4",
+        "calls=number:2",
+        "fault=false",
+        "no target=false",
+    ] {
+        assert!(
+            inline.lines().any(|line| line == expected),
+            "missing {expected}\n{inline}"
+        );
+    }
+}

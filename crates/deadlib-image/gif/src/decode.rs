@@ -490,15 +490,12 @@ impl Decoder {
                             return Err(Error::Invalid("incomplete LZW image"));
                         }
                         if self.frame.interlaced {
-                            self.interlace.clear();
-                            reserve(&mut self.interlace, count)?;
-                            self.interlace.resize(count, 0);
-                            let w = self.frame.width as usize;
-                            for (row, y) in interlace_rows(self.frame.height as usize).enumerate() {
-                                self.interlace[y * w..(y + 1) * w]
-                                    .copy_from_slice(&self.frame.indices[row * w..(row + 1) * w]);
-                            }
-                            std::mem::swap(&mut self.interlace, &mut self.frame.indices);
+                            deinterlace(
+                                &mut self.frame.indices,
+                                self.frame.width as usize,
+                                self.frame.height as usize,
+                                &mut self.interlace,
+                            )?;
                         }
                         self.frame.validate(
                             self.header.as_ref().unwrap(),
@@ -594,6 +591,53 @@ pub(crate) fn interlace_rows(height: usize) -> impl Iterator<Item = usize> {
         .into_iter()
         .flat_map(move |(start, step)| (start..height).step_by(step))
 }
+
+fn deinterlace(
+    pixels: &mut [u8],
+    width: usize,
+    height: usize,
+    row: &mut Vec<u8>,
+) -> Result<(), Error> {
+    if height <= 2 {
+        return Ok(());
+    }
+    let extra = width.saturating_sub(row.len());
+    reserve(row, extra)?;
+    row.resize(width, 0);
+    // GIF heights fit u16. Walk each row-permutation cycle once, keeping only
+    // its first row aside. Every other row moves directly to its destination.
+    let mut visited = [0u64; 1024];
+    let pass1 = height.div_ceil(8);
+    let pass2 = (height + 3) / 8;
+    let pass3 = (height + 1) / 4;
+    for start in 0..height {
+        if visited[start / 64] & (1 << (start % 64)) != 0 {
+            continue;
+        }
+        row.copy_from_slice(&pixels[start * width..(start + 1) * width]);
+        let mut dest = start;
+        loop {
+            visited[dest / 64] |= 1 << (dest % 64);
+            let source = if dest & 7 == 0 {
+                dest / 8
+            } else if dest & 7 == 4 {
+                pass1 + dest / 8
+            } else if dest & 3 == 2 {
+                pass1 + pass2 + dest / 4
+            } else {
+                pass1 + pass2 + pass3 + dest / 2
+            };
+            if source == start {
+                pixels[dest * width..(dest + 1) * width].copy_from_slice(row);
+                break;
+            }
+            pixels.copy_within(source * width..(source + 1) * width, dest * width);
+            dest = source;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn validate_text(
     text: &PlainText,
     header: &Header,
@@ -643,6 +687,29 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
             None => {
                 decoder.finish()?;
                 return Err(Error::Truncated);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interlace_permutation_all_pass_tails_and_long_cycles() {
+        let mut row = Vec::new();
+        for height in (1..=257).chain([511, 512, 513, 8193, 65535]) {
+            for width in [1, 3, 17] {
+                let expected: Vec<_> = (0..height)
+                    .flat_map(|y| (0..width).map(move |x| ((y * 137 + x * 71) % 251) as u8))
+                    .collect();
+                let mut wire: Vec<_> = interlace_rows(height)
+                    .flat_map(|y| expected[y * width..(y + 1) * width].iter().copied())
+                    .collect();
+                deinterlace(&mut wire, width, height, &mut row).unwrap();
+                assert_eq!(wire, expected, "{width}x{height}");
+                assert_eq!(row.len(), if height <= 2 { 0 } else { width });
             }
         }
     }

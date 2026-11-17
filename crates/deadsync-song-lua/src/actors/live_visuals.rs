@@ -321,13 +321,13 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
             parts.push("ScreenGameplay".into());
             break;
         }
-        let parent = get(call, current, b"__songlua_parent")?;
+        let parent = get_static(call, current, b"__songlua_parent")?;
         if parent == Value::Nil {
             return Err(call.error(b"subscriber has no captured actor path"));
         }
         let parent = table(call, parent)?;
         let mut component = None;
-        let index_key = call.try_intern(b"__songlua_message_authored_index")?;
+        let index_key = call.intern_static(b"__songlua_message_authored_index")?;
         let authored = call.raw_table_get(current, index_key)?;
         if authored != Value::Nil {
             let Value::Number(index) = authored else {
@@ -339,7 +339,7 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
             }
             component = Some((index as usize).to_string());
         }
-        let wrappers = get(call, parent, b"__songlua_wrappers")?;
+        let wrappers = get_static(call, parent, b"__songlua_wrappers")?;
         if component.is_none() && wrappers != Value::Nil {
             let wrappers = table(call, wrappers)?;
             for index in 1usize.. {

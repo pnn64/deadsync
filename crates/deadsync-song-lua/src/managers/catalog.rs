@@ -486,7 +486,7 @@ fn song_util(call: &mut HostCall<'_>) -> Result<(), Error> {
         let argument = if filtered {
             match call.arguments().get(index + 1).copied() {
                 Some(v) => v,
-                None => call.try_intern(b"StepsType_Dance_Single")?,
+                None => call.intern_static(b"StepsType_Dance_Single")?,
             }
         } else {
             Value::Nil

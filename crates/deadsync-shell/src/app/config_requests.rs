@@ -35,6 +35,7 @@ pub(super) fn execute_options(
             config::runtime_update::update_windows_gamepad_backend(backend)
         }
         Request::UseFsrs(enabled) => config::runtime_update::update_use_fsrs(enabled),
+        Request::AxisFix(enabled) => config::runtime_update::update_axis_fix(enabled),
         Request::ThreeKeyNavigation(enabled) => {
             config::runtime_update::update_three_key_navigation(enabled)
         }
@@ -401,6 +402,9 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
                 }
             });
         }
+        Request::GrooveStatsScoreboxBoards(mask) => {
+            config::runtime_update::update_groovestats_scorebox_boards(mask);
+        }
         Request::EnableArrowCloud(enabled) => {
             config::runtime_update::update_enable_arrowcloud(enabled)
         }
@@ -414,6 +418,12 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
                     config::runtime_update::update_select_music_show_golf_pars(true);
                 }
             }
+        }
+        Request::ArrowCloudRegularBoards(enabled) => {
+            config::runtime_update::update_arrowcloud_regular_boards(enabled);
+        }
+        Request::ArrowCloudEventBoards(enabled) => {
+            config::runtime_update::update_arrowcloud_event_boards(enabled);
         }
         Request::SubmitArrowCloudFails(enabled) => {
             config::runtime_update::update_submit_arrowcloud_fails(enabled)
@@ -543,17 +553,6 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         }
         Request::ScoreboxEventsFirst(enabled) => {
             config::runtime_update::update_select_music_scorebox_events_first(enabled);
-        }
-        Request::ScoreboxCycleMask(mask) => {
-            config::runtime_update::update_select_music_scorebox_cycle_golf(mask & (1 << 4) != 0);
-            config::runtime_update::update_select_music_scorebox_cycle_itg(mask & (1 << 0) != 0);
-            config::runtime_update::update_select_music_scorebox_cycle_ex(mask & (1 << 1) != 0);
-            config::runtime_update::update_select_music_scorebox_cycle_hard_ex(
-                mask & (1 << 2) != 0,
-            );
-            config::runtime_update::update_select_music_scorebox_cycle_tournaments(
-                mask & (1 << 3) != 0,
-            );
         }
         Request::ChartInfoMask(mask) => {
             config::runtime_update::update_select_music_chart_info_peak_nps(mask & (1 << 0) != 0);

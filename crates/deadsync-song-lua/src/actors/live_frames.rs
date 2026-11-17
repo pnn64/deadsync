@@ -29,9 +29,8 @@ fn ordinary(call: &mut HostCall<'_>, owner: Value, key: &str) -> Result<Value, E
     let key = call.try_intern(key.as_bytes())?;
     call.table_get(owner, key)
 }
-fn raw_field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<Value, Error> {
-    let key = call.try_intern(key.as_bytes())?;
-    call.raw_table_get(owner, key)
+fn raw_field(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<Value, Error> {
+    get_static(call, owner, key.as_bytes())
 }
 fn invoke(
     call: &mut HostCall<'_>,
@@ -68,8 +67,11 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             table(call, stats)?;
             call.raw_table_set(batch, Value::Number((i + 2) as f64), stats)?;
         }
-        let selected = call.try_intern(b"live_statistics")?;
+        let selected = call.intern_static(b"live_statistics")?;
         call.raw_table_set(catalog, selected, Value::Table(batch))?;
+        let routine = raw_field(call, catalog, "statistics_routine")?;
+        table(call, routine)?;
+        call.raw_table_set(batch, Value::Number(7.), routine)?;
         {
             let status = call
                 .function_data::<Arc<Mutex<[crate::PlayerStateStatus; LUA_PLAYERS]>>>()
@@ -84,11 +86,14 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         let children = table(call, children)?;
         call.with_roots(&[Value::Table(screen), Value::Table(children)], |call| {
             for i in 0..LUA_PLAYERS {
-                let meter = raw_field(call, children, &format!("LifeP{}", i + 1))?;
+                let player = get(call, children, crate::top_screen_player_name(i).as_bytes())?;
+                let meter = if player == Value::Nil { Value::Nil } else {
+                    raw_field(call, table(call, player)?, "__songlua_life_meter")?
+                };
                 if meter != Value::Nil {
                     table(call, meter)?;
                     let stats = call.raw_table_get(batch, Value::Number((i + 2) as f64))?;
-                    let key = call.try_intern(b"__songlua_life_meter")?;
+                    let key = call.intern_static(b"__songlua_life_meter")?;
                     call.raw_table_set(table(call, stats)?, key, meter)?;
                 }
             }

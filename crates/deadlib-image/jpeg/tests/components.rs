@@ -436,7 +436,7 @@ fn pinned_generic_component_streams_match_pre_entropy_data_and_boundaries() {
                             c,
                         ),
                         HierarchicalData::Lossless { components, .. } => support::sample_dump(
-                            &expected(&format!("frame-{i}.samples")),
+                            &root.join(format!("{name}.frame-{i}.samples")),
                             frame.frame.precision,
                             frame.frame.width,
                             frame.frame.height,
@@ -446,7 +446,7 @@ fn pinned_generic_component_streams_match_pre_entropy_data_and_boundaries() {
                 }
                 let planes = image.reconstruct_reference().unwrap();
                 support::sample_dump(
-                    &expected("samples"),
+                    &root.join(format!("{name}.samples")),
                     image.header.precision,
                     image.header.width,
                     image.header.height,

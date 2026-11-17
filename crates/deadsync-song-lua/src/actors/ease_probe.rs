@@ -26,8 +26,8 @@ fn optional_table(call: &HostCall<'_>, value: Value) -> Result<Option<TableId>, 
         table(call, value).map(Some)
     }
 }
-pub(super) fn actor(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    if !store.lock().unwrap().ease_probe_active {
+pub(super) fn actor(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if !call.store().ease_probe_active {
         return Ok(());
     }
     let actors = global(call, KEYS[1])?;
@@ -66,12 +66,7 @@ fn kind(call: &mut HostCall<'_>, actor: TableId) -> Result<&'static str, Error> 
         _ => "player-child",
     })
 }
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, id: TableId, name: &str) -> Result<(), Error> {
     if !matches!(
         name,
         "x" | "y"
@@ -88,11 +83,11 @@ pub(super) fn method(
             | "baserotationz"
             | "skewx"
             | "skewy"
-    ) || !store.lock().unwrap().ease_probe_active
+    ) || !call.store().ease_probe_active
     {
         return Ok(());
     }
-    actor(call, store, id)?;
+    actor(call, id)?;
     let calls = global(call, KEYS[0])?;
     let Some(calls_id) = optional_table(call, calls)? else {
         return Ok(());
@@ -154,8 +149,8 @@ fn classify(call: &mut HostCall<'_>, calls: TableId) -> Result<Option<Target>, E
     Ok((flags.count_ones() == 1).then(|| targets[flags.trailing_zeros() as usize].clone()))
 }
 impl Actors {
-    pub(crate) fn set_ease_probe_active(&self, active: bool) {
-        self.store.lock().unwrap().ease_probe_active = active;
+    pub(crate) fn set_ease_probe_active(&self, vm: &mut Vm, active: bool) {
+        vm.store().ease_probe_active = active;
     }
     pub(crate) fn begin_ease_probe(&self, vm: &mut Vm) -> Result<Session, Error> {
         let retained = vm.try_new_table()?;

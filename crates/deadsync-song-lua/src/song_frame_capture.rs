@@ -1,5 +1,9 @@
 //! The existing chronological track compiler over Rust replay publications.
-use super::{actors::perframes::Access, song_compiler_roots::Roots, *};
+use super::{
+    actors::perframes::Access,
+    song_compiler_roots::{RootedValues, Roots},
+    *,
+};
 use crate::{
     SongLuaOverlayState as State, SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateTrack,
     SongLuaOverlayUpdateValue as Update,
@@ -73,6 +77,7 @@ impl SongOverlayFrameCapture {
         context: &SongLuaCompileContext,
         states: SongFrameCaptureStates<'_>,
         clock: SongFrameCaptureClock,
+        initialize_updates: bool,
     ) -> Result<(), String> {
         frame_capture::capture_update_overlay_samples(
             source,
@@ -81,6 +86,7 @@ impl SongOverlayFrameCapture {
                 baseline: states.baseline,
                 from_states: states.from,
                 update_states: states.update,
+                initialize_updates,
                 to_states: states.to,
                 restored_indices: states.restored_indices,
                 tracks: &mut self.tracks,
@@ -105,19 +111,33 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            if self.actors.publish_song_tween_frame(screen, actors) {
-                Ok(())
-            } else {
-                Err("song replay capture is not active".into())
-            }
+            self.publish_rooted_song_tween_frame(screen, &rooted)
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn publish_rooted_song_tween_frame(
+        &mut self,
+        screen: ActorScene,
+        actors: &RootedValues,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        if self
+            .actors
+            .publish_song_tween_frame(&mut self.vm, screen, actors)
+        {
+            Ok(())
+        } else {
+            Err("song replay capture is not active".into())
+        }
     }
 
     /// Apply the full preparation getter handoff in supplied order. This is
@@ -163,23 +183,37 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            let access = self.actors.perframe_access();
-            capture.sample_schedule(states, seconds, |index, target, value| {
-                if let Some(actor) = actors.get(index) {
-                    access
-                        .update_getter(&mut self.vm, *actor, target, value)
-                        .map_err(|e| e.to_string())?;
-                }
-                Ok(())
-            })
+            self.sample_rooted_song_overlay_schedule(screen, capture, &rooted, states, seconds)
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn sample_rooted_song_overlay_schedule(
+        &mut self,
+        screen: ActorScene,
+        capture: &SongOverlayFrameCapture,
+        actors: &RootedValues,
+        states: &mut [State],
+        seconds: f64,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        let access = self.actors.perframe_access();
+        capture.sample_schedule(states, seconds, |index, target, value| {
+            if let Some(actor) = actors.get(index) {
+                access
+                    .update_getter(&mut self.vm, *actor, target, value)
+                    .map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })
     }
 
     /// Consume the active replay's complete ordered publication batch. Actor
@@ -195,22 +229,40 @@ impl SongRuntime {
     ) -> Result<(), String> {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
-        let mut roots = Roots::default();
+        let mut rooted = RootedValues::default();
         let result = (|| {
             for actor in actors {
-                roots.keep(&mut self.vm, *actor)?;
+                rooted.push(&mut self.vm, *actor)?;
             }
-            let access = self.actors.perframe_access();
-            let mut source = Source {
-                runtime: self,
-                screen,
-                actors,
-                access,
-            };
-            capture.capture(&mut source, context, states, clock)
+            self.capture_rooted_song_overlay_frame(
+                screen, capture, &rooted, context, states, clock, false,
+            )
         })();
-        roots.clear(&mut self.vm)?;
+        rooted.release(&mut self.vm)?;
         result
+    }
+
+    pub(super) fn capture_rooted_song_overlay_frame(
+        &mut self,
+        screen: ActorScene,
+        capture: &mut SongOverlayFrameCapture,
+        actors: &RootedValues,
+        context: &SongLuaCompileContext,
+        states: SongFrameCaptureStates<'_>,
+        clock: SongFrameCaptureClock,
+        initialize_updates: bool,
+    ) -> Result<(), String> {
+        self.actor_scene_root(screen)
+            .ok_or("released or foreign song screen")?;
+        actors.validate(&self.vm)?;
+        let access = self.actors.perframe_access();
+        let mut source = Source {
+            runtime: self,
+            screen,
+            actors,
+            access,
+        };
+        capture.capture(&mut source, context, states, clock, initialize_updates)
     }
 }
 struct Source<'a> {
@@ -219,18 +271,200 @@ struct Source<'a> {
     actors: &'a [Value],
     access: Access,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Publications {
+        count: usize,
+        rows: Vec<(
+            usize,
+            Vec<frame_capture::ScheduledUpdate>,
+            Vec<(Target, Update)>,
+        )>,
+        fail: bool,
+    }
+    impl CaptureSource for Publications {
+        fn actor_count(&self) -> usize {
+            self.count
+        }
+        fn chronological(&self) -> bool {
+            true
+        }
+        fn drain(&mut self, visit: &mut CaptureVisitor<'_>) -> Result<(), String> {
+            for (index, scheduled, final_values) in &self.rows {
+                visit(*index, &[], scheduled, final_values, false, &mut || {
+                    Ok(false)
+                })?;
+                if self.fail {
+                    return Err("publication failed".into());
+                }
+            }
+            Ok(())
+        }
+        fn reset(&mut self, _: usize) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn tween(target: Target, value: f32) -> frame_capture::ScheduledUpdate {
+        frame_capture::ScheduledUpdate {
+            progress: None,
+            dispatch_seconds: None,
+            frame_advance: 0.,
+            initial_value: None,
+            delay_seconds: 0.,
+            duration_seconds: 1.,
+            easing: None,
+            opt1: None,
+            target,
+            value: Update::F32(value),
+        }
+    }
+
+    #[test]
+    fn replay_capture_keeps_completed_and_restored_states_across_sparse_publications() {
+        let context = SongLuaCompileContext::new(std::path::Path::new("."), "sparse capture");
+        let mut baseline = vec![State::default(); 3];
+        let mut states = baseline.clone();
+        for (state, x) in states.iter_mut().zip([10., 30., 50.]) {
+            state.x = x;
+        }
+        let mut updates = vec![
+            State {
+                x: -999.,
+                ..State::default()
+            };
+            3
+        ];
+        let mut capture = SongOverlayFrameCapture::default();
+        frame_capture::append_scheduled_overlay_updates(
+            &mut capture.scheduled,
+            &context,
+            &states,
+            0,
+            &[tween(Target::Y, 40.)],
+            0.,
+        );
+        let mut source = Publications {
+            count: 3,
+            rows: vec![
+                (0, vec![], vec![(Target::X, Update::F32(60.))]),
+                (0, vec![tween(Target::X, 100.)], vec![]),
+                (2, vec![tween(Target::X, 150.)], vec![]),
+            ],
+            fail: false,
+        };
+        let run = |source: &mut Publications,
+                   baseline: &[State],
+                   states: &mut [State],
+                   updates: &mut [State],
+                   capture: &mut SongOverlayFrameCapture,
+                   at: f64| {
+            let from = states.to_vec();
+            capture.capture(
+                source,
+                &context,
+                SongFrameCaptureStates {
+                    baseline,
+                    from: &from,
+                    update: updates,
+                    to: states,
+                    restored_indices: &[0],
+                },
+                SongFrameCaptureClock {
+                    prior_time: 0.,
+                    next_time: at as f32,
+                    next_seconds: at,
+                },
+                true,
+            )
+        };
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.,
+        )
+        .unwrap();
+        assert_eq!((states[0].x, states[0].y), (10., 40.));
+        assert_eq!((updates[0].x, updates[0].y), (60., 40.));
+        assert_eq!(capture.scheduled[0].from, Update::F32(60.));
+        assert_eq!(capture.scheduled[1].from, Update::F32(50.));
+
+        // A previously idle actor and a newly appended wrapper must initialize
+        // from this frame, without carrying another actor's scratch state.
+        states[1].x = 80.;
+        states.push(State {
+            x: 110.,
+            ..State::default()
+        });
+        baseline.push(State::default());
+        updates.push(State::default());
+        source.count = 4;
+        source.rows = vec![
+            (1, vec![tween(Target::X, 180.)], vec![]),
+            (3, vec![tween(Target::X, 220.)], vec![]),
+        ];
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.5,
+        )
+        .unwrap();
+        assert_eq!(capture.scheduled[2].from, Update::F32(80.));
+        assert_eq!(capture.scheduled[3].from, Update::F32(110.));
+
+        // A failed publication must not leave initialization flags live for
+        // the next capture, even when it touches the same actor again.
+        source.rows = vec![(1, vec![], vec![(Target::X, Update::F32(90.))])];
+        source.fail = true;
+        assert!(
+            run(
+                &mut source,
+                &baseline,
+                &mut states,
+                &mut updates,
+                &mut capture,
+                1.6
+            )
+            .is_err()
+        );
+        states[1].x = 123.;
+        source.rows = vec![(1, vec![tween(Target::Z, 250.)], vec![])];
+        source.fail = false;
+        run(
+            &mut source,
+            &baseline,
+            &mut states,
+            &mut updates,
+            &mut capture,
+            1.7,
+        )
+        .unwrap();
+        assert_eq!(updates[1].x, 123.);
+    }
+}
 impl CaptureSource for Source<'_> {
     fn actor_count(&self) -> usize {
         self.actors.len()
     }
     fn chronological(&self) -> bool {
-        self.runtime.actors.chronological_song_capture()
+        self.runtime
+            .actors
+            .chronological_song_capture(&self.runtime.vm)
     }
     fn drain(&mut self, visit: &mut CaptureVisitor<'_>) -> Result<(), String> {
         let frames = self
             .runtime
             .actors
-            .take_song_overlay_frame_updates(self.screen, true)
+            .take_song_overlay_frame_updates(&mut self.runtime.vm, self.screen, true)
             .ok_or("song replay capture is not active")?;
         let result = (|| {
             for frame in &frames {
@@ -255,9 +489,11 @@ impl CaptureSource for Source<'_> {
             Ok(())
         })();
         if result.is_err() {
-            self.runtime
-                .actors
-                .restore_song_overlay_updates(self.screen, frames);
+            self.runtime.actors.restore_song_overlay_updates(
+                &mut self.runtime.vm,
+                self.screen,
+                frames,
+            );
         }
         result
     }

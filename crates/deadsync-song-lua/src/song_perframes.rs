@@ -431,7 +431,9 @@ pub(super) fn apply_message_with_pose(
         }
     }
     if chronological && command.message == "__songlua_actor_startup" {
-        runtime.actors.apply_song_replay_pose(row.actor, &mut state);
+        runtime
+            .actors
+            .apply_song_replay_pose(&runtime.vm, row.actor, &mut state);
     }
     active.as_mut().unwrap().elapsed = Some(elapsed);
     if let Some(epoch) = crate::motion_restart_epoch(
@@ -441,6 +443,7 @@ pub(super) fn apply_message_with_pose(
         crate::song_elapsed_seconds_at(message.start, context),
     ) {
         access.motion(
+            &mut runtime.vm,
             row.actor,
             epoch,
             crate::song_elapsed_seconds_at(beat, context),

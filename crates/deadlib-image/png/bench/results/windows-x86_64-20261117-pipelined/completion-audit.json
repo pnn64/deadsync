@@ -1,0 +1,47 @@
+{
+  "objective": "Continue optimizing the dependency-free PNG decoder until faster/more optimized than Rust image/png in CPU cycles and allocations.",
+  "scope": "Buffered static PNG decoding on the recorded Windows x86-64 host, using the unchanged 89-image corpus and pinned reference versions. CPU comparisons describe corpus averages, not universal per-file or hardware guarantees.",
+  "external_production_dependencies": [],
+  "production_graph": [
+    "deadlib-image-png",
+    "deadlib-image (local shared storage)"
+  ],
+  "reference_versions": {
+    "png": "0.18.1",
+    "image": "0.25.10"
+  },
+  "required_cpu_evidence": "Both independent processes use fewer geometric-mean cycles and fewer total measured cycles than normalized png and image in every corpus group; overall packed-API cycles also lower in both processes.",
+  "cpu_evidence_passed": true,
+  "allocation_evidence": {
+    "images": 89,
+    "native_calls": 284,
+    "png_calls": 1057,
+    "image_calls": 1122,
+    "native_requested_bytes": 44093707,
+    "fewer_calls_and_requested_bytes_on_all_images": true
+  },
+  "validation": {
+    "suites": 43,
+    "passed": 161,
+    "ignored": 21,
+    "failed": 0
+  },
+  "portable_validation": {
+    "i686_windows_passed": 20,
+    "arm_library_compile": true,
+    "strict_clippy_both_workspaces": true
+  },
+  "asan": {
+    "executions": 200000,
+    "source_hashes_verified": true,
+    "native_feedback_isolation_verified": true,
+    "manifest_sha256": "0c724b81a8cfe2b240465e096429589a728057260b8e4c4cff2ce81aebd9570d"
+  },
+  "current_source_corpus_binary_and_retained_hashes_verified": true,
+  "remaining_required_work": [],
+  "limits": [
+    "Some individual images still use more CPU cycles.",
+    "Packed sub-byte output performs different expansion work.",
+    "Streaming/APNG throughput and other architectures were not timed."
+  ]
+}

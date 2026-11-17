@@ -82,6 +82,7 @@ impl Hooks {
             ..Self::default()
         }
     }
+    #[inline]
     pub fn preserve_popped(&mut self, registers: &[Value], end: usize) {
         if self.popped.is_empty() {
             return;

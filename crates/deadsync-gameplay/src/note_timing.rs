@@ -646,6 +646,40 @@ impl GameplayTimeToBeatCaches {
         .max(song_row)
     }
 
+    pub fn beat_tick_row_no_offset(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        music_time_ns: SongTimeNs,
+    ) -> i32 {
+        beat_tick_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            music_time_ns,
+            &mut self.assist,
+        )
+    }
+
+    pub fn beat_tick_future_row(
+        &mut self,
+        timing: &TimingData,
+        global_offset_seconds: f32,
+        audio_output_delay_seconds: f32,
+        music_time_ns: SongTimeNs,
+        slope: f32,
+        song_row: i32,
+    ) -> i32 {
+        let horizon = assist_lookahead_music_horizon_seconds(audio_output_delay_seconds, slope);
+
+        beat_tick_row_no_offset_cached(
+            timing,
+            global_offset_seconds,
+            song_time_ns_add_seconds(music_time_ns, horizon),
+            &mut self.assist_future,
+        )
+        .max(song_row)
+    }
+
     #[inline(always)]
     pub fn lane_search_rows(
         &mut self,
@@ -655,6 +689,29 @@ impl GameplayTimeToBeatCaches {
     ) -> LaneSearchRows {
         self.input[player].rows(timing, time_ns)
     }
+}
+
+#[inline(always)]
+fn beat_tick_row_no_offset_cached(
+    timing: &TimingData,
+    global_offset_seconds: f32,
+    music_time_ns: SongTimeNs,
+    cache: &mut BeatInfoCache,
+) -> i32 {
+    let target_time_ns = song_time_ns_add_seconds(music_time_ns, -global_offset_seconds);
+    let info = timing.get_beat_info_from_time_ns_cached(target_time_ns, cache);
+    if !info.beat.is_finite() {
+        return -1;
+    }
+
+    // Keep fractional-beat measure boundaries (e.g. 3/8). During a delay the
+    // displayed beat has arrived, but its tick is still in the future.
+    let row = if info.is_in_delay {
+        beat_to_note_row(info.beat).saturating_sub(1)
+    } else {
+        (info.beat * ROWS_PER_BEAT as f32).floor() as i32
+    };
+    row.max(-1)
 }
 
 #[inline(always)]
@@ -972,7 +1029,7 @@ pub fn assist_clap_schedule_update(
     assist_enabled: bool,
     timeline_reset: bool,
 ) -> AssistClapScheduleUpdate {
-    let song_row = song_row.max(0);
+    let song_row = song_row.max(-1);
     if !assist_enabled {
         return AssistClapScheduleUpdate {
             cursor: assist_clap_cursor_for_row(rows, song_row),
@@ -1096,6 +1153,77 @@ pub fn build_assist_clap_rows(notes: &[Note], note_range: (usize, usize)) -> Vec
     build_assist_clap_rows_with_capacity(notes, note_range, note_row_count(notes, note_range))
 }
 
+#[must_use]
+pub fn build_beat_tick_rows(timing: &TimingData, last_beat: f32) -> Vec<usize> {
+    if !last_beat.is_finite() || last_beat < 0.0 {
+        return Vec::new();
+    }
+
+    let max_row = (last_beat * ROWS_PER_BEAT as f32).floor() as i32;
+    let default_signature = [deadsync_rules::timing::default_time_signature()];
+    let signatures = timing.time_signature_segments();
+    let signatures = if signatures.is_empty() { &default_signature } else { signatures };
+    let mut rows = Vec::new();
+    let mut last_tick_time_ns = None;
+    let mut time_cache = BeatTimeCache::new(timing);
+    let cached_times = timing.supports_row_time_cache();
+    for (index, signature) in signatures.iter().enumerate() {
+        let start = i64::from(beat_to_note_row(signature.beat));
+        let end = signatures.get(index + 1)
+            .map_or(i64::from(max_row) + 1, |next| i64::from(beat_to_note_row(next.beat)))
+            .min(i64::from(max_row) + 1);
+        let rows_per_measure = signature.note_rows_per_measure();
+        let mut row = start.max(0);
+        while row < end {
+            let row_in_measure = (row - start) % rows_per_measure;
+            let remainder = row_in_measure % i64::from(ROWS_PER_BEAT);
+            if remainder == 0 {
+                let beat = note_row_to_beat(row as i32);
+                if !timing.is_warp_at_beat(beat) {
+                    let tick_time_ns = if cached_times {
+                        timing.get_time_for_beat_no_offset_ns_cached(beat, &mut time_cache)
+                    } else {
+                        timing.get_time_for_beat_no_offset_ns(beat)
+                    };
+                    if last_tick_time_ns.is_none_or(|previous| tick_time_ns > previous) {
+                        rows.push(row as usize);
+                        last_tick_time_ns = Some(tick_time_ns);
+                    }
+                }
+            }
+            // Native NoteRowToMeasureAndBeat counts quarter-note beats within
+            // each measure, restarting at every measure/signature boundary.
+            row += (i64::from(ROWS_PER_BEAT) - remainder)
+                .min(rows_per_measure - row_in_measure);
+        }
+    }
+    rows
+}
+
+#[must_use]
+pub fn beat_tick_sfx_for_row(timing: &TimingData, row: usize) -> &'static str {
+    let row = row.min(i32::MAX as usize) as i32;
+    let signatures = timing.time_signature_segments();
+    let index = signatures.partition_point(|signature| beat_to_note_row(signature.beat) <= row);
+    let default_signature = deadsync_rules::timing::default_time_signature();
+    let signature = if index == 0 { &default_signature } else { &signatures[index - 1] };
+    let row_in_measure = (i64::from(row) - i64::from(beat_to_note_row(signature.beat)))
+        % signature.note_rows_per_measure();
+    if row_in_measure == 0 { MEASURE_TICK_SFX_PATH } else { BEAT_TICK_SFX_PATH }
+}
+
+#[inline(always)]
+#[must_use]
+pub fn beat_tick_music_seconds_for_row(
+    timing: &TimingData,
+    row: usize,
+) -> Option<f64> {
+    let row = i32::try_from(row).ok()?;
+    let beat = note_row_to_beat(row);
+
+    Some(timing.get_time_for_beat_no_offset_ns(beat) as f64 * 1.0e-9)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayTimeBounds {
     pub first_judgable_second: f32,
@@ -1213,3 +1341,56 @@ fn build_note_count_stats_for_players(
     })
 }
 
+#[cfg(test)]
+mod beat_tick_tests {
+    use super::*;
+    use deadsync_rules::timing::WarpSegment;
+
+    #[test]
+    fn beat_ticks_follow_the_musical_grid_and_bpm_changes() {
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0), (4.0, 240.0)],
+            ..Default::default()
+        };
+
+        let timing = TimingData::from_segments(
+            0.0, 0.0, &segments, &[]
+        );
+
+        let rows = build_beat_tick_rows(&timing, 6.0);
+
+        assert_eq!(
+            rows,
+            vec![0, 48, 96, 144, 192, 240, 288]
+        );
+
+        // Beat 5 should occur 0.25 seconds after beat 4.
+        let time = beat_tick_music_seconds_for_row(&timing, 240)
+            .expect("valid beat tick row");
+
+        assert!((time - 2.25).abs() < 0.000001);
+    }
+
+    #[test]
+    fn beat_ticks_skip_warped_beats() {
+        let segments = TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            warps: vec![WarpSegment {
+                beat: 4.0,
+                length: 4.0,
+            }],
+            ..Default::default()
+        };
+
+        let timing = TimingData::from_segments(
+            0.0, 0.0, &segments, &[]
+        );
+
+        let rows = build_beat_tick_rows(&timing, 9.0);
+
+        assert_eq!(
+            rows,
+            vec![0, 48, 96, 144, 384, 432]
+        );
+    }
+}

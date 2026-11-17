@@ -5,6 +5,10 @@ use deadsync_song_lua::{
 };
 use std::{collections::HashMap, path::Path, sync::Arc};
 
+#[path = "../../../tests/support/allocations.rs"]
+#[expect(dead_code, reason = "only the scoped measurement is needed here")]
+mod allocations;
+
 fn slots(_: &Path, _: &Path, _: &Path) -> Result<Arc<[()]>, String> {
     Ok(Arc::from([]))
 }
@@ -271,6 +275,222 @@ fn frame(t: f64) -> SongLuaLiveFrame {
 }
 
 #[test]
+fn live_state_cache_observes_raw_additions_removals_and_nested_mutations() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "return Def.Quad{InitCommand=function(self) Q=self; self:x(701) end}",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "raw state cache fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    let run = |scene: &mut SongLiveScene, source: &str| {
+        scene
+            .runtime_mut()
+            .vm_mut()
+            .execute(&compile_named(source.as_bytes(), b"=raw state mutation").unwrap())
+            .unwrap();
+    };
+    let mut tick = 0;
+    let mut read = |scene: &mut SongLiveScene| {
+        tick += 1;
+        scene.update(frame(tick as f64 * 0.1)).unwrap();
+        *scene.states().iter().find(|state| state.x == 701.).unwrap()
+    };
+    let original = read(&mut scene);
+    for _ in 0..3 {
+        assert_eq!(read(&mut scene), original);
+    }
+    run(&mut scene, "Q.__songlua_state_z_bias=7");
+    assert_eq!(read(&mut scene).z_bias, 7.);
+    run(&mut scene, "Q.__songlua_state_z_bias=nil");
+    assert_eq!(read(&mut scene).z_bias, original.z_bias);
+    run(&mut scene, "Q.__songlua_state_shadow_len={2,3}");
+    assert_eq!(read(&mut scene).shadow_len, [2., 3.]);
+    run(&mut scene, "Q.__songlua_state_shadow_len[2]=9");
+    assert_eq!(read(&mut scene).shadow_len, [2., 9.]);
+    run(
+        &mut scene,
+        "Q.__songlua_state_shadow_len=nil; Q.__songlua_state_spin={baked=true,rotation={1,2,3}}",
+    );
+    assert!(read(&mut scene).spin_baked);
+    run(&mut scene, "Q.__songlua_state_spin.baked=false");
+    assert!(!read(&mut scene).spin_baked);
+    // The cached outer table must still run its nested authored lookups.
+    run(
+        &mut scene,
+        "spin_reads=0; Q.__songlua_state_spin=setmetatable({}, {__index=function(_,k) if k=='baked' then spin_reads=spin_reads+1; return true end; return {4,5,6} end})",
+    );
+    assert!(read(&mut scene).spin_baked);
+    run(&mut scene, "assert(spin_reads>0); spin_reads=0");
+    assert!(read(&mut scene).spin_baked);
+    run(
+        &mut scene,
+        "assert(spin_reads>0); Q.__songlua_state_spin=nil",
+    );
+    assert!(!read(&mut scene).spin_baked);
+    // An earlier Sprite lookup can introduce an override in the same read.
+    run(
+        &mut scene,
+        "old_meta=getmetatable(Q); Q.__songlua_actor_type='Sprite'; Q.__songlua_state_sprite_texture=nil; setmetatable(Q,{__index=function(self,k) if k=='Texture' then rawset(self,'__songlua_state_z_bias',11); return nil end; local index=old_meta.__index; if type(index)=='function' then return index(self,k) end; return index[k] end})",
+    );
+    assert_eq!(read(&mut scene).z_bias, 11.);
+    run(
+        &mut scene,
+        "setmetatable(Q,old_meta); Q.__songlua_actor_type='Quad'; Q.__songlua_state_z_bias=nil",
+    );
+    assert_eq!(read(&mut scene).z_bias, original.z_bias);
+    run(&mut scene, "Q.__songlua_state_z_bias={}");
+    assert!(scene.update(frame(2.)).is_err());
+    run(
+        &mut scene,
+        "Q.__songlua_state_z_bias=nil; Q.__songlua_state_spin=false",
+    );
+    assert!(scene.update(frame(2.1)).is_err());
+    run(&mut scene, "Q.__songlua_state_spin=nil");
+    scene.update(frame(2.2)).unwrap();
+    assert_eq!(
+        scene
+            .states()
+            .iter()
+            .find(|state| state.x == 701.)
+            .unwrap()
+            .z_bias,
+        original.z_bias
+    );
+    scene.end().unwrap();
+}
+
+#[test]
+#[ignore = "actor snapshot benchmark; run alone in release with --nocapture"]
+fn benchmark_live_actor_snapshots() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "local t=Def.ActorFrame{}; for i=1,512 do t[#t+1]=Def.Quad{} end; return t",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot benchmark");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    let mut tick = 0;
+    let mut update = || {
+        tick += 1;
+        std::hint::black_box(scene.update(frame(tick as f64 / 60.)).unwrap());
+    };
+    for _ in 0..8 {
+        update();
+    }
+    for round in 0..5 {
+        let start = std::time::Instant::now();
+        for _ in 0..300 {
+            update();
+        }
+        println!(
+            "snapshot benchmark,{round},{}",
+            start.elapsed().as_secs_f64()
+        );
+    }
+    scene.end().unwrap();
+}
+
+#[test]
+fn steady_state_updates_reuse_actor_snapshot_storage() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "local t=Def.ActorFrame{}; for i=1,128 do t[#t+1]=Def.Quad{} end; return t",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot allocation fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    for i in 1..=4 {
+        scene.update(frame(i as f64 * 0.1)).unwrap();
+    }
+    let bytes_per_snapshot =
+        scene.states().len() * std::mem::size_of::<song::SongLuaOverlayState>();
+    for i in 5..=8 {
+        let (_, churn) = allocations::measure(|| scene.update(frame(i as f64 * 0.1)).unwrap());
+        println!("snapshot update: {churn:?}; full snapshot: {bytes_per_snapshot} bytes");
+        assert!(
+            churn.allocated_bytes < bytes_per_snapshot,
+            "steady update allocated at least another full actor snapshot ({bytes_per_snapshot} bytes): {churn:?}"
+        );
+    }
+    scene.end().unwrap();
+}
+
+#[test]
+fn failed_state_read_preserves_both_snapshots_and_can_recover() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(
+        &path,
+        "return Def.ActorFrame{Def.Quad{InitCommand=function(self) A=self end}, Def.Quad{InitCommand=function(self) B=self end}}",
+    )
+    .unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "snapshot error fixture");
+    context.live = true;
+    let mut scene = rust_scene(&context, &[&path]);
+    scene.update(frame(0.1)).unwrap();
+    let states = scene.states().to_vec();
+    let tracked: Vec<_> = scene.tracked_states().map(|(_, state)| state).collect();
+    scene
+        .runtime_mut()
+        .vm_mut()
+        .execute(
+            &compile_named(
+                br#"
+        A:x(123)
+        old_meta=getmetatable(B)
+        rawset(B,'__songlua_actor_type','Sprite')
+        rawset(B,'__songlua_state_sprite_texture',nil)
+        setmetatable(B,{__index=function(self,key)
+            if key=='Texture' then error('snapshot read failed') end
+            local index=old_meta.__index
+            if type(index)=='function' then return index(self,key) end
+            return index[key]
+        end})
+    "#,
+                b"=snapshot failure",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let error = scene.update(frame(0.2)).unwrap_err();
+    assert!(
+        error.to_string().contains("snapshot read failed"),
+        "{error}"
+    );
+    assert_eq!(scene.states(), states);
+    assert_eq!(
+        scene.tracked_states().map(|(_, state)| state).collect::<Vec<_>>(),
+        tracked
+    );
+    scene
+        .runtime_mut()
+        .vm_mut()
+        .execute(
+            &compile_named(
+                b"setmetatable(B,old_meta);rawset(B,'__songlua_actor_type','Quad')",
+                b"=snapshot recovery",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    scene.update(frame(0.3)).unwrap();
+    assert!(scene.states().iter().any(|state| state.x == 123.));
+    assert_ne!(scene.states(), states);
+    assert_eq!(scene.tracked_states().count(), tracked.len());
+    scene.end().unwrap();
+}
+
+#[test]
 fn retained_scene_update_prepare_draw_end_and_owned_render_states_match() {
     let mut p = Pair::new(&[SOURCE], |_| {});
     p.run("collectgarbage('collect');collectgarbage('collect')");
@@ -445,6 +665,43 @@ fn original_startup_request_fixture_retains_the_native_reload_limit() {
         Err(e) => e,
     };
     assert!(error.contains("128 startup gameplay reloads"));
+}
+
+#[test]
+fn startup_join_reloads_both_player_trees_in_the_same_vm() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("default.lua");
+    std::fs::write(&path, r#"
+        loads=(loads or 0)+1
+        return Def.Actor {
+            PlayerJoinedMessageCommand=function(self,params)
+                assert(params.Player==PLAYER_2); joined=true
+            end,
+            OnCommand=function(self)
+                if not GAMESTATE:IsSideJoined(PLAYER_2) then
+                    GAMESTATE:JoinPlayer(PLAYER_2)
+                    assert(joined)
+                    SCREENMAN:SetNewScreen('ScreenGameplay')
+                else
+                    assert(loads==2 and #GAMESTATE:GetEnabledPlayers()==2)
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP1'))
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP2'))
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP1'):GetX()==160)
+                    assert(SCREENMAN:GetTopScreen():GetChild('PlayerP2'):GetX()==480)
+                    assert(GetNotefieldX(PLAYER_1)==160 and GetNotefieldX(PLAYER_2)==480)
+                end
+            end
+        }
+    "#).unwrap();
+    let mut context = SongLuaCompileContext::new(directory.path(), "join and reload");
+    context.live = true;
+    context.players[1].enabled = false;
+    context.versus_player_screen_x = Some([160.0, 480.0]);
+    let output = song::compile_song_lua_layers(
+        &[&path], 0, &context, Default::default(), slots, layer, |_, _| None,
+    ).unwrap();
+    assert_eq!(output[0].loaded_players, Some([true, true]));
+    assert_eq!(output[0].loaded_style.as_deref(), Some("versus"));
 }
 
 #[test]

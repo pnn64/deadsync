@@ -253,7 +253,9 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
     let mut palette = Vec::new();
     let mut transparency = None;
     let mut ancillary = Vec::new();
-    let mut compressed = Vec::new();
+    let mut compressed_start = &[][..];
+    let mut compressed_wire_len = 0;
+    let mut compressed_bytes = 0;
     let mut metadata_bytes = 0usize;
     let mut seen_data = false;
     let mut ended_data = false;
@@ -263,6 +265,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         if count > limits.max_chunks {
             return Err(Error::LimitExceeded);
         }
+        let chunk_start = input;
         let (kind, data) = chunk(&mut input)?;
         if seen_data && &kind != b"IDAT" {
             ended_data = true;
@@ -312,13 +315,14 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
                 }
                 if !seen_data {
                     animation_decoder.before_default()?;
+                    compressed_start = chunk_start;
                 }
                 if header.color == ColorType::Indexed && palette.is_empty() {
                     return Err(Error::Invalid("missing PLTE"));
                 }
                 seen_data = true;
-                reserve(&mut compressed, data.len())?;
-                compressed.extend_from_slice(data);
+                compressed_wire_len = compressed_start.len() - input.len();
+                compressed_bytes += data.len();
             }
             b"IEND" => {
                 if !data.is_empty() || !seen_data {
@@ -353,9 +357,13 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
             }
         }
     }
-    crate::metadata::validate(&ancillary, header, palette.len(), limits)?;
+    crate::metadata::validate_only(&ancillary, header, palette.len(), limits)?;
     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
-    let (raw, _) = zlib::decompress_prefix(&compressed, expected)?;
+    let raw = zlib::decompress_idat(
+        &compressed_start[..compressed_wire_len],
+        compressed_bytes,
+        expected,
+    )?;
     if raw.len() != expected {
         return Err(Error::Invalid("image data length"));
     }

@@ -86,27 +86,24 @@ impl Actors {
 }
 fn player_field(call: &mut HostCall<'_>, actor: TableId) -> Result<Value, Error> {
     if call.raw_table_len(actor)? == 0 {
-        let key = call.try_intern(b"__songlua_children")?;
+        let key = call.intern_static(b"__songlua_children")?;
         let children = call.raw_table_get(actor, key)?;
         if children != Value::Nil {
             return with_table(call, children, |call, children| {
-                let key = call.try_intern(b"NoteField")?;
+                let key = call.intern_static(b"NoteField")?;
                 call.raw_table_get(children.unwrap(), key)
             });
         }
     }
-    let children = native_children::named_children(call, actor)?;
-    call.with_roots(&[children], |call| {
-        super::super::field(call, children, "NoteField")
-    })
+    native_children::named_child(call, actor, b"NoteField")
 }
-fn field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<Value, Error> {
+fn field(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<Value, Error> {
     sprites::field(call, owner, key)
 }
 fn float_field(
     call: &mut HostCall<'_>,
     owner: TableId,
-    key: &str,
+    key: &'static str,
     default: Option<f32>,
 ) -> Result<f32, Error> {
     let value = field(call, owner, key)?;
@@ -117,7 +114,11 @@ fn float_field(
     }
     numeric(call, value, Numeric::Float).map(|n| n as f32)
 }
-fn unsigned_field(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<usize, Error> {
+fn unsigned_field(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: &'static str,
+) -> Result<usize, Error> {
     let value = field(call, owner, key)?;
     numeric(call, value, Numeric::Unsigned).map(|n| n as usize)
 }
@@ -204,7 +205,7 @@ fn points_match(points: &[[f32; 3]], coefficients: &[[[f32; 4]; 3]]) -> bool {
 fn read_position(
     call: &mut HostCall<'_>,
     column: TableId,
-    key: &str,
+    key: &'static str,
     previous: Option<&Spline>,
     scratch: &mut Scratch,
 ) -> Result<Option<Spline>, Error> {

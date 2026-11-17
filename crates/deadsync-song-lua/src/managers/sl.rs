@@ -67,7 +67,7 @@ fn noop(_: &mut HostCall<'_>) -> Result<(), Error> {
     Ok(())
 }
 fn logo(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let text = call.try_intern(b"Logo.png")?;
+    let text = call.intern_static(b"Logo.png")?;
     call.push(text)
 }
 fn create_sl_srpg9(call: &mut HostCall<'_>) -> Result<TableId, Error> {
@@ -502,7 +502,7 @@ fn create_sl_preferences(call: &mut HostCall<'_>, mode: &str) -> Result<TableId,
                     if !matches!(get, Value::Function(_) | Value::Native(_)) {
                         return Err(call.error(b"theme preference getter must be a function"));
                     }
-                    let key = call.try_intern(b"RescoreEarlyHits")?;
+                    let key = call.intern_static(b"RescoreEarlyHits")?;
                     let result = call
                         .call(get, &[key])?
                         .first()
@@ -633,7 +633,7 @@ fn init_streams(call: &mut HostCall<'_>, streams: Value) -> Result<(), Error> {
     }
     for &name in STREAM_STRINGS {
         if get(call, streams, name)? == Value::Nil {
-            let value = call.try_intern(b"")?;
+            let value = call.intern_static(b"")?;
             assign(call, streams, name, value)?;
         }
     }

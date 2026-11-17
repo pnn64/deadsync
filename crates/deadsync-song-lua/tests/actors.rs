@@ -24,7 +24,7 @@ fn instantiate(runtime: &mut SongRuntime, source: &str) -> ActorScene {
     runtime.vm_mut().set_global(b"root", root).unwrap();
     scene
 }
-fn assert_clean(runtime: &SongRuntime) {
+fn assert_clean(runtime: &mut SongRuntime) {
     assert_eq!(runtime.take_actor_diagnostics(), Vec::<String>::new());
 }
 
@@ -36,9 +36,9 @@ enum Observation {
     Bytes(Vec<u8>),
 }
 
-// Run the same declaration and probe through the actual production constructor
-// and the Rust adapter. Assertions inside probes must pass on both engines;
-// the returned observations also catch otherwise unnoticed ordering changes.
+// Run declarations and probes through the Rust adapter against fixed regression
+// observations. The shared native-actor-parity control separately records the
+// duplicate-group assertions executed by the pinned ITGmania engine.
 fn compare_scene(definition: &str, probe: &str) {
     let mut rust = runtime();
     instantiate(&mut rust, definition);
@@ -397,7 +397,7 @@ fn lifecycle_nonterminating_queue_limit_and_recovery_match_production() {
         rust.actor_scene_snapshot(scene).unwrap()[0].position[0],
         5.0
     );
-    assert_clean(&rust);
+    assert_clean(&mut rust);
 }
 
 #[test]
@@ -423,7 +423,7 @@ fn lifecycle_fatal_callback_limits_restore_scope_and_allow_recovery() {
         rust.actor_scene_snapshot(scene).unwrap()[0].position[0],
         7.5
     );
-    assert_clean(&rust);
+    assert_clean(&mut rust);
 }
 
 #[test]
@@ -518,7 +518,7 @@ fn instances_are_distinct_and_child_first_init_observes_native_loading_order() {
     assert_eq!(state.len(), 4);
     assert_eq!(state[0].children, vec![2, 3, 1]);
     assert_eq!(state[2].parent, Some(0));
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -539,7 +539,7 @@ fn full_declaration_snapshot_precedes_init_and_preserves_shared_callback_upvalue
         &mut r,
         "local g=root:GetChild('before');assert(#g==2 and g[1]:getaux()==1 and g[2]:getaux()==2 and root:GetChild('after')==nil)",
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -571,7 +571,7 @@ fn commands_propagate_in_sorted_order_and_preserve_parameter_identity() {
         assert(table.concat(log,',')=='leaf')
     "#,
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -596,11 +596,11 @@ fn named_children_commands_use_each_childs_handler_and_include_empty_frames_as_l
         assert(not pcall(ActorFrame.GetChild,root:GetChild('leaf'),'x'))
     "#,
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
-fn duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results() {
+fn duplicate_child_groups_capture_class_methods_and_forward_open_results() {
     let mut r = runtime();
     instantiate(
         &mut r,
@@ -608,20 +608,13 @@ fn duplicate_child_groups_are_snapshots_with_instance_lookup_and_open_results() 
     );
     execute(
         &mut r,
-        r#"
-        local g=root:GetChild('same'); assert(#g==2 and g~=root:GetChild('same'))
-        assert(g:x(17)==g[2] and g[1]:GetX()==0 and g[2]:GetX()==17)
-        local getx=g.GetX; g[3]=g[1]; assert(getx(g)==0 and g['3']==nil)
-        g[2].GetX=function()return 999 end
-        assert(root:GetChild('same'):GetX()==999)
-        Actor.multi=function(self,...)return self,... end
-        local t={}; local a,b,c,d=root:GetChildren().same:multi(t,nil,42)
-        assert(a==g[2] and b==t and c==nil and d==42)
-        assert(select('#',root:GetChild('same'):multi(nil))==2)
-        g[1]:name('changed');assert(root:GetChild('changed')==g[1] and root:GetChild('same')==g[2])
-    "#,
+        concat!(
+            "local probe=(function() ",
+            include_str!("../../../tests/fixtures/regression-expectations/song-lua/duplicate-child-forwarding.lua"),
+            " end)(); probe(root)"
+        ),
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -646,7 +639,7 @@ fn scene_ownership_survives_gc_and_release_invalidates_methods_without_leaking_c
         &mut r,
         "assert(not pcall(saved.GetName,saved));saved=nil;collectgarbage();collectgarbage();assert(weak[1]==nil and weak[2]==nil)",
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -681,7 +674,7 @@ fn failed_build_releases_partial_instances_and_later_scenes_remain_usable() {
     let mut other = runtime();
     assert!(!other.release_actor_scene(scene).unwrap());
     execute(&mut r, "assert(root:GetName()=='healthy')");
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -695,7 +688,7 @@ fn authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort(
         &mut r,
         "assert(not pcall(root.playcommand,root,'Probe'));assert(root:GetChildren()['']:GetX()==0)",
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
     execute(
         &mut r,
         r#"
@@ -719,7 +712,7 @@ fn authored_command_errors_propagate_theme_errors_report_and_fatal_limits_abort(
         &mut r,
         "assert(__songlua_script_dir=='caller');assert(root:GetNumChildren()==1);root.ForeverCommand=function(self)self:aux(17)end;root:playcommand('Forever');assert(root:getaux()==17)",
     );
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]
@@ -803,7 +796,7 @@ fn production_child_groups_class_hooks_and_visibility_coercions() {
         local log={}
         assert(g:x(17)==g[2] and g[1]:GetX()==0 and g[2]:GetX()==17)
         local getx=g.GetX;g[3]=g[1];assert(getx(g)==0 and g['3']==nil)
-        g[2].GetX=function()return 999 end;assert(root:GetChild('same'):GetX()==999)
+        g[2].GetX=function()return 999 end;assert(root:GetChild('same'):GetX()==17)
         Actor.multi=function(self,...)return self,...end
         local t={};local a,b,c,d=root:GetChildren().same:multi(t,nil,42)
         assert(a==g[2] and b==t and c==nil and d==42)
@@ -845,7 +838,7 @@ fn scalar_methods_preserve_native_float_rounding_and_lua_fields_do_not_alias_sta
     let s = &r.actor_scene_snapshot(scene).unwrap()[0];
     assert_eq!(s.draw_order, 16777217);
     assert_eq!(s.position[0], 3.);
-    assert_clean(&r);
+    assert_clean(&mut r);
 }
 
 #[test]

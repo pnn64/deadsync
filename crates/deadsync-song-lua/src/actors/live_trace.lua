@@ -9,6 +9,21 @@ remember(song, 'Song', songdir)
 remember(stage, 'StageStats', 'stage:current')
 remember(style, 'Style', style:GetName())
 hook(style, 'Style', 'GetName')
+-- JoinPlayer and SetCurrentStyle can replace the style within a scene.
+-- Register that new object's identity before encoding the getter's result.
+-- Read owned metadata so observation never invokes an authored GetName override.
+if not gs.__songlua_observed_style_getter then
+    local get_style = gs.GetCurrentStyle
+    gs.__songlua_class_methods.GetCurrentStyle = function(...)
+        local value = get_style(...)
+        if value then
+            remember(value, 'Style', rawget(value, '__songlua_style_key'))
+            hook(value, 'Style', 'GetName')
+        end
+        return value
+    end
+    gs.__songlua_observed_style_getter = true
+end
 for player=0,1 do
     local state=gs:GetPlayerState(player)
     local path='player-state:PlayerNumber_P'..(player+1)
@@ -41,6 +56,12 @@ for index,player in ipairs(stage.__songlua_player_stats) do
     hook(player, 'PlayerStageStats', 'GetPossibleDancePoints')
     hook(player, 'PlayerStageStats', 'GetCurrentPossibleDancePoints')
 end
+-- The shared scorekeeper is a separate PlayerStageStats owner. Its native
+-- point getters emit the same observations as the participant getters.
+local routine = stage:GetRoutineStageStats()
+remember(routine, 'PlayerStageStats', 'stage:current/routine')
+hook(routine, 'PlayerStageStats', 'GetPossibleDancePoints')
+hook(routine, 'PlayerStageStats', 'GetCurrentPossibleDancePoints')
 for _,name in ipairs{'GetCurrentSong','GetCurrentSteps','GetCurrentStyle','GetPlayerState',
     'GetSongBeat','IsPlayerEnabled','SetCurrentSteps','GetSongOptionsObject'} do
     hook(gs, 'GameState', name)

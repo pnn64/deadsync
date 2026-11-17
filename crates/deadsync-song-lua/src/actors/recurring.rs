@@ -11,13 +11,12 @@ pub(super) struct State {
 
 fn invoke(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     command: &[u8],
     queued: Option<f32>,
 ) -> Result<(), Error> {
     let (prior, prior_clock) = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let prior_clock = if let Some(remaining) = queued {
             guard.replay_clock.as_mut().and_then(|clock| {
                 clock.reset(actor);
@@ -53,10 +52,10 @@ fn invoke(
         song_replay::raw_set(call, actor, "__songlua_capture_opt2", Value::Nil)?;
         // This scheduler invokes the actor's own named command. ActorFrame's
         // recursive PlayCommand dispatch is a separate queue path.
-        run_named(call, store, actor, command, None)?;
-        song_pose::advance_position(call, store, actor)
+        run_named(call, actor, command, None)?;
+        song_pose::advance_position(call, actor)
     })();
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     guard.replay_dispatch = prior;
     if let Some(clock) = &mut guard.replay_clock {
         clock.dispatch = prior_clock;
@@ -70,27 +69,17 @@ fn invoke(
         .unwrap()
         .recurring;
     recurring.running = false;
-    drop(guard);
     match result {
-        Err(error) => diagnostics::report(
-            call,
-            store,
-            actor,
-            diagnostics::Callback::Command(command),
-            error,
-        ),
+        Err(error) => {
+            diagnostics::report(call, actor, diagnostics::Callback::Command(command), error)
+        }
         Ok(()) => Ok(()),
     }
 }
 
-pub(super) fn advance(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    delta: f32,
-) -> Result<(), Error> {
+pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
     let (command, mut interval, mut left) = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.replay_frame.is_none()
             || guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
         {
@@ -116,7 +105,7 @@ pub(super) fn advance(
     // The native zero-interval branch runs once per active update, including
     // a zero or negative delta, and carries no queued publication scope.
     if interval <= f64::EPSILON {
-        return invoke(call, store, actor, &command, None);
+        return invoke(call, actor, &command, None);
     }
     let mut delta = delta.max(0.);
     let mut runs = 0;
@@ -129,9 +118,9 @@ pub(super) fn advance(
                 break;
             }
         }
-        invoke(call, store, actor, &command, Some(delta))?;
+        invoke(call, actor, &command, Some(delta))?;
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             let recurring = &mut guard
                 .actors
                 .get_mut(&actor)
@@ -152,9 +141,7 @@ pub(super) fn advance(
         }
         left = interval as f32;
     }
-    store
-        .lock()
-        .unwrap()
+    call.store()
         .actors
         .get_mut(&actor)
         .unwrap()

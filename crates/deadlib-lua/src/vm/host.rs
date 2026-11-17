@@ -53,10 +53,86 @@ impl Action<'_> {
 /// VM; its Lua finalizers are skipped because execution was interrupted.
 pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 
+/// A pure fast path for a host function installed as an `__index` handler.
+///
+/// The interpreter calls the resolver with the table whose metatable holds the
+/// handler and the key that table lacks. `Some(value)` is the result of the
+/// index operation and the handler is not called; `None` calls the handler.
+/// A resolver must return `Some` only where the handler would return the same
+/// value with no other effect, because the two are used interchangeably: the
+/// handler still answers whenever a debug hook or instruction limit is active.
+///
+/// A resolver reads through [`IndexView`], so it cannot allocate, raise an
+/// error, run Lua or change any table.
+pub type IndexResolver = fn(&IndexView<'_>, TableId, Value) -> Option<Value>;
+
+/// Read-only access to VM tables for an [`IndexResolver`].
+pub struct IndexView<'a> {
+    tables: &'a Arena<Table>,
+    strings: &'a Arena<ByteString>,
+    index_name: StringId,
+    captures: &'a [Value],
+    data: Option<&'a (dyn Any + Send + Sync)>,
+}
+impl<'a> IndexView<'a> {
+    pub(super) fn new(
+        tables: &'a Arena<Table>,
+        strings: &'a Arena<ByteString>,
+        index_name: StringId,
+        captures: &'a [Value],
+        data: Option<&'a (dyn Any + Send + Sync)>,
+    ) -> Self {
+        Self {
+            tables,
+            strings,
+            index_name,
+            captures,
+            data,
+        }
+    }
+
+    /// The handler's captured values, which the collector keeps alive.
+    pub fn captures(&self) -> &'a [Value] {
+        self.captures
+    }
+
+    /// The handler's private binding data, if it has data of type `T`.
+    pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&'a T> {
+        self.data?.downcast_ref()
+    }
+
+    /// The bytes of a live string.
+    pub fn string_bytes(&self, id: StringId) -> Option<&'a [u8]> {
+        self.strings.get(id.0).map(AsRef::as_ref)
+    }
+
+    /// Read a table without consulting metatables. A collected table reads as empty.
+    pub fn raw_get(&self, table: TableId, key: Value) -> Value {
+        self.tables
+            .get(table.0)
+            .map_or(Value::Nil, |table| table.get(key))
+    }
+
+    /// Read `table[key]` through table-valued `__index` handlers only.
+    ///
+    /// Returns `None` where Lua would call a function handler, including
+    /// another resolver's handler, or for a collected table.
+    pub fn get(&self, table: TableId, key: Value) -> Option<Value> {
+        let entries = self.tables.get(table.0)?;
+        match (entries.get(key), entries.metatable()) {
+            (Value::Nil, Some(metatable)) => {
+                simple::inherited(self.tables, self.index_name, None, table, metatable, key)
+            }
+            (value, _) => Some(value),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct Function {
     callback: HostFunction,
     data: Option<Shared<dyn Any + Send + Sync>>,
+    resolver: Option<IndexResolver>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,6 +144,12 @@ impl std::fmt::Debug for Function {
 impl Function {
     pub(super) fn heap_bytes(&self) -> usize {
         self.data.as_ref().map_or(0, Shared::heap_bytes)
+    }
+    pub(super) fn resolver(&self) -> Option<IndexResolver> {
+        self.resolver
+    }
+    pub(super) fn data(&self) -> Option<&(dyn Any + Send + Sync)> {
+        self.data.as_deref()
     }
 }
 
@@ -224,11 +306,75 @@ impl Vm {
         data: Option<Shared<dyn Any + Send + Sync>>,
     ) -> Result<Value, Error> {
         self.validate_host_captures(captures)?;
-        let function = Function { callback, data };
+        let function = Function {
+            callback,
+            data,
+            resolver: None,
+        };
         let bytes = function.heap_bytes();
         let value = self.new_native(threads::NativeKind::Host(function), captures)?;
         self.native_closures.note_alloc(bytes);
         Ok(value)
+    }
+
+    /// Attach a pure fast path to a host function used as an `__index` handler.
+    ///
+    /// With no debug hook and no instruction limit active, an index operation
+    /// that reaches `function` as its handler asks `resolver` first and calls
+    /// the handler only when the resolver returns `None`. See
+    /// [`IndexResolver`] for the contract between the two. The resolver reads
+    /// the function's captures and binding data, so keep every value it uses
+    /// there.
+    ///
+    /// ```
+    /// use deadlib_lua::{Error, HostCall, IndexView, TableId, Value, Vm, compile};
+    /// // The handler reads fields from its captured class table.
+    /// fn index(call: &mut HostCall<'_>) -> Result<(), Error> {
+    ///     let value = call.table_get(call.captures()[0], call.arguments()[1])?;
+    ///     call.push(value)
+    /// }
+    /// // Plain fields of that class need no call at all.
+    /// fn resolve(view: &IndexView<'_>, _: TableId, key: Value) -> Option<Value> {
+    ///     let Value::Table(class) = view.captures()[0] else { return None };
+    ///     view.get(class, key)
+    /// }
+    /// let mut vm = Vm::new();
+    /// let class = vm.execute(&compile(b"return {answer = 42}")?)?[0];
+    /// let handler = vm.new_host_function(index, &[class])?;
+    /// vm.set_index_resolver(handler, resolve)?;
+    /// vm.set_global(b"handler", handler)?;
+    /// let program = compile(b"return setmetatable({}, {__index = handler}).answer")?;
+    /// assert_eq!(vm.execute(&program)?, &[Value::Number(42.0)]);
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function of this VM.
+    pub fn set_index_resolver(
+        &mut self,
+        function: Value,
+        resolver: IndexResolver,
+    ) -> Result<(), Error> {
+        self.validate_value(function)?;
+        let Value::Native(id) = function else {
+            return Err(Error::new(ErrorKind::Runtime, 0, "host function expected"));
+        };
+        match self.native_closures.get_mut(id).map(|f| &mut f.kind) {
+            Some(threads::NativeKind::Host(function)) => {
+                function.resolver = Some(resolver);
+                Ok(())
+            }
+            _ => Err(Error::new(ErrorKind::Runtime, 0, "host function expected")),
+        }
+    }
+
+    // Host-initiated reads may use resolvers under the interpreter's condition:
+    // nothing is installed that could observe or count the skipped handler call.
+    fn index_resolvers(&self) -> Option<simple::Resolvers<'_>> {
+        (self.hooks.mask == 0 && self.budget.is_none()).then_some(simple::Resolvers {
+            natives: &self.native_closures,
+            strings: &self.strings.bytes,
+        })
     }
 
     fn validate_host_captures(&self, captures: &[Value]) -> Result<(), Error> {
@@ -473,6 +619,16 @@ impl Vm {
     }
 }
 
+// The handles of one `HostCall::with_roots` scope. Nearly every scope holds
+// a value or two, so those stay on the Rust stack.
+struct RootScope {
+    few: [Option<Root>; Self::FEW],
+    many: Option<Buffer<Root>>,
+}
+impl RootScope {
+    const FEW: usize = 4;
+}
+
 impl HostCall<'_> {
     /// Event being delivered by an external native hook, without a Lua call frame.
     pub fn hook_event(&self) -> Option<NativeHookEvent> {
@@ -608,6 +764,8 @@ impl HostCall<'_> {
                 (Value::Nil, Some(metatable)) => simple::inherited(
                     &self.vm.tables,
                     self.vm.meta_names[Meta::Index as usize],
+                    self.vm.index_resolvers().as_ref(),
+                    id,
                     metatable,
                     key,
                 ),
@@ -939,6 +1097,15 @@ impl HostCall<'_> {
         self.vm.try_intern(bytes)
     }
 
+    /// Intern a literal, finding it again by its address. See [`Vm::intern_static`].
+    ///
+    /// # Errors
+    /// Returns the fixed Lua memory error if the string cannot be stored.
+    #[inline]
+    pub fn intern_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        self.vm.intern_static(bytes)
+    }
+
     /// Borrow the bytes of a live string in this VM.
     pub fn string_bytes(&self, id: StringId) -> Option<&[u8]> {
         self.vm.string_bytes(id)
@@ -990,6 +1157,19 @@ impl HostCall<'_> {
             .new_host_function_with_data(callback, captures, data)
     }
 
+    /// Give a host function a pure fast path as an `__index` handler, from
+    /// inside a host call. See [`Vm::set_index_resolver`].
+    ///
+    /// # Errors
+    /// Returns an error if `function` is not a live host function of this VM.
+    pub fn set_index_resolver(
+        &mut self,
+        function: Value,
+        resolver: IndexResolver,
+    ) -> Result<(), Error> {
+        self.vm.set_index_resolver(function, resolver)
+    }
+
     /// Keep temporary values alive across nested calls for the duration of `run`.
     ///
     /// Roots are released on both success and error, including partial setup
@@ -1000,22 +1180,41 @@ impl HostCall<'_> {
         values: &[Value],
         run: impl FnOnce(&mut Self) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let mut scope = RootScope {
+            few: [None; RootScope::FEW],
+            many: None,
+        };
+        let result = self.pin_scope(values, &mut scope).and_then(|()| run(self));
+        self.unpin_scope(&scope);
+        result
+    }
+    // Pinning stops at the first invalid value; `unpin_scope` releases the rest.
+    fn pin_scope(&mut self, values: &[Value], scope: &mut RootScope) -> Result<(), Error> {
+        if values.len() <= RootScope::FEW {
+            for (root, &value) in scope.few.iter_mut().zip(values) {
+                *root = Some(self.vm.pin(value)?);
+            }
+            return Ok(());
+        }
         let mut roots = Buffer::new_in(self.vm.roots.memory().clone());
         roots
             .try_reserve(values.len())
             .map_err(|_| self.vm.memory_failure())?;
-        let result = (|| {
-            for &value in values {
-                roots.push(self.vm.pin(value)?);
-            }
-            run(self)
-        })();
-        for root in roots.iter().copied() {
-            // These handles are private to this scope, so user code cannot
-            // unpin them while `run` is active.
-            self.vm.unpin(root).expect("temporary host root");
+        let roots = scope.many.insert(roots);
+        for &value in values {
+            roots.push(self.vm.pin(value)?);
         }
-        result
+        Ok(())
+    }
+    fn unpin_scope(&mut self, scope: &RootScope) {
+        // These handles are private to their scope, so user code cannot unpin
+        // them while it is active.
+        for root in scope.few.iter().flatten() {
+            self.vm.unpin(*root).expect("temporary host root");
+        }
+        for root in scope.many.iter().flat_map(|roots| roots.iter()) {
+            self.vm.unpin(*root).expect("temporary host root");
+        }
     }
 
     /// Read a value's field, honoring Lua's `__index` semantics.
@@ -1054,6 +1253,8 @@ impl HostCall<'_> {
             Some(metatable) => simple::inherited(
                 &self.vm.tables,
                 self.vm.meta_names[Meta::Index as usize],
+                self.vm.index_resolvers().as_ref(),
+                id,
                 metatable,
                 key,
             ),
@@ -1083,12 +1284,80 @@ impl HostCall<'_> {
         Ok(self.vm.tables[slot_index(table.0)].get(key))
     }
 
+    /// A counter that changes whenever a string-keyed entry of the table is
+    /// added, replaced or removed, and possibly at other times. While it is
+    /// unchanged, raw reads of string keys return what they returned before,
+    /// so an embedding can remember such reads per table and repeat them only
+    /// after a change. The counter wraps after 2^32 changes.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].fields_version())
+    }
+
+    /// Read a field named by a literal without invoking metamethods. The
+    /// name is found as [`Vm::intern_static`] finds it.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle, or if the
+    /// name cannot be stored.
+    #[inline]
+    pub fn raw_table_get_static(
+        &mut self,
+        table: TableId,
+        name: &'static [u8],
+    ) -> Result<Value, Error> {
+        let Value::String(key) = self.vm.intern_static(name)? else {
+            unreachable!("an interned name is a string")
+        };
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].get_string(key))
+    }
+
     /// Set a table entry without invoking metamethods.
     ///
     /// # Errors
     /// Returns an error for invalid handles, nil keys or NaN keys.
     pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
         self.vm.raw_table_set(table, key, value)
+    }
+
+    /// Return a table's actual metatable, ignoring any `__metatable` field.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    pub fn raw_metatable(&self, table: TableId) -> Result<Option<TableId>, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        Ok(self.vm.tables[slot_index(table.0)].metatable())
+    }
+
+    /// Whether calling `function` with a table and a key is exactly
+    /// [`Self::raw_table_next`]: true for the standard library's `next` and
+    /// for the iterator `pairs` returns, whatever the globals now hold.
+    #[inline]
+    pub fn is_raw_next(&self, function: Value) -> bool {
+        matches!(function, Value::Native(NEXT | PAIRS_NEXT))
+    }
+
+    /// Return the entry after `key` in a table's traversal order, as Lua's
+    /// `next` does. `Value::Nil` starts a traversal and `None` ends it.
+    ///
+    /// Like `next`, the order is unspecified and a traversal is only valid
+    /// while no new key is added to the table.
+    ///
+    /// # Errors
+    /// Returns an error for invalid handles or a key the table does not hold.
+    pub fn raw_table_next(
+        &self,
+        table: TableId,
+        key: Value,
+    ) -> Result<Option<(Value, Value)>, Error> {
+        self.vm.validate_value(Value::Table(table))?;
+        self.vm.validate_value(key)?;
+        self.vm.tables[slot_index(table.0)].next(key)
     }
 
     /// Read private embedding state attached to a table. See `Vm::table_host_state`.

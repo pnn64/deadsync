@@ -591,13 +591,18 @@ fn pinned_independent_frame_data_and_sample_regressions() {
         // Frame entropy data were compared exactly with the independently
         // instrumented C decoder. Final samples pin the Annex J native filter;
         // C raster differences are reported separately in the manifest.
+        let actual = sample_snapshot(
+            image.header.precision,
+            image.header.width,
+            image.header.height,
+            &output.components,
+        );
+        // Set DEADLIB_JPEG_REPIN after an intentional native IDCT change.
+        if std::env::var_os("DEADLIB_JPEG_REPIN").is_some() {
+            std::fs::write(path.with_extension("samples"), &actual).unwrap();
+        }
         assert_eq!(
-            sample_snapshot(
-                image.header.precision,
-                image.header.width,
-                image.header.height,
-                &output.components
-            ),
+            actual,
             std::fs::read(path.with_extension("samples")).unwrap(),
             "{}",
             path.display()

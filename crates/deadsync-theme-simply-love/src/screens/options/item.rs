@@ -94,6 +94,8 @@ pub enum ItemId {
 
     // Input Backend Options submenu
     InpGamepadBackend,
+    #[cfg(target_os = "linux")]
+    InpAxisFix,
     InpSmxInput,
     InpUseFsrs,
     InpDebugFsrDump,
@@ -228,7 +230,6 @@ pub enum ItemId {
     SmStageDisplay,
     SmShowRivals,
     SmScoreboxPlacement,
-    SmScoreboxCycle,
     SmScoreboxEventsFirst,
 
     // Course Options submenu
@@ -249,6 +250,7 @@ pub enum ItemId {
 
     // GrooveStats Options submenu
     GsEnable,
+    GsScoreboxBoards,
     GsShowSrpgShop,
     GsSrpgShopFolder,
     GsEnableBoogie,
@@ -259,6 +261,8 @@ pub enum ItemId {
 
     // ArrowCloud Options submenu
     AcEnable,
+    AcRegularBoards,
+    AcEventBoards,
     AcGolf,
     AcSubmitFails,
     AcResultDialogs,

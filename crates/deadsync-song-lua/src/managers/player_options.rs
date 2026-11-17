@@ -280,8 +280,8 @@ fn index(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.push(method)
 }
 
-fn nested(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<TableId, Error> {
-    match raw(call, owner, key)? {
+fn nested(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<TableId, Error> {
+    match call.raw_table_get_static(owner, key.as_bytes())? {
         Value::Nil => {
             let value = call.try_new_table()?;
             set(owner, key, value, call)?;
@@ -315,6 +315,48 @@ fn raw_float(
 ) -> Result<f32, Error> {
     let value = raw(call, owner, key)?;
     typed_float(call, value, default)
+}
+// `raw_float` for a field a literal names.
+fn raw_float_static(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: &'static str,
+    default: f32,
+) -> Result<f32, Error> {
+    let value = call.raw_table_get_static(owner, key.as_bytes())?;
+    typed_float(call, value, default)
+}
+// Whether a raw write of `new` over `old` would leave the entry as it is.
+// Numbers compare by bits: -0 and 0 are different values to store.
+pub(super) fn unchanged(old: Value, new: Value) -> bool {
+    match (old, new) {
+        (Value::Number(old), Value::Number(new)) => old.to_bits() == new.to_bits(),
+        (old, new) => old == new,
+    }
+}
+// A raw write that is skipped when the entry already holds the value, and
+// whether it was made. The write runs no metamethod and leaves contents and
+// traversal order as they are, so skipping it changes only the version.
+pub(super) fn update(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: Value,
+    value: Value,
+) -> Result<bool, Error> {
+    if unchanged(call.raw_table_get(owner, key)?, value) {
+        return Ok(false);
+    }
+    call.raw_table_set(owner, key, value)?;
+    Ok(true)
+}
+fn update_static(
+    call: &mut HostCall<'_>,
+    owner: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<bool, Error> {
+    let key = call.intern_static(key.as_bytes())?;
+    update(call, owner, key, value)
 }
 fn get_float(
     call: &mut HostCall<'_>,

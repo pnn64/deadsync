@@ -669,7 +669,7 @@ fn failed_on_preserves_partial_state_and_releases_new_constructor_owners() {
             .is_err()
     );
     assert!(pair.rust.release_actor_scene(pair.scene).unwrap());
-    let after = test_support::actor_ownership_counts(&pair.rust);
+    let after = test_support::actor_ownership_counts(&mut pair.rust);
     let mut control = Pair::new(pair.context.clone());
     control
         .rust
@@ -678,7 +678,7 @@ fn failed_on_preserves_partial_state_and_releases_new_constructor_owners() {
     control.rust.release_actor_scene(control.scene).unwrap();
     assert_eq!(
         after,
-        test_support::actor_ownership_counts(&control.rust),
+        test_support::actor_ownership_counts(&mut control.rust),
         "activation must release every new constructor owner, matching a control stopped after Init"
     );
     assert!(
@@ -2754,7 +2754,7 @@ fn render_property_capture_reuses_pending_destinations_across_drains_and_validat
             .rust
             .set_song_pending_render_updates(pair.scene, &[(0, Target::X, Update::F32(1.))])
     );
-    let foreign = SongRuntime::new(&context).unwrap();
+    let mut foreign = SongRuntime::new(&context).unwrap();
     assert!(!foreign.set_song_pending_render_updates(pair.scene, &pending));
     pair.script("saved.parent:linear(0.25):fov(90)");
     let second = compare_property_updates(&mut pair);
@@ -2811,7 +2811,7 @@ fn render_property_capture_reuses_pending_destinations_across_drains_and_validat
     assert_eq!(second[0].scheduled[0].value, Update::F32(90.));
 }
 
-fn install_predicted_frames(pair: &Pair, deltas: &[f64], actor_frames: Option<&[[f32; 2]]>) {
+fn install_predicted_frames(pair: &mut Pair, deltas: &[f64], actor_frames: Option<&[[f32; 2]]>) {
     let frames: Vec<_> = deltas
         .iter()
         .enumerate()
@@ -2869,7 +2869,7 @@ fn queue_clock_predicts_render_samples_and_cross_actor_frame_advancement() {
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["early", "driver", "late"]);
     let deltas = [0., 0.125, 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     let mut seconds = 0.;
     for (i, &dt) in deltas.iter().enumerate() {
         if i == 1 {
@@ -2920,7 +2920,7 @@ fn queue_clock_retains_dispatch_remainders_and_sample_arrays_after_queue_callbac
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["early", "driver", "late"]);
     let deltas = [0., 0.125, 0.125, 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     pair.script("events={}");
     let mut seconds = 0.;
     let mut owned = Vec::new();
@@ -2969,11 +2969,11 @@ fn queue_clock_preserves_actor_frame_spans_zero_tails_hurry_and_cancellation() {
     let rust = pair.activate(&[&path]);
     assert!(!pair.rust.set_song_replay_frames(pair.scene, &[], None));
     begin_message_replay(&mut pair, &rust, &["actor"]);
-    let foreign = SongRuntime::new(&context).unwrap();
+    let mut foreign = SongRuntime::new(&context).unwrap();
     assert!(!foreign.set_song_replay_frames(pair.scene, &[], None));
     let deltas = [0., 0.125, 0.125, 0.125];
     let actor_frames = [[0., 0.], [0.0625, 0.125], [0.0625, 0.125], [0.0625, 0.125]];
-    install_predicted_frames(&pair, &deltas, Some(&actor_frames));
+    install_predicted_frames(&mut pair, &deltas, Some(&actor_frames));
     let mut seconds = 0.;
     for (i, &dt) in deltas.iter().enumerate() {
         if i == 1 {
@@ -3030,7 +3030,7 @@ fn queue_clock_keeps_final_frame_zero_states_deferred_until_their_actor_update()
     ));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["early", "late"]);
-    install_predicted_frames(&pair, &[0., 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125], None);
     advance_predicted_frame(&mut pair, 0, 0., 0.);
     pair.script("saved.armed=true");
     let frames = advance_predicted_frame(&mut pair, 1, 0.125, 0.125);
@@ -3078,7 +3078,7 @@ fn fallback_clock_dispatch_preserves_rates_hibernation_and_backdated_publication
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["early", "driver", "late", "asleep"]);
     let deltas = [0., 0.125, 0.125, 0.125, 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     pair.script("events={}");
     let mut seconds = 0.;
     let mut owned = Vec::new();
@@ -3128,7 +3128,7 @@ fn fallback_clock_hands_only_dispatch_remainder_to_new_recurring_commands() {
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["loop"]);
     let deltas = [0., 0.125, 0.125, 0.125, 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     let mut seconds = 0.;
     for (i, &dt) in deltas.iter().enumerate() {
         if i == 1 {
@@ -3176,7 +3176,7 @@ fn fallback_clock_queue_errors_report_once_and_restore_dispatch_for_later_frames
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["bad", "other"]);
     let deltas = [0., 0.125, 0.125, 0.125, 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     let mut seconds = 0.;
     for (i, &dt) in deltas.iter().enumerate() {
         if i == 1 {
@@ -3232,7 +3232,7 @@ fn fallback_clock_nested_inline_commands_restore_absent_timestamps() {
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["parent", "child"]);
     let deltas = [0., 0.125, 0.125, 0.125];
-    install_predicted_frames(&pair, &deltas, None);
+    install_predicted_frames(&mut pair, &deltas, None);
     let mut seconds = 0.;
     for (i, &dt) in deltas.iter().enumerate() {
         if i == 1 {
@@ -3306,7 +3306,7 @@ fn pose_output_captures_all_fallback_targets_timing_and_ordered_messages() {
     ));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["actor"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125, 0.125], None);
     let setters = "x(1):y(2):z(3):aux(4):zoom(2):rotationx(5):rotationy(6):rotationz(7):skewx(0.1):skewy(0.2):cropleft(0.1):cropright(0.2):croptop(0.3):cropbottom(0.4):fadeleft(0.1):faderight(0.2):fadetop(0.3):fadebottom(0.4):diffuse(0.2,0.3,0.4,0.5):diffuseupperleft(1,0,0,1):glow(0.5,0.4,0.3,0.2):heading(15)";
     pair.script(&format!(
         "MESSAGEMAN:Broadcast('Change',{{apply=function()saved.actor:{setters}end}})"
@@ -3365,7 +3365,7 @@ fn pose_output_reconciles_current_destinations_prior_reads_and_sampled_getters()
     let mut pair = Pair::new(context.clone());
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["early", "driver", "late"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125, 0.125], None);
 
     let sampled = vec![
         (0, Target::X, Update::F32(1.)),
@@ -3457,7 +3457,7 @@ fn pose_output_preserves_pending_finish_stop_partial_errors_and_owned_values() {
     let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "pose cancellation"));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["actor"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125], None);
     pair.script("MESSAGEMAN:Broadcast('Change',{apply=function()saved.actor:linear(0.5):x(8):y(4):rotationz(90):diffuse(0.2,0.3,0.4,0.5):glow(1,0,0,1)end})");
     let first = compare_pose_output(&mut pair);
     let pending: Vec<_> = first
@@ -3517,7 +3517,7 @@ fn media_output_captures_text_masks_and_sprite_setters_in_native_order() {
     let mut pair = Pair::new(SongLuaCompileContext::new(dir.path(), "media publications"));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["text", "sprite", "mask"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125, 0.125], None);
     let setters = r#"
         saved.text:uppercase(true):rainbowscroll(true):jitter(true):distort(0.2)
             :textglowmode('TextGlowMode_Inner'):set_mult_attrs_with_diffuse(true)
@@ -3582,7 +3582,7 @@ fn media_output_preserves_retained_texture_state_and_geometry_write_order() {
     ));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["sprite"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125, 0.125], None);
     pair.script(
         r#"MESSAGEMAN:Broadcast('Change',{apply=function()
         local a=saved.sprite;local t=a:GetTexture();collectgarbage();t:loop(false);t:rate(0.5)
@@ -3638,7 +3638,7 @@ fn media_output_retains_partial_writes_and_pending_stop_finish_values() {
     ));
     let rust = pair.activate(&[&path]);
     begin_message_replay(&mut pair, &rust, &["text", "sprite"]);
-    install_predicted_frames(&pair, &[0., 0.125, 0.125, 0.125], None);
+    install_predicted_frames(&mut pair, &[0., 0.125, 0.125, 0.125], None);
     pair.script(
         r#"MESSAGEMAN:Broadcast('Change',{apply=function()
         assert(not pcall(function()
@@ -6526,14 +6526,14 @@ fn actor_messages_scan_freezes_sorted_names_restores_history_and_extracts_sounds
     let b = saved(&mut pair, "a");
 
     assert!(test_support::rust_seed_message_sound_block(
-        &pair.rust,
+        &mut pair.rust,
         Value::Table(b),
         false
     ));
     pair.script("saved.a:linear(1)");
 
     assert!(test_support::rust_seed_message_sound_block(
-        &pair.rust,
+        &mut pair.rust,
         Value::Table(b),
         true
     ));

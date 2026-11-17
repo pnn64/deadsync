@@ -125,7 +125,9 @@ fn compile_live<S, V>(
                 .map_err(|e| e.to_string())?;
             // Native startup reconstruction runs End, without the live scene's
             // compiled Sound-owner stop pass (no scene has been returned yet).
-            runtime.actors.suppress_load_sound_retirement(screen);
+            runtime
+                .actors
+                .suppress_load_sound_retirement(&mut runtime.vm, screen);
             runtime
                 .retire_actor_scene(screen)
                 .map_err(|e| e.to_string())?;
@@ -219,6 +221,7 @@ fn compile_live<S, V>(
             })
         })),
         loaded_style: Some(selected.style_name.clone()),
+        loaded_players: Some(selected.players.each_ref().map(|player| player.enabled)),
         startup_reloads: reloads,
         entry_path: trace.clone(),
         screen_width: selected.screen_width,

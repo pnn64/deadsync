@@ -2929,6 +2929,181 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn beat_tick_survives_delay_enable_pause_and_practice_restart() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            delays: vec![DelaySegment { beat: 4.0, duration: 2.0 }],
+            ..Default::default()
+        }, 480);
+        state.drain_audio_commands().for_each(drop);
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Beat, 3.0);
+        state.run_pre_notes_phase(3_000_000_000, 3_000_000_000, 3_000_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+        let expected = vec![GameplayAudioCommand::PlayAssistTickAtMusicTime {
+            path: MEASURE_TICK_SFX_PATH, music_seconds: 4.0,
+        }];
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+        state.set_gameplay_paused(true);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 0.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+        state.set_gameplay_paused(false);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+        state.run_pre_notes_phase(3_970_000_000, 3_970_000_000, 3_970_000_000, 0.0, 1.0, 2, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0, "no duplicate tick on following frame");
+
+        state.start_practice_music_at(3.0, 3.0);
+        state.drain_audio_commands().for_each(drop);
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 3, "assist");
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn beat_tick_uses_measure_and_beat_sounds_on_fractional_grid() {
+        let mut state = regression_state_with_segments(TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            time_signatures: vec![deadsync_rules::timing::TimeSignatureSegment {
+                beat: 0.0, numerator: 3, denominator: 8,
+            }],
+            ..Default::default()
+        }, 480);
+        state.drain_audio_commands().for_each(drop);
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Beat, 0.70);
+        for (now, seconds, path) in [
+            (710_000_000, 0.75, MEASURE_TICK_SFX_PATH),
+            (1_210_000_000, 1.25, BEAT_TICK_SFX_PATH),
+            (1_460_000_000, 1.5, MEASURE_TICK_SFX_PATH),
+        ] {
+            state.run_pre_notes_phase(now, now, now, 0.0, 1.0, 1, "assist");
+            assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), vec![
+                GameplayAudioCommand::PlayAssistTickAtMusicTime { path, music_seconds: seconds },
+            ]);
+        }
+        state.apply_timing_tick_mode_command(GameplayTimingTickMode::Off, 1.6);
+        state.run_pre_notes_phase(1_960_000_000, 1_960_000_000, 1_960_000_000, 0.0, 1.0, 1, "assist");
+        assert_eq!(state.drain_audio_commands().count(), 0);
+    }
+
+    #[test]
+    fn gameplay_pause_skips_judgments_and_roll_decay_but_keeps_screen_time() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+        state.boundary.total_elapsed_in_screen = 1.0;
+        let snapshot = GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot {
+                music_nanos: start,
+                music_seconds_per_second: 0.0,
+                has_music_mapping: true,
+                valid_at: Instant::now(), valid_at_host_nanos: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        state.drain_audio_commands().for_each(drop);
+        state.set_gameplay_paused(true);
+        state.set_gameplay_paused(true);
+        assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), vec![GameplayAudioCommand::PauseMusic(true)]);
+        let mut prepared = false;
+        state.update_gameplay_frame_with_pre_player(0.5, snapshot, "unused", || 1, |_| prepared = true);
+        assert!(prepared, "paused frames still prepare live actors");
+        assert_eq!(state.boundary.total_elapsed_in_screen, 1.5);
+        assert!(state.chart_runtime.notes[0].result.is_none(), "paused autoplay cannot judge");
+        state.set_gameplay_paused(false);
+        state.update_gameplay_frame(0.0, snapshot, "unused", || 1);
+        assert!(state.chart_runtime.notes[0].result.is_some());
+        let life = state.active_hold(0).unwrap().life;
+        state.set_gameplay_paused(true);
+        state.update_gameplay_frame(0.6, snapshot, "unused", || 1);
+        assert_eq!(state.active_hold(0).unwrap().life, life);
+        state.set_gameplay_paused(false);
+        state.update_gameplay_frame(0.01, snapshot, "unused", || 1);
+        assert!(state.active_hold(0).unwrap().life < life, "normal frame decay resumes");
+        state.set_gameplay_paused(true);
+        state.clock.song_position.current_music_time_ns = state.music_end_time_ns() + 1_000_000_000;
+        assert!(state.finish_gameplay_if_ready(false).is_none(), "pause blocks screen completion");
+        state.set_gameplay_paused(false);
+        state.mods.attacks.cleared_for_outro = true;
+        state.set_gameplay_paused(true);
+        assert!(!state.control.paused, "native ignores pause requests during outro");
+    }
+
+    #[test]
+    fn autoplay_roll_uses_frame_time_when_audio_stalls() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+        let before_head = state.autoplay_roll_frame_notes();
+        state.run_autoplay_or_replay_frame(start);
+        state.advance_autoplay_roll_frame(&before_head, start, 0.3);
+        state.update_active_holds(&[false; MAX_COLS], start);
+        assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0,
+            "a roll head is crossed after this frame's hold-life update");
+
+        // Only 10 ms of audio progress, but a long native frame drains 60%.
+        let at = start + 10_000_000;
+        let before = state.autoplay_roll_frame_notes();
+        state.run_autoplay_or_replay_frame(at);
+        state.advance_autoplay_roll_frame(&before, at, 0.6 * deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL);
+        state.update_active_holds(&[false; MAX_COLS], at);
+        assert!((state.hold_runtime.active_holds[0].as_ref().unwrap().life - 0.4).abs() < 0.00001);
+        // Autoplay refills below half life before the next frame's drain.
+        state.run_autoplay_or_replay_frame(at);
+        assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0);
+        state.advance_autoplay_roll_frame(&before, at, 0.4);
+        state.update_active_holds(&[false; MAX_COLS], at);
+        assert!(state.hold_runtime.active_holds[0].is_none());
+        assert_eq!(state.chart_runtime.notes[0].hold.as_ref().unwrap().result, Some(HoldResult::LetGo),
+            "an audio stall does not stop native roll-life decay");
+        assert_eq!(state.display.hold_feedback.hold_judgments[0].unwrap().result, HoldResult::LetGo);
+    }
+
+    #[test]
+    fn autoplay_roll_clock_rewind_uses_current_rounded_head_row() {
+        let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+        state.chart_runtime.notes[0].note_type = NoteType::Roll;
+        state.progress.stage.autoplay_enabled = true;
+        state.apply_global_offset_delta(-state.global_offset_seconds());
+        let start = state.chart_runtime.note_time_cache_ns[0];
+        state.run_autoplay_or_replay_frame(start);
+        let window = deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL;
+        // Start, rewind below the head, cross its rounded row before its exact
+        // timestamp, then move forward. Only in-range frames drain roll life.
+        for (offset, delta, drained) in [
+            (50_000_000, 0.05, 0.05),
+            (-50_000_000, 0.1, 0.05),
+            (-1_000_000, 0.02, 0.07),
+            (20_000_000, 0.03, 0.1),
+        ] {
+            let before = state.autoplay_roll_frame_notes();
+            let at = start + offset;
+            state.run_autoplay_or_replay_frame(at);
+            state.advance_autoplay_roll_frame(&before, at, delta);
+            state.update_active_holds(&[false; MAX_COLS], at);
+            let life = state.active_hold(0).expect("roll remains active").life;
+            assert!((life - (1.0 - drained / window)).abs() < 0.00001,
+                "clock offset {offset}: wrong roll life {life}");
+        }
+        state.hold_runtime.active_holds[0].as_mut().unwrap().life = 0.4;
+        state.chart_runtime.notes[0].hold.as_mut().unwrap().life = 0.4;
+        state.run_autoplay_or_replay_frame(start - 50_000_000);
+        assert_eq!(state.active_hold(0).unwrap().life, 0.4,
+            "the previous head judgment does not refill before its current row");
+        state.run_autoplay_or_replay_frame(start - 1_000_000);
+        assert_eq!(state.active_hold(0).unwrap().life, 1.0,
+            "a rounded head row can refill just before its exact timestamp");
+    }
+
+    #[test]
     fn autoplay_roll_threshold_is_strict_and_manual_taps_are_unthrottled() {
         for (autoplay, life, refilled) in [
             (true, 0.5, false),
@@ -6044,7 +6219,142 @@ mod runtime_regression_tests {
 
         // CombinedLifeMeterShared: one meter changed by both participants.
         assert_eq!(players[0].life, players[1].life);
-        assert_eq!(players[0].life_history, players[1].life_history);
+        assert_ne!(players[0].life_history, players[1].life_history,
+            "native PlayerStageStats records only its own life events");
+        for player in players {
+            assert_eq!(player.life_history.last().unwrap().1, 0.5,
+                "combined-meter history reads the independent tug-life value");
+        }
+    }
+
+    #[test]
+    fn routine_team_scoring_has_ordered_callbacks_and_independent_failure() {
+        let mut state = routine_state();
+        let first = state.chart_runtime.note_time_cache_ns[routine_note(&state, 0)];
+        let second = state.chart_runtime.note_time_cache_ns[routine_note(&state, 1)];
+        state.mark_player_stage_failed_from_script(0);
+        assert!(!state.players()[1].stage_failed);
+        assert!(
+            !state
+                .players_runtime
+                .routine
+                .as_ref()
+                .unwrap()
+                .stats
+                .stage_failed
+        );
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capture = seen.clone();
+        state.tap_row_judgment_callback = Some(Box::new(move |state, player, _, _| {
+            let team = &state.players_runtime.routine.as_ref().unwrap().stats;
+            capture
+                .lock()
+                .unwrap()
+                .push((player, team.earned_grade_points, team.combo));
+        }));
+        routine_step(&mut state, &[Lane::Left, Lane::P2Right], first);
+        assert_eq!(*seen.lock().unwrap(), [(0, 0, 0), (1, 5, 1)]);
+        assert_eq!(state.players()[0].earned_grade_points, 0);
+        assert_eq!(state.players()[1].earned_grade_points, 5);
+        assert_eq!(
+            state
+                .players_runtime
+                .routine
+                .as_ref()
+                .unwrap()
+                .stats
+                .earned_grade_points,
+            10
+        );
+        state.mark_routine_stage_failed_from_script();
+        assert!(!state.players()[1].stage_failed);
+        routine_step(&mut state, &[Lane::Down], second);
+        let team = &state.players_runtime.routine.as_ref().unwrap().stats;
+        assert_eq!(
+            (
+                team.earned_grade_points,
+                team.current_possible_points,
+                team.combo
+            ),
+            (10, 15, 3)
+        );
+        assert_eq!(team.judgment_counts, [3, 0, 0, 0, 0, 0]);
+        assert_eq!(team.recorded_max_combo, 0);
+        assert_eq!(state.players()[0].recorded_max_combo, 2);
+        assert_eq!(state.players()[1].recorded_max_combo, 1);
+        assert!((state.routine_shared_stage_itg_score_percent().unwrap() - 0.6666).abs() < 1e-12);
+        assert_eq!(
+            state.routine_shared_itg_score_percent(),
+            state.routine_shared_stage_itg_score_percent()
+        );
+    }
+
+    #[test]
+    fn routine_secondary_scorekeeper_records_holds_mines_and_weighted_checkpoints() {
+        let mut team = RoutineStageStats::default();
+        team.hold(NoteType::Hold, HoldResult::Held);
+        team.mine_hit();
+        team.checkpoint(0, 2, 3, 4);
+        assert_eq!(team.stats.earned_grade_points, 5 - 6 - 8);
+        assert_eq!(team.stats.checkpoints_missed, 4);
+        assert_eq!(team.stats.miss_combo, 4);
+        team.checkpoint(1, 1, 3, 4);
+        assert_eq!(
+            team.stats.miss_combo, 4,
+            "a mixed checkpoint resets the old miss streak"
+        );
+        team.stats.stage_failed = true;
+        let frozen = team.stats.earned_grade_points;
+        team.hold(NoteType::Roll, HoldResult::Held);
+        team.mine_hit();
+        team.checkpoint(1, 0, 3, 4);
+        assert_eq!(team.stats.earned_grade_points, frozen);
+        assert_eq!(
+            (
+                team.stats.holds_held,
+                team.stats.rolls_held,
+                team.stats.mines_hit
+            ),
+            (1, 1, 2)
+        );
+        assert_eq!(
+            (
+                team.stats.combo,
+                team.stats.miss_combo,
+                team.stats.current_possible_points
+            ),
+            (3, 0, 10)
+        );
+        assert_eq!(team.stats.recorded_max_combo, 0);
+        assert!(team.stats.life_history.is_empty());
+    }
+
+    #[test]
+    fn routine_life_writes_share_the_meter_but_preserve_individual_history() {
+        for style in [GameplayInputPlayStyle::Routine, GameplayInputPlayStyle::PumpRoutine] {
+            let mut state = routine_state_for_style(style);
+            assert!(state.players().iter().all(|p| p.life == 0.5 && p.life_history.is_empty()));
+            state.set_player_life_from_script(0, 0.8);
+            assert!(state.players().iter().all(|p| p.life == 0.8));
+            assert_eq!(state.players()[0].life_history.last().unwrap().1, 0.5);
+            assert!(state.players()[1].life_history.is_empty());
+            let p1_history = state.players()[0].life_history.clone();
+            state.set_player_life_from_script(1, 0.2);
+            assert!(state.players().iter().all(|p| p.life == 0.2));
+            assert_eq!(state.players()[0].life_history, p1_history);
+            assert_eq!(state.players()[1].life_history.last().unwrap().1, 0.5);
+            state.record_player_life_from_script(1, 0.);
+            assert!(state.players().iter().all(|p| p.life == 0.2));
+            assert_eq!(state.players()[0].life_history, p1_history);
+            assert_eq!(state.players()[1].life_history.last().unwrap().1, 0.);
+            for player in &mut state.players_runtime.players {
+                reset_player_runtime_for_practice(player, 0.);
+                assert!(player.life_history.is_empty());
+                apply_course_life_event(player, 1., 0.008, CourseLifeEvent::Tap(JudgeGrade::Fantastic));
+                assert_eq!(player.life_history.last().unwrap().1, 0.5);
+                assert!(player.life > 0.5);
+            }
+        }
     }
 
     #[test]
@@ -6128,6 +6438,13 @@ mod runtime_regression_tests {
             state.players_runtime.players[player].scoring_counts =
                 [stage_steps[player], 0, 0, 0, 0, 0];
         }
+        state
+            .players_runtime
+            .routine
+            .as_mut()
+            .unwrap()
+            .stats
+            .scoring_counts = [stage_steps.iter().sum(), 0, 0, 0, 0, 0];
 
         // Individual-song saves keep the current song only.
         assert_eq!(state.routine_shared_stage_itg_score_percent(), Some(1.0));

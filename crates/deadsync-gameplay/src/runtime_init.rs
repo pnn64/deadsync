@@ -1068,6 +1068,13 @@ where
             combo_carry[p],
             caps,
         );
+        if play_style.is_routine() {
+            // Player::Load seeds history only for an individual LifeMeter.
+            // CombinedLifeMeterShared changes a separate inner meter; native
+            // Player::ChangeLifeRecord still reads GameState's initial tug life.
+            player.life_record_source = LifeRecordSource::Combined(0.5);
+            player.life_history.clear();
+        }
         let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
         let possible = target.score_type.possible_points(
             possible_grade_points[p],
@@ -1097,6 +1104,14 @@ where
     });
     let assist_clap_rows =
         build_assist_clap_rows_with_capacity(&notes, note_ranges[0], note_count_stats[0].len());
+    let beat_tick_end_time_ns = song_time_ns_add_seconds(
+        music_end_time_ns,
+        -config.global_offset_seconds * rate,
+    );
+    let beat_tick_end_beat =
+        timing.get_beat_for_time_ns(beat_tick_end_time_ns);
+    let beat_tick_rows =
+        build_beat_tick_rows(&timing, beat_tick_end_beat);
     let song_offset_seconds = song.offset;
     let base_attack_appearance = std::array::from_fn(|player| {
         if player < num_players {
@@ -1204,6 +1219,7 @@ where
         ),
         players_runtime: GameplayPlayersRuntimeState {
             players,
+            routine: play_style.is_routine().then(RoutineStageStats::default),
             column_judgments_active: [true; MAX_PLAYERS],
         },
         display: GameplayDisplayRuntimeState {
@@ -1290,6 +1306,7 @@ where
             song_lua_visuals,
             song_lua_player_transforms: song_lua_player_transforms_default(),
             song_lua_fail_types: [None; MAX_PLAYERS],
+            song_lua_player_options: [None; MAX_PLAYERS],
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);
@@ -1302,6 +1319,7 @@ where
             },
         },
         control: GameplayControlRuntimeState {
+            paused: false,
             exit_input: GameplayExitInputState::default(),
             offset_adjust_hold: GameplayOffsetAdjustHoldState::default(),
             input_state: GameplayInputState::default(),
@@ -1312,6 +1330,7 @@ where
             autosync: GameplayAutosyncRuntimeState::default(),
             tick_mode,
             assist_clap: GameplayAssistClapState::new(assist_clap_rows),
+            beat_tick: GameplayAssistClapState::new(beat_tick_rows),
             update_trace: GameplayUpdateTraceState::default(),
         },
         pending_input: GameplayPendingInputState::with_capacity(pending_edges_capacity),

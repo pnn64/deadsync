@@ -413,3 +413,121 @@ return ordinary,depth
         .join()
         .unwrap();
 }
+
+#[test]
+fn a_raw_literal_field_write_is_the_pushed_raw_assignment() {
+    fn direct(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let value = stack.value(2).unwrap();
+        stack.raw_set_static(1, b"field", value)?;
+        assert_eq!(stack.top(), 2);
+        stack.finish(0)
+    }
+    fn pushed(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let value = stack.value(2).unwrap();
+        let key = stack.intern(b"field");
+        stack.push(key)?;
+        stack.push(value)?;
+        stack.set_table(1, true)?;
+        assert_eq!(stack.top(), 2);
+        stack.finish(0)
+    }
+    let mut vm = Vm::new();
+    for (name, callback) in [
+        (b"direct".as_slice(), direct as deadlib_lua::HostFunction),
+        (b"pushed", pushed),
+    ] {
+        let function = vm.new_host_function(callback, &[]).unwrap();
+        vm.set_global(name, function).unwrap();
+    }
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local payload = {}
+for _, write in ipairs({direct, pushed}) do
+    local calls = 0
+    local target = setmetatable({}, {__newindex = function() calls = calls + 1 end})
+    for _, value in ipairs({payload, 7, 'text', false}) do
+        write(target, value)
+        collectgarbage()
+        assert(calls == 0 and rawget(target, 'field') == value)
+    end
+    write(target, nil)
+    assert(rawget(target, 'field') == nil and next(target) == nil)
+    -- Crowded tables and tables that must grow take the same write.
+    local crowded = {}
+    for i = 1, 100 do crowded['field' .. i] = i end
+    write(crowded, payload)
+    assert(crowded.field == payload and crowded.field100 == 100)
+end
+-- A target that is not a table is refused the same way.
+local ok1, direct_error = pcall(direct, 5, 1)
+local ok2, pushed_error = pcall(pushed, 5, 1)
+assert(not ok1 and not ok2)
+return direct_error == pushed_error, direct_error
+"#
+        ),
+        [
+            Value::Boolean(true),
+            vm.intern(b"raw native access requires a table")
+        ]
+    );
+}
+
+#[test]
+fn the_vm_reads_the_same_fields_version_as_a_host_call() {
+    fn version(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let Value::Table(table) = call.arguments()[0] else {
+            return Err(call.error(b"table expected"));
+        };
+        let version = call.raw_fields_version(table)?;
+        call.push(Value::Number(f64::from(version)))
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let Value::Table(table) = execute(&mut vm, b"T = {name = 1}; return T")[0] else {
+        panic!("expected table");
+    };
+    let from_call = |vm: &mut Vm| execute(vm, b"return version(T)")[0];
+    let first = vm.raw_fields_version(table).unwrap();
+    assert_eq!(from_call(&mut vm), Value::Number(f64::from(first)));
+    execute(&mut vm, b"T.name = 2");
+    let second = vm.raw_fields_version(table).unwrap();
+    assert_ne!(second, first);
+    assert_eq!(from_call(&mut vm), Value::Number(f64::from(second)));
+}
+
+#[test]
+fn the_native_stack_reads_the_same_fields_version_as_a_host_call() {
+    fn versions(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let Value::Table(table) = call.arguments()[0] else {
+            return Err(call.error(b"table expected"));
+        };
+        let from_call = call.raw_fields_version(table)?;
+        let mut stack = call.native_stack()?;
+        let from_stack = stack.raw_fields_version(table)?;
+        assert_eq!(from_call, from_stack);
+        stack.push(Value::Number(f64::from(from_stack)))?;
+        stack.finish(1)
+    }
+    let mut vm = Vm::new();
+    let function = vm.new_host_function(versions, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    assert_eq!(
+        execute(
+            &mut vm,
+            br#"
+local t = {name = 1}
+local first = version(t)
+local _ = t.name
+local same = version(t) == first
+t.name = 2
+return same, version(t) ~= first
+"#
+        ),
+        [Value::Boolean(true), Value::Boolean(true)]
+    );
+}

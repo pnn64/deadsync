@@ -158,18 +158,55 @@ pub(super) fn entries(
     mut visit: impl FnMut(&mut HostCall<'_>, Value, Value) -> Result<(), Error>,
 ) -> Result<(), Error> {
     call.with_roots(&[Value::Table(source)], |call| {
+        // The traversal function captured at installation is the standard
+        // `next`, which is the raw walk without a call for each entry.
+        let next = call.captures()[3];
+        let raw = call.is_raw_next(next);
         let mut key = Value::Nil;
         loop {
-            let pair = call.call(call.captures()[3], &[Value::Table(source), key])?;
-            key = pair.first().copied().unwrap_or(Value::Nil);
-            if key == Value::Nil {
-                break;
-            }
-            let value = pair.get(1).copied().unwrap_or(Value::Nil);
+            let value = if raw {
+                let Some((next, value)) = call.raw_table_next(source, key)? else {
+                    break;
+                };
+                key = next;
+                value
+            } else {
+                let pair = call.call(next, &[Value::Table(source), key])?;
+                key = pair.first().copied().unwrap_or(Value::Nil);
+                if key == Value::Nil {
+                    break;
+                }
+                pair.get(1).copied().unwrap_or(Value::Nil)
+            };
             call.with_roots(&[key, value], |call| visit(call, key, value))?;
         }
         Ok(())
     })
+}
+// Whether `copy` already holds exactly `source`'s raw entries and has no
+// metatable, as a fresh `copy` of it would.
+fn same_entries(call: &mut HostCall<'_>, source: TableId, copy: TableId) -> Result<bool, Error> {
+    if call.raw_metatable(copy)?.is_some() {
+        return Ok(false);
+    }
+    let mut count = 0usize;
+    let mut key = Value::Nil;
+    while let Some((next, value)) = call.raw_table_next(source, key)? {
+        key = next;
+        count += 1;
+        if !unchanged(call.raw_table_get(copy, key)?, value) {
+            return Ok(false);
+        }
+    }
+    let mut key = Value::Nil;
+    while let Some((next, _)) = call.raw_table_next(copy, key)? {
+        key = next;
+        count = match count.checked_sub(1) {
+            Some(count) => count,
+            None => return Ok(false),
+        };
+    }
+    Ok(count == 0)
 }
 pub(super) fn copy(call: &mut HostCall<'_>, source: TableId) -> Result<TableId, Error> {
     object(call, |call, target| {
@@ -249,12 +286,52 @@ pub(super) fn set_options(
         effect(call)
     })
 }
+/// What an advance reads: Song and Current, Current's and Song's option
+/// states, Song's approach speeds, Song's disabled windows and Current's copy
+/// of them, each with its fields version and array length; and whether that
+/// copy has a metatable. Once an advance settles, the next one with the same
+/// inputs, and a finite, non-negative rate and delta, again writes nothing
+/// and raises nothing.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) struct Inputs([(Option<TableId>, u32, usize); 7], bool);
+
+pub(super) fn inputs(call: &mut HostCall<'_>, owners: [TableId; 4]) -> Result<Inputs, Error> {
+    let fields = [
+        Value::Table(owners[2]),
+        Value::Table(owners[3]),
+        call.raw_table_get_static(owners[3], STATE.as_bytes())?,
+        call.raw_table_get_static(owners[2], STATE.as_bytes())?,
+        call.raw_table_get_static(owners[2], SPEEDS.as_bytes())?,
+        call.raw_table_get_static(owners[2], WINDOWS.as_bytes())?,
+        call.raw_table_get_static(owners[3], WINDOWS.as_bytes())?,
+    ];
+    let mut tables = [(None, 0, 0); 7];
+    for (entry, field) in tables.iter_mut().zip(fields) {
+        if let Value::Table(table) = field {
+            *entry = (
+                Some(table),
+                call.raw_fields_version(table)?,
+                call.raw_table_len(table)?,
+            );
+        }
+    }
+    let held = match fields[6] {
+        Value::Table(held) => call.raw_metatable(held)?.is_some(),
+        _ => false,
+    };
+    Ok(Inputs(tables, held))
+}
+
+/// Approach Current toward Song, and report whether it had already settled:
+/// nothing was written, every approached value stood at its target and every
+/// approach speed was finite and non-negative.
 pub(super) fn advance(
     call: &mut HostCall<'_>,
     owners: [TableId; 4],
     delta: f32,
     rate: f32,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
+    let mut settled = true;
     let current = nested(call, owners[3], STATE)?;
     let target = nested(call, owners[2], STATE)?;
     let speeds = nested(call, owners[2], SPEEDS)?;
@@ -265,7 +342,10 @@ pub(super) fn advance(
             Value::Table(speeds),
         ],
         |call| {
-            let mut keys = smallvec::SmallVec::<[smallvec::SmallVec<[u8; 32]>; 16]>::new();
+            // Each modifier name with the string that is its key, when the
+            // key is a string: the name then needs no further lookup.
+            type Name = (smallvec::SmallVec<[u8; 32]>, Option<Value>);
+            let mut keys = smallvec::SmallVec::<[Name; 16]>::new();
             for owner in [current, target] {
                 entries(call, owner, |call, key, _| {
                     let id = call
@@ -275,38 +355,56 @@ pub(super) fn advance(
                         .string_bytes(id)
                         .ok_or_else(|| call.error(b"invalid UTF-8 string"))?;
                     std::str::from_utf8(bytes).map_err(|_| call.error(b"invalid UTF-8 string"))?;
-                    keys.push(smallvec::SmallVec::from_slice(bytes));
+                    let string = matches!(key, Value::String(_)).then_some(key);
+                    keys.push((smallvec::SmallVec::from_slice(bytes), string));
                     Ok(())
                 })?;
             }
-            keys.sort_unstable();
-            keys.dedup();
-            for key in keys {
+            // One string exists for each spelling, so equal names share a key.
+            keys.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+            keys.dedup_by(|a, b| a.0 == b.0);
+            for (key, string) in keys {
                 let key = std::str::from_utf8(&key).expect("validated modifier key");
-                let value = raw(call, target, key)?;
-                let value = if value == Value::Nil {
-                    default_value(call, &key)?
-                } else {
-                    value
+                let name = match string {
+                    Some(name) => name,
+                    None => call.try_intern(key.as_bytes())?,
                 };
-                if matches!(value, Value::Boolean(_) | Value::String(_))
-                    || matches!(
-                        key,
-                        "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
-                    )
-                {
-                    set(current, key, value, call)?;
-                } else if let Some(target) = float(call, value) {
-                    let value = raw_float(call, current, key, 0.0)?;
-                    let speed = raw_float(call, speeds, key, 1.0)?;
-                    let value = super::super::song_options::approach(
-                        call,
-                        value,
-                        target,
-                        rate * delta * speed,
-                    )?;
-                    set(current, key, value, call)?;
-                }
+                call.with_roots(&[name], |call| {
+                    let value = call.raw_table_get(target, name)?;
+                    let value = if value == Value::Nil {
+                        default_value(call, key)?
+                    } else {
+                        value
+                    };
+                    if matches!(value, Value::Boolean(_) | Value::String(_))
+                        || matches!(
+                            key,
+                            "modtimersetting" | "failsetting" | "batterylives" | "visualdelay"
+                        )
+                    {
+                        if update(call, current, name, value)? {
+                            settled = false;
+                        }
+                    } else if let Some(target) = float(call, value) {
+                        let old = call.raw_table_get(current, name)?;
+                        let value = typed_float(call, old, 0.0)?;
+                        let speed = call.raw_table_get(speeds, name)?;
+                        let speed = typed_float(call, speed, 1.0)?;
+                        settled &= value == target && speed.is_finite() && speed >= 0.0;
+                        let value = super::super::song_options::approach(
+                            call,
+                            value,
+                            target,
+                            rate * delta * speed,
+                        )?;
+                        let value = Value::Number(f64::from(value));
+                        if !unchanged(old, value) {
+                            call.raw_table_set(current, name, value)?;
+                            settled = false;
+                        }
+                    }
+                    Ok(())
+                })?;
             }
             for (field, key, default) in [
                 ("__songlua_time_spacing", "_spacing", 0.0),
@@ -314,36 +412,53 @@ pub(super) fn advance(
                 ("__songlua_speedmod_cmod", "cmod", 200.0),
                 ("__songlua_speedmod_mmod", "mmod", 0.0),
             ] {
-                let value = raw_float(call, owners[3], field, default)?;
-                let target = raw_float(call, owners[2], field, default)?;
-                let speed = raw_float(call, speeds, key, 1.0)?;
+                let value = raw_float_static(call, owners[3], field, default)?;
+                let target = raw_float_static(call, owners[2], field, default)?;
+                let speed = raw_float_static(call, speeds, key, 1.0)?;
                 let amount = if key == "cmod" {
                     delta * speed * 150.0
                 } else {
                     rate * delta * speed
                 };
+                settled &= value == target && speed.is_finite() && speed >= 0.0;
                 let value = super::super::song_options::approach(call, value, target, amount)?;
-                set(owners[3], field, value, call)?;
+                if update_static(call, owners[3], field, Value::Number(f64::from(value)))? {
+                    settled = false;
+                }
             }
-            let mode = if raw_float(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
+            let mode = if raw_float_static(call, owners[3], "__songlua_time_spacing", 0.0)? != 0.0 {
                 "cmod"
-            } else if raw_float(call, owners[3], "__songlua_speedmod_mmod", 0.0)? != 0.0 {
+            } else if raw_float_static(call, owners[3], "__songlua_speedmod_mmod", 0.0)? != 0.0 {
                 "mmod"
             } else {
                 "xmod"
             };
-            set(owners[3], "__songlua_speedmod_active", mode, call)?;
-            for key in [SKIN, SKIN_OVERRIDE] {
-                let value = raw(call, owners[2], key)?;
-                set(owners[3], key, value, call)?;
+            let mode = call.intern_static(mode.as_bytes())?;
+            if update_static(call, owners[3], "__songlua_speedmod_active", mode)? {
+                settled = false;
             }
-            let windows = raw(call, owners[2], WINDOWS)?;
+            for key in [SKIN, SKIN_OVERRIDE] {
+                let value = call.raw_table_get_static(owners[2], key.as_bytes())?;
+                if update_static(call, owners[3], key, value)? {
+                    settled = false;
+                }
+            }
+            // Current holds a copy of Song's disabled windows. A copy whose
+            // entries already match, with no metatable of its own, is what
+            // a fresh copy would be.
+            let windows = call.raw_table_get_static(owners[2], WINDOWS.as_bytes())?;
+            let held = call.raw_table_get_static(owners[3], WINDOWS.as_bytes())?;
+            if let (Value::Table(windows), Value::Table(held)) = (windows, held)
+                && same_entries(call, windows, held)?
+            {
+                return Ok(settled);
+            }
             let windows = if let Value::Table(windows) = windows {
                 Value::Table(copy(call, windows)?)
             } else {
                 windows
             };
-            set(owners[3], WINDOWS, windows, call)
+            Ok(!update_static(call, owners[3], WINDOWS, windows)? && settled)
         },
     )
 }

@@ -37,6 +37,14 @@ rendering data. Changes to one execution strategy must preserve supported song
 behavior in the other. Themes consume the resulting gameplay interfaces rather
 than providing an alternate Lua implementation.
 
+Sharing the host does not itself prove equivalent preparation and playback.
+Baked preparation must capture every child that initialization will load,
+including sparse declarations and helper scripts that return no actor. Otherwise
+Init/On queues can disappear when the compiler reconstructs the scene for replay.
+The baked child-declaration regression compares the resulting animation against
+Runtime on the same frame clock. Runtime-only reference replays do not replace
+this check.
+
 ProgramCache stores verified code and immutable compiler metadata. It does not
 store VM globals, mutable objects or a baked gameplay scene. Each VM binds cached
 programs to its own runtime state.
@@ -53,6 +61,7 @@ Initialize the pinned [test fixtures](../README.md#test-fixtures), then run:
 ```sh
 cargo test -p deadlib-lua
 cargo test -p deadsync-song-lua --features test-support
+cargo test -p deadsync-song-lua --test baked_children
 cargo test --test full_song_lua -- --list
 ```
 

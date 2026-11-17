@@ -120,14 +120,38 @@ impl<'a> Compiler<'a> {
                 self.tasks.try_push(Task::IndexTable(id, dst, work))?;
                 self.tasks.try_push(Task::Operand(*table, work))?;
             }
-            Expr::Table(_, load_line) => {
+            Expr::Table(fields, load_line) => {
+                // Lua 5.1 reserves constructor slots before evaluating fields.
+                // Those hints affect collision placement and thus pairs order.
+                let fields = self.ast.fields(*fields);
+                let records = fields.iter().filter(|(key, _)| key.is_some()).count();
+                let mut array = fields.len() - records;
+                if fields
+                    .last()
+                    .is_some_and(|(key, value)| key.is_none() && self.multiple(*value))
+                {
+                    array -= 1;
+                }
+                let hint = |mut count: usize| {
+                    let mut exponent = 0u16;
+                    while count >= 16 {
+                        count = (count + 1) >> 1;
+                        exponent += 1;
+                    }
+                    if count < 8 {
+                        count as u16
+                    } else {
+                        ((exponent + 1) << 3) | (count as u16 - 8)
+                    }
+                };
+                let (array, records) = (hint(array), hint(records));
                 let table = if self.top_temporary(dst) {
                     dst
                 } else {
                     self.alloc(1)?
                 };
                 self.line = *load_line;
-                self.emit(Op::NewTable, table, 0, 0)?;
+                self.emit(Op::NewTable, table, array, u32::from(records))?;
                 self.tasks.try_push(Task::TableNext(TableState {
                     id,
                     index: 0,

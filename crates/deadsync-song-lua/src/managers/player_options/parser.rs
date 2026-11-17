@@ -70,7 +70,7 @@ fn clear_skin(call: &mut HostCall<'_>, owner: TableId) -> Result<(), Error> {
             let name = if found {
                 crate::SONG_LUA_DEFAULT_NOTESKIN_NAME.to_owned()
             } else {
-                let default = call.try_intern(b"default")?;
+                let default = call.intern_static(b"default")?;
                 if truthy(
                     call.call(exists, &[skins, default])?
                         .first()

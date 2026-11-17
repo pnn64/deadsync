@@ -37,7 +37,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 {
                     first
                 }
-                _ => call.try_intern(b"")?,
+                _ => call.intern_static(b"")?,
             };
             call.push(value)
         }
@@ -63,13 +63,13 @@ fn info(call: &mut HostCall<'_>) -> Result<(), Error> {
             for key in ["source", "short_src"] {
                 super::set(call, Value::Table(result), key, source)?;
             }
-            let what = call.try_intern(b"Lua")?;
+            let what = call.intern_static(b"Lua")?;
             super::set(call, Value::Table(result), "what", what)?;
             for key in ["currentline", "linedefined", "lastlinedefined"] {
                 super::set(call, Value::Table(result), key, Value::Number(0.))?;
             }
             if supplied {
-                let empty = call.try_intern(b"")?;
+                let empty = call.intern_static(b"")?;
                 super::set(call, Value::Table(result), "namewhat", empty)?;
             }
             call.push(Value::Table(result))

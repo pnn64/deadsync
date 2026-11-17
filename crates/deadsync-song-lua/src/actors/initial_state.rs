@@ -3,16 +3,15 @@
 //! getters or advancing tweens. Captured values own no Lua allocations.
 use super::*;
 use crate::SongLuaOverlayState;
+use fields::{Field, Reader};
 
 pub(super) fn read_live(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<SongLuaOverlayState, Error> {
-    let mut state = read_with_metadata(call, store, actor, true, true)?;
-    let pose = store
-        .lock()
-        .unwrap()
+    let mut state = read_with_metadata(call, actor, true, true)?;
+    let pose = call
+        .store()
         .actors
         .get(&actor)
         .map(|a| (a.current, *a.destination()));
@@ -23,86 +22,51 @@ pub(super) fn read_live(
         state.y = dest.y;
         crate::move_overlay(&mut state, current.x, current.y);
     }
-    state.spin_baked = chronological::render_spin(call, store, actor)?.is_some();
+    state.spin_baked = chronological::render_spin(call, actor)?.is_some();
     Ok(state)
 }
 
-fn get(call: &mut HostCall<'_>, actor: TableId, key: &[u8], live: bool) -> Result<Value, Error> {
-    if live
-        && let Some(key) = key.strip_prefix(b"__songlua_state_")
-        && matches!(
-            key,
-            b"aux"
-                | b"x"
-                | b"y"
-                | b"z"
-                | b"zoom"
-                | b"zoom_x"
-                | b"zoom_y"
-                | b"zoom_z"
-                | b"rot_x_deg"
-                | b"rot_y_deg"
-                | b"rot_z_deg"
-                | b"skew_x"
-                | b"skew_y"
-                | b"cropleft"
-                | b"cropright"
-                | b"croptop"
-                | b"cropbottom"
-                | b"fadeleft"
-                | b"faderight"
-                | b"fadetop"
-                | b"fadebottom"
-                | b"diffuse"
-                | b"vertex_colors"
-                | b"glow"
-                | b"quaternion"
-                | b"draw_by_z_position"
-                | b"mask_source"
-                | b"mask_dest"
-                | b"depth_test"
-                | b"depth_write"
-                | b"depth_test_on_fail"
-                | b"texture_filtering"
-                | b"texture_wrapping"
-                | b"basezoom"
-                | b"basezoom_x"
-                | b"basezoom_y"
-                | b"basezoom_z"
-                | b"halign"
-                | b"valign"
-        )
-    {
+#[inline(always)]
+fn get(call: &mut HostCall<'_>, r: &mut Reader, key: Field, live: bool) -> Result<Value, Error> {
+    // During playback the live pose owns these properties; the raw fields
+    // are the preparation representation and are not consulted.
+    if live && key.native() {
         return Ok(Value::Nil);
     }
-    super::get(call, actor, key)
+    r.get(call, key)
 }
 
-pub(super) fn read(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<SongLuaOverlayState, Error> {
-    read_with_metadata(call, store, actor, true, false)
+pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<SongLuaOverlayState, Error> {
+    read_with_metadata(call, actor, true, false)
 }
 
 pub(super) fn read_reset(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
 ) -> Result<SongLuaOverlayState, Error> {
-    read_with_metadata(call, store, actor, false, false)
+    read_with_metadata(call, actor, false, false)
 }
 
 fn read_with_metadata(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     metadata: bool,
     live: bool,
 ) -> Result<SongLuaOverlayState, Error> {
+    let mut reader = Reader::new(call, actor)?;
+    let state = read_fields(call, actor, &mut reader, metadata, live);
+    reader.finish(call);
+    state
+}
+fn read_fields(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    r: &mut Reader,
+    metadata: bool,
+    live: bool,
+) -> Result<SongLuaOverlayState, Error> {
     let mut state = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         guard
             .actors
             .get(&actor)
@@ -170,8 +134,8 @@ fn read_with_metadata(
             hibernating
         );
     }
-    let class = text(call, actor, "__songlua_actor_type", live)?;
-    if !metadata || !store.lock().unwrap().actors.contains_key(&actor) {
+    let class = text(call, r, Field::ACTOR_TYPE, live)?;
+    if !metadata || !call.store().actors.contains_key(&actor) {
         let model = class
             .as_deref()
             .is_some_and(|class| class.eq_ignore_ascii_case("Model"));
@@ -184,35 +148,38 @@ fn read_with_metadata(
             deadlib_render_core::CullMode::None
         };
     }
-    if let Some(mode) = integer(call, actor, "__songlua_state_cull_mode", 0., 255., live)? {
+    if let Some(mode) = integer(call, r, Field::STATE_CULL_MODE, 0., 255., live)? {
         state.cull_mode = match mode {
             1 => deadlib_render_core::CullMode::Back,
             2 => deadlib_render_core::CullMode::Front,
             _ => deadlib_render_core::CullMode::None,
         };
     }
-    if let Some(left) = number(call, actor, "__songlua_hibernate_seconds", live)? {
+    if let Some(left) = number(call, r, Field::HIBERNATE_SECONDS, live)? {
         state.hibernating = left > 0.;
     }
-    state.hibernating |= flag(call, actor, "__songlua_theme_hibernating", live)?.unwrap_or(false);
-    if let Some(aux) = number(call, actor, "__songlua_state_aux", live)? {
+    state.hibernating |= flag(call, r, Field::THEME_HIBERNATING, live)?.unwrap_or(false);
+    if let Some(aux) = number(call, r, Field::STATE_AUX, live)? {
         state.aux = aux;
     }
-    if let Some(visible) = flag(call, actor, "__songlua_visible", live)? {
+    if let Some(visible) = flag(call, r, Field::VISIBLE, live)? {
         state.visible = visible;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_sprite_texture", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_SPRITE_TEXTURE, live)? {
         state.sprite_texture = value;
     } else if class
         .as_deref()
         .is_some_and(|class| class.eq_ignore_ascii_case("Sprite"))
     {
+        // These lookups may run an authored `__index`, so the reader asks
+        // the table's version again after each.
         let texture = sprites::field(call, actor, "Texture")?;
+        r.refresh(call)?;
         let has_texture = value_text(call, texture)?.is_some();
         let capture = if has_texture {
             None
         } else {
-            let allocation = get(call, actor, b"__songlua_aft_allocation", live)?;
+            let allocation = get(call, r, Field::AFT_ALLOCATION, live)?;
             let value = if allocation == Value::Nil {
                 sprites::field(call, actor, "__songlua_aft_capture_name")?
             } else {
@@ -221,189 +188,200 @@ fn read_with_metadata(
             value_text(call, value)?
         };
         state.sprite_texture = has_texture || capture.is_some();
+        r.refresh(call)?;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_x", live)? {
+    // The common live actor has no raw overrides left after promotion. Once
+    // these reads are known to be nil, keep its native state without testing
+    // every property separately. Present tables still take the full path:
+    // their components can change without changing the actor table's version.
+    const LIVE_TAIL: [u64; 2] = Field::mask(Field::STATE_X, Field::STATE_EFFECT_MODE, true);
+    if live && r.all_absent(call, LIVE_TAIL)? {
+        // The FOV read also normalizes the retained native value.
+        state.fov = state.fov.filter(|value| *value != -1.);
+        return Ok(state);
+    }
+    if let Some(value) = number(call, r, Field::STATE_X, live)? {
         state.x = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_y", live)? {
+    if let Some(value) = number(call, r, Field::STATE_Y, live)? {
         state.y = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_z", live)? {
+    if let Some(value) = number(call, r, Field::STATE_Z, live)? {
         state.z = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_z_bias", live)? {
+    if let Some(value) = number(call, r, Field::STATE_Z_BIAS, live)? {
         state.z_bias = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_halign", live)? {
+    if let Some(value) = number(call, r, Field::STATE_HALIGN, live)? {
         state.halign = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_valign", live)? {
+    if let Some(value) = number(call, r, Field::STATE_VALIGN, live)? {
         state.valign = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_cropleft", live)? {
+    if let Some(value) = number(call, r, Field::STATE_CROPLEFT, live)? {
         state.cropleft = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_cropright", live)? {
+    if let Some(value) = number(call, r, Field::STATE_CROPRIGHT, live)? {
         state.cropright = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_croptop", live)? {
+    if let Some(value) = number(call, r, Field::STATE_CROPTOP, live)? {
         state.croptop = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_cropbottom", live)? {
+    if let Some(value) = number(call, r, Field::STATE_CROPBOTTOM, live)? {
         state.cropbottom = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_fadeleft", live)? {
+    if let Some(value) = number(call, r, Field::STATE_FADELEFT, live)? {
         state.fadeleft = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_faderight", live)? {
+    if let Some(value) = number(call, r, Field::STATE_FADERIGHT, live)? {
         state.faderight = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_fadetop", live)? {
+    if let Some(value) = number(call, r, Field::STATE_FADETOP, live)? {
         state.fadetop = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_fadebottom", live)? {
+    if let Some(value) = number(call, r, Field::STATE_FADEBOTTOM, live)? {
         state.fadebottom = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_zoom", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ZOOM, live)? {
         state.zoom = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_zoom_x", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ZOOM_X, live)? {
         state.zoom_x = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_zoom_y", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ZOOM_Y, live)? {
         state.zoom_y = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_zoom_z", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ZOOM_Z, live)? {
         state.zoom_z = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_basezoom", live)? {
+    if let Some(value) = number(call, r, Field::STATE_BASEZOOM, live)? {
         state.basezoom = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_basezoom_x", live)? {
+    if let Some(value) = number(call, r, Field::STATE_BASEZOOM_X, live)? {
         state.basezoom_x = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_basezoom_y", live)? {
+    if let Some(value) = number(call, r, Field::STATE_BASEZOOM_Y, live)? {
         state.basezoom_y = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_basezoom_z", live)? {
+    if let Some(value) = number(call, r, Field::STATE_BASEZOOM_Z, live)? {
         state.basezoom_z = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_base_alpha", live)? {
+    if let Some(value) = number(call, r, Field::STATE_BASE_ALPHA, live)? {
         state.base_alpha = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_rot_x_deg", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ROT_X_DEG, live)? {
         state.rot_x_deg = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_rot_y_deg", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ROT_Y_DEG, live)? {
         state.rot_y_deg = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_rot_z_deg", live)? {
+    if let Some(value) = number(call, r, Field::STATE_ROT_Z_DEG, live)? {
         state.rot_z_deg = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_skew_x", live)? {
+    if let Some(value) = number(call, r, Field::STATE_SKEW_X, live)? {
         state.skew_x = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_skew_y", live)? {
+    if let Some(value) = number(call, r, Field::STATE_SKEW_Y, live)? {
         state.skew_y = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_effect_period", live)? {
+    if let Some(value) = number(call, r, Field::STATE_EFFECT_PERIOD, live)? {
         state.effect_period = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_effect_offset", live)? {
+    if let Some(value) = number(call, r, Field::STATE_EFFECT_OFFSET, live)? {
         state.effect_offset = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_text_distortion", live)? {
+    if let Some(value) = number(call, r, Field::STATE_TEXT_DISTORTION, live)? {
         state.text_distortion = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_sprite_playback_rate", live)? {
+    if let Some(value) = number(call, r, Field::STATE_SPRITE_PLAYBACK_RATE, live)? {
         state.sprite_playback_rate = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_sprite_state_delay", live)? {
+    if let Some(value) = number(call, r, Field::STATE_SPRITE_STATE_DELAY, live)? {
         state.sprite_state_delay = value;
     }
-    if let Some(value) = number(call, actor, "__songlua_state_max_width", live)? {
+    if let Some(value) = number(call, r, Field::STATE_MAX_WIDTH, live)? {
         state.max_width = Some(value);
     }
-    if let Some(value) = number(call, actor, "__songlua_state_max_height", live)? {
+    if let Some(value) = number(call, r, Field::STATE_MAX_HEIGHT, live)? {
         state.max_height = Some(value);
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_draw_by_z_position", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_DRAW_BY_Z_POSITION, live)? {
         state.draw_by_z_position = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_aft_preserve", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_AFT_PRESERVE, live)? {
         state.aft_preserve = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_aft_created", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_AFT_CREATED, live)? {
         state.aft_created = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_uppercase", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_UPPERCASE, live)? {
         state.uppercase = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_mask_source", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MASK_SOURCE, live)? {
         state.mask_source = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_mask_dest", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MASK_DEST, live)? {
         state.mask_dest = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_depth_test", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_DEPTH_TEST, live)? {
         state.depth_test = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_depth_write", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_DEPTH_WRITE, live)? {
         state.depth_write = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_depth_test_on_fail", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_DEPTH_TEST_ON_FAIL, live)? {
         state.depth_test_on_fail = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_vibrate", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_VIBRATE, live)? {
         state.vibrate = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_rainbow", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_RAINBOW, live)? {
         state.rainbow = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_rainbow_scroll", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_RAINBOW_SCROLL, live)? {
         state.rainbow_scroll = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_text_jitter", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_TEXT_JITTER, live)? {
         state.text_jitter = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_mult_attrs_with_diffuse", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MULT_ATTRS_WITH_DIFFUSE, live)? {
         state.mult_attrs_with_diffuse = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_sprite_animate", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_SPRITE_ANIMATE, live)? {
         state.sprite_animate = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_sprite_loop", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_SPRITE_LOOP, live)? {
         state.sprite_loop = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_max_w_pre_zoom", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MAX_W_PRE_ZOOM, live)? {
         state.max_w_pre_zoom = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_max_h_pre_zoom", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MAX_H_PRE_ZOOM, live)? {
         state.max_h_pre_zoom = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_max_dimension_uses_zoom", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_MAX_DIMENSION_USES_ZOOM, live)? {
         state.max_dimension_uses_zoom = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_decode_movie", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_DECODE_MOVIE, live)? {
         state.decode_movie = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_texture_filtering", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_TEXTURE_FILTERING, live)? {
         state.texture_filtering = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_texture_wrapping", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_TEXTURE_WRAPPING, live)? {
         state.texture_wrapping = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_effect_timer", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_EFFECT_TIMER, live)? {
         state.effect_timer = value;
     }
-    if let Some(value) = flag(call, actor, "__songlua_state_effect_no_offset", live)? {
+    if let Some(value) = flag(call, r, Field::STATE_EFFECT_NO_OFFSET, live)? {
         state.effect_no_offset = value;
     }
-    let fov = number(call, actor, "__songlua_state_fov", live)?;
-    let declaration = number(call, actor, "FOV", live)?;
+    let fov = number(call, r, Field::STATE_FOV, live)?;
+    let declaration = number(call, r, Field::FOV, live)?;
     // Materialized frames already consumed FOV. A later fov(-1) leaves None;
     // falling back to the declaration here would accidentally enable it again.
-    let fallback = if store.lock().unwrap().actors.contains_key(&actor) {
+    let fallback = if call.store().actors.contains_key(&actor) {
         state.fov
     } else {
         declaration
@@ -411,8 +389,8 @@ fn read_with_metadata(
     state.fov = fov.or(fallback).filter(|value| *value != -1.);
     if let Some(value) = integer(
         call,
-        actor,
-        "__songlua_state_draw_order",
+        r,
+        Field::STATE_DRAW_ORDER,
         i32::MIN as f64,
         i32::MAX as f64,
         live,
@@ -421,8 +399,8 @@ fn read_with_metadata(
     }
     if let Some(value) = integer(
         call,
-        actor,
-        "__songlua_state_vert_spacing",
+        r,
+        Field::STATE_VERT_SPACING,
         i32::MIN as f64,
         i32::MAX as f64,
         live,
@@ -431,8 +409,8 @@ fn read_with_metadata(
     }
     if let Some(value) = integer(
         call,
-        actor,
-        "__songlua_state_wrap_width_pixels",
+        r,
+        Field::STATE_WRAP_WIDTH_PIXELS,
         i32::MIN as f64,
         i32::MAX as f64,
         live,
@@ -441,92 +419,94 @@ fn read_with_metadata(
     }
     if let Some(value) = integer(
         call,
-        actor,
-        "__songlua_state_sprite_state_index",
+        r,
+        Field::STATE_SPRITE_STATE_INDEX,
         u32::MIN as f64,
         u32::MAX as f64,
         live,
     )? {
         state.sprite_state_index = Some(value as u32);
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_diffuse", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_DIFFUSE, live)? {
         state.diffuse = value;
     }
-    if let Some(value) = vector::<2>(call, actor, "__songlua_state_shadow_len", live)? {
+    if let Some(value) = vector::<2>(call, r, Field::STATE_SHADOW_LEN, live)? {
         state.shadow_len = value;
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_shadow_color", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_SHADOW_COLOR, live)? {
         state.shadow_color = value;
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_glow", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_GLOW, live)? {
         state.glow = value;
     }
-    if let Some(value) = vector::<2>(call, actor, "__songlua_state_vanishpoint", live)? {
+    if let Some(value) = vector::<2>(call, r, Field::STATE_VANISHPOINT, live)? {
         state.vanishpoint = Some(value);
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_quaternion", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_QUATERNION, live)? {
         state.quaternion = value;
     }
-    if let Some(value) = vector::<3>(call, actor, "__songlua_state_base_rotation", live)? {
+    if let Some(value) = vector::<3>(call, r, Field::STATE_BASE_ROTATION, live)? {
         state.base_rotation = value;
     }
-    if let Some(value) = vector::<3>(call, actor, "__songlua_state_effect_magnitude", live)? {
+    if let Some(value) = vector::<3>(call, r, Field::STATE_EFFECT_MAGNITUDE, live)? {
         state.effect_magnitude = value;
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_effect_color1", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_EFFECT_COLOR1, live)? {
         state.effect_color1 = value;
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_effect_color2", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_EFFECT_COLOR2, live)? {
         state.effect_color2 = value;
     }
-    if let Some(value) = vector::<5>(call, actor, "__songlua_state_effect_timing", live)? {
+    if let Some(value) = vector::<5>(call, r, Field::STATE_EFFECT_TIMING, live)? {
         state.effect_timing = Some(value);
     }
-    if let Some(value) = vector::<2>(call, actor, "__songlua_state_texcoord_offset", live)? {
+    if let Some(value) = vector::<2>(call, r, Field::STATE_TEXCOORD_OFFSET, live)? {
         state.texcoord_offset = Some(value);
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_custom_texture_rect", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_CUSTOM_TEXTURE_RECT, live)? {
         state.custom_texture_rect = Some(value);
     }
-    if let Some(value) = vector::<2>(call, actor, "__songlua_state_texcoord_velocity", live)? {
+    if let Some(value) = vector::<2>(call, r, Field::STATE_TEXCOORD_VELOCITY, live)? {
         state.texcoord_velocity = Some(value);
     }
-    if let Some(value) = vector::<2>(call, actor, "__songlua_state_size", live)? {
+    if let Some(value) = vector::<2>(call, r, Field::STATE_SIZE, live)? {
         state.size = Some(value);
     }
-    if let Some(value) = vector::<4>(call, actor, "__songlua_state_stretch_rect", live)? {
+    if let Some(value) = vector::<4>(call, r, Field::STATE_STRETCH_RECT, live)? {
         state.stretch_rect = Some(value);
     }
-    if let Some(colors) = optional_table(call, actor, "__songlua_state_vertex_colors", live)? {
-        if let Some(out) = vertex_colors(call, colors)? {
+    if let Some(colors) = optional_table(call, r, Field::STATE_VERTEX_COLORS, live)? {
+        let colors = vertex_colors(call, colors)?;
+        r.refresh(call)?;
+        if let Some(out) = colors {
             state.vertex_colors = Some(out);
         }
     }
-    if let Some(value) = text(call, actor, "__songlua_state_text_align", live)?
+    if let Some(value) = text(call, r, Field::STATE_TEXT_ALIGN, live)?
         .as_deref()
         .and_then(crate::parse_overlay_text_align)
     {
         state.text_align = value;
     }
-    if let Some(value) = text(call, actor, "__songlua_state_effect_clock", live)?
+    if let Some(value) = text(call, r, Field::STATE_EFFECT_CLOCK, live)?
         .as_deref()
         .and_then(crate::parse_overlay_effect_clock)
     {
         state.effect_clock = value;
     }
-    if let Some(value) = text(call, actor, "__songlua_state_text_glow_mode", live)?
+    if let Some(value) = text(call, r, Field::STATE_TEXT_GLOW_MODE, live)?
         .as_deref()
         .and_then(crate::parse_overlay_text_glow_mode)
     {
         state.text_glow_mode = value;
     }
-    if let Some(value) = text(call, actor, "__songlua_state_blend", live)?
+    if let Some(value) = text(call, r, Field::STATE_BLEND, live)?
         .as_deref()
         .and_then(crate::parse_overlay_blend_mode)
     {
         state.blend = value;
     }
-    if let Some(value) = text(call, actor, "__songlua_state_effect_mode", live)?
+    if let Some(value) = text(call, r, Field::STATE_EFFECT_MODE, live)?
         .as_deref()
         .and_then(crate::parse_overlay_effect_mode)
     {
@@ -534,43 +514,60 @@ fn read_with_metadata(
     }
     Ok(state)
 }
+// A field's value as a number. Anything but a number goes through `tonumber`,
+// which runs a debug hook if one is set, so the reader asks the version again.
+#[inline(always)]
+fn to_number(call: &mut HostCall<'_>, r: &mut Reader, value: Value) -> Result<f64, Error> {
+    match value {
+        Value::Number(value) => Ok(value),
+        value => converted(call, r, value),
+    }
+}
+#[inline(never)]
+fn converted(call: &mut HostCall<'_>, r: &mut Reader, value: Value) -> Result<f64, Error> {
+    let value = sprites::number(call, value)?;
+    r.refresh(call)?;
+    Ok(value)
+}
+#[inline(always)]
 fn number(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     live: bool,
 ) -> Result<Option<f32>, Error> {
-    let value = get(call, actor, key.as_bytes(), live)?;
-    if value == Value::Nil {
-        return Ok(None);
+    match get(call, r, key, live)? {
+        Value::Nil => Ok(None),
+        value => to_number(call, r, value).map(|value| Some(value as f32)),
     }
-    sprites::number(call, value).map(|value| Some(value as f32))
 }
+#[inline]
 fn integer(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     min: f64,
     max: f64,
     live: bool,
 ) -> Result<Option<i64>, Error> {
-    let value = get(call, actor, key.as_bytes(), live)?;
+    let value = get(call, r, key, live)?;
     if value == Value::Nil {
         return Ok(None);
     }
-    let value = sprites::number(call, value)?.trunc();
+    let value = to_number(call, r, value)?.trunc();
     if !(min..=max).contains(&value) {
-        return Err(call.error(format!("{key}: integer out of range").as_bytes()));
+        return Err(call.error(format!("{}: integer out of range", key.name()).as_bytes()));
     }
     Ok(Some(value as i64))
 }
+#[inline(always)]
 fn flag(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     live: bool,
 ) -> Result<Option<bool>, Error> {
-    let value = get(call, actor, key.as_bytes(), live)?;
+    let value = get(call, r, key, live)?;
     Ok((value != Value::Nil).then_some(!matches!(value, Value::Nil | Value::Boolean(false))))
 }
 pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option<String>, Error> {
@@ -586,11 +583,11 @@ pub(super) fn value_text(call: &mut HostCall<'_>, value: Value) -> Result<Option
 }
 fn text(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     live: bool,
 ) -> Result<Option<StateText>, Error> {
-    let value = get(call, actor, key.as_bytes(), live)?;
+    let value = get(call, r, key, live)?;
     if value == Value::Nil {
         return Ok(None);
     }
@@ -610,26 +607,33 @@ impl std::ops::Deref for StateText {
         std::str::from_utf8(&self.0).expect("validated actor state text")
     }
 }
+#[inline(always)]
 fn optional_table(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     live: bool,
 ) -> Result<Option<TableId>, Error> {
-    let value = get(call, actor, key.as_bytes(), live)?;
+    let value = get(call, r, key, live)?;
     if value == Value::Nil {
         return Ok(None);
     }
     table(call, value).map(Some)
 }
+#[inline(always)]
 fn vector<const N: usize>(
     call: &mut HostCall<'_>,
-    actor: TableId,
-    key: &str,
+    r: &mut Reader,
+    key: Field,
     live: bool,
 ) -> Result<Option<[f32; N]>, Error> {
-    match optional_table(call, actor, key, live)? {
-        Some(t) => components(call, t),
+    match optional_table(call, r, key, live)? {
+        Some(t) => {
+            // A component that is not a number goes through `tonumber`.
+            let value = components(call, t)?;
+            r.refresh(call)?;
+            Ok(value)
+        }
         None => Ok(None),
     }
 }

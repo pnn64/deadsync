@@ -9,7 +9,6 @@ pub(crate) struct Tracked {
 }
 #[derive(Clone)]
 struct Read {
-    store: Shared,
     scene: u64,
     output: Arc<Mutex<Vec<Tracked>>>,
 }
@@ -24,7 +23,6 @@ impl Actors {
             read,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
             Read {
-                store: self.store.clone(),
                 scene: screen.id,
                 output: output.clone(),
             },
@@ -79,15 +77,13 @@ fn push(
     let index = call.raw_table_len(batch)? + 1;
     call.raw_table_set(batch, Value::Number(index as f64), Value::Table(actor))?;
     let state = if matches!(target, Target::Player(_)) {
-        initial_state::read(call, &data.store, actor)?
+        initial_state::read(call, actor)?
     } else {
         let value = field(call, actor, "__songlua_manual_draw_state")?;
         if let Some(snapshot) = optional_table(call, value)? {
-            call.with_roots(&[value], |call| {
-                initial_state::read(call, &data.store, snapshot)
-            })?
+            call.with_roots(&[value], |call| initial_state::read(call, snapshot))?
         } else {
-            initial_state::read(call, &data.store, actor)?
+            initial_state::read(call, actor)?
         }
     };
     let manual_hud_draw = matches!(target, Target::Player(_)) && manual_hud(call, actor)?;
@@ -118,25 +114,18 @@ fn child(
         if index.fract() != 0. || !(0. ..crate::LUA_PLAYERS as f64).contains(&index) {
             return Err(call.error(b"tracked player index out of range"));
         }
-        return player_parts::tracked_child(
-            call,
-            &data.store,
-            data.scene,
-            parent,
-            index as usize,
-            name,
-        );
+        return player_parts::tracked_child(call, data.scene, parent, index as usize, name);
     }
     let top = kind
         .as_deref()
         .is_some_and(|s| s.eq_ignore_ascii_case("TopScreen"));
     let actor = if top {
-        screen_parts::create(call, &data.store, data.scene, name)?
+        screen_parts::create(call, data.scene, name)?
     } else {
-        generated_players::dummy(call, &data.store, data.scene, "ChildActor", name, None)?
+        generated_players::dummy(call, data.scene, "ChildActor", name, None)?
     };
     underlay::copy_tags(call, parent, actor)?;
-    native_children::adopt(call, &data.store, actor, parent)?;
+    native_children::adopt(call, actor, parent)?;
     if top {
         let value = call.try_intern(name.as_bytes())?;
         set(call, actor, "__songlua_top_screen_child_name", value)?;

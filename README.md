@@ -128,8 +128,14 @@ export RUSTFLAGS="-L native=$brew_prefix/lib -L native=$brew_prefix/opt/vulkan-l
 
 ### BSD build dependencies (FreeBSD)
 ```bash
-pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi
+pkg install cmake python3 pkgconf alsa-lib alsa-plugins vulkan-validation-layers hidapi dbus
 ```
+
+Native folder browsing on Linux and FreeBSD uses the desktop's XDG FileChooser
+portal, with `zenity` as a fallback when the portal is unavailable. FreeBSD
+installations also need the `dbus` runtime package. To smoke-test selection and
+cancellation independently of profile importing, run
+`cargo run -p deadlib-platform --example pick_folder` on a desktop session.
 
 ## Test fixtures
 
@@ -295,6 +301,12 @@ P1_Back=PadCode[0x00030031]@0
 
 Legacy high-level bindings like `PadDir::Up`, `PadButton::Confirm`, and `PadN::Dir::Left` are still accepted for convenience, but low-level `PadCode[...]` bindings are the most accurate and device-agnostic way to configure controllers.
 
+#### Axis Fix (Linux)
+
+For dance pad adapters that report directional buttons as X/Y axes, enable **Axis Fix** in **Input Options**, then restart DeadSync and configure the directions through the mapping screen. This uses ITGmania's Axis Fix interpretation, including simultaneous Left+Right and Up+Down presses on compatible adapters.
+
+The option defaults to **Off**. It can also be set with `AxisFix=1` in the `[Options]` section of `deadsync.ini`; use `AxisFix=0` to disable it. Leave it off for ordinary analog controllers.
+
 #### Debug shortcuts
 
 | Key | Action |
@@ -316,6 +328,24 @@ A `save` directory is created inside the data directory to store your personal d
 
 *   To enable online features with **GrooveStats**, edit `<data dir>/save/profiles/00000000/groovestats.ini` and add your API key and username. This allows the game to fetch your online scores. The SRPG Shop also requires `Password=<your GrooveStats password>` in that file.
 *   You can also change your in-game display name in `<data dir>/save/profiles/00000000/profile.ini`.
+
+### Scorebox leaderboards
+
+Each online service chooses its own scorebox boards under
+**Options > Online Score Services**:
+
+- **GrooveStats Options > Scorebox Boards** toggles the GrooveStats ITG, EX and
+  event (ITL, SRPG) boards. All three are on by default.
+- **ArrowCloud Options > Regular Boards** turns ArrowCloud's ITG/EX/H.EX boards
+  on or off. Which of them appear is set in your board preferences on the
+  ArrowCloud website. Its default is set when ArrowCloud is enabled: off if
+  GrooveStats was already enabled, so GrooveStats' ITG and EX boards aren't
+  duplicated, and on otherwise. Enabling GrooveStats later keeps it on.
+- **ArrowCloud Options > Event Boards** turns ArrowCloud event boards such as
+  Golf on or off. On by default.
+
+**Select Music Options** keeps the display settings: Show GS Box, its
+placement, and Lead With Event Boards.
 
 ### Lua chart score submission
 
@@ -346,8 +376,8 @@ player and Select Music choices.
 - **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
   Turning the master switch on also turns this on, so pars appear right away;
   switch it off here if you would rather not see them.
-- **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
-  shows the online event board alongside the other selectable leaderboards,
+- **Options > Online Score Services > ArrowCloud Options > Event Boards** (on
+  by default) shows the online golf board alongside the other leaderboards,
   framed in fairway green over the In The Golf course pattern.
   ArrowCloud sends it with the chart's other boards in the same request, so
   turning it on or off takes effect immediately.

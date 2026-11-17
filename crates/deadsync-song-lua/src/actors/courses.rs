@@ -35,7 +35,7 @@ pub(super) const METHODS: &[&str] = &[
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let methods = native_children::helper_function(call, b"course_methods")?;
     let methods = table(call, methods)?;
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     for &name in METHODS {
         let method = get(call, methods, name.as_bytes())?;
@@ -51,12 +51,7 @@ pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Err
     Ok(())
 }
 
-pub(super) fn initialize(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn initialize(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
     for (key, value) in [
         ("current_item", 0.),
         ("destination_item", 0.),
@@ -71,19 +66,17 @@ pub(super) fn initialize(
     let display = table(call, display)?;
     let name = field(call, display, "Name")?;
     if name == Value::Nil {
-        let name = call.try_intern(b"Display")?;
+        let name = call.intern_static(b"Display")?;
         set(call, display, "Name", name)?;
     } else {
         assets::text(call, name)?;
     }
-    native_children::adopt(call, store, display, actor)?;
-    if store.lock().unwrap().actors[&actor].offline_instance
-        || get(call, display, b"Condition")? != Value::Boolean(false)
+    native_children::adopt(call, display, actor)?;
+    if call.store().actors[&actor].offline_instance
+        || get_static(call, display, b"Condition")? != Value::Boolean(false)
     {
-        attach(call, store, scene, display)?;
-        store
-            .lock()
-            .unwrap()
+        attach(call, scene, display)?;
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -107,58 +100,40 @@ pub(super) fn initialize(
 
 // The production constructor appends Display itself, including a plain Def
 // table. Track it without adding instance methods or replacing its metatable.
-pub(super) fn attach(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
+pub(super) fn attach(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
     {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let actors = &guard.scenes[&scene].actors;
         if actors.contains(&actor) {
             return Ok(());
         }
     }
-    if store.lock().unwrap().actors.contains_key(&actor) {
-        if store.lock().unwrap().retired_scenes.contains_key(&scene) {
+    if call.store().actors.contains_key(&actor) {
+        if call.store().retired_scenes.contains_key(&scene) {
             let registry = table(call, call.captures()[0])?;
-            retirement::retain(call, store, scene, actor, registry)?;
+            retirement::retain(call, scene, actor, registry)?;
         }
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .scenes
             .get_mut(&scene)
             .unwrap()
             .actors
             .push(actor);
-        if !store.lock().unwrap().actors[&actor].initialized {
-            let name = get(call, actor, b"Name")?;
+        if !call.store().actors[&actor].initialized {
+            let name = get_static(call, actor, b"Name")?;
             if matches!(name, Value::Number(_) | Value::String(_)) {
                 let name = bytes(call, name)?;
-                store
-                    .lock()
-                    .unwrap()
-                    .actors
-                    .get_mut(&actor)
-                    .unwrap()
-                    .load_name = Some(name);
+                call.store().actors.get_mut(&actor).unwrap().load_name = Some(name);
             }
         }
-        let mut descendants = children(call, store, actor)?;
-        descendants.extend(
-            store.lock().unwrap().actors[&actor]
-                .wrappers
-                .iter()
-                .copied(),
-        );
+        let mut descendants = children(call, actor)?;
+        descendants.extend(call.store().actors[&actor].wrappers.iter().copied());
         for child in descendants {
-            attach(call, store, scene, child)?;
+            attach(call, scene, child)?;
         }
         return Ok(());
     }
-    let name = get(call, actor, b"Name")?;
+    let name = get_static(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {
@@ -169,38 +144,34 @@ pub(super) fn attach(
     instance.initialized = boolean(call, actor, "__songlua_init_commands_ran")?;
     instance.started = boolean(call, actor, "__songlua_startup_commands_ran")?;
     if instance.initialized {
-        let name = get(call, actor, b"__songlua_native_name")?;
+        let name = get_static(call, actor, b"__songlua_native_name")?;
         if matches!(name, Value::Number(_) | Value::String(_)) {
             instance.state.name = bytes(call, name)?;
         }
     }
     instance.registered = instance.initialized;
     let registry = table(call, call.captures()[0])?;
-    retirement::retain(call, store, scene, actor, registry)?;
-    store.lock().unwrap().actors.insert(actor, instance);
-    store
-        .lock()
-        .unwrap()
+    retirement::retain(call, scene, actor, registry)?;
+    call.store().actors.insert(actor, instance);
+    call.store()
         .scenes
         .get_mut(&scene)
         .unwrap()
         .actors
         .push(actor);
-    refresh_raw_children(call, store, actor, false)
+    refresh_raw_children(call, actor, false)
 }
 
 pub(super) fn refresh_raw_children(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     compact: bool,
 ) -> Result<(), Error> {
     let selected = call.call(helper(call, 10)?, &[Value::Table(actor)])?[0];
     call.with_roots(&[selected], |call| {
         let selected = table(call, selected)?;
-        let owners: Vec<_> = store
-            .lock()
-            .unwrap()
+        let owners: Vec<_> = call
+            .store()
             .scenes
             .iter()
             .filter_map(|(id, scene)| scene.actors.contains(&actor).then_some(*id))
@@ -209,7 +180,7 @@ pub(super) fn refresh_raw_children(
         for i in 1..=call.raw_table_len(selected)? {
             let child = table(call, call.raw_table_get(selected, Value::Number(i as f64))?)?;
             for &scene in &owners {
-                attach(call, store, scene, child)?;
+                attach(call, scene, child)?;
             }
             children.push(child);
         }
@@ -230,51 +201,29 @@ pub(super) fn refresh_raw_children(
                 call.raw_table_set(actor, Value::Number((i + 1) as f64), Value::Table(*child))?;
             }
         }
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .children = children;
+        call.store().actors.get_mut(&actor).unwrap().children = children;
         Ok(())
     })
 }
 
-pub(super) fn prepare_raw_init(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-) -> Result<(), Error> {
-    if !store.lock().unwrap().actors[&actor].raw_instance {
+pub(super) fn prepare_raw_init(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    if !call.store().actors[&actor].raw_instance {
         return Ok(());
     }
     let initialized = boolean(call, actor, "__songlua_init_commands_ran")?;
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .initialized = initialized;
+    call.store().actors.get_mut(&actor).unwrap().initialized = initialized;
     if initialized {
         return Ok(());
     }
-    refresh_raw_children(call, store, actor, true)?;
-    let name = get(call, actor, b"Name")?;
+    refresh_raw_children(call, actor, true)?;
+    let name = get_static(call, actor, b"Name")?;
     let name = if matches!(name, Value::Number(_) | Value::String(_)) {
         Some(bytes(call, name)?)
     } else {
         None
     };
-    store
-        .lock()
-        .unwrap()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .load_name = name;
-    let empty = call.try_intern(b"")?;
+    call.store().actors.get_mut(&actor).unwrap().load_name = name;
+    let empty = call.intern_static(b"")?;
     for name in [b"__songlua_native_name".as_slice(), b"__songlua_load_name"] {
         let key = call.try_intern(name)?;
         call.raw_table_set(actor, key, empty)?;
@@ -284,31 +233,28 @@ pub(super) fn prepare_raw_init(
 
 pub(super) fn share_child(
     call: &mut HostCall<'_>,
-    store: &Shared,
     owner: TableId,
     child: TableId,
 ) -> Result<(), Error> {
-    let owners: Vec<_> = store
-        .lock()
-        .unwrap()
+    let owners: Vec<_> = call
+        .store()
         .scenes
         .iter()
         .filter_map(|(id, scene)| scene.actors.contains(&owner).then_some(*id))
         .collect();
     for scene in owners {
-        attach(call, store, scene, child)?;
+        attach(call, scene, child)?;
     }
     Ok(())
 }
 
 pub(super) fn publish_raw_name(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     original: Value,
 ) -> Result<(), Error> {
     let name = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let a = &guard.actors[&actor];
         (a.raw_instance || a.offline_instance).then(|| a.state.name.clone())
     };
@@ -318,25 +264,24 @@ pub(super) fn publish_raw_name(
         } else {
             original
         };
-        let key = call.try_intern(b"__songlua_native_name")?;
+        let key = call.intern_static(b"__songlua_native_name")?;
         call.raw_table_set(actor, key, value)?;
         if original != Value::Nil {
-            let key = call.try_intern(b"Name")?;
+            let key = call.intern_static(b"Name")?;
             call.raw_table_set(actor, key, original)?;
         }
-        let key = call.try_intern(b"__songlua_load_name")?;
+        let key = call.intern_static(b"__songlua_load_name")?;
         call.raw_table_set(actor, key, Value::Nil)?;
     }
     Ok(())
 }
 pub(super) fn publish_raw_flag(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     key: &str,
 ) -> Result<(), Error> {
     let publish = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         let a = &guard.actors[&actor];
         a.raw_instance || a.offline_instance
     };
@@ -348,7 +293,7 @@ pub(super) fn publish_raw_flag(
 fn boolean(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<bool, Error> {
     // Lua's bool conversion uses truthiness; nil is the optional default.
     Ok(!matches!(
-        field(call, actor, key)?,
+        sprites::field_named(call, actor, key)?,
         Value::Nil | Value::Boolean(false)
     ))
 }
@@ -356,7 +301,7 @@ fn put(call: &mut HostCall<'_>, actor: TableId, key: &str, value: Value) -> Resu
     set(call, actor, &format!("__songlua_scroller_{key}"), value)
 }
 fn float(call: &mut HostCall<'_>, actor: TableId, key: &str, default: f32) -> Result<f32, Error> {
-    let value = field(call, actor, &format!("__songlua_scroller_{key}"))?;
+    let value = sprites::field_named(call, actor, &format!("__songlua_scroller_{key}"))?;
     if value == Value::Nil {
         Ok(default)
     } else {
@@ -382,15 +327,12 @@ fn function(call: &HostCall<'_>, value: Value) -> Result<Option<Value>, Error> {
     }
 }
 fn display(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let named = native_children::named_children(call, actor)?;
-    call.with_roots(&[named], |call| {
-        let value = field(call, table(call, named)?, "Display")?;
-        if value == Value::Nil {
-            Ok(None)
-        } else {
-            Ok(Some(table(call, value)?))
-        }
-    })
+    let value = native_children::host_child(call, actor, b"Display")?;
+    if value == Value::Nil {
+        Ok(None)
+    } else {
+        Ok(Some(table(call, value)?))
+    }
 }
 fn position(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let Some(display) = display(call, actor)? else {
@@ -411,7 +353,8 @@ fn position(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
             )?;
         } else {
             for (key, axis) in [("item_height", "Y"), ("item_width", "X")] {
-                let value = field(call, actor, &format!("__songlua_scroller_{key}"))?;
+                let value =
+                    sprites::field_named(call, actor, &format!("__songlua_scroller_{key}"))?;
                 if value != Value::Nil {
                     let offset = 0.0_f32 * sprites::number(call, value)? as f32;
                     set(call, display, axis, Value::Number(offset as f64))?;
@@ -431,7 +374,7 @@ fn call_method(
     call.with_roots(
         &[Value::Table(object), extra.unwrap_or(Value::Nil)],
         |call| {
-            let method = field(call, object, name)?;
+            let method = sprites::field_named(call, object, name)?;
             let Some(method) = function(call, method)? else {
                 return Ok(Value::Nil);
             };
@@ -455,30 +398,29 @@ fn gamestate(call: &mut HostCall<'_>, name: &str, extra: Option<Value>) -> Resul
 }
 fn set_song(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     params: Value,
     leaf: bool,
 ) -> Result<(), Error> {
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         if !leaf && let Some((command, _)) = command(call, actor, b"SetSong")? {
-            run_actor_function(call, store, actor, command, Some(params))?;
+            run_actor_function(call, actor, command, Some(params))?;
         }
         if leaf {
             for child in native_children::group_members(call, actor)? {
-                set_song(call, store, child, params, true)?;
+                set_song(call, child, params, true)?;
             }
         }
     } else if leaf {
-        leaves(call, store, actor, &mut |call, child| {
-            run_named(call, store, child, b"SetSong", Some(params))
+        leaves(call, actor, &mut |call, child| {
+            run_named(call, child, b"SetSong", Some(params))
         })?;
     } else {
-        run_named(call, store, actor, b"SetSong", Some(params))?;
+        run_named(call, actor, b"SetSong", Some(params))?;
     }
     Ok(())
 }
-fn populate(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+fn populate(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let Some(display) = display(call, actor)? else {
         return Ok(());
     };
@@ -510,23 +452,18 @@ fn populate(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(
                     set(call, params, name, value)?;
                 }
                 let params = Value::Table(params);
-                set_song(call, store, display, params, false)?;
-                set_song(call, store, display, params, true)
+                set_song(call, display, params, false)?;
+                set_song(call, display, params, true)
             })?;
         }
         Ok(())
     })
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     let value = arg(call, 1);
     match name {
-        "Load" => return sprites::method(call, store, actor, name),
+        "Load" => return sprites::method(call, actor, name),
         "SetFromGameState" => {
             if assets::field(call, actor, b"__songlua_actor_type")?
                 .is_some_and(|s| s.eq_ignore_ascii_case("CourseContentsList"))
@@ -538,7 +475,7 @@ pub(super) fn method(
                     Value::Boolean(true),
                 )?;
                 put(call, actor, "num_items", Value::Number(1.))?;
-                populate(call, store, actor)?;
+                populate(call, actor)?;
             }
         }
         "PositionItems" => position(call, actor)?,

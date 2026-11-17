@@ -24,6 +24,7 @@ pub struct SongLuaLivePlayer {
     pub life_record_latest: Option<f32>,
     pub failed: bool,
     pub combo: u32,
+    pub recorded_max_combo: u32,
     pub miss_combo: u32,
     /// Native TapNoteScore order: None, HitMine, AvoidMine, CheckpointMiss,
     /// Miss, W5, W4, W3, W2, W1, CheckpointHit.
@@ -51,6 +52,7 @@ pub enum SongLuaLivePlayerWrite {
     SetLife { player: usize, life: f32 },
     RecordLife { player: usize, life: f32 },
     Fail { player: usize },
+    FailRoutine,
 }
 
 pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
@@ -68,6 +70,7 @@ pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, 
             SongLuaLivePlayerWrite::Fail { player } => {
                 game.mark_player_stage_failed_from_script(player)
             }
+            SongLuaLivePlayerWrite::FailRoutine => game.mark_routine_stage_failed_from_script(),
         }
     }
 }
@@ -98,6 +101,8 @@ pub struct SongLuaLiveFrame {
     pub chart_attacks:
         Option<[std::sync::Arc<[deadsync_gameplay::ChartAttackWindow]>; LUA_PLAYERS]>,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
+    /// Routine's separately ordered scorekeeper, without a life-meter actor.
+    pub routine: Option<SongLuaLivePlayer>,
 }
 
 impl SongLuaLivePlayer {
@@ -108,10 +113,12 @@ impl SongLuaLivePlayer {
             actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
             life: player.life,
-            life_record_latest: player.life_history.last().map(|&(_, life)| life),
+            life_record_latest: player.life_history.last().map(|&(_, life)| life).or_else(||
+                matches!(player.life_record_source, deadsync_gameplay::LifeRecordSource::Combined(_)).then_some(0.)),
             failed: player.stage_failed || player.fail_time.is_some(),
             fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo,
+            recorded_max_combo: player.recorded_max_combo,
             miss_combo: player.miss_combo,
             tap_scores: [
                 0,
@@ -149,6 +156,12 @@ impl SongLuaLiveFrame {
             uptime_seconds: None,
             gameplay_outro: game.mods.attacks.cleared_for_outro,
             chart_attacks: Some(game.mods.attacks.option_windows.clone()),
+            routine: game.routine_shared_stage_itg_score_inputs().map(|score| {
+                SongLuaLivePlayer::from_player(
+                    &game.players_runtime.routine.as_ref().unwrap().stats,
+                    score.possible_grade_points,
+                )
+            }),
             players: std::array::from_fn(|player| {
                 game.stage_itg_score_inputs(player).map_or_else(
                     SongLuaLivePlayer::default,
@@ -203,6 +216,8 @@ pub struct SongLuaLiveBroadcast {
 
 #[derive(Debug, Default)]
 pub struct SongLuaLiveOutput {
+    /// Ordered music/player pause transitions; repeated unchanged requests are ignored.
+    pub gameplay_pauses: Vec<bool>,
     /// Ordered actor-owned audio operations emitted by authored Lua callbacks.
     pub actor_sounds: Vec<SongLuaActorSound>,
     pub request: Option<SongLuaLiveRequest>,
@@ -225,6 +240,7 @@ pub struct SongLuaLiveOutput {
 
 impl SongLuaLiveOutput {
     pub fn append(&mut self, mut next: Self) {
+        self.gameplay_pauses.append(&mut next.gameplay_pauses);
         self.actor_sounds.append(&mut next.actor_sounds);
         if next.request.is_some() {
             self.request = next.request;

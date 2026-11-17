@@ -23,7 +23,7 @@ impl SongRuntime {
         beat: f32,
         restore_function_tables: bool,
     ) -> Result<crate::SongLuaFunctionActionCapture, String> {
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("function action capture requires preparation before frame replay".into());
         }
         let mut pins = Vec::new();

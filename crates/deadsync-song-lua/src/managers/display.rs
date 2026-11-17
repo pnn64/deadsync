@@ -50,7 +50,7 @@ fn install_inner(
     }
     vm.raw_table_set(specs, Value::Number(1.), Value::Table(spec))?;
     let mt = new_table(vm, roots)?;
-    let text = vm.try_intern(b"DisplaySpecs: songlua")?;
+    let text = vm.intern_static(b"DisplaySpecs: songlua")?;
     constant_method(vm, mt, "__tostring", text)?;
     let setmetatable = vm.get_global(b"setmetatable")?;
     vm.call(setmetatable, &[Value::Table(specs), Value::Table(mt)])?;
@@ -138,14 +138,14 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     let operation = *call.function_data::<Operation>().expect("screen binding");
     let value = match operation {
         Operation::Aspect(fallback) => {
-            let key = call.try_intern(b"PREFSMAN")?;
+            let key = call.intern_static(b"PREFSMAN")?;
             let prefs = call.table_get(call.captures()[0], key)?;
             call.with_roots(&[prefs], |call| {
                 let prefs = table(call, prefs)?;
-                let key = call.try_intern(b"__songlua_preference_values")?;
+                let key = call.intern_static(b"__songlua_preference_values")?;
                 let values = call.raw_table_get(prefs, key)?;
                 let values = table(call, values)?;
-                let key = call.try_intern(b"DisplayAspectRatio")?;
+                let key = call.intern_static(b"DisplayAspectRatio")?;
                 let value = call.raw_table_get(values, key)?;
                 let n = if value == Value::Nil {
                     fallback

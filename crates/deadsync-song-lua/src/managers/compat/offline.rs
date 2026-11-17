@@ -117,7 +117,7 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
         Operation::True => Value::Boolean(true),
         Operation::Owner => call.captures()[1],
         Operation::Zeros(len) => call.try_intern(&vec![0; len])?,
-        Operation::Uuid => call.try_intern(b"00000000-0000-4000-8000-000000000000")?,
+        Operation::Uuid => call.intern_static(b"00000000-0000-4000-8000-000000000000")?,
         Operation::Effect(result) => {
             effect(call)?;
             let Some(result) = result else {

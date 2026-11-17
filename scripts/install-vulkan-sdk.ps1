@@ -1,6 +1,31 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-VulkanSdkInstaller {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Uri,
+
+        [Parameter(Mandatory)]
+        [string]$OutFile
+    )
+
+    # Retry transport failures too (for example a connection reset mid-download).
+    # With --output, curl truncates the partial download before each retry.
+    & curl.exe --fail --location --no-progress-meter `
+        --retry 5 --retry-all-errors --retry-delay 5 --retry-max-time 600 `
+        --connect-timeout 30 --max-time 600 --output $OutFile $Uri
+    $downloadExitCode = $LASTEXITCODE
+    if ($downloadExitCode -ne 0) {
+        Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+        throw "Vulkan SDK download failed after retries (curl exit code $downloadExitCode): $Uri"
+    }
+    if (-not (Test-Path -LiteralPath $OutFile -PathType Leaf) -or
+        (Get-Item -LiteralPath $OutFile).Length -eq 0) {
+        throw "Vulkan SDK download produced no installer: $Uri"
+    }
+}
+
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
@@ -12,11 +37,14 @@ $installerUrl = 'https://sdk.lunarg.com/sdk/download/latest/windows/vulkan-sdk.e
 $installer = Join-Path $env:TEMP 'vulkan-sdk.exe'
 
 Write-Host 'Downloading Vulkan SDK...'
-Invoke-WebRequest -Uri $installerUrl -OutFile $installer -UseBasicParsing
+Get-VulkanSdkInstaller -Uri $installerUrl -OutFile $installer
 
 Write-Host 'Installing Vulkan SDK...'
 $installerArgs = '--accept-licenses', '--default-answer', '--confirm-command', 'install'
-Start-Process -FilePath $installer -ArgumentList $installerArgs -NoNewWindow -Wait
+$installProcess = Start-Process -FilePath $installer -ArgumentList $installerArgs -WindowStyle Hidden -Wait -PassThru
+if ($installProcess.ExitCode -ne 0) {
+    throw "Vulkan SDK installer failed with exit code $($installProcess.ExitCode)."
+}
 
 $vulkanRoot = Join-Path $env:SystemDrive 'VulkanSDK'
 

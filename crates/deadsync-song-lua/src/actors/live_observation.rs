@@ -14,8 +14,8 @@ struct Observer {
 }
 
 impl Actors {
-    pub(crate) fn take_message_coverage(&self) -> Vec<String> {
-        std::mem::take(&mut self.store.lock().unwrap().message_coverage)
+    pub(crate) fn take_message_coverage(&self, vm: &mut Vm) -> Vec<String> {
+        std::mem::take(&mut vm.store().message_coverage)
     }
 
     pub(crate) fn enable_overlay_observer(
@@ -63,22 +63,22 @@ impl Actors {
                 });
             }
         }
-        self.store.lock().unwrap().message_paths = order;
+        vm.store().message_paths = order;
         Ok(())
     }
 }
 
 fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let screen = get(call, globals, b"__songlua_top_screen")?;
+    let screen = get_static(call, globals, b"__songlua_top_screen")?;
     let screen = table(call, screen)?;
     let children = native_children::named_children(call, screen)?;
     let children = table(call, children)?;
-    let overlay = get(call, children, b"Overlay")?;
+    let overlay = get_static(call, children, b"Overlay")?;
     let overlay = table(call, overlay)?;
     let children = native_children::named_children(call, overlay)?;
     let children = table(call, children)?;
-    let probe = get(call, children, b"ITGmaniaHarnessTraceProbe")?;
+    let probe = get_static(call, children, b"ITGmaniaHarnessTraceProbe")?;
     let actor = if probe == Value::Nil {
         overlay
     } else {
@@ -101,8 +101,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn observe(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let helpers = table(call, call.captures()[1])?;
-    let key = call.try_intern(OBSERVER)?;
-    let observer = call.raw_table_get(helpers, key)?;
+    let observer = get_static(call, helpers, OBSERVER)?;
     if observer != Value::Nil {
         call.call(observer, &[Value::Table(actor)])?;
     }
@@ -118,7 +117,7 @@ fn record(call: &mut HostCall<'_>) -> Result<(), Error> {
         return Ok(());
     };
     let catalog = table(call, call.captures()[0])?;
-    let key = call.try_intern(b"scene_step_indices")?;
+    let key = call.intern_static(b"scene_step_indices")?;
     let selected = call.raw_table_get(catalog, key)?;
     let values = call.call(selected, &[])?.to_vec();
     let player_step_indices = std::array::from_fn(|i| match values[i] {

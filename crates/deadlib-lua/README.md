@@ -61,6 +61,27 @@ so every callback shares it without reference counting or locking. A borrow
 ends before the callback can reenter Lua. The state is not scanned by the
 collector, stays available to closing finalizers and is dropped with the VM.
 
+`set_index_resolver` gives a host function used as an `__index` handler a pure
+fast path. The interpreter asks the resolver first and calls the handler only
+when it declines, so ordinary member reads need no call. A resolver reads
+tables through `IndexView` and cannot allocate, fail or run Lua. The handler
+still answers whenever a debug hook or an instruction limit is active.
+
+`HostCall::raw_metatable` and `raw_table_next` read a table's actual metatable
+and walk its entries without metamethods, so a callback can inspect a table
+without entering Lua. `HostCall::is_raw_next` tells whether a traversal
+function the embedding holds is that same walk.
+
+`intern_static` interns a byte string that lives for the whole program, such
+as a literal, and afterwards finds it by the slice's address instead of its
+contents. The string stays alive with the VM, so the value needs no rooting.
+Use it for the field names a callback reads on every call;
+`HostCall::raw_table_get_static` reads such a field in one step, and
+`NativeStack::raw_set_static` writes one without pushing its name and value.
+`HostCall::raw_fields_version` changes whenever a string-keyed entry of a
+table changes, so an embedding can remember those reads per table and repeat
+them only after a write.
+
 `HostCall::try_new_userdata` allocates zeroed, VM-owned byte storage in the
 callback's environment and propagates allocation or VM memory-limit errors.
 Root or publish the returned value before calling Lua or collecting garbage.

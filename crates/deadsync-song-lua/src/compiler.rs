@@ -133,12 +133,24 @@ pub fn compile_prepared_song_lua_layers<S, V>(
     );
     timer.push_stage("update_functions");
     context.report_bake_progress(0.20);
+    // Keep draw-time writes separate from startup queue discovery. A property
+    // changed by the first draw is already observable on frame zero, including
+    // when the callback never submits that actor's Draw().
+    let before_draw = runtime
+        .actors
+        .before_song_update(&mut runtime.vm, screen)
+        .map_err(|e| e.to_string())?;
     runtime
         .actors
         .compiler_read(&mut runtime.vm, root, Query::Draw)
         .map_err(|e| e.to_string())?;
+    let mut initial_draw = runtime
+        .actors
+        .after_song_update(&mut runtime.vm, screen, before_draw)
+        .map_err(|e| e.to_string())?;
+    initial_draw.retain(|_, state| !state.blocks.is_empty());
     timer.push_stage("draw_functions");
-    let mut discovered = runtime.actors.take_song_broadcasts();
+    let mut discovered = runtime.actors.take_song_broadcasts(&mut runtime.vm);
     let mut sounds = runtime.take_prepared_sounds();
     let mut judgments = runtime.take_judgment_textures();
     let mut sprites = runtime
@@ -182,6 +194,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
             })
         })),
         loaded_style: Some(selected.style_name.clone()),
+        loaded_players: Some(selected.players.each_ref().map(|player| player.enabled)),
         startup_reloads: reloads,
         entry_path: paths[primary].clone(),
         screen_width: selected.screen_width,
@@ -303,6 +316,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         &mut rows,
         &queued,
         &activation,
+        &initial_draw,
         &mut out.messages,
         &selected,
     )?;
@@ -369,7 +383,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .song_timing
         .as_ref()
         .map(|t| t.get_time_for_beat_exact(0.));
-    for detail in runtime.actors.take_callback_errors() {
+    for detail in runtime.actors.take_callback_errors(&mut runtime.vm) {
         out.info.unsupported_perframes += 1;
         crate::push_unique_compile_detail(&mut out.info.unsupported_perframe_captures, detail);
     }
@@ -612,6 +626,7 @@ impl SongRuntime {
         rows: &mut SongOverlayActors<K>,
         queued: &HashMap<TableId, SongStartupState>,
         activation: &SongActivation,
+        initial_draw: &HashMap<TableId, SongStartupState>,
         messages: &mut Vec<SongLuaMessageEvent>,
         context: &SongLuaCompileContext,
     ) -> Result<(), String> {
@@ -624,8 +639,12 @@ impl SongRuntime {
                 unreachable!()
             };
             if let Some(state) = queued.get(&id)
-                && let Some(command) =
-                    crate::perframe::startup_command(state, row.actor.initial_state)
+                && let Some(command) = crate::perframe::startup_command(
+                    state,
+                    initial_draw
+                        .get(&id)
+                        .map_or(row.actor.initial_state, |draw| draw.initial),
+                )
             {
                 row.actor.initial_state = state.initial;
                 row.actor.message_commands.push(command);
@@ -685,7 +704,12 @@ impl SongRuntime {
             else {
                 unreachable!()
             };
-            if let Some(state) = activation.updates.get(&id) {
+            for state in activation
+                .updates
+                .get(&id)
+                .into_iter()
+                .chain(initial_draw.get(&id))
+            {
                 for block in &state.blocks {
                     if block.duration == 0.
                         && block.start <= 0.

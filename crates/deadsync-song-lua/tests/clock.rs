@@ -317,6 +317,192 @@ fn generated_bpm_tables_and_invalid_numeric_fields_follow_legacy_behavior() {
     assert!(pair.rust.set_beat(2.0).is_err());
 }
 
+fn precision_context(
+    song_offset: f32,
+    group_offset: f32,
+    global_offset: f32,
+    rate: f32,
+) -> SongLuaCompileContext {
+    let mut context = context();
+    context.song_music_rate = rate;
+    context.song_timing_bpms = vec![(0.0, 180.0), (2.0, 135.0)];
+    let mut timing = TimingData::from_segments(
+        song_offset,
+        global_offset,
+        &TimingSegments {
+            bpms: context.song_timing_bpms.clone(),
+            stops: vec![StopSegment {
+                beat: 4.0,
+                duration: 0.125,
+            }],
+            delays: vec![DelaySegment {
+                beat: 6.0,
+                duration: 1.0 / 60.0,
+            }],
+            ..Default::default()
+        },
+        &[],
+    );
+    timing.shift_group_offset_seconds(group_offset);
+    context.song_timing = Some(timing);
+    context.music_length_seconds = 8.0;
+    context
+}
+
+fn execute_clock(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
+    runtime
+        .vm_mut()
+        .execute(&compile(source.as_bytes()).unwrap())
+        .unwrap()
+        .to_vec()
+}
+
+#[test]
+fn beatnooffset_effect_uses_the_supplied_music_timestamp() {
+    for live in [false, true] {
+        for (song, group, global) in [
+            (0.0, -0.009, -0.008),
+            (0.125, -0.009, -0.008),
+            (-0.5, 0.03125, 0.017),
+        ] {
+            for rate in [1.0, 1.7, 0.5, 2.0] {
+                let mut context = precision_context(song, group, global, rate);
+                context.live = live;
+                let timing = context.song_timing.as_ref().unwrap();
+                let origin = timing.get_time_for_beat_exact(0.0);
+                let mut runtime = SongRuntime::new(&context).unwrap();
+                let definition = execute_clock(
+                    &mut runtime,
+                    "return Def.Quad{InitCommand=function(self) self:rainbow():effectclock('beatnooffset') end}",
+                )[0];
+                let scene = runtime.instantiate_actor(definition).unwrap();
+                let root = runtime.actor_scene_root(scene).unwrap();
+                runtime.vm_mut().set_global(b"root", root).unwrap();
+                for raw in [0.083333335_f32, 0.1, 0.11666667, 0.7, 1.5, 2.6462812, 4.125] {
+                    let seconds = if live {
+                        f64::from(raw)
+                    } else {
+                        (f64::from(raw) - f64::from(origin)) / f64::from(rate)
+                    };
+                    let beat = timing.get_song_position_with_rate(raw, rate).beat;
+                    execute_clock(
+                        &mut runtime,
+                        &format!(
+                            "local r=__songlua_compile_song_runtime; r.__songlua_music_seconds={seconds:?}; r.__songlua_song_beat={beat:?}"
+                        ),
+                    );
+                    runtime.advance_actor_scene(scene, 0.01).unwrap();
+                    let actual = execute_clock(&mut runtime, "return root:GetSecsIntoEffect()");
+                    // Native uses the original music timestamp for the offset-free
+                    // lookup; neither the visible beat nor elapsed actor time enters it.
+                    let expected = timing.get_song_position_no_offset(raw).beat;
+                    assert_eq!(
+                        actual,
+                        vec![Value::Number(f64::from(expected))],
+                        "live={live}, raw={raw:?}, origin={origin:?}, rate={rate:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn captured_music_clock_keeps_compiled_track_anchors() {
+    use deadsync_song_lua::{
+        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update, SongLuaTimeUnit,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("clock.lua");
+    std::fs::write(
+        &entry,
+        r#"return Def.ActorFrame{
+        OnCommand=function(self)
+            local probe=self:GetChild('ClockProbe')
+            self:SetUpdateFunction(function(self)
+                probe:x(GAMESTATE:GetSongPosition():GetMusicSeconds())
+            end)
+        end,
+        Def.Quad{
+            Name='ClockProbe',
+            InitCommand=function(self) self:rainbow():effectclock('beatnooffset') end,
+        },
+    }"#,
+    )
+    .unwrap();
+    // Keep source timestamps and effect phases bit-exact across the BPM change,
+    // stop and delay, including the early frames where offset rounding matters.
+    let mut raw_times = vec![0.083333335_f32, 0.1, 0.11666667];
+    raw_times.extend((8..=240).map(|frame| frame as f32 / 60.0));
+    for rate in [1.0, 1.7, 0.5, 2.0] {
+        let mut context = precision_context(0.0, -0.009, -0.008, rate);
+        context.song_dir = dir.path().to_path_buf();
+        let timing = context.song_timing.as_ref().unwrap();
+        let origin = timing.get_time_for_beat_exact(0.0);
+        context
+            .compile_clock_inputs
+            .push([f64::from(origin), 0.0, 0.0]);
+        let mut previous = origin;
+        for &raw in &raw_times {
+            context.compile_clock_inputs.push([
+                f64::from(raw),
+                f64::from(timing.get_song_position_with_rate(raw, rate).beat),
+                f64::from((raw - previous) / rate),
+            ]);
+            previous = raw;
+        }
+        let compiled = deadsync_assets::song_lua::compile_song_lua_layers(&[&entry], 0, &context)
+            .unwrap()
+            .remove(0);
+        assert!(compiled.live_scene.is_none());
+        assert_eq!(compiled.overlay_update_unit, SongLuaTimeUnit::Second);
+        let index = compiled
+            .overlays
+            .iter()
+            .position(|a| a.name.as_deref() == Some("ClockProbe"))
+            .unwrap();
+        for &raw in &raw_times {
+            let beat = timing.get_song_position_with_rate(raw, rate).beat;
+            let sample = compiled
+                .overlay_updates
+                .iter()
+                .filter(|track| track.overlay_index == index && track.target == Target::X)
+                .flat_map(|track| &track.samples)
+                .filter(|sample| sample.time <= raw)
+                .max_by(|a, b| a.time.total_cmp(&b.time))
+                .expect("music getter produces a compiled X sample");
+            assert_eq!(
+                sample.time.to_bits(),
+                raw.to_bits(),
+                "track anchor at rate {rate}"
+            );
+            assert_eq!(
+                sample.value,
+                Update::F32(raw),
+                "music getter at rate {rate}"
+            );
+            let effect = compiled
+                .overlay_updates
+                .iter()
+                .filter(|track| track.overlay_index == index && track.target == Target::EffectTime)
+                .flat_map(|track| &track.samples)
+                .filter(|sample| sample.time <= raw)
+                .max_by(|a, b| a.time.total_cmp(&b.time))
+                .expect("rainbow retains its effect clock");
+            let Update::Vec2([at, units]) = effect.value else {
+                panic!("effect clock pair");
+            };
+            let expected = timing.get_song_position_no_offset(raw).beat;
+            assert_eq!(
+                (units + (beat - at)).to_bits(),
+                expected.to_bits(),
+                "effect phase at rate {rate}"
+            );
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;

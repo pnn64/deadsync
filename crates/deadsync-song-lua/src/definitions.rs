@@ -99,7 +99,7 @@ fn load_live_actor(call: &mut HostCall<'_>) -> Result<(), Error> {
             let directory = match directory {
                 Some(directory) => Some(directory),
                 None => {
-                    let key = call.try_intern(b"__songlua_script_dir")?;
+                    let key = call.intern_static(b"__songlua_script_dir")?;
                     match call.table_get(call.captures()[2], key)? {
                         Value::String(id) => Some(PathBuf::from(
                             std::str::from_utf8(call.string_bytes(id).unwrap())
@@ -267,7 +267,7 @@ fn resolve(call: &mut HostCall<'_>) -> Result<(), Error> {
         None | Some(Value::Nil | Value::Boolean(false))
     );
     if path.is_relative() {
-        let key = call.try_intern(b"__songlua_script_dir")?;
+        let key = call.intern_static(b"__songlua_script_dir")?;
         let directory = call.table_get(call.captures()[0], key)?;
         if directory != Value::Nil {
             let directory = call

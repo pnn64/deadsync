@@ -5,8 +5,10 @@ use crate::{Error, reserve};
 /// unchanged until the image ends: dictionary phrases refer to that prefix.
 /// Output is bounded before every expansion, including KwKwK and frozen tables.
 pub struct Decoder {
-    offsets: [usize; 4096],
-    lengths: [u16; 4096],
+    // Output offsets relative to the last CLEAR, packed with 12-bit lengths.
+    // The allocation is sized from the output bound and reused across frames.
+    dictionary: Vec<u64>,
+    origin: usize,
     clear: u16,
     next: u16,
     width: u8,
@@ -24,8 +26,8 @@ impl Default for Decoder {
 impl Decoder {
     pub fn new() -> Self {
         Self {
-            offsets: [0; 4096],
-            lengths: [0; 4096],
+            dictionary: Vec::new(),
+            origin: 0,
             clear: 4,
             next: 6,
             width: 3,
@@ -49,6 +51,7 @@ impl Decoder {
         Ok(())
     }
     fn clear_table(&mut self) {
+        self.dictionary.clear();
         self.next = self.clear + 2;
         self.width = self.minimum + 1;
         self.previous = None;
@@ -90,6 +93,9 @@ impl Decoder {
                     }
                     reserve(output, 1)?;
                     output.push(code as u8);
+                    if self.previous.is_none() {
+                        self.origin = start;
+                    }
                     1
                 } else {
                     if code == self.clear {
@@ -101,9 +107,10 @@ impl Decoder {
                         break;
                     }
                     let (offset, length) = if code < self.next {
+                        let entry = self.dictionary[(code - self.clear - 2) as usize];
                         (
-                            self.offsets[code as usize],
-                            self.lengths[code as usize] as usize,
+                            self.origin + (entry >> 12) as usize,
+                            (entry & 4095) as usize,
                         )
                     } else if code == self.next && self.next < 4096 {
                         let (offset, len) = self
@@ -116,10 +123,20 @@ impl Decoder {
                     if length > limit.saturating_sub(start) {
                         return Err(Error::Invalid("LZW output exceeds frame size"));
                     }
-                    reserve(output, length)?;
                     let first = output[offset];
                     let count = length.min(start - offset);
-                    output.extend_from_within(offset..offset + count);
+                    if count <= 8 && start - offset >= 8 && limit - start >= 8 {
+                        // A constant-size copy avoids a variable-size memmove
+                        // for short phrases. Both source and temporary output
+                        // are initialized and within the caller's bound; drop
+                        // the extra suffix before exposing the output again.
+                        reserve(output, length.max(8))?;
+                        output.extend_from_within(offset..offset + 8);
+                        output.truncate(start + count);
+                    } else {
+                        reserve(output, length)?;
+                        output.extend_from_within(offset..offset + count);
+                    }
                     if count < length {
                         output.push(first);
                     }
@@ -128,8 +145,20 @@ impl Decoder {
                 if let Some((offset, previous_len)) = self.previous
                     && self.next < 4096
                 {
-                    self.offsets[self.next as usize] = offset;
-                    self.lengths[self.next as usize] = (previous_len + 1) as u16;
+                    if self.dictionary.len() == self.dictionary.capacity() {
+                        let bound = limit
+                            .saturating_sub(self.origin)
+                            .min((4096 - self.clear - 2) as usize);
+                        self.dictionary
+                            .try_reserve_exact(bound - self.dictionary.len())
+                            .map_err(|_| Error::Allocation)?;
+                    }
+                    // Before the table freezes there are at most 4091 phrases,
+                    // each at most 4091 bytes long. Thus relative offsets fit
+                    // 24 bits even when a caller's output prefix exceeds 4 GiB.
+                    // A frozen table adds no entries; CLEAR starts a new epoch.
+                    let entry = ((offset - self.origin) as u64) << 12 | (previous_len + 1) as u64;
+                    self.dictionary.push(entry);
                     self.next += 1;
                     if self.next == 1 << self.width && self.width < 12 {
                         self.width += 1;

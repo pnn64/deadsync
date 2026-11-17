@@ -168,27 +168,23 @@ pub fn coefficient_dump(data: &[u8], frame: &FrameHeader, components: &[Coeffici
     assert_eq!(position, data.len());
 }
 
+/// Native sample snapshots pin implementation-defined IDCT rounding. Set
+/// `DEADLIB_JPEG_REPIN` to rewrite them after an intentional transform change.
 pub fn sample_dump(
-    data: &[u8],
+    path: &std::path::Path,
     precision: u8,
     width: u16,
     height: u16,
     planes: &[deadlib_image_jpeg::ComponentPlane],
 ) {
-    assert_eq!(&data[..4], b"JLP1");
-    let mut position = 4;
-    fn word(data: &[u8], p: &mut usize) -> usize {
-        let n = u32::from_le_bytes(data[*p..*p + 4].try_into().unwrap()) as usize;
-        *p += 4;
-        n
-    }
+    let mut actual = b"JLP1".to_vec();
     for n in [
         precision as usize,
         width as usize,
         height as usize,
         planes.len(),
     ] {
-        assert_eq!(word(data, &mut position), n);
+        actual.extend((n as u32).to_le_bytes());
     }
     for c in planes {
         for n in [
@@ -198,15 +194,14 @@ pub fn sample_dump(
             c.width,
             c.height,
         ] {
-            assert_eq!(word(data, &mut position), n);
+            actual.extend((n as u32).to_le_bytes());
         }
         for &v in &c.samples {
-            assert_eq!(
-                u16::from_le_bytes(data[position..position + 2].try_into().unwrap()),
-                v
-            );
-            position += 2;
+            actual.extend(v.to_le_bytes());
         }
     }
-    assert_eq!(position, data.len());
+    if std::env::var_os("DEADLIB_JPEG_REPIN").is_some() {
+        std::fs::write(path, &actual).unwrap();
+    }
+    assert!(actual == std::fs::read(path).unwrap(), "{}", path.display());
 }

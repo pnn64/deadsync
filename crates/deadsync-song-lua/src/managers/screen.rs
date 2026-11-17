@@ -13,6 +13,9 @@ pub(crate) struct Screen {
 type Shared = Arc<Mutex<Requests>>;
 #[derive(Default)]
 pub(crate) struct Requests {
+    pub gameplay_paused: bool,
+    pub gameplay_pauses: Vec<bool>,
+    pub gameplay_outro: bool,
     pub next: Option<String>,
     pub actor_names: Option<super::super::actors::ActorNames>,
     #[cfg(feature = "test-support")]
@@ -48,6 +51,12 @@ impl SongRuntime {
         screen: Value,
         players: [Value; LUA_PLAYERS],
     ) -> Result<(), Error> {
+        {
+            let mut state = self.screen.state.lock().unwrap();
+            state.gameplay_paused = false;
+            state.gameplay_pauses.clear();
+            state.gameplay_outro = false;
+        }
         let globals = self.vm.rooted(self.screen.globals)?;
         let state = self.screen.state.clone();
         self.vm
@@ -208,8 +217,10 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 stack.set_table(top as isize, false)?;
                 // SCREENMAN changes the native name too. Ordinary authored
                 // Name assignments keep their existing instance-field policy.
-                let names = state.lock().unwrap().actor_names.clone();
-                if names.and_then(|names| names.rename(actor, name.as_bytes())) == Some(true) {
+                let names = state.lock().unwrap().actor_names;
+                if names.and_then(|names| names.rename(&mut stack, actor, name.as_bytes()))
+                    == Some(true)
+                {
                     for key in [b"__songlua_load_name".as_slice(), b"__songlua_native_name"] {
                         if key == b"__songlua_load_name" {
                             stack.push_bytes(key)?;

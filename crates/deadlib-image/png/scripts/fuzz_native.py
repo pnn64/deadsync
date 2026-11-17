@@ -83,6 +83,12 @@ def main():
         parser.error('--runs must be positive')
     assert os.name == 'posix', 'Use Linux for the ASan campaign'
     package = Path(__file__).resolve().parent.parent
+    # Resolve the complete graph before capturing input hashes. A stale lock
+    # must fail here instead of changing during a long fuzz campaign.
+    preflight = ['rustup', 'run', 'nightly', 'cargo', 'metadata', '--locked', '--offline',
+                 '--manifest-path', str(package / 'fuzz/Cargo.toml'), '--format-version', '1',
+                 '--filter-platform', 'x86_64-unknown-linux-gnu']
+    subprocess.run(preflight, cwd=package, stdout=subprocess.DEVNULL, check=True)
     output = args.output_dir.resolve()
     output.mkdir(parents=True)
     target_dir = args.target_dir.resolve()
@@ -113,7 +119,8 @@ def main():
         package / 'fuzz/scripts/native_rustc.py', Path(__file__).resolve()]
     sources = [{'path': p.relative_to(package.parent).as_posix(), 'sha256': sha(p)} for p in source_paths]
     metadata = {'baseline_png_commit': 'fae2e5bd2', 'source_sha256': sources,
-                'seed_archive_sha256': sha(args.seed_archive), 'commands': [], 'campaigns': [], 'requested_run_override': args.runs,
+                'seed_archive_sha256': sha(args.seed_archive), 'preflight': preflight,
+                'commands': [], 'campaigns': [], 'requested_run_override': args.runs,
                 'environment': {key: env[key] for key in ['RUSTFLAGS', 'RUSTC_WRAPPER',
                     'DEADLIB_PNG_NATIVE_FUZZ_AUDIT', 'CARGO_BUILD_JOBS', 'CC', 'CFLAGS']},
                 'rustc': subprocess.check_output(['rustup', 'run', 'nightly', 'rustc', '-vV'], text=True),

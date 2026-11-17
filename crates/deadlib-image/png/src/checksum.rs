@@ -1,3 +1,8 @@
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[path = "checksum/x86.rs"]
+mod x86;
+
 const fn crc_table() -> [u32; 256] {
     let mut table = [0; 256];
     let mut i = 0;
@@ -59,27 +64,35 @@ impl Crc32 {
         Self { state: !0 }
     }
     pub(crate) fn update(&mut self, bytes: &[u8]) {
-        let mut crc = self.state;
-        let (groups, tail) = bytes.as_chunks::<16>();
-        for &bytes in groups {
-            let low = u64::from_le_bytes(bytes[..8].try_into().unwrap()) ^ u64::from(crc);
-            let high = u64::from_le_bytes(bytes[8..].try_into().unwrap());
-            crc = crc_word::<8>(low) ^ crc_word::<0>(high);
+        #[cfg(target_arch = "x86_64")]
+        if let Some(state) = x86::update(self.state, bytes) {
+            self.state = state;
+            return;
         }
-        let tail = if let Some((bytes, tail)) = tail.split_first_chunk::<8>() {
-            crc = crc_word::<0>(u64::from_le_bytes(*bytes) ^ u64::from(crc));
-            tail
-        } else {
-            tail
-        };
-        for &byte in tail {
-            crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
-        }
-        self.state = crc;
+        self.state = update_scalar(self.state, bytes);
     }
     pub(crate) fn finish(&self) -> u32 {
         !self.state
     }
+}
+
+fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
+    let (groups, tail) = bytes.as_chunks::<16>();
+    for &bytes in groups {
+        let low = u64::from_le_bytes(bytes[..8].try_into().unwrap()) ^ u64::from(crc);
+        let high = u64::from_le_bytes(bytes[8..].try_into().unwrap());
+        crc = crc_word::<8>(low) ^ crc_word::<0>(high);
+    }
+    let tail = if let Some((bytes, tail)) = tail.split_first_chunk::<8>() {
+        crc = crc_word::<0>(u64::from_le_bytes(*bytes) ^ u64::from(crc));
+        tail
+    } else {
+        tail
+    };
+    for &byte in tail {
+        crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
+    }
+    crc
 }
 
 pub(crate) fn adler32(input: &[u8]) -> u32 {
@@ -110,6 +123,10 @@ impl Adler32 {
         }
     }
     fn update_bulk(&mut self, input: &[u8]) {
+        #[cfg(target_arch = "x86_64")]
+        if x86::adler_update(self, input) {
+            return;
+        }
         for block in input.chunks(5552) {
             let tail = if block.len() >= 64 {
                 let (groups, tail) = block.as_chunks::<16>();

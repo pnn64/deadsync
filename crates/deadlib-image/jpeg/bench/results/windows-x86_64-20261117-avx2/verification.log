@@ -1,0 +1,148 @@
+VERIFIED	assets\fonts\_combo\Wendy (Cursed)\_Wendy (Cursed).jpg	224338	673014
+PIXELS	assets\fonts\_combo\Wendy (Cursed)\_Wendy (Cursed).jpg	zune	4	0.346983
+PIXELS	assets\fonts\_combo\Wendy (Cursed)\_Wendy (Cursed).jpg	jpeg-decoder	3	0.112976
+PIXELS	assets\fonts\_combo\Wendy (Cursed)\_Wendy (Cursed).jpg	image	4	0.346983
+VERIFIED	assets\graphics\srpg10_shop\janus5kshopd.jpg	2073600	6220800
+PIXELS	assets\graphics\srpg10_shop\janus5kshopd.jpg	zune	5	0.605244
+PIXELS	assets\graphics\srpg10_shop\janus5kshopd.jpg	jpeg-decoder	3	0.213859
+PIXELS	assets\graphics\srpg10_shop\janus5kshopd.jpg	image	5	0.605244
+VERIFIED	assets\graphics\srpg10_shop\levitasshopc.jpg	2073600	6220800
+PIXELS	assets\graphics\srpg10_shop\levitasshopc.jpg	zune	5	0.474317
+PIXELS	assets\graphics\srpg10_shop\levitasshopc.jpg	jpeg-decoder	3	0.218120
+PIXELS	assets\graphics\srpg10_shop\levitasshopc.jpg	image	5	0.474317
+VERIFIED	assets\graphics\srpg10_shop\remsshopc.jpg	2073600	6220800
+PIXELS	assets\graphics\srpg10_shop\remsshopc.jpg	zune	5	0.546086
+PIXELS	assets\graphics\srpg10_shop\remsshopc.jpg	jpeg-decoder	3	0.234774
+PIXELS	assets\graphics\srpg10_shop\remsshopc.jpg	image	5	0.546086
+VERIFIED	assets\graphics\srpg10_shop\tevshopc.jpg	2073600	6220800
+PIXELS	assets\graphics\srpg10_shop\tevshopc.jpg	zune	4	0.520129
+PIXELS	assets\graphics\srpg10_shop\tevshopc.jpg	jpeg-decoder	3	0.216015
+PIXELS	assets\graphics\srpg10_shop\tevshopc.jpg	image	4	0.520129
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-410.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-411.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-420.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-422.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-440.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-444.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-gray.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-multiscan.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-optimized.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-restart.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-rgb.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/progressive\12-wide-quant.jpg	higher-precision comparison pending; native output is preserved
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-410.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-410.jpg	zune	104	21.589553
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-410.jpg	jpeg-decoder	104	21.598805
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-410.jpg	image	104	21.589553
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-411.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-411.jpg	zune	90	18.980601
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-411.jpg	jpeg-decoder	90	18.980239
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-411.jpg	image	90	18.980601
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-420.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-420.jpg	zune	3	0.717822
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-420.jpg	jpeg-decoder	3	0.290346
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-420.jpg	image	3	0.717822
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-422.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-422.jpg	zune	2	0.292560
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-422.jpg	jpeg-decoder	3	0.244510
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-422.jpg	image	2	0.292560
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-440.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-440.jpg	zune	2	0.285115
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-440.jpg	jpeg-decoder	2	0.301965
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-440.jpg	image	2	0.285115
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-444.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-444.jpg	zune	3	0.253152
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-444.jpg	jpeg-decoder	3	0.296938
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-444.jpg	image	3	0.253152
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-cmyk.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-cmyk.jpg	zune	1	0.157944
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-cmyk.jpg	jpeg-decoder	1	0.153805
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-cmyk.jpg	image	1	0.157944
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-gray.jpg	775	775
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-gray.jpg	zune	1	0.143684
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-gray.jpg	jpeg-decoder	1	0.152400
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-gray.jpg	image	1	0.143684
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-multiscan.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-multiscan.jpg	zune	3	0.741982
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-multiscan.jpg	jpeg-decoder	2	0.274352
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-multiscan.jpg	image	3	0.741982
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-optimized.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-optimized.jpg	zune	3	0.717822
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-optimized.jpg	jpeg-decoder	3	0.290346
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-optimized.jpg	image	3	0.717822
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-restart.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-restart.jpg	zune	3	0.253152
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-restart.jpg	jpeg-decoder	3	0.296938
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-restart.jpg	image	3	0.253152
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-rgb.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-rgb.jpg	zune	1	0.142180
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-rgb.jpg	jpeg-decoder	1	0.143684
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-rgb.jpg	image	1	0.142180
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-wide-quant.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-wide-quant.jpg	zune	0	0.000000
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-wide-quant.jpg	jpeg-decoder	0	0.000000
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/progressive\8-wide-quant.jpg	image	0	0.000000
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-410.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-411.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-420.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-422.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-440.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-444.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-gray.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-multiscan.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-optimized.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-restart.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-rgb.jpg	higher-precision comparison pending; native output is preserved
+EXCLUDED	crates/deadlib-image/jpeg/tests/fixtures/sequential\12-wide-quant.jpg	higher-precision comparison pending; native output is preserved
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-410.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-410.jpg	zune	104	21.589553
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-410.jpg	jpeg-decoder	104	21.598805
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-410.jpg	image	104	21.589553
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-411.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-411.jpg	zune	90	18.980601
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-411.jpg	jpeg-decoder	90	18.980239
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-411.jpg	image	90	18.980601
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-420.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-420.jpg	zune	3	0.717822
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-420.jpg	jpeg-decoder	3	0.290346
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-420.jpg	image	3	0.717822
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-422.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-422.jpg	zune	2	0.292560
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-422.jpg	jpeg-decoder	3	0.244510
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-422.jpg	image	2	0.292560
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-440.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-440.jpg	zune	2	0.285115
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-440.jpg	jpeg-decoder	2	0.301965
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-440.jpg	image	2	0.285115
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-444.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-444.jpg	zune	3	0.253152
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-444.jpg	jpeg-decoder	3	0.296938
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-444.jpg	image	3	0.253152
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-cmyk.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-cmyk.jpg	zune	1	0.157944
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-cmyk.jpg	jpeg-decoder	1	0.153805
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-cmyk.jpg	image	1	0.157944
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-gray.jpg	775	775
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-gray.jpg	zune	1	0.143684
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-gray.jpg	jpeg-decoder	1	0.152400
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-gray.jpg	image	1	0.143684
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-multiscan.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-multiscan.jpg	zune	255	127.919350
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-multiscan.jpg	jpeg-decoder	2	0.274352
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-multiscan.jpg	image	255	127.919350
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-optimized.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-optimized.jpg	zune	3	0.717822
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-optimized.jpg	jpeg-decoder	3	0.290346
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-optimized.jpg	image	3	0.717822
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-restart.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-restart.jpg	zune	3	0.253152
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-restart.jpg	jpeg-decoder	3	0.296938
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-restart.jpg	image	3	0.253152
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-rgb.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-rgb.jpg	zune	1	0.142180
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-rgb.jpg	jpeg-decoder	1	0.143684
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-rgb.jpg	image	1	0.142180
+VERIFIED	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-wide-quant.jpg	775	2325
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-wide-quant.jpg	zune	0	0.000000
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-wide-quant.jpg	jpeg-decoder	0	0.000000
+PIXELS	crates/deadlib-image/jpeg/tests/fixtures/sequential\8-wide-quant.jpg	image	0	0.000000

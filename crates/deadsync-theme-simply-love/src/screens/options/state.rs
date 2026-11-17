@@ -188,7 +188,10 @@ pub struct State {
     pub(super) song_packs: Vec<OptionsSongPackView>,
     pub(super) pack_sync: OptionsPackSyncView,
     pub(super) bookkeeping: crate::views::BookkeepingView,
-    pub(super) scorebox_cycle_mask: u8,
+    pub(super) groovestats_scorebox_mask: u8,
+    /// The player has picked `ArrowCloud` Regular Boards. Until then the row
+    /// follows Enable `GrooveStats`.
+    pub(super) arrowcloud_regular_boards_set: bool,
     pub(super) auto_screenshot_mask: u8,
     pub(super) chart_info_mask: u8,
     pub selected: usize,
@@ -317,6 +320,9 @@ pub struct State {
     pub(super) advanced_prev_visible_rows: Vec<usize>,
     pub(super) select_music_prev_visible_rows: Vec<usize>,
     pub(super) i18n_revision: u64,
+    pub(super) search: search::SettingSearchState,
+    /// Where a search jump lands once the page fades finish.
+    pub(super) search_jump: Option<search::SearchTarget>,
 }
 
 impl State {
@@ -430,7 +436,8 @@ pub fn init(view: OptionsInitView) -> State {
         song_packs,
         pack_sync,
         bookkeeping,
-        scorebox_cycle_mask: scorebox_cycle_mask_from_config(&cfg),
+        groovestats_scorebox_mask: groovestats_scorebox_mask_from_config(&cfg),
+        arrowcloud_regular_boards_set: cfg.arrowcloud_regular_boards.is_some(),
         auto_screenshot_mask: cfg.auto_screenshot_eval,
         chart_info_mask: select_music_chart_info_mask_from_config(&cfg),
         selected: 0,
@@ -447,6 +454,8 @@ pub fn init(view: OptionsInitView) -> State {
         submenu_transition: SubmenuTransition::None,
         pending_submenu_kind: None,
         pending_submenu_parent_kind: None,
+        search: search::SettingSearchState::Hidden,
+        search_jump: None,
         submenu_parent_kind: None,
         submenu_fade_t: 0.0,
         content_alpha: 1.0,
@@ -761,6 +770,13 @@ pub fn init(view: OptionsInitView) -> State {
         INPUT_BACKEND_OPTIONS_ROWS,
         SubRowId::GamepadBackend,
         windows_backend_choice_index(cfg.windows_gamepad_backend),
+    );
+    #[cfg(target_os = "linux")]
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::InputBackend].choice_indices,
+        INPUT_BACKEND_OPTIONS_ROWS,
+        SubRowId::AxisFix,
+        usize::from(cfg.axis_fix),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::InputBackend].choice_indices,
@@ -1573,27 +1589,6 @@ pub fn init(view: OptionsInitView) -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
-        SubRowId::GsBoxLeaderboards,
-        if cfg.enable_golf
-            && cfg.select_music_scorebox_cycle_golf
-            && !(cfg.select_music_scorebox_cycle_itg
-                || cfg.select_music_scorebox_cycle_ex
-                || cfg.select_music_scorebox_cycle_hard_ex
-                || cfg.select_music_scorebox_cycle_tournaments)
-        {
-            4
-        } else {
-            scorebox_cycle_cursor_index(
-                cfg.select_music_scorebox_cycle_itg,
-                cfg.select_music_scorebox_cycle_ex,
-                cfg.select_music_scorebox_cycle_hard_ex,
-                cfg.select_music_scorebox_cycle_tournaments,
-            )
-        },
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
-        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::GsBoxEventsFirst,
         yes_no_choice_index(cfg.select_music_scorebox_events_first),
     );
@@ -1602,6 +1597,16 @@ pub fn init(view: OptionsInitView) -> State {
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::EnableGrooveStats,
         yes_no_choice_index(cfg.enable_groovestats),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
+        GROOVESTATS_OPTIONS_ROWS,
+        SubRowId::GrooveStatsScoreboxBoards,
+        groovestats_scorebox_cursor_index(
+            cfg.groovestats_scorebox_itg,
+            cfg.groovestats_scorebox_ex,
+            cfg.groovestats_scorebox_events,
+        ),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
@@ -1644,6 +1649,21 @@ pub fn init(view: OptionsInitView) -> State {
         ARROWCLOUD_OPTIONS_ROWS,
         SubRowId::EnableArrowCloud,
         yes_no_choice_index(cfg.enable_arrowcloud),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::ArrowCloudRegularBoards,
+        yes_no_choice_index(arrowcloud_regular_boards_shown(
+            cfg.arrowcloud_regular_boards,
+            cfg.enable_groovestats,
+        )),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,
+        ARROWCLOUD_OPTIONS_ROWS,
+        SubRowId::ArrowCloudEventBoards,
+        yes_no_choice_index(cfg.arrowcloud_event_boards),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::ArrowCloud].choice_indices,

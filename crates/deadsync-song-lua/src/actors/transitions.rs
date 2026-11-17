@@ -98,10 +98,9 @@ end"#;
 impl Actors {
     #[cfg(feature = "test-support")]
     pub(crate) fn start_transition(&self, vm: &mut Vm, actor: Value) -> Result<(), Error> {
-        let function = vm.new_host_function_with_data(
+        let function = vm.new_host_function(
             start_callback,
             &[Value::Table(self.registry), Value::Table(self.helpers)],
-            self.store.clone(),
         )?;
         vm.call(function, &[actor]).map(|_| ())
     }
@@ -136,7 +135,7 @@ pub(super) fn ensure_helpers(vm: &mut Vm, helpers: TableId) -> Result<(), Error>
 }
 
 pub(super) fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<u8>, Error> {
-    let value = get(call, actor, b"__songlua_transition_state")?;
+    let value = get_static(call, actor, b"__songlua_transition_state")?;
     if value == Value::Nil {
         return Ok(None);
     }
@@ -148,7 +147,7 @@ pub(super) fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<u8
 }
 
 pub(super) fn child(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<TableId>, Error> {
-    let value = get(call, actor, b"__songlua_transition_child")?;
+    let value = get_static(call, actor, b"__songlua_transition_child")?;
     if value == Value::Nil {
         Ok(None)
     } else {
@@ -156,16 +155,14 @@ pub(super) fn child(call: &mut HostCall<'_>, actor: TableId) -> Result<Option<Ta
     }
 }
 
-pub(super) fn start(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
+pub(super) fn start(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     if state(call, actor)? != Some(0) {
         return Ok(());
     }
     if let Some(child) = child(call, actor)? {
         // The AutoActor survives replacement/removal of the raw child field by
         // its own callback. Start's state write follows the complete traversal.
-        call.with_roots(&[Value::Table(child)], |call| {
-            start_commands(call, store, child)
-        })?;
+        call.with_roots(&[Value::Table(child)], |call| start_commands(call, child))?;
         set(call, actor, "__songlua_transition_state", Value::Number(1.))?;
     }
     Ok(())
@@ -173,18 +170,17 @@ pub(super) fn start(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> 
 
 #[cfg(feature = "test-support")]
 fn start_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let store = call.function_data::<Shared>().unwrap().clone();
-    start(call, &store, table(call, arg(call, 0))?)
+    start(call, table(call, arg(call, 0))?)
 }
 
 fn global_table(call: &mut HostCall<'_>, name: &str) -> Result<TableId, Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let value = field(call, globals, name)?;
+    let value = sprites::field_named(call, globals, name)?;
     table(call, value)
 }
 fn global_call(call: &mut HostCall<'_>, name: &str, args: &[Value]) -> Result<Value, Error> {
     let globals = table(call, helper(call, 5)?)?;
-    let function = field(call, globals, name)?;
+    let function = sprites::field_named(call, globals, name)?;
     function_call(call, function, args)
 }
 fn function_call(call: &mut HostCall<'_>, function: Value, args: &[Value]) -> Result<Value, Error> {
@@ -223,19 +219,14 @@ fn cancel(call: &mut HostCall<'_>) -> Result<(), Error> {
     invoke(call, actor, "diffusealpha", &[Value::Number(1.)])
 }
 
-fn attach(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    owner: TableId,
-    child: TableId,
-) -> Result<(), Error> {
+fn attach(call: &mut HostCall<'_>, owner: TableId, child: TableId) -> Result<(), Error> {
     set(
         call,
         owner,
         "__songlua_transition_child",
         Value::Table(child),
     )?;
-    append(call, store, owner, child)
+    append(call, owner, child)
 }
 fn commands(
     call: &mut HostCall<'_>,
@@ -253,18 +244,13 @@ fn commands(
     Ok(())
 }
 
-pub(super) fn create(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    name: &str,
-) -> Result<TableId, Error> {
-    let actor = dummy(call, store, scene, "ActorFrame", name, None)?;
+pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
+    let actor = dummy(call, scene, "ActorFrame", name, None)?;
     set(call, actor, "__songlua_transition_state", Value::Number(0.))?;
     if name.eq_ignore_ascii_case("In") {
-        create_in(call, store, scene, actor)?;
+        create_in(call, scene, actor)?;
     } else {
-        let quad = dummy(call, store, scene, "Quad", "", Some(actor))?;
+        let quad = dummy(call, scene, "Quad", "", Some(actor))?;
         if name.eq_ignore_ascii_case("Out") {
             let factory = native_children::helper_function(call, b"transition_out_commands")?;
             let handlers = call.call(factory, &[])?[0];
@@ -287,21 +273,16 @@ pub(super) fn create(
             let function = call.new_host_function(cancel, &[])?;
             set(call, quad, "StartTransitioningCommand", function)?;
         }
-        attach(call, store, actor, quad)?;
+        attach(call, actor, quad)?;
     }
     Ok(actor)
 }
 
-fn create_in(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    scene: u64,
-    actor: TableId,
-) -> Result<(), Error> {
-    let child = dummy(call, store, scene, "ActorFrame", "", Some(actor))?;
-    attach(call, store, actor, child)?;
-    let visuals = dummy(call, store, scene, "ActorFrame", "", Some(child))?;
-    append(call, store, child, visuals)?;
+fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), Error> {
+    let child = dummy(call, scene, "ActorFrame", "", Some(actor))?;
+    attach(call, actor, child)?;
+    let visuals = dummy(call, scene, "ActorFrame", "", Some(child))?;
+    append(call, child, visuals)?;
     let sl = global_table(call, "SL")?;
     let global = field(call, sl, "Global")?;
     let reload = field(call, table(call, global)?, "GameplayReloadCheck")?;
@@ -317,11 +298,11 @@ fn create_in(
         set(call, visuals, name, function)?;
     }
     if reload {
-        let name = call.try_intern(b"Hide")?;
+        let name = call.intern_static(b"Hide")?;
         return invoke(call, visuals, "playcommand", &[name]);
     }
     invoke(call, visuals, "sleep", &[Value::Number(2.)])?;
-    let name = call.try_intern(b"Hide")?;
+    let name = call.intern_static(b"Hide")?;
     invoke(call, visuals, "queuecommand", &[name])?;
     let factory = native_children::helper_function(call, b"transition_in_commands")?;
     let handlers = call.call(factory, &[])?[0];
@@ -329,7 +310,7 @@ fn create_in(
         let handlers = table(call, handlers)?;
         let prefs = global_table(call, "ThemePrefs")?;
         let getter = field(call, prefs, "Get")?;
-        let key = call.try_intern(b"VisualStyle")?;
+        let key = call.intern_static(b"VisualStyle")?;
         let style = function_call(call, getter, &[key])?;
         let style = assets::text(call, style)?;
         let spooky = global_call(call, "IsSpooky", &[])?;
@@ -340,7 +321,6 @@ fn create_in(
             for index in 0..4 {
                 let sprite = dummy(
                     call,
-                    store,
                     scene,
                     if index == 0 { "Quad" } else { "Sprite" },
                     "",
@@ -381,7 +361,7 @@ fn create_in(
                     let path =
                         gameplay_bitmaps::load(&asset).map_err(|e| call.error(e.as_bytes()))?;
                     let path = call.try_intern(path.as_bytes())?;
-                    sprites::set_texture(call, store, sprite, path, false)?;
+                    sprites::set_texture(call, sprite, path, false)?;
                     invoke(call, sprite, "diffuse", &[color])?;
                     invoke(
                         call,
@@ -417,7 +397,7 @@ fn create_in(
                     )?;
                 }
                 invoke(call, sprite, "diffusealpha", &[Value::Number(0.)])?;
-                append(call, store, visuals, sprite)?;
+                append(call, visuals, sprite)?;
             }
             Ok(())
         })
@@ -425,18 +405,16 @@ fn create_in(
     let factory = native_children::helper_function(call, b"transition_stage_text")?;
     let stage = call.call(factory, &[])?[0];
     let stage = assets::text(call, stage)?;
-    let label = text(call, store, scene, "", &stage)?;
-    native_children::adopt(call, store, label, child)?;
+    let label = text(call, scene, "", &stage)?;
+    native_children::adopt(call, label, child)?;
     invoke(call, label, "accelerate", &[Value::Number(0.5)])?;
     invoke(call, label, "diffusealpha", &[Value::Number(1.)])?;
     invoke(call, label, "sleep", &[Value::Number(0.66)])?;
     invoke(call, label, "accelerate", &[Value::Number(0.33)])?;
-    append(call, store, child, label)
+    append(call, child, label)
 }
 
-fn start_commands(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    native_children::run_command(call, store, actor, b"StartTransitioning", None)?;
-    native_children::with_children(call, actor, |call, child| {
-        start_commands(call, store, child)
-    })
+fn start_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    native_children::run_command(call, actor, b"StartTransitioning", None)?;
+    native_children::with_children(call, actor, |call, child| start_commands(call, child))
 }

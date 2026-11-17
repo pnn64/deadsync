@@ -440,6 +440,56 @@ fn system_choice_emits_shell_options_config_request() {
     ));
 }
 
+#[cfg(target_os = "linux")]
+#[test]
+fn axis_fix_choice_tracks_saved_state_and_emits_both_toggle_values() {
+    let asset_manager = AssetManager::new();
+    for initial in [false, true] {
+        let config = config::app_config::Config {
+            axis_fix: initial,
+            ..config::app_config::Config::default()
+        };
+        let mut state = init_with_config(config);
+        state.view = OptionsView::Submenu(SubmenuKind::InputBackend);
+        let row = select_visible_row(&mut state, SubmenuKind::InputBackend, SubRowId::AxisFix);
+        assert_eq!(
+            state.sub[SubmenuKind::InputBackend].choice_indices[row],
+            usize::from(initial)
+        );
+        assert_eq!(
+            state.sub[SubmenuKind::InputBackend].cursor_indices[row],
+            usize::from(initial)
+        );
+
+        for enabled in [!initial, initial] {
+            let delta = if enabled { 1 } else { -1 };
+            let effect = apply_submenu_choice_delta(
+                &mut state,
+                &asset_manager,
+                delta,
+                NavWrap::Clamp,
+            )
+            .expect("Axis Fix choice should emit shell config work");
+            assert_eq!(
+                state.sub[SubmenuKind::InputBackend].choice_indices[row],
+                usize::from(enabled)
+            );
+            assert_eq!(
+                state.sub[SubmenuKind::InputBackend].cursor_indices[row],
+                usize::from(enabled)
+            );
+            assert!(matches!(
+                effect,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                    crate::SimplyLoveConfigRequest::Options(
+                        crate::SimplyLoveOptionsConfigRequest::AxisFix(value)
+                    )
+                )) if value == enabled
+            ));
+        }
+    }
+}
+
 #[test]
 fn show_local_ip_choice_emits_machine_config_request() {
     let asset_manager = AssetManager::new();
@@ -1569,38 +1619,17 @@ fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
     let assets = AssetManager::new();
     let mut state = init_with_config(config::app_config::Config {
         select_music_show_golf_pars: true,
-        select_music_scorebox_cycle_golf: true,
         ..Default::default()
     });
     let pars_row = SELECT_MUSIC_OPTIONS_ROWS
         .iter()
         .position(|row| row.id == SubRowId::ShowGolfPars)
         .unwrap();
-    let boards_row = SELECT_MUSIC_OPTIONS_ROWS
-        .iter()
-        .position(|row| row.id == SubRowId::GsBoxLeaderboards)
-        .unwrap();
-    let original_mask = state.scorebox_cycle_mask;
     assert!(!golf_features_enabled(&state));
     assert!(
         !submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
             .contains(&pars_row)
     );
-    assert_eq!(
-        row_choices(
-            &state,
-            SubmenuKind::SelectMusic,
-            SELECT_MUSIC_OPTIONS_ROWS,
-            boards_row
-        )
-        .len(),
-        4
-    );
-    assert!(matches!(
-        toggle_select_music_scorebox_cycle_option(&mut state, 4),
-        ThemeEffect::None
-    ));
-    assert_eq!(state.scorebox_cycle_mask, original_mask);
 
     state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
     select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::EnableGolf);
@@ -1618,28 +1647,159 @@ fn golf_master_switch_reveals_options_and_preserves_saved_selections() {
         submenu_visible_row_indices(&state, SubmenuKind::SelectMusic, SELECT_MUSIC_OPTIONS_ROWS)
             .contains(&pars_row)
     );
-    assert_eq!(
-        row_choices(
-            &state,
-            SubmenuKind::SelectMusic,
-            SELECT_MUSIC_OPTIONS_ROWS,
-            boards_row
-        )
-        .len(),
-        5
-    );
-    state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row] = 4;
     apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
     assert!(!golf_features_enabled(&state));
-    assert_eq!(
-        state.sub[SubmenuKind::SelectMusic].cursor_indices[boards_row],
-        3
-    );
-    assert_eq!(state.scorebox_cycle_mask, original_mask);
     assert_eq!(
         state.sub[SubmenuKind::SelectMusic].choice_indices[pars_row],
         1
     );
+}
+
+#[test]
+fn groovestats_scorebox_boards_toggle_each_board() {
+    let mut state = init_with_config(config::app_config::Config {
+        groovestats_scorebox_itg: true,
+        groovestats_scorebox_ex: false,
+        groovestats_scorebox_events: true,
+        ..Default::default()
+    });
+    assert_eq!(state.groovestats_scorebox_mask, 0b101);
+    let row = GROOVESTATS_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::GrooveStatsScoreboxBoards)
+        .unwrap();
+    assert!(
+        submenu_visible_row_indices(&state, SubmenuKind::GrooveStats, GROOVESTATS_OPTIONS_ROWS)
+            .contains(&row)
+    );
+
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 1),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::GrooveStatsScoreboxBoards(0b111)
+            )
+        ))
+    ));
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 0),
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::GrooveStatsScoreboxBoards(0b110)
+            )
+        ))
+    ));
+    assert_eq!(state.sub[SubmenuKind::GrooveStats].cursor_indices[row], 0);
+    assert!(matches!(
+        toggle_groovestats_scorebox_board(&mut state, 3),
+        ThemeEffect::None
+    ));
+    assert_eq!(state.groovestats_scorebox_mask, 0b110);
+    assert!(
+        !SELECT_MUSIC_OPTIONS_ROWS
+            .iter()
+            .any(|row| row.id == SubRowId::GrooveStatsScoreboxBoards)
+    );
+}
+
+#[test]
+fn arrowcloud_regular_boards_follow_groovestats_until_set() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let regular_row = ARROWCLOUD_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ArrowCloudRegularBoards)
+        .unwrap();
+    let regular = |state: &State| state.sub[SubmenuKind::ArrowCloud].choice_indices[regular_row];
+    // Each Enable GrooveStats change queues an online reinitialize, which the
+    // input loop drains before the next change.
+    let toggle_groovestats = |state: &mut State, delta| {
+        apply_submenu_choice_delta(state, &assets, delta, NavWrap::Clamp).unwrap();
+        state.online_reinit_pending = false;
+    };
+    // Neither service is enabled on a fresh config, so the boards start on.
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    state.view = OptionsView::Submenu(SubmenuKind::GrooveStats);
+    select_visible_row(&mut state, SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    toggle_groovestats(&mut state, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    toggle_groovestats(&mut state, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    // Once picked, the choice no longer follows GrooveStats.
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudRegularBoards);
+    apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    state.view = OptionsView::Submenu(SubmenuKind::GrooveStats);
+    select_visible_row(&mut state, SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    toggle_groovestats(&mut state, 1);
+    toggle_groovestats(&mut state, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+}
+
+#[test]
+fn arrowcloud_regular_boards_settle_when_arrowcloud_is_enabled() {
+    let assets = AssetManager::new();
+    let regular_row = ARROWCLOUD_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::ArrowCloudRegularBoards)
+        .unwrap();
+    let regular = |state: &State| state.sub[SubmenuKind::ArrowCloud].choice_indices[regular_row];
+    // Each service toggle queues an online reinitialize, which the input loop
+    // drains before the next change.
+    let toggle = |state: &mut State, kind, id, delta| {
+        state.view = OptionsView::Submenu(kind);
+        select_visible_row(state, kind, id);
+        apply_submenu_choice_delta(state, &assets, delta, NavWrap::Clamp).unwrap();
+        state.online_reinit_pending = false;
+    };
+    let gs = (SubmenuKind::GrooveStats, SubRowId::EnableGrooveStats);
+    let ac = (SubmenuKind::ArrowCloud, SubRowId::EnableArrowCloud);
+
+    // ArrowCloud first: the boards stay on once GrooveStats is enabled.
+    let mut state = init_with_config(config::app_config::Config::default());
+    toggle(&mut state, ac.0, ac.1, 1);
+    toggle(&mut state, gs.0, gs.1, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(true));
+
+    // GrooveStats first: the boards start off and stay off.
+    let mut state = init_with_config(config::app_config::Config::default());
+    toggle(&mut state, gs.0, gs.1, 1);
+    toggle(&mut state, ac.0, ac.1, 1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+    toggle(&mut state, gs.0, gs.1, -1);
+    assert_eq!(regular(&state), yes_no_choice_index(false));
+}
+
+#[test]
+fn arrowcloud_board_rows_turn_regular_and_event_boards_on_or_off() {
+    let assets = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    state.view = OptionsView::Submenu(SubmenuKind::ArrowCloud);
+
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudRegularBoards);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudRegularBoards(false)
+            )
+        ))
+    ));
+
+    select_visible_row(&mut state, SubmenuKind::ArrowCloud, SubRowId::ArrowCloudEventBoards);
+    let effect = apply_submenu_choice_delta(&mut state, &assets, -1, NavWrap::Clamp).unwrap();
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::Online(
+                crate::SimplyLoveOnlineConfigRequest::ArrowCloudEventBoards(false)
+            )
+        ))
+    ));
 }
 
 #[test]
@@ -2390,6 +2550,8 @@ fn max_fps_hold_delta_accelerates() {
 fn input_backend_items_match_rows() {
     let expected = [
         (SubRowId::GamepadBackend, ItemId::InpGamepadBackend),
+        #[cfg(target_os = "linux")]
+        (SubRowId::AxisFix, ItemId::InpAxisFix),
         (SubRowId::UseFsrs, ItemId::InpUseFsrs),
         (SubRowId::SmxConfig, ItemId::InpSmxConfig),
         (SubRowId::DebugFsrDump, ItemId::InpDebugFsrDump),
@@ -4075,4 +4237,254 @@ fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {
     assert_eq!(targets.len(), 1);
     assert!(Arc::ptr_eq(&targets[0].song, &song));
     assert_eq!(targets[0].chart_ix, 0);
+}
+
+fn search_i18n() {
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        crate::tests::init_paths();
+        crate::i18n::init_for_tests();
+    });
+}
+
+fn search_key(code: KeyCode) -> RawKeyboardEvent {
+    RawKeyboardEvent {
+        code,
+        pressed: true,
+        repeat: false,
+        timestamp: Instant::now(),
+        host_nanos: 0,
+    }
+}
+
+fn open_search(state: &mut State) -> bool {
+    handle_raw_key_event(state, Some(&search_key(KeyCode::KeyF)), None, true, &mut Vec::new())
+}
+
+fn search_for(state: &mut State, query: &str) {
+    handle_raw_key_event(state, None, Some(query), false, &mut Vec::new());
+}
+
+fn focused_search_target(state: &State) -> Option<search::SearchTarget> {
+    match &state.search {
+        search::SettingSearchState::Open(open) => {
+            open.matches.get(open.selected_index).map(|m| m.target)
+        }
+        search::SettingSearchState::Hidden => None,
+    }
+}
+
+fn row_target(kind: SubmenuKind, id: SubRowId) -> search::SearchTarget {
+    search::SearchTarget::Row {
+        kind,
+        row: row_position(submenu_rows(kind), id).expect("row should exist"),
+    }
+}
+
+#[test]
+fn ctrl_f_opens_search_only_with_keyboard_features() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config {
+        keyboard_features: false,
+        ..config::app_config::Config::default()
+    });
+    assert!(!open_search(&mut state));
+    assert!(!state.search.is_open());
+
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(!handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::KeyF)),
+        None,
+        false,
+        &mut Vec::new()
+    ));
+    assert!(open_search(&mut state));
+    assert!(state.search.is_open());
+    // Ctrl-modified text never reaches the query.
+    handle_raw_key_event(&mut state, None, Some("f"), true, &mut Vec::new());
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should stay open");
+    };
+    assert!(open.query.is_empty());
+
+    handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::Escape)),
+        None,
+        false,
+        &mut Vec::new(),
+    );
+    assert!(!state.search.is_open());
+}
+
+#[test]
+fn search_jumps_into_nested_submenu_row() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "enable arrowcloud");
+    let target = row_target(SubmenuKind::ArrowCloud, SubRowId::EnableArrowCloud);
+    assert_eq!(focused_search_target(&state), Some(target));
+
+    handle_raw_key_event(
+        &mut state,
+        Some(&search_key(KeyCode::Enter)),
+        None,
+        false,
+        &mut Vec::new(),
+    );
+    assert!(!state.search.is_open());
+    settle_submenu(&mut state, &asset_manager);
+
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::ArrowCloud));
+    assert_eq!(state.submenu_parent_kind, Some(SubmenuKind::OnlineScoring));
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::ArrowCloud, state.sub_selected),
+        Some(row)
+    );
+    assert_eq!(state.search_jump, None);
+}
+
+#[test]
+fn search_jump_out_of_graphics_goes_through_main_list() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    state.view = OptionsView::Submenu(SubmenuKind::Graphics);
+
+    let target = row_target(SubmenuKind::Machine, SubRowId::KeyboardFeatures);
+    search::jump(&mut state, target);
+    // Graphics applies its deferred changes on the way back to the main list.
+    assert_eq!(state.submenu_transition, SubmenuTransition::FadeOutToMain);
+    settle_submenu(&mut state, &asset_manager);
+
+    assert_eq!(state.view, OptionsView::Submenu(SubmenuKind::Machine));
+    assert_eq!(state.submenu_parent_kind, None);
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::Machine, state.sub_selected),
+        Some(row)
+    );
+}
+
+#[test]
+fn search_selects_main_entries_and_rows_on_the_current_page() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let sound = visible_items(&state)
+        .iter()
+        .position(|item| item.id == ItemId::SoundOptions)
+        .expect("sound options should be listed");
+    search::jump(&mut state, search::SearchTarget::Main(sound));
+    assert_eq!(state.selected, sound);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+
+    state.view = OptionsView::Submenu(SubmenuKind::Machine);
+    let target = row_target(SubmenuKind::Machine, SubRowId::KeyboardFeatures);
+    search::jump(&mut state, target);
+    assert_eq!(state.submenu_transition, SubmenuTransition::None);
+    let search::SearchTarget::Row { row, .. } = target else {
+        unreachable!();
+    };
+    assert_eq!(
+        submenu_visible_row_to_actual(&state, SubmenuKind::Machine, state.sub_selected),
+        Some(row)
+    );
+
+    // From a submenu, a main entry is selected once the page fades out.
+    search::jump(&mut state, search::SearchTarget::Main(0));
+    settle_submenu(&mut state, &asset_manager);
+    assert_eq!(state.view, OptionsView::Main);
+    assert_eq!(state.selected, 0);
+}
+
+#[test]
+fn search_lists_every_reachable_page_but_not_bookkeeping() {
+    search_i18n();
+    let state = init_with_config(config::app_config::Config::default());
+    let matches = search::rebuild_matches(&state, "");
+    let kinds: Vec<SubmenuKind> = matches
+        .iter()
+        .filter_map(|m| match m.target {
+            search::SearchTarget::Row { kind, .. } => Some(kind),
+            search::SearchTarget::Main(_) => None,
+        })
+        .collect();
+    for kind in [
+        SubmenuKind::System,
+        SubmenuKind::Graphics,
+        SubmenuKind::InputBackend,
+        SubmenuKind::GrooveStats,
+        SubmenuKind::ArrowCloud,
+        SubmenuKind::SyncPacks,
+    ] {
+        assert!(kinds.contains(&kind), "{kind:?} rows should be searchable");
+    }
+    assert!(!kinds.contains(&SubmenuKind::Bookkeeping));
+    assert!(
+        matches
+            .iter()
+            .all(|m| m.target != search::SearchTarget::Main(visible_items(&state).len() - 1)),
+        "the Exit entry is not a search result"
+    );
+}
+
+#[test]
+fn search_owns_pad_input_while_open() {
+    search_i18n();
+    let asset_manager = AssetManager::new();
+    let mut state = init_with_config(config::app_config::Config::default());
+    let selected = state.selected;
+    assert!(open_search(&mut state));
+    press(&mut state, &asset_manager, VirtualAction::p1_down);
+    assert_eq!(state.selected, selected, "the list under the overlay stays put");
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should stay open");
+    };
+    assert_eq!(open.selected_index, 1);
+    press(&mut state, &asset_manager, VirtualAction::p1_back);
+    assert!(!state.search.is_open());
+}
+
+#[test]
+fn search_help_shows_paragraphs_not_bullet_lists() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "input options");
+    let search::SettingSearchState::Open(open) = &state.search else {
+        panic!("search should be open");
+    };
+    let input = open
+        .matches
+        .iter()
+        .find(|m| matches!(m.target, search::SearchTarget::Main(_)))
+        .expect("the Input Options entry should match");
+    let help = search::help_text(input).expect("Input Options has help");
+    assert!(help.contains("input diagnostics"), "{help}");
+    // Its bullets list the page's rows; they belong on the page, not in one run-on line.
+    assert!(!help.contains("Test Input"), "{help}");
+}
+
+#[test]
+fn search_ignores_page_keys() {
+    search_i18n();
+    let mut state = init_with_config(config::app_config::Config::default());
+    assert!(open_search(&mut state));
+    search_for(&mut state, "graph");
+    let before = focused_search_target(&state);
+    assert!(before.is_some());
+    for code in [KeyCode::PageDown, KeyCode::PageUp] {
+        handle_raw_key_event(&mut state, Some(&search_key(code)), None, false, &mut Vec::new());
+        assert_eq!(focused_search_target(&state), before);
+    }
 }

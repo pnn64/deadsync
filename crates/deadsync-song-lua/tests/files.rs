@@ -294,6 +294,49 @@ fn sprite_hint_stripping_preserves_native_string_conversion_and_suffix_rules() {
 }
 
 #[test]
+fn combo_font_queries_use_the_supplied_game_assets_without_changing_authored_theme_paths() {
+    let dir = directory();
+    let fonts = dir.path().join("game-assets/fonts");
+    fs::create_dir_all(fonts.join("Fixture")).unwrap();
+    fs::write(fonts.join("Fixture/Fixture.ini"), b"[main]").unwrap();
+    fs::write(fonts.join("Fixture/Fixture 10x2.png"), b"fixture").unwrap();
+    let mut context = SongLuaCompileContext::new(dir.path(), "installed combo fonts");
+    context.theme_combo_font_directory = Some(fonts);
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    runtime
+        .vm_mut()
+        .execute(
+            &compile_named(
+                br#"
+        local path=THEME:GetCurrentThemeDirectory()..'Fonts/_Combo Fonts/'
+        assert(table.concat(GetComboFonts(), ',')=='Fixture')
+        assert(FILEMAN:DoesFileExist(path..'Fixture/Fixture.ini'))
+        assert(FILEMAN:GetFileSizeBytes(path..'Fixture/Fixture.ini')==6)
+        assert(#FILEMAN:GetDirListing(path..'Fixture/*.ini')==1)
+        THEME.GetCurrentThemeDirectory=function()return 'missing/' end
+        assert(#GetComboFonts()==0)
+    "#,
+                b"=installed combo font queries",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    context.theme_combo_font_directory = Some(dir.path().join("missing-fonts"));
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    runtime
+        .vm_mut()
+        .execute(
+            &compile_named(
+                b"assert(#GetComboFonts()==0)",
+                b"=missing installed combo fonts",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+#[test]
 fn combo_fonts_scan_current_theme_and_preserve_wendy_order_without_fallbacks() {
     let dir = directory();
     let fonts = dir.path().join("theme/Fonts/_Combo Fonts");

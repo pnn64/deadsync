@@ -143,14 +143,15 @@ const fn survival_seconds_change(event: CourseLifeEvent) -> f32 {
 }
 
 fn record_player_life_change(player: &mut PlayerRuntime, current_music_time: f32, old_life: f32) {
-    if (player.life - old_life).abs() <= 0.000_001_f32 {
+    if player.life_record_source == LifeRecordSource::Meter
+        && (player.life - old_life).abs() <= 0.000_001_f32 {
         return;
     }
     deadsync_rules::life::record_life_change(
         &mut player.life_history,
         current_music_time,
-        old_life,
-        player.life,
+        player.life_record_source.value(old_life),
+        player.life_record_source.value(player.life),
     );
 }
 
@@ -303,6 +304,22 @@ pub fn apply_gameplay_life_delta(
     delta: f32,
     fail_at_zero: bool,
 ) -> GameplayLifeDeltaUpdate {
+    apply_gameplay_life_delta_with_record_source(meter, life_history, course_submit_life,
+        current_music_time, delta, fail_at_zero, LifeRecordSource::Meter)
+}
+
+fn apply_gameplay_life_delta_with_record_source(
+    meter: &mut deadsync_rules::life::LifeMeter,
+    life_history: &mut Vec<(f32, f32)>,
+    course_submit_life: Option<&mut deadsync_rules::life::LifeMeter>,
+    current_music_time: f32,
+    delta: f32,
+    fail_at_zero: bool,
+    source: LifeRecordSource,
+) -> GameplayLifeDeltaUpdate {
+    if let LifeRecordSource::Combined(value) = source {
+        deadsync_rules::life::record_life_change(life_history, current_music_time, value, value);
+    }
     if let Some(meter) = course_submit_life {
         let _ = deadsync_rules::life::apply_life_delta_mode(meter, current_music_time, delta, fail_at_zero);
     }
@@ -316,7 +333,8 @@ pub fn apply_gameplay_life_delta(
     }
 
     let result = deadsync_rules::life::apply_life_delta_mode(meter, current_music_time, delta, fail_at_zero);
-    if (result.new_life - result.old_life).abs() > 0.000_001_f32 {
+    if source == LifeRecordSource::Meter
+        && (result.new_life - result.old_life).abs() > 0.000_001_f32 {
         deadsync_rules::life::record_life_change(
             life_history,
             current_music_time,
@@ -357,13 +375,14 @@ pub fn apply_player_runtime_life_delta(
     delta: f32,
 ) -> GameplayLifeDeltaUpdate {
     let mut meter = player_runtime_life_meter(player);
-    let update = apply_gameplay_life_delta(
+    let update = apply_gameplay_life_delta_with_record_source(
         &mut meter,
         &mut player.life_history,
         player.course_submit_life.as_mut(),
         current_music_time,
         delta,
         player.fail_type.fails_during_play(),
+        player.life_record_source,
     );
     write_player_runtime_life_meter(player, meter);
     update

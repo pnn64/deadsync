@@ -289,7 +289,7 @@ impl Vm {
         .enumerate()
         {
             let name = self.try_intern(name)?;
-            self.tables[slot_index(table.0)].set(name, Value::Native(CO_CREATE + i as u64))?;
+            self.raw_set(table, name, Value::Native(CO_CREATE + i as u64))?;
         }
         self.set_global(b"coroutine", Value::Table(table))?;
         Ok(())

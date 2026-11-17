@@ -104,7 +104,7 @@ pub(in crate::actors) fn callback_jobs(
 pub(in crate::actors) fn plan_roots(plan: &Plan) -> TableId {
     plan.roots
 }
-pub(in crate::actors) fn cached_for_root(store: &Shared, root: TableId) -> Option<Arc<Plan>> {
+pub(in crate::actors) fn cached_for_root(store: &mut Store, root: TableId) -> Option<Arc<Plan>> {
     fn contains(node: &FrameNode, actor: TableId) -> bool {
         node.actor == actor
             || node
@@ -113,7 +113,7 @@ pub(in crate::actors) fn cached_for_root(store: &Shared, root: TableId) -> Optio
                 .chain(&node.children)
                 .any(|child| contains(child, actor))
     }
-    let guard = store.lock().unwrap();
+    let guard = &mut *store;
     guard.update_plans.get(&root).cloned().or_else(|| {
         guard
             .update_plans

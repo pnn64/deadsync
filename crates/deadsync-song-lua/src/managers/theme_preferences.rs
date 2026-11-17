@@ -142,7 +142,7 @@ fn init(call: &mut HostCall<'_>) -> Result<(), Error> {
             let key = Value::String(id);
             call.with_roots(&[key], |call| {
                 if call.table_get(store, key)? == Value::Nil {
-                    let field = call.try_intern(b"Default")?;
+                    let field = call.intern_static(b"Default")?;
                     let value = match call.table_get(def, field) {
                         Ok(value) => value,
                         Err(error)

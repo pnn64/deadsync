@@ -68,9 +68,26 @@ pub const fn held_miss_render_info(started_at_screen_s: f32) -> HeldMissRenderIn
     }
 }
 
+/// Player::ChangeLifeRecord reads the tug-life value for combined meters,
+/// independently of the inner shared meter's current life.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum LifeRecordSource {
+    #[default]
+    Meter,
+    Combined(f32),
+}
+
+impl LifeRecordSource {
+    pub const fn value(self, meter: f32) -> f32 {
+        match self { Self::Meter => meter, Self::Combined(value) => value }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
     pub combo: u32,
+    /// Largest combo recorded by Player::UpdateComboList, not the scorekeeper.
+    pub recorded_max_combo: u32,
     pub miss_combo: u32,
     pub full_combo_grade: Option<JudgeGrade>,
     pub current_combo_grade: Option<JudgeGrade>,
@@ -122,6 +139,7 @@ pub struct PlayerRuntime {
     pub course_submit_life: Option<deadsync_rules::life::LifeMeter>,
 
     pub life_history: Vec<(f32, f32)>,
+    pub life_record_source: LifeRecordSource,
 
     pub error_bar_mono_ticks: [Option<ErrorBarTick>; 15],
     pub error_bar_mono_next: usize,
@@ -146,6 +164,8 @@ pub struct PlayerRuntime {
 #[derive(Clone, Debug)]
 pub struct GameplayPlayersRuntimeState {
     pub players: [PlayerRuntime; MAX_PLAYERS],
+    /// Separate secondary scorekeeper; it has no input actor or life meter.
+    pub routine: Option<RoutineStageStats>,
     /// Latched once at frame start. `ITGmania` publishes `HealthState_Dead` after
     /// the frame's `JudgmentMessages`, so the judgment that drains life to zero
     /// (and any other judgments in that update) must remain eligible.
@@ -238,6 +258,7 @@ pub fn init_player_runtime() -> PlayerRuntime {
 pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
     PlayerRuntime {
         combo: 0,
+        recorded_max_combo: 0,
         miss_combo: 0,
         full_combo_grade: None,
         current_combo_grade: None,
@@ -281,6 +302,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         failed_ex_score_inputs: None,
         course_submit_life: None,
         life_history: Vec::with_capacity(caps.life_history),
+        life_record_source: LifeRecordSource::Meter,
         error_bar_mono_ticks: [None; 15],
         error_bar_mono_next: 0,
         error_bar_color_ticks: [None; 10],
@@ -408,13 +430,14 @@ pub fn reset_player_runtime_for_practice(player: &mut PlayerRuntime, judge_start
     error_bar_long_avg_samples.clear();
 
     let mut reset = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
+    reset.life_record_source = player.life_record_source;
     reset.combo_milestones = combo_milestones;
     reset.life_history = life_history;
     reset.error_bar_avg_samples = error_bar_avg_samples;
     reset.error_bar_long_avg_samples = error_bar_long_avg_samples;
-    reset
-        .life_history
-        .push((judge_start_music_time, reset.life));
+    if reset.life_record_source == LifeRecordSource::Meter {
+        reset.life_history.push((judge_start_music_time, reset.life));
+    }
     *player = reset;
 }
 

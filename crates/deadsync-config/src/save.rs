@@ -461,6 +461,11 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         enable_arrowcloud: cfg.enable_arrowcloud,
         enable_golf: cfg.enable_golf,
         enable_boogiestats: cfg.enable_boogiestats,
+        groovestats_scorebox_itg: cfg.groovestats_scorebox_itg,
+        groovestats_scorebox_ex: cfg.groovestats_scorebox_ex,
+        groovestats_scorebox_events: cfg.groovestats_scorebox_events,
+        arrowcloud_regular_boards: cfg.arrowcloud_regular_boards,
+        arrowcloud_event_boards: cfg.arrowcloud_event_boards,
         submit_arrowcloud_fails: cfg.submit_arrowcloud_fails,
         show_arrowcloud_result_dialogs: cfg.show_arrowcloud_result_dialogs,
         arrowcloud_qr_login_when: cfg.arrowcloud_qr_login_when,
@@ -530,6 +535,7 @@ const fn runtime_options(cfg: &Config) -> RuntimeOptions {
         song_parsing_threads: cfg.song_parsing_threads,
         smooth_histogram: cfg.smooth_histogram,
         shade_scatterplot_judgments: cfg.shade_scatterplot_judgments,
+        axis_fix: cfg.axis_fix,
         arcade_options_navigation: cfg.arcade_options_navigation,
         delayed_back: cfg.delayed_back,
         three_key_navigation: cfg.three_key_navigation,
@@ -650,11 +656,6 @@ const fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         step_artist_box_mode: cfg.select_music_step_artist_box_mode,
         show_scorebox: cfg.show_select_music_scorebox,
         scorebox_placement: cfg.select_music_scorebox_placement,
-        scorebox_cycle_itg: cfg.select_music_scorebox_cycle_itg,
-        scorebox_cycle_ex: cfg.select_music_scorebox_cycle_ex,
-        scorebox_cycle_hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
-        scorebox_cycle_tournaments: cfg.select_music_scorebox_cycle_tournaments,
-        scorebox_cycle_golf: cfg.select_music_scorebox_cycle_golf,
         scorebox_events_first: cfg.select_music_scorebox_events_first,
         show_golf_pars: cfg.select_music_show_golf_pars,
         chart_info_peak_nps: cfg.select_music_chart_info_peak_nps,
@@ -690,6 +691,71 @@ mod tests {
     use super::*;
     use crate::ini::SimpleIni;
     use deadlib_render_core::BackendType;
+
+    #[test]
+    fn axis_fix_defaults_off_and_round_trips_through_app_config() {
+        assert!(!Config::default().axis_fix);
+        let mut ini = SimpleIni::new();
+        ini.load_str(&build_default_app_config_file());
+        assert_eq!(ini.get("Options", "AxisFix"), Some("0"));
+
+        for (value, expected) in [
+            ("", false),
+            ("AxisFix=invalid", false),
+            ("AxisFix=0", false),
+            ("AxisFix=1", true),
+            ("AxisFix=Off", false),
+            ("AxisFix= on ", true),
+        ] {
+            let mut ini = SimpleIni::new();
+            ini.load_str(&format!("[Options]\n{value}\n"));
+            let cfg = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(cfg.axis_fix, expected, "{value}");
+
+            let content =
+                build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+            ini.load_str(&content);
+            assert_eq!(
+                ini.get("Options", "AxisFix"),
+                Some(if expected { "1" } else { "0" }),
+                "{value}",
+            );
+            assert_eq!(
+                crate::load::load_app_config(&ini, Config::default()).axis_fix,
+                expected,
+                "{value}",
+            );
+        }
+    }
+
+    #[test]
+    fn axis_fix_backfill_keeps_existing_input_options() {
+        let cfg = Config {
+            input_debounce_seconds: 0.015,
+            three_key_navigation: true,
+            use_fsrs: true,
+            ..Config::default()
+        };
+        let content =
+            build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+        let mut old_ini = SimpleIni::new();
+        old_ini.load_str(&content.replace("AxisFix=0\n", ""));
+        assert_eq!(old_ini.get("Options", "AxisFix"), None);
+        assert!(crate::backfill::has_missing_fields(&old_ini, &content));
+
+        let loaded = crate::load::load_app_config(&old_ini, Config::default());
+        assert!(!loaded.axis_fix);
+        assert_eq!(loaded.input_debounce_seconds, cfg.input_debounce_seconds);
+        assert!(loaded.three_key_navigation);
+        assert!(loaded.use_fsrs);
+
+        let backfilled =
+            build_saved_app_config_file(&loaded, &Keymap::default(), "", &[], &[], "", "", "", "");
+        let mut ini = SimpleIni::new();
+        ini.load_str(&backfilled);
+        assert_eq!(ini.get("Options", "AxisFix"), Some("0"));
+        assert!(!crate::backfill::has_missing_fields(&ini, &content));
+    }
 
     #[test]
     fn fullscreen_refresh_round_trips() {

@@ -155,7 +155,6 @@ fn optional_number(stack: &mut NativeStack<'_, '_>, value: Value) -> Result<Opti
 
 pub(super) fn compile_source(
     stack: &mut NativeStack<'_, '_>,
-    store: &Shared,
     inputs: &[Value],
     source: &[SourceJob],
     actors: &[TableId],
@@ -206,9 +205,8 @@ pub(super) fn compile_source(
                 // Actor, unlike the native table representation. Preserve that
                 // value when no raw override exists; validate explicit values
                 // with the same Lua number conversion as the native factory.
-                let canonical_rate = store
-                    .lock()
-                    .unwrap()
+                let canonical_rate = stack
+                    .store()
                     .actors
                     .get(&actor)
                     .map_or(1., |actor| actor.update_rate);
@@ -248,9 +246,8 @@ pub(super) fn compile_source(
             }
         }
     }
-    let owner = super::compile_with_updates(
-        stack, store, inputs, actors, states, tracked, &updates, &reserved,
-    )?;
+    let owner =
+        super::compile_with_updates(stack, inputs, actors, states, tracked, &updates, &reserved)?;
     for job in &mut jobs {
         if let Job::Callback { program, .. } = job {
             *program += owner.input_count;

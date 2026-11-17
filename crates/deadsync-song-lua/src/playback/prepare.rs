@@ -100,6 +100,14 @@ impl<S> PreparedGameplaySongLua<S> {
             .find_map(|compiled| compiled.loaded_style.as_deref())
     }
 
+    /// Joined Lua player slots retained through startup gameplay reloads.
+    pub fn loaded_players(&self) -> Option<[bool; crate::LUA_PLAYERS]> {
+        self.primary.iter().map(|p| &p.compiled)
+            .chain(self.background_layers.iter().map(|p| &p.compiled))
+            .chain(self.foreground_layers.iter().map(|p| &p.compiled))
+            .find_map(|compiled| compiled.loaded_players)
+    }
+
     pub fn startup(&self) -> crate::SongLuaStartup {
         let mut startup = crate::SongLuaStartup::default();
         for compiled in self
@@ -199,6 +207,7 @@ fn compile_song_lua_layer<S: Clone + std::fmt::Debug>(
 ) -> Option<GameplaySongLuaLayer<S>> {
     let mut context = context.clone();
     context.background_layer_count = usize::from(background);
+    context.background_sources = if background { vec![PathBuf::from(entry_name)] } else { Vec::new() };
     context.layer_start_beats = vec![start_beat];
     context.foreground_names = if background { Vec::new() } else { vec![entry_name.to_owned()] };
     match compile_song_lua(path, &context) {
@@ -246,6 +255,7 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     }
     let mut context = context.clone();
     context.background_layer_count = paths.len();
+    context.background_sources = song.background_lua_changes.iter().map(|change| change.source.clone()).collect();
     context.background_activations = song.background_lua_changes.iter()
         .map(|change| (change.layer, change.activations.clone())).collect();
     context.background_upper_left_colors = song.background_lua_changes.iter().map(|owner|
@@ -363,7 +373,7 @@ fn compile_song_lua_separately<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 true,
-                "",
+                &change.source.to_string_lossy(),
                 "background lua layer",
                 context,
                 &compile_song_lua,
@@ -413,7 +423,7 @@ fn compile_song_lua_without_primary<S: Clone + std::fmt::Debug>(
                 &change.path,
                 change.start_beat,
                 true,
-                "",
+                &change.source.to_string_lossy(),
                 "background lua layer",
                 context,
                 &compile_song_lua,

@@ -355,3 +355,233 @@ fn inherited_fields_resolve_through_table_handlers_like_lua_indexing() {
         &[Value::Boolean(true)]
     );
 }
+
+// Walks a table with `raw_table_next`, returning how many entries it holds and
+// the sum of its numeric values, plus whether the actual metatable is the
+// second argument.
+fn walk(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let (mut count, mut sum, mut key) = (0.0, 0.0, Value::Nil);
+    while let Some((next, value)) = call.raw_table_next(target, key)? {
+        count += 1.0;
+        if let Value::Number(n) = value {
+            sum += n;
+        }
+        key = next;
+    }
+    let metatable = call.raw_metatable(target)?.map(Value::Table);
+    call.push(Value::Number(count))?;
+    call.push(Value::Number(sum))?;
+    call.push(Value::Boolean(
+        metatable.unwrap_or(Value::Nil) == call.arguments()[1],
+    ))
+}
+
+#[test]
+fn raw_traversal_and_metatable_reads_bypass_metamethods() {
+    let mut vm = vm();
+    let function = vm.new_host_function(walk, &[]).unwrap();
+    vm.set_global(b"host_walk", function).unwrap();
+    let program = compile(
+        br#"
+        local count, sum, same = host_walk({}, nil)
+        assert(count == 0 and sum == 0 and same)
+
+        -- Array and hash parts are both visited, each entry once.
+        local mixed = {10, 20, 30, name = 'x', [2.5] = 4, [true] = 5}
+        local expected = 0
+        for _ in next, mixed do expected = expected + 1 end
+        count, sum, same = host_walk(mixed, nil)
+        assert(count == expected and sum == 69 and same)
+
+        -- Neither `__pairs`-like handlers nor `__index` contribute entries, and
+        -- a `__metatable` field does not hide the actual metatable.
+        local mt = {__index = {inherited = 1}, __metatable = 'locked'}
+        local guarded = setmetatable({own = 7}, mt)
+        assert(getmetatable(guarded) == 'locked')
+        count, sum, same = host_walk(guarded, mt)
+        assert(count == 1 and sum == 7 and same)
+        count, sum, same = host_walk(guarded, nil)
+        assert(not same)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+fn stale_next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let absent = call.intern(b"absent");
+    let error = call.raw_table_next(target, absent).unwrap_err();
+    let message = call.intern(error.to_string().as_bytes());
+    call.push(message)
+}
+
+#[test]
+fn raw_traversal_rejects_a_key_the_table_does_not_hold() {
+    let mut vm = vm();
+    let function = vm.new_host_function(stale_next, &[]).unwrap();
+    vm.set_global(b"host_stale_next", function).unwrap();
+    let program = compile(b"return host_stale_next({present = 1})").unwrap();
+    let Value::String(id) = vm.execute(&program).unwrap()[0] else {
+        panic!("error message")
+    };
+    let message = String::from_utf8(vm.string_bytes(id).unwrap().to_vec()).unwrap();
+    assert!(message.contains("invalid key to 'next'"), "{message}");
+}
+
+fn static_field(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let value = call.raw_table_get_static(target, b"field")?;
+    call.push(value)
+}
+
+#[test]
+fn static_name_reads_are_raw_and_agree_with_ordinary_raw_reads() {
+    let mut vm = vm();
+    let function = vm.new_host_function(static_field, &[]).unwrap();
+    vm.set_global(b"static_field", function).unwrap();
+    let program = compile(
+        br#"
+        assert(static_field({}) == nil)
+        assert(static_field({field = 7}) == 7)
+        assert(static_field({field = false}) == false)
+        -- Inherited fields and handlers are not consulted.
+        local calls = 0
+        local inherited = setmetatable({}, {__index = function() calls = calls + 1 return 1 end})
+        assert(static_field(inherited) == nil and calls == 0)
+        assert(static_field(setmetatable({}, {__index = {field = 3}})) == nil)
+        -- Many other fields share the table, and the field is added last.
+        local crowded = {}
+        for i = 1, 200 do crowded['field' .. i] = i end
+        assert(static_field(crowded) == nil)
+        crowded.field = 'found'
+        assert(static_field(crowded) == 'found' and rawget(crowded, 'field') == 'found')
+        crowded.field = nil
+        assert(static_field(crowded) == nil)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+fn fields_version(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let Value::Table(target) = call.arguments()[0] else {
+        return Err(call.error(b"table expected"));
+    };
+    let version = call.raw_fields_version(target)?;
+    call.push(Value::Number(f64::from(version)))
+}
+
+#[test]
+fn the_fields_version_changes_with_every_string_keyed_write_and_never_on_reads() {
+    let mut vm = vm();
+    let function = vm.new_host_function(fields_version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let program = compile(
+        br#"
+        local t = {name = 'a', count = 1}
+        local seen = version(t)
+        local function changed(label)
+            local now = version(t)
+            assert(now ~= seen, label)
+            seen = now
+        end
+        local function same(label)
+            assert(version(t) == seen, label)
+        end
+
+        -- Reads of every kind leave it alone.
+        local _ = t.name, t.missing, rawget(t, 'count'), #t, next(t)
+        for _ in pairs(t) do end
+        same('reads')
+        setmetatable(t, {__index = function() return 1 end})
+        local _ = t.inherited
+        same('metatable and inherited reads')
+        setmetatable(t, nil)
+
+        t.added = true;            changed('new field')
+        t.count = 2;               changed('number over number')
+        t.count = 2;               changed('same value again')
+        t.name = 'b';              changed('string over string')
+        t.name = {};               changed('table over string')
+        rawset(t, 'name', 'c');    changed('rawset')
+        t.added = nil;             changed('removed field')
+        t.added = 1;               changed('field added again')
+        t.never = nil;             same('removing a field that never existed')
+
+        -- A write through __newindex that stores nothing changes nothing.
+        setmetatable(t, {__newindex = function() end})
+        t.swallowed = 1
+        same('swallowed write')
+        setmetatable(t, nil)
+
+        -- Growth and compaction keep counting.
+        for i = 1, 300 do t['k' .. i] = i; changed('growth ' .. i) end
+        for i = 1, 300 do t['k' .. i] = nil; changed('removal ' .. i) end
+
+        -- Another table is counted separately.
+        local other = {}
+        local before = version(other)
+        t.elsewhere = 1; changed('write to t')
+        assert(version(other) == before)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+#[test]
+fn clearing_a_weak_entry_changes_the_fields_version() {
+    let mut vm = vm();
+    let function = vm.new_host_function(fields_version, &[]).unwrap();
+    vm.set_global(b"version", function).unwrap();
+    let program = compile(
+        br#"
+        local weak = setmetatable({}, {__mode = 'v'})
+        weak.kept = 'string'
+        weak.dropped = {}
+        local before = version(weak)
+        collectgarbage('collect')
+        collectgarbage('collect')
+        assert(weak.dropped == nil and weak.kept == 'string')
+        assert(version(weak) ~= before)
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}
+
+fn raw_next(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let raw = call.is_raw_next(call.arguments()[0]);
+    call.push(Value::Boolean(raw))
+}
+
+#[test]
+fn only_the_standard_traversal_functions_are_the_raw_next() {
+    let mut vm = vm();
+    let function = vm.new_host_function(raw_next, &[]).unwrap();
+    vm.set_global(b"raw_next", function).unwrap();
+    let program = compile(
+        br#"
+        local standard = next
+        assert(raw_next(next))
+        assert(raw_next((pairs({}))))
+        assert(not raw_next(function(t, k) return standard(t, k) end))
+        assert(not raw_next(pairs) and not raw_next(ipairs) and not raw_next((ipairs({}))))
+        assert(not raw_next(rawget) and not raw_next(raw_next))
+        assert(not raw_next(nil) and not raw_next('next') and not raw_next({}))
+        -- Replacing the global does not change what the function is.
+        next = function() end
+        assert(not raw_next(next) and raw_next(standard))
+        "#,
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+}

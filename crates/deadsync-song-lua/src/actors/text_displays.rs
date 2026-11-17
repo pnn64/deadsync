@@ -1,6 +1,6 @@
 //! Existing text-display adapters whose methods are private instance bindings.
 //! These classes inherit the public Actor table, not BitmapText's theme helpers.
-use super::{Shared, arg, assets, float_scalar, get, helper, render, sprites, table, text};
+use super::{arg, assets, float_scalar, get, get_static, helper, render, sprites, table, text};
 use deadlib_lua::{Error, HostCall, TableId, Value};
 use sprites::{field, set};
 
@@ -24,10 +24,10 @@ pub(super) fn is_text(kind: &str) -> bool {
 }
 
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
-    let bound = get(call, actor, b"__songlua_bound_methods")?;
+    let bound = get_static(call, actor, b"__songlua_bound_methods")?;
     let bound = table(call, bound)?;
     let helpers = table(call, call.captures()[1])?;
-    let methods = get(call, helpers, b"text_display_methods")?;
+    let methods = get_static(call, helpers, b"text_display_methods")?;
     let methods = table(call, methods)?;
     for &name in text::METHODS.iter().chain(METHODS) {
         let method = get(call, methods, name.as_bytes())?;
@@ -66,12 +66,7 @@ fn formatted(call: &mut HostCall<'_>) -> Result<String, Error> {
     })
 }
 
-pub(super) fn method(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    actor: TableId,
-    name: &str,
-) -> Result<(), Error> {
+pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
         "Load" => {
             let kind = assets::field(call, actor, b"__songlua_actor_type")?;
@@ -87,7 +82,7 @@ pub(super) fn method(
                     set(call, actor, "__songlua_rolling_numbers_format", format)?;
                 }
             } else {
-                return sprites::method(call, store, actor, "Load");
+                return sprites::method(call, actor, "Load");
             }
         }
         "targetnumber" | "SetTargetNumber" => {
@@ -122,7 +117,7 @@ pub(super) fn method(
             set(call, actor, "Text", value)?;
         }
         "mult_attrs_with_diffuse" => {
-            return text::method(call, store, actor, "set_mult_attrs_with_diffuse");
+            return text::method(call, actor, "set_mult_attrs_with_diffuse");
         }
         _ => unreachable!(),
     }

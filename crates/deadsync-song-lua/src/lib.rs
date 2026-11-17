@@ -238,6 +238,7 @@ pub struct SongRuntime {
     position: Root,
     players: Vec<Root>,
     operations: [Root; 6],
+    option_snapshots: live_frames::OptionSnapshots,
 }
 
 impl SongRuntime {
@@ -262,8 +263,8 @@ impl SongRuntime {
     }
 
     /// Copy the actor's captured writes and unconsumed command/tween metadata.
-    pub fn actor_command_capture(&self, actor: Value) -> Option<ActorCommandCapture> {
-        self.actors.command_capture(actor)
+    pub fn actor_command_capture(&mut self, actor: Value) -> Option<ActorCommandCapture> {
+        self.actors.command_capture(&mut self.vm, actor)
     }
 
     pub fn new(context: &SongLuaCompileContext) -> Result<Self, Error> {
@@ -277,7 +278,7 @@ impl SongRuntime {
     ) -> Result<Self, Error> {
         #[cfg(feature = "test-support")]
         let observations = observations::Observations::default();
-        let mut vm = Vm::new();
+        let mut vm = Vm::try_new_with_lua51_table_order()?;
         #[cfg(feature = "test-support")]
         if context.initial_lua_gc_stopped {
             vm.with_native_stack(|stack| stack.gc(deadlib_lua::GcOperation::Stop).map(|_| ()))?;
@@ -477,6 +478,7 @@ impl SongRuntime {
             position: song_position,
             players,
             operations: roots.try_into().expect("six clock operations"),
+            option_snapshots: Default::default(),
         })
     }
 
@@ -521,11 +523,11 @@ impl SongRuntime {
     }
 
     pub fn actor_scene_root(&self, scene: ActorScene) -> Option<Value> {
-        self.actors.root(scene)
+        self.actors.root(&self.vm, scene)
     }
 
     pub fn actor_scene_snapshot(&self, scene: ActorScene) -> Option<Vec<ActorSnapshot>> {
-        self.actors.snapshot(scene)
+        self.actors.snapshot(&self.vm, scene)
     }
 
     /// Local render states with the retained effect phase and native spin flag.
@@ -535,7 +537,7 @@ impl SongRuntime {
         scene: ActorScene,
         frame_clock: [f32; 2],
     ) -> Option<Vec<crate::SongLuaOverlayState>> {
-        self.actors.render_states(scene, frame_clock)
+        self.actors.render_states(&self.vm, scene, frame_clock)
     }
 
     /// Deliver Begin and On to this actor subtree once. Screen activation and
@@ -546,8 +548,8 @@ impl SongRuntime {
 
     /// Enter retained playback after preparation/startup. This preserves the
     /// production boundary for publishing cached rotation getters on writes.
-    pub fn begin_actor_playback(&self) {
-        self.actors.begin_playback();
+    pub fn begin_actor_playback(&mut self) {
+        self.actors.begin_playback(&mut self.vm);
     }
 
     /// Advance the subtree's existing queues and callbacks in native order.
@@ -593,8 +595,8 @@ impl SongRuntime {
         self.actors.retire(&mut self.vm, scene)
     }
 
-    pub fn take_actor_diagnostics(&self) -> Vec<String> {
-        self.actors.take_diagnostics()
+    pub fn take_actor_diagnostics(&mut self) -> Vec<String> {
+        self.actors.take_diagnostics(&mut self.vm)
     }
 
     /// Read copied mesh vertices and their texture using the actor's current
@@ -649,13 +651,14 @@ impl SongRuntime {
         actor: Value,
         layers: &[crate::SongLuaOverlayModelLayer<V>],
     ) -> Result<(), String> {
-        self.actors.install_model_materials(actor, layers)
+        self.actors
+            .install_model_materials(&mut self.vm, actor, layers)
     }
 
     /// Record a preparation frame after advancing the scene. The compiler owns
     /// the finite frame schedule and transfers these samples to immutable output.
     pub fn sample_model_materials(&mut self, second: f32) {
-        self.actors.sample_model_materials(second);
+        self.actors.sample_model_materials(&mut self.vm, second);
     }
 
     /// Finish and detach material capture for this actor, retaining layer order.
@@ -663,7 +666,7 @@ impl SongRuntime {
         &mut self,
         actor: Value,
     ) -> Result<Vec<Arc<[crate::SongLuaTextureSample]>>, String> {
-        self.actors.take_model_material_samples(actor)
+        self.actors.take_model_material_samples(&mut self.vm, actor)
     }
 
     /// Read the existing meter stream width and owned render state, if drawable.
@@ -689,26 +692,27 @@ impl SongRuntime {
     }
 
     /// Drain immediate sound commands, retaining each native actor identity.
-    pub fn take_actor_sounds(&self) -> Vec<crate::SongLuaActorSound> {
-        self.actors.take_sounds()
+    pub fn take_actor_sounds(&mut self) -> Vec<crate::SongLuaActorSound> {
+        self.actors.take_sounds(&mut self.vm)
     }
 
     /// Begin the compiler's media-capture phase. This does not advance time or
     /// execute queued commands. A new phase clears its previous captured events.
-    pub fn begin_actor_capture(&self, queued_startup: bool) {
-        self.actors.begin_sound_capture(queued_startup);
+    pub fn begin_actor_capture(&mut self, queued_startup: bool) {
+        self.actors
+            .begin_sound_capture(&mut self.vm, queued_startup);
     }
-    pub fn take_prepared_sounds(&self) -> Vec<crate::SongLuaSoundEvent> {
-        self.actors.take_prepared_sounds()
+    pub fn take_prepared_sounds(&mut self) -> Vec<crate::SongLuaSoundEvent> {
+        self.actors.take_prepared_sounds(&mut self.vm)
     }
-    pub fn take_sprite_textures(&self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
-        self.actors.take_sprite_textures()
+    pub fn take_sprite_textures(&mut self) -> Vec<(u64, crate::SongLuaSpriteTexture)> {
+        self.actors.take_sprite_textures(&mut self.vm)
     }
-    pub fn take_judgment_textures(&self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
-        self.actors.take_judgment_textures()
+    pub fn take_judgment_textures(&mut self) -> Vec<(usize, crate::SongLuaJudgmentTexture)> {
+        self.actors.take_judgment_textures(&mut self.vm)
     }
-    pub fn end_actor_capture(&self) {
-        self.actors.end_sound_capture();
+    pub fn end_actor_capture(&mut self) {
+        self.actors.end_sound_capture(&mut self.vm);
     }
 
     /// Deliver a host message with the existing authored-message normalization.
@@ -729,13 +733,13 @@ impl SongRuntime {
 
     /// Imported subscriber identity ranks for differential controls only.
     #[cfg(feature = "test-support")]
-    pub fn set_actor_message_ranks(&self, scene: ActorScene, ranks: &[usize]) -> bool {
-        self.actors.set_message_ranks(scene, ranks)
+    pub fn set_actor_message_ranks(&mut self, scene: ActorScene, ranks: &[usize]) -> bool {
+        self.actors.set_message_ranks(&mut self.vm, scene, ranks)
     }
 
     #[cfg(feature = "test-support")]
-    pub fn set_actor_message_identity(&self, actor: Value, rank: usize) -> bool {
-        self.actors.set_message_identity(actor, rank)
+    pub fn set_actor_message_identity(&mut self, actor: Value, rank: usize) -> bool {
+        self.actors.set_message_identity(&mut self.vm, actor, rank)
     }
 
     /// Load a song script with cmd preprocessing and its file environment.
@@ -820,7 +824,7 @@ impl SongRuntime {
     pub fn set_live(&mut self, live: bool) {
         self.clock.live.store(live, Ordering::Relaxed);
         if live {
-            self.actors.discard_song_replay_clock();
+            self.actors.discard_song_replay_clock(&mut self.vm);
         }
     }
 
@@ -2474,6 +2478,8 @@ pub struct SongLuaCompileContext {
     /// Session entry paths list backgrounds first, then foregrounds.
     /// A single-entry compile defaults to the foreground layer.
     pub background_layer_count: usize,
+    /// Native logical source spelling for each resolved background entry.
+    pub background_sources: Vec<PathBuf>,
     /// Authored song beats for session entries, in the same path order.
     /// Empty for direct actor compilation without a simfile layer schedule.
     pub layer_start_beats: Vec<f32>,
@@ -2485,6 +2491,9 @@ pub struct SongLuaCompileContext {
     /// compiling standalone actors without simfile foreground declarations.
     pub foreground_names: Vec<String>,
     pub song_dir: PathBuf,
+    /// Physical backing for the current theme's Fonts/_Combo Fonts FILEMAN queries.
+    /// Standalone hosts without installed theme resources leave this unset.
+    pub theme_combo_font_directory: Option<PathBuf>,
     /// Resolved artwork from the parsed song, including non-conventional filenames.
     pub song_banner_path: Option<PathBuf>,
     pub main_title: String,
@@ -2531,6 +2540,9 @@ pub struct SongLuaCompileContext {
     /// audio duration. Note times include the load offset; hints stay absolute.
     pub song_note_bounds: Option<[f32; 2]>,
     pub style_name: String,
+    /// Host layout for separate player fields after an authored join/reload.
+    /// Standalone contexts can keep their explicit player positions instead.
+    pub versus_player_screen_x: Option<[f32; LUA_PLAYERS]>,
     /// Song charts in simfile load order; never synthesize missing difficulties.
     pub song_steps: Vec<SongLuaStep>,
     /// Lua catalog entries map to playable payloads; an empty map is identity.
@@ -2559,7 +2571,9 @@ pub struct SongLuaCompileContext {
 
 impl SongLuaCompileContext {
     pub(crate) fn report_bake_progress(&self, fraction: f32) {
-        if !self.live && let Some(progress) = &self.bake_progress {
+        if !self.live
+            && let Some(progress) = &self.bake_progress
+        {
             progress.report(fraction);
         }
     }
@@ -2572,6 +2586,7 @@ impl SongLuaCompileContext {
         let song_dir = std::path::absolute(&song_dir).unwrap_or(song_dir);
         Self {
             background_layer_count: 0,
+            background_sources: Vec::new(),
             bake_progress: None,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
@@ -2581,6 +2596,7 @@ impl SongLuaCompileContext {
             defer_initial_live_update: false,
             screen_loading: false,
             song_dir,
+            theme_combo_font_directory: None,
             song_banner_path: None,
             main_title: main_title.into(),
             song_display_bpms: [60.0, 60.0],
@@ -2607,6 +2623,7 @@ impl SongLuaCompileContext {
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),
+            versus_player_screen_x: None,
             song_steps: Vec::new(),
             song_step_chart_indices: Vec::new(),
             player_step_indices: [None; LUA_PLAYERS],
@@ -2996,6 +3013,7 @@ pub struct CompiledSongLua<OverlayActor> {
     /// Charts whose note fields were constructed after startup reloads.
     pub loaded_steps: Option<[Option<usize>; LUA_PLAYERS]>,
     pub loaded_style: Option<String>,
+    pub loaded_players: Option<[bool; LUA_PLAYERS]>,
     pub startup_reloads: u32,
     pub startup: SongLuaStartup,
     pub entry_path: PathBuf,
@@ -3100,6 +3118,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             live_indices: Vec::new(),
             loaded_steps: None,
             loaded_style: None,
+            loaded_players: None,
             startup_reloads: 0,
             startup: SongLuaStartup::default(),
             entry_path: PathBuf::new(),

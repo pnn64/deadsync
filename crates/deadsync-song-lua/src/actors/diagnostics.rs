@@ -27,7 +27,6 @@ impl Callback<'_> {
 /// fallible clock and actor label reads, without holding actor state across Lua.
 pub(super) fn report(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     callback: Callback<'_>,
     error: Error,
@@ -69,7 +68,7 @@ pub(super) fn report(
                 error.to_string()
             }
         };
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if matches!(callback, Callback::Update)
             && let Some(actor) = guard.actors.get_mut(&actor)
         {
@@ -82,7 +81,7 @@ pub(super) fn report(
 }
 
 impl Actors {
-    pub(crate) fn take_callback_errors(&self) -> Vec<String> {
-        std::mem::take(&mut self.store.lock().unwrap().callback_errors)
+    pub(crate) fn take_callback_errors(&self, vm: &mut Vm) -> Vec<String> {
+        std::mem::take(&mut vm.store().callback_errors)
     }
 }

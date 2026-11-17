@@ -194,9 +194,14 @@ fn table(call: &HostCall<'_>, v: Value) -> Result<TableId, Error> {
         _ => Err(call.error(b"ArrowEffects table expected")),
     }
 }
-fn field(call: &mut HostCall<'_>, owner: Value, key: &str, raw: bool) -> Result<Value, Error> {
+fn field(
+    call: &mut HostCall<'_>,
+    owner: Value,
+    key: &'static str,
+    raw: bool,
+) -> Result<Value, Error> {
     call.with_roots(&[owner], |call| {
-        let key = call.try_intern(key.as_bytes())?;
+        let key = call.intern_static(key.as_bytes())?;
         if raw {
             call.raw_table_get(table(call, owner)?, key)
         } else {
@@ -204,7 +209,7 @@ fn field(call: &mut HostCall<'_>, owner: Value, key: &str, raw: bool) -> Result<
         }
     })
 }
-fn raw(call: &mut HostCall<'_>, owner: TableId, key: &str) -> Result<Value, Error> {
+fn raw(call: &mut HostCall<'_>, owner: TableId, key: &'static str) -> Result<Value, Error> {
     field(call, Value::Table(owner), key, true)
 }
 fn numeric(call: &mut HostCall<'_>, v: Value) -> Result<f64, Error> {
@@ -257,7 +262,7 @@ fn loose(call: &HostCall<'_>, args: &[Value], i: usize, default: f32) -> f32 {
         .and_then(|v| read_float(call, v))
         .unwrap_or(default)
 }
-fn n(call: &mut HostCall<'_>, state: Option<TableId>, key: &str) -> Result<f32, Error> {
+fn n(call: &mut HostCall<'_>, state: Option<TableId>, key: &'static str) -> Result<f32, Error> {
     let Some(t) = state else { return Ok(0.) };
     let v = raw(call, t, key)?;
     if v == Value::Nil {
@@ -266,7 +271,18 @@ fn n(call: &mut HostCall<'_>, state: Option<TableId>, key: &str) -> Result<f32, 
         numeric(call, v).map(|n| n as f32)
     }
 }
-fn flag(call: &mut HostCall<'_>, state: Option<TableId>, key: &str) -> Result<bool, Error> {
+// `n` for a modifier name built at run time, such as a per-column key.
+fn n_named(call: &mut HostCall<'_>, state: Option<TableId>, key: &str) -> Result<f32, Error> {
+    let Some(t) = state else { return Ok(0.) };
+    let key = call.try_intern(key.as_bytes())?;
+    let v = call.raw_table_get(t, key)?;
+    if v == Value::Nil {
+        Ok(0.)
+    } else {
+        numeric(call, v).map(|n| n as f32)
+    }
+}
+fn flag(call: &mut HostCall<'_>, state: Option<TableId>, key: &'static str) -> Result<bool, Error> {
     let Some(t) = state else { return Ok(false) };
     Ok(!matches!(
         raw(call, t, key)?,
@@ -283,7 +299,7 @@ fn optional_table(call: &HostCall<'_>, v: Value) -> Result<Option<TableId>, Erro
 fn invoke(
     call: &mut HostCall<'_>,
     owner: Value,
-    name: &str,
+    name: &'static str,
     args: &[Value],
 ) -> Result<Value, Error> {
     call.with_roots(&[owner], |call| {
@@ -515,7 +531,7 @@ fn style_info(call: &mut HostCall<'_>) -> crate::SongLuaStyleInfo {
 fn speed_value(
     call: &mut HostCall<'_>,
     options: TableId,
-    name: &str,
+    name: &'static str,
 ) -> Result<Option<f32>, Error> {
     let f = field(call, Value::Table(options), name, false)?;
     if f == Value::Nil {

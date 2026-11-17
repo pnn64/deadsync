@@ -156,19 +156,21 @@ pub(crate) fn allocate_components(
 /// Accepts sequential/progressive Huffman/arithmetic DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
-    decode_with_tables(input, limits, &mut Tables::new())
+    decode_with_tables(input, limits, &mut Tables::new(), None)
 }
 pub(crate) fn decode_with_tables<'a>(
     input: &'a [u8],
     limits: Limits,
     tables: &mut Tables,
+    mut hints: Option<&mut crate::reconstruct::ColorHints>,
 ) -> Result<CoefficientImage<'a>> {
     let mut reader = MarkerReader::new(input)?;
     let Tables { quant, huffman } = tables;
     let mut conditioning = Conditioning::default();
     let mut frame = None;
     let mut components = Vec::new();
-    let mut seen = Vec::new();
+    // At most 255 frame components; a stack array avoids an allocation.
+    let mut seen = [false; 256];
     let mut memory_bytes = 0usize;
     let mut metadata = Vec::new();
     let mut metadata_bytes = 0usize;
@@ -218,13 +220,20 @@ pub(crate) fn decode_with_tables<'a>(
                 {
                     return Err(Error::LimitExceeded("metadata and coefficients"));
                 }
-                metadata.try_reserve(1).map_err(|_| Error::Allocation)?;
-                metadata.push(MetadataSegment {
-                    marker,
-                    data,
-                    offset,
-                    preceding_scans: scans,
-                });
+                // Pixel output keeps only the color hints, with identical limits.
+                if let Some(hints) = hints.as_deref_mut() {
+                    if scans == 0 {
+                        hints.observe(marker, data);
+                    }
+                } else {
+                    metadata.try_reserve(1).map_err(|_| Error::Allocation)?;
+                    metadata.push(MetadataSegment {
+                        marker,
+                        data,
+                        offset,
+                        preceding_scans: scans,
+                    });
+                }
             }
             Event::Segment { marker, data, .. } if Process::try_from(marker).is_ok() => {
                 if frame.is_some() {
@@ -262,14 +271,13 @@ pub(crate) fn decode_with_tables<'a>(
                             ..limits
                         },
                     )?;
-                    seen.resize(frame.components.len(), false);
                 }
                 decode_scan(
                     header,
                     entropy,
                     frame,
                     &mut components,
-                    &mut seen,
+                    &mut seen[..frame.components.len()],
                     quant,
                     huffman,
                     interval,
@@ -296,7 +304,7 @@ pub(crate) fn decode_with_tables<'a>(
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
-    if scans == 0 || seen.iter().any(|&v| !v) {
+    if scans == 0 || seen[..frame.components.len()].iter().any(|&v| !v) {
         return Err(Error::Invalid("missing component scan"));
     }
     Ok(CoefficientImage {
@@ -468,6 +476,9 @@ pub(crate) fn decode_scan(
         )
     };
     let mut bits = Bits::new(entropy);
+    // Sequential Huffman scans use the faster reader; acceptance is identical.
+    let mut reader = (progression.is_none() && !frame.process.is_arithmetic())
+        .then(|| crate::fast::Reader::new(entropy));
     let mut arithmetic = if frame.process.is_arithmetic() {
         Some((
             Arithmetic::new(entropy)?,
@@ -490,7 +501,11 @@ pub(crate) fn decode_scan(
                 statistics.reset();
                 classes.fill(0);
             } else {
-                bits.restart(restart)?;
+                if let Some(reader) = &mut reader {
+                    reader.restart(restart)?;
+                } else {
+                    bits.restart(restart)?;
+                }
             }
             restart = (restart + 1) & 7;
             predictors.fill(0);
@@ -550,10 +565,10 @@ pub(crate) fn decode_scan(
                             frame.precision,
                             frame.process.is_differential(),
                         )?;
-                    } else {
-                        sequential_block(
+                    } else if let Some(reader) = &mut reader {
+                        crate::fast::block(
                             block,
-                            &mut bits,
+                            reader,
                             tables[dc].as_ref().unwrap(),
                             tables[ac].as_ref().unwrap(),
                             &mut predictors[j],
@@ -570,6 +585,8 @@ pub(crate) fn decode_scan(
     }
     if let Some((coder, _, _)) = arithmetic {
         coder.finish()?;
+    } else if let Some(reader) = reader {
+        reader.finish()?;
     } else {
         bits.finish()?;
     }
@@ -579,52 +596,6 @@ pub(crate) fn decode_scan(
         }
         if progression.is_none() {
             components[i].successive_approximation.fill(0);
-        }
-    }
-    Ok(())
-}
-
-fn sequential_block(
-    block: &mut [i16; 64],
-    bits: &mut Bits<'_>,
-    dc: &Huffman,
-    ac: &Huffman,
-    predictor: &mut i32,
-    precision: u8,
-    differential: bool,
-) -> Result<()> {
-    let size = dc.decode(bits)?;
-    if size > precision + 3 {
-        return Err(Error::Invalid("DC magnitude category"));
-    }
-    *predictor += bits.receive(size)?;
-    if *predictor < -(1 << (precision + 3)) || *predictor >= 1 << (precision + 3) {
-        return Err(Error::Invalid("DC coefficient range"));
-    }
-    block[0] = *predictor as i16;
-    let mut k = 1;
-    while k < 64 {
-        let rs = ac.decode(bits)?;
-        let run = (rs >> 4) as usize;
-        let size = rs & 15;
-        if size == 0 {
-            if run == 0 {
-                break;
-            }
-            if run != 15 {
-                return Err(Error::Invalid("sequential AC run symbol"));
-            }
-            k += 16;
-            if k > 64 {
-                return Err(Error::Invalid("AC zero run exceeds block"));
-            }
-        } else {
-            k += run;
-            if k >= 64 || size > precision + 2 + u8::from(differential) {
-                return Err(Error::Invalid("AC run or magnitude"));
-            }
-            block[ZIGZAG[k]] = bits.receive(size)? as i16;
-            k += 1;
         }
     }
     Ok(())

@@ -107,13 +107,14 @@ impl Vm {
         .enumerate()
         {
             let key = self.try_intern(name)?;
-            self.tables[slot_index(table.0)].set(key, Value::Native(STR_FIRST + i as u64))?;
+            self.raw_set(table, key, Value::Native(STR_FIRST + i as u64))?;
         }
         let key = self.try_intern(b"gfind")?;
-        self.tables[slot_index(table.0)].set(key, Value::Native(STR_GMATCH))?;
+        self.raw_set(table, key, Value::Native(STR_GMATCH))?;
         self.set_global(b"string", Value::Table(table))?;
         let mt = self.try_new_table()?;
-        self.tables[slot_index(mt.0)].set(
+        self.raw_set(
+            mt,
             Value::String(self.meta_names[Meta::Index as usize]),
             Value::Table(table),
         )?;

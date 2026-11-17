@@ -368,10 +368,15 @@ fn pinned_persistent_sessions_exact_data_and_malformed_boundaries() {
                 let before = cache.clone();
                 let model = read(&bytes, &mut cache);
                 let expect = |tail: &str, actual: Vec<u8>| {
+                    let path = root.join(format!("{name}.image-{image_index}.{tail}"));
+                    // Samples pin native IDCT rounding; coefficients never repin.
+                    if tail.ends_with("samples") && std::env::var_os("DEADLIB_JPEG_REPIN").is_some()
+                    {
+                        std::fs::write(&path, &actual).unwrap();
+                    }
                     assert_eq!(
                         actual,
-                        std::fs::read(root.join(format!("{name}.image-{image_index}.{tail}")))
-                            .unwrap(),
+                        std::fs::read(path).unwrap(),
                         "{name} image {image_index} {tail}"
                     )
                 };

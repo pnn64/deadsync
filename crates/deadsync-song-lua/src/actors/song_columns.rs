@@ -75,7 +75,7 @@ pub(super) fn numeric(call: &mut HostCall<'_>, value: Value, mode: Numeric) -> R
     };
     Ok(value)
 }
-fn field(call: &mut HostCall<'_>, actor: TableId, key: &str) -> Result<Value, Error> {
+fn field(call: &mut HostCall<'_>, actor: TableId, key: &'static str) -> Result<Value, Error> {
     sprites::field(call, actor, key)
 }
 pub(super) fn text(call: &mut HostCall<'_>, value: Value, optional: bool) -> Result<String, Error> {
@@ -142,7 +142,7 @@ fn spline_size(call: &mut HostCall<'_>, spline: TableId) -> Result<usize, Error>
 fn uniform(
     call: &mut HostCall<'_>,
     column: TableId,
-    key: &str,
+    key: &'static str,
     component: usize,
     baseline: f32,
 ) -> Result<Option<f32>, Error> {
@@ -404,11 +404,11 @@ pub(super) fn note_field(call: &mut HostCall<'_>, index: usize) -> Result<Option
         let Some(player) = player else {
             return Ok(None);
         };
-        let key = call.try_intern(b"__songlua_children")?;
+        let key = call.intern_static(b"__songlua_children")?;
         let children = call.raw_table_get(player, key)?;
         if call.raw_table_len(player)? == 0 && children != Value::Nil {
             return with_table(call, children, |call, children| {
-                let key = call.try_intern(b"NoteField")?;
+                let key = call.intern_static(b"NoteField")?;
                 let value = call.raw_table_get(children.unwrap(), key)?;
                 if value == Value::Nil {
                     Ok(None)
@@ -417,15 +417,12 @@ pub(super) fn note_field(call: &mut HostCall<'_>, index: usize) -> Result<Option
                 }
             });
         }
-        let children = native_children::named_children(call, player)?;
-        call.with_roots(&[children], |call| {
-            let value = super::super::field(call, children, "NoteField")?;
-            if value == Value::Nil {
-                Ok(None)
-            } else {
-                table(call, value).map(Some)
-            }
-        })
+        let value = native_children::named_child(call, player, b"NoteField")?;
+        if value == Value::Nil {
+            Ok(None)
+        } else {
+            table(call, value).map(Some)
+        }
     })
 }
 fn read_pending(

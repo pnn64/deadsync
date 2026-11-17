@@ -144,27 +144,30 @@ impl Capture {
 impl Actors {
     pub(crate) fn set_song_pending_overlay_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         values: &[(usize, Target, UpdateValue)],
     ) -> bool {
-        self.set_pending_updates(screen, values, false)
+        self.set_pending_updates(vm, screen, values, false)
     }
 
     pub(crate) fn set_song_pending_render_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         values: &[(usize, Target, UpdateValue)],
     ) -> bool {
-        self.set_pending_updates(screen, values, true)
+        self.set_pending_updates(vm, screen, values, true)
     }
 
     fn set_pending_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         values: &[(usize, Target, UpdateValue)],
         render_only: bool,
     ) -> bool {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         if store.replay_frame.map(|f| f.0) != Some(screen.id) {
             return false;
         }
@@ -199,9 +202,10 @@ impl Actors {
 
     pub(crate) fn drain_song_immediate_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Option<Vec<SongReplayImmediateUpdates>> {
-        let mut frames = self.drain_song_property_updates(screen)?;
+        let mut frames = self.drain_song_property_updates(vm, screen)?;
         for frame in &mut frames {
             frame.values.retain(|(target, _)| TARGETS.contains(target));
             frame
@@ -222,9 +226,10 @@ impl Actors {
 
     pub(crate) fn drain_song_property_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Option<Vec<SongReplayImmediateUpdates>> {
-        let mut frames = self.drain_song_overlay_updates(screen)?;
+        let mut frames = self.drain_song_overlay_updates(vm, screen)?;
         for frame in &mut frames {
             frame.values.retain(|(target, _)| {
                 TARGETS.contains(target) || song_properties::TARGETS.contains(target)
@@ -247,17 +252,19 @@ impl Actors {
 
     pub(crate) fn drain_song_overlay_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Option<Vec<SongReplayImmediateUpdates>> {
-        self.take_song_overlay_frame_updates(screen, false)
+        self.take_song_overlay_frame_updates(vm, screen, false)
     }
 
     pub(crate) fn take_song_overlay_frame_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         include_empty: bool,
     ) -> Option<Vec<SongReplayImmediateUpdates>> {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         if store.replay_frame?.0 != screen.id {
             return None;
         }
@@ -274,18 +281,19 @@ impl Actors {
         )
     }
 
-    pub(crate) fn chronological_song_capture(&self) -> bool {
-        self.store.lock().unwrap().replay_clock.is_some()
+    pub(crate) fn chronological_song_capture(&self, vm: &Vm) -> bool {
+        vm.store_ref().replay_clock.is_some()
     }
 
     /// Metadata classification performs no authored calls. If it fails, retain
     /// the complete publication batch as the native visit-before-clear reader did.
     pub(crate) fn restore_song_overlay_updates(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
         frames: Vec<SongReplayImmediateUpdates>,
     ) {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let capture = &mut store
             .scenes
             .get_mut(&screen.id)
@@ -306,7 +314,7 @@ impl Actors {
 }
 
 // A capture's actor IDs are traced by its enclosing scene. Lookup after each Lua
-// access also tolerates authored reentry without holding a Store lock across it.
+// access also tolerates authored reentry without borrowing the store across it.
 pub(super) fn context(store: &Store, id: TableId) -> Option<(u64, usize)> {
     if store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
@@ -325,28 +333,16 @@ pub(super) fn context(store: &Store, id: TableId) -> Option<(u64, usize)> {
     Some((owner, *capture.indices.get(&id)?))
 }
 
-pub(super) fn record(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    target: Target,
-    value: UpdateValue,
-) {
-    capture::retain_render_update(store, id, target, &value, true);
-    record_frame(call, store, id, target, value);
+pub(super) fn record(call: &mut HostCall<'_>, id: TableId, target: Target, value: UpdateValue) {
+    capture::retain_render_update(call.store(), id, target, &value, true);
+    record_frame(call, id, target, value);
 }
-fn record_frame(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    target: Target,
-    value: UpdateValue,
-) {
-    if context(&store.lock().unwrap(), id).is_none() {
+fn record_frame(call: &mut HostCall<'_>, id: TableId, target: Target, value: UpdateValue) {
+    if context(&call.store(), id).is_none() {
         return;
     }
     let beat = effects::values(call, false).map_or(0., |values| values[0]);
-    let mut guard = store.lock().unwrap();
+    let guard = call.store();
     let Some((owner, index)) = context(&guard, id) else {
         return;
     };
@@ -407,12 +403,11 @@ fn record_frame(
 
 pub(super) fn delta(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     delta: &crate::SongLuaOverlayStateDelta,
     immediate: bool,
 ) {
-    if !immediate || context(&store.lock().unwrap(), id).is_none() {
+    if !immediate || context(&call.store(), id).is_none() {
         return;
     }
     let mut state = crate::SongLuaOverlayState::default();
@@ -421,7 +416,6 @@ pub(super) fn delta(
         if delta.has_update_target(target) {
             record_frame(
                 call,
-                store,
                 id,
                 target,
                 crate::perframe::overlay_state_update_value(&state, target),
@@ -430,18 +424,13 @@ pub(super) fn delta(
     }
 }
 
-pub(super) fn cancel(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-    finish: bool,
-) -> Result<(), Error> {
-    if context(&store.lock().unwrap(), id).is_none() {
+pub(super) fn cancel(call: &mut HostCall<'_>, id: TableId, finish: bool) -> Result<(), Error> {
+    if context(&call.store(), id).is_none() {
         return Ok(());
     }
     let beat = effects::values(call, false).map_or(0., |values| values[0]);
     let (owner, index, message, values) = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         let Some((owner, index)) = context(&guard, id) else {
             return Ok(());
         };
@@ -490,9 +479,9 @@ pub(super) fn cancel(
     };
     for (target, value) in values {
         if crate::tween_pose::TARGETS.contains(&target) {
-            song_pose::set_getter(call, store, id, target, &value)?;
+            song_pose::set_getter(call, id, target, &value)?;
         }
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if song_properties::TARGETS.contains(&target) {
             let actor = guard.actors.get_mut(&id).unwrap();
             crate::perframe::set_overlay_state_update_value(

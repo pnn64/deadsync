@@ -10,7 +10,7 @@ impl SongRuntime {
         actor: Value,
         command_name: &str,
     ) -> Result<Vec<crate::SongLuaOverlayCommandBlock>, String> {
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("actor command capture requires preparation before frame replay".into());
         }
         let mut pins = Vec::new();
@@ -84,7 +84,7 @@ impl SongRuntime {
         if self.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
             return Ok(Default::default());
         }
-        if !self.actors.actor_function_capture_ready() {
+        if !self.actors.actor_function_capture_ready(&mut self.vm) {
             return Err("actor message capture requires preparation before frame replay".into());
         }
         let pin = self.vm.pin(actor).map_err(|e| e.to_string())?;
@@ -132,7 +132,7 @@ impl SongRuntime {
             }
             let startup = self
                 .actors
-                .captured_blocks(actor)
+                .captured_blocks(&mut self.vm, actor)
                 .unwrap_or_default()
                 .into_iter()
                 .filter(|b| b.delta.sound_play == Some(true))

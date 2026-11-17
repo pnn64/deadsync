@@ -2,6 +2,7 @@
 *.rs text eol=lf
 *.json text eol=lf
 *.py text eol=lf
+bench/results/**/*.log text eol=lf -whitespace
 independent-build.log text eol=lf
 # Preserve raw PowerShell diagnostics, including alignment whitespace.
 decoder-completion-*.log text eol=lf -whitespace

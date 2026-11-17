@@ -32,8 +32,215 @@ const BASIS: [[i64; 8]; 8] = [
 #[path = "../tests/support/t83_transform.rs"]
 mod t83_transform;
 
-pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
+/// Hierarchical frames keep the exact Q20 transform: lossless corrections are
+/// exact only against the encoder's reference reconstruction.
+pub(crate) fn idct_exact(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
     idct_mode(block, quant, Some(precision))
+}
+
+pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
+    if precision == 8 {
+        let mut out = [0u8; 64];
+        idct8(block, &FloatQuant::new(quant), &mut out, 8);
+        return out.map(u16::from);
+    }
+    idct_mode(block, quant, Some(precision))
+}
+
+// 8-bit samples use libjpeg's floating-point AAN inverse DCT (jidctflt.c,
+// the JDCT_FLOAT reference used by the C oracles) with its operation order,
+// f64-derived constants, folded 1/8 scale and truncation after +128.5.
+// Rust evaluates every f32 operation exactly once in IEEE single precision,
+// so vectorized and scalar evaluation produce identical samples.
+// libjpeg's decimal literals, rounded through f64 like the C constants.
+#[allow(clippy::approx_constant)]
+const R2: f32 = 1.414213562f64 as f32;
+const C2: f32 = 1.847759065f64 as f32;
+const C2_MINUS_C6: f32 = 1.082392200f64 as f32;
+const C2_PLUS_C6: f32 = 2.613125930f64 as f32;
+
+/// Dequantization multipliers with AAN row/column scales and the 1/8 descale.
+pub(crate) struct FloatQuant(pub(crate) [f32; 64]);
+
+impl FloatQuant {
+    pub fn new(quant: &[u16; 64]) -> Self {
+        const AAN: [f64; 8] = [
+            1.0,
+            1.387039845,
+            1.306562965,
+            1.175875602,
+            1.0,
+            0.785694958,
+            0.541196100,
+            0.275899379,
+        ];
+        Self(core::array::from_fn(|i| {
+            (f64::from(quant[i]) * AAN[i / 8] * AAN[i % 8] * 0.125) as f32
+        }))
+    }
+}
+
+#[inline(always)]
+fn aan_line(x: [f32; 8]) -> [f32; 8] {
+    let tmp10 = x[0] + x[4];
+    let tmp11 = x[0] - x[4];
+    let tmp13 = x[2] + x[6];
+    let tmp12 = (x[2] - x[6]) * R2 - tmp13;
+    let tmp0 = tmp10 + tmp13;
+    let tmp3 = tmp10 - tmp13;
+    let tmp1 = tmp11 + tmp12;
+    let tmp2 = tmp11 - tmp12;
+    let z13 = x[5] + x[3];
+    let z10 = x[5] - x[3];
+    let z11 = x[1] + x[7];
+    let z12 = x[1] - x[7];
+    let tmp7 = z11 + z13;
+    let tmp11 = (z11 - z13) * R2;
+    let z5 = (z10 + z12) * C2;
+    let tmp10 = z5 - z12 * C2_MINUS_C6;
+    let tmp12 = z5 - z10 * C2_PLUS_C6;
+    let tmp6 = tmp12 - tmp7;
+    let tmp5 = tmp11 - tmp6;
+    let tmp4 = tmp10 - tmp5;
+    [
+        tmp0 + tmp7,
+        tmp1 + tmp6,
+        tmp2 + tmp5,
+        tmp3 + tmp4,
+        tmp3 - tmp4,
+        tmp2 - tmp5,
+        tmp1 - tmp6,
+        tmp0 - tmp7,
+    ]
+}
+
+/// Reconstruct one 8-bit block into `out` rows `stride` bytes apart.
+// Plain counted loops over flat arrays keep both passes vectorized under
+// baseline SSE2; value-array formulations left whole passes scalar.
+#[inline(always)]
+pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let mut input = [0f32; 64];
+    for i in 0..64 {
+        input[i] = f32::from(block[i]) * quant.0[i];
+    }
+    // Columns first, as in jidctflt.
+    let mut work = [0f32; 64];
+    for u in 0..8 {
+        let column = aan_line(core::array::from_fn(|v| input[v * 8 + u]));
+        for (y, value) in column.into_iter().enumerate() {
+            work[y * 8 + u] = value;
+        }
+    }
+    // Rows go to a contiguous block first: stores `stride` apart would stop
+    // the second pass from vectorizing across rows.
+    let mut samples = [0f32; 64];
+    for y in 0..8 {
+        let mut row: [f32; 8] = work[y * 8..y * 8 + 8].try_into().unwrap();
+        // Level shift and rounding bias enter with the DC term.
+        row[0] += 128.5;
+        samples[y * 8..y * 8 + 8].copy_from_slice(&aan_line(row));
+    }
+    write_samples(&samples, out, stride);
+}
+
+/// Truncate, clamp and store samples. A separate contiguous loop keeps the
+/// conversion vectorized; fused into the row pass it compiled to scalar code.
+#[inline(always)]
+fn write_samples(samples: &[f32; 64], out: &mut [u8], stride: usize) {
+    let mut pixels = [0u8; 64];
+    for (pixel, &sample) in pixels.iter_mut().zip(samples) {
+        *pixel = sample.clamp(0.0, 255.0) as u8;
+    }
+    for (y, row) in pixels.as_chunks::<8>().0.iter().enumerate() {
+        out[y * stride..y * stride + 8].copy_from_slice(row);
+    }
+}
+
+/// `aan_line` with inputs 4..8 zero. Dropping exact zero terms can only change
+/// the sign of a zero, which never reaches a nonzero sum or the +128.5
+/// output, so samples are identical.
+#[inline(always)]
+fn aan_half(x: [f32; 4]) -> [f32; 8] {
+    let tmp12 = x[2] * R2 - x[2];
+    let tmp0 = x[0] + x[2];
+    let tmp3 = x[0] - x[2];
+    let tmp1 = x[0] + tmp12;
+    let tmp2 = x[0] - tmp12;
+    let tmp7 = x[1] + x[3];
+    let tmp11 = (x[1] - x[3]) * R2;
+    let z5 = (x[1] - x[3]) * C2;
+    let tmp10 = z5 - x[1] * C2_MINUS_C6;
+    let tmp12 = z5 + x[3] * C2_PLUS_C6;
+    let tmp6 = tmp12 - tmp7;
+    let tmp5 = tmp11 - tmp6;
+    let tmp4 = tmp10 - tmp5;
+    [
+        tmp0 + tmp7,
+        tmp1 + tmp6,
+        tmp2 + tmp5,
+        tmp3 + tmp4,
+        tmp3 - tmp4,
+        tmp2 - tmp5,
+        tmp1 - tmp6,
+        tmp0 - tmp7,
+    ]
+}
+
+/// [`idct8`] for blocks whose nonzero coefficients lie in the top-left 4x4.
+#[inline(always)]
+pub(crate) fn idct8_quarter(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let mut input = [0f32; 32];
+    for v in 0..4 {
+        for u in 0..8 {
+            input[v * 8 + u] = f32::from(block[v * 8 + u]) * quant.0[v * 8 + u];
+        }
+    }
+    let mut work = [0f32; 32];
+    for u in 0..4 {
+        let column = aan_half(core::array::from_fn(|v| input[v * 8 + u]));
+        for (y, value) in column.into_iter().enumerate() {
+            work[y * 4 + u] = value;
+        }
+    }
+    let mut samples = [0f32; 64];
+    for y in 0..8 {
+        let mut row: [f32; 4] = work[y * 4..y * 4 + 4].try_into().unwrap();
+        row[0] += 128.5;
+        samples[y * 8..y * 8 + 8].copy_from_slice(&aan_half(row));
+    }
+    write_samples(&samples, out, stride);
+}
+
+/// Reconstruct with the cheapest exact transform for the block's support.
+#[inline(always)]
+pub(crate) fn idct8_auto(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    if block[1..].iter().fold(0, |acc, &v| acc | v) == 0 {
+        return idct8_dc(block[0], quant, out, stride);
+    }
+    // With AVX2 the full transform is cheaper than the reduced portable one.
+    if crate::simd::idct8(block, &quant.0, [R2, C2, C2_MINUS_C6, C2_PLUS_C6], out, stride) {
+        return;
+    }
+    let outside = block[32..].iter().fold(0, |acc, &v| acc | v)
+        | block[..32]
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .fold(0, |acc, row| acc | row[4] | row[5] | row[6] | row[7]);
+    if outside != 0 {
+        idct8(block, quant, out, stride);
+    } else {
+        idct8_quarter(block, quant, out, stride);
+    }
+}
+
+/// DC-only blocks reduce exactly to one sample in every position.
+#[inline(always)]
+pub(crate) fn idct8_dc(dc: i16, quant: &FloatQuant, out: &mut [u8], stride: usize) {
+    let value = (f32::from(dc) * quant.0[0] + 128.5).clamp(0.0, 255.0) as u8;
+    for y in 0..8 {
+        out[y * stride..y * stride + 8].fill(value);
+    }
 }
 
 /// Annex J residuals have no inverse level shift or unsigned sample clipping.
@@ -54,25 +261,49 @@ fn idct_mode(block: &[i16; 64], quant: &[u16; 64], precision: Option<u8>) -> [u1
     }
     let mut tmp = [[0i64; 8]; 8];
     for v in 0..8 {
-        for x in 0..8 {
-            let mut sum = 0;
-            for u in 0..8 {
-                sum += i64::from(block[v * 8 + u]) * i64::from(quant[v * 8 + u]) * BASIS[x][u];
-            }
-            tmp[v][x] = (sum + (1 << 15)) >> 16;
-        }
+        let input =
+            core::array::from_fn(|u| i64::from(block[v * 8 + u]) * i64::from(quant[v * 8 + u]));
+        tmp[v] = inverse_line(input).map(|sum| (sum + (1 << 15)) >> 16);
     }
     let mut out = [0; 64];
-    for y in 0..8 {
-        for x in 0..8 {
-            let mut sum = 0;
-            for v in 0..8 {
-                sum += tmp[v][x] * BASIS[y][v];
-            }
+    for x in 0..8 {
+        let column = inverse_line(tmp.map(|row| row[x]));
+        for (y, sum) in column.into_iter().enumerate() {
             out[y * 8 + x] = finish((sum + (1 << 23)) >> 24);
         }
     }
     out
+}
+
+/// Factor the exact Q20 matrix using its even/odd and mirror symmetries.
+/// All rounding stays at the original pass boundaries, including differential
+/// reconstruction. No approximation or narrower intermediate changes samples.
+#[inline]
+fn inverse_line(a: [i64; 8]) -> [i64; 8] {
+    if a[1..].iter().all(|&v| v == 0) {
+        return [a[0] * 370728; 8];
+    }
+    let e0 = (a[0] + a[4]) * 370728;
+    let e1 = (a[0] - a[4]) * 370728;
+    let e2 = a[2] * 484379 + a[6] * 200636;
+    let e3 = a[2] * 200636 - a[6] * 484379;
+    let even = [e0 + e2, e1 + e3, e1 - e3, e0 - e2];
+    let odd = [
+        a[1] * 514214 + a[3] * 435930 + a[5] * 291279 + a[7] * 102284,
+        a[1] * 435930 - a[3] * 102284 - a[5] * 514214 - a[7] * 291279,
+        a[1] * 291279 - a[3] * 514214 + a[5] * 102284 + a[7] * 435930,
+        a[1] * 102284 - a[3] * 291279 + a[5] * 435930 - a[7] * 514214,
+    ];
+    [
+        even[0] + odd[0],
+        even[1] + odd[1],
+        even[2] + odd[2],
+        even[3] + odd[3],
+        even[3] - odd[3],
+        even[2] - odd[2],
+        even[1] - odd[1],
+        even[0] - odd[0],
+    ]
 }
 
 /// Forward orthonormal transform, using the transpose of the same Q20 basis.
@@ -133,6 +364,76 @@ fn fdct_inner(samples: &[u16; 64], quant: &[u16; 64], read: impl Fn(u16) -> i64)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inverse_factorization_is_exact_for_sparse_and_wide_inputs() {
+        let matrix =
+            |a: [i64; 8]| BASIS.map(|row| row.into_iter().zip(a).map(|(b, v)| b * v).sum());
+        for value in [-(1i64 << 38), -1, 0, 1, 1 << 38] {
+            assert_eq!(inverse_line([value; 8]), matrix([value; 8]));
+            for i in 0..8 {
+                let mut a = [0; 8];
+                a[i] = value;
+                assert_eq!(inverse_line(a), matrix(a));
+            }
+        }
+        let mut state = 0x8723479812345678u64;
+        for _ in 0..1000 {
+            let input = core::array::from_fn(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                (state >> 26) as i64 - (1 << 37)
+            });
+            assert_eq!(inverse_line(input), matrix(input));
+        }
+    }
+    #[test]
+    fn sparse_inverse_transforms_match_the_full_transform() {
+        let quant = FloatQuant::new(&core::array::from_fn(|i| 1 + (i as u16 * 37) % 97));
+        let mut state = 0x9e37_79b9u32;
+        for case in 0..200_000 {
+            let mut block = [0i16; 64];
+            for v in 0..4 {
+                for u in 0..4 {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    if case % 2 == 0 || state.is_multiple_of(3) {
+                        block[v * 8 + u] = (state >> 16) as i16 >> (case % 13);
+                    }
+                }
+            }
+            if case % 5 == 0 {
+                block[1..].fill(0);
+            }
+            let (mut full, mut sparse) = ([0u8; 64], [0u8; 64]);
+            idct8(&block, &quant, &mut full, 8);
+            idct8_auto(&block, &quant, &mut sparse, 8);
+            assert_eq!(full, sparse, "{block:?}");
+        }
+    }
+    #[test]
+    fn dispatched_inverse_transform_matches_the_portable_one() {
+        let mut state = 0x2545_f491u32;
+        for case in 0..100_000u32 {
+            let mut next = || {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state
+            };
+            let quant = FloatQuant::new(&core::array::from_fn(|_| 1 + (next() % 255) as u16));
+            let shift = case % 16;
+            let block: [i16; 64] = core::array::from_fn(|_| {
+                let v = next();
+                if v % 4 == 0 { (v >> 16) as i16 >> shift } else { 0 }
+            });
+            let (mut dispatched, mut portable) = ([0u8; 64], [0u8; 64]);
+            idct8_auto(&block, &quant, &mut dispatched, 8);
+            crate::simd::portable(|| idct8_auto(&block, &quant, &mut portable, 8));
+            assert_eq!(dispatched, portable, "{block:?}");
+        }
+    }
     #[test]
     fn signed_forward_dct_has_no_level_shift_and_checks_its_model() {
         assert_eq!(fdct_differential(&[0; 64], &[1; 64]).unwrap(), [0; 64]);

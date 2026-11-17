@@ -261,7 +261,7 @@ impl Pair {
             &actual.len(),
         );
         for (index, actual) in actual.iter().copied().enumerate() {
-            let actual = test_support::captured_blocks(&self.rust, actual).unwrap();
+            let actual = test_support::captured_blocks(&mut self.rust, actual).unwrap();
             reference_test::assert_debug(
                 "song/tests/rust_transitions.rs::capture_blocks",
                 &(index, &actual),

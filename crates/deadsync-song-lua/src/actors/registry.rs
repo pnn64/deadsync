@@ -95,6 +95,7 @@ impl<T> Registry<T> {
         Some(self.entries.swap_remove(index).1)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     #[inline]
     pub(super) fn len(&self) -> usize {
         self.entries.len()

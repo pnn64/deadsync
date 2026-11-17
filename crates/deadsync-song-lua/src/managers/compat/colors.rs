@@ -130,7 +130,7 @@ fn steps_color(call: &mut HostCall<'_>, value: Value) -> Option<[f32; 4]> {
         return Some(color);
     }
     let Value::Table(_) = value else { return None };
-    let key = call.try_intern(b"GetDifficulty").ok()?;
+    let key = call.intern_static(b"GetDifficulty").ok()?;
     let method = call.table_get(value, key).ok()?;
     if !matches!(method, Value::Function(_) | Value::Native(_)) {
         return None;

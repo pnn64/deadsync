@@ -2231,7 +2231,18 @@ return Def.ActorFrame {
 fn live_steps_display_owns_native_children_resources_and_step_lifecycle() {
     let mut compiled = compile_with_context(
         "native-gameplay-steps-display",
-        "return Def.Actor {}",
+        r#"return Def.Actor { OnCommand=function()
+            local screen=SCREENMAN:GetTopScreen()
+            for index,pn in ipairs{PLAYER_1,PLAYER_2} do
+                local description=screen:GetChild('StepsDescriptionP'..index)
+                assert(description:GetText()==(index==1 and 'P1 chart' or 'Fixture edit'),
+                    'LoadNextSong initializes each hidden chart description before authored On')
+                assert(description:GetText()==GAMESTATE:GetCurrentSteps(pn):GetDescription())
+                assert(description:GetTweenTimeLeft()==math.huge)
+                description:diffusealpha(0.5)
+                assert(description:GetTweenTimeLeft()==math.huge)
+            end
+        end }"#,
         |context| {
             context.defer_initial_live_update = true;
             context.players[0].enabled = true;
@@ -4332,6 +4343,37 @@ end
 }
 
 #[test]
+fn live_pause_output_preserves_transitions_and_ignores_outro_pause() {
+    let mut compiled = compile("pause-output", r#"
+return Def.ActorFrame { OnCommand=function(self)
+ local screen=SCREENMAN:GetTopScreen()
+ self:SetUpdateFunction(function()
+  if GetTimeSinceStart()==0 then return end
+  screen:PauseGame(true)
+  screen:PauseGame(true)
+  screen:PauseGame(false)
+  screen:PauseGame(true)
+ end)
+end }
+"#);
+    let mut scene = compiled.live_scene.take().unwrap();
+    scene.take_startup_output();
+    let output = scene.advance(SongLuaLiveFrame {
+        music_seconds: 1.0, screen_seconds: 1.0, delta_seconds: 0.1, uptime_seconds: Some(1.0),
+        ..Default::default()
+    }).unwrap();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    assert_eq!(output.gameplay_pauses, [true, false, true]);
+    scene.note_gameplay_outro_after_actors();
+    let output = scene.advance(SongLuaLiveFrame {
+        music_seconds: 1.0, screen_seconds: 1.1, delta_seconds: 0.1, uptime_seconds: Some(1.1),
+        gameplay_outro: true, ..Default::default()
+    }).unwrap();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    assert_eq!(output.gameplay_pauses, [false], "outro can resume, but cannot pause again");
+}
+
+#[test]
 fn live_uptime_advances_while_music_is_paused() {
     let mut compiled = compile(
         "uptime-paused",
@@ -4816,7 +4858,8 @@ return Def.Actor { OnCommand = function()
         local combo = player:GetChild('Combo')
         assert(combo:GetParent() == player and combo:GetName() == 'Combo')
         if $POPULATED then
-            assert(tostring(combo):find('ActorFrame', 1, true))
+            -- Native Player retains the theme's ActorFrame Lua type.
+            assert(tostring(combo):find('^ActorFrame %(') and combo.__songlua_actor_type == 'ActorFrame')
             local number = combo:GetChild('Number')
             assert(tostring(number):find('BitmapText', 1, true))
             assert(number:GetParent() == combo and combo:GetNumChildren() == 3)
@@ -8764,6 +8807,61 @@ return Def.ActorFrame {
     );
 }
 
+// A texture path is remembered once it is found, never while it is missing.
+#[test]
+fn live_sprite_publication_finds_a_texture_written_after_a_missing_lookup() {
+    let mut compiled = compile_with_context(
+        "live-sprite-late-texture",
+        r#"
+return Def.ActorFrame {
+    Def.Sprite {
+        Name='Late', Texture='first.png',
+        InitCommand=function(self) SPRITE=self end,
+    },
+}
+"#,
+        |context| {
+            context.defer_initial_live_update = true;
+            image::RgbaImage::new(16, 16)
+                .save(context.song_dir.join("first.png"))
+                .unwrap();
+            let _ = fs::remove_file(context.song_dir.join("late.png"));
+        },
+    );
+    let local = compiled
+        .overlays
+        .iter()
+        .position(|actor| actor.name.as_deref() == Some("Late"))
+        .unwrap();
+    let global = compiled.live_actor_indices()[local];
+    let mut kind = compiled.overlays[local].kind.clone();
+    let path = |kind: &SongLuaOverlayKind<_, _, _>| match kind {
+        SongLuaOverlayKind::Sprite { texture_path, .. } => texture_path.clone(),
+        _ => panic!("sprite visual slot"),
+    };
+    let scene = compiled.live_scene.take().unwrap();
+    let owned = scene_actor_at(&scene, global).unwrap();
+    scene_sync_visual(&scene, owned, &mut kind).unwrap();
+    let first = path(&kind);
+    assert!(first.ends_with("first.png"), "{first:?}");
+    let late = first.with_file_name("late.png");
+    scene_set_string(&scene, "LATE_TEXTURE", late.to_string_lossy().as_ref()).unwrap();
+    scene_exec(&scene, "rawset(SPRITE, 'Texture', LATE_TEXTURE)").unwrap();
+    for _ in 0..2 {
+        scene_sync_visual(&scene, owned, &mut kind).unwrap();
+        assert_eq!(
+            path(&kind),
+            first,
+            "a missing texture keeps the published path"
+        );
+    }
+    image::RgbaImage::new(16, 16).save(&late).unwrap();
+    for _ in 0..2 {
+        scene_sync_visual(&scene, owned, &mut kind).unwrap();
+        assert_eq!(path(&kind), late);
+    }
+}
+
 #[test]
 fn live_content_reaches_visual_slots_after_input_and_updates() {
     let mut compiled = compile(
@@ -9572,7 +9670,7 @@ fn scene_seed_queries(scene: &SongLuaLiveScene, objects: &[(Root, serde_json::Va
         .iter()
         .map(|(root, label)| (runtime.vm_mut().rooted(*root).unwrap(), label.clone()))
         .collect::<Vec<_>>();
-    song::test_support::seed_live_query_objects(&runtime, &values)
+    song::test_support::seed_live_query_objects(&mut runtime, &values)
 }
 fn scene_hook_query(
     scene: &SongLuaLiveScene,
@@ -11698,7 +11796,7 @@ fn scene_command_depth(scene: &SongLuaLiveScene) -> usize {
     song::test_support::live_command_depth(&scene.runtime())
 }
 fn scene_set_command_depth(scene: &SongLuaLiveScene, depth: usize) {
-    song::test_support::set_live_command_depth(&scene.runtime(), depth)
+    song::test_support::set_live_command_depth(&mut scene.runtime(), depth)
 }
 fn scene_install_command_depth(scene: &SongLuaLiveScene) -> Result<(), Error> {
     song::test_support::install_live_command_depth_probe(&mut scene.runtime())

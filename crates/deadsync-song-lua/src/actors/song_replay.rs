@@ -14,7 +14,6 @@ pub(super) struct State {
 
 #[derive(Clone)]
 struct Setup {
-    store: Shared,
     scene: u64,
     overlays: Vec<(TableId, SongLuaOverlayState)>,
     startup: HashMap<TableId, SongStartupState>,
@@ -30,7 +29,7 @@ impl Actors {
         startup: &HashMap<TableId, SongStartupState>,
     ) -> Result<(), Error> {
         let invalid = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             if store.clock.live.load(std::sync::atomic::Ordering::Relaxed) {
                 Some(b"song preparation replay is unavailable in live mode".as_slice())
             } else if store.playback {
@@ -61,7 +60,7 @@ impl Actors {
             return vm.with_native_stack(|stack| Err(stack.error(message)));
         }
         let spin = {
-            let store = self.store.lock().unwrap();
+            let store = vm.store();
             overlays
                 .iter()
                 .filter_map(|(id, _)| {
@@ -93,7 +92,6 @@ impl Actors {
                 Value::Table(roots),
             ],
             Setup {
-                store: self.store.clone(),
                 scene: screen.id,
                 overlays: overlays.to_vec(),
                 startup: startup.clone(),
@@ -104,9 +102,9 @@ impl Actors {
         let function = function?;
         // General playback removes discovery queues. The saved Init/On queues
         // below are the only queues which may enter chronological preparation.
-        self.begin_playback();
+        self.begin_playback(vm);
         vm.call(function, &[])?;
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         store.replay_frame = Some((screen.id, 0.));
         store
             .scenes
@@ -144,7 +142,7 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         let blocks = call.try_new_table()?;
         raw_set(call, id, "__songlua_capture_blocks", Value::Table(blocks))?;
-        let binding = get(call, id, b"__songlua_startup_sprite")?;
+        let binding = get_static(call, id, b"__songlua_startup_sprite")?;
         if binding != Value::Nil {
             call.with_roots(&[binding], |call| {
                 let binding = table(call, binding)?;
@@ -161,9 +159,9 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
                 Ok(())
             })?;
         }
-        restore_getters(call, &setup.store, id, state)?;
+        restore_getters(call, id, state)?;
     }
-    let mut store = setup.store.lock().unwrap();
+    let store = call.store();
     store.replay_clock = None;
     // Native chronological queues are installed only for actors with startup
     // steps. Other actors retain command capture until frame-driven queueing.
@@ -236,7 +234,6 @@ fn setup(call: &mut HostCall<'_>) -> Result<(), Error> {
 // discovery also writes non-tween properties which the compiler keeps.
 fn restore_getters(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     state: SongLuaOverlayState,
 ) -> Result<(), Error> {
@@ -323,7 +320,7 @@ fn restore_getters(
         let value = call.try_intern(label.as_bytes())?;
         call.with_roots(&[value], |call| sprites::set(call, id, key, value))?;
     }
-    let mut store = store.lock().unwrap();
+    let store = call.store();
     let actor = store.actors.get_mut(&id).unwrap();
     actor.current.x = state.x;
     actor.current.y = state.y;
@@ -377,6 +374,23 @@ fn restore_getters(
 pub(super) fn raw_set(
     call: &mut HostCall<'_>,
     actor: TableId,
+    key: &'static str,
+    value: Value,
+) -> Result<(), Error> {
+    if matches!(value, Value::Nil | Value::Boolean(_) | Value::Number(_)) {
+        // Nothing to keep alive while the name is found.
+        let key = call.intern_static(key.as_bytes())?;
+        return call.raw_table_set(actor, key, value);
+    }
+    call.with_roots(&[value], |call| {
+        let key = call.intern_static(key.as_bytes())?;
+        call.raw_table_set(actor, key, value)
+    })
+}
+// `raw_set` for a field name built at run time.
+pub(super) fn raw_set_named(
+    call: &mut HostCall<'_>,
+    actor: TableId,
     key: &str,
     value: Value,
 ) -> Result<(), Error> {
@@ -387,14 +401,10 @@ pub(super) fn raw_set(
 }
 
 /// Preparation exports the sampled current pose and queued destination to
-/// Lua. No metadata lock survives allocation or a host API operation.
-pub(super) fn sync_getters(
-    call: &mut HostCall<'_>,
-    store: &Shared,
-    id: TableId,
-) -> Result<(), Error> {
+/// Lua. No store borrow survives allocation or a host API operation.
+pub(super) fn sync_getters(call: &mut HostCall<'_>, id: TableId) -> Result<(), Error> {
     let poses = {
-        let mut store = store.lock().unwrap();
+        let store = call.store();
         let fallback = song_pose::mode(&store, id);
         let actor = store.actors.get_mut(&id).unwrap();
         if actor.replay.is_some() {
@@ -416,34 +426,29 @@ pub(super) fn sync_getters(
         return Ok(());
     };
     for (key, value) in [
-        ("aux", dest.aux),
-        ("x", dest.x),
-        ("y", dest.y),
-        ("z", dest.z),
-        ("zoom", dest.zoom),
-        ("zoom_x", dest.zoom_x),
-        ("zoom_y", dest.zoom_y),
-        ("zoom_z", dest.zoom_z),
-        ("rot_x_deg", dest.rot_x_deg),
-        ("rot_y_deg", dest.rot_y_deg),
-        ("rot_z_deg", dest.rot_z_deg),
-        ("skew_x", dest.skew_x),
-        ("skew_y", dest.skew_y),
-        ("cropleft", dest.cropleft),
-        ("cropright", dest.cropright),
-        ("croptop", dest.croptop),
-        ("cropbottom", dest.cropbottom),
-        ("fadeleft", dest.fadeleft),
-        ("faderight", dest.faderight),
-        ("fadetop", dest.fadetop),
-        ("fadebottom", dest.fadebottom),
+        ("__songlua_state_aux", dest.aux),
+        ("__songlua_state_x", dest.x),
+        ("__songlua_state_y", dest.y),
+        ("__songlua_state_z", dest.z),
+        ("__songlua_state_zoom", dest.zoom),
+        ("__songlua_state_zoom_x", dest.zoom_x),
+        ("__songlua_state_zoom_y", dest.zoom_y),
+        ("__songlua_state_zoom_z", dest.zoom_z),
+        ("__songlua_state_rot_x_deg", dest.rot_x_deg),
+        ("__songlua_state_rot_y_deg", dest.rot_y_deg),
+        ("__songlua_state_rot_z_deg", dest.rot_z_deg),
+        ("__songlua_state_skew_x", dest.skew_x),
+        ("__songlua_state_skew_y", dest.skew_y),
+        ("__songlua_state_cropleft", dest.cropleft),
+        ("__songlua_state_cropright", dest.cropright),
+        ("__songlua_state_croptop", dest.croptop),
+        ("__songlua_state_cropbottom", dest.cropbottom),
+        ("__songlua_state_fadeleft", dest.fadeleft),
+        ("__songlua_state_faderight", dest.faderight),
+        ("__songlua_state_fadetop", dest.fadetop),
+        ("__songlua_state_fadebottom", dest.fadebottom),
     ] {
-        raw_set(
-            call,
-            id,
-            &format!("__songlua_state_{key}"),
-            Value::Number(f64::from(value)),
-        )?;
+        raw_set(call, id, key, Value::Number(f64::from(value)))?;
     }
     for (key, values) in [
         ("__songlua_diffuse", dest.diffuse),
@@ -490,12 +495,11 @@ pub(super) fn sync_getters(
 // destinations. Current XYZ/aux still come from the replay's current pose.
 pub(super) fn publish_scalar(
     call: &mut HostCall<'_>,
-    store: &Shared,
     id: TableId,
     name: &str,
 ) -> Result<(), Error> {
     let (poses, initial_live) = {
-        let store = store.lock().unwrap();
+        let store = call.store();
         let actor = &store.actors[&id];
         let initial_live = store.live_sources.is_some() && !store.playback && !actor.raw_live_epoch;
         let live_rotation = store.live_sources.is_some()
@@ -517,38 +521,33 @@ pub(super) fn publish_scalar(
     let Some((current, dest, size)) = poses else {
         return Ok(());
     };
-    let keys: &[(&str, f32)] = match name {
-        "x" | "addx" => &[("x", dest.x)],
-        "y" | "addy" => &[("y", dest.y)],
-        "z" | "addz" => &[("z", dest.z)],
-        "xy" => &[("x", dest.x), ("y", dest.y)],
-        "aux" => &[("aux", dest.aux)],
+    let keys: &[(&'static str, f32)] = match name {
+        "x" | "addx" => &[("__songlua_state_x", dest.x)],
+        "y" | "addy" => &[("__songlua_state_y", dest.y)],
+        "z" | "addz" => &[("__songlua_state_z", dest.z)],
+        "xy" => &[("__songlua_state_x", dest.x), ("__songlua_state_y", dest.y)],
+        "aux" => &[("__songlua_state_aux", dest.aux)],
         "zoom" => &[
-            ("zoom", dest.zoom),
-            ("zoom_x", dest.zoom_x),
-            ("zoom_y", dest.zoom_y),
-            ("zoom_z", dest.zoom_z),
+            ("__songlua_state_zoom", dest.zoom),
+            ("__songlua_state_zoom_x", dest.zoom_x),
+            ("__songlua_state_zoom_y", dest.zoom_y),
+            ("__songlua_state_zoom_z", dest.zoom_z),
         ],
-        "zoomx" => &[("zoom_x", dest.zoom_x)],
-        "zoomy" => &[("zoom_y", dest.zoom_y)],
-        "zoomz" => &[("zoom_z", dest.zoom_z)],
-        "rotationx" | "addrotationx" => &[("rot_x_deg", dest.rot_x_deg)],
-        "rotationy" | "addrotationy" => &[("rot_y_deg", dest.rot_y_deg)],
-        "rotationz" | "addrotationz" => &[("rot_z_deg", dest.rot_z_deg)],
+        "zoomx" => &[("__songlua_state_zoom_x", dest.zoom_x)],
+        "zoomy" => &[("__songlua_state_zoom_y", dest.zoom_y)],
+        "zoomz" => &[("__songlua_state_zoom_z", dest.zoom_z)],
+        "rotationx" | "addrotationx" => &[("__songlua_state_rot_x_deg", dest.rot_x_deg)],
+        "rotationy" | "addrotationy" => &[("__songlua_state_rot_y_deg", dest.rot_y_deg)],
+        "rotationz" | "addrotationz" => &[("__songlua_state_rot_z_deg", dest.rot_z_deg)],
         _ => &[],
     };
     for &(key, value) in keys {
-        raw_set(
-            call,
-            id,
-            &format!("__songlua_state_{key}"),
-            Value::Number(f64::from(value)),
-        )?;
+        raw_set(call, id, key, Value::Number(f64::from(value)))?;
         let current = match key {
-            "x" => Some(("__songlua_current_x", current.x)),
-            "y" => Some(("__songlua_current_y", current.y)),
-            "z" => Some(("__songlua_current_z", current.z)),
-            "aux" => Some(("__songlua_aux", current.aux)),
+            "__songlua_state_x" => Some(("__songlua_current_x", current.x)),
+            "__songlua_state_y" => Some(("__songlua_current_y", current.y)),
+            "__songlua_state_z" => Some(("__songlua_current_z", current.z)),
+            "__songlua_state_aux" => Some(("__songlua_aux", current.aux)),
             _ => None,
         };
         if let Some((key, value)) = current
@@ -573,12 +572,11 @@ impl Actors {
         delta: f64,
     ) -> Result<bool, Error> {
         let first = {
-            let mut store = self.store.lock().unwrap();
+            let store = vm.store();
             if store
                 .replay_frame
                 .is_none_or(|(owner, _)| owner != screen.id)
             {
-                drop(store);
                 return vm.with_native_stack(|stack| {
                     Err(stack.error(b"song preparation replay has not started"))
                 });
@@ -586,18 +584,19 @@ impl Actors {
             store.replay_frame = Some((screen.id, seconds));
             store.next
         };
-        let previous = std::mem::replace(&mut self.store.lock().unwrap().replay_advancing, true);
+        let previous = std::mem::replace(&mut vm.store().replay_advancing, true);
         let result = self.advance(vm, screen, delta);
-        self.store.lock().unwrap().replay_advancing = previous;
-        song_activation::adopt_created(&self.store, screen.id, first);
+        vm.store().replay_advancing = previous;
+        song_activation::adopt_created(vm.store(), screen.id, first);
         result
     }
 
     pub(crate) fn capture_song_tween_replay(
         &self,
+        vm: &mut Vm,
         screen: ActorScene,
     ) -> Option<HashMap<TableId, super::super::SongTweenReplay>> {
-        let mut store = self.store.lock().unwrap();
+        let store = vm.store();
         let (owner, time) = store.replay_frame?;
         if owner != screen.id {
             return None;
@@ -626,8 +625,13 @@ impl Actors {
         Some(result)
     }
 
-    pub(crate) fn publish_song_tween_frame(&self, screen: ActorScene, actors: &[Value]) -> bool {
-        let mut store = self.store.lock().unwrap();
+    pub(crate) fn publish_song_tween_frame(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        actors: &[Value],
+    ) -> bool {
+        let store = vm.store();
         let Some((owner, second)) = store.replay_frame else {
             return false;
         };

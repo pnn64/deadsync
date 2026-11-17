@@ -2368,12 +2368,9 @@ fn append_song_lua_ease_targets_key(
     opt2: Option<f32>,
     capacity_hint: usize,
 ) -> bool {
-    if key.is_empty() {
-        return false;
-    }
     let pct_from = song_lua_normalized_value(from);
     let pct_to = song_lua_normalized_value(to);
-    let mut push = |target, from, to| {
+    visit_song_lua_mod_targets(key, from, to, pct_from, pct_to, |target, from, to| {
         push_song_lua_ease_target(
             out,
             target,
@@ -2387,7 +2384,22 @@ fn append_song_lua_ease_targets_key(
             opt2,
             capacity_hint,
         );
-    };
+    })
+}
+
+/// Share authored-name conversion between baked windows and live Current values.
+/// Separate normalized values keep live floats from taking a percentage round trip.
+fn visit_song_lua_mod_targets(
+    key: &str,
+    from: f32,
+    to: f32,
+    pct_from: f32,
+    pct_to: f32,
+    mut push: impl FnMut(SongLuaEaseMaskTarget, f32, f32),
+) -> bool {
+    if key.is_empty() {
+        return false;
+    }
 
     if let Some(col) = mod_column_suffix(key, "stealth") {
         push(
@@ -5837,6 +5849,8 @@ pub struct GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta> {
     pub song_lua_visuals: SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
     pub song_lua_player_transforms: SongLuaPlayerTransforms,
     pub song_lua_fail_types: [Option<crate::GameplayFailType>; MAX_PLAYERS],
+    /// Current PlayerOptions already advanced by the retained Lua runtime.
+    pub song_lua_player_options: [Option<SongLuaPlayerOptions>; MAX_PLAYERS],
     pub attacks: GameplayAttackRuntimeState,
     pub expand_seconds: [f32; MAX_PLAYERS],
 }

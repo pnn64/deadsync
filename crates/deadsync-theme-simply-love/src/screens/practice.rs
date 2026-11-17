@@ -1021,6 +1021,7 @@ fn set_gameplay_hotkey_flash(state: &mut State, input: GameplayRawKeyInput) {
                 GameplayTimingTickMode::Off => "FlashTicksOff",
                 GameplayTimingTickMode::Assist => "FlashTicksAssist",
                 GameplayTimingTickMode::Hit => "FlashTicksHit",
+                GameplayTimingTickMode::Beat => "FlashTicksBeat",
             };
             set_flash_tr(state, key);
         }

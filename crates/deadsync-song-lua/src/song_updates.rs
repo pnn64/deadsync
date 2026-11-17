@@ -1,5 +1,8 @@
 //! Production chronological song compilation over the shared Rust engine.
-use super::{song_compiler_roots::Roots, *};
+use super::{
+    song_compiler_roots::{RootedValues, Roots},
+    *,
+};
 use crate::{
     SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetWindow, SongLuaEaseWindow,
     SongLuaMessageEvent, SongLuaOverlayKind as Kind, SongLuaOverlayState as State,
@@ -11,9 +14,7 @@ use actors::{
     chronological::{Answer, Query},
     perframes::Access,
 };
-use std::{
-    collections::{BTreeMap, HashMap},
-};
+use std::collections::{BTreeMap, HashMap};
 type MotionSample = (Option<[f32; 2]>, Option<[f32; 3]>);
 
 #[derive(Default)]
@@ -201,19 +202,18 @@ impl SongRuntime {
         self.actor_scene_root(screen)
             .ok_or("released or foreign song screen")?;
         let mut roots = Roots::default();
+        let mut values = RootedValues::default();
         let result = (|| {
             roots.keep(&mut self.vm, root)?;
             let owner = overlays.owner.ok_or("released song overlay batch")?;
             self.vm.rooted(owner).map_err(|e| e.to_string())?;
             let owner = tracked.owner.ok_or("released song tracked batch")?;
             self.vm.rooted(owner).map_err(|e| e.to_string())?;
-            let mut values = Vec::new();
             for row in &overlays.actors {
                 let value = self
                     .song_overlay_actor_value(row)
                     .map_err(|e| e.to_string())?;
-                roots.keep(&mut self.vm, value)?;
-                values.push(value);
+                values.push(&mut self.vm, value)?;
             }
             let mut tracked_values = Vec::new();
             for row in &tracked.actors {
@@ -234,13 +234,13 @@ impl SongRuntime {
                 sound_events,
                 judgment_textures,
                 sprite_textures,
-                &mut roots,
-                values,
+                &mut values,
                 &tracked_values,
             )
         })();
         #[cfg(feature = "test-support")]
         self.observations.stop();
+        values.release(&mut self.vm)?;
         roots.clear(&mut self.vm)?;
         result
     }
@@ -257,8 +257,7 @@ impl SongRuntime {
         sound_events: &mut Vec<crate::SongLuaSoundEvent>,
         judgment_textures: &mut Vec<(usize, crate::SongLuaJudgmentTexture)>,
         sprite_textures: &mut Vec<(usize, crate::SongLuaSpriteTexture)>,
-        roots: &mut Roots,
-        mut values: Vec<Value>,
+        values: &mut RootedValues,
         tracked_values: &[Value],
     ) -> Result<SongUpdateOutput, String> {
         let mut splines = SongColumnSplineCapture::default();
@@ -277,7 +276,7 @@ impl SongRuntime {
         else {
             unreachable!()
         };
-        if (!active && !self.actors.models_active()) || end <= start {
+        if (!active && !self.actors.models_active(&mut self.vm)) || end <= start {
             let static_output = self.compile_song_static_update_output(context, splines)?;
             return Ok(SongUpdateOutput {
                 eases: static_output.eases,
@@ -327,11 +326,12 @@ impl SongRuntime {
             for (player, value) in players.iter().enumerate() {
                 if let Some(value) = value {
                     player_indices[player] = Some(values.len());
-                    values.push(*value);
-                    let state = access
+                    values.push(&mut self.vm, *value)?;
+                    let mut state = access
                         .state(&mut self.vm, *value)
                         .map_err(|e| e.to_string())?;
-                    baseline.push(self.update_pose(*value, state)?);
+                    self.update_pose(*value, &mut state);
+                    baseline.push(state);
                 }
             }
             let mut layers = Vec::new();
@@ -341,7 +341,7 @@ impl SongRuntime {
                     Tracked::SongForeground | Tracked::ScreenLayer(_)
                 ) {
                     layers.push((i, values.len()));
-                    values.push(value);
+                    values.push(&mut self.vm, value)?;
                     baseline.push(
                         access
                             .state(&mut self.vm, value)
@@ -349,9 +349,11 @@ impl SongRuntime {
                     );
                 }
             }
-            self.actors.replace_song_capture_indices(screen, &values);
+            self.actors
+                .replace_song_capture_indices(&mut self.vm, screen, &values);
             self.begin_actor_capture(false);
-            self.actors.begin_song_wrapper_capture(screen, values.len());
+            self.actors
+                .begin_song_wrapper_capture(&mut self.vm, screen, values.len());
             #[cfg(feature = "test-support")]
             self.observations.start();
             let wrapper_start = values.len();
@@ -360,22 +362,17 @@ impl SongRuntime {
             let started =
                 replay.advance(self, context, overlays, &values, &mut replay_states, start)?;
             self.restore_update_messages(&access, &values, &replay_states, started)?;
-            self.append_update_wrappers(
-                screen,
-                roots,
-                &mut values,
-                &mut [&mut baseline, &mut replay_states],
-            )?;
+            self.append_update_wrappers(screen, values, &mut [&mut baseline, &mut replay_states])?;
             for row in &mut tracked.actors {
                 if let Tracked::Player(player) = row.target
                     && let Some(i) = player_indices[player]
                 {
-                    let state = self.update_pose(values[i], replay_states[i])?;
+                    self.update_pose(values[i], &mut replay_states[i]);
+                    let state = replay_states[i];
                     access
                         .write_frame(&mut self.vm, values[i], state)
                         .map_err(|e| e.to_string())?;
                     baseline[i] = state;
-                    replay_states[i] = state;
                     row.actor.initial_state = state;
                 }
             }
@@ -419,7 +416,7 @@ impl SongRuntime {
                         .vm
                         .try_intern(text.as_bytes())
                         .map_err(|e| e.to_string())?;
-                    let key = self.vm.try_intern(b"Text").map_err(|e| e.to_string())?;
+                    let key = self.vm.intern_static(b"Text").map_err(|e| e.to_string())?;
                     self.vm
                         .raw_table_set(id, key, value)
                         .map_err(|e| e.to_string())?;
@@ -433,7 +430,7 @@ impl SongRuntime {
             }
             let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
             let start_time = frame_time(start, start_seconds);
-            self.capture_song_overlay_frame(
+            self.capture_rooted_song_overlay_frame(
                 screen,
                 &mut capture,
                 &values,
@@ -450,6 +447,7 @@ impl SongRuntime {
                     next_time: start_time,
                     next_seconds: start_seconds,
                 },
+                true,
             )?;
             replay.stop(capture.stopped_indices());
             let music = self.update_music_seconds(start_seconds, context)?;
@@ -484,6 +482,7 @@ impl SongRuntime {
             let mut scheduled = baseline.clone();
             let mut masks = self.update_masks(&players)?;
             let mut broadcasts = Vec::new();
+            let mut motions = Vec::with_capacity(values.len());
 
             for (frame, (exact_beat, delta)) in frames.into_iter().enumerate().skip(1) {
                 if frame & 63 == 0 {
@@ -509,7 +508,7 @@ impl SongRuntime {
                     &mut replay_states,
                     next_beat,
                 )?;
-                self.sample_song_overlay_schedule(
+                self.sample_rooted_song_overlay_schedule(
                     screen,
                     &capture,
                     &values,
@@ -534,11 +533,11 @@ impl SongRuntime {
                     next_beat - beat,
                     delta,
                 )?;
-                self.actors.sample_model_materials(seconds as f32);
+                self.actors
+                    .sample_model_materials(&mut self.vm, seconds as f32);
                 self.append_update_wrappers(
                     screen,
-                    roots,
-                    &mut values,
+                    values,
                     &mut [
                         &mut baseline,
                         &mut current,
@@ -557,14 +556,13 @@ impl SongRuntime {
                         samples.push((next_time, text.into()));
                     }
                 }
-                self.publish_song_tween_frame(screen, &values)?;
+                self.publish_rooted_song_tween_frame(screen, values)?;
                 for (i, &value) in values.iter().enumerate().take(count) {
-                    replay_states[i] = self.update_pose(value, replay_states[i])?;
+                    self.update_pose(value, &mut replay_states[i]);
                 }
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
-                update_states.copy_from_slice(&replay_states);
                 let next_masks = self.update_masks(&players)?;
-                self.capture_song_overlay_frame(
+                self.capture_rooted_song_overlay_frame(
                     screen,
                     &mut capture,
                     &values,
@@ -581,9 +579,10 @@ impl SongRuntime {
                         next_time,
                         next_seconds: seconds,
                     },
+                    true,
                 )?;
                 replay.stop(capture.stopped_indices());
-                self.sample_song_overlay_schedule(
+                self.sample_rooted_song_overlay_schedule(
                     screen,
                     &capture,
                     &values,
@@ -645,8 +644,18 @@ impl SongRuntime {
                     );
                 }
                 let music = self.update_music_seconds(seconds, context)?;
-                for (i, &value) in values.iter().enumerate() {
-                    let (time, spin) = self.update_motion(value, [music, next_beat], true)?;
+                self.actors
+                    .chronological_read_many(
+                        &mut self.vm,
+                        &values,
+                        Query::Motion([music, next_beat], true),
+                        &mut motions,
+                    )
+                    .map_err(|e| e.to_string())?;
+                for (i, motion) in motions.iter().enumerate() {
+                    let &Answer::Motion(time, spin) = motion else {
+                        unreachable!()
+                    };
                     if let Some(clock) = time {
                         let clock = current[i]
                             .effect_time
@@ -779,7 +788,9 @@ impl SongRuntime {
                 &baseline_players,
                 &baseline_mods,
             );
-            let wrappers = self.actors.finish_song_wrapper_capture(screen);
+            let wrappers = self
+                .actors
+                .finish_song_wrapper_capture(&mut self.vm, screen);
             self.append_update_wrapper_rows(overlays, &values, &wrappers)?;
             let mut tracks = capture.finish();
             tracks.retain_mut(|t| {
@@ -834,12 +845,12 @@ impl SongRuntime {
                 });
             }
             stateful.retain(|c| !c.overlay_targets.is_empty() || !c.writes.is_empty());
-            let mut runtime_broadcasts = self.actors.take_song_broadcasts();
+            let mut runtime_broadcasts = self.actors.take_song_broadcasts(&mut self.vm);
             runtime_broadcasts.extend(broadcasts);
             let replay = self
                 .capture_song_tween_replay(screen)
                 .ok_or("missing song tween progress")?;
-            let advances = self.actors.song_message_advances(screen);
+            let advances = self.actors.song_message_advances(&mut self.vm, screen);
             for (i, row) in overlays.actors.iter_mut().enumerate() {
                 for command in &mut row.actor.message_commands {
                     for ((index, name), advance) in &advances {
@@ -872,8 +883,8 @@ impl SongRuntime {
             );
             self.end_actor_capture();
             #[cfg(feature = "test-support")]
-            let overlay_writes = self.actors.take_song_observed_writes(screen);
-            self.actors.end_song_update_capture(screen);
+            let overlay_writes = self.actors.take_song_observed_writes(&mut self.vm, screen);
+            self.actors.end_song_update_capture(&mut self.vm, screen);
             Ok(SongUpdateOutput {
                 eases,
                 overlay_tracks: tracks,
@@ -889,9 +900,8 @@ impl SongRuntime {
         options.release(&mut self.vm).map_err(|e| e.to_string())?;
         result
     }
-    fn update_pose(&mut self, value: Value, mut state: State) -> Result<State, String> {
-        self.actors.apply_song_replay_pose(value, &mut state);
-        Ok(state)
+    fn update_pose(&self, value: Value, state: &mut State) {
+        self.actors.apply_song_replay_pose(&self.vm, value, state);
     }
     fn update_motion(
         &mut self,
@@ -937,7 +947,7 @@ impl SongRuntime {
             if let Some(v) = v {
                 out[i] = access.player(&mut self.vm, *v).map_err(|e| e.to_string())?;
                 let mut state = State::default();
-                if self.actors.apply_song_replay_pose(*v, &mut state) {
+                if self.actors.apply_song_replay_pose(&self.vm, *v, &mut state) {
                     crate::perframe::sample_player_pose(&mut out[i], &state, None);
                 }
             }
@@ -963,13 +973,11 @@ impl SongRuntime {
     fn append_update_wrappers(
         &mut self,
         screen: ActorScene,
-        roots: &mut Roots,
-        values: &mut Vec<Value>,
+        values: &mut RootedValues,
         states: &mut [&mut Vec<State>],
     ) -> Result<(), String> {
-        for (_, id, state) in self.actors.new_song_wrappers(screen) {
-            roots.keep(&mut self.vm, Value::Table(id))?;
-            values.push(Value::Table(id));
+        for (_, id, state) in self.actors.new_song_wrappers(&mut self.vm, screen) {
+            values.push(&mut self.vm, Value::Table(id))?;
             for rows in states.iter_mut() {
                 rows.push(state);
             }
@@ -1058,7 +1066,7 @@ impl SongRuntime {
                 };
                 let key = self
                     .vm
-                    .try_intern(b"__songlua_parent")
+                    .intern_static(b"__songlua_parent")
                     .map_err(|e| e.to_string())?;
                 let mut raw = self
                     .vm
@@ -1067,7 +1075,7 @@ impl SongRuntime {
                 if raw == Value::Nil {
                     raw = self
                         .actors
-                        .wrapper_parent(value)
+                        .wrapper_parent(&mut self.vm, value)
                         .map_or(Value::Nil, Value::Table);
                 }
                 if raw != Value::Nil && !matches!(raw, Value::Table(_)) {

@@ -46,6 +46,11 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
         }
     }
     let globals = vm.get_global(b"_G")?;
+    let Value::Table(string) = vm.get_global(b"string")? else {
+        unreachable!("standard string library")
+    };
+    let format_key = vm.intern_static(b"format")?;
+    let native_format = vm.raw_table_get(string, format_key)?;
     for (name, operation) in [
         ("PlayerNumberToString", Operation::Player),
         ("FormatPercentScore", Operation::Percent),
@@ -73,7 +78,14 @@ pub(super) fn install(vm: &mut Vm) -> Result<(), Error> {
         ("SaveProfileCustom", Operation::Effect),
     ] {
         if missing(vm, name)? {
-            let function = vm.new_host_function_with_data(dispatch, &[globals], operation)?;
+            let captures = [globals, native_format];
+            let count = if matches!(operation, Operation::Percent) {
+                2
+            } else {
+                1
+            };
+            let function =
+                vm.new_host_function_with_data(dispatch, &captures[..count], operation)?;
             bind(vm, name, function)?;
         }
     }
@@ -96,8 +108,14 @@ fn dispatch(call: &mut HostCall<'_>) -> Result<(), Error> {
             call.try_intern(text.as_bytes())?
         }
         Operation::Percent => {
-            let value = float(call, arg(call, 0)).unwrap_or(0.);
-            call.try_intern(format!("{:.2}%", value * 100.).as_bytes())?
+            // Native checks the Lua number, narrows to float, then multiplies
+            // before printf promotion. Use the original formatter to preserve
+            // native padding and platform nonfinite spellings independently
+            // of an authored replacement for string.format.
+            let value = (call.number(0)? as f32 * 100.) as f64;
+            let format = call.intern_static(b"%5.2f%%")?;
+            let formatter = call.captures()[1];
+            call.call(formatter, &[format, Value::Number(value)])?[0]
         }
         Operation::Suffix => {
             let value = integer(call, 0)?;

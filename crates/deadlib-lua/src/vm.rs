@@ -38,9 +38,9 @@ use crate::arena::{Arena, index as slot_index};
 use crate::memory::{Buffer, Memory};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
-    HostCall, HostFunction, HostThreadState, NativeBuiltinBody, NativeCallStatus, NativeDebugFrame,
-    NativeDebugInfo, NativeDebugString, NativeHook, NativeHookEvent, NativeHookInfo,
-    NativeLoadStatus, NativeStack, NativeThreadStack,
+    HostCall, HostFunction, HostThreadState, IndexResolver, IndexView, NativeBuiltinBody,
+    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
+    NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
 };
 pub use memory_limit::MemoryUsage;
 use native::format_number;
@@ -252,6 +252,93 @@ impl Strings {
     }
 }
 
+/// Strings interned from `&'static` slices, found again by the slice's address.
+///
+/// A `&'static` slice names memory that never changes, so one address and
+/// length always hold the same bytes and identify the string without reading
+/// them. The collector marks every entry at the start of a cycle.
+#[derive(Debug)]
+struct StaticStrings {
+    // Open addressing over (address, length, string). No slice starts at
+    // address zero, which marks a vacant slot.
+    slots: Buffer<(usize, usize, StringId)>,
+    len: usize,
+}
+impl StaticStrings {
+    fn new_in(memory: Memory) -> Self {
+        Self {
+            slots: Buffer::new_in(memory),
+            len: 0,
+        }
+    }
+    #[inline]
+    fn start(&self, address: usize, len: usize) -> usize {
+        // Literals lie close together; multiply so that the slot comes from
+        // high bits which every address bit reaches.
+        let mixed =
+            (address ^ len.rotate_left(20)).wrapping_mul(0x9e37_79b9_7f4a_7c15_u64 as usize);
+        mixed >> (usize::BITS - self.slots.len().trailing_zeros())
+    }
+    #[inline]
+    fn find(&self, bytes: &'static [u8]) -> Option<StringId> {
+        if self.slots.is_empty() {
+            return None;
+        }
+        let (address, len) = (bytes.as_ptr() as usize, bytes.len());
+        let mut slot = self.start(address, len);
+        loop {
+            let (other, other_len, id) = self.slots[slot];
+            if other == address && other_len == len {
+                return Some(id);
+            }
+            if other == 0 {
+                return None;
+            }
+            slot = (slot + 1) & (self.slots.len() - 1);
+        }
+    }
+    // Make room for one more entry, so that `insert` cannot fail.
+    fn try_reserve(&mut self) -> Result<(), Error> {
+        if (self.len + 1) * 2 <= self.slots.len() {
+            return Ok(());
+        }
+        let size = self
+            .slots
+            .len()
+            .checked_mul(2)
+            .ok_or_else(Error::memory)?
+            .max(64);
+        let mut slots = Buffer::new_in(self.slots.memory().clone());
+        slots.try_reserve_exact(size)?;
+        slots.resize(size, (0, 0, StringId(0)));
+        let old = std::mem::replace(&mut self.slots, slots);
+        for &(address, len, id) in old.iter().filter(|slot| slot.0 != 0) {
+            self.place(address, len, id);
+        }
+        Ok(())
+    }
+    fn place(&mut self, address: usize, len: usize, id: StringId) {
+        let mut slot = self.start(address, len);
+        while self.slots[slot].0 != 0 {
+            slot = (slot + 1) & (self.slots.len() - 1);
+        }
+        self.slots[slot] = (address, len, id);
+    }
+    fn insert(&mut self, bytes: &'static [u8], id: StringId) {
+        self.place(bytes.as_ptr() as usize, bytes.len(), id);
+        self.len += 1;
+    }
+    fn strings(&self) -> impl Iterator<Item = StringId> + '_ {
+        self.slots
+            .iter()
+            .filter(|slot| slot.0 != 0)
+            .map(|slot| slot.2)
+    }
+    fn heap_bytes(&self) -> usize {
+        self.slots.capacity() * size_of::<(usize, usize, StringId)>()
+    }
+}
+
 #[derive(Debug)]
 struct LoadedProgram {
     data: crate::memory::Shared<ProgramData>,
@@ -419,6 +506,7 @@ const _: () = assert!(std::mem::size_of::<Frame>() == 72);
 /// with [`Self::pin`] when the host needs them across executions or collections.
 #[derive(Debug)]
 pub struct Vm {
+    lua51_table_order: bool,
     registers: Buffer<Value>,
     programs: Arena<LoadedProgram>,
     functions: Arena<Closure>,
@@ -473,6 +561,7 @@ pub struct Vm {
     sort_line: Option<u32>,
     // Embedding-owned state borrowed by host callbacks; never traced.
     host_state: Option<Box<dyn std::any::Any + Send + Sync>>,
+    static_strings: StaticStrings,
 }
 
 impl Default for Vm {
@@ -516,6 +605,25 @@ impl Vm {
         Ok(vm)
     }
 
+    /// Open a state whose table traversal follows Lua 5.1's node placement.
+    ///
+    /// Useful for existing scripts that build ordered side effects with `pairs`.
+    /// String/number/boolean keys follow the reference hash and resize rules;
+    /// object-key ordering uses VM identities instead of native pointer addresses.
+    /// Ordinary states retain the compact insertion-ordered representation.
+    pub fn try_new_with_lua51_table_order() -> Result<Self, Error> {
+        let mut vm = Self::try_new_bare()?;
+        vm.lua51_table_order = true;
+        for id in [vm.globals, vm.registry] {
+            vm.tables[slot_index(id.0)] =
+                Table::with_native51_capacity(0, 0, vm.tables.memory().clone())?;
+        }
+        vm.initializing = true;
+        vm.open_libraries().map_err(Error::without_vm_values)?;
+        vm.initializing = false;
+        Ok(vm)
+    }
+
     /// Create a state without standard libraries, returning allocation errors.
     ///
     /// # Errors
@@ -536,6 +644,7 @@ impl Vm {
         builtin_envs.try_reserve_exact(CONT_RAW as usize)?;
         builtin_envs.resize(CONT_RAW as usize, None);
         let mut vm = Self {
+            lua51_table_order: false,
             registers: Buffer::new_in(memory.clone()),
             programs: Arena::new_in(memory.clone()),
             functions: Arena::identified_in(memory.clone()),
@@ -582,13 +691,14 @@ impl Vm {
             userdata: Arena::new_in(memory.clone()),
             initializing: true,
             io: io::Io {
-                files: Arena::new_in(memory),
+                files: Arena::new_in(memory.clone()),
                 ..io::Io::default()
             },
             userdata_order: 0,
             standalone: 0,
             sort_line: None,
             host_state: None,
+            static_strings: StaticStrings::new_in(memory),
         };
         vm.memory_error = vm.strings.try_intern(b"not enough memory")?;
         for (slot, name) in vm.meta_names.iter_mut().zip(META_NAMES) {
@@ -680,7 +790,7 @@ impl Vm {
             (debug::CONSOLE, b"debug"),
         ] {
             let key = self.try_intern(name)?;
-            self.tables[slot_index(debug.0)].set(key, Value::Native(id))?;
+            self.raw_set(debug, key, Value::Native(id))?;
         }
         self.set_global(b"debug", Value::Table(debug))?;
         self.set_global(b"_G", Value::Table(globals))?;
@@ -745,6 +855,52 @@ impl Vm {
             .try_intern(bytes)
             .map(Value::String)
             .map_err(|_| self.memory_failure())
+    }
+
+    /// Intern a byte string that lives for the whole program, such as a literal.
+    ///
+    /// The first call with a slice interns it and keeps the string alive for
+    /// as long as this VM exists. Every later call with the same slice finds
+    /// the string by the slice's address and length, without hashing or
+    /// comparing its bytes, so a field name spelled as a literal costs a few
+    /// instructions to resolve. The returned value needs no rooting.
+    ///
+    /// Equal bytes at different addresses yield the same string; each address
+    /// is remembered separately. Keep this for a bounded set of names: every
+    /// string interned here stays allocated until the VM is dropped.
+    ///
+    /// ```
+    /// use deadlib_lua::{Value, Vm};
+    /// let mut vm = Vm::new();
+    /// let name = vm.intern_static(b"position")?;
+    /// assert_eq!(vm.intern_static(b"position")?, name);
+    /// assert_eq!(vm.intern(b"position"), name);
+    /// # Ok::<(), deadlib_lua::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    /// Returns the fixed Lua memory error if the string or its index entry
+    /// cannot be allocated.
+    #[inline]
+    pub fn intern_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        match self.static_strings.find(bytes) {
+            Some(id) => Ok(Value::String(id)),
+            None => self.remember_static(bytes),
+        }
+    }
+    #[cold]
+    fn remember_static(&mut self, bytes: &'static [u8]) -> Result<Value, Error> {
+        if self.static_strings.try_reserve().is_err() {
+            return Err(self.memory_failure());
+        }
+        // Interning marks the string for a collection in progress; every
+        // later cycle marks it from the index.
+        let id = match self.strings.try_intern(bytes) {
+            Ok(id) => id,
+            Err(_) => return Err(self.memory_failure()),
+        };
+        self.static_strings.insert(bytes, id);
+        Ok(Value::String(id))
     }
 
     fn string_slice(
@@ -903,6 +1059,17 @@ impl Vm {
         Ok(self.tables[slot_index(table.0)].get(key))
     }
 
+    /// [`HostCall::raw_fields_version`](crate::HostCall::raw_fields_version)
+    /// outside a host call.
+    ///
+    /// # Errors
+    /// Returns an error for an invalid or collected table handle.
+    #[inline]
+    pub fn raw_fields_version(&self, table: TableId) -> Result<u32, Error> {
+        self.validate_value(Value::Table(table))?;
+        Ok(self.tables[slot_index(table.0)].fields_version())
+    }
+
     /// Return Lua's raw sequence boundary for a live table.
     pub fn raw_table_len(&self, table: TableId) -> Result<usize, Error> {
         self.validate_value(Value::Table(table))?;
@@ -965,9 +1132,19 @@ impl Vm {
         }
         Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
         self.reserve_gc_table_write(id, key, value)?;
+        let string_hash = if self.lua51_table_order {
+            match key {
+                Value::String(id) => Some(Table::native_string_hash(
+                    &self.strings.bytes[slot_index(id.0)],
+                )),
+                _ => None,
+            }
+        } else {
+            None
+        };
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        let result = table.set(key, value);
+        let result = table.set_hashed(key, value, string_hash);
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
@@ -986,7 +1163,17 @@ impl Vm {
     fn memory_failure(&self) -> Error {
         Error::memory().with_value(Value::String(self.memory_error))
     }
+    // Calls and returns reserve on every frame; usually the capacity is there.
+    #[inline]
     fn reserve_registers(&mut self, len: usize) -> Result<(), Error> {
+        if len <= self.registers.capacity() {
+            return Ok(());
+        }
+        self.grow_registers(len)
+    }
+    #[cold]
+    #[inline(never)]
+    fn grow_registers(&mut self, len: usize) -> Result<(), Error> {
         let before = self.registers.capacity();
         self.registers
             .try_reserve(len.saturating_sub(self.registers.len()))
@@ -994,16 +1181,22 @@ impl Vm {
         self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
         Ok(())
     }
+    #[inline]
     fn resize_registers(&mut self, len: usize) {
         self.hooks.preserve_popped(&self.registers, len);
         let before = self.registers.capacity();
         self.registers.resize(len, Value::Nil);
-        self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
+        if self.registers.capacity() != before {
+            self.gc_note_control(
+                (self.registers.capacity() - before) * std::mem::size_of::<Value>(),
+            );
+        }
     }
     fn truncate_registers(&mut self, len: usize) {
         self.hooks.preserve_popped(&self.registers, len);
         self.registers.truncate(len);
     }
+    #[inline]
     fn push_record(&mut self, mut frame: Frame) {
         frame.c_level_bias = self.threads[slot_index(self.thread.0)].native_bias;
         let before = self.frames.capacity();
@@ -1029,15 +1222,18 @@ impl Vm {
         self.try_table_with_capacity(0, 0)
     }
     fn try_table_with_capacity(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
-        let table = Table::with_capacity_in(array, records, self.tables.memory().clone()).map_err(
-            |error| {
-                if error.kind() == ErrorKind::Memory {
-                    self.memory_failure()
-                } else {
-                    error
-                }
-            },
-        )?;
+        let create = if self.lua51_table_order {
+            Table::with_native51_capacity
+        } else {
+            Table::with_capacity_in
+        };
+        let table = create(array, records, self.tables.memory().clone()).map_err(|error| {
+            if error.kind() == ErrorKind::Memory {
+                self.memory_failure()
+            } else {
+                error
+            }
+        })?;
         self.reserve_gc_new_value()?;
         let bytes = table.heap_bytes();
         let id = TableId(
@@ -1761,6 +1957,11 @@ impl Vm {
                         gc_pending: self.gc.pending,
                         closed: self.open_upvalues.is_empty(),
                         index_name: self.meta_names[Meta::Index as usize],
+                        // A hook would observe the handler call a resolver skips.
+                        resolvers: (self.hooks.mask == 0).then_some(simple::Resolvers {
+                            natives: &self.native_closures,
+                            strings: &self.strings.bytes,
+                        }),
                     };
                     while let Some(next) = simple::step(&mut cx, pc) {
                         pc = next;
@@ -1834,7 +2035,21 @@ impl Vm {
                         }
                     }
                     Op::NewTable => {
-                        let id = self.try_new_table()?;
+                        let id = if self.lua51_table_order {
+                            let size = |hint: u32| -> Result<usize, Error> {
+                                if hint < 8 {
+                                    return Ok(hint as usize);
+                                }
+                                1usize
+                                    .checked_shl((hint >> 3) - 1)
+                                    .and_then(|scale| scale.checked_mul((hint & 7) as usize + 8))
+                                    .filter(|&size| size <= 1 << 26)
+                                    .ok_or_else(|| Error::runtime_static("table overflow"))
+                            };
+                            self.try_table_with_capacity(size(u32::from(i.b))?, size(i.c)?)?
+                        } else {
+                            self.try_new_table()?
+                        };
                         self.registers[a] = Value::Table(id);
                         self.maybe_gc()?;
                     }

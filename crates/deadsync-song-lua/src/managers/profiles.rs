@@ -336,7 +336,7 @@ fn profile(call: &mut HostCall<'_>, name: &str) -> Result<TableId, Error> {
 
 fn strict_text(call: &mut HostCall<'_>, value: Value) -> Result<Value, Error> {
     if value == Value::Nil {
-        return call.try_intern(b"");
+        return call.intern_static(b"");
     }
     let id = call
         .coerce_string(value)?
@@ -404,7 +404,7 @@ fn state(call: &mut HostCall<'_>) -> Result<(), Error> {
                     if text(call, value).is_some() {
                         value
                     } else {
-                        call.try_intern(b"")?
+                        call.intern_static(b"")?
                     }
                 }
                 Kind::Number => Value::Number(float(call, value).unwrap_or(0.) as f64),

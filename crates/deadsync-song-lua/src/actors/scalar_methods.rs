@@ -1,5 +1,6 @@
 //! Original setter identities and captured targets for existing input snapshots.
 use super::*;
+use deadlib_lua::IndexView;
 use smallvec::SmallVec;
 use std::sync::Weak;
 
@@ -55,7 +56,6 @@ impl Methods {
 }
 #[derive(Clone)]
 struct Binding {
-    store: Shared,
     identity: Arc<Method>,
 }
 struct LookupKeys {
@@ -63,8 +63,7 @@ struct LookupKeys {
     classes: [Value; 10],
 }
 struct LookupBinding {
-    // Keep the same native method and Store lifetimes as other bindings.
-    _store: Shared,
+    // Keeps the method identity alive for as long as the closure exists.
     _identity: Arc<Method>,
     keys: LookupKeys,
 }
@@ -218,7 +217,7 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     if !frame && frame_callback {
         return call.push(Value::Nil);
     }
-    let mut result = match get(call, actor, b"__songlua_bound_methods")? {
+    let mut result = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => Value::Nil,
         Value::Table(bound) => call.raw_table_get(bound, key)?,
         _ => return Err(call.error(b"actor method table expected")),
@@ -247,6 +246,39 @@ fn lookup(call: &mut HostCall<'_>) -> Result<(), Error> {
     }
     call.push(result)
 }
+/// Answers [`lookup`] inline for members found on the actor's class.
+///
+/// This repeats the handler's steps that only read tables, in the same order.
+/// Everything else returns `None` and runs the handler itself: its errors, a
+/// coerced actor type, a class global that is missing, replaced by a non-table
+/// or reached through a function metamethod, and the bound-method fallbacks of
+/// classes outside the core set.
+fn resolve_lookup(view: &IndexView<'_>, actor: TableId, key: Value) -> Option<Value> {
+    let Value::String(name) = key else {
+        return Some(Value::Nil);
+    };
+    let keys = &view.function_data::<LookupBinding>()?.keys;
+    // The handler rejects member names that are not UTF-8.
+    std::str::from_utf8(view.string_bytes(name)?).ok()?;
+    let (public, core) = match view.raw_get(actor, keys.actor_type) {
+        Value::Nil => ("Actor", true),
+        Value::String(kind) => {
+            let kind = std::str::from_utf8(view.string_bytes(kind)?).ok()?;
+            (class_name(kind), is_core(kind))
+        }
+        _ => return None,
+    };
+    let Value::Table(globals) = view.captures()[0] else {
+        return None;
+    };
+    let Value::Table(class) = view.get(globals, class_key(keys, public))? else {
+        return None;
+    };
+    match view.get(class, key)? {
+        Value::Nil if !core => None,
+        member => Some(member),
+    }
+}
 fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, arg(call, 0))?;
     let key = arg(call, 1);
@@ -256,7 +288,7 @@ fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
         && method_flags(call, key)?.0
         && matches!(value, Value::Native(_))
     {
-        match get(call, actor, b"__songlua_bound_methods")? {
+        match get_static(call, actor, b"__songlua_bound_methods")? {
             Value::Nil => {}
             Value::Table(bound) => return call.raw_table_set(bound, key, value),
             _ => return Err(call.error(b"actor method table expected")),
@@ -265,11 +297,7 @@ fn assign(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.raw_table_set(actor, key, value)
 }
 
-pub(super) fn install_metatable(
-    vm: &mut Vm,
-    methods: TableId,
-    store: &Shared,
-) -> Result<(), Error> {
+pub(super) fn install_metatable(vm: &mut Vm, methods: TableId) -> Result<(), Error> {
     let stringify = vm.new_host_function(stringify, &[])?;
     super::super::put(vm, methods, "Stringify", stringify)?;
     let globals = vm.get_global(b"_G")?;
@@ -277,7 +305,7 @@ pub(super) fn install_metatable(
     let pin = vm.pin(Value::Table(symbols))?;
     let result = (|| {
         vm.raw_table_set(symbols, Value::Number(1.), Value::Table(methods))?;
-        let actor_type = vm.try_intern(b"__songlua_actor_type")?;
+        let actor_type = vm.intern_static(b"__songlua_actor_type")?;
         vm.raw_table_set(symbols, Value::Number(2.), actor_type)?;
         let mut classes = [Value::Nil; CLASS_KEYS.len()];
         for (index, class) in CLASS_KEYS.iter().enumerate() {
@@ -293,7 +321,6 @@ pub(super) fn install_metatable(
                     lookup,
                     &[globals, Value::Table(symbols)],
                     LookupBinding {
-                        _store: store.clone(),
                         _identity: identity.clone(),
                         keys: LookupKeys {
                             actor_type,
@@ -305,17 +332,15 @@ pub(super) fn install_metatable(
                     assign,
                     &[globals, Value::Table(methods)],
                     Binding {
-                        store: store.clone(),
                         identity: identity.clone(),
                     },
                 )?,
                 _ => unreachable!("only metatable callbacks are registered here"),
             };
-            store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .insert(function, &identity);
+            if matches!(method, Method::Lookup) {
+                vm.set_index_resolver(function, resolve_lookup)?;
+            }
+            vm.store().scalar_methods.insert(function, &identity);
             super::super::put(
                 vm,
                 methods,
@@ -335,8 +360,7 @@ pub(super) fn install_metatable(
 
 fn stringify(call: &mut HostCall<'_>) -> Result<(), Error> {
     let actor = table(call, arg(call, 0))?;
-    let key = call.try_intern(b"__songlua_actor_type")?;
-    let value = call.raw_table_get(actor, key)?;
+    let value = get_static(call, actor, b"__songlua_actor_type")?;
     let kind = if value == Value::Nil {
         "Actor".to_owned()
     } else {
@@ -366,7 +390,6 @@ pub(super) fn install(
     vm: &mut Vm,
     class: TableId,
     setter: Setter,
-    store: &Shared,
     captures: &[Value],
 ) -> Result<(), Error> {
     let identity = Arc::new(Method::Forward(setter));
@@ -374,23 +397,18 @@ pub(super) fn install(
         forward,
         captures,
         Binding {
-            store: store.clone(),
             identity: identity.clone(),
         },
     )?;
-    store
-        .lock()
-        .unwrap()
-        .scalar_methods
-        .insert(function, &identity);
+    vm.store().scalar_methods.insert(function, &identity);
     super::super::put(vm, class, setter.name(), function)
 }
 
-pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> Result<(), Error> {
-    let bound = match get(call, actor, b"__songlua_bound_methods")? {
+pub(super) fn bind(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let bound = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => {
             let bound = call.try_new_table()?;
-            let key = call.try_intern(b"__songlua_bound_methods")?;
+            let key = call.intern_static(b"__songlua_bound_methods")?;
             call.raw_table_set(actor, key, Value::Table(bound))?;
             bound
         }
@@ -404,9 +422,7 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
         let key = call.try_intern(setter.name().as_bytes())?;
         call.raw_table_set(actor, key, Value::Nil)?;
         let previous = get(call, bound, setter.name().as_bytes())?;
-        if store.lock().unwrap().scalar_methods.identity(previous)
-            == Some(Method::Bound(setter, actor))
-        {
+        if call.store().scalar_methods.identity(previous) == Some(Method::Bound(setter, actor)) {
             // An interrupted construction can leave some original bindings
             // installed before the actor joins Store. Reuse only bindings
             // authenticated for this exact actor and operation on retry.
@@ -417,15 +433,10 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
             bound_setter,
             &captures,
             Binding {
-                store: store.clone(),
                 identity: identity.clone(),
             },
         )?;
-        store
-            .lock()
-            .unwrap()
-            .scalar_methods
-            .insert(function, &identity);
+        call.store().scalar_methods.insert(function, &identity);
         call.with_roots(&[function], |call| {
             let key = call.try_intern(setter.name().as_bytes())?;
             call.raw_table_set(bound, key, function)
@@ -435,19 +446,15 @@ pub(super) fn bind(call: &mut HostCall<'_>, store: &Shared, actor: TableId) -> R
 }
 
 fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (setter, store) = {
-        let data = call.function_data::<Binding>().unwrap();
-        let Method::Forward(setter) = *data.identity else {
-            unreachable!()
-        };
-        (setter, data.store.clone())
+    let Method::Forward(setter) = *call.function_data::<Binding>().unwrap().identity else {
+        unreachable!()
     };
     let Value::Table(actor) = arg(call, 0) else {
         return Err(
             call.error(format!("actor method {} requires an actor", setter.name()).as_bytes())
         );
     };
-    let source = match get(call, actor, b"__songlua_bound_methods")? {
+    let source = match get_static(call, actor, b"__songlua_bound_methods")? {
         Value::Nil => actor,
         Value::Table(bound) => bound,
         _ => return Err(call.error(b"actor method table expected")),
@@ -463,27 +470,23 @@ fn forward(call: &mut HostCall<'_>) -> Result<(), Error> {
         ));
     }
     let args = SmallVec::<[Value; 4]>::from_slice(call.arguments());
-    live_trace::scalar_forward(call, &store, setter.name(), function, &args)
+    live_trace::scalar_forward(call, setter.name(), function, &args)
 }
 fn bound_setter(call: &mut HostCall<'_>) -> Result<(), Error> {
-    let (setter, identity, store) = {
-        let data = call.function_data::<Binding>().unwrap();
-        let Method::Bound(setter, identity) = *data.identity else {
-            unreachable!()
-        };
-        (setter, identity, data.store.clone())
+    let Method::Bound(setter, identity) = *call.function_data::<Binding>().unwrap().identity else {
+        unreachable!()
     };
     let actor = table(call, call.captures()[2])?;
     debug_assert_eq!(actor, identity);
-    if !store.lock().unwrap().actors.contains_key(&actor) {
+    if !call.store().actors.contains_key(&actor) {
         return Err(call.error(b"actor instance is not owned by this runtime or has been released"));
     }
-    ease_probe::method(call, &store, actor, setter.name())?;
-    set_scalar(call, &store, actor, setter.name())?;
+    ease_probe::method(call, actor, setter.name())?;
+    set_scalar(call, actor, setter.name())?;
     if setter == Setter::Visible
         && let Some(value) = boolish(call, arg(call, 1))
     {
-        publish_plain_visibility(call, &store, actor, value)?;
+        publish_plain_visibility(call, actor, value)?;
     }
     call.push(Value::Table(actor))
 }
@@ -494,12 +497,11 @@ fn bound_setter(call: &mut HostCall<'_>) -> Result<(), Error> {
 // capture owner to those sessions.
 fn publish_plain_visibility(
     call: &mut HostCall<'_>,
-    store: &Shared,
     actor: TableId,
     value: bool,
 ) -> Result<(), Error> {
     let plain = {
-        let guard = store.lock().unwrap();
+        let guard = call.store();
         !guard.clock.live.load(std::sync::atomic::Ordering::Relaxed)
             && !guard.playback
             && !guard.preparing
@@ -602,7 +604,7 @@ mod tests {
             .raw_table_get(table_id(root), Value::Number(1.))
             .unwrap();
         {
-            let guard = runtime.actors.store.lock().unwrap();
+            let guard = runtime.vm.store_ref();
             let methods = &guard.scalar_methods;
             assert_eq!(
                 methods.identity(values[0]),
@@ -621,23 +623,11 @@ mod tests {
             "root[1].__songlua_bound_methods.x=function()end; collectgarbage('collect');collectgarbage('collect')",
         );
         assert_eq!(
-            runtime
-                .actors
-                .store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .identity(values[0]),
+            runtime.vm.store_ref().scalar_methods.identity(values[0]),
             None
         );
         assert_eq!(
-            runtime
-                .actors
-                .store
-                .lock()
-                .unwrap()
-                .scalar_methods
-                .identity(values[1]),
+            runtime.vm.store_ref().scalar_methods.identity(values[1]),
             Some(Method::Forward(Setter::X))
         );
     }

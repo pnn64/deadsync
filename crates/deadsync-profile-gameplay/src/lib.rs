@@ -162,6 +162,7 @@ pub const fn gameplay_tick_mode_from_profile(
             deadsync_gameplay::GameplayTimingTickMode::Assist
         }
         deadsync_profile::TimingTickMode::Hit => deadsync_gameplay::GameplayTimingTickMode::Hit,
+        deadsync_profile::TimingTickMode::Beat => deadsync_gameplay::GameplayTimingTickMode::Beat,
     }
 }
 
@@ -175,6 +176,7 @@ pub const fn profile_tick_mode_from_gameplay(
             deadsync_profile::TimingTickMode::Assist
         }
         deadsync_gameplay::GameplayTimingTickMode::Hit => deadsync_profile::TimingTickMode::Hit,
+        deadsync_gameplay::GameplayTimingTickMode::Beat => deadsync_profile::TimingTickMode::Beat,
     }
 }
 
@@ -539,6 +541,13 @@ pub fn song_lua_compile_context(
     context.confusion_offset_available = true;
     context.confusion_available = true;
     context.amod_available = false;
+    context.versus_player_screen_x = Some(std::array::from_fn(|player| {
+        song_lua_compile_player_screen_x(
+            2, player, &player_profiles[player], viewport,
+            deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            player_side, false,
+        )
+    }));
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
         autoplay: 0.0,

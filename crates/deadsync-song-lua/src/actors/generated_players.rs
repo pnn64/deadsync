@@ -7,7 +7,6 @@ type Statistics = Arc<Mutex<super::super::statistics::State>>;
 
 #[derive(Clone)]
 pub(super) struct Build {
-    store: Shared,
     statistics: Statistics,
     player: crate::SongLuaPlayerContext,
     index: usize,
@@ -17,9 +16,9 @@ pub(super) struct Build {
 }
 #[derive(Clone)]
 struct Method {
-    store: Shared,
     statistics: Statistics,
     index: usize,
+    combined_life: bool,
     name: &'static str,
 }
 
@@ -72,7 +71,6 @@ impl Actors {
                 catalog,
             ],
             Build {
-                store: self.store.clone(),
                 statistics,
                 player: player.clone(),
                 index,
@@ -92,13 +90,11 @@ impl Actors {
 
 impl Build {
     pub(super) fn new(
-        store: Shared,
         statistics: Statistics,
         context: &crate::SongLuaCompileContext,
         index: usize,
     ) -> Self {
         Self {
-            store,
             statistics,
             player: context.players[index].clone(),
             index,
@@ -109,18 +105,16 @@ impl Build {
     }
     fn method(&self) -> Method {
         Method {
-            store: self.store.clone(),
             statistics: self.statistics.clone(),
             index: self.index,
+            combined_life: crate::song_lua_style_info(&self.style).style_type == "StyleType_TwoPlayersSharedSides",
             name: "",
         }
     }
     pub(super) fn create_meter(&self, call: &mut HostCall<'_>, id: u64) -> Result<TableId, Error> {
-        let store = self.store.clone();
         let method = self.method();
         let meter = dummy(
             call,
-            &store,
             id,
             "LifeMeter",
             &format!("LifeP{}", method.index + 1),
@@ -141,13 +135,11 @@ impl Build {
         Ok(meter)
     }
     pub(super) fn create_player(&self, call: &mut HostCall<'_>, id: u64) -> Result<TableId, Error> {
-        let store = self.store.clone();
         let method = self.method();
         let player = &self.player;
         let style = &self.style;
         let actor = dummy(
             call,
-            &store,
             id,
             "PlayerActor",
             &format!("PlayerP{}", method.index + 1),
@@ -165,19 +157,10 @@ impl Build {
         for name in ["get_oitg_zoom_mode", "set_oitg_zoom_mode", "SetLife"] {
             bind(call, actor, &method, name)?;
         }
-        let attack = dummy(call, &store, id, "ActorFrame", "", Some(actor))?;
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&attack)
-            .unwrap()
-            .current
-            .x = -40.;
+        let attack = dummy(call, id, "ActorFrame", "", Some(actor))?;
+        call.store().actors.get_mut(&attack).unwrap().current.x = -40.;
         call.raw_table_set(actor, Value::Number(1.), Value::Table(attack))?;
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -191,7 +174,7 @@ impl Build {
             Value::Table(attack),
         )?;
         {
-            let mut guard = store.lock().unwrap();
+            let guard = call.store();
             let pose = &mut guard.actors.get_mut(&actor).unwrap().current;
             pose.x = player.screen_x;
             pose.y = player.screen_y;
@@ -208,17 +191,16 @@ impl Build {
 #[cfg(feature = "test-support")]
 fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
     let data = call.function_data::<Build>().unwrap().clone();
-    let store = data.store.clone();
     let style = data.style.clone();
     let parts = data.parts;
     let method = Method {
-        store: store.clone(),
         statistics: data.statistics.clone(),
         index: data.index,
+        combined_life: crate::song_lua_style_info(&style).style_type == "StyleType_TwoPlayersSharedSides",
         name: "",
     };
     let id = {
-        let mut guard = store.lock().unwrap();
+        let guard = call.store();
         if guard.next >= (1u64 << 53) - 1 {
             return Err(call.error(b"actor scene identity exhausted"));
         }
@@ -243,13 +225,13 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
         // ScreenGameplay owns the connection, after constructing the player.
         set(call, actor, "__songlua_life_meter", Value::Table(meter))?;
         if parts {
-            player_parts::install(call, &store, id, actor, method.index, &style)?;
+            player_parts::install(call, id, actor, method.index, &style)?;
         }
-        store.lock().unwrap().scenes.get_mut(&id).unwrap().root = Some(actor);
+        call.store().scenes.get_mut(&id).unwrap().root = Some(actor);
         Ok(())
     })();
     if let Err(error) = result {
-        release(call, &store, id)?;
+        release(call, id)?;
         return Err(error);
     }
     call.push(Value::Number(id as f64))
@@ -257,7 +239,6 @@ fn construct(call: &mut HostCall<'_>) -> Result<(), Error> {
 
 pub(super) fn dummy(
     call: &mut HostCall<'_>,
-    store: &Shared,
     scene: u64,
     kind: &str,
     name: &str,
@@ -276,13 +257,11 @@ pub(super) fn dummy(
         }
         let node = call.call(helper(call, 2)?, &[Value::Table(attrs)])?[0];
         let actor = call.with_roots(&[node], |call| {
-            Ok(build(call, store, scene, table(call, node)?, parent, false, true)?.unwrap())
+            Ok(build(call, scene, table(call, node)?, parent, false, true)?.unwrap())
         })?;
         // create_dummy_actor does not run the authored Sprite initializer.
         // Its render animation flag remains false until an explicit command.
-        store
-            .lock()
-            .unwrap()
+        call.store()
             .actors
             .get_mut(&actor)
             .unwrap()
@@ -291,23 +270,10 @@ pub(super) fn dummy(
             .sprite_animate = false;
         let value = call.try_intern(name.as_bytes())?;
         set(call, actor, "Name", value)?;
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .native_children = true;
-        store
-            .lock()
-            .unwrap()
-            .actors
-            .get_mut(&actor)
-            .unwrap()
-            .state
-            .name = name.as_bytes().to_vec();
+        call.store().actors.get_mut(&actor).unwrap().native_children = true;
+        call.store().actors.get_mut(&actor).unwrap().state.name = name.as_bytes().to_vec();
         if let Some(parent) = parent {
-            native_children::adopt(call, store, actor, parent)?;
+            native_children::adopt(call, actor, parent)?;
         }
         Ok(actor)
     })
@@ -335,7 +301,7 @@ fn bind(
     ];
     let function = call.new_host_function_with_data(invoke, &captures, data)?;
     call.with_roots(&[function], |call| {
-        let bound = get(call, actor, b"__songlua_bound_methods")?;
+        let bound = get_static(call, actor, b"__songlua_bound_methods")?;
         set(call, table(call, bound)?, name, function)
     })
 }
@@ -465,18 +431,25 @@ fn change_life(
     actor: TableId,
     life: f32,
 ) -> Result<(), Error> {
+    // Player::ChangeLifeRecord uses the independent tug-life value when the
+    // player is attached to a combined meter. SetLife still changes the shared
+    // inner meter immediately, before LifeChanged listeners run.
+    let recorded = if data.combined_life { 0.5 } else { life };
     {
         let mut state = data.statistics.lock().unwrap();
         if let Some(players) = state.players.as_mut() {
+            if data.combined_life {
+                for player in players.iter_mut() { player.life = life; }
+            }
             players[data.index].life = life;
-            players[data.index].life_record_latest = Some(life);
+            players[data.index].life_record_latest = Some(recorded);
         }
     }
     let catalog = table(call, call.captures()[2])?;
-    let key = call.try_intern(b"live_statistics")?;
+    let key = call.intern_static(b"live_statistics")?;
     let selected = call.raw_table_get(catalog, key)?;
     let stats = if selected == Value::Nil {
-        let key = call.try_intern(b"statistics_players")?;
+        let key = call.intern_static(b"statistics_players")?;
         let players = table(call, call.raw_table_get(catalog, key)?)?;
         table(
             call,
@@ -491,11 +464,9 @@ fn change_life(
             )?,
         )?
     };
-    raw_set(call, stats, b"__songlua_life", Value::Number(life as f64))?;
-    if data
-        .store
-        .lock()
-        .unwrap()
+    raw_set(call, stats, b"__songlua_life", Value::Number(recorded as f64))?;
+    if call
+        .store()
         .clock
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
@@ -509,20 +480,15 @@ fn change_life(
                 life,
             });
     }
-    let key = call.try_intern(b"__songlua_life_meter")?;
+    let key = call.intern_static(b"__songlua_life_meter")?;
     let meter = table(call, call.raw_table_get(actor, key)?)?;
     raw_set(call, meter, b"__songlua_life", Value::Number(life as f64))?;
     let params = call.try_new_table()?;
     call.with_roots(&[Value::Table(params)], |call| {
-        let player = call.try_intern(format!("PlayerNumber_P{}", data.index + 1).as_bytes())?;
+        let meter_owner = if data.combined_life { 0 } else { data.index };
+        let player = call.try_intern(format!("PlayerNumber_P{}", meter_owner + 1).as_bytes())?;
         raw_set(call, params, b"Player", player)?;
         raw_set(call, params, b"LifeMeter", Value::Table(meter))?;
-        messages::dispatch(
-            call,
-            &data.store,
-            b"LifeChanged",
-            Some(Value::Table(params)),
-            true,
-        )
+        messages::dispatch(call, b"LifeChanged", Some(Value::Table(params)), true)
     })
 }

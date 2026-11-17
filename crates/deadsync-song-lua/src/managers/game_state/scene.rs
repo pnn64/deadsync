@@ -94,10 +94,16 @@ pub(crate) fn context(
     catalog: TableId,
     context: &crate::SongLuaCompileContext,
 ) -> Result<crate::SongLuaCompileContext, Error> {
-    let key = vm.try_intern(b"scene_selection")?;
+    let key = vm.intern_static(b"scene_selection")?;
     let read = vm.raw_table_get(catalog, key)?;
     let values = vm.call(read, &[])?.to_vec();
     let mut selected = context.clone();
+    let roster = vm.intern_static(b"player_roster")?;
+    let roster = vm.raw_table_get(catalog, roster)?;
+    let enabled = vm.call(roster, &[])?.to_vec();
+    for (player, enabled) in selected.players.iter_mut().zip(enabled) {
+        player.enabled = enabled == Value::Boolean(true);
+    }
     let difficulties = [
         crate::SongLuaDifficulty::Beginner,
         crate::SongLuaDifficulty::Easy,
@@ -125,19 +131,26 @@ pub(crate) fn context(
         unreachable!("host style projection returns a string")
     };
     selected.style_name = String::from_utf8(vm.string_bytes(style).unwrap().to_vec()).unwrap();
+    if matches!(crate::song_lua_style_info(&selected.style_name).name, "versus" | "couple")
+        && selected.players.iter().all(|player| player.enabled)
+        && let Some(positions) = selected.versus_player_screen_x
+    {
+        for (player, x) in selected.players.iter_mut().zip(positions) {
+            player.screen_x = x;
+        }
+    }
     Ok(selected)
 }
 
 pub(crate) fn initialize(
     vm: &mut Vm,
     catalog: TableId,
-    context: &crate::SongLuaCompileContext,
+    _context: &crate::SongLuaCompileContext,
 ) -> Result<(), Error> {
-    let key = vm.try_intern(b"initialize_gameplay_selection")?;
+    let key = vm.intern_static(b"initialize_gameplay_selection")?;
     let seed = vm.raw_table_get(catalog, key)?;
-    let enabled = context
-        .players
-        .each_ref()
-        .map(|p| Value::Boolean(p.enabled));
+    let key = vm.intern_static(b"player_roster")?;
+    let roster = vm.raw_table_get(catalog, key)?;
+    let enabled = vm.call(roster, &[])?.to_vec();
     vm.call(seed, &enabled).map(|_| ())
 }

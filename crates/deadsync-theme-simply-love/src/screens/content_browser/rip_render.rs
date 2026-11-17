@@ -17,7 +17,7 @@ use super::layout as lo;
 use super::render::{Z_MODAL_PANEL, Z_MODAL_TEXT, Z_TEXT, accent, text_width};
 use super::rip::{self, CardMotion, Choice, PackMotion, Pick, Row, Stage, TitleFit};
 use super::spinner;
-use super::state::{State, Zone, banner_is_lost};
+use super::state::{State, Zone, banner_is_lost, three_key};
 use crate::act;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, TextContent};
@@ -299,6 +299,31 @@ pub(super) fn footer(state: &State) -> &'static str {
     }
 }
 
+/// The same, on a cabinet with only the three dedicated menu buttons: LEFT and
+/// RIGHT walk the rows, and START is the only other button.
+pub(super) fn three_key_footer(state: &State) -> &'static str {
+    let rip = &state.rip;
+    if rip.prompt.is_some() {
+        return "START keep it";
+    }
+    if rip.picking.is_some() {
+        return "LEFT/RIGHT move   START choose";
+    }
+    if rip.adjusting {
+        return "LEFT/RIGHT change   START done";
+    }
+    match Row::ALL[rip.row.min(Row::ALL.len() - 1)] {
+        Row::Button if rip.stage == Stage::Choosing => "LEFT/RIGHT keep or re-rip   START choose",
+        Row::Reset => "START reset options   LEFT/RIGHT options",
+        Row::Button if rip::busy(rip) => "LEFT/RIGHT options",
+        Row::Button => "START rip a pack   LEFT/RIGHT options",
+        Row::Typed | Row::Avoid => "START type names   LEFT/RIGHT options",
+        Row::Era => "START choose eras   LEFT/RIGHT options",
+        Row::Author => "START choose authors   LEFT/RIGHT options",
+        Row::Lo | Row::Hi | Row::Full => "START change   LEFT/RIGHT options",
+    }
+}
+
 // --- the options --------------------------------------------------------------
 
 fn push_options(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4]) {
@@ -350,13 +375,16 @@ fn push_options(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4]) {
                     maxwidth(lo::RIP_PANEL_W - 44.0): horizalign(left):
                     diffuse(ink, ink, ink, 1.0): z(Z)
                 ));
-                // The arrows that change it, on the row the cursor is on.
-                if lit && row.cycles() {
+                // The arrows that change it, on the row the cursor is on. A
+                // three-key cabinet's LEFT and RIGHT walk the rows instead,
+                // until START hands them to the value -- which lights them.
+                if lit && row.cycles() && (!three_key(state) || rip.adjusting) {
+                    let ink = if rip.adjusting { accent } else { [1.0; 4] };
                     actors.push(act!(text:
                         font("miso"): settext("&MENULEFT;&MENURIGHT;"):
                         align(1.0, 0.5): xy(lo::RIP_PANEL_X + lo::RIP_PANEL_W - 8.0, y):
                         zoom(0.42): horizalign(right):
-                        diffuse(1.0, 1.0, 1.0, 1.0): z(Z)
+                        diffuse(ink[0], ink[1], ink[2], 1.0): z(Z)
                     ));
                 }
             }
@@ -1164,7 +1192,10 @@ fn push_picker(actors: &mut Vec<Actor>, state: &State, accent: [f32; 4], w: f32,
     }
 
     actors.push(act!(text:
-        font("miso"): settext(crate::i18n::tr("ContentBrowser", "ChooseClearDoneHint")):
+        font("miso"): settext(crate::i18n::tr(
+            "ContentBrowser",
+            if three_key(state) { "ChooseDoneThreeKeyHint" } else { "ChooseClearDoneHint" },
+        )):
         align(0.5, 0.5): xy(cx, top + box_h - 16.0): zoom(0.45): horizalign(center):
         diffuse(0.85, 0.85, 0.88, 1.0): z(Z)
     ));
@@ -1239,7 +1270,10 @@ pub(super) fn push_prompt(
         ));
     }
     actors.push(act!(text:
-        font("miso"): settext(crate::i18n::tr("ContentBrowser", "KeepNameHint")):
+        font("miso"): settext(crate::i18n::tr(
+            "ContentBrowser",
+            if three_key(state) { "KeepNameThreeKeyHint" } else { "KeepNameHint" },
+        )):
         align(0.5, 0.5): xy(cx, answer_cy + ANSWER_H * 0.5 + 18.0): zoom(0.5):
         horizalign(center):
         diffuse(0.75, 0.75, 0.75, 1.0): z(Z_MODAL_TEXT)

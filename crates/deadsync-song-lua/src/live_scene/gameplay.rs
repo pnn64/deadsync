@@ -28,7 +28,7 @@ impl Callbacks {
         label: &'static str,
         event: impl FnOnce(&GameplayRuntimeState<P, O, C, D>) -> Event,
     ) {
-        let writes = {
+        let (writes, pauses) = {
             let mut guard = self.owner.access();
             let runtime = &mut *guard;
             let result = self
@@ -39,12 +39,25 @@ impl Callbacks {
                     .actors
                     .gameplay_error(&mut runtime.vm, None, flag, label, e);
             }
-            runtime.take_player_writes()
+            let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+            (runtime.take_player_writes(), pauses)
         };
         crate::live::apply_player_writes(writes, game);
+        for paused in pauses { game.set_gameplay_paused(paused); }
     }
 }
 impl SongLiveScene {
+    /// Refresh input-phase queries after a physical judgment without advancing
+    /// actor updates, option clocks, or the next frame's preparation.
+    pub fn refresh_gameplay_statistics<P: GameplayProfileData, O, C, D>(
+        &self,
+        game: &GameplayRuntimeState<P, O, C, D>,
+    ) -> Result<(), Error> {
+        let mut runtime = self.runtime.access();
+        let owners = self.frames.owners(&mut runtime)?;
+        runtime.feed_gameplay_callback(owners, &SongLuaLiveFrame::from_gameplay(game, 0.), self.context.song_timing.as_ref())
+    }
+
     fn callbacks(&self) -> Result<Callbacks, Error> {
         let mut runtime = self.runtime.access();
         let owners = self.frames.owners(&mut runtime)?;
@@ -161,7 +174,9 @@ impl SongLiveScene {
                 return tap;
             }
             let result = (|| {
-                let key = runtime.vm.try_intern(b"__songlua_did_tap_note_callback")?;
+                let key = runtime
+                    .vm
+                    .intern_static(b"__songlua_did_tap_note_callback")?;
                 let Value::Table(t) = field else {
                     unreachable!()
                 };
@@ -207,8 +222,10 @@ impl SongLiveScene {
                 }
             };
             let writes = runtime.take_player_writes();
+            let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
             drop(guard);
             crate::live::apply_player_writes(writes, game);
+            for paused in pauses { game.set_gameplay_paused(paused); }
             result
         }));
         Ok(())
@@ -217,8 +234,12 @@ impl SongLiveScene {
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) {
-        let writes = self.runtime.access().take_player_writes();
+        let mut runtime = self.runtime.access();
+        let writes = runtime.take_player_writes();
+        let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+        drop(runtime);
         crate::live::apply_player_writes(writes, game);
+        for paused in pauses { game.set_gameplay_paused(paused); }
     }
     pub fn apply_output_player_writes<P: GameplayProfileData, O, C, D>(
         &self,
@@ -226,14 +247,39 @@ impl SongLiveScene {
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) {
         crate::live::apply_player_writes(output.player_writes.iter().copied(), game);
+        for &paused in &output.gameplay_pauses { game.set_gameplay_paused(paused); }
     }
     pub fn prepare_gameplay_player_options<P: GameplayProfileData, O, C, D>(
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
+        let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
+        for paused in pauses { game.set_gameplay_paused(paused); }
+        runtime.refresh_gameplay_options(std::array::from_fn(|player| {
+            deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
+        }))?;
         for player in 0..LUA_PLAYERS {
             game.mods.song_lua_fail_types[player] = runtime.gameplay_fail_type(player)?;
+        }
+        // Compare in place and copy only a player whose options changed.
+        let mut changed = false;
+        for (published, options) in game
+            .mods
+            .song_lua_player_options
+            .iter_mut()
+            .zip(runtime.gameplay_options())
+        {
+            if published.as_ref() != Some(options) {
+                *published = Some(*options);
+                changed = true;
+            }
+        }
+        drop(runtime);
+        if changed {
+            // Current setters in Update/Input/Draw can change speed and reverse
+            // after the gameplay core's normal motion refresh for this frame.
+            game.refresh_live_notefield_options(game.clock.song_position.current_bpm);
         }
         Ok(())
     }
