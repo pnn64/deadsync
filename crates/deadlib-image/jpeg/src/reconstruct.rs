@@ -230,6 +230,32 @@ impl PlanarImage {
                 .try_reserve_exact(count)
                 .map_err(|_| Error::Allocation)?;
         }
+        if self.precision == 8
+            && self.color_space == ColorSpace::YCbCr
+            && upsampling == Upsampling::Linear
+            && self.components[0].spec.horizontal_sampling as usize == max_h
+            && self.components[0].spec.vertical_sampling as usize == max_v
+            && self.components[1].spec.horizontal_sampling as usize * 2 == max_h
+            && self.components[1].spec.vertical_sampling as usize * 2 == max_v
+            && self.components[2].spec.horizontal_sampling
+                == self.components[1].spec.horizontal_sampling
+            && self.components[2].spec.vertical_sampling
+                == self.components[1].spec.vertical_sampling
+        {
+            ycbcr420_rgb8(
+                &self.components,
+                self.width as usize,
+                self.height as usize,
+                &mut u8_samples,
+            );
+            return Ok(Image {
+                width: self.width as u32,
+                height: self.height as u32,
+                color_type: ColorType::Rgb,
+                bit_depth: 8,
+                samples: Samples::U8(u8_samples),
+            });
+        }
         let max = (1i32 << self.precision) - 1;
         for y in 0..self.height as usize {
             for x in 0..self.width as usize {
@@ -472,7 +498,7 @@ impl CmykImage {
     }
 }
 
-fn ycbcr_to_rgb(values: [i32; 3], precision: u8) -> [i32; 3] {
+pub(crate) fn ycbcr_to_rgb(values: [i32; 3], precision: u8) -> [i32; 3] {
     let [y, cb, cr] = values.map(i64::from);
     let center = 1i64 << (precision - 1);
     let max = (1i64 << precision) - 1;
@@ -485,12 +511,12 @@ fn ycbcr_to_rgb(values: [i32; 3], precision: u8) -> [i32; 3] {
     .map(|v| v.clamp(0, max) as i32)
 }
 
-fn ycck_to_cmyk(values: [i32; 4], precision: u8) -> [i32; 4] {
+pub(crate) fn ycck_to_cmyk(values: [i32; 4], precision: u8) -> [i32; 4] {
     let max = (1i32 << precision) - 1;
     let rgb = ycbcr_to_rgb(values[..3].try_into().unwrap(), precision);
     [max - rgb[0], max - rgb[1], max - rgb[2], values[3]]
 }
-fn cmyk_to_rgb(values: [i32; 4], polarity: CmykPolarity, precision: u8) -> [i32; 3] {
+pub(crate) fn cmyk_to_rgb(values: [i32; 4], polarity: CmykPolarity, precision: u8) -> [i32; 3] {
     let max = (1i32 << precision) - 1;
     let inverse = values.map(|v| {
         if polarity == CmykPolarity::AdobeInverted {
@@ -523,6 +549,14 @@ pub(crate) fn infer_components(
             && s.data.len() >= 14
             && s.data.starts_with(b"JFIF\0")
     });
+    infer_components_with_hints(components, jfif, adobe)
+}
+
+pub(crate) fn infer_components_with_hints(
+    components: &[ComponentSpec],
+    jfif: bool,
+    adobe: Option<u8>,
+) -> ColorSpace {
     match (components.len(), adobe) {
         (1, _) => ColorSpace::Grayscale,
         (3, _) if jfif => ColorSpace::YCbCr,
@@ -547,6 +581,74 @@ pub(crate) fn infer_cmyk_polarity(metadata: &[MetadataSegment<'_>]) -> CmykPolar
     } else {
         CmykPolarity::Conventional
     }
+}
+
+// Centered 2:1 interpolation has alternating 1:3 and 3:1 weights. Keep the
+// vertical result unrounded and slide three chroma samples across each row;
+// this is exactly the generic bilinear result with its single final rounding.
+fn ycbcr420_rgb8(components: &[ComponentPlane], width: usize, height: usize, out: &mut Vec<u8>) {
+    let [luma, cb, cr] = components else {
+        unreachable!();
+    };
+    let chroma_width = cb.width;
+    for y in 0..height {
+        let cy = y / 2;
+        let (top, bottom, wt, wb) = if y & 1 == 0 {
+            (cy.saturating_sub(1), cy, 1, 3)
+        } else {
+            (cy, (cy + 1).min(cb.height - 1), 3, 1)
+        };
+        let cb_top = &cb.samples[top * chroma_width..(top + 1) * chroma_width];
+        let cb_bottom = &cb.samples[bottom * chroma_width..(bottom + 1) * chroma_width];
+        let cr_top = &cr.samples[top * chroma_width..(top + 1) * chroma_width];
+        let cr_bottom = &cr.samples[bottom * chroma_width..(bottom + 1) * chroma_width];
+        ycbcr420_row(
+            &luma.samples[y * width..(y + 1) * width],
+            [cb_top, cb_bottom],
+            [cr_top, cr_bottom],
+            [wt, wb],
+            out,
+        );
+    }
+}
+
+pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
+    luma: &[T],
+    cb: [&[T]; 2],
+    cr: [&[T]; 2],
+    weights: [i32; 2],
+    out: &mut Vec<u8>,
+) {
+    let [wt, wb] = weights;
+    let mut vertical = cb[0]
+        .iter()
+        .zip(cb[1])
+        .zip(cr[0].iter().zip(cr[1]))
+        .map(|((&a, &b), (&c, &d))| [a.into() * wt + b.into() * wb, c.into() * wt + d.into() * wb]);
+    let mut current = vertical.next().unwrap();
+    let mut previous = current;
+    for pair in luma.chunks(2) {
+        let next = vertical.next().unwrap_or(current);
+        let left = [0, 1].map(|i| (previous[i] + 3 * current[i] + 8) >> 4);
+        out.extend_from_slice(&rgb8(pair[0].into(), left));
+        if let Some(&y) = pair.get(1) {
+            let right = [0, 1].map(|i| (3 * current[i] + next[i] + 8) >> 4);
+            out.extend_from_slice(&rgb8(y.into(), right));
+        }
+        previous = current;
+        current = next;
+    }
+}
+
+#[inline]
+pub(crate) fn rgb8(y: i32, chroma: [i32; 2]) -> [u8; 3] {
+    let [cb, cr] = chroma.map(|v| v - 128);
+    [
+        y + ((91881 * cr + 32768) >> 16),
+        y + ((-22554 * cb - 46802 * cr + 32768) >> 16),
+        y + ((116130 * cb + 32768) >> 16),
+    ]
+    .map(|v| v.clamp(0, 255) as u8)
 }
 
 fn sample(
@@ -590,6 +692,77 @@ fn sample(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn paired_chroma_interpolation_matches_generic_siting_and_rounding() {
+        let mut state = 0x12345678u32;
+        for (width, height) in (1usize..=19)
+            .flat_map(|w| (1usize..=19).map(move |h| (w, h)))
+            .chain([(1, 511), (1919, 3), (31, 33)])
+        {
+            for scale in [1, 2] {
+                let components = [2 * scale, scale, scale]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, factor)| {
+                        let (w, h) = if i == 0 {
+                            (width, height)
+                        } else {
+                            (width.div_ceil(2), height.div_ceil(2))
+                        };
+                        ComponentPlane {
+                            spec: ComponentSpec {
+                                id: i as u8 + 1,
+                                horizontal_sampling: factor,
+                                vertical_sampling: factor,
+                                quantization_table: 0,
+                            },
+                            width: w,
+                            height: h,
+                            samples: (0..w * h)
+                                .map(|_| {
+                                    state ^= state << 13;
+                                    state ^= state >> 17;
+                                    state ^= state << 5;
+                                    (state & 255) as u16
+                                })
+                                .collect(),
+                        }
+                    })
+                    .collect();
+                let planes = PlanarImage {
+                    width: width as u16,
+                    height: height as u16,
+                    precision: 8,
+                    color_space: ColorSpace::YCbCr,
+                    cmyk_polarity: CmykPolarity::Conventional,
+                    components,
+                    limits: Limits::default(),
+                    memory_bytes: 0,
+                };
+                let mut expected = Vec::new();
+                for y in 0..height {
+                    for x in 0..width {
+                        let values = core::array::from_fn(|i| {
+                            sample(
+                                &planes.components[i],
+                                x,
+                                y,
+                                2 * scale as usize,
+                                2 * scale as usize,
+                                Upsampling::Linear,
+                            )
+                        });
+                        expected.extend(ycbcr_to_rgb(values, 8).map(|v| v as u8));
+                    }
+                }
+                assert_eq!(
+                    planes.to_image(Upsampling::Linear).unwrap().samples,
+                    Samples::U8(expected),
+                    "{width}x{height}, scale {scale}"
+                );
+            }
+        }
+    }
     #[test]
     fn subtractive_extrema_and_polarity_conversion() {
         for precision in 2..=16 {

@@ -54,25 +54,49 @@ fn idct_mode(block: &[i16; 64], quant: &[u16; 64], precision: Option<u8>) -> [u1
     }
     let mut tmp = [[0i64; 8]; 8];
     for v in 0..8 {
-        for x in 0..8 {
-            let mut sum = 0;
-            for u in 0..8 {
-                sum += i64::from(block[v * 8 + u]) * i64::from(quant[v * 8 + u]) * BASIS[x][u];
-            }
-            tmp[v][x] = (sum + (1 << 15)) >> 16;
-        }
+        let input =
+            core::array::from_fn(|u| i64::from(block[v * 8 + u]) * i64::from(quant[v * 8 + u]));
+        tmp[v] = inverse_line(input).map(|sum| (sum + (1 << 15)) >> 16);
     }
     let mut out = [0; 64];
-    for y in 0..8 {
-        for x in 0..8 {
-            let mut sum = 0;
-            for v in 0..8 {
-                sum += tmp[v][x] * BASIS[y][v];
-            }
+    for x in 0..8 {
+        let column = inverse_line(tmp.map(|row| row[x]));
+        for (y, sum) in column.into_iter().enumerate() {
             out[y * 8 + x] = finish((sum + (1 << 23)) >> 24);
         }
     }
     out
+}
+
+/// Factor the exact Q20 matrix using its even/odd and mirror symmetries.
+/// All rounding stays at the original pass boundaries, including differential
+/// reconstruction. No approximation or narrower intermediate changes samples.
+#[inline]
+fn inverse_line(a: [i64; 8]) -> [i64; 8] {
+    if a[1..].iter().all(|&v| v == 0) {
+        return [a[0] * 370728; 8];
+    }
+    let e0 = (a[0] + a[4]) * 370728;
+    let e1 = (a[0] - a[4]) * 370728;
+    let e2 = a[2] * 484379 + a[6] * 200636;
+    let e3 = a[2] * 200636 - a[6] * 484379;
+    let even = [e0 + e2, e1 + e3, e1 - e3, e0 - e2];
+    let odd = [
+        a[1] * 514214 + a[3] * 435930 + a[5] * 291279 + a[7] * 102284,
+        a[1] * 435930 - a[3] * 102284 - a[5] * 514214 - a[7] * 291279,
+        a[1] * 291279 - a[3] * 514214 + a[5] * 102284 + a[7] * 435930,
+        a[1] * 102284 - a[3] * 291279 + a[5] * 435930 - a[7] * 514214,
+    ];
+    [
+        even[0] + odd[0],
+        even[1] + odd[1],
+        even[2] + odd[2],
+        even[3] + odd[3],
+        even[3] - odd[3],
+        even[2] - odd[2],
+        even[1] - odd[1],
+        even[0] - odd[0],
+    ]
 }
 
 /// Forward orthonormal transform, using the transpose of the same Q20 basis.
@@ -133,6 +157,29 @@ fn fdct_inner(samples: &[u16; 64], quant: &[u16; 64], read: impl Fn(u16) -> i64)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn inverse_factorization_is_exact_for_sparse_and_wide_inputs() {
+        let matrix =
+            |a: [i64; 8]| BASIS.map(|row| row.into_iter().zip(a).map(|(b, v)| b * v).sum());
+        for value in [-(1i64 << 38), -1, 0, 1, 1 << 38] {
+            assert_eq!(inverse_line([value; 8]), matrix([value; 8]));
+            for i in 0..8 {
+                let mut a = [0; 8];
+                a[i] = value;
+                assert_eq!(inverse_line(a), matrix(a));
+            }
+        }
+        let mut state = 0x8723479812345678u64;
+        for _ in 0..1000 {
+            let input = core::array::from_fn(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                (state >> 26) as i64 - (1 << 37)
+            });
+            assert_eq!(inverse_line(input), matrix(input));
+        }
+    }
     #[test]
     fn signed_forward_dct_has_no_level_shift_and_checks_its_model() {
         assert_eq!(fdct_differential(&[0; 64], &[1; 64]).unwrap(), [0; 64]);

@@ -25,6 +25,7 @@ mod output;
 mod pixel_encode;
 mod progressive;
 mod pyramid;
+mod raster;
 mod reconstruct;
 mod scan_encode;
 mod stream_abbreviated;
@@ -67,6 +68,7 @@ pub use pyramid::{
     encode_hierarchical_planes, encode_hierarchical_planes_with_metadata,
     encode_hierarchical_samples, encode_hierarchical_samples_with_metadata,
 };
+pub use raster::{decode, decode_with_upsampling};
 pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };

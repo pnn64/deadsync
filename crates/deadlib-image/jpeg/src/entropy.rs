@@ -186,6 +186,38 @@ impl<'a> Bits<'a> {
 mod tests {
     use super::*;
     #[test]
+    fn word_refills_match_an_independent_bit_reader_with_stuffing() {
+        let mut state = 0x12345678u32;
+        let raw: Vec<_> = (0..4096)
+            .map(|i| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                if i % 17 == 0 { 255 } else { state as u8 }
+            })
+            .collect();
+        let stuffed: Vec<_> = raw
+            .iter()
+            .flat_map(|&v| if v == 255 { vec![255, 0] } else { vec![v] })
+            .collect();
+        for start in 0..16 {
+            let mut bits = Bits::new(&stuffed);
+            let mut at = 0;
+            let mut turn = start;
+            while at < raw.len() * 8 {
+                let n = (1 + turn % 16).min(raw.len() * 8 - at);
+                let mut expected = 0u32;
+                for bit in at..at + n {
+                    expected = expected << 1 | u32::from((raw[bit / 8] >> (7 - bit % 8)) & 1);
+                }
+                assert_eq!(bits.read(n as u8).unwrap(), expected);
+                at += n;
+                turn += 7;
+            }
+            bits.finish().unwrap();
+        }
+    }
+    #[test]
     fn all_code_lengths_fast_and_slow() {
         let counts = [1; 16];
         let symbols: Vec<_> = (0..16).collect();

@@ -6,6 +6,15 @@ reconstruction, 8/12-bit
 integer IDCT, restart intervals, interleaved and separate component scans,
 component subsampling, borrowed APPn/COM preservation, native component planes,
 grayscale/RGB/YCbCr interpretation and centered chroma interpolation.
+
+`decode(jpeg, Limits::default())` returns owned shared gray/RGB pixels with
+centered linear chroma interpolation; `decode_with_upsampling` also accepts
+`Upsampling::Nearest`. Sequential 8-bit single-scan decoding reconstructs blocks
+into three rolling MCU rows, bounding intermediate storage by width. Progressive,
+arithmetic, higher-precision, lossless, and hierarchical inputs use their native
+reconstruction paths. The coefficient and planar APIs below retain their
+precision, component, and metadata representations.
+
 Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
 progressions retain the precision available for each band.
@@ -124,7 +133,9 @@ management. Metadata bytes are preserved without modification by default.
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
-allocator high-water mark; allocation instrumentation remains planned.
+allocator high-water mark. The separate [benchmark workspace](bench/README.md)
+measures process-wide CPU cycles and allocation calls/bytes against the Rust
+`image`, `zune-jpeg`, and `jpeg-decoder` crates.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Incremental input, single-channel table-first paired output,
 additional encoder scan strategies, and the broader validation
