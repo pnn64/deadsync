@@ -651,14 +651,30 @@ fn load<T: Copy + Into<i32>>(source: &[T]) -> [i16; CHUNK] {
     values
 }
 
+/// Append `pixels` converted samples. A whole chunk is copied as two
+/// constant halves: SSE2 inlines copies of at most 128 bytes, while larger
+/// ones call memcpy once per chunk.
+#[inline(always)]
+fn emit_chunk(out: &mut Vec<u8>, rgb: &[u8; CHUNK * 3], pixels: usize) {
+    if pixels == CHUNK {
+        for half in rgb.as_chunks::<{ CHUNK * 3 / 2 }>().0 {
+            out.extend_from_slice(half);
+        }
+    } else {
+        out.extend_from_slice(&rgb[..pixels * 3]);
+    }
+}
+
 /// Full-resolution 8-bit YCbCr to interleaved RGB.
 pub(crate) fn ycbcr_row<T: Copy + Into<i32>>(luma: &[T], cb: &[T], cr: &[T], out: &mut Vec<u8>) {
     let mut rgb = [0; CHUNK * 3];
     for start in (0..luma.len()).step_by(CHUNK) {
         let end = (start + CHUNK).min(luma.len());
-        let [y, cb, cr] = [luma, cb, cr].map(|plane| load(&plane[start..end]));
-        ycbcr_chunk(&y, &cb, &cr, &mut rgb);
-        out.extend_from_slice(&rgb[..(end - start) * 3]);
+        let y = load(&luma[start..end]);
+        let blue = load(&cb[start..end]);
+        let red = load(&cr[start..end]);
+        ycbcr_chunk(&y, &blue, &red, &mut rgb);
+        emit_chunk(out, &rgb, end - start);
     }
 }
 
@@ -709,7 +725,7 @@ pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
             up
         });
         ycbcr_chunk(&load(&luma[start..end]), &cb, &cr, &mut rgb);
-        out.extend_from_slice(&rgb[..(end - start) * 3]);
+        emit_chunk(out, &rgb, end - start);
     }
 }
 

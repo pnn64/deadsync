@@ -9,6 +9,9 @@ use crate::{Error, Result, ZIGZAG};
 
 const FAST: u32 = LOOK_BITS as u32;
 
+// Copy lets cold paths take the state by value: no reference escapes, so
+// the hot loop keeps `buffer` and `count` in registers.
+#[derive(Clone, Copy)]
 pub(crate) struct Reader<'a> {
     input: &'a [u8],
     position: usize,
@@ -68,19 +71,21 @@ impl<'a> Reader<'a> {
                 return;
             }
         }
-        self.refill_bytes();
+        *self = self.refill_bytes();
     }
 
     #[cold]
     #[inline(never)]
-    fn refill_bytes(&mut self) {
+    fn refill_bytes(mut self) -> Self {
         while self.count <= 56 {
             let Some(&byte) = self.input.get(self.position) else {
-                return self.pad();
+                self.pad();
+                break;
             };
             if byte == 0xff {
                 if self.input.get(self.position + 1) != Some(&0) {
-                    return self.pad();
+                    self.pad();
+                    break;
                 }
                 self.position += 1;
             }
@@ -88,6 +93,7 @@ impl<'a> Reader<'a> {
             self.buffer |= u64::from(byte) << (56 - self.count);
             self.count += 8;
         }
+        self
     }
 
     fn pad(&mut self) {
@@ -209,15 +215,16 @@ impl Table {
             reader.consume(u32::from(entry >> 8));
             return Ok(u32::from(entry & 0xff));
         }
-        self.long_symbol(reader)
+        let (symbol, length) = self.long_symbol(reader.peek(16) as i32)?;
+        reader.consume(length);
+        Ok(symbol)
     }
 
     // A prefix miss means the code is longer than FAST bits or unassigned:
     // canonical codes give no shorter match, as in the bitwise decoder.
     #[cold]
     #[inline(never)]
-    fn long_symbol(&self, reader: &mut Reader<'_>) -> Result<u32> {
-        let code = reader.peek(16) as i32;
+    fn long_symbol(&self, code: i32) -> Result<(u32, u32)> {
         for length in FAST + 1..=16 {
             if code <= self.max_code[length as usize] {
                 let index = (code >> (16 - length)) + self.offsets[length as usize];
@@ -226,8 +233,7 @@ impl Table {
                     .get(index as usize)
                     .copied()
                     .ok_or(Error::Invalid("Huffman code"))?;
-                reader.consume(length);
-                return Ok(u32::from(value));
+                return Ok((u32::from(value), length));
             }
         }
         Err(Error::Invalid("unassigned Huffman code"))
