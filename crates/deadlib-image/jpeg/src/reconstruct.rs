@@ -616,6 +616,56 @@ fn ycbcr420_rgb8(components: &[ComponentPlane], width: usize, height: usize, out
     }
 }
 
+const CHUNK: usize = 64;
+
+#[inline(always)]
+fn high(a: i16, c: i16) -> i16 {
+    ((i32::from(a) * i32::from(c)) >> 16) as i16
+}
+
+/// [`rgb8`] for a chunk, written so baseline SSE2 vectorizes it. The 32-bit
+/// fixed-point products decompose exactly into 16-bit operations:
+/// 91881 = 65536 + 26345 and 116130 = 131072 - 14942, with
+/// `((2x * c >> 16) + 1) >> 1 == (x * c + 32768) >> 16`; green keeps its
+/// 32-bit sum, which LLVM forms with pmaddwd. All 2^24 inputs are tested.
+#[inline(always)]
+fn ycbcr_chunk(y: &[i16; CHUNK], cb: &[i16; CHUNK], cr: &[i16; CHUNK], out: &mut [u8; CHUNK * 3]) {
+    for i in 0..CHUNK {
+        let (luma, cb, cr) = (y[i], cb[i] - 128, cr[i] - 128);
+        let red = luma + cr + ((high(cr * 2, 26345) + 1) >> 1);
+        let blue = luma + 2 * cb + ((high(cb * 2, -14942) + 1) >> 1);
+        let green = luma - cr
+            + ((i32::from(cb) * -22554 + i32::from(cr) * 18734 + 32768) >> 16) as i16;
+        out[3 * i] = red.clamp(0, 255) as u8;
+        out[3 * i + 1] = green.clamp(0, 255) as u8;
+        out[3 * i + 2] = blue.clamp(0, 255) as u8;
+    }
+}
+
+#[inline(always)]
+fn load<T: Copy + Into<i32>>(source: &[T]) -> [i16; CHUNK] {
+    let mut values = [0; CHUNK];
+    for (value, &sample) in values.iter_mut().zip(source) {
+        *value = sample.into() as i16;
+    }
+    values
+}
+
+/// Full-resolution 8-bit YCbCr to interleaved RGB.
+pub(crate) fn ycbcr_row<T: Copy + Into<i32>>(luma: &[T], cb: &[T], cr: &[T], out: &mut Vec<u8>) {
+    let mut rgb = [0; CHUNK * 3];
+    for start in (0..luma.len()).step_by(CHUNK) {
+        let end = (start + CHUNK).min(luma.len());
+        let [y, cb, cr] = [luma, cb, cr].map(|plane| load(&plane[start..end]));
+        ycbcr_chunk(&y, &cb, &cr, &mut rgb);
+        out.extend_from_slice(&rgb[..(end - start) * 3]);
+    }
+}
+
+/// Centered 2:1 horizontal interpolation has alternating 1:3 and 3:1 weights.
+/// `weights` blend two chroma rows vertically (summing to four), and the
+/// result stays unrounded until one final rounding, exactly the generic
+/// bilinear sample. Edges replicate the first and last chroma samples.
 pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
     luma: &[T],
     cb: [&[T]; 2],
@@ -623,29 +673,49 @@ pub(crate) fn ycbcr420_row<T: Copy + Into<i32>>(
     weights: [i32; 2],
     out: &mut Vec<u8>,
 ) {
-    let [wt, wb] = weights;
-    let mut vertical = cb[0]
-        .iter()
-        .zip(cb[1])
-        .zip(cr[0].iter().zip(cr[1]))
-        .map(|((&a, &b), (&c, &d))| [a.into() * wt + b.into() * wb, c.into() * wt + d.into() * wb]);
-    let mut current = vertical.next().unwrap();
-    let mut previous = current;
-    for pair in luma.chunks(2) {
-        let next = vertical.next().unwrap_or(current);
-        let left = [0, 1].map(|i| (previous[i] + 3 * current[i] + 8) >> 4);
-        out.extend_from_slice(&rgb8(pair[0].into(), left));
-        if let Some(&y) = pair.get(1) {
-            let right = [0, 1].map(|i| (3 * current[i] + next[i] + 8) >> 4);
-            out.extend_from_slice(&rgb8(y.into(), right));
+    let width = luma.len();
+    let chroma = cb[0].len();
+    let [top, bottom] = weights.map(|w| w as i16);
+    let mut rgb = [0; CHUNK * 3];
+    for start in (0..width).step_by(CHUNK) {
+        let end = (start + CHUNK).min(width);
+        let first = start / 2;
+        // blend[j] is chroma index first - 1 + j, clamped to the row.
+        let mut blend = [[0i16; CHUNK / 2 + 2]; 2];
+        let low = first.saturating_sub(1);
+        let limit = (first + CHUNK / 2 + 1).min(chroma);
+        let offset = low + 1 - first;
+        for (plane, rows) in blend.iter_mut().zip([cb, cr]) {
+            let target = &mut plane[offset..offset + (limit - low)];
+            for ((value, &a), &b) in target
+                .iter_mut()
+                .zip(&rows[0][low..limit])
+                .zip(&rows[1][low..limit])
+            {
+                *value = a.into() as i16 * top + b.into() as i16 * bottom;
+            }
+            if offset == 1 {
+                plane[0] = plane[1];
+            }
+            let last = plane[offset + (limit - low) - 1];
+            plane[offset + (limit - low)..].fill(last);
         }
-        previous = current;
-        current = next;
+        let [cb, cr] = blend.map(|v| {
+            let mut up = [0i16; CHUNK];
+            for j in 0..CHUNK / 2 {
+                up[2 * j] = (v[j] + 3 * v[j + 1] + 8) >> 4;
+                up[2 * j + 1] = (3 * v[j + 1] + v[j + 2] + 8) >> 4;
+            }
+            up
+        });
+        ycbcr_chunk(&load(&luma[start..end]), &cb, &cr, &mut rgb);
+        out.extend_from_slice(&rgb[..(end - start) * 3]);
     }
 }
 
-#[inline]
-pub(crate) fn rgb8(y: i32, chroma: [i32; 2]) -> [u8; 3] {
+/// The 8-bit fixed-point conversion that [`ycbcr_chunk`] vectorizes.
+#[cfg(test)]
+fn rgb8(y: i32, chroma: [i32; 2]) -> [u8; 3] {
     let [cb, cr] = chroma.map(|v| v - 128);
     [
         y + ((91881 * cr + 32768) >> 16),
@@ -696,6 +766,22 @@ fn sample(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn chunked_color_conversion_matches_fixed_point_for_every_input() {
+        let luma: [i16; CHUNK] = core::array::from_fn(|i| i as i16);
+        let mut out = [0; CHUNK * 3];
+        for cb in 0..256 {
+            for cr in 0..256 {
+                for base in (0..256).step_by(CHUNK) {
+                    let y = luma.map(|v| v + base as i16);
+                    ycbcr_chunk(&y, &[cb as i16; CHUNK], &[cr as i16; CHUNK], &mut out);
+                    for (i, rgb) in out.as_chunks::<3>().0.iter().enumerate() {
+                        assert_eq!(*rgb, rgb8(i32::from(y[i]), [cb, cr]), "{cb} {cr}");
+                    }
+                }
+            }
+        }
+    }
     #[test]
     fn paired_chroma_interpolation_matches_generic_siting_and_rounding() {
         let mut state = 0x12345678u32;

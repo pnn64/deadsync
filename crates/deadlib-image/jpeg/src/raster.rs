@@ -3,7 +3,7 @@ use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader, Table};
 use crate::transform::{FloatQuant, idct8, idct8_dc};
 use crate::reconstruct::{
-    cmyk_to_rgb, infer_components_with_hints, rgb8, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
+    cmyk_to_rgb, infer_components_with_hints, ycbcr_row, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
 };
 use crate::{
     CmykPolarity, ColorSpace, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
@@ -445,12 +445,14 @@ impl Plan<'_> {
             .max()
             .unwrap();
         let full = layout[..3].iter().all(|c| c.h == max_h && c.v == max_v);
+        // 4:2:0 and 4:2:2: half-width chroma, half or full height.
         let half = layout[0].h == max_h
             && layout[0].v == max_v
             && layout[1].h * 2 == max_h
-            && layout[1].v * 2 == max_v
+            && (layout[1].v * 2 == max_v || layout[1].v == max_v)
             && layout[2].h == layout[1].h
             && layout[2].v == layout[1].v;
+        let half_height = layout[1].v * 2 == max_v;
         for y in start..(start + rows).min(height) {
             let samplers: [Row<'_>; 4] = core::array::from_fn(|i| {
                 if i < self.frame.components.len() {
@@ -464,16 +466,22 @@ impl Plan<'_> {
                     samplers[0].top,
                     [samplers[1].top, samplers[1].bottom],
                     [samplers[2].top, samplers[2].bottom],
-                    if y & 1 == 0 { [1, 3] } else { [3, 1] },
+                    if !half_height {
+                        [4, 0]
+                    } else if y & 1 == 0 {
+                        [1, 3]
+                    } else {
+                        [3, 1]
+                    },
                     out,
                 );
             } else if self.color == ColorSpace::YCbCr && full {
-                for x in 0..width {
-                    out.extend_from_slice(&rgb8(
-                        i32::from(samplers[0].top[x]),
-                        [i32::from(samplers[1].top[x]), i32::from(samplers[2].top[x])],
-                    ));
-                }
+                ycbcr_row(
+                    &samplers[0].top[..width],
+                    &samplers[1].top[..width],
+                    &samplers[2].top[..width],
+                    out,
+                );
             } else if self.color == ColorSpace::Rgb && full {
                 for x in 0..width {
                     out.extend_from_slice(&[

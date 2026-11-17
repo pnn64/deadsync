@@ -131,12 +131,20 @@ pub(crate) fn idct8(block: &[i16; 64], quant: &FloatQuant, out: &mut [u8], strid
             work[y * 8 + u] = value;
         }
     }
+    // Rows go to a contiguous block first: stores `stride` apart would stop
+    // the second pass from vectorizing across rows.
+    let mut pixels = [0u8; 64];
     for y in 0..8 {
         let mut row: [f32; 8] = work[y * 8..y * 8 + 8].try_into().unwrap();
         // Level shift and rounding bias enter with the DC term.
         row[0] += 128.5;
-        let target: &mut [u8; 8] = (&mut out[y * stride..y * stride + 8]).try_into().unwrap();
-        *target = aan_line(row).map(|v| v.clamp(0.0, 255.0) as u8);
+        let samples = aan_line(row);
+        for x in 0..8 {
+            pixels[y * 8 + x] = samples[x].clamp(0.0, 255.0) as u8;
+        }
+    }
+    for (y, row) in pixels.as_chunks::<8>().0.iter().enumerate() {
+        out[y * stride..y * stride + 8].copy_from_slice(row);
     }
 }
 
