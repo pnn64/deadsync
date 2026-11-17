@@ -30,6 +30,8 @@ const ROOT_REFERENCE_WIDTH: f32 = 640.0;
 // Simply Love: Graphics/ScreenSelectPlayMode Icon.lua
 const CURSOR_MIN_W: f32 = 90.0;
 const CURSOR_MAX_W: f32 = 170.0;
+const CURSOR_LABEL_PADDING: f32 = 18.0;
+const CURSOR_LABEL_RIGHT_GAP: f32 = 9.0;
 
 const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
@@ -186,6 +188,26 @@ const fn choice_cursor_label_width(choice: Choice) -> f32 {
     }
 }
 
+fn choice_label_right_x(choice: Choice) -> f32 {
+    match choice {
+        Choice::Marathon => -156.0,
+        Choice::Regular | Choice::PremiumFree => -160.0,
+    }
+}
+
+fn cursor_layout(base_width: f32, choice_zoom: f32) -> (f32, f32) {
+    let text_width = base_width * choice_zoom;
+    let max_text_width = CURSOR_MAX_W - CURSOR_LABEL_PADDING;
+    let text_scale = if text_width > max_text_width {
+        max_text_width / text_width
+    } else {
+        1.0
+    };
+    let cursor_width =
+        (text_width.mul_add(text_scale, CURSOR_LABEL_PADDING)).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
+    (text_scale, cursor_width)
+}
+
 pub struct State {
     pub active_color_index: i32,
     flow: ModeFlow,
@@ -333,7 +355,7 @@ fn root_sz(w: f32, h: f32) -> (f32, f32) {
 
 #[cfg(test)]
 mod layout_tests {
-    use super::root_scale_for_width;
+    use super::{CURSOR_LABEL_PADDING, CURSOR_MAX_W, cursor_layout, root_scale_for_width};
     use crate::ui_layout::UILayoutType;
 
     #[test]
@@ -342,6 +364,16 @@ mod layout_tests {
         assert!((root_scale_for_width(UILayoutType::Squareish, 600.0) - 1.171875).abs() < 0.001);
         assert_eq!(root_scale_for_width(UILayoutType::Wide, 853.0), 1.25);
         assert_eq!(root_scale_for_width(UILayoutType::UltraWide, 1147.0), 1.25);
+    }
+
+    #[test]
+    fn selected_choice_label_fits_its_cursor() {
+        let (text_scale, cursor_width) = cursor_layout(260.0, 0.75);
+        let text_width = 260.0 * 0.75 * text_scale;
+
+        assert!(text_scale < 1.0);
+        assert!(cursor_width <= CURSOR_MAX_W);
+        assert!(cursor_width >= text_width + CURSOR_LABEL_PADDING - f32::EPSILON);
     }
 }
 
@@ -463,25 +495,23 @@ pub fn push_actors(
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
     let labels = &text.labels;
-    let label = &labels[selected_index];
-    let measured_w = asset_manager.with_fonts(|all_fonts| {
-        asset_manager
-            .with_font(
-                machine_font_key(visual_policy.machine_font, FontRole::Header),
-                |f| font::measure_line_width_logical(f, label, all_fonts) as f32,
-            )
-            .unwrap_or(0.0)
+    let measured_widths: [f32; 3] = std::array::from_fn(|index| {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager
+                .with_font(
+                    machine_font_key(visual_policy.machine_font, FontRole::Header),
+                    |f| font::measure_line_width_logical(f, &labels[index], all_fonts) as f32,
+                )
+                .unwrap_or_else(|| choice_cursor_label_width(Choice::from_index(index)))
+        })
     });
-    let base_w = if measured_w > 0.0 {
-        measured_w
-    } else {
-        choice_cursor_label_width(choice)
-    };
-    let cursor_w = (base_w / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
+    let selected_zoom = state.flow.choice_zoom(selected_index);
+    let (_, cursor_w) = cursor_layout(measured_widths[selected_index], selected_zoom);
     let (cw, ch_outer) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT + 2.0);
     let (cw2, ch_inner) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT);
-    let (cx_outer, cy_outer) = root_pt(-151.0, state.flow.cursor_y());
-    let (cx_inner, cy_inner) = root_pt(-150.0, state.flow.cursor_y());
+    let cursor_right_x = choice_label_right_x(choice) + CURSOR_LABEL_RIGHT_GAP;
+    let (cx_outer, cy_outer) = root_pt(cursor_right_x, state.flow.cursor_y());
+    let (cx_inner, cy_inner) = root_pt(cursor_right_x + 1.0, state.flow.cursor_y());
     actors.push(act!(quad:
         align(1.0, 0.5): xy(cx_outer, cy_outer):
         zoomto(cw, ch_outer):
@@ -502,8 +532,13 @@ pub fn push_actors(
     let zoom_den =
         (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
     for (i, label) in labels.iter().take(state.flow.choice_count()).enumerate() {
-        let (x, y) = root_pt(-160.0, mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0));
+        let choice = Choice::from_index(i);
+        let (x, y) = root_pt(
+            choice_label_right_x(choice),
+            mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0),
+        );
         let choice_zoom = state.flow.choice_zoom(i);
+        let (text_scale, _) = cursor_layout(measured_widths[i], choice_zoom);
         let t = ((choice_zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
 
         let rgb = [
@@ -517,7 +552,7 @@ pub fn push_actors(
             settext(Arc::clone(label)):
             align(1.0, 0.5):
             xy(x, y):
-            zoom(choice_zoom * root_scale):
+            zoom(choice_zoom * text_scale * root_scale):
             diffuse(rgb[0], rgb[1], rgb[2], label_alpha):
             horizalign(right)
         ));
