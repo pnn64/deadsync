@@ -54,6 +54,8 @@ pub(crate) mod tests {
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
+    include!("looping_rooms_regression_tests.rs");
+
 
     #[test]
     fn model_cache_prewarms_more_than_legacy_slot_limit() {

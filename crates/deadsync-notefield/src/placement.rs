@@ -670,10 +670,6 @@ fn field_receptor_y(
 
 pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let style = request.hud_style;
-    let clamped_width = request.screen_width.clamp(
-        crate::style::LAYOUT_WIDTH_MIN,
-        crate::style::LAYOUT_WIDTH_MAX,
-    );
     let side_sign = match request.placement {
         FieldPlacement::P1 => -1.0,
         FieldPlacement::P2 => 1.0,
@@ -686,8 +682,11 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        (side_sign * clamped_width)
-            .mul_add(crate::style::SIDE_CENTER_X_RATIO, request.screen_center_x)
+        deadsync_gameplay::gameplay_side_field_center_x(
+            request.screen_width,
+            request.screen_center_x,
+            request.placement == FieldPlacement::P2,
+        )
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
@@ -1257,15 +1256,15 @@ mod tests {
         p1_request.num_players = 2;
         p1_request.notefield_offset_x = 20.0;
         let p1 = field_layout(p1_request);
-        assert_near(p1.playfield_center_x, 193.5);
-        assert_near(p1.layout_center_x, 193.5);
+        assert_near(p1.playfield_center_x, 193.25);
+        assert_near(p1.layout_center_x, 193.25);
         assert_near(p1.notefield_offset_x, -20.0);
 
         let mut p2_request = p1_request;
         p2_request.placement = FieldPlacement::P2;
         let p2 = field_layout(p2_request);
-        assert_near(p2.playfield_center_x, 660.5);
-        assert_near(p2.layout_center_x, 660.5);
+        assert_near(p2.playfield_center_x, 660.75);
+        assert_near(p2.layout_center_x, 660.75);
         assert_near(p2.notefield_offset_x, 20.0);
     }
 
@@ -1281,8 +1280,8 @@ mod tests {
         let mut non_single_request = single_request;
         non_single_request.single_style = false;
         let non_single = field_layout(non_single_request);
-        assert_near(non_single.playfield_center_x, 193.5);
-        assert_near(non_single.layout_center_x, 193.5);
+        assert_near(non_single.playfield_center_x, 193.25);
+        assert_near(non_single.layout_center_x, 193.25);
 
         let mut double_request = single_request;
         double_request.single_style = false;
@@ -1292,6 +1291,14 @@ mod tests {
         let double = field_layout(double_request);
         assert_near(double.playfield_center_x, 447.0);
         assert_near(double.layout_center_x, 427.0);
+
+        let mut shared_request = single_request;
+        shared_request.num_players = 2;
+        shared_request.center_one_player = false;
+        shared_request.shared_sides = true;
+        let shared = field_layout(shared_request);
+        assert_near(shared.playfield_center_x, 407.0);
+        assert_near(shared.layout_center_x, 427.0);
     }
 
     #[test]
@@ -1305,7 +1312,40 @@ mod tests {
         wide_request.screen_width = 1000.0;
         wide_request.screen_center_x = 500.0;
         wide_request.placement = FieldPlacement::P2;
-        assert_near(field_layout(wide_request).playfield_center_x, 713.5);
+        assert_near(field_layout(wide_request).playfield_center_x, 713.75);
+    }
+
+    #[test]
+    fn side_centers_match_native_integer_margin_conversion() {
+        // At 854px the theme returns margins 77.5 / 155 / 77.5. Native
+        // SafeFArg makes those 77 / 155 / 77 before splitting the middle,
+        // yielding Player centers 213.25 and 640.75. Integer outer margins at
+        // 640px and 852px retain the exact quarter-screen centers.
+        for (width, centers) in [
+            (500.0, [90.0, 410.0]),
+            (640.0, [160.0, 480.0]),
+            (642.0, [160.25, 481.75]),
+            (800.0, [200.0, 600.0]),
+            (852.0, [213.0, 639.0]),
+            (854.0, [213.25, 640.75]),
+            (1000.0, [286.25, 713.75]),
+        ] {
+            for num_players in [1, 2] {
+                for (side, placement) in [FieldPlacement::P1, FieldPlacement::P2]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let mut request = request();
+                    request.num_players = num_players;
+                    request.screen_width = width;
+                    request.screen_center_x = width * 0.5;
+                    request.placement = placement;
+                    let layout = field_layout(request);
+                    assert_near(layout.playfield_center_x, centers[side]);
+                    assert_near(layout.layout_center_x, centers[side]);
+                }
+            }
+        }
     }
 
     #[test]
@@ -1444,9 +1484,9 @@ mod tests {
         };
         let layout = field_layout(request);
 
-        assert_near(layout.judgment_x, 225.5);
-        assert_near(layout.combo_x, 205.5);
-        assert_near(layout.error_bar_x, 217.5);
+        assert_near(layout.judgment_x, 225.25);
+        assert_near(layout.combo_x, 205.25);
+        assert_near(layout.error_bar_x, 217.25);
         assert_near(layout.hud_layout.judgment_y, 217.0);
         assert_near(layout.hud_layout.zmod_layout.combo_y, 261.0);
         assert_near(layout.hud_layout.error_bar_y, 221.0);

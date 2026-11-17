@@ -56,6 +56,8 @@ struct DrawItem {
     camera: u8,
     kind: DrawKind,
     vertex_color_encoding: actors::VertexColorEncoding,
+    // Sprite shadow tint semantics survive conversion to mesh geometry.
+    sprite_shadow: bool,
 }
 
 impl DrawItem {
@@ -75,6 +77,7 @@ impl DrawItem {
             camera: 0,
             kind: DrawKind::Sprite,
             vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: true,
         }
     }
 }
@@ -190,6 +193,7 @@ impl FrameBuilder {
             camera,
             kind: DrawKind::Sprite,
             vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: true,
         });
     }
 
@@ -214,6 +218,7 @@ impl FrameBuilder {
             camera,
             kind: DrawKind::Mesh,
             vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: false,
         });
     }
 
@@ -238,6 +243,7 @@ impl FrameBuilder {
             camera,
             kind: DrawKind::TexturedMesh,
             vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: false,
         });
     }
 
@@ -391,6 +397,7 @@ impl FrameBuilder {
             kind,
             payload_index,
             vertex_color_encoding: old.vertex_color_encoding,
+            sprite_shadow: old.sprite_shadow,
         };
     }
 
@@ -5685,7 +5692,7 @@ fn push_shadow_objects_for_range(
                 let mut shadow_tint = color;
                 let native_sprite =
                     item.vertex_color_encoding == actors::VertexColorEncoding::RageVColor;
-                if !native_sprite {
+                if !native_sprite && !item.sprite_shadow {
                     shadow_tint[0] *= instance.tint[0];
                     shadow_tint[1] *= instance.tint[1];
                     shadow_tint[2] *= instance.tint[2];
@@ -5739,11 +5746,12 @@ fn push_shadow_objects_for_range(
                         depth_test_on_fail: source.depth_test_on_fail,
                         clear_depth: source.clear_depth,
                         clear_depth_after: source.clear_depth_after,
-                        sampler: None,
+                        sampler: source.sampler,
                     },
                 );
             }
         }
+        out.items.last_mut().expect("shadow emitted a draw").sprite_shadow = item.sprite_shadow;
         out.encode_vertex_colors(out.len() - 1, item.vertex_color_encoding);
     }
 }
@@ -8337,43 +8345,53 @@ fn calculate_uvs<T: TextureContext + ?Sized>(
     (uv_scale, uv_offset)
 }
 
-#[inline(always)]
-fn fold_sprite_xy_rot(
-    mut flip_x: bool,
-    mut flip_y: bool,
-    mut size_x: f32,
-    mut size_y: f32,
-    rot_x_deg: f32,
-    rot_y_deg: f32,
-) -> (bool, bool, f32, f32) {
-    // Sprite instances only preserve 2D rotation in the fast path. Fold SM's
-    // X/Y rotations into foreshortening plus texture flips so Y=180 mirrors
-    // horizontally instead of becoming an accidental in-plane 180-degree turn.
-    if rot_x_deg == 0.0 && rot_y_deg == 0.0 {
-        return (flip_x, flip_y, size_x, size_y);
-    }
+fn sprite_rotation_matrix(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
+    // RageMatrixRotationXYZ, conjugated into this presenter's Y-up geometry.
+    // Sprite X/Y retain native angles; callers already convert Z to world space.
+    // Keep the native coefficients instead of accumulating three matrix products.
+    let [x, y, z] = [-rot_x_deg, rot_y_deg, rot_z_deg]
+        .map(|degrees| degrees * (std::f32::consts::PI / 180.0));
+    let (sx, cx) = (x.sin(), x.cos());
+    let (sy, cy) = (y.sin(), y.cos());
+    let (sz, cz) = (z.sin(), z.cos());
+    Matrix4::from_cols_array(&[
+        cz * cy, cz * sy * sx + sz * cx, cz * sy * cx + sz * -sx, 0.0,
+        -sz * cy, -sz * sy * sx + cz * cx, -sz * sy * cx + cz * -sx, 0.0,
+        -sy, cy * sx, cy * cx, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ])
+}
 
-    let cos_y = if rot_y_deg == 0.0 {
-        1.0
-    } else {
-        rot_y_deg.to_radians().cos()
-    };
-    size_x *= cos_y.abs();
-    if cos_y.is_sign_negative() {
-        flip_x = !flip_x;
+fn sprite_edge_fade(
+    crop: [f32; 4],
+    visible_size: [f32; 2],
+    fade: [f32; 4],
+    flips: [bool; 2],
+) -> [f32; 4] {
+    // Crop and flips cannot make a zero fade nonzero.
+    if fade.iter().all(|&value| value <= 0.0) {
+        return [0.0; 4];
     }
-
-    let cos_x = if rot_x_deg == 0.0 {
-        1.0
-    } else {
-        rot_x_deg.to_radians().cos()
-    };
-    size_y *= cos_x.abs();
-    if cos_x.is_sign_negative() {
-        flip_y = !flip_y;
+    // Sprite::DrawPrimitives specifies fades before crop. Negative crop can
+    // cancel a fade; opposing fades shrink together to fit the visible area.
+    let mut result = std::array::from_fn::<_, 4, _>(|index| {
+        (fade[index].clamp(0.0, 1.0) + crop[index].min(0.0)).max(0.0)
+    });
+    for axis in 0..2 {
+        let first = axis * 2;
+        let sum = result[first] + result[first + 1];
+        if sum > 0.0 && visible_size[axis] < sum {
+            let scale = visible_size[axis] / sum;
+            result[first] *= scale;
+            result[first + 1] *= scale;
+        }
+        result[first] = (result[first] / visible_size[axis]).clamp(0.0, 1.0);
+        result[first + 1] = (result[first + 1] / visible_size[axis]).clamp(0.0, 1.0);
+        if flips[axis] {
+            result.swap(first, first + 1);
+        }
     }
-
-    (flip_x, flip_y, size_x, size_y)
+    result
 }
 
 // The first tint is diffuse; the optional second tint is glow. Finish each
@@ -8469,8 +8487,6 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         )
     };
 
-    let (flip_x, flip_y, size_x, size_y) =
-        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
     let texture_handle = match texture_handle {
         Some(handle) => handle,
         None => {
@@ -8479,7 +8495,14 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         }
     };
 
-    if skew[0].abs() > f32::EPSILON || skew[1].abs() > f32::EPSILON {
+    let edge_fade = sprite_edge_fade(
+        [cropleft, cropright, croptop, cropbottom],
+        [sx_crop, sy_crop],
+        [fadeleft, faderight, fadetop, fadebottom],
+        [flip_x, flip_y],
+    );
+    let has_xy_rotation = rot_x_deg != 0.0 || rot_y_deg != 0.0;
+    if has_xy_rotation || skew[0].abs() > f32::EPSILON || skew[1].abs() > f32::EPSILON {
         let offset_sin = local_offset_rot_sin_cos[0];
         let offset_cos = local_offset_rot_sin_cos[1];
         let offset_world = Vector2::new(
@@ -8493,11 +8516,16 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         let skew_y = Matrix4::from_cols_array(&[
             1.0, skew[1], 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
         ]);
+        let rotation = if has_xy_rotation {
+            sprite_rotation_matrix(rot_x_deg, rot_y_deg, rot_z_deg)
+        } else {
+            Matrix4::from_rotation_z(rot_z_deg.to_radians())
+        };
         let transform = Matrix4::from_translation(Vector3::new(
             base_center.x + offset_world.x,
             base_center.y + offset_world.y,
             world_z,
-        )) * Matrix4::from_rotation_z(rot_z_deg.to_radians())
+        )) * rotation
             * skew_x
             * skew_y
             * Matrix4::from_translation(Vector3::new(crop_offset.x, crop_offset.y, 0.0))
@@ -8510,6 +8538,7 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
             [0.0, 0.0],
             false,
         );
+        let vertices = sprite_mesh_vertices(edge_fade);
         for (pass, &tint) in tints.iter().enumerate() {
             if tint[3] <= 0.0 {
                 continue;
@@ -8526,27 +8555,19 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                 camera,
                 TexturedMeshPayload {
                     instance,
-                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
-                        skewed_sprite_vertices(),
-                    )),
+                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&vertices)),
                     geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
                     depth_write: false,
                     depth_test_on_fail: false,
                     clear_depth: false,
                     clear_depth_after: false,
-                    // Mesh draws otherwise select repeat addressing. A target
-                    // sprite must retain the target's clamp/nearest sampling.
-                    sampler: renderer::is_render_target_texture(texture_handle).then_some(renderer::MeshSampler {
-                        filter: if renderer::render_target_uses_nearest(texture_handle) {
-                            renderer::SamplerFilter::Nearest
-                        } else {
-                            renderer::SamplerFilter::Linear
-                        },
-                        wrap: renderer::SamplerWrap::Clamp,
-                    }),
+                    // Changing geometry must not change a Sprite's texture
+                    // filtering, addressing, or render-target nearest tag.
+                    sampler: Some(renderer::MeshSampler::Texture),
                 },
             );
+            out.items.last_mut().expect("sprite emitted a mesh").sprite_shadow = true;
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
         }
         return;
@@ -8556,52 +8577,6 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         (0.0, 1.0)
     } else {
         rot_z_deg.to_radians().sin_cos()
-    };
-
-    // Crop and flips cannot make a zero fade nonzero.
-    let edge_fade = if fadeleft <= 0.0 && faderight <= 0.0 && fadetop <= 0.0 && fadebottom <= 0.0 {
-        [0.0; 4]
-    } else {
-        let fl = fadeleft.clamp(0.0, 1.0);
-        let fr = faderight.clamp(0.0, 1.0);
-        let ft = fadetop.clamp(0.0, 1.0);
-        let fb = fadebottom.clamp(0.0, 1.0);
-
-        // StepMania parity (Sprite::DrawPrimitives edge-fade behavior):
-        // - Fade distances are specified in the *pre-crop* [0..1] space.
-        // - Visible (post-crop) fraction is `(1 - crop_a - crop_b)`.
-        // - Negative crop values can "cancel" fade (used by Simply Love transitions).
-        let mut fl_size = (fl + cropleft.min(0.0)).max(0.0);
-        let mut fr_size = (fr + cropright.min(0.0)).max(0.0);
-        let mut ft_size = (ft + croptop.min(0.0)).max(0.0);
-        let mut fb_size = (fb + cropbottom.min(0.0)).max(0.0);
-
-        let sum_x = fl_size + fr_size;
-        if sum_x > 0.0 && sx_crop < sum_x {
-            let s = sx_crop / sum_x;
-            fl_size *= s;
-            fr_size *= s;
-        }
-
-        let sum_y = ft_size + fb_size;
-        if sum_y > 0.0 && sy_crop < sum_y {
-            let s = sy_crop / sum_y;
-            ft_size *= s;
-            fb_size *= s;
-        }
-
-        let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
-        let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
-        let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
-        let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
-
-        if flip_x {
-            std::mem::swap(&mut fl_eff, &mut fr_eff);
-        }
-        if flip_y {
-            std::mem::swap(&mut ft_eff, &mut fb_eff);
-        }
-        [fl_eff, fr_eff, ft_eff, fb_eff]
     };
 
     let mut instance = renderer::SpriteInstanceRaw {
@@ -8630,7 +8605,55 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
     }
 }
 
-fn skewed_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
+fn sprite_mesh_vertices(edge_fade: [f32; 4]) -> Arc<[renderer::TexturedMeshVertex]> {
+    if !edge_fade.iter().any(|&value| value > 0.0) {
+        return Arc::clone(unit_sprite_vertices());
+    }
+    let axis_breaks = |left: f32, right: f32| {
+        let mut values = [0.0, 1.0, 1.0, 1.0];
+        if left > 0.0 { values[2] = left; }
+        if right > 0.0 { values[3] = 1.0 - right; }
+        values.sort_unstable_by(f32::total_cmp);
+        values
+    };
+    let xs = axis_breaks(edge_fade[0], edge_fade[1]);
+    let ys = axis_breaks(edge_fade[2], edge_fade[3]);
+    let vertex = |u: f32, v: f32| {
+        let mut alpha: f32 = 1.0;
+        for (distance, fade) in [u, 1.0 - u, v, 1.0 - v].into_iter().zip(edge_fade) {
+            if fade > 0.0 { alpha = alpha.min((distance / fade).clamp(0.0, 1.0)); }
+        }
+        renderer::TexturedMeshVertex {
+            pos: [u - 0.5, 0.5 - v, 0.0],
+            uv: [u, v],
+            color: [1.0, 1.0, 1.0, alpha],
+            ..renderer::TexturedMeshVertex::default()
+        }
+    };
+    // The sprite shader takes the minimum of four linear edge ramps. At most
+    // nine cells reproduce that surface; each corner cell's diagonal follows
+    // the meeting of its two ramps. Diffuse/glow share this bounded geometry.
+    let mut vertices = [renderer::TexturedMeshVertex::default(); 54];
+    let mut count = 0;
+    for y in ys.windows(2).filter(|pair| pair[0] < pair[1]) {
+        for x in xs.windows(2).filter(|pair| pair[0] < pair[1]) {
+            let [a, b, c, d] = [
+                vertex(x[0], y[0]), vertex(x[1], y[0]),
+                vertex(x[1], y[1]), vertex(x[0], y[1]),
+            ];
+            let cell = if a.color[3] + c.color[3] >= b.color[3] + d.color[3] {
+                [a, b, c, a, c, d]
+            } else {
+                [a, b, d, b, c, d]
+            };
+            vertices[count..count + 6].copy_from_slice(&cell);
+            count += 6;
+        }
+    }
+    Arc::from(&vertices[..count])
+}
+
+fn unit_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
     static VERTICES: OnceLock<Arc<[renderer::TexturedMeshVertex]>> = OnceLock::new();
     VERTICES.get_or_init(|| {
         let white = [1.0; 4];
@@ -9561,6 +9584,7 @@ fn clipped_sprite_object_to_world_rect(
 #[derive(Clone, Copy)]
 struct ClipVertex {
     pos: [f32; 2],
+    world_z: f32,
     uv: [f32; 2],
     color: [f32; 4],
 }
@@ -9680,6 +9704,7 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
             (b.pos[0] - a.pos[0]).mul_add(t, a.pos[0]),
             (b.pos[1] - a.pos[1]).mul_add(t, a.pos[1]),
         ],
+        world_z: (b.world_z - a.world_z).mul_add(t, a.world_z),
         uv: [
             (b.uv[0] - a.uv[0]).mul_add(t, a.uv[0]),
             (b.uv[1] - a.uv[1]).mul_add(t, a.uv[1]),
@@ -9902,7 +9927,13 @@ fn clip_textured_mesh_to_world_rect_inner<const FMA: bool>(
             clip,
             texture_mask,
             recycled_vertices,
-            |pos| affine_world_xy_3d(&transform, pos),
+            |pos| {
+                let xy = affine_world_xy_3d(&transform, pos);
+                let z = transform.z_axis.z.mul_add(
+                    pos[2], transform.y_axis.z.mul_add(pos[1], transform.x_axis.z * pos[0]),
+                ) + transform.w_axis.z;
+                [xy[0], xy[1], z]
+            },
         )
     } else {
         clip_textured_mesh_to_world_rect_with::<FMA>(
@@ -9914,7 +9945,11 @@ fn clip_textured_mesh_to_world_rect_inner<const FMA: bool>(
             clip,
             texture_mask,
             recycled_vertices,
-            |pos| world_xy_3d(&transform, pos),
+            |pos| {
+                let clip = transform * Vector4::new(pos[0], pos[1], pos[2], 1.0);
+                let inv_w = if clip.w.abs() > f32::EPSILON { clip.w.recip() } else { 1.0 };
+                [clip.x * inv_w, clip.y * inv_w, clip.z * inv_w]
+            },
         )
     }
 }
@@ -9930,7 +9965,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
     clip: WorldRect,
     texture_mask: bool,
     mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
-    mut world_xy: impl FnMut([f32; 3]) -> [f32; 2],
+    mut world_xyz: impl FnMut([f32; 3]) -> [f32; 3],
 ) -> Option<ClippedSpriteObject> {
     if vertices.len() < 3 {
         return None;
@@ -9938,9 +9973,9 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
 
     let mut out: Option<Vec<renderer::TexturedMeshVertex>> = None;
     for tri in vertices.as_chunks::<3>().0 {
-        let p0 = world_xy(tri[0].pos);
-        let p1 = world_xy(tri[1].pos);
-        let p2 = world_xy(tri[2].pos);
+        let p0 = world_xyz(tri[0].pos);
+        let p1 = world_xyz(tri[1].pos);
+        let p2 = world_xyz(tri[2].pos);
         let left = p0[0].min(p1[0]).min(p2[0]);
         let right = p0[0].max(p1[0]).max(p2[0]);
         let bottom = p0[1].min(p1[1]).min(p2[1]);
@@ -9962,7 +9997,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
                 ]
                 .map(|(pos, uv, color)| renderer::TexturedMeshVertex {
                     normal: [0.0; 4],
-                    pos: [pos[0], pos[1], 0.0],
+                    pos,
                     uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color,
@@ -9973,17 +10008,20 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
 
         let poly = [
             ClipVertex {
-                pos: p0,
+                pos: [p0[0], p0[1]],
+                world_z: p0[2],
                 uv: uv0,
                 color: tri[0].color,
             },
             ClipVertex {
-                pos: p1,
+                pos: [p1[0], p1[1]],
+                world_z: p1[2],
                 uv: uv1,
                 color: tri[1].color,
             },
             ClipVertex {
-                pos: p2,
+                pos: [p2[0], p2[1]],
+                world_z: p2[2],
                 uv: uv2,
                 color: tri[2].color,
             },
@@ -10004,7 +10042,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
             out.extend([base, clipped[i], clipped[i + 1]].map(|vertex| {
                 renderer::TexturedMeshVertex {
                     normal: [0.0; 4],
-                    pos: [vertex.pos[0], vertex.pos[1], 0.0],
+                    pos: [vertex.pos[0], vertex.pos[1], vertex.world_z],
                     uv: vertex.uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color: vertex.color,
@@ -10148,21 +10186,25 @@ fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
                 offset_world,
                 [-0.5_f32, -0.5_f32],
             ),
+            world_z: center[2],
             uv: [uv_offset[0], uv_offset[1] + uv_scale[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [0.5_f32, -0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1] + uv_scale[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [0.5_f32, 0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [-0.5_f32, 0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0], uv_offset[1]],
             color: [1.0; 4],
         },
@@ -10188,7 +10230,7 @@ fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
         for v in [base, clipped[i], clipped[i + 1]] {
             out.push(renderer::TexturedMeshVertex {
                 normal: [0.0; 4],
-                pos: [v.pos[0], v.pos[1], 0.0],
+                pos: [v.pos[0], v.pos[1], v.world_z],
                 uv: v.uv,
                 tex_matrix_scale: [1.0, 1.0],
                 color: v.color,
@@ -10241,7 +10283,7 @@ mod tests {
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, clipped_sprite_object_to_world_rect, finish_frame,
-        fold_sprite_xy_rot, font_chain_key, gather_finalized_sprites, mul_rgba,
+        font_chain_key, gather_finalized_sprites, mul_rgba,
         prewarm_cached_prepared_inline_text_slot, prewarm_frame_inline_text_slot,
         prewarm_prepared_inline_text_slot, prewarm_u32_text_slot, push_shadow_objects_for_range,
         resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items, str_ptr,
@@ -11454,13 +11496,24 @@ mod tests {
             );
         assert_test_frames_equal(&expected, &actual);
 
-        // Both diffuse and glow passes retain culling through flat draws.
-        assert_eq!(actual.tmesh_instances.len(), 4);
+        // Both Model passes retain culling/environment state through flat draws.
+        // The tilted Sprite also emits diffuse/glow meshes, with no Model state.
+        assert!(actual.sprite_instances.is_empty());
+        assert_eq!(actual.tmesh_instances.len(), 6);
+        let model_texture = TestDrawTextureContext.texture_handle("flat-model.png");
+        let model_instances: Vec<_> = actual.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) if run.texture_handle == model_texture => Some(run),
+            _ => None,
+        }).flat_map(|run| {
+            let start = run.instance_start as usize;
+            &actual.tmesh_instances[start..start + run.instance_count as usize]
+        }).collect();
+        assert_eq!(model_instances.len(), 4);
         let expected_eye = eye
             * Matrix4::from_translation(Vector3::new(16.0, 80.0, 9.0))
             * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
             * environment.transform;
-        for instance in &actual.tmesh_instances {
+        for instance in &model_instances {
             if instance.texture_mask > 0.5 {
                 assert_eq!(instance.sphere_rows, [[0.0; 4]; 3]);
                 assert_eq!(instance.additive_texture, 0);
@@ -11476,7 +11529,22 @@ mod tests {
                 assert_ne!(instance.additive_texture, 0);
             }
         }
-        assert!(actual.tmesh_instances.iter().all(|i| i.cull_mode == 1.0));
+        assert!(model_instances.iter().all(|i| i.cull_mode == 1.0));
+        let sprite_texture = TestDrawTextureContext.texture_handle("flat-note.png");
+        let mut sprite_instances = 0;
+        for run in actual.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) if run.texture_handle == sprite_texture => Some(run),
+            _ => None,
+        }) {
+            let start = run.instance_start as usize;
+            for instance in &actual.tmesh_instances[start..start + run.instance_count as usize] {
+                assert_eq!(instance.cull_mode, 0.0);
+                assert_eq!(instance.sphere_rows, [[0.0; 4]; 3]);
+                assert_eq!(instance.additive_texture, 0);
+                sprite_instances += 1;
+            }
+        }
+        assert_eq!(sprite_instances, 2);
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -13271,26 +13339,6 @@ mod tests {
     }
 
     #[test]
-    fn sprite_rotationy_180_folds_to_horizontal_flip() {
-        let (flip_x, flip_y, size_x, size_y) =
-            fold_sprite_xy_rot(false, false, 22.0, 10.0, 0.0, 180.0);
-        assert!(flip_x);
-        assert!(!flip_y);
-        assert!((size_x - 22.0).abs() < 0.0001);
-        assert!((size_y - 10.0).abs() < 0.0001);
-    }
-
-    #[test]
-    fn sprite_rotationx_180_folds_to_vertical_flip() {
-        let (flip_x, flip_y, size_x, size_y) =
-            fold_sprite_xy_rot(false, false, 22.0, 10.0, 180.0, 0.0);
-        assert!(!flip_x);
-        assert!(flip_y);
-        assert!((size_x - 22.0).abs() < 0.0001);
-        assert!((size_y - 10.0).abs() < 0.0001);
-    }
-
-    #[test]
     fn lock_growth_saturates_future_inserts() {
         let key = TextLayoutKey {
             font_key: 7,
@@ -14764,15 +14812,15 @@ mod tests {
     #[test]
     fn mesh_batches_preserve_sampler_changes() {
         use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
-        let nearest = Some(MeshSampler {
+        let nearest = Some(MeshSampler::Override {
             filter: SamplerFilter::Nearest,
             wrap: SamplerWrap::Repeat,
         });
-        let linear = Some(MeshSampler {
+        let linear = Some(MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Repeat,
         });
-        let clamp = Some(MeshSampler {
+        let clamp = Some(MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Clamp,
         });

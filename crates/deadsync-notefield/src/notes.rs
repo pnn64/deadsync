@@ -965,7 +965,7 @@ impl ScrollTravel<'_> {
             self.request.lane_tipsy,
             self.request.lane_tipsy_offset,
             self.request.lane_tipsy_speed,
-        ) + move_col_extra(self.request.lane_move_y, local_col)
+        ) + move_col_extra(self.request.lane_move_y, local_col) * self.request.field_zoom
     }
 
     #[must_use]
@@ -1840,8 +1840,8 @@ mod tests {
                 assert_eq!(mesh.world_z, 9.0);
                 assert_eq!(
                     mesh.local_transform * glam::Vec4::new(1.0, 2.0, 3.0, 1.0),
-                    glam::Vec4::new(5.0, -1.0, 19.0, 1.0),
-                    "model XYZ is projected by the shared field camera",
+                    glam::Vec4::new(5.0, -11.0, 19.0, 1.0),
+                    "native Model Y flip precedes actor translation and shared camera projection",
                 );
             }
         }
@@ -2614,6 +2614,62 @@ mod tests {
     }
 
     #[test]
+    fn slow_speed_range_limits_heads_and_preserves_crossing_holds() {
+        for ratio in [0.1, 0.75] {
+            let timing = TimingData::from_segments(
+                0.0,
+                0.0,
+                &TimingSegments {
+                    bpms: vec![(0.0, 120.0)],
+                    speeds: vec![SpeedSegment {
+                        beat: 0.0,
+                        ratio,
+                        delay: 0.0,
+                        unit: SpeedUnit::Beats,
+                    }],
+                    ..TimingSegments::default()
+                },
+                &[],
+            );
+            let mut request = request(&timing, ScrollSpeedSetting::XMod(1.0), 96.35323);
+            request.draw_distance_before_targets = 6000.0;
+            let travel = scroll_travel(request);
+            let range = travel
+                .visible_row_range()
+                .expect("finite native row range");
+            let notes = vec![note(112.0), hold(112.25, 113.0), hold(113.5, 114.0)];
+            let note_itg_rows: Vec<_> = notes
+                .iter()
+                .map(|note| beat_to_note_row(note.beat))
+                .collect();
+            let note_indices = [0usize, 1, 2];
+            let note_bounds = lane_window_bounds_by_note_row_from_cursor(
+                &note_itg_rows,
+                &note_indices,
+                Some(range),
+                &mut LaneWindowCursor::default(),
+            )
+            .expect("finite row range");
+            let hold_indices = [1usize, 2];
+            let hold_bounds = lane_hold_window_bounds_by_note_row_from_cursor(
+                &notes,
+                &note_itg_rows,
+                &hold_indices,
+                Some(range),
+                &mut LaneWindowCursor::default(),
+            )
+            .expect("finite row range");
+            if ratio < 0.75 {
+                assert_eq!(&note_indices[note_bounds.0..note_bounds.1], &[0, 1]);
+                assert_eq!(&hold_indices[hold_bounds.0..hold_bounds.1], &[1]);
+            } else {
+                assert_eq!(&note_indices[note_bounds.0..note_bounds.1], &[0, 1, 2]);
+                assert_eq!(&hold_indices[hold_bounds.0..hold_bounds.1], &[1, 2]);
+            }
+        }
+    }
+
+    #[test]
     fn planned_rows_bound_notes_and_keep_overlapping_holds() {
         let timing = timing();
         let travel = scroll_travel(request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0));
@@ -2647,6 +2703,33 @@ mod tests {
         assert!(hold_overlaps_visible_window(0, &notes, Some(range)));
         let hold_end = notes[0].hold.as_ref().expect("hold fixture").end_beat;
         assert_near(travel.raw_beat(hold_end), 0.0);
+    }
+
+    #[test]
+    fn lane_projection_scales_move_y_with_the_native_field_zoom() {
+        let timing = timing();
+        let move_y = [-0.25, 0.5];
+        for mini in [-0.1, 0.0, 1.0, 2.0, 3.0] {
+            let field_zoom = 1.0 - mini * 0.5;
+            let mut request = request(&timing, ScrollSpeedSetting::XMod(1.0), 4.0);
+            request.field_zoom = field_zoom;
+            request.lane_move_y = &move_y;
+            let travel = scroll_travel(request);
+            for (column, local_offset) in [-16.0, 32.0].into_iter().enumerate() {
+                let expected_offset = local_offset * field_zoom;
+                assert_near(travel.lane_offset(column), expected_offset);
+                for direction in [-1.0, 1.0] {
+                    let raw = travel.raw_beat(5.0);
+                    let expected = 100.0 + direction * travel.adjusted(raw) + expected_offset;
+                    let y = travel.lane_y(column, 100.0, direction, raw);
+                    assert_near(y, expected);
+                    assert_near(
+                        travel.adjusted_from_screen_y(column, 100.0, direction, y),
+                        travel.adjusted(raw),
+                    );
+                }
+            }
+        }
     }
 
     #[test]

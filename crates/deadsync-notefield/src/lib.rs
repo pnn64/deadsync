@@ -1451,21 +1451,31 @@ mod tests {
             VisualEffectParams {
                 tiny: 0.25,
                 confusion_offset: 0.5,
+                confusion_x_offset: 0.25,
+                confusion_y_offset: -0.5,
                 bumpy: 0.75,
                 ..VisualEffectParams::default()
             },
             1,
             &[9.0, -0.5],
             &[9.0, f32::NAN],
+            &[9.0, 1.0],
+            &[9.0, -0.25],
             &[9.0, 0.25],
         );
         assert!((params.tiny + 0.25).abs() <= 1e-6);
         assert!((params.confusion_offset - 0.5).abs() <= 1e-6);
+        assert!((params.confusion_x_offset - 1.25).abs() <= 1e-6);
+        assert!((params.confusion_y_offset + 0.75).abs() <= 1e-6);
         assert!((params.bumpy - 1.0).abs() <= 1e-6);
 
-        let params = visual_effect_params_for_col(params, 2, &[0.0], &[0.0, 0.0, 0.25], &[0.0]);
+        let params = visual_effect_params_for_col(
+            params, 2, &[0.0], &[0.0, 0.0, 0.25], &[0.0], &[0.0, 0.0, f32::INFINITY], &[0.0],
+        );
         assert!((params.tiny + 0.25).abs() <= 1e-6);
         assert!((params.confusion_offset - 0.75).abs() <= 1e-6);
+        assert!((params.confusion_x_offset - 1.25).abs() <= 1e-6);
+        assert!((params.confusion_y_offset + 0.75).abs() <= 1e-6);
         assert!((params.bumpy - 1.0).abs() <= 1e-6);
     }
 
@@ -2615,6 +2625,7 @@ mod tests {
                     super::fill_gameplay_lane_effects(
                         &visual,
                         0.37,
+                        1.0,
                         num_cols,
                         &mut [super::VisualEffectParams::default(); 8],
                         &mut [0.0; 8],
@@ -2799,6 +2810,7 @@ mod tests {
         fill_gameplay_lane_effects(
             &visual,
             1.25,
+            1.0,
             4,
             &mut params,
             &mut lane_offsets,
@@ -2842,6 +2854,30 @@ mod tests {
                 move_y_offsets[local_col].to_bits(),
                 move_col_extra(&visual.move_y_cols, local_col).to_bits(),
             );
+        }
+    }
+
+    #[test]
+    fn gameplay_lane_cache_scales_move_y_with_native_mini_zoom() {
+        let mut visual = VisualEffects::default();
+        visual.move_y_cols[..4].copy_from_slice(&[-0.25, 0.5, -2.0, 0.0]);
+        for mini in [-0.1, 0.0, 1.0, 2.0, 3.0] {
+            let field_zoom = 1.0 - mini * 0.5;
+            let mut offsets = [0.0; 4];
+            let mut tipsy = [0.0; 4];
+            let mut moves = [0.0; 4];
+            fill_gameplay_lane_effects(
+                &visual, 0.0, field_zoom, 4,
+                &mut [VisualEffectParams::default(); 4],
+                &mut offsets, &mut tipsy, &mut moves,
+            );
+            // ArrowEffects::GetMoveY supplies local pixels; NoteField's parent
+            // transform scales them even for zero or negative Mini zoom.
+            for (column, local) in [-16.0, 32.0, -128.0, 0.0].into_iter().enumerate() {
+                assert_eq!(moves[column], local * field_zoom);
+                assert_eq!(offsets[column], local * field_zoom);
+                assert_eq!(tipsy[column], 0.0);
+            }
         }
     }
 
@@ -3193,6 +3229,7 @@ mod tests {
         super::fill_gameplay_lane_effects(
             &visual,
             2.25,
+            1.0,
             4,
             &mut [super::VisualEffectParams::default(); 4],
             &mut lane_offsets,

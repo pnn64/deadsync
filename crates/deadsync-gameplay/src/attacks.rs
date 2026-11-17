@@ -479,7 +479,7 @@ pub struct ParsedAttackMods {
     pub appearance: AppearanceOverrides,
     pub appearance_speed: AppearanceOverrides,
     pub visibility: VisibilityOverrides,
-    pub dark_col_speed: [Option<f32>; MAX_COLS],
+    pub visibility_speed: VisibilityOverrides,
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -506,7 +506,7 @@ impl Default for ParsedAttackMods {
             appearance: AppearanceOverrides::default(),
             appearance_speed: AppearanceOverrides::default(),
             visibility: VisibilityOverrides::default(),
-            dark_col_speed: [None; MAX_COLS],
+            visibility_speed: VisibilityOverrides::default(),
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
@@ -582,8 +582,27 @@ pub fn begin_outro_attack_visual_clear(
     outro_attack_visual[..player_count].copy_from_slice(&active_attack_visual[..player_count]);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AttackMaskClock {
+    /// PlayerState updates before ScreenGameplay samples the next music position.
+    NativePlayerState,
+    /// Compiled Lua writes are evaluated at this frame's visible song position.
+    LuaScreen,
+}
+
+impl AttackMaskClock {
+    #[inline(always)]
+    const fn sample(self, now: f32, native_attack_second: f32) -> f32 {
+        match self {
+            Self::NativePlayerState => native_attack_second,
+            Self::LuaScreen => now,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AttackMaskWindow {
+    pub clock: AttackMaskClock,
     pub start_second: f32,
     pub end_second: f32,
     pub sustain_end_second: f32,
@@ -600,7 +619,7 @@ pub struct AttackMaskWindow {
     pub appearance: AppearanceOverrides,
     pub appearance_speed: AppearanceOverrides,
     pub visibility: VisibilityOverrides,
-    pub dark_col_speed: [Option<f32>; MAX_COLS],
+    pub visibility_speed: VisibilityOverrides,
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -624,6 +643,7 @@ pub fn build_song_lua_constant_attack_mask_window(
         return None;
     }
     Some(AttackMaskWindow {
+        clock: AttackMaskClock::LuaScreen,
         start_second,
         end_second,
         sustain_end_second: f32::MAX,
@@ -640,7 +660,7 @@ pub fn build_song_lua_constant_attack_mask_window(
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
-        dark_col_speed: mods.dark_col_speed,
+        visibility_speed: mods.visibility_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -660,6 +680,7 @@ pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWi
         return None;
     }
     Some(AttackMaskWindow {
+        clock: AttackMaskClock::NativePlayerState,
         start_second: f32::MIN,
         end_second: f32::MAX,
         sustain_end_second: f32::MAX,
@@ -676,7 +697,7 @@ pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWi
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
-        dark_col_speed: mods.dark_col_speed,
+        visibility_speed: mods.visibility_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -767,6 +788,8 @@ pub enum SongLuaEaseMaskTarget {
     VisualConfusionOffset,
     VisualConfusionXOffset,
     VisualConfusionOffsetColumn(usize),
+    VisualConfusionXOffsetColumn(usize),
+    VisualConfusionYOffsetColumn(usize),
     VisualFlip,
     VisualInvert,
     VisualTornado,
@@ -2465,6 +2488,22 @@ fn visit_song_lua_mod_targets(
         );
         return true;
     }
+    if let Some(col) = mod_column_suffix(key, "confusionxoffset") {
+        push(
+            SongLuaEaseMaskTarget::VisualConfusionXOffsetColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
+    if let Some(col) = mod_column_suffix(key, "confusionyoffset") {
+        push(
+            SongLuaEaseMaskTarget::VisualConfusionYOffsetColumn(col),
+            pct_from,
+            pct_to,
+        );
+        return true;
+    }
 
     match key {
         "boost" => push(SongLuaEaseMaskTarget::AccelBoost, pct_from, pct_to),
@@ -3355,6 +3394,16 @@ pub fn song_lua_apply_eased_target(
                 visual.confusion_offset_cols[col] = Some(value);
             }
         }
+        SongLuaEaseMaskTarget::VisualConfusionXOffsetColumn(col) => {
+            if col < MAX_COLS {
+                visual.confusion_x_offset_cols[col] = Some(value);
+            }
+        }
+        SongLuaEaseMaskTarget::VisualConfusionYOffsetColumn(col) => {
+            if col < MAX_COLS {
+                visual.confusion_y_offset_cols[col] = Some(value);
+            }
+        }
         SongLuaEaseMaskTarget::VisualFlip => visual.flip = Some(value),
         SongLuaEaseMaskTarget::VisualInvert => visual.invert = Some(value),
         SongLuaEaseMaskTarget::VisualTornado => visual.tornado = Some(value),
@@ -3509,6 +3558,7 @@ fn attack_mask_window_from_values(
         return None;
     }
     Some(AttackMaskWindow {
+        clock: AttackMaskClock::NativePlayerState,
         start_second,
         end_second,
         sustain_end_second: end_second,
@@ -3530,7 +3580,7 @@ fn attack_mask_window_from_values(
         appearance: mods.appearance,
         appearance_speed: mods.appearance_speed,
         visibility: mods.visibility,
-        dark_col_speed: mods.dark_col_speed,
+        visibility_speed: mods.visibility_speed,
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
@@ -3662,6 +3712,16 @@ fn song_lua_constant_sets_target(window: &AttackMaskWindow, target: SongLuaEaseM
         SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) => window
             .visual
             .confusion_offset_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualConfusionXOffsetColumn(col) => window
+            .visual
+            .confusion_x_offset_cols
+            .get(col)
+            .is_some_and(Option::is_some),
+        SongLuaEaseMaskTarget::VisualConfusionYOffsetColumn(col) => window
+            .visual
+            .confusion_y_offset_cols
             .get(col)
             .is_some_and(Option::is_some),
         SongLuaEaseMaskTarget::VisualFlip => window.visual.flip.is_some(),
@@ -5099,6 +5159,20 @@ fn mark_visual_targets(targets: &mut VisualOverrides, visual: VisualOverrides) {
     {
         mark_active_target(target, value);
     }
+    for (target, value) in targets
+        .confusion_x_offset_cols
+        .iter_mut()
+        .zip(visual.confusion_x_offset_cols)
+    {
+        mark_active_target(target, value);
+    }
+    for (target, value) in targets
+        .confusion_y_offset_cols
+        .iter_mut()
+        .zip(visual.confusion_y_offset_cols)
+    {
+        mark_active_target(target, value);
+    }
     mark_active_target(&mut targets.flip, visual.flip);
     mark_active_target(&mut targets.invert, visual.invert);
     mark_active_target(&mut targets.tornado, visual.tornado);
@@ -5175,7 +5249,7 @@ pub fn collect_active_attack_targets(
     windows: &[AttackMaskWindow],
     now: f32,
 ) -> AttackActiveTargets {
-    collect_active_attack_targets_selected(windows, None, now)
+    collect_active_attack_targets_selected(windows, None, now, now)
 }
 
 #[inline(always)]
@@ -5197,10 +5271,12 @@ fn collect_active_attack_targets_selected(
     windows: &[AttackMaskWindow],
     indices: Option<&[usize]>,
     now: f32,
+    native_attack_second: f32,
 ) -> AttackActiveTargets {
     let mut targets = AttackActiveTargets::default();
     for_each_selected(windows, indices, |window| {
-        if now < window.start_second || now >= window.end_second {
+        let second = window.clock.sample(now, native_attack_second);
+        if !attack_window_started(window, second) || second >= window.end_second {
             return;
         }
         if window.clear_all {
@@ -5245,7 +5321,7 @@ pub struct ActiveAttackMaskValues {
     pub appearance_target: AppearanceEffects,
     pub appearance_speed: AppearanceEffects,
     pub visibility: VisibilityOverrides,
-    pub dark_col_speed: [Option<f32>; MAX_COLS],
+    pub visibility_speed: VisibilityOverrides,
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
@@ -5271,7 +5347,7 @@ impl ActiveAttackMaskValues {
             appearance_target: base_appearance,
             appearance_speed: AppearanceEffects::approach_speeds(),
             visibility: VisibilityOverrides::default(),
-            dark_col_speed: [None; MAX_COLS],
+            visibility_speed: VisibilityOverrides::default(),
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
@@ -5292,6 +5368,7 @@ impl ActiveAttackMaskValues {
 #[derive(Clone, Copy, Debug)]
 pub struct ActiveAttackRefreshInput<'a> {
     pub now: f32,
+    pub native_attack_second: f32,
     pub delta_time: f32,
     pub attacks_cleared_for_outro: bool,
     pub base_appearance: AppearanceEffects,
@@ -5578,16 +5655,96 @@ impl ActiveWindowIndex {
 
 #[derive(Clone, Debug, Default)]
 struct GameplayPlayerWindowIndex {
-    masks: ActiveWindowIndex,
+    native_masks: ActiveWindowIndex,
+    screen_masks: ActiveWindowIndex,
+    // Both sources retain their original indices so overlapping writes keep
+    // authored precedence. Rebuild this reserved merge only at index changes.
+    merged_masks: Vec<usize>,
+    max_active_masks: usize,
     eases: ActiveWindowIndex,
     // Same song-lifetime capacity and counters as eases, sampled at the prior
     // update because native Current advances before Lua changes Song targets.
     approach_eases: ActiveWindowIndex,
 }
 
+impl GameplayPlayerWindowIndex {
+    fn update_masks(&mut self, windows: &[AttackMaskWindow], now: f32, native_second: f32) {
+        let prior_stats = [self.native_masks.stats, self.screen_masks.stats];
+        self.native_masks.update(
+            windows,
+            native_second,
+            |window| attack_index_start(window, AttackMaskClock::NativePlayerState),
+            attack_window_expiry,
+            |window, second| window.clock == AttackMaskClock::NativePlayerState
+                && attack_window_active(window, second),
+        );
+        self.screen_masks.update(
+            windows,
+            now,
+            |window| attack_index_start(window, AttackMaskClock::LuaScreen),
+            attack_window_expiry,
+            |window, second| window.clock == AttackMaskClock::LuaScreen
+                && attack_window_active(window, second),
+        );
+        if prior_stats == [self.native_masks.stats, self.screen_masks.stats] {
+            return;
+        }
+        self.merged_masks.clear();
+        // Normally reserved by new(); this also handles a replaced test source.
+        self.merged_masks.reserve(windows.len());
+        let mut native = self.native_masks.active.iter().copied().peekable();
+        let mut screen = self.screen_masks.active.iter().copied().peekable();
+        while let (Some(&left), Some(&right)) = (native.peek(), screen.peek()) {
+            if left < right {
+                self.merged_masks.push(left);
+                native.next();
+            } else {
+                self.merged_masks.push(right);
+                screen.next();
+            }
+        }
+        self.merged_masks.extend(native);
+        self.merged_masks.extend(screen);
+        self.max_active_masks = self.max_active_masks.max(self.merged_masks.len());
+    }
+
+    fn mask_stats(&self) -> GameplayWindowIndexStats {
+        let left = self.native_masks.stats;
+        let right = self.screen_masks.stats;
+        GameplayWindowIndexStats {
+            source_rebuilds: left.source_rebuilds.saturating_add(right.source_rebuilds),
+            time_rebuilds: left.time_rebuilds.saturating_add(right.time_rebuilds),
+            activations: left.activations.saturating_add(right.activations),
+            pruned: left.pruned.saturating_add(right.pruned),
+            max_active: self.max_active_masks,
+        }
+    }
+}
+
+#[inline(always)]
+fn attack_index_start(window: &AttackMaskWindow, clock: AttackMaskClock) -> f32 {
+    if window.clock != clock {
+        return f32::INFINITY;
+    }
+    match clock {
+        // PlayerState's strict start comparison activates on the next possible
+        // f32 music position. Keep an exact-start window queued for that frame.
+        AttackMaskClock::NativePlayerState => window.start_second.next_up(),
+        AttackMaskClock::LuaScreen => window.start_second,
+    }
+}
+
+#[inline(always)]
+fn attack_window_started(window: &AttackMaskWindow, now: f32) -> bool {
+    match window.clock {
+        AttackMaskClock::NativePlayerState => now > window.start_second,
+        AttackMaskClock::LuaScreen => now >= window.start_second,
+    }
+}
+
 #[inline(always)]
 fn attack_window_active(window: &AttackMaskWindow, now: f32) -> bool {
-    now >= window.start_second
+    attack_window_started(window, now)
         && now < window.sustain_end_second
         && (now < window.end_second || window.persist_after_end)
 }
@@ -5646,7 +5803,14 @@ impl GameplayAttackRuntimeState {
         song_lua_ease_windows: [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
     ) -> Self {
         let window_indices = std::array::from_fn(|player| GameplayPlayerWindowIndex {
-            masks: ActiveWindowIndex::new(&mask_windows[player], |window| window.start_second),
+            native_masks: ActiveWindowIndex::new(&mask_windows[player], |window| {
+                attack_index_start(window, AttackMaskClock::NativePlayerState)
+            }),
+            screen_masks: ActiveWindowIndex::new(&mask_windows[player], |window| {
+                attack_index_start(window, AttackMaskClock::LuaScreen)
+            }),
+            merged_masks: Vec::with_capacity(mask_windows[player].len()),
+            max_active_masks: 0,
             eases: ActiveWindowIndex::new(&song_lua_ease_windows[player], |window| {
                 window.start_second
             }),
@@ -5663,16 +5827,14 @@ impl GameplayAttackRuntimeState {
     }
 
     pub fn update_window_indices(&mut self, player: usize, now: f32) {
+        self.update_window_indices_at_times(player, now, now);
+    }
+
+    fn update_window_indices_at_times(&mut self, player: usize, now: f32, native_second: f32) {
         let Some(indices) = self.window_indices.get_mut(player) else {
             return;
         };
-        indices.masks.update(
-            &self.mask_windows[player],
-            now,
-            |window| window.start_second,
-            attack_window_expiry,
-            attack_window_active,
-        );
+        indices.update_masks(&self.mask_windows[player], now, native_second);
         indices.eases.update(
             &self.song_lua_ease_windows[player],
             now,
@@ -5685,7 +5847,9 @@ impl GameplayAttackRuntimeState {
     /// Discard update clocks when evaluating a seek destination.
     pub fn reset_window_times(&mut self) {
         for indices in &mut self.window_indices {
-            indices.masks.reset_time();
+            indices.native_masks.reset_time();
+            indices.screen_masks.reset_time();
+            indices.merged_masks.clear();
             indices.eases.reset_time();
             indices.approach_eases.reset_time();
         }
@@ -5756,6 +5920,24 @@ impl GameplayAttackRuntimeState {
         base_effects: impl FnOnce() -> AttackBaseEffects,
         player_transform: SongLuaPlayerTransform,
     ) -> Option<SongLuaPlayerTransform> {
+        self.refresh_player_at_times(
+            player, now, now, delta_time, base_appearance, base_effects, player_transform,
+        )
+    }
+
+    /// Timed chart attacks use the prior raw PlayerState position. Lua windows
+    /// use the current visible position, after ScreenGameplay updates its clock.
+    #[allow(clippy::too_many_arguments)]
+    pub fn refresh_player_at_times(
+        &mut self,
+        player: usize,
+        now: f32,
+        native_attack_second: f32,
+        delta_time: f32,
+        base_appearance: AppearanceEffects,
+        base_effects: impl FnOnce() -> AttackBaseEffects,
+        player_transform: SongLuaPlayerTransform,
+    ) -> Option<SongLuaPlayerTransform> {
         if player >= MAX_PLAYERS
             || self.idle_player_settled(player, base_appearance, player_transform)
         {
@@ -5769,11 +5951,12 @@ impl GameplayAttackRuntimeState {
             &self.song_lua_ease_windows[player], approach_second,
             |window| window.start_second, ease_window_expiry, ease_window_active,
         );
-        self.update_window_indices(player, now);
+        self.update_window_indices_at_times(player, now, native_attack_second);
         let (attack_window_indices, ease_window_indices) = self.active_window_indices(player);
         let output = refresh_active_attack_player_indexed(
             ActiveAttackRefreshInput {
                 now,
+                native_attack_second,
                 delta_time,
                 attacks_cleared_for_outro: self.cleared_for_outro,
                 base_appearance,
@@ -5826,7 +6009,7 @@ impl GameplayAttackRuntimeState {
             .get(player)
             .map_or((&[], &[]), |indices| {
                 (
-                    indices.masks.active.as_slice(),
+                    indices.merged_masks.as_slice(),
                     indices.eases.active.as_slice(),
                 )
             })
@@ -5839,7 +6022,7 @@ impl GameplayAttackRuntimeState {
     ) -> Option<(GameplayWindowIndexStats, GameplayWindowIndexStats)> {
         self.window_indices
             .get(player)
-            .map(|indices| (indices.masks.stats, indices.eases.stats))
+            .map(|indices| (indices.mask_stats(), indices.eases.stats))
     }
 }
 
@@ -5960,9 +6143,12 @@ fn apply_song_lua_approach_targets(
             player,
         );
         match window.target {
+            SongLuaEaseMaskTarget::VisibilityDark => attack.visibility_speed.dark = Some(speed),
             SongLuaEaseMaskTarget::VisibilityDarkColumn(col) if col < MAX_COLS => {
-                attack.dark_col_speed[col] = Some(speed)
+                attack.visibility_speed.dark_cols[col] = Some(speed)
             }
+            SongLuaEaseMaskTarget::VisibilityBlind => attack.visibility_speed.blind = Some(speed),
+            SongLuaEaseMaskTarget::VisibilityCover => attack.visibility_speed.cover = Some(speed),
             SongLuaEaseMaskTarget::FailSetting
             | SongLuaEaseMaskTarget::VisualModTimerType
             | SongLuaEaseMaskTarget::VisualDizzyHolds
@@ -6258,6 +6444,12 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualConfusionOffsetColumn(col) if col < MAX_COLS => {
                 attack.visual_speed.confusion_offset_cols[col] = Some(speed)
             }
+            SongLuaEaseMaskTarget::VisualConfusionXOffsetColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.confusion_x_offset_cols[col] = Some(speed)
+            }
+            SongLuaEaseMaskTarget::VisualConfusionYOffsetColumn(col) if col < MAX_COLS => {
+                attack.visual_speed.confusion_y_offset_cols[col] = Some(speed)
+            }
             SongLuaEaseMaskTarget::VisualBumpyColumn(col) if col < MAX_COLS => {
                 attack.visual_speed.bumpy_cols[col] = Some(speed)
             }
@@ -6358,18 +6550,21 @@ pub fn apply_active_attack_mask_window(
 
     if let Some(v) = window.visibility.dark {
         values.visibility.dark = Some(v);
+        values.visibility_speed.dark = window.visibility_speed.dark;
     }
     for col in 0..MAX_COLS {
         if let Some(value) = window.visibility.dark_cols[col] {
             values.visibility.dark_cols[col] = Some(value);
-            values.dark_col_speed[col] = window.dark_col_speed[col];
+            values.visibility_speed.dark_cols[col] = window.visibility_speed.dark_cols[col];
         }
     }
     if let Some(v) = window.visibility.blind {
         values.visibility.blind = Some(v);
+        values.visibility_speed.blind = window.visibility_speed.blind;
     }
     if let Some(v) = window.visibility.cover {
         values.visibility.cover = Some(v);
+        values.visibility_speed.cover = window.visibility_speed.cover;
     }
 
     apply_active_scroll_window(values, window, active_targets, persisted);
@@ -6457,6 +6652,35 @@ fn refresh_idle_attack_player(
         false,
         input.delta_time,
     );
+    if state.active_attack_visual.any() {
+        approach_visual_overrides_to_target(
+            &mut state.active_attack_visual,
+            VisualOverrides::default(),
+            VisualOverrides::default(),
+            input.base_visual,
+            input.delta_time,
+        );
+    }
+    approach_visibility_overrides(
+        &mut state.active_attack_visibility,
+        VisibilityOverrides::default(),
+        VisibilityOverrides::default(),
+        input.delta_time,
+    );
+    approach_scroll_overrides_to_target(
+        &mut state.active_attack_scroll,
+        ScrollOverrides::default(),
+        ScrollOverrides::default(),
+        input.base_scroll,
+        input.delta_time,
+    );
+    approach_attack_mini_percent_to_target(
+        &mut state.active_attack_mini_percent,
+        None,
+        input.base_mini_percent,
+        None,
+        input.delta_time,
+    );
     let appearance = state.attack_current_appearance;
     ActiveAttackRefreshOutput {
         attack_target_appearance: input.base_appearance,
@@ -6467,13 +6691,13 @@ fn refresh_idle_attack_player(
         active_attack_accel: state.active_attack_accel,
         active_fail_type: None,
         active_attack_flags: state.active_attack_flags,
-        active_attack_visual: VisualOverrides::default(),
+        active_attack_visual: state.active_attack_visual,
         active_attack_appearance: appearance,
-        active_attack_visibility: VisibilityOverrides::default(),
-        active_attack_scroll: ScrollOverrides::default(),
+        active_attack_visibility: state.active_attack_visibility,
+        active_attack_scroll: state.active_attack_scroll,
         active_attack_perspective: PerspectiveOverrides::default(),
         active_attack_scroll_speed: None,
-        active_attack_mini_percent: None,
+        active_attack_mini_percent: state.active_attack_mini_percent,
         outro_attack_visual: state.outro_attack_visual,
         player_transform: SongLuaPlayerTransformValues::default(),
     }
@@ -6522,16 +6746,14 @@ fn refresh_active_attack_player_full(
         input.attack_windows,
         attack_window_indices,
         input.now,
+        input.native_attack_second,
     );
     let mut attack = ActiveAttackMaskValues::new(input.base_appearance);
     let mut player_transform = SongLuaPlayerTransformValues::default();
     for_each_selected(input.attack_windows, attack_window_indices, |window| {
-        let persisted = window.persist_after_end && input.now >= window.end_second;
-        if !input.attacks_cleared_for_outro
-            && input.now >= window.start_second
-            && input.now < window.sustain_end_second
-            && (input.now < window.end_second || persisted)
-        {
+        let second = window.clock.sample(input.now, input.native_attack_second);
+        let persisted = window.persist_after_end && second >= window.end_second;
+        if !input.attacks_cleared_for_outro && attack_window_active(window, second) {
             apply_active_attack_mask_window(
                 &mut attack,
                 window,
@@ -6626,14 +6848,13 @@ fn refresh_active_attack_player_full(
     );
     attack.visual = state.active_attack_visual;
 
-    approach_attack_cols(
-        &mut state.active_attack_visibility.dark_cols,
-        attack.visibility.dark_cols,
-        [0.0; MAX_COLS],
-        attack.dark_col_speed,
+    approach_visibility_overrides(
+        &mut state.active_attack_visibility,
+        attack.visibility,
+        attack.visibility_speed,
         input.delta_time,
     );
-    attack.visibility.dark_cols = state.active_attack_visibility.dark_cols;
+    attack.visibility = state.active_attack_visibility;
 
     let base_scroll = if attack.clear_all {
         ScrollEffects::default()
@@ -7333,6 +7554,24 @@ fn apply_active_visual_window(
         window.visual.confusion_offset_cols,
         window.visual_speed.confusion_offset_cols,
         active_targets.visual.confusion_offset_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.confusion_x_offset_cols,
+        &mut values.visual_speed.confusion_x_offset_cols,
+        window.visual.confusion_x_offset_cols,
+        window.visual_speed.confusion_x_offset_cols,
+        active_targets.visual.confusion_x_offset_cols,
+        active_clear_all,
+        persisted,
+    );
+    apply_active_visual_cols(
+        &mut values.visual.confusion_y_offset_cols,
+        &mut values.visual_speed.confusion_y_offset_cols,
+        window.visual.confusion_y_offset_cols,
+        window.visual_speed.confusion_y_offset_cols,
+        active_targets.visual.confusion_y_offset_cols,
         active_clear_all,
         persisted,
     );
@@ -8102,7 +8341,7 @@ fn apply_runtime_mod(
     if let Some(col) = mod_column_suffix(key, "dark") {
         set_approached_mod(
             &mut out.visibility.dark_cols[col],
-            &mut out.dark_col_speed[col],
+            &mut out.visibility_speed.dark_cols[col],
             attack_level(percent_value),
             approach_speed,
         );
@@ -8157,6 +8396,24 @@ fn apply_runtime_mod(
         set_approached_mod(
             &mut out.visual.confusion_offset_cols[col],
             &mut out.visual_speed.confusion_offset_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "confusionxoffset") {
+        set_approached_mod(
+            &mut out.visual.confusion_x_offset_cols[col],
+            &mut out.visual_speed.confusion_x_offset_cols[col],
+            attack_level(percent_value),
+            approach_speed,
+        );
+        return;
+    }
+    if let Some(col) = mod_column_suffix(key, "confusionyoffset") {
+        set_approached_mod(
+            &mut out.visual.confusion_y_offset_cols[col],
+            &mut out.visual_speed.confusion_y_offset_cols[col],
             attack_level(percent_value),
             approach_speed,
         );
@@ -8994,9 +9251,24 @@ fn apply_runtime_mod(
             out.appearance.random_vanish = attack_level(percent_value);
             out.appearance_speed.random_vanish = Some(approach_speed);
         }
-        "dark" => out.visibility.dark = attack_level(percent_value),
-        "blind" => out.visibility.blind = attack_level(percent_value),
-        "cover" => out.visibility.cover = attack_level(percent_value),
+        "dark" => set_approached_mod(
+            &mut out.visibility.dark,
+            &mut out.visibility_speed.dark,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "blind" => set_approached_mod(
+            &mut out.visibility.blind,
+            &mut out.visibility_speed.blind,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "cover" => set_approached_mod(
+            &mut out.visibility.cover,
+            &mut out.visibility_speed.cover,
+            attack_level(percent_value),
+            approach_speed,
+        ),
         "tilt" => out.perspective.tilt = attack_level(percent_value),
         "skew" => out.perspective.skew = attack_level(percent_value),
         "overhead" => {
@@ -9293,6 +9565,8 @@ pub fn merge_attack_accel_effects(base: AccelEffects, attack: AccelOverrides) ->
 #[must_use]
 pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides) -> VisualEffects {
     let mut confusion_offset_cols = base.confusion_offset_cols;
+    let mut confusion_x_offset_cols = base.confusion_x_offset_cols;
+    let mut confusion_y_offset_cols = base.confusion_y_offset_cols;
     let mut bumpy_cols = base.bumpy_cols;
     let mut tiny_cols = base.tiny_cols;
     let mut move_x_cols = base.move_x_cols;
@@ -9301,6 +9575,12 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
     for i in 0..MAX_COLS {
         if let Some(v) = attack.confusion_offset_cols[i].filter(|v| v.is_finite()) {
             confusion_offset_cols[i] = v;
+        }
+        if let Some(v) = attack.confusion_x_offset_cols[i].filter(|v| v.is_finite()) {
+            confusion_x_offset_cols[i] = v;
+        }
+        if let Some(v) = attack.confusion_y_offset_cols[i].filter(|v| v.is_finite()) {
+            confusion_y_offset_cols[i] = v;
         }
         if let Some(v) = attack.bumpy_cols[i].filter(|v| v.is_finite()) {
             bumpy_cols[i] = v;
@@ -9390,6 +9670,8 @@ pub fn merge_attack_visual_effects(base: VisualEffects, attack: VisualOverrides)
             attack.confusion_x_offset,
         ),
         confusion_offset_cols,
+        confusion_x_offset_cols,
+        confusion_y_offset_cols,
         big: base.big,
         flip: merge_attack_value(base.flip, attack.flip),
         invert: merge_attack_value(base.invert, attack.invert),
@@ -9608,7 +9890,7 @@ pub fn approach_f32(current: &mut f32, target: f32, step: f32) {
         return;
     }
     let step = step.max(0.0);
-    if step <= f32::EPSILON || (*current - target).abs() <= f32::EPSILON {
+    if step == 0.0 || *current == target {
         return;
     }
     let delta = target - *current;

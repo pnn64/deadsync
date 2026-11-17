@@ -5853,7 +5853,7 @@ mod tests {
         };
         let cases = [
             (
-                Some(MeshSampler {
+                Some(MeshSampler::Override {
                     filter: SamplerFilter::Nearest,
                     wrap: SamplerWrap::Repeat,
                 }),
@@ -5861,7 +5861,7 @@ mod tests {
                 [0, 0, 255],
             ),
             (
-                Some(MeshSampler {
+                Some(MeshSampler::Override {
                     filter: SamplerFilter::Linear,
                     wrap: SamplerWrap::Repeat,
                 }),
@@ -5869,7 +5869,7 @@ mod tests {
                 [128, 0, 128],
             ),
             (
-                Some(MeshSampler {
+                Some(MeshSampler::Override {
                     filter: SamplerFilter::Nearest,
                     wrap: SamplerWrap::Repeat,
                 }),
@@ -5877,7 +5877,7 @@ mod tests {
                 [0, 0, 255],
             ),
             (
-                Some(MeshSampler {
+                Some(MeshSampler::Override {
                     filter: SamplerFilter::Nearest,
                     wrap: SamplerWrap::Clamp,
                 }),
@@ -5885,7 +5885,7 @@ mod tests {
                 [0, 0, 255],
             ),
             (
-                Some(MeshSampler {
+                Some(MeshSampler::Override {
                     filter: SamplerFilter::Nearest,
                     wrap: SamplerWrap::Repeat,
                 }),
@@ -5893,6 +5893,8 @@ mod tests {
                 [255, 0, 0],
             ),
             (None, 0.5, [128, 0, 128]),
+            (Some(MeshSampler::Texture), 0.5, [128, 0, 128]),
+            (Some(MeshSampler::Texture), 1.25, [0, 0, 255]),
         ];
         for staged in [false, true] {
             for indexed in [false, true] {

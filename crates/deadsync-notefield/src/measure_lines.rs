@@ -1115,6 +1115,7 @@ mod tests {
                     crate::fill_gameplay_lane_effects(
                         &visual,
                         arrow_time,
+                        1.0,
                         4,
                         &mut [crate::VisualEffectParams::default(); 4],
                         &mut lane_offsets,

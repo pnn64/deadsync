@@ -686,6 +686,7 @@ mod tests {
         crate::fill_gameplay_lane_effects(
             &request.visual.visual,
             prepared.arrow_effect_time_s,
+            prepared.field_zoom,
             prepared.frame_plan.num_cols,
             &mut [crate::VisualEffectParams::default(); MAX_COLS],
             &mut [0.0; MAX_COLS],
@@ -4147,8 +4148,8 @@ mod tests {
                                 &source,
                             );
                             let endpoints = [
-                                prepared.field.column_receptor_ys[0] + dir * low * zoom + 32.0,
-                                prepared.field.column_receptor_ys[0] + dir * high * zoom + 32.0,
+                                prepared.field.column_receptor_ys[0] + (dir * low + 32.0) * zoom,
+                                prepared.field.column_receptor_ys[0] + (dir * high + 32.0) * zoom,
                             ];
                             let bounds = [
                                 endpoints[0].min(endpoints[1]),
@@ -6369,8 +6370,15 @@ mod tests {
                     request.geometry.draw_distance_after_targets = 1536.0;
                     request.visual.visual.confusion_x = value("strength_x");
                     request.visual.visual.confusion_y = value("strength_y");
-                    request.visual.visual.confusion_x_offset = value("offset_x");
-                    request.visual.visual.confusion_y_offset = value("offset_y");
+                    if col == 0 {
+                        request.visual.visual.confusion_x_offset = value("offset_x");
+                        request.visual.visual.confusion_y_offset = value("offset_y");
+                    } else {
+                        // Native ArrowEffects adds lane offsets on the same
+                        // axes as global offsets, including hold heads/bodies.
+                        request.visual.visual.confusion_x_offset_cols[col] = value("offset_x");
+                        request.visual.visual.confusion_y_offset_cols[col] = value("offset_y");
+                    }
                     request.visual.visual.roll = value("roll");
                     request.visual.visual.twirl = value("twirl");
                     let prepared = prepare_notefield(&request).expect("prepared Beat field");
@@ -6778,11 +6786,12 @@ mod tests {
                             "{kind:?}, Mini={field_zoom}, direction={direction}, {sample}, actual={:?}",
                             sprite.center
                         );
-                        if index < 2 && field_zoom == 1.0 {
-                            let expected_y =
-                                prepared.field.column_receptor_ys[col] + 32.0 + direction * travel;
-                            assert!((sprite.center[1] - expected_y).abs() < 0.00005);
-                        }
+                        let expected_y = prepared.field.column_receptor_ys[col]
+                            + (32.0 + direction * travel) * field_zoom;
+                        assert!(
+                            (sprite.center[1] - expected_y).abs() < 0.00005,
+                            "{kind:?}, Mini={field_zoom}, direction={direction}, index={index}",
+                        );
                         checked[index] = true;
                     }
                     assert_eq!(checked, [true; 4], "notes and receptors must render");

@@ -119,12 +119,12 @@ fn create_texture_samplers(
     };
     let choices = [
         desc,
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Clamp,
         }
         .apply(desc),
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Nearest,
             wrap: SamplerWrap::Clamp,
         }

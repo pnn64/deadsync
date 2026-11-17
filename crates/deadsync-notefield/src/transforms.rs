@@ -1122,6 +1122,8 @@ pub(crate) fn visual_effect_params_for_col(
     col: usize,
     tiny: &[f32],
     confusion_offset: &[f32],
+    confusion_x_offset: &[f32],
+    confusion_y_offset: &[f32],
     bumpy: &[f32],
 ) -> VisualEffectParams {
     if let Some(v) = tiny.get(col).copied().filter(|v| v.is_finite()) {
@@ -1129,6 +1131,12 @@ pub(crate) fn visual_effect_params_for_col(
     }
     if let Some(v) = confusion_offset.get(col).copied().filter(|v| v.is_finite()) {
         params.confusion_offset += v;
+    }
+    if let Some(v) = confusion_x_offset.get(col).copied().filter(|v| v.is_finite()) {
+        params.confusion_x_offset += v;
+    }
+    if let Some(v) = confusion_y_offset.get(col).copied().filter(|v| v.is_finite()) {
+        params.confusion_y_offset += v;
     }
     if let Some(v) = bumpy.get(col).copied().filter(|v| v.is_finite()) {
         params.bumpy += v;
@@ -1203,6 +1211,8 @@ pub(crate) fn gameplay_visual_effect_params(
         local_col,
         &visual.tiny_cols,
         &visual.confusion_offset_cols,
+        &visual.confusion_x_offset_cols,
+        &visual.confusion_y_offset_cols,
         &visual.bumpy_cols,
     )
 }
@@ -1211,6 +1221,7 @@ pub(crate) fn gameplay_visual_effect_params(
 pub(crate) fn fill_gameplay_lane_effects(
     visual: &VisualEffects,
     arrow_effect_time_s: f32,
+    field_zoom: f32,
     num_cols: usize,
     effect_params: &mut [VisualEffectParams],
     lane_offsets: &mut [f32],
@@ -1231,7 +1242,9 @@ pub(crate) fn fill_gameplay_lane_effects(
             visual.tipsy_offset,
             visual.tipsy_speed,
         );
-        let move_y = move_col_extra(&visual.move_y_cols, local_col);
+        // GetMoveY is local to NoteField; Player's Mini zoom scales that
+        // translation before it reaches these screen-space lane coordinates.
+        let move_y = move_col_extra(&visual.move_y_cols, local_col) * field_zoom;
         lane_offsets[local_col] = tipsy + move_y;
         tipsy_offsets[local_col] = tipsy;
         move_y_offsets[local_col] = move_y;

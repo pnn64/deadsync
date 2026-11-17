@@ -10931,6 +10931,10 @@ fn field_metrics_are_shared() {
         .expect("canonical field metrics should be readable");
     let placement = read_source(root.join("crates/deadsync-notefield/src/placement.rs"))
         .expect("canonical field placement should be readable");
+    let gameplay_metrics = read_source(root.join("crates/deadsync-gameplay/src/song_lua_windows.rs"))
+        .expect("shared gameplay field placement should be readable");
+    let profile_gameplay = read_source(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
+        .expect("profile gameplay adapter should be readable");
     let compose = read_source(root.join("crates/deadsync-notefield/src/compose.rs"))
         .expect("canonical composition contract should be readable");
 
@@ -10997,15 +11001,22 @@ fn field_metrics_are_shared() {
     }
     assert!(!canonical.contains("deadsync_theme"));
     assert!(!canonical.contains("pub style:"));
-    for metric in [
-        "LAYOUT_WIDTH_MIN",
-        "LAYOUT_WIDTH_MAX",
-        "SIDE_CENTER_X_RATIO",
-        "RECEPTOR_NORMAL_Y",
-        "RECEPTOR_REVERSE_Y",
-    ] {
+    for metric in ["RECEPTOR_NORMAL_Y", "RECEPTOR_REVERSE_Y"] {
         assert!(metrics.contains(&format!("pub(crate) const {metric}:")));
         assert!(placement.contains(&format!("crate::style::{metric}")));
+    }
+    assert!(gameplay_metrics.contains("pub fn gameplay_side_field_center_x("));
+    for (owner, source) in [("notefield", &placement), ("profile", &profile_gameplay)] {
+        assert!(
+            source.contains("deadsync_gameplay::gameplay_side_field_center_x("),
+            "{owner} placement must use the shared native margin calculation"
+        );
+    }
+    for obsolete in ["LAYOUT_WIDTH_MIN", "LAYOUT_WIDTH_MAX", "SIDE_CENTER_X_RATIO"] {
+        assert!(
+            !metrics.contains(obsolete) && !placement.contains(obsolete),
+            "{obsolete} duplicates shared gameplay field placement"
+        );
     }
     for metric in [
         "HOLD_BODY_Z",

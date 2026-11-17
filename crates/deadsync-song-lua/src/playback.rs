@@ -8472,7 +8472,7 @@ fn append_song_lua_model_actors(
                     [state.skew_x, state.skew_y],
                 );
             let environment = Some(deadlib_present::actors::MeshEnvironment {
-                sampler: Some(deadlib_render_core::MeshSampler {
+                sampler: Some(deadlib_render_core::MeshSampler::Override {
                     filter: if state.texture_filtering {
                         deadlib_render_core::SamplerFilter::Linear
                     } else {
@@ -8615,9 +8615,14 @@ fn song_lua_secondary_model_actor(
     let sampler = environment
         .as_ref()
         .and_then(|environment| environment.sampler)
-        .map(|sampler| deadlib_render_core::MeshSampler {
-            filter: deadlib_render_core::SamplerFilter::Linear,
-            ..sampler
+        .map(|sampler| match sampler {
+            deadlib_render_core::MeshSampler::Override { wrap, .. } => {
+                deadlib_render_core::MeshSampler::Override {
+                    filter: deadlib_render_core::SamplerFilter::Linear,
+                    wrap,
+                }
+            }
+            deadlib_render_core::MeshSampler::Texture => sampler,
         });
     *environment = Some(deadlib_present::actors::MeshEnvironment {
         sampler,
@@ -8897,7 +8902,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                             additive_uv: [0.0, 0.0, 1.0, 1.0],
                         }
                     });
-                    environment.sampler = Some(deadlib_render_core::MeshSampler {
+                    environment.sampler = Some(deadlib_render_core::MeshSampler::Override {
                         filter: if state.texture_filtering {
                             deadlib_render_core::SamplerFilter::Linear
                         } else {
@@ -10244,7 +10249,7 @@ fn song_lua_flat_skewed_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
-            sampler: deadlib_render_core::MeshSampler {
+            sampler: deadlib_render_core::MeshSampler::Override {
                 filter: if state.texture_filtering {
                     deadlib_render_core::SamplerFilter::Linear
                 } else {
@@ -10321,7 +10326,7 @@ fn song_lua_projected_overlay_actor(
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
-            sampler: deadlib_render_core::MeshSampler {
+            sampler: deadlib_render_core::MeshSampler::Override {
                 filter: if state.texture_filtering {
                     deadlib_render_core::SamplerFilter::Linear
                 } else {
@@ -11298,7 +11303,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     Actor::ReusableTexturedMesh {
                         vertex_color_encoding: Default::default(),
                         environment: Some(deadlib_present::actors::MeshEnvironment {
-                            sampler: Some(deadlib_render_core::MeshSampler {
+                            sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
                                     deadlib_render_core::SamplerFilter::Linear
                                 } else {
@@ -11343,7 +11348,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     Actor::TexturedMesh {
                         vertex_color_encoding: Default::default(),
                         environment: Some(deadlib_present::actors::MeshEnvironment {
-                            sampler: Some(deadlib_render_core::MeshSampler {
+                            sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
                                     deadlib_render_core::SamplerFilter::Linear
                                 } else {

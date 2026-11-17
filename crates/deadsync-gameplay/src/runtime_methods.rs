@@ -2162,8 +2162,10 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run_pre_notes_phase(
         &mut self,
+        previous_music_time_ns: SongTimeNs,
         music_time_ns: SongTimeNs,
         display_music_time_ns: SongTimeNs,
         visual_scroll_music_time_ns: SongTimeNs,
@@ -2216,7 +2218,11 @@ where
                     .note_disabled(assist_sfx_generation);
             }
         }
-        refresh_active_attack_masks(self, delta_time);
+        // GameState updates timed attacks before ScreenGameplay samples this
+        // frame's audio position. Lua windows still read the new visible time.
+        refresh_active_attack_masks_at_time(
+            self, delta_time, Some(song_time_ns_to_seconds(previous_music_time_ns)),
+        );
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
             let expand_period = self
                 .effective_accel_effects_for_player_with_mask(

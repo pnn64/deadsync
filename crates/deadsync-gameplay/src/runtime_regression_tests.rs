@@ -1460,7 +1460,7 @@ mod runtime_regression_tests {
             (0.25, 0.625, -0.25),
             (0.25, 0.75, -0.375),
         ] {
-            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            state.run_pre_notes_phase(0, 0, 0, 0, delta, 1.0, 0, "unused");
             let flags = state.mods.attacks.attack_flags[0];
             assert!((flags.no_attack.expect("Current NoAttack") - no_attack).abs() < 0.0001);
             assert!((flags.rand_attack.expect("Current RandAttack") - rand_attack).abs() < 0.0001);
@@ -1475,7 +1475,7 @@ mod runtime_regression_tests {
             build_song_lua_constant_attack_mask_window(0.0, 1000.0, "*0.5 no NoAttacks")
                 .expect("clear profile NoAttack gradually"),
         );
-        state.run_pre_notes_phase(0, 0, 0, 0.25, 1.0, 0, "unused");
+        state.run_pre_notes_phase(0, 0, 0, 0, 0.25, 1.0, 0, "unused");
         assert_eq!(state.mods.attacks.attack_flags[0].no_attack, Some(0.875));
     }
 
@@ -1502,7 +1502,7 @@ mod runtime_regression_tests {
             (0.25_f32, 1.95317173_f32),
             (0_f32, 1.95317173_f32),
         ] {
-            state.run_pre_notes_phase(0, 0, 0, delta, 1.0, 0, "unused");
+            state.run_pre_notes_phase(0, 0, 0, 0, delta, 1.0, 0, "unused");
             assert!(
                 (state.mods.expand_seconds[0] - expected).abs() < 0.00001,
                 "delta={delta}, actual={}",
@@ -2955,27 +2955,27 @@ mod runtime_regression_tests {
         }, 480);
         state.drain_audio_commands().for_each(drop);
         state.apply_timing_tick_mode_command(GameplayTimingTickMode::Beat, 3.0);
-        state.run_pre_notes_phase(3_000_000_000, 3_000_000_000, 3_000_000_000, 0.0, 1.0, 1, "assist");
+        state.run_pre_notes_phase(3_000_000_000, 3_000_000_000, 3_000_000_000, 3_000_000_000, 0.0, 1.0, 1, "assist");
         assert_eq!(state.drain_audio_commands().count(), 0);
         let expected = vec![GameplayAudioCommand::PlayAssistTickAtMusicTime {
             path: MEASURE_TICK_SFX_PATH, music_seconds: 4.0,
         }];
-        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 1, "assist");
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 1, "assist");
         assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
         state.set_gameplay_paused(true);
         state.drain_audio_commands().for_each(drop);
-        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 0.0, 2, "assist");
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 0.0, 2, "assist");
         assert_eq!(state.drain_audio_commands().count(), 0);
         state.set_gameplay_paused(false);
         state.drain_audio_commands().for_each(drop);
-        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 2, "assist");
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 2, "assist");
         assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
-        state.run_pre_notes_phase(3_970_000_000, 3_970_000_000, 3_970_000_000, 0.0, 1.0, 2, "assist");
+        state.run_pre_notes_phase(3_970_000_000, 3_970_000_000, 3_970_000_000, 3_970_000_000, 0.0, 1.0, 2, "assist");
         assert_eq!(state.drain_audio_commands().count(), 0, "no duplicate tick on following frame");
 
         state.start_practice_music_at(3.0, 3.0);
         state.drain_audio_commands().for_each(drop);
-        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 3, "assist");
+        state.run_pre_notes_phase(3_960_000_000, 3_960_000_000, 3_960_000_000, 3_960_000_000, 0.0, 1.0, 3, "assist");
         assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), expected);
     }
 
@@ -2995,13 +2995,13 @@ mod runtime_regression_tests {
             (1_210_000_000, 1.25, BEAT_TICK_SFX_PATH),
             (1_460_000_000, 1.5, MEASURE_TICK_SFX_PATH),
         ] {
-            state.run_pre_notes_phase(now, now, now, 0.0, 1.0, 1, "assist");
+            state.run_pre_notes_phase(now, now, now, now, 0.0, 1.0, 1, "assist");
             assert_eq!(state.drain_audio_commands().collect::<Vec<_>>(), vec![
                 GameplayAudioCommand::PlayAssistTickAtMusicTime { path, music_seconds: seconds },
             ]);
         }
         state.apply_timing_tick_mode_command(GameplayTimingTickMode::Off, 1.6);
-        state.run_pre_notes_phase(1_960_000_000, 1_960_000_000, 1_960_000_000, 0.0, 1.0, 1, "assist");
+        state.run_pre_notes_phase(1_960_000_000, 1_960_000_000, 1_960_000_000, 1_960_000_000, 0.0, 1.0, 1, "assist");
         assert_eq!(state.drain_audio_commands().count(), 0);
     }
 
@@ -3050,6 +3050,49 @@ mod runtime_regression_tests {
         state.mods.attacks.cleared_for_outro = true;
         state.set_gameplay_paused(true);
         assert!(!state.control.paused, "native ignores pause requests during outro");
+    }
+
+    #[test]
+    fn gameplay_attacks_use_previous_raw_music_time_despite_visual_delay() {
+        let mut state = regression_state_with_segments(TimingSegments::default(), 960);
+        state.boundary.total_elapsed_in_screen = 1.0;
+        state.clock.visible_timing.global_visual_delay_seconds = 0.2;
+        state.clock.visible_timing.player_visual_delay_seconds[0] = 0.1;
+        state.set_current_music_time_ns(900_000_000);
+        let mut masks = build_attack_mask_windows(&[ChartAttackWindow {
+            start_second: 1.0,
+            len_seconds: 1.0,
+            mods: "*1000 100 movex1".to_string(),
+        }]);
+        masks.push(build_song_lua_constant_attack_mask_window(
+            0.75, 3.0, "*1000 50 movey1",
+        ).unwrap());
+        state.mods.attacks = GameplayAttackRuntimeState::new(
+            [masks, Vec::new()], [Vec::new(), Vec::new()],
+        );
+
+        for (music_nanos, expected_x) in [
+            (1_100_000_000, None),
+            (1_200_000_000, Some(1.0)),
+            (2_100_000_000, Some(1.0)),
+            (2_200_000_000, Some(0.9)),
+        ] {
+            let snapshot = GameplayAudioSnapshot {
+                stream_clock: GameplayStreamClockSnapshot {
+                    music_nanos,
+                    music_seconds_per_second: 0.0,
+                    has_music_mapping: true,
+                    valid_at: Instant::now(),
+                    valid_at_host_nanos: music_nanos as u64,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            state.update_gameplay_frame(0.1, snapshot, "unused", || 1);
+            assert_eq!(state.current_music_time_ns(), music_nanos);
+            assert_eq!(state.mods.attacks.visual[0].move_x_cols[0], expected_x);
+            assert_eq!(state.mods.attacks.visual[0].move_y_cols[0], Some(0.5));
+        }
     }
 
     #[test]

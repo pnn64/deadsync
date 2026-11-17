@@ -8621,16 +8621,19 @@ fn native_model_material_passes_match_production() {
                     "separate material passes have one bound image"
                 );
                 assert_ne!(run.texture_handle, 0, "submit a bound material image");
-                let sampler = run
+                let deadlib_render_core::MeshSampler::Override { filter, wrap } = run
                     .sampler
-                    .expect("production Model submits per-draw sampler state");
+                    .expect("production Model submits per-draw sampler state")
+                else {
+                    panic!("production Model overrides filtering and wrapping");
+                };
                 assert_eq!(
-                    sampler.filter == deadlib_render_core::SamplerFilter::Linear,
+                    filter == deadlib_render_core::SamplerFilter::Linear,
                     reference["texture_filtering"].as_bool().unwrap(),
                     "noteskin={noteskin} update={ordinal} pass={pass} native filtering"
                 );
                 assert_eq!(
-                    sampler.wrap == deadlib_render_core::SamplerWrap::Repeat,
+                    wrap == deadlib_render_core::SamplerWrap::Repeat,
                     reference["texture_wrapping"].as_bool().unwrap(),
                     "noteskin={noteskin} update={ordinal} pass={pass} native wrapping"
                 );

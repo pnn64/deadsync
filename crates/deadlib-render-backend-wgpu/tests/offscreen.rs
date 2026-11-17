@@ -332,7 +332,7 @@ fn check_model_samplers(state: &mut backend::State) {
     );
     let choices = [
         (
-            Some(MeshSampler {
+            Some(MeshSampler::Override {
                 filter: SamplerFilter::Nearest,
                 wrap: SamplerWrap::Repeat,
             }),
@@ -340,7 +340,7 @@ fn check_model_samplers(state: &mut backend::State) {
             [0, 0, 255, 255],
         ),
         (
-            Some(MeshSampler {
+            Some(MeshSampler::Override {
                 filter: SamplerFilter::Linear,
                 wrap: SamplerWrap::Repeat,
             }),
@@ -348,7 +348,7 @@ fn check_model_samplers(state: &mut backend::State) {
             [128, 0, 128, 255],
         ),
         (
-            Some(MeshSampler {
+            Some(MeshSampler::Override {
                 filter: SamplerFilter::Nearest,
                 wrap: SamplerWrap::Repeat,
             }),
@@ -356,7 +356,7 @@ fn check_model_samplers(state: &mut backend::State) {
             [0, 0, 255, 255],
         ),
         (
-            Some(MeshSampler {
+            Some(MeshSampler::Override {
                 filter: SamplerFilter::Nearest,
                 wrap: SamplerWrap::Clamp,
             }),
@@ -364,7 +364,7 @@ fn check_model_samplers(state: &mut backend::State) {
             [0, 0, 255, 255],
         ),
         (
-            Some(MeshSampler {
+            Some(MeshSampler::Override {
                 filter: SamplerFilter::Nearest,
                 wrap: SamplerWrap::Repeat,
             }),
@@ -372,6 +372,8 @@ fn check_model_samplers(state: &mut backend::State) {
             [255, 0, 0, 255],
         ),
         (None, 0.5, [128, 0, 128, 255]),
+        (Some(MeshSampler::Texture), 0.5, [128, 0, 128, 255]),
+        (Some(MeshSampler::Texture), 1.25, [0, 0, 255, 255]),
     ];
     let mut frame = RenderFrame {
         clear_color: [0.0; 4],
@@ -383,12 +385,13 @@ fn check_model_samplers(state: &mut backend::State) {
         tmesh_instances: Vec::new(),
         ops: Vec::new(),
     };
+    let case_count = choices.len() as f32;
     for (index, (sampler, u, _)) in choices.iter().enumerate() {
-        let x = (index as f32 + 0.5) / 3.0 - 1.0;
+        let x = 2.0 * (index as f32 + 0.5) / case_count - 1.0;
         let mut value = instance(
             [1.0; 4],
             Mat4::from_translation(glam::Vec3::new(x, 0.0, 0.0))
-                * Mat4::from_scale(glam::Vec3::new(0.15, 0.5, 1.0)),
+                * Mat4::from_scale(glam::Vec3::new(0.9 / case_count, 0.5, 1.0)),
         );
         value.uv_scale = [0.0; 2];
         value.uv_offset = [*u, 0.5];
@@ -404,7 +407,7 @@ fn check_model_samplers(state: &mut backend::State) {
     }
     let capture = capture(state, &frame, &textures);
     for (index, (_, _, color)) in choices.iter().enumerate() {
-        let x = (((index as f32 + 0.5) / 3.0) * 0.5 * capture.width() as f32) as u32;
+        let x = ((index as f32 + 0.5) / case_count * capture.width() as f32) as u32;
         let actual = capture.get_pixel(x, capture.height() / 2).0;
         for (actual, expected) in actual.into_iter().zip(*color) {
             // Half-intensity UNORM results may quantize to 127 or 128;

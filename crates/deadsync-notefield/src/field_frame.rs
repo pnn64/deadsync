@@ -269,6 +269,7 @@ fn compose_field_contents<S, F>(
     fill_gameplay_lane_effects(
         &visual,
         travel.arrow_effect_time_s(),
+        field_zoom,
         num_cols,
         &mut lane_effect_params,
         &mut lane_offsets,
@@ -382,7 +383,10 @@ fn compose_field_contents<S, F>(
         )
     };
     let visible_row_range = if field_zoom > 0.0 {
-        crate::note_placement::expand_range(travel.visible_row_range())
+        // Native NoteField uses the searched rows without padding. A later
+        // note may re-enter the pixel window through reversed SCROLLS while
+        // remaining outside that row range; pixel clipping alone admits it.
+        travel.visible_row_range()
     } else {
         None
     };
@@ -1838,7 +1842,7 @@ fn hold_lane_frame(
         use_legacy_sprites: !visual.z_buffer
             && visual.twirl == 0.0
             && visual.confusion_y == 0.0
-            && visual.confusion_y_offset == 0.0
+            && effect_params.confusion_y_offset == 0.0
             && visual.shrink_linear == 0.0
             && visual.shrink_mult == 0.0
             && visual.parabola_x == 0.0

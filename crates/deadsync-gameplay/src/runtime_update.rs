@@ -252,6 +252,7 @@ where
             None
         };
         self.run_pre_notes_phase(
+            previous_music_time_ns,
             music_time_ns,
             display_music_time_ns,
             visual_scroll_music_time_ns,
@@ -1196,15 +1197,22 @@ where
     }
 
     pub fn refresh_player_attacks(&mut self, player: usize, now: f32, delta_time: f32) {
+        self.refresh_player_attacks_at_times(player, now, now, delta_time);
+    }
+
+    pub fn refresh_player_attacks_at_times(
+        &mut self, player: usize, now: f32, native_attack_second: f32, delta_time: f32,
+    ) {
         if player >= self.setup.num_players || player >= MAX_PLAYERS {
             return;
         }
 
         let profile = &self.profiles_runtime.profiles[player];
         let player_transform = self.mods.song_lua_player_transforms[player];
-        if let Some(transform) = self.mods.attacks.refresh_player(
+        if let Some(transform) = self.mods.attacks.refresh_player_at_times(
             player,
             now,
+            native_attack_second,
             delta_time,
             base_appearance_effects(profile),
             || AttackBaseEffects {

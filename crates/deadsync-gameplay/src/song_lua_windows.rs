@@ -642,6 +642,28 @@ where
     }
 }
 
+/// Native Player center for a side field in Simply Love's coordinate space.
+/// `_fallback` GameplayMargins uses a fixed 272px field width. SafeFArg converts
+/// its outer and combined center margins to integers before ScreenGameplay
+/// halves the center margin and positions each Player. Theme X metrics remain
+/// fractional; this conversion belongs only to the resulting actor placement.
+#[inline]
+#[must_use]
+pub fn gameplay_side_field_center_x(
+    screen_width: f32,
+    screen_center_x: f32,
+    p2: bool,
+) -> f32 {
+    let half_screen = screen_width * 0.5;
+    let metric_center = half_screen - screen_width.clamp(640.0, 854.0) * 0.25;
+    let outer_margin = (metric_center - 136.0).trunc();
+    let inner_margin = (2.0 * (half_screen - metric_center - 136.0)).trunc() * 0.5;
+    let p1_center = outer_margin + (half_screen - outer_margin - inner_margin) * 0.5;
+    let displacement = half_screen - p1_center;
+    // Translate the symmetric native layout when the caller has another origin.
+    screen_center_x + if p2 { displacement } else { -displacement }
+}
+
 #[must_use]
 pub fn song_lua_compile_player_screen_x(
     num_players: usize,
@@ -652,7 +674,6 @@ pub fn song_lua_compile_player_screen_x(
     note_field_offset_x: f32,
     center_1player_notefield: bool,
 ) -> f32 {
-    let clamped_width = viewport.width().clamp(640.0, 854.0);
     let centered_one_side = num_players == 1
         && play_style == SongLuaCompilePlayStyle::Single
         && center_1player_notefield;
@@ -663,26 +684,12 @@ pub fn song_lua_compile_player_screen_x(
     } else {
         player_index == 1
     };
-    let base_center_x = if centered_both_sides {
-        viewport.center_x()
-    } else if num_players == 2 {
-        if p2_side {
-            viewport.center_x() + (clamped_width * 0.25)
-        } else {
-            viewport.center_x() - (clamped_width * 0.25)
-        }
-    } else if centered_both_sides || centered_one_side {
-        viewport.center_x()
-    } else if p2_side {
-        viewport.center_x() + (clamped_width * 0.25)
-    } else {
-        viewport.center_x() - (clamped_width * 0.25)
-    };
     if centered_both_sides || centered_one_side {
         viewport.center_x()
     } else {
         let offset_sign = if p2_side { 1.0 } else { -1.0 };
-        base_center_x + offset_sign * note_field_offset_x.clamp(0.0, 50.0)
+        gameplay_side_field_center_x(viewport.width(), viewport.center_x(), p2_side)
+            + offset_sign * note_field_offset_x.clamp(0.0, 50.0)
     }
 }
 
