@@ -1984,6 +1984,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
             size: [SizeSpec::Px(sprite.size[0]), SizeSpec::Px(sprite.size[1])],
             source: sprite.source,
             tint: sprite.tint,
+            vertex_color_encoding: sprite.vertex_color_encoding,
             glow: sprite.glow,
             z: sprite.z,
             cell: None,
@@ -2027,6 +2028,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 local_transform: mesh.local_transform,
                 texture: mesh.texture,
                 tint: mesh.tint,
+                vertex_color_encoding: mesh.vertex_color_encoding,
                 glow: mesh.glow,
                 vertices,
                 geom_cache_key: mesh.geom_cache_key,
@@ -2052,6 +2054,7 @@ pub fn actor_from_flat_draw(draw: FlatDraw) -> Actor {
                 local_transform: mesh.local_transform,
                 texture: mesh.texture,
                 tint: mesh.tint,
+                vertex_color_encoding: mesh.vertex_color_encoding,
                 glow: mesh.glow,
                 vertices,
                 geom_cache_key: mesh.geom_cache_key,
@@ -2421,6 +2424,7 @@ mod camera_wrap_tests {
             view_proj: Mat4::IDENTITY,
         }];
         actors.push(actor_from_flat_draw(FlatDraw::Sprite(FlatSprite {
+            vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
             center: [12.0, 34.0],
             world_z: 5.0,
             size: [64.0, 48.0],
@@ -2446,6 +2450,7 @@ mod camera_wrap_tests {
             world_z,
             size,
             tint,
+            vertex_color_encoding,
             glow,
             uv_rect,
             flip_x,
@@ -2467,6 +2472,10 @@ mod camera_wrap_tests {
         assert_eq!(*world_z, 5.0);
         assert!(matches!(size, [SizeSpec::Px(64.0), SizeSpec::Px(48.0)]));
         assert_eq!(*tint, [0.8, 0.7, 0.6, 0.5]);
+        assert_eq!(
+            *vertex_color_encoding,
+            deadlib_present::actors::VertexColorEncoding::RageVColor
+        );
         assert_eq!(*glow, [1.0, 1.0, 1.0, 0.25]);
         assert_eq!(*uv_rect, Some([0.1, 0.2, 0.8, 0.9]));
         assert!(*flip_x);
@@ -2485,6 +2494,7 @@ mod camera_wrap_tests {
     fn capture_preserves_reusable_hold_mesh_storage() {
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = actor_from_flat_draw(FlatDraw::TexturedMesh(FlatTexturedMesh {
+            vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
             environment: Some(deadlib_present::actors::MeshEnvironment {
                 sampler: None,
                 camera: None,
@@ -2517,12 +2527,17 @@ mod camera_wrap_tests {
             vertices: captured,
             environment,
             depth_test,
+            vertex_color_encoding,
             ..
         } = actor
         else {
             panic!("hold capture should retain reusable mesh ownership");
         };
         assert!(depth_test);
+        assert_eq!(
+            vertex_color_encoding,
+            deadlib_present::actors::VertexColorEncoding::RageVColor
+        );
         assert_eq!(
             environment
                 .expect("capture must preserve material")

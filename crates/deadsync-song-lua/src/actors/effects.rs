@@ -486,6 +486,28 @@ pub(super) fn render_time(actor: &Actor, frame_clock: [f32; 2], render: &mut Son
     render.effect_time = render_effect_time(actor, frame_clock, render);
 }
 
+pub(super) fn render_live_time(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    render: &mut SongLuaOverlayState,
+) -> Result<(), Error> {
+    if !render.rainbow && matches!(render.effect_mode, EffectMode::None | EffectMode::Spin) {
+        return Ok(());
+    }
+    // Live render snapshots are evaluated at the current music/beat position,
+    // but timer effects own an accumulator advanced by this actor's updates.
+    // Preserve that phase across pauses, update rates, and effect restarts.
+    let [beat, seconds] = values(call, false)?;
+    if let Some(actor) = call.store().actors.get(&actor) {
+        render.effect_time = render_effect_time(actor, [seconds, beat], render);
+    }
+    Ok(())
+}
+
+pub(super) fn delta(actor: &Actor) -> f32 {
+    actor.effects.motion.map_or(0.0, |motion| motion.delta)
+}
+
 pub(super) fn render_effect_time(
     actor: &Actor,
     frame_clock: [f32; 2],

@@ -498,6 +498,7 @@ fn append_receptor_sprite<S, F>(
     ];
     let (sin, cos) = draw.rotation_z_deg.to_radians().sin_cos();
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [
             draw.center[0] + cos * offset[0] - sin * offset[1],
             draw.center[1] + sin * offset[0] + cos * offset[1],

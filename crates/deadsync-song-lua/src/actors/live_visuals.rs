@@ -321,7 +321,11 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
             parts.push("ScreenGameplay".into());
             break;
         }
-        let parent = get_static(call, current, b"__songlua_parent")?;
+        let mut parent = get_static(call, current, b"__songlua_parent")?;
+        if parent == Value::Nil {
+            parent = call.store().actors.get(&current).and_then(|actor| actor.parent)
+                .map_or(Value::Nil, Value::Table);
+        }
         if parent == Value::Nil {
             return Err(call.error(b"subscriber has no captured actor path"));
         }
@@ -352,6 +356,11 @@ pub(super) fn actor_path(call: &mut HostCall<'_>, actor: TableId) -> Result<Stri
                     break;
                 }
             }
+        }
+        if component.is_none() && wrappers == Value::Nil {
+            component = call.store().actors.get(&parent)
+                .and_then(|actor| actor.wrappers.iter().position(|&wrapper| wrapper == current))
+                .map(|index| format!("WrapperState{}", index + 1));
         }
         if component.is_none() {
             for index in 1usize.. {

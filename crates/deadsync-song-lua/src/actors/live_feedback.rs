@@ -12,6 +12,7 @@ pub(super) fn update(
 ) -> Result<(), Error> {
     holds(call, statistics, actor)?;
     judgment(call, statistics, actor)?;
+    judgment_position(call, catalog, actor)?;
     note_field_zoom(call, catalog, actor)
 }
 
@@ -270,6 +271,92 @@ fn judgment(call: &mut HostCall<'_>, statistics: &Statistics, actor: TableId) ->
     })
 }
 
+fn current_option_state(
+    call: &mut HostCall<'_>,
+    catalog: TableId,
+    player: usize,
+) -> Result<Option<TableId>, Error> {
+    let players = raw(call, catalog, "player_options")?;
+    let levels = call.raw_table_get(table(call, players)?, Value::Number((player + 1) as f64))?;
+    let options = call.raw_table_get(table(call, levels)?, Value::Number(4.))?;
+    let state = raw(call, table(call, options)?, "__songlua_player_option_state")?;
+    optional_table(call, state)
+}
+
+fn judgment_position(
+    call: &mut HostCall<'_>,
+    catalog: TableId,
+    actor: TableId,
+) -> Result<(), Error> {
+    let Some(player) = player(call, actor)?.filter(|i| *i < crate::LUA_PLAYERS) else {
+        return Ok(());
+    };
+    let frame = child(call, actor, "Judgment")?;
+    let Some(frame) = optional_table(call, frame)? else {
+        return Ok(());
+    };
+    call.with_roots(&[Value::Table(frame)], |call| {
+        let state = current_option_state(call, catalog, player)?;
+        let mut read = |key| {
+            state
+                .map(|state| optional_float(call, state, key))
+                .transpose()
+                .map(|value| value.flatten().unwrap_or(0.))
+        };
+        let reverse = read("reverse")? + read("reverse1")?;
+        let split = read("split")?;
+        let alternate = read("alternate")?;
+        let cross = read("cross")?;
+        let centered = read("centered")?;
+        let mini = read("mini")?;
+        let tiny = read("tiny")?;
+        let slots = raw(call, catalog, "game_state_slots")?;
+        let slots = table(call, slots)?;
+        let style = raw(call, slots, "style")?;
+        let style = table(call, style)?;
+        let style = call.raw_table_get(style, Value::Number(1.))?;
+        let style = table(call, style)?;
+        let style = raw(call, style, "__songlua_style_key")?;
+        let style = assets::text(call, style)?;
+        let columns = crate::song_lua_style_info(&style).columns;
+        let reverse = deadsync_gameplay::scroll_reverse_percent_for_column(
+            deadsync_gameplay::ScrollReverseOptions {
+                reverse,
+                split,
+                alternate,
+                cross,
+            },
+            0,
+            columns,
+        ) == 1.;
+
+        // The supported Simply Love judgment inherits _fallback's
+        // JudgmentTransform[Shared]Command. Its two Centered endpoints are
+        // identical. Player::Update still interpolates the complete TweenState
+        // and uses an exact full-Reverse comparison, not a halfway threshold.
+        let transform = TweenPose::from(crate::SongLuaOverlayState {
+            y: if reverse { 30. } else { -30. },
+            ..Default::default()
+        });
+        let mut destination = transform.lerp(transform, centered);
+        let scale = 0.5_f32.powf(mini + tiny);
+        let zoom = destination.zoom_x * if 1. < scale { 1. } else { scale };
+        destination.zoom = zoom;
+        destination.zoom_x = zoom;
+        destination.zoom_y = zoom;
+        destination.zoom_z = zoom;
+
+        if let Some(node) = call.store().actors.get_mut(&frame) {
+            // Native replaces DestTweenState after this player's subtree has
+            // advanced. Keep its current pose and every queued tween intact;
+            // the last destination is the only state the engine overwrites.
+            *node.destination_mut() = destination;
+            node.sync_rotation_getters();
+        }
+        Ok(())
+    })
+}
+
 fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) -> Result<(), Error> {
     let Some(player) = player(call, actor)? else {
         return Ok(());
@@ -277,11 +364,7 @@ fn note_field_zoom(call: &mut HostCall<'_>, catalog: TableId, actor: TableId) ->
     if player >= crate::LUA_PLAYERS {
         return Ok(());
     }
-    let players = raw(call, catalog, "player_options")?;
-    let levels = call.raw_table_get(table(call, players)?, Value::Number((player + 1) as f64))?;
-    let options = call.raw_table_get(table(call, levels)?, Value::Number(4.))?;
-    let state = raw(call, table(call, options)?, "__songlua_player_option_state")?;
-    let mini = optional_table(call, state)?
+    let mini = current_option_state(call, catalog, player)?
         .map(|state| optional_float(call, state, "mini"))
         .transpose()?
         .flatten()

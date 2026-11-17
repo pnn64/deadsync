@@ -3616,6 +3616,8 @@ end}
             ("mismatches", json!([{"field":"command_query_event"}])),
             ("errors", json!(["callback failure"])),
             ("errors", json!(null)),
+            ("interactive", json!({"draw_vibration_scopes_without_native_inputs":1})),
+            ("interactive", json!({"unreplayed_render_random_inputs":1})),
         ] {
             let mut failed = report.clone();
             failed[field] = value;
@@ -5078,6 +5080,9 @@ fn replay_mode(
             if draw_checks.uncompared_immediate_draws > uncompared {
                 runtime_coverage.insert("owned immediate Draw submissions without matching native drawable observations".into());
             }
+            if draw_checks.missing_random_inputs > 0 {
+                runtime_coverage.insert("native render random inputs are missing for active vibration; recapture with the PreDraw random observer".into());
+            }
         }
         let overlay_observation = state.song_lua.as_ref()
             .and_then(|scene| scene.take_overlay_stage_observation());
@@ -5194,7 +5199,9 @@ fn replay_mode(
             && !draw_samples.is_empty()
             && mismatches.is_empty()
             && errors.is_empty()
-            && interactive["draw_mismatches"] == 0;
+            && interactive["draw_mismatches"] == 0
+            && interactive["draw_vibration_scopes_without_native_inputs"] == 0
+            && interactive["unreplayed_render_random_inputs"] == 0;
         return Ok(
             json!({"execution_path":"production-live-lua","production_preparation_exercised":true,
             "source_identity":source_identity,
@@ -5338,6 +5345,8 @@ fn replay_mode(
     }
     report["interactive_checks_passed"] = json!(scope == Scope::Full
         && input_cursor > 0 && input_cursor == input_events.len() && draw_cursor > 0 && draw_cursor == draw_samples.len()
+        && report["interactive"]["draw_vibration_scopes_without_native_inputs"] == 0
+        && report["interactive"]["unreplayed_render_random_inputs"] == 0
         && report["mismatches"].as_array().is_some_and(Vec::is_empty)
         && report["errors"].as_array().is_some_and(Vec::is_empty));
     let accepted = archive_passes(scope, &report);
@@ -5362,6 +5371,8 @@ pub(super) fn archive_passes(scope: Scope, report: &Value) -> bool {
             frames > 0 && report["replayed_frames"].as_u64() == Some(frames))
         && report["mismatches"].as_array().is_some_and(Vec::is_empty)
         && report["errors"].as_array().is_some_and(Vec::is_empty)
+        && report["interactive"]["draw_vibration_scopes_without_native_inputs"].as_u64().unwrap_or(0) == 0
+        && report["interactive"]["unreplayed_render_random_inputs"].as_u64().unwrap_or(0) == 0
 }
 
 

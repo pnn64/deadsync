@@ -415,6 +415,7 @@ fn append_sprite(
     tint: [f32; 4],
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center,
         world_z: 0.0,
         size,

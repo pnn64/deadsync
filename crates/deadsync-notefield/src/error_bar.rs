@@ -575,6 +575,7 @@ fn append_quad(
     z: i16,
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: position,
         world_z: 0.0,
         size,
@@ -943,6 +944,7 @@ mod tests {
                 size: actual_size,
                 source,
                 tint: actual_tint,
+                vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
                 glow,
                 uv_rect,
                 flip_x,

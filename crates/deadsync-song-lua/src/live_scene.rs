@@ -37,6 +37,8 @@ pub struct SongLiveScene {
     layers: SongLiveLayers,
     context: SongLuaCompileContext,
     actors: Vec<Value>,
+    wrapper_epoch: u64,
+    pending_wrappers: std::collections::VecDeque<(usize, usize)>,
     tracked: Vec<(SongLuaTrackedActorTarget, Value)>,
     states: Vec<SongLuaOverlayState>,
     tracked_states: Vec<SongLuaOverlayState>,
@@ -149,6 +151,8 @@ impl SongLiveScene {
             layers,
             context: context.clone(),
             actors: b.actors,
+            wrapper_epoch: 0,
+            pending_wrappers: Default::default(),
             tracked: b.tracked,
             states: Vec::new(),
             tracked_states: Vec::new(),
@@ -452,6 +456,23 @@ impl SongLiveScene {
     }
     fn read_states(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
         let batch = runtime.vm.rooted(self.retained)?;
+        let epoch = runtime.actors.live_wrapper_epoch(&runtime.vm);
+        if epoch != self.wrapper_epoch {
+            let appended = runtime.actors.unbound_live_wrappers(&runtime.vm, &self.actors);
+            if !appended.is_empty() {
+                let Value::Table(batch) = batch else { unreachable!() };
+                let Value::Table(list) = runtime.vm.raw_table_get(batch, Value::Number(2.))? else {
+                    unreachable!()
+                };
+                for (owner, actor) in appended {
+                    let global = self.actors.len();
+                    runtime.vm.raw_table_set(list, Value::Number((global + 1) as f64), actor)?;
+                    self.actors.push(actor);
+                    self.pending_wrappers.push_back((owner, global));
+                }
+            }
+            self.wrapper_epoch = epoch;
+        }
         runtime.actors.live_phase(
             &mut runtime.vm,
             self.screen,

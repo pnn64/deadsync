@@ -813,6 +813,7 @@ fn advance_node(
                 );
                 -left
             } else {
+                sprite_animation::advance(call, node.actor, material_delta)?;
                 models::advance_materials(call.store(), node.actor, material_delta);
                 for column in &node.columns {
                     advance_node(call, column, material_delta, material_span)?;
@@ -876,6 +877,7 @@ fn advance_node(
             advance_node(call, child, delta, span)?;
         }
     }
+    sprite_animation::advance(call, actor, material_delta)?;
     models::advance_materials(call.store(), actor, material_delta);
     enter_phase(call.store(), node.callback_order, delta);
     let function = get_static(call, actor, b"__songlua_update_function")?;

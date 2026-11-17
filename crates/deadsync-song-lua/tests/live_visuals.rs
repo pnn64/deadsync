@@ -137,7 +137,7 @@ impl Pair {
         );
     }
     fn publish(&mut self, success: bool) {
-        let r = self.rust.as_ref().unwrap().write_visuals(&mut self.r);
+        let r = self.rust.as_mut().unwrap().write_visuals(&mut self.r);
 
         assert_eq!(r.is_ok(), success, "rust: {r:?}");
         self.compare("publication including partial failure");
@@ -546,6 +546,150 @@ fn single_use_publication_callbacks_reject_recursive_and_saved_lua_calls() {
     "#);
     p.publish(true);
     p.script("setmetatable(TXT,ORIGINAL_TXT_META);TXT.Text='guarded';SAVED_PUBLICATION=nil;ORIGINAL_TXT_META=nil;ORIGINAL_GETINFO=nil;collectgarbage('collect')");
+}
+
+#[test]
+fn late_wrapper_visuals_keep_owned_slots_and_publish_all_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = ["background.lua", "foreground.lua", "main.lua"]
+        .map(|name| dir.path().join(name));
+    std::fs::write(&paths[0], r#"
+        return Def.ActorFrame {Name='Background',
+            Def.Quad {Name='Whoosh', InitCommand=function(self) WHOOSH=self end,
+                OnCommand=function(self)
+                    self:setsize(128,128):rotationz(90):rotationx(45)
+                    self:AddWrapperState():y(-100):zoom(4):zoomz(1)
+                    self:AddWrapperState():x(6)
+                end}}
+    "#).unwrap();
+    for (path, name) in paths[1..].iter().zip(["Foreground", "Main"]) {
+        std::fs::write(path, format!(r#"
+            return Def.ActorFrame {{Name='{name}',
+                Def.Quad {{Name='{name}Leaf', OnCommand=function(self)
+                    self:AddWrapperState():x(7)
+                end}}}}
+        "#)).unwrap();
+    }
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "late wrapper publication");
+    context.live = true;
+    context.defer_initial_live_update = true;
+    context.music_length_seconds = 10.;
+    context.background_layer_count = 1;
+    context.foreground_names = vec!["foreground.lua".into(), "main.lua".into()];
+    context.layer_start_beats = vec![0., 0., 0.];
+    context.players[0].step_statistics_enabled = false;
+    context.players[1].enabled = false;
+    let refs = paths.iter().map(|path| path.as_path()).collect::<Vec<_>>();
+    let mut outputs = song::compile_song_lua_layers(
+        &refs, 2, &context, Default::default(), slots, layer, |_, _| None,
+    ).unwrap();
+    let mut scene = outputs.iter_mut().find_map(|output| output.live_scene.take()).unwrap();
+    let bindings = outputs.iter().enumerate().flat_map(|(layer, output)| {
+        output.live_actor_indices().iter().enumerate().map(move |(local, &global)|
+            (global, match layer {
+                0 => Target::Background(0, local),
+                1 => Target::Foreground(0, local),
+                _ => Target::Root(local),
+            }))
+    }).collect();
+    scene.bind_targets(bindings).unwrap();
+    let main = outputs.pop().unwrap();
+    let foreground = outputs.pop().unwrap();
+    let background = outputs.pop().unwrap();
+    let make_layer = |output: song::CompiledSongLua<Actor>| {
+        deadsync_gameplay::SongLuaVisualLayerRuntime {
+            start_second: 0., screen_width: output.screen_width, screen_height: output.screen_height,
+            overlays: output.overlays, overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(),
+            overlay_events: Vec::new(), song_foreground: output.song_foreground,
+            song_foreground_events: Vec::new(),
+        }
+    };
+    let mut visual = visuals(main);
+    visual.background_visual_layers.push(make_layer(background));
+    visual.foreground_visual_layers.push(make_layer(foreground));
+    let before = [visual.overlays.len(), visual.background_visual_layers[0].overlays.len(),
+        visual.foreground_visual_layers[0].overlays.len()];
+    let whoosh = visual.background_visual_layers[0].overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("Whoosh")).unwrap();
+    let original_parent = visual.background_visual_layers[0].overlays[whoosh].parent_index;
+    let screen = visual.screen_overlay_index;
+    scene.write_visuals(&mut visual).unwrap();
+    assert!(!visual.overlays.iter().any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    assert!(!visual.foreground_visual_layers[0].overlays.iter()
+        .any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    assert!(!visual.background_visual_layers[0].overlays.iter()
+        .any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    let update = |scene: &mut song::SongLiveScene, seconds, delta| {
+        let output = scene.update(song::SongLuaLiveFrame {
+            music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.,
+            delta_seconds: delta, ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+    };
+    update(&mut scene, 0.1, 0.1);
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(visual.screen_overlay_index, screen);
+    assert_eq!(visual.overlays.len(), before[0] + 1);
+    assert_eq!(visual.foreground_visual_layers[0].overlays.len(), before[2] + 1);
+    let background = &visual.background_visual_layers[0].overlays;
+    assert_eq!(background.len(), before[1] + 2);
+    assert_eq!(background[whoosh].name.as_deref(), Some("Whoosh"));
+    let inner = background[whoosh].parent_index.unwrap();
+    let outer = background[inner].parent_index.unwrap();
+    assert_eq!((inner, outer), (before[1], before[1] + 1));
+    assert_eq!(background[outer].parent_index, original_parent);
+    let pose = background[inner].initial_state;
+    assert_eq!((pose.y, pose.zoom_x, pose.zoom_y, pose.zoom_z), (-100., 4., 4., 1.));
+    assert_eq!(song::overlay_state_axis_scale(pose), [4., 4.]);
+    assert_eq!(song::overlay_state_z_scale(pose), 1.);
+    assert_eq!(background[outer].initial_state.x, 6.);
+    assert_eq!(song::overlay_state_axis_scale(background[whoosh].initial_state), [1., 1.]);
+    let paths = scene.visual_bindings().unwrap();
+    let owner_path = paths.iter().find_map(|(path, target)| match target {
+        Target::Background(0, index) if *index == whoosh => Some(path.clone()),
+        _ => None,
+    }).unwrap();
+    for (index, ordinal) in [(inner, 1), (outer, 2)] {
+        assert!(paths.iter().any(|(path, target)| path == &format!("{owner_path}/WrapperState{ordinal}")
+            && matches!(target, Target::Background(0, local) if *local == index)));
+    }
+    let count = scene.visual_draw_bindings().len();
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(scene.visual_draw_bindings().len(), count, "publication is idempotent");
+    {
+        let mut runtime = scene.runtime_mut();
+        let program = compile_named(br#"
+            WHOOSH:GetWrapperState(1):linear(.5):y(-80)
+            WHOOSH:GetWrapperState(1):AddWrapperState():x(999)
+            collectgarbage('collect')
+        "#, b"@/late-wrapper-update.lua").unwrap();
+        runtime.vm_mut().execute(&program).unwrap();
+    }
+    update(&mut scene, 0.35, 0.25);
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(visual.background_visual_layers[0].overlays[inner].initial_state.y, -90.);
+    assert_eq!(scene.visual_draw_bindings().len(), count,
+        "Actor::Draw does not recurse through a wrapper's own wrapper list");
+    {
+        let mut runtime = scene.runtime_mut();
+        let program = compile_named(br#"WHOOSH:AddWrapperState():z(12)"#,
+            b"@/late-wrapper-second-attachment.lua").unwrap();
+        runtime.vm_mut().execute(&program).unwrap();
+    }
+    update(&mut scene, 0.5, 0.15);
+    scene.write_visuals(&mut visual).unwrap();
+    let background = &visual.background_visual_layers[0].overlays;
+    let newest = before[1] + 2;
+    assert_eq!(background.len(), newest + 1);
+    assert_eq!(background[outer].parent_index, Some(newest));
+    assert_eq!(background[newest].parent_index, original_parent);
+    assert_eq!(background[newest].initial_state.z, 12.);
+    assert_eq!(scene.visual_draw_bindings().len(), count + 1,
+        "a later wrapper in the same scene triggers another publication");
+    assert!(scene.visual_bindings().unwrap().iter().any(|(path, target)|
+        path == &format!("{owner_path}/WrapperState3")
+            && matches!(target, Target::Background(0, local) if *local == newest)));
+    scene.end().unwrap();
 }
 
 #[allow(dead_code)]

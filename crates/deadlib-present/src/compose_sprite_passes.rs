@@ -169,6 +169,7 @@ fn flat_sprite_passes_match_independent_composition() {
         for glow_alpha in [0.0, 0.0001, 0.25, f32::NAN] {
             for parent_alpha in [0.0, 0.7] {
                 let sprite = FlatSprite {
+                    vertex_color_encoding: Default::default(),
                     center: [24.0, 36.0],
                     size: [32.0, 48.0],
                     world_z: 2.0,

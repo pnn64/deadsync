@@ -546,6 +546,9 @@ pub(super) fn reset_actor(call: &mut HostCall<'_>, actor: TableId) -> Result<(),
                 a.hibernate = 0.;
                 a.started = false;
                 a.effects = Default::default();
+                if let Some(sprite) = &mut a.sprite_animation {
+                    sprite.set_state(0);
+                }
                 a.state.render = render;
                 a.base_transform = Default::default();
                 a.pose_exported = false;

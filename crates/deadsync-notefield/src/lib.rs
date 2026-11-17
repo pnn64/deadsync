@@ -638,6 +638,7 @@ mod tests {
                 size,
                 source,
                 tint,
+                vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
                 glow,
                 uv_rect,
                 flip_x,

@@ -107,6 +107,7 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                 // the production constructor's partial state and cleanup lifetime.
                 store.actors.get_mut(&wrapper).unwrap().parent = Some(actor);
                 store.actors.get_mut(&actor).unwrap().wrappers.push(wrapper);
+                store.wrapper_epoch = store.wrapper_epoch.wrapping_add(1);
             }
             chronological::created(call, actor, wrapper)?;
             lifecycle::invalidate_plans(call)?;

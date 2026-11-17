@@ -136,6 +136,7 @@ fn append_explosion_draw<S, F>(
 {
     let flip = draw.zoom < 0.0;
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: draw.center,
         world_z: 0.0,
         size: [

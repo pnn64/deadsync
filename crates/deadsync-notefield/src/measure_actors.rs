@@ -255,6 +255,7 @@ fn append_measure_quad(
     z: i16,
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [
             (0.5 - align[0]).mul_add(size[0], xy[0]),
             (0.5 - align[1]).mul_add(size[1], xy[1]),

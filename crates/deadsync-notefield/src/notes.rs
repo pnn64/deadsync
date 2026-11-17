@@ -327,6 +327,7 @@ where
     F: Fn(&S) -> SpriteSource,
 {
     FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: request.sprite_center,
         world_z: request.world_z,
         size: request.size,

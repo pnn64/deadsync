@@ -15,6 +15,47 @@ struct Run {
     phase: Phase,
 }
 impl Actors {
+    pub(crate) fn live_wrapper_epoch(&self, vm: &Vm) -> u64 {
+        vm.store_ref().wrapper_epoch
+    }
+
+    /// Discover wrappers through owned actor identities. The caller retains
+    /// appended values before invoking Lua, and only calls this after wrapper
+    /// attachment changes; ordinary frames do not scan the scene again. Scene
+    /// allocation is independent: AddWrapperState uses its owner's scene.
+    pub(crate) fn unbound_live_wrappers(
+        &self,
+        vm: &Vm,
+        actors: &[Value],
+    ) -> Vec<(usize, Value)> {
+        let store = vm.store_ref();
+        let mut values = actors.to_vec();
+        let mut known = values.iter().filter_map(|value| match value {
+            Value::Table(id) => Some(*id),
+            _ => None,
+        }).collect::<HashSet<_>>();
+        let mut appended = Vec::new();
+        let mut owner = 0;
+        while owner < values.len() {
+            if let Value::Table(id) = values[owner]
+                && let Some(actor) = store.actors.get(&id)
+                // Actor::Draw calls PreDraw/BeginDraw directly on its wrapper
+                // list; it does not recurse through a wrapper's own Draw.
+                && actor.state.class != "WrapperState"
+            {
+                for &wrapper in &actor.wrappers {
+                    if known.insert(wrapper) {
+                        let value = Value::Table(wrapper);
+                        values.push(value);
+                        appended.push((owner, value));
+                    }
+                }
+            }
+            owner += 1;
+        }
+        appended
+    }
+
     pub(crate) fn suppress_load_sound_retirement(&self, vm: &mut Vm, scene: ActorScene) {
         if let Some(scene) = vm.store().scenes.get_mut(&scene.id) {
             scene.sounds_retired = true;

@@ -89,6 +89,7 @@ mod song_properties;
 pub(super) mod song_tree;
 mod sound;
 mod sound_manager;
+mod sprite_animation;
 mod sprites;
 mod state_snapshot;
 mod text;
@@ -158,6 +159,7 @@ struct Actor {
     active_commands: HashSet<Vec<u8>>,
     propagate: bool,
     effects: effects::State,
+    sprite_animation: Option<sprite_animation::State>,
     sound: Option<TableId>,
     offline_template: bool,
     offline_instance: bool,
@@ -179,6 +181,7 @@ struct TemplateState {
     propagate: bool,
     update_error_reported: bool,
     effects: effects::State,
+    sprite_animation: Option<sprite_animation::State>,
     capture: Option<capture::Capture>,
     preparation_getters: Option<[f32; 4]>,
 }
@@ -194,6 +197,7 @@ impl From<&Actor> for TemplateState {
             propagate: actor.propagate,
             update_error_reported: actor.update_error_reported,
             effects: actor.effects,
+            sprite_animation: actor.sprite_animation.clone(),
             capture: actor.capture.clone(),
             preparation_getters: actor.preparation_getters,
         }
@@ -242,6 +246,7 @@ impl Actor {
             active_commands: HashSet::new(),
             propagate: false,
             effects: effects::State::default(),
+            sprite_animation: None,
             sound: None,
             offline_template: false,
             offline_instance: false,
@@ -315,6 +320,7 @@ struct Store {
     song_callback_depth: usize,
     trace_dynamic_commands: bool,
     next: u64,
+    wrapper_epoch: u64,
     actors: registry::Registry<Actor>,
     actor_order: Vec<TableId>,
     scenes: FxHashMap<u64, Scene>,
@@ -1274,6 +1280,7 @@ impl Actors {
                 .map(|(snapshot, id)| {
                     let mut render = snapshot.render;
                     effects::render_time(&store.actors[id], frame_clock, &mut render);
+                    sprite_animation::render(&store.actors[id], &mut render);
                     render
                 })
                 .collect(),
@@ -1520,6 +1527,26 @@ fn run_actor_function(
     command_locals::capture(call, function)?;
     run_scoped(call, actor, function, params)
 }
+// ActorFrame::RunCommands forwards the selected function, without looking up
+// the command name again on its children. HandleMessage performs the separate
+// recursive named dispatch after this function has run on every receiver.
+fn run_commands(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    function: Value,
+    params: Option<Value>,
+) -> Result<(), Error> {
+    call.with_roots(&[function, params.unwrap_or(Value::Nil)], |call| {
+        if call.store().actors[&actor].propagate {
+            for child in children(call, actor)? {
+                run_commands(call, child, function, params)?;
+            }
+            Ok(())
+        } else {
+            run(call, actor, function, params)
+        }
+    })
+}
 // A function's identity. It carries the function's generation, so a later
 // function never has the identity of a collected one.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -1655,6 +1682,22 @@ fn run_guarded_command(
     params: Option<Value>,
     drain: bool,
 ) -> Result<(), Error> {
+    // Observation belongs to the selected command's owner, even when native
+    // propagation invokes its function with a different actor as self.
+    call.with_roots(&[function, params.unwrap_or(Value::Nil)], |call| {
+        let observed = command_observed(call, actor, &field, function)?;
+        run_guarded_command_function(call, actor, field, function, params, drain, observed)
+    })
+}
+fn run_guarded_command_function(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    field: Vec<u8>,
+    function: Value,
+    params: Option<Value>,
+    drain: bool,
+    observed: bool,
+) -> Result<(), Error> {
     let inserted = call
         .store()
         .actors
@@ -1671,8 +1714,15 @@ fn run_guarded_command(
     // Keep the selected function alive if a callback replaces its own field or
     // forces GC. Never hold a store borrow while entering authored Lua.
     let result = call.with_roots(&[function, params.unwrap_or(Value::Nil)], |call| {
+        if call.store().actors[&actor].propagate {
+            for child in children(call, actor)? {
+                run_guarded_command_function(
+                    call, child, field.clone(), function, params, drain, observed,
+                )?;
+            }
+            return Ok(());
+        }
         let theme = theme_callback(call, function)?;
-        let observed = command_observed(call, actor, &field, function)?;
         match run_callback(call, actor, function, params, observed, Some(&field)) {
             Err(error) if theme && error.kind() == ErrorKind::Runtime => {
                 call.store().diagnostics.push(error.to_string());
@@ -1943,6 +1993,7 @@ fn build(
             instance.pose_exported = template.pose_exported;
             instance.state.rotation = template.state.rotation;
             instance.effects = template.effects;
+            instance.sprite_animation = template.sprite_animation.clone();
             if store.preparing {
                 instance.capture = template.capture.clone().or(instance.capture);
                 instance.preparation_getters = template.preparation_getters;
@@ -2728,8 +2779,12 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         }
         Op::Sort => sort(call, actor)?,
         Op::Propagate => {
-            call.store().actors.get_mut(&actor).unwrap().propagate =
-                !matches!(arg(call, 1), Value::Nil | Value::Boolean(false));
+            let enabled = match arg(call, 1) {
+                Value::Boolean(value) => value,
+                Value::Number(value) => value.trunc() != 0.0,
+                _ => return Err(call.error(b"propagate expects a boolean or number")),
+            };
+            call.store().actors.get_mut(&actor).unwrap().propagate = enabled;
         }
         Op::AddCommand | Op::GetCommand => {
             let name = arg(call, 1);
@@ -2786,15 +2841,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                         )?;
                     }
                 }
-                _ => {
-                    let propagate = call.store().actors[&actor].propagate;
-                    if !propagate {
-                        run_named(call, actor, &name, params)?;
-                    }
-                    for child in children(call, actor)? {
-                        play(call, child, &name, params, true)?;
-                    }
-                }
+                _ => play(call, actor, &name, params, true)?,
             }
         }
         Op::Recursive => {
@@ -2814,7 +2861,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                     })?,
                     _ => {
                         for child in children(call, actor)? {
-                            run(call, child, function, params)?;
+                            run_commands(call, child, function, params)?;
                         }
                     }
                 }

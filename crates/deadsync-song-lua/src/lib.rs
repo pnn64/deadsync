@@ -4026,8 +4026,12 @@ pub struct SongLuaOverlayState {
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
-    /// Vibration contributed by composed ancestor ActorFrames.
-    pub inherited_vibrate: [f32; 3],
+    /// Raw signed random inputs for this draw, before native magnitude and zoom.
+    /// When absent, playback supplies its independent per-actor random sample.
+    pub vibrate_input: Option<[f32; 3]>,
+    /// Actor::GetZoom reads the destination tween's X zoom during PreDraw.
+    /// Live playback retains it separately from the current animated scale.
+    pub vibrate_zoom: Option<f32>,
     pub effect_clock: EffectClock,
     pub effect_timer: bool,
     pub effect_no_offset: bool,
@@ -4138,7 +4142,8 @@ impl Default for SongLuaOverlayState {
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
-            inherited_vibrate: [0.0, 0.0, 0.0],
+            vibrate_input: None,
+            vibrate_zoom: None,
             effect_clock: EffectClock::Time,
             effect_timer: true,
             effect_no_offset: false,

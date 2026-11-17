@@ -222,6 +222,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 Job::Texture(_) => {
                     if let Some(d) = deltas[slot].input.0 {
+                        sprite_animation::advance(call, actor, d as f32)?;
                         models::advance_materials(call.store(), actor, d as f32);
                     }
                 }
@@ -569,7 +570,7 @@ fn collect(
         .store()
         .actors
         .get(&actor)
-        .is_some_and(|a| a.model_materials.iter().any(Option::is_some))
+        .is_some_and(|a| a.sprite_animation.is_some() || a.model_materials.iter().any(Option::is_some))
     {
         plan.jobs.push(Job::Texture(actor));
     }
@@ -646,7 +647,13 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
                 let player = table(call, player)?;
                 retain(call, &plan, player)?;
                 collect(call, &mut plan, player, None, DeltaSource::Children)?;
-                if live {
+                // ScreenGameplay only initializes and updates enabled Players
+                // attached to its child list. Private compatibility handles for
+                // disabled players must not receive Player::Update HUD writes.
+                let attached = matches!(top, Value::Table(screen)
+                    if call.store_ref().actors.get(&screen)
+                        .is_some_and(|screen| screen.children.contains(&player)));
+                if live && attached {
                     plan.jobs.push(Job::PlayerFeedback(player));
                 }
             }

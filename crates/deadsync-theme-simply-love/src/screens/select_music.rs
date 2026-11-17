@@ -6469,6 +6469,7 @@ fn push_null_or_die_overlay_unreserved(
     if sync_heat_source(overlay).is_some() {
         actors.push(Actor::Sprite {
             align: [0.0, 0.0],
+            vertex_color_encoding: Default::default(),
             offset: [graph_x, graph_y],
             world_z: 0.0,
             size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_h)],

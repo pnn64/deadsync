@@ -574,6 +574,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
     z: i16,
 ) -> Actor {
     Actor::TexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment,
         align: [0.0, 0.0],
         offset: xy,
@@ -621,6 +622,7 @@ fn flat_from_vertices<S: NoteskinSlot>(
     z: i16,
 ) -> FlatTexturedMesh {
     FlatTexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment,
         offset: xy,
         world_z: 0.0,

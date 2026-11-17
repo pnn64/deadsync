@@ -1,4 +1,8 @@
 use super::*;
+
+mod native_vertex_colors {
+    include!("native_vertex_colors.rs");
+}
 use deadlib_render_core::BackendType;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_assets::song_lua::{
@@ -744,6 +748,8 @@ fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
             &states,
             &states,
             SongLuaOverlayState::default(),
+            None,
+            &mut Vec::new(),
             None,
             &SongLuaScreenProxySources::default(),
             None,
@@ -2564,6 +2570,8 @@ fn delayed_foreground_hide_skips_layer_and_survives_seek() {
             &states,
             layer,
             None,
+            &mut Vec::new(),
+            None,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -2686,6 +2694,156 @@ fn song_lua_wrappers_preserve_owner_draw_order() {
     states[2].draw_order = -1;
     song_lua_overlay_order_into(&overlays, &states, &mut cache, None, &mut Vec::new());
     assert_eq!(cache.child_lists[0], [0, 3]);
+}
+
+#[test]
+fn song_lua_late_wrappers_preserve_composition_order_and_capture_handles() {
+    let actor = |kind, parent_index, initial_state| SongLuaOverlayActor {
+        kind, parent_index, initial_state, name: None, message_commands: Vec::new(),
+    };
+    let mut overlays = vec![
+        actor(SongLuaOverlayKind::ActorFrame, None, SongLuaOverlayState {
+            x: 320., y: 240., fov: Some(90.), ..Default::default()
+        }),
+        actor(SongLuaOverlayKind::Quad, Some(0), SongLuaOverlayState {
+            x: 5., y: 10., size: Some([128.; 2]), rot_z_deg: 90., rot_x_deg: 45.,
+            ..Default::default()
+        }),
+        actor(SongLuaOverlayKind::Quad, Some(0), SongLuaOverlayState {
+            size: Some([8.; 2]), ..Default::default()
+        }),
+        actor(SongLuaOverlayKind::ActorFrameTexture {
+            capture_name: "retained".into(), capture_size: Some([64.; 2]),
+            alpha_buffer: true, depth_buffer: false, float_buffer: false,
+        }, None, SongLuaOverlayState { aft_created: true, ..Default::default() }),
+        actor(SongLuaOverlayKind::Quad, Some(3), SongLuaOverlayState {
+            size: Some([8.; 2]), ..Default::default()
+        }),
+    ];
+    let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+    let handle = composer.capture_handle(3).unwrap();
+    let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let composed = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
+    let before = composer.render_overlay(&overlays, &composed, 1, [640.,480.], 0., 0.);
+    assert!(!before.ops.is_empty());
+
+    let mut scratch = FrameScratch {
+        song_lua_overlay_order: song_lua_overlay_order_cache_from(&overlays, &[]),
+        song_lua_proxy_request_index: SongLuaProxyRequestIndex::new(&overlays),
+        song_lua_aft_capture_scratch: SongLuaAftCaptureScratch::new(&overlays,
+            &SongLuaOverlayTopologyIndex::new(&overlays)),
+        song_lua_projected_mesh_scratch: song_lua_projected_mesh_scratch_for(&overlays),
+        song_lua_local_state_scratch: local,
+        song_lua_overlay_state_scratch: composed,
+        ..Default::default()
+    };
+    scratch.enable_dynamic_scene();
+    let gameplay_handle = scratch.song_lua_proxy_request_index.topology.aft_texture_handles[3];
+    scratch.song_lua_aft_capture_scratch.active_bank = 1;
+    let banks = scratch.song_lua_aft_capture_scratch.slots[3].as_mut().unwrap();
+    let retained = banks[0].refill([0.;2], |actors| actors.push(Actor::Frame {
+        align: [0.;2], offset: [0.;2], size: [SizeSpec::Px(8.);2],
+        children: Vec::new(), background: None, z: 0,
+    })).unwrap();
+    let bank_stats = banks[0].stats();
+    let history: Arc<[SongLuaDrawFrame]> = Arc::from([SongLuaDrawFrame {
+        second: 0., immediate: true, owners: vec![1], owner_ends: vec![0], ops: Vec::new(),
+    }]);
+    scratch.song_lua_aft_capture_scratch.manual =
+        SongLuaManualScratch::with_frames(&overlays, history.clone());
+    scratch.song_lua_aft_capture_scratch.manual.immediate_cursor = 1;
+    scratch.song_lua_aft_capture_scratch.manual.immediate_second = 0.25;
+
+    overlays[1].parent_index = Some(5);
+    overlays.push(actor(SongLuaOverlayKind::WrapperState, Some(6), SongLuaOverlayState {
+        y: -100., zoom_x: 4., zoom_y: 4., ..Default::default()
+    }));
+    overlays.push(actor(SongLuaOverlayKind::WrapperState, Some(0), SongLuaOverlayState {
+        x: 6., ..Default::default()
+    }));
+    let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let composed = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
+    assert_eq!((composed[1].x, composed[1].y), (346., 180.));
+    let expected_matrix = actor_conformance::multiply_matrices(
+        actor_conformance::actor_matrix([326., 140., 0.], [0.;3], [4.,4.,1.], [0.;2]),
+        actor_conformance::actor_matrix([5.,10.,0.], [45.,0.,90.], [1.;3], [0.;2]),
+    );
+    let actual_matrix = actor_conformance::overlay_sprite_matrix(composed[1], [128.;2]);
+    for (actual, expected) in actual_matrix.iter().flatten().zip(expected_matrix.iter().flatten()) {
+        assert!((actual - expected).abs() < 0.001, "{actual_matrix:?} != {expected_matrix:?}");
+    }
+    let after = composer.render_overlay(&overlays, &composed, 1, [640.,480.], 0., 0.);
+    assert_eq!(composer.capture_handle(3), Some(handle), "retained composer preserves its AFT identity");
+    assert_ne!(compare_render_frames_semantic(&before, &after), Ok(()));
+    let permutation = [0,6,5,1,2,3,4];
+    let mut remap = [0;7];
+    for (new, &old) in permutation.iter().enumerate() { remap[old] = new; }
+    let prepared = permutation.map(|old| {
+        let mut actor = overlays[old].clone();
+        actor.parent_index = actor.parent_index.map(|parent| remap[parent]);
+        actor
+    });
+    let prepared_local = prepared.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let prepared_states = actor_conformance::compose_overlay_states(&prepared, &prepared_local, [640.,480.], [0.;2]);
+    let expected = actor_conformance::WholeSongComposer::new(&prepared)
+        .render_overlay(&prepared, &prepared_states, remap[1], [640.,480.], 0., 0.);
+    assert_eq!(compare_render_frames_semantic(&expected, &after), Ok(()));
+
+    let visual = SongLuaRuntimeVisuals {
+        overlays, screen_overlay_index: None, overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(),
+        overlay_events: Vec::new(), background_visual_layers: Vec::new(), foreground_visual_layers: Vec::new(),
+        player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        player_events: Default::default(), player_judgment_events: Default::default(), player_combo_events: Default::default(),
+        song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
+        hidden_players: [false;MAX_PLAYERS], screen_layers: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        screen_layer_events: Default::default(), note_hides: Default::default(), column_offsets: Default::default(),
+        column_splines: Default::default(), screen_width: 640., screen_height: 480.,
+    };
+    scratch.refresh_live_wrappers(&visual);
+    assert_eq!(scratch.song_lua_proxy_request_index.topology.aft_texture_handles[3], gameplay_handle);
+    assert_eq!(scratch.song_lua_overlay_order.dynamic_composed_indices.as_ref(), &[0,6,5,1,2,3,4]);
+    assert_eq!(scratch.song_lua_overlay_order.child_lists[1], [6,2], "wrapper keeps original sibling position");
+    assert_eq!(scratch.song_lua_aft_capture_scratch.active_bank, 1);
+    assert_eq!(scratch.song_lua_aft_capture_scratch.slots[3].as_ref().unwrap()[0].stats(), bank_stats);
+    assert!(!retained.is_empty());
+    assert!(Arc::ptr_eq(&scratch.song_lua_aft_capture_scratch.manual.frames, &history));
+    assert_eq!(scratch.song_lua_aft_capture_scratch.manual.immediate_cursor, 1);
+    assert_eq!(scratch.song_lua_aft_capture_scratch.manual.immediate_second, 0.25);
+}
+
+#[test]
+fn song_lua_late_wrappers_refresh_same_count_parent_camera_changes() {
+    let actor = |kind, parent_index, initial_state| SongLuaOverlayActor {
+        kind, parent_index, initial_state, name: None, message_commands: Vec::new(),
+    };
+    let mut overlays = vec![
+        actor(SongLuaOverlayKind::ActorFrame, None, SongLuaOverlayState {
+            fov: Some(90.), ..Default::default()
+        }),
+        actor(SongLuaOverlayKind::ActorFrame, Some(0), SongLuaOverlayState::default()),
+        actor(SongLuaOverlayKind::Quad, Some(1), SongLuaOverlayState {
+            size: Some([16.;2]), rot_x_deg: 30., ..Default::default()
+        }),
+    ];
+    let mut composer = actor_conformance::WholeSongComposer::new(&overlays);
+    overlays[2].parent_index = Some(3);
+    overlays.push(actor(SongLuaOverlayKind::WrapperState, Some(1), SongLuaOverlayState {
+        x: 10., ..Default::default()
+    }));
+    let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let states = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
+    let _ = composer.render_overlay(&overlays, &states, 2, [640.,480.], 0., 0.);
+    let before = composer.model_matrices(&states, 2, [640.,480.]);
+    // ActorFrame::DrawPrimitives owns camera scope. It can begin setting FOV
+    // on a later frame without another actor or wrapper being allocated.
+    overlays[1].initial_state.fov = Some(55.);
+    let local = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let states = actor_conformance::compose_overlay_states(&overlays, &local, [640.,480.], [0.;2]);
+    let after = composer.model_matrices(&states, 2, [640.,480.]);
+    let expected = actor_conformance::WholeSongComposer::new(&overlays)
+        .model_matrices(&states, 2, [640.,480.]);
+    assert_ne!(before, after);
+    assert_eq!(after, expected);
 }
 
 #[test]
@@ -4122,6 +4280,8 @@ fn song_lua_direct_proxies_record_exact_overlay_insertions() {
         &overlay_states,
         SongLuaOverlayState::default(),
         None,
+        &mut Vec::new(),
+        None,
         &proxy_sources,
         Some(&mut direct),
         None,
@@ -4474,16 +4634,20 @@ fn song_lua_overlay_local_offsets_still_compose_from_centered_actorframe() {
 }
 
 #[test]
-fn song_lua_overlay_inherits_actorframe_vibration() {
+fn song_lua_overlay_composes_independent_parent_and_child_vibration() {
     let parent = SongLuaOverlayState {
         vibrate: true,
         effect_magnitude: [20.0, 12.0, 4.0],
-        inherited_vibrate: [3.0, 2.0, 1.0],
+        vibrate_input: Some([0.5, -0.25, 1.0]),
+        zoom: 2.0,
+        basezoom: 3.0,
         ..SongLuaOverlayState::default()
     };
     let child = SongLuaOverlayState {
         vibrate: true,
         effect_magnitude: [5.0, 6.0, 7.0],
+        vibrate_input: Some([-1.0, 0.5, 0.25]),
+        zoom: 0.5,
         ..SongLuaOverlayState::default()
     };
     let composed = song_lua_overlay_compose_state(
@@ -4494,11 +4658,49 @@ fn song_lua_overlay_inherits_actorframe_vibration() {
         480.0,
         [0.0; 2],
     );
+    // Parent jitter uses its own zoom, excluding base zoom. Child jitter uses
+    // the child's zoom and is then transformed by the full parent scale.
+    assert_eq!([composed.x, composed.y, composed.z], [5.0, 3.0, 13.25]);
+    assert!(!composed.vibrate);
+    assert!(composed.vibrate_input.is_none());
+    let second = song_lua_overlay_compose_state(
+        &SongLuaOverlayKind::ActorFrame,
+        parent,
+        SongLuaOverlayState {
+            x: 10.0,
+            ..Default::default()
+        },
+        854.0,
+        480.0,
+        [0.0; 2],
+    );
+    assert_eq!([second.x, second.y, second.z], [80.0, -6.0, 8.0]);
+}
 
-    assert_eq!(composed.inherited_vibrate, [23.0, 14.0, 5.0]);
+#[test]
+fn song_lua_vibration_uses_destination_zoom_and_samples_only_once() {
+    let local = SongLuaOverlayState {
+        x: 100.0,
+        y: 120.0,
+        z: 2.0,
+        zoom: 1.25,
+        basezoom: 4.0,
+        vibrate: true,
+        effect_magnitude: [7.0, 11.0, 3.0],
+        vibrate_input: Some([0.25, -0.5, 1.0]),
+        vibrate_zoom: Some(2.0),
+        ..Default::default()
+    };
+    let drawn = song_lua_pre_draw_state(local, [0.0; 2]);
+    assert_eq!([drawn.x, drawn.y, drawn.z], [103.5, 109.0, 8.0]);
+    let repeated = song_lua_pre_draw_state(drawn, [0.0; 2]);
     assert_eq!(
-        song_lua_overlay_vibrate_magnitude(composed),
-        [28.0, 20.0, 12.0]
+        [repeated.x, repeated.y, repeated.z],
+        [drawn.x, drawn.y, drawn.z]
+    );
+    assert!(
+        local.vibrate,
+        "draw evaluation must not mutate the Lua pose"
     );
 }
 
@@ -5493,6 +5695,7 @@ fn song_lua_proxy_prewarm_reuses_segment_join_frame() {
 #[test]
 fn song_lua_capture_style_tints_sprite_glow() {
     let actor = Actor::Sprite {
+        vertex_color_encoding: Default::default(),
         align: [0.5, 0.5],
         offset: [0.0, 0.0],
         world_z: 0.0,
@@ -5624,6 +5827,7 @@ fn song_lua_capture_style_shares_mesh_vertices_and_composes_tint() {
 #[test]
 fn song_lua_capture_style_tints_textured_mesh() {
     let actor = Actor::TexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment: None,
         align: [0.0, 0.0],
         offset: [0.0, 0.0],
@@ -5825,6 +6029,8 @@ fn song_lua_preloaded_aft_chain_preserves_pixels() {
             &states,
             SongLuaOverlayState::default(),
             None,
+            &mut Vec::new(),
+            None,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -5898,6 +6104,8 @@ fn song_lua_aft_allocation_controls_passes_and_live_preserve() {
             &states,
             SongLuaOverlayState::default(),
             None,
+            &mut Vec::new(),
+            None,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -5949,6 +6157,8 @@ fn song_lua_aft_passes_keep_capture_dependencies_ordered() {
         &states,
         &states,
         SongLuaOverlayState::default(),
+        None,
+        &mut Vec::new(),
         None,
         &SongLuaScreenProxySources::default(),
         None,
@@ -6037,6 +6247,8 @@ fn song_lua_coincident_rgb_aft_renders_once_then_samples_three_times() {
         &overlay_states,
         &overlay_states,
         SongLuaOverlayState::default(),
+        None,
+        &mut Vec::new(),
         None,
         &proxy_sources,
         None,
@@ -6174,6 +6386,8 @@ fn song_lua_kenpo_capture_keeps_rotated_notes_and_rgb_split() {
             &states,
             &states,
             SongLuaOverlayState::default(),
+            None,
+            &mut Vec::new(),
             None,
             &sources,
             None,
@@ -6727,6 +6941,7 @@ fn direct_field_proxy_cancels_player_translation_and_layer_z() {
     assert!(song_lua_player_transform_is_direct_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));
     let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [playfield_center_x + 24.0, screen_center_y() - 40.0],
         world_z: 0.0,
         size: [32.0, 32.0],
@@ -6816,6 +7031,7 @@ fn field_proxy_overflow_keeps_actor_and_direct_draw_inside_camera() {
     text.z(81);
     let actors = [text.build(0)];
     let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [320.0, 240.0],
         world_z: 0.0,
         size: [32.0, 2.0],
@@ -6881,6 +7097,7 @@ fn direct_hud_proxy_cancels_player_translation_and_layer_z() {
     assert!(song_lua_player_transform_is_direct_hud_proxy(transform));
     assert!(!song_lua_player_transform_is_direct_identity(transform));
     let draws = [FlatDraw::Sprite(deadlib_present::actors::FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [playfield_center_x + 24.0, screen_center_y() - 40.0],
         world_z: 0.0,
         size: [32.0, 32.0],
@@ -10577,6 +10794,8 @@ fn screen_camera_projects_extensionless_sprite_at_runtime() {
             &states,
             SongLuaOverlayState::default(),
             Some(states[screen]),
+            &mut Vec::new(),
+            None,
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -10952,19 +11171,20 @@ fn song_lua_sprite_applies_fade_edges_at_runtime() {
     .expect_actor("faded sprite should render");
 
     match actor {
-        Actor::Sprite {
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
+        Actor::TexturedMesh {
+            vertices,
+            vertex_color_encoding,
             z,
             ..
         } => {
             assert_eq!(z, 782);
-            assert!((fadeleft - 0.1).abs() <= 0.000_1);
-            assert!((faderight - 0.2).abs() <= 0.000_1);
-            assert!((fadetop - 0.3).abs() <= 0.000_1);
-            assert!((fadebottom - 0.4).abs() <= 0.000_1);
+            assert_eq!(
+                vertex_color_encoding,
+                deadlib_present::actors::VertexColorEncoding::RageVColor
+            );
+            assert_eq!(vertices.len(), 30, "center and four edge quads");
+            assert_eq!(vertices.iter().filter(|v| v.color[3] == 0.0).count(), 12);
+            assert_eq!(vertices.iter().filter(|v| v.color[3] == 1.0).count(), 18);
         }
         other => panic!("expected faded sprite overlay, got {other:?}"),
     }
@@ -11619,6 +11839,15 @@ fn song_lua_projected_overlay_applies_fade_edges_at_runtime() {
             assert_eq!(z, 792);
             assert_eq!(tint, [0.8, 0.7, 0.6, 0.5]);
             assert_eq!(vertices.len(), 18);
+            // Native Sprite::DrawPrimitives emits the inside before its left
+            // and right fades, even though their cells are adjacent in X.
+            for (quad, [left, right]) in vertices.chunks_exact(6)
+                .zip([[0.25, 0.75], [0.0, 0.25], [0.75, 1.0]])
+            {
+                assert_eq!(quad[0].uv, [left, 0.0]);
+                assert_eq!(quad[1].uv, [right, 0.0]);
+                assert_eq!(quad[2].uv, [right, 1.0]);
+            }
             assert!(vertices.iter().all(|vertex| {
                 (vertex.color[0] - 1.0).abs() <= 0.000_1
                     && (vertex.color[1] - 1.0).abs() <= 0.000_1
@@ -11672,6 +11901,26 @@ fn song_lua_projected_overlay_applies_fade_edges_at_runtime() {
     };
     assert_eq!(Arc::as_ptr(&next_vertices), buffer_ptr);
     assert_eq!(scratch.replacements, 0);
+
+    let Actor::TexturedMesh { vertices, .. } = build_song_lua_overlay_actor(
+        &sprite,
+        SongLuaOverlayState { fadetop: 0.25, fadebottom: 0.25, ..state },
+        camera, &asset_manager, 792, 640.0, 480.0, 0.0, 0.0, 0.0,
+    ).expect_actor("sprite with four faded edges should render") else {
+        panic!("expected projected textured mesh");
+    };
+    assert_eq!(vertices.len(), 30, "native omits the four corner cells");
+    for (quad, [left, top, right, bottom]) in vertices.chunks_exact(6).zip([
+        [0.25, 0.25, 0.75, 0.75], // inside
+        [0.0, 0.25, 0.25, 0.75], // left
+        [0.75, 0.25, 1.0, 0.75], // right
+        [0.25, 0.0, 0.75, 0.25], // top
+        [0.25, 0.75, 0.75, 1.0], // bottom
+    ]) {
+        assert_eq!(quad[0].uv, [left, top]);
+        assert_eq!(quad[1].uv, [right, top]);
+        assert_eq!(quad[2].uv, [right, bottom]);
+    }
 }
 
 #[test]

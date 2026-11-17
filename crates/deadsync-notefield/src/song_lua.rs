@@ -461,6 +461,7 @@ mod tests {
             tex_matrix_scale: [1.25, 0.75],
         }]);
         let textured_mesh = Actor::TexturedMesh {
+            vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
             environment: None,
             align: [0.1, 0.9],
             offset: [140.0, 23.0],
@@ -494,6 +495,7 @@ mod tests {
             local_transform: folded_transform,
             texture: deadlib_present::actors::MeshTexture::Key(folded_texture),
             tint,
+            vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
             glow,
             vertices,
             geom_cache_key,

@@ -3,13 +3,17 @@ use super::{gameplay, native_creation_order_with_coverage_for_entries};
 use deadlib_present::render::{DrawOp, RenderFrame};
 use deadsync_assets::song_lua::{SongLuaOverlayActor, SongLuaOverlayKind};
 use deadsync_song_lua::playback::actor_conformance::{
-    WholeSongComposer, compose_overlay_states, matrix_rows, project_world,
+    WholeSongComposer, compose_layer_overlay_states, matrix_rows, project_world,
 };
-use deadsync_song_lua::{SongLuaInputEvent, SongLuaInputType, SongLuaLiveTarget};
+use deadsync_song_lua::{SongLuaInputEvent, SongLuaInputType, SongLuaLiveTarget, SongLuaOverlayState};
 use serde_json::{Value, json};
 use std::{collections::{BTreeMap, VecDeque}, path::Path};
 
+#[path = "render_random.rs"]
+mod render_random;
+
 pub(super) fn validate(trace: &Value) -> Result<(), String> {
+    render_random::validate(trace)?;
     let injected = trace["input"]["injected_inputs"] == true;
     let inputs = trace["capabilities"]["native_input_events"] == true;
     let draws = trace["capabilities"]["native_drawable_vertices"] == true;
@@ -306,19 +310,105 @@ pub(super) fn dispatch(
 #[derive(Default)]
 pub(super) struct DrawChecks {
     bindings: BTreeMap<String, SongLuaLiveTarget>,
+    binding_paths: BTreeMap<String, String>,
+    targets: BTreeMap<String, SongLuaLiveTarget>,
+    random: Option<render_random::Replay>,
     composers: BTreeMap<i32, WholeSongComposer>,
     pub samples: usize,
     pub vertices: usize,
     pub text_samples: usize,
     pub failures: usize,
     pub culled_samples: usize,
+    pub degenerate_samples: usize,
+    pub batched_samples: usize,
     pub uncompared_immediate_draws: usize,
+    pub missing_random_inputs: usize,
+    failure_counts: BTreeMap<String, usize>,
+    failure_examples: BTreeMap<(String, String), Value>,
     last_failure: Option<Value>,
 }
 
 struct ImmediateDraw {
     frame: RenderFrame,
     texture: Option<String>,
+}
+
+fn native_draw_vertex_count(sample: &Value) -> Result<usize, String> {
+    let count = sample["vertices"].as_array().ok_or("draw without vertices")?.len();
+    match sample["primitive"].as_str() {
+        Some("Quads") if count > 0 && count % 4 == 0 => Ok(count / 4 * 6),
+        Some("Triangles") if count > 0 && count % 3 == 0 => Ok(count),
+        _ => Err("unsupported native primitive in draw comparison".into()),
+    }
+}
+
+fn native_draw_batch<'a>(
+    samples: &'a [Value],
+    owned_vertices: usize,
+    sprite_pieces: bool,
+) -> Result<(usize, usize, std::borrow::Cow<'a, [Value]>), String> {
+    let first = samples.first().ok_or("empty native draw batch")?;
+    let mut count = native_draw_vertex_count(first)?;
+    let mut reference = std::borrow::Cow::Borrowed(first["vertices"].as_array().unwrap().as_slice());
+    let mut consumed = 1;
+    // Native Sprite::DrawPrimitives submits each faded piece through a separate
+    // DrawQuad call. One owned draw may batch those quads in a single mesh. Its
+    // independently emitted vertex count bounds this occurrence: never pool all
+    // samples for an actor/frame or consume the next recorded ImmediateDraw.
+    if sprite_pieces && first["primitive"] == "Quads" {
+        for next in &samples[1..] {
+            if count >= owned_vertices || ["actor", "definition_id", "scene", "update_sequence",
+                "primitive", "coordinate_space", "state", "render_random_sequences", "note_context",
+                "native_draw_sequence", "draw_ordinal"]
+                .into_iter().any(|key| next[key] != first[key])
+            {
+                break;
+            }
+            let next_count = native_draw_vertex_count(next)?;
+            if count + next_count > owned_vertices {
+                break;
+            }
+            reference.to_mut().extend_from_slice(next["vertices"].as_array().unwrap());
+            count += next_count;
+            consumed += 1;
+        }
+    }
+    Ok((consumed, count, reference))
+}
+
+#[test]
+fn native_draw_batches_preserve_occurrences_and_all_piece_boundaries() {
+    let samples = (0..6).map(|piece| json!({
+        "actor":"sprite", "definition_id":"def-1", "scene":1, "update_sequence":2,
+        "primitive":"Quads", "coordinate_space":"native", "state":{"texture":"song:/a.png"},
+        "render_random_sequences":[7], "vertices":vec![json!([piece]);4],
+    })).collect::<Vec<_>>();
+    let (used, count, vertices) = native_draw_batch(&samples, 18, true).unwrap();
+    assert_eq!((used, count, vertices.len()), (3, 18, 12));
+    assert_eq!([&vertices[0][0], &vertices[4][0], &vertices[8][0]], [&json!(0), &json!(1), &json!(2)]);
+    let (used, count, vertices) = native_draw_batch(&samples[used..], 18, true).unwrap();
+    assert_eq!((used, count, vertices.len()), (3, 18, 12));
+    assert_eq!(vertices[0][0], 3, "the next immediate occurrence keeps its own first piece");
+    assert_eq!(native_draw_batch(&samples, 6, true).unwrap().0, 1);
+    assert_eq!(native_draw_batch(&samples, 18, false).unwrap().0, 1);
+    let (used, count, _) = native_draw_batch(&samples[..2], 18, true).unwrap();
+    assert_eq!((used, count), (2, 12), "missing pieces must leave a vertex-count mismatch");
+
+    for (field, value) in [
+        ("actor", json!("other")), ("definition_id", json!("def-2")),
+        ("scene", json!(2)), ("update_sequence", json!(3)), ("primitive", json!("Triangles")),
+        ("coordinate_space", json!("other")), ("state", json!({"texture":"song:/b.png"})),
+        ("render_random_sequences", json!([8])), ("native_draw_sequence", json!(1)),
+        ("draw_ordinal", json!(1)), ("note_context", json!({"player":1})),
+    ] {
+        let mut changed = samples[..2].to_vec();
+        changed[1][field] = value;
+        assert_eq!(native_draw_batch(&changed, 12, true).unwrap().0, 1, "crossed {field}");
+    }
+    let mut oversized = samples[..2].to_vec();
+    oversized[1]["vertices"] = json!(vec![json!([1]);8]);
+    assert_eq!(native_draw_batch(&oversized, 12, true).unwrap().0, 1,
+        "a native submission cannot be split across owned occurrences");
 }
 
 fn target_slot(target: SongLuaLiveTarget) -> (i32, usize) {
@@ -338,6 +428,49 @@ fn layer(state: &gameplay::State, group: i32) -> &[SongLuaOverlayActor] {
     } else {
         &v.foreground_visual_layers[(group - 1) as usize].overlays
     }
+}
+
+fn overlay_screen_state(
+    overlays: &[SongLuaOverlayActor],
+    index: usize,
+    screen: Option<SongLuaOverlayState>,
+) -> Option<SongLuaOverlayState> {
+    let mut parent = overlays[index].parent_index;
+    while let Some(index) = parent {
+        let actor = &overlays[index];
+        // RageTextureRenderTarget::BeginRenderingTo resets both the model
+        // matrix and camera. The displayed AFT sprite still inherits its own
+        // screen parent unless it is itself inside another capture.
+        if matches!(actor.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
+            return None;
+        }
+        parent = actor.parent_index;
+    }
+    screen
+}
+
+#[test]
+fn native_draw_screen_projection_stops_at_texture_capture() {
+    let actor = |kind, parent_index| SongLuaOverlayActor {
+        kind, parent_index, name: None, initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let overlays = vec![
+        actor(SongLuaOverlayKind::ActorFrame, None),
+        actor(SongLuaOverlayKind::ActorFrameTexture {
+            capture_name: "capture".into(), alpha_buffer: true, depth_buffer: false,
+            float_buffer: false, capture_size: Some([320.0, 240.0]),
+        }, Some(0)),
+        actor(SongLuaOverlayKind::ActorFrame, Some(1)),
+        actor(SongLuaOverlayKind::Actor, Some(2)),
+        actor(SongLuaOverlayKind::AftSprite { capture_name: "capture".into() }, Some(0)),
+    ];
+    let screen = SongLuaOverlayState { x: 17.0, fov: Some(60.0), ..SongLuaOverlayState::default() };
+    let inherited = overlay_screen_state(&overlays, 4, Some(screen)).expect("displayed AFT sprite inherits screen");
+    assert_eq!(inherited.x, 17.0);
+    assert_eq!(inherited.fov, Some(60.0));
+    assert!(overlay_screen_state(&overlays, 3, Some(screen)).is_none(), "capture descendants keep their own viewport");
+    assert!(overlay_screen_state(&overlays, 0, None).is_none(), "missing screen state remains absent");
 }
 
 impl DrawChecks {
@@ -414,7 +547,12 @@ impl DrawChecks {
             .visual_bindings().map_err(|e| e.to_string())?;
         let targets: BTreeMap<_, _> = bindings.into_iter().collect();
         self.bindings.clear();
+        self.binding_paths.clear();
+        self.targets = targets.clone();
         self.composers.clear();
+        if self.random.is_none() && trace["capabilities"]["native_render_random_inputs"] == true {
+            self.random = Some(render_random::Replay::parse(trace)?);
+        }
         for creation in trace["actor_creation_inputs"]
             .as_array()
             .ok_or("missing native factory inputs")?
@@ -436,6 +574,18 @@ impl DrawChecks {
                     creation["actor"].as_str().ok_or("missing actor ID")?.into(),
                     target,
                 );
+                self.binding_paths.insert(
+                    creation["actor"].as_str().unwrap().into(), paths[&pointer].clone(),
+                );
+            }
+        }
+        for actor in trace["runtime_actors"].as_array().into_iter().flatten() {
+            if !actor["definition_id"].is_null() { continue; }
+            if let (Some(id), Some(path)) = (actor["id"].as_str(), actor["path"].as_str())
+                && let Some(&target) = targets.get(path)
+            {
+                self.bindings.insert(id.into(), target);
+                self.binding_paths.insert(id.into(), path.into());
             }
         }
         if let Some(sample) = trace["drawable_samples"]
@@ -466,9 +616,29 @@ impl DrawChecks {
         simfile: &Path,
         mismatches: &mut Vec<Value>,
     ) -> Result<(), String> {
+        if let Some(scene) = state.song_lua.as_ref()
+            && scene.visual_draw_bindings().len() != self.targets.len()
+        {
+            // Late AddWrapperState appends independently owned visual slots.
+            // Original actor indexes remain stable; raw random source paths must
+            // resolve against the newly published wrapper identities too.
+            self.targets = scene.visual_bindings()?.into_iter().collect();
+        }
         let mut states = BTreeMap::new();
         let mut immediate = self.immediate(state, screen, clock)?;
-        for sample in samples {
+        let mut ordinary_draws = std::collections::BTreeSet::new();
+        // ScreenGameplay is retained outside the independent song layer trees.
+        // Use its live local pose for the same outer projection and fallback
+        // camera as production playback; recorded draws already carry theirs.
+        let visuals = &state.gameplay.mods.song_lua_visuals;
+        let screen_state = visuals.screen_overlay_index
+            .and_then(|index| visuals.overlays.get(index))
+            .map(|actor| actor.initial_state);
+        let mut sample_index = 0;
+        while sample_index < samples.len() {
+            let batch_start = sample_index;
+            let sample = &samples[sample_index];
+            sample_index += 1;
             let actor = sample["actor"]
                 .as_str()
                 .ok_or("draw without native actor")?;
@@ -481,13 +651,36 @@ impl DrawChecks {
                 SongLuaLiveTarget::Foreground(l, i) => (l as i32 + 1, i),
             };
             let overlays = layer(state, group);
-            let composed = states.entry(group).or_insert_with(|| {
-                compose_overlay_states(
-                    overlays,
-                    &overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>(),
-                    screen,
-                    clock,
-                )
+            let mut local = overlays.iter().map(|a| a.initial_state).collect::<Vec<_>>();
+            let mut screen_state = screen_state;
+            let mut ancestry = std::iter::successors(Some(index), |&index| overlays[index].parent_index)
+                .collect::<Vec<_>>();
+            ancestry.reverse();
+            let mut vibrating = ancestry.into_iter().filter(|&index| local[index].vibrate)
+                .map(|index| (group, index)).collect::<Vec<_>>();
+            if let Some(index) = visuals.screen_overlay_index
+                && screen_state.is_some_and(|state| state.vibrate)
+                && !vibrating.contains(&(0, index))
+            { vibrating.insert(0, (0, index)); }
+            let random_ids = if let Some(random) = self.random.as_mut() {
+                random.apply(sample, &self.bindings, &self.binding_paths, &self.targets,
+                    &vibrating, group, &mut local,
+                    visuals.screen_overlay_index.zip(screen_state.as_mut()))?
+            } else {
+                self.missing_random_inputs += vibrating.len();
+                Vec::new()
+            };
+            let composed = states.entry((group, random_ids.clone())).or_insert_with(|| {
+                let parents = if group < 0 {
+                    [visuals.screen_layers[2].initial_state,
+                        visuals.background_visual_layers[(-group - 1) as usize].song_foreground.initial_state]
+                } else if group > 0 {
+                    [visuals.song_foreground.initial_state,
+                        visuals.foreground_visual_layers[(group - 1) as usize].song_foreground.initial_state]
+                } else {
+                    [visuals.song_foreground.initial_state, SongLuaOverlayState::default()]
+                };
+                compose_layer_overlay_states(overlays, &local, screen, clock, parents)
             });
             self.samples += 1;
             // Glyph geometry has a separate font oracle. Here compare the live
@@ -504,8 +697,14 @@ impl DrawChecks {
                 .entry(group)
                 .or_insert_with(|| WholeSongComposer::new(overlays));
             let (frame, recorded_texture) = match immediate.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
-                Some(draw) => (draw.frame, Some(draw.texture)),
-                None => (composer.render_screen_overlay(overlays, composed, index, screen, clock[0], clock[1], None), None),
+                Some(draw) => {
+                    if !random_ids.is_empty() {
+                        return Err("recorded immediate Draw needs raw random scope binding".into());
+                    }
+                    (draw.frame, Some(draw.texture))
+                },
+                None => (composer.render_screen_overlay(overlays, composed, index, screen, clock[0], clock[1],
+                    overlay_screen_state(overlays, index, screen_state)), None),
             };
             let rows = submitted_rows(&frame);
             let reference = sample["vertices"]
@@ -515,6 +714,32 @@ impl DrawChecks {
                 self.culled_samples += 1;
                 continue;
             }
+            if rows.is_empty() && fully_degenerate(sample["primitive"].as_str().unwrap_or(""), reference) {
+                self.degenerate_samples += 1;
+                continue;
+            }
+
+            let extra_ordinary_draw = recorded_texture.is_none() && !ordinary_draws.insert((group, index));
+            let (consumed, expected_count, reference) = native_draw_batch(
+                &samples[batch_start..], rows.len(),
+                matches!(overlays[index].kind,
+                    SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad | SongLuaOverlayKind::AftSprite { .. }),
+            )?;
+            // Context equality above also requires equal raw-input references;
+            // still validate every consumed native sample against owned ancestry.
+            for piece in &samples[batch_start + 1..batch_start + consumed] {
+                if let Some(random) = self.random.as_mut() {
+                    let ids = random.apply(piece, &self.bindings, &self.binding_paths, &self.targets,
+                        &vibrating, group, &mut local,
+                        visuals.screen_overlay_index.zip(screen_state.as_mut()))?;
+                    if ids != random_ids { return Err("native sprite batch changed random inputs".into()); }
+                } else {
+                    self.missing_random_inputs += vibrating.len();
+                }
+            }
+            sample_index += consumed - 1;
+            self.samples += consumed - 1;
+            self.batched_samples += consumed - 1;
 
             let image_uv_scale: [f32; 2] = std::array::from_fn(|axis| {
                 let (image, backing) = if axis == 0 {
@@ -525,11 +750,6 @@ impl DrawChecks {
                 let image = sample["state"][image].as_f64().unwrap_or(1.0);
                 sample["state"][backing].as_f64().unwrap_or(image) as f32 / image as f32
             });
-            let expected_count = match sample["primitive"].as_str() {
-                Some("Quads") if reference.len() % 4 == 0 => reference.len() / 4 * 6,
-                Some("Triangles") => reference.len(),
-                _ => return Err("unsupported native primitive in draw comparison".into()),
-            };
             let expected_texture = sample["state"]["texture"].as_str().unwrap_or("");
             let expected_texture = expected_texture.strip_prefix("song:/").map(|p| {
                 deadsync_assets::textures::canonical_texture_key(simfile.parent().unwrap().join(p))
@@ -541,7 +761,7 @@ impl DrawChecks {
             }));
             let texture_ok = expected_texture
                 .as_deref()
-                .is_none_or(|key| actual_texture == Some(key));
+                .is_none_or(|key| actual_texture.is_some_and(|actual| same_texture_key(key, actual)));
             let native_depth = sample["state"]["z_test"] != 0;
             let native_write = sample["state"]["z_write"] == true;
             let native_fail = sample["state"]["z_test"] == 2;
@@ -559,9 +779,12 @@ impl DrawChecks {
                 }),
                 _ => true,
             });
-            if rows.len() != expected_count || !texture_ok || !depth_ok || !sampler_ok {
-                self.fail(sample, "draw_shape_resource_or_depth", json!({"vertices":rows.len(),"expected_vertices":expected_count,
-                    "texture_ok":texture_ok,"depth_ok":depth_ok,"sampler_ok":sampler_ok,"ops":format!("{:?}",frame.ops)}), mismatches);
+            if rows.len() != expected_count || !texture_ok || !depth_ok || !sampler_ok || extra_ordinary_draw {
+                let detail = json!({"vertices":rows.len(),"expected_vertices":expected_count,
+                    "texture_ok":texture_ok,"expected_texture":expected_texture,"actual_texture":actual_texture,
+                    "depth_ok":depth_ok,"sampler_ok":sampler_ok,"native_submissions":consumed,
+                    "extra_ordinary_draw":extra_ordinary_draw,"ops":format!("{:?}",frame.ops)});
+                self.fail(sample, "draw_shape_resource_or_depth", detail, mismatches);
                 continue;
             }
             self.vertices += rows.len();
@@ -579,7 +802,7 @@ impl DrawChecks {
                         triangle(&actual[..3], a) && triangle(&actual[3..],b)
                             || triangle(&actual[..3],b) && triangle(&actual[3..],a))
                 })
-            } else { rows.iter().zip(reference).all(|(actual,native)|matches(actual,native)) };
+            } else { rows.iter().zip(reference.iter()).all(|(actual,native)|matches(actual,native)) };
             if !geometry_ok {
                 let example=rows.iter().enumerate().find(|(vertex, actual)| {
                     let candidates=if sample["primitive"]=="Quads" { &reference[vertex/6*4..vertex/6*4+4] }
@@ -598,6 +821,11 @@ impl DrawChecks {
         self.failures += 1;
         let failure = json!({"field":field,"actor":sample["actor"],
             "frame":sample["update_sequence"],"deadsync":actual});
+        *self.failure_counts.entry(field.into()).or_default() += 1;
+        if self.failure_examples.len() < 64 {
+            self.failure_examples.entry((field.into(), sample["actor"].as_str().unwrap_or("").into()))
+                .or_insert_with(|| failure.clone());
+        }
         if self.failures <= 100 {
             mismatches.push(failure.clone());
         }
@@ -608,9 +836,102 @@ impl DrawChecks {
         json!({"input_events_replayed":inputs,"draw_samples_compared":self.samples,
             "submitted_vertices_compared":self.vertices,"live_text_samples_compared":self.text_samples,
             "draw_mismatches":self.failures,"equivalent_offscreen_culls":self.culled_samples,
+            "batched_native_draw_samples":self.batched_samples,
+            "draw_mismatch_counts":self.failure_counts,
+            "draw_mismatch_examples":self.failure_examples.values().collect::<Vec<_>>(),
+            "equivalent_degenerate_culls":self.degenerate_samples,
             "uncompared_owned_immediate_draws":self.uncompared_immediate_draws,
+            "render_random_inputs_replayed":self.random.as_ref().map_or(0, render_random::Replay::used),
+            "render_random_inputs_captured":self.random.as_ref().map_or(0, render_random::Replay::total),
+            "unreplayed_render_random_inputs":self.random.as_ref().map_or(0, |random| random.total() - random.used()),
+            "draw_vibration_scopes_without_native_inputs":self.missing_random_inputs,
             "last_draw_mismatch":self.last_failure,"pixel_parity_proven":false})
     }
+}
+
+// Native archives use portable separators and normalized source paths, while
+// owned handles retain the authored spelling. Resolve parent aliases through
+// the filesystem: lexical cancellation can select a different file at a symlink.
+fn same_texture_key(expected: &str, actual: &str) -> bool {
+    if expected.split(['/', '\\']).filter(|part| *part != ".")
+        .eq(actual.split(['/', '\\']).filter(|part| *part != ".")) {
+        return true;
+    }
+    if !expected.split(['/', '\\']).chain(actual.split(['/', '\\'])).any(|part| part == "..") {
+        return false;
+    }
+    let expected_source = deadsync_assets::textures::texture_source_key(expected);
+    let actual_source = deadsync_assets::textures::texture_source_key(actual);
+    if expected[expected_source.len()..] != actual[actual_source.len()..] {
+        return false;
+    }
+    let expected_source = expected_source.replace('\\', "/");
+    let actual_source = actual_source.replace('\\', "/");
+    let expected_path = Path::new(&expected_source);
+    let actual_path = Path::new(&actual_source);
+    // Filename hints affect texture preparation even when an alias happens to
+    // reach the same file. Retain that spelling and the resource suffix above.
+    if expected_path.file_name() != actual_path.file_name() {
+        return false;
+    }
+    match (expected_path.canonicalize(), actual_path.canonicalize()) {
+        (Ok(expected), Ok(actual)) => expected == actual,
+        _ => false,
+    }
+}
+
+#[test]
+fn native_texture_keys_compare_platform_separators_without_merging_resources() {
+    let expected = "C:/trace/song/bg/background.png";
+    assert!(same_texture_key(expected, r"C:\trace\song\bg\background.png"));
+    assert!(same_texture_key(expected, r"C:/trace/song/bg\background.png"));
+    assert!(same_texture_key(expected, r"C:\trace\song\bg\./background.png"));
+    assert!(same_texture_key(expected, r"C:\trace\.\song\bg\.\background.png"));
+    assert!(!same_texture_key(expected, r"C:\trace\song\background.png"));
+    assert!(!same_texture_key(expected, r"C:\trace\song\bg\background.png#itg-model"));
+    assert!(!same_texture_key(expected, r"C:\trace\other-song\bg\background.png"));
+    assert!(!same_texture_key(expected, r"C:\trace\song\bg\..\background.png"));
+    assert!(!same_texture_key(expected, r"C:\trace\song\bg\.background.png"));
+}
+
+#[test]
+fn native_texture_keys_resolve_parent_aliases_without_merging_resources() {
+    let song = tempfile::tempdir().unwrap();
+    for directory in ["bg", "lua/inner", "other"] {
+        std::fs::create_dir_all(song.path().join(directory)).unwrap();
+    }
+    for file in ["bg/sky#grad.png", "other/sky#grad.png", "bg/other.png"] {
+        std::fs::write(song.path().join(file), b"same contents").unwrap();
+    }
+    let expected = song.path().join("bg/sky#grad.png").to_string_lossy().into_owned();
+    let alias = song.path().join("lua/inner/../../bg/sky#grad.png").to_string_lossy().into_owned();
+    assert!(same_texture_key(&expected, &alias));
+    assert!(same_texture_key(&format!("{expected}#itg-model"), &format!("{alias}#itg-model")));
+    assert!(!same_texture_key(&expected, &format!("{alias}#itg-model")));
+    assert!(!same_texture_key(&format!("{expected}#itg-model"), &alias));
+    for different in ["lua/../other/sky#grad.png", "lua/../bg/other.png", "lua/../missing/sky#grad.png"] {
+        assert!(!same_texture_key(&expected, &song.path().join(different).to_string_lossy()));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_texture_parent_aliases_follow_symlinks_without_erasing_filename_hints() {
+    use std::os::unix::fs::symlink;
+
+    let song = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(song.path().join("real/nested")).unwrap();
+    std::fs::create_dir_all(song.path().join("local")).unwrap();
+    for file in ["real/sky.png", "local/sky.png"] {
+        std::fs::write(song.path().join(file), b"same contents").unwrap();
+    }
+    symlink(song.path().join("real/nested"), song.path().join("local/link")).unwrap();
+    let alias = song.path().join("local/link/../sky.png").to_string_lossy().into_owned();
+    assert!(same_texture_key(&song.path().join("real/sky.png").to_string_lossy(), &alias));
+    assert!(!same_texture_key(&song.path().join("local/sky.png").to_string_lossy(), &alias));
+    symlink(song.path().join("real/sky.png"), song.path().join("real/sky (doubleres).png")).unwrap();
+    let hinted = song.path().join("real/nested/../sky (doubleres).png").to_string_lossy().into_owned();
+    assert!(!same_texture_key(&song.path().join("real/sky.png").to_string_lossy(), &hinted));
 }
 
 pub(crate) fn native_depth_range(state: &Value) -> [f32; 2] {
@@ -663,6 +984,101 @@ pub(crate) fn fully_clipped(rows: &[Value]) -> bool {
     if rows.is_empty() || rows.iter().any(|r| (3..7).any(|i| !native_number(&r[i]).is_finite())) { return false; }
     (0..3).any(|axis| rows.iter().all(|r| native_number(&r[axis+3]) > native_number(&r[6])+0.0001)
         || rows.iter().all(|r| native_number(&r[axis+3]) < -native_number(&r[6])-0.0001))
+}
+
+// Native Sprite::DrawTexture submits zero-scale quads; production composition
+// can omit them because they cover no pixels. Prove a conservative subset of
+// exact projected degeneracy, without an area tolerance or perspective divide.
+// Products of two finite f32 values are exact in f64, so these comparisons cannot
+// round a merely thin triangle down to zero area. Other diagonal collinearity
+// remains a mismatch rather than relying on a rounded determinant.
+pub(crate) fn fully_degenerate(primitive: &str, rows: &[Value]) -> bool {
+    let count = match primitive {
+        "Triangles" => 3,
+        "Quads" => 4,
+        _ => return false,
+    };
+    if rows.is_empty() || rows.len() % count != 0 { return false; }
+    rows.chunks_exact(count).all(|group| {
+        let mut points = [[0.0f32; 4]; 4];
+        for (point, row) in points.iter_mut().zip(group) {
+            let Some(values) = row.as_array().filter(|values| values.len() == 13) else { return false; };
+            *point = std::array::from_fn(|axis| native_number(&values[axis + 3]));
+            if point.iter().any(|value| !value.is_finite()) || point[3] <= 0.0 { return false; }
+        }
+        let same_axis = |a: [f32; 4], b: [f32; 4], axis: usize| {
+            f64::from(a[axis]) * f64::from(b[3]) == f64::from(b[axis]) * f64::from(a[3])
+        };
+        let same_point = |a, b| same_axis(a, b, 0) && same_axis(a, b, 1);
+        let zero_triangle = |indices: [usize; 3]| {
+            let [a, b, c] = indices.map(|index| points[index]);
+            (0..2).any(|axis| same_axis(a, b, axis) && same_axis(a, c, axis))
+                || same_point(a, b) || same_point(a, c) || same_point(b, c)
+        };
+        zero_triangle([0, 1, 2]) && (count == 3
+            // Either native quad diagonal must cover zero area. A repeated
+            // corner alone must not conceal the remaining visible triangle.
+            || [[0, 2, 3], [0, 1, 3], [1, 2, 3]].into_iter().all(zero_triangle))
+    })
+}
+
+#[test]
+fn native_degenerate_culls_require_exact_projected_collapse() {
+    let rows = |points: &[[f32; 4]]| points.iter().map(|p|
+        json!([0, 0, 0, p[0], p[1], p[2], p[3], 0, 0, 1, 1, 1, 1])
+    ).collect::<Vec<_>>();
+    let collapsed = rows(&[[-f32::EPSILON / 2.0, 0.0, 0.0, 1.0]; 4]);
+    assert!(fully_degenerate("Quads", &collapsed));
+    assert!(fully_degenerate("Triangles", &rows(&[
+        [0.5, -1.0, 0.0, 1.0], [1.0, 2.0, 0.0, 2.0], [2.0, 2.0, 0.0, 4.0],
+    ])), "equal projected X is sufficient even when homogeneous W differs");
+    assert!(fully_degenerate("Quads", &rows(&[
+        [-1.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 1.0],
+        [2.0, 0.0, 0.0, 1.0], [-2.0, 0.0, 0.0, 1.0],
+    ])));
+    let a = [-1.0, -1.0, 0.0, 1.0];
+    let b = [1.0, 1.0, 0.0, 1.0];
+    assert!(fully_degenerate("Quads", &rows(&[a, a, b, b])));
+    assert!(!fully_degenerate("Quads", &rows(&[a, a, b, [-1.0, 1.0, 0.0, 1.0]])),
+        "a duplicate corner does not erase the remaining triangle");
+    let thin = rows(&[
+        [0.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0],
+        [1.0e-30, 1.0, 0.0, 1.0], [1.0e-30, 0.0, 0.0, 1.0],
+    ]);
+    assert!(!fully_degenerate("Quads", &thin), "nonzero area has no acceptance epsilon");
+    assert!(!fully_degenerate("Triangles", &thin[..3]));
+    assert!(!fully_degenerate("Quads", &rows(&[
+        [-1.0, -1.0, 0.0, 1.0], [1.0, 1.0, 0.0, 1.0],
+        [-1.0, 1.0, 0.0, 1.0], [1.0, -1.0, 0.0, 1.0],
+    ])), "opposite signed triangle areas cannot cancel visible geometry");
+    let mut mixed = collapsed;
+    mixed.extend(thin);
+    assert!(!fully_degenerate("Quads", &mixed), "every primitive must collapse");
+}
+
+#[test]
+fn native_degenerate_culls_reject_invalid_geometry_and_transparency() {
+    let row = json!([0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1]);
+    let mut rows = vec![row; 4];
+    assert!(!fully_degenerate("Lines", &rows));
+    assert!(!fully_degenerate("Quads", &[]));
+    assert!(!fully_degenerate("Quads", &rows[..3]));
+    for w in [0.0, -1.0] {
+        rows[0][6] = json!(w);
+        assert!(!fully_degenerate("Quads", &rows));
+    }
+    rows[0][6] = json!(1.0);
+    for axis in 3..7 {
+        let before = rows[0][axis].clone();
+        rows[0][axis] = json!({"type":"number", "value":"inf"});
+        assert!(!fully_degenerate("Quads", &rows));
+        rows[0][axis] = before;
+    }
+    rows[0] = json!([0, 0, 0, 0, 0, 0, 1]);
+    assert!(!fully_degenerate("Quads", &rows));
+    let transparent = [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(|p|
+        json!([0, 0, 0, p[0], p[1], 0, 1, 0, 0, 1, 1, 1, 0]));
+    assert!(!fully_degenerate("Quads", &transparent), "alpha zero does not prove a safe depth or blend cull");
 }
 
 fn native_number(v: &Value) -> f32 {

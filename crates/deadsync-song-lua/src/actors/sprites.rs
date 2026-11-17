@@ -327,7 +327,8 @@ pub(super) fn initialize(
         render.sprite_animate = !theme_actor;
         render.sprite_texture = bound;
     }
-    refresh_size(call, actor)
+    refresh_size(call, actor)?;
+    sprite_animation::initialize(call, actor, template)
 }
 pub(super) fn set_texture(
     call: &mut HostCall<'_>,
@@ -445,13 +446,30 @@ fn state(
     if clear_rect {
         action_capture::prepare_write(call, actor)?;
     }
+    let (index, clear_custom) = if let Some(state) = call
+        .store()
+        .actors
+        .get_mut(&actor)
+        .and_then(|actor| actor.sprite_animation.as_mut())
+    {
+        (
+            if clear_rect {
+                state.set_state(index)
+            } else {
+                index
+            },
+            false,
+        )
+    } else {
+        (index, clear_rect)
+    };
     set(
         call,
         actor,
         "__songlua_state_sprite_state_index",
         Value::Number(index as f64),
     )?;
-    if clear_rect {
+    if clear_custom {
         set(
             call,
             actor,
@@ -468,7 +486,7 @@ fn state(
     }
     let render = &mut instance.state.render;
     render.sprite_state_index = Some(index);
-    if clear_rect {
+    if clear_custom {
         render.custom_texture_rect = None;
     }
     if clear_rect {
@@ -497,34 +515,51 @@ fn state(
 }
 fn rect(call: &mut HostCall<'_>, actor: TableId, rect: [f32; 4]) -> Result<(), Error> {
     action_capture::prepare_write(call, actor)?;
-    state(call, actor, crate::SONG_LUA_SPRITE_STATE_CLEAR, false)?;
-    capture::write(
-        call,
-        actor,
-        crate::SongLuaOverlayStateDelta {
-            sprite_state_index: Some(crate::SONG_LUA_SPRITE_STATE_CLEAR),
-            ..Default::default()
-        },
-        false,
-    );
-    song_properties::record(
-        call,
-        actor,
-        crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
-        crate::SongLuaOverlayUpdateValue::U32(crate::SONG_LUA_SPRITE_STATE_CLEAR),
-    );
-    put_vector(call, actor, "__songlua_state_custom_texture_rect", &rect)?;
-    call.store()
+    if let Some(state) = call
+        .store()
         .actors
         .get_mut(&actor)
-        .unwrap()
-        .state
-        .render
-        .custom_texture_rect = Some(rect);
+        .and_then(|actor| actor.sprite_animation.as_mut())
+    {
+        state.set_rect(rect);
+    } else {
+        state(call, actor, crate::SONG_LUA_SPRITE_STATE_CLEAR, false)?;
+        capture::write(
+            call,
+            actor,
+            crate::SongLuaOverlayStateDelta {
+                sprite_state_index: Some(crate::SONG_LUA_SPRITE_STATE_CLEAR),
+                ..Default::default()
+            },
+            false,
+        );
+        song_properties::record(
+            call,
+            actor,
+            crate::SongLuaOverlayUpdateTarget::SpriteStateIndex,
+            crate::SongLuaOverlayUpdateValue::U32(crate::SONG_LUA_SPRITE_STATE_CLEAR),
+        );
+    }
+    put_vector(call, actor, "__songlua_state_custom_texture_rect", &rect)?;
+    // Sprite::SetCustomTextureRect and SetCustomTextureCoords both enable
+    // wrapping, including when a prior texturewrapping(false) disabled it.
+    super::host_compat::raw_flag(call, actor, "__songlua_state_texture_wrapping", true)?;
+    let render = &mut call.store().actors.get_mut(&actor).unwrap().state.render;
+    render.texture_wrapping = true;
+    render.custom_texture_rect = Some(rect);
+    song_media::record(call, actor, "texture_wrapping");
     song_media::record(call, actor, "custom_texture_rect");
     Ok(())
 }
 fn current_rect(call: &mut HostCall<'_>, actor: TableId) -> Result<[f32; 4], Error> {
+    if let Some(state) = call
+        .store()
+        .actors
+        .get(&actor)
+        .and_then(|actor| actor.sprite_animation.as_ref())
+    {
+        return Ok(state.active_rect());
+    }
     let custom = field(call, actor, "__songlua_state_custom_texture_rect")?;
     let custom = vector::<4>(call, custom)?;
     let state = optional_uint(call, actor, "__songlua_state_sprite_state_index")?;
@@ -794,6 +829,7 @@ pub(super) fn load(
             true,
         );
     }
+    sprite_animation::load(call, actor, preserve)?;
     capture(call, actor, previous)
 }
 
@@ -864,10 +900,28 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
         }
         "GetTexture" => return textures::get(call, actor),
         "GetNumStates" => {
+            if let Some(state) = call
+                .store()
+                .actors
+                .get(&actor)
+                .and_then(|actor| actor.sprite_animation.as_ref())
+            {
+                let count = state.states.len();
+                return call.push(Value::Number(count as f64));
+            }
             let count = crate::sprite_frame_count(sheet(call, actor)?);
             return call.push(Value::Number(count as f64));
         }
         "GetState" => {
+            if let Some(state) = call
+                .store()
+                .actors
+                .get(&actor)
+                .and_then(|actor| actor.sprite_animation.as_ref())
+            {
+                let index = state.index;
+                return call.push(Value::Number(index as f64));
+            }
             let state = optional_uint(call, actor, "__songlua_state_sprite_state_index")?;
             return call.push(Value::Number(
                 crate::song_lua_valid_sprite_state_index(state).unwrap_or(0) as f64,
@@ -932,6 +986,14 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
         }
         "SetAllStateDelays" => {
             if let Some(delay) = float_scalar(call, value, false) {
+                if let Some(state) = call
+                    .store()
+                    .actors
+                    .get_mut(&actor)
+                    .and_then(|actor| actor.sprite_animation.as_mut())
+                {
+                    state.set_delays(delay);
+                }
                 let delay = delay.max(0.0);
                 action_capture::prepare_write(call, actor)?;
                 set(
@@ -951,6 +1013,15 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
             }
         }
         "GetAnimationLengthSeconds" => {
+            if let Some(state) = call
+                .store()
+                .actors
+                .get(&actor)
+                .and_then(|actor| actor.sprite_animation.as_ref())
+            {
+                let length = state.length();
+                return call.push(Value::Number(length as f64));
+            }
             let length = if let Some(length) =
                 optional_number(call, actor, "__songlua_sprite_animation_length_seconds")?
             {
@@ -965,6 +1036,9 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
         }
         "SetSecondsIntoAnimation" => {
             if let Some(seconds) = float_scalar(call, value, false) {
+                if sprite_animation::set_seconds(call, actor, seconds)? {
+                    return call.push(Value::Table(actor));
+                }
                 let delay = optional_number(call, actor, "__songlua_state_sprite_state_delay")?
                     .unwrap_or(0.1);
                 let count = crate::sprite_frame_count(sheet(call, actor)?);
@@ -983,6 +1057,8 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                 let mut length = 0.0f32;
                 let mut first = None;
                 let mut first_delay = None;
+                let mut states = Vec::new();
+                let retained = call.store().actors[&actor].sprite_animation.is_some();
                 for i in 1usize.. {
                     let entry = call.raw_table_get(entries, Value::Number(i as f64))?;
                     if entry == Value::Nil {
@@ -990,12 +1066,22 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                     }
                     let entry_table = table(call, entry)?;
                     call.with_roots(&[entry], |call| {
+                        let frame = if first.is_none() || retained {
+                            optional_uint(call, entry_table, "Frame")?
+                        } else {
+                            None
+                        };
                         if first.is_none() {
-                            first = optional_uint(call, entry_table, "Frame")?;
+                            first = frame;
                         }
-                        let delay = optional_number(call, entry_table, "Delay")?
-                            .unwrap_or(0.0)
-                            .max(0.0);
+                        let delay = optional_number(call, entry_table, "Delay")?.unwrap_or(0.0);
+                        if retained {
+                            states.push(crate::SongLuaSpriteState {
+                                frame: frame.unwrap_or(0),
+                                delay,
+                            });
+                        }
+                        let delay = delay.max(0.0);
                         first_delay.get_or_insert(delay);
                         length += delay;
                         Ok(())
@@ -1024,16 +1110,29 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                         .sprite_state_delay = delay;
                     song_media::record(call, actor, "sprite_state_delay");
                 }
-                state(call, actor, first.unwrap_or(0), true)?;
+                sprite_animation::set_states(call, actor, states)?;
+                if !retained {
+                    state(call, actor, first.unwrap_or(0), true)?;
+                }
             }
         }
         "customtexturerect" | "SetCustomImageRect" => {
-            let values =
+            let mut values =
                 [1, 2, 3, 4].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
+            if name == "SetCustomImageRect"
+                && let Some(state) = call
+                    .store()
+                    .actors
+                    .get(&actor)
+                    .and_then(|actor| actor.sprite_animation.as_ref())
+            {
+                values = state.image_rect(values);
+            }
             rect(call, actor, values)?;
         }
         "stretchtexcoords" | "addimagecoords" => {
-            let upload = if name == "addimagecoords" {
+            let retained = call.store().actors[&actor].sprite_animation.is_some();
+            let upload = if name == "addimagecoords" && !retained {
                 let Some(size) = actor_upload_size(call, actor)? else {
                     return call.push(Value::Table(actor));
                 };
@@ -1043,7 +1142,18 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
             };
             let delta = [1, 2].map(|i| float_scalar(call, arg(call, i), false).unwrap_or(0.0));
             let current = current_rect(call, actor)?;
-            let next = if let Some(size) = upload {
+            let native_offset = if name == "addimagecoords" {
+                call.store()
+                    .actors
+                    .get(&actor)
+                    .and_then(|actor| actor.sprite_animation.as_ref())
+                    .map(|state| state.pixel_offset(delta))
+            } else {
+                None
+            };
+            let next = if let Some(delta) = native_offset {
+                Some(crate::offset_texture_rect(current, delta))
+            } else if let Some(size) = upload {
                 crate::texture_pixel_offset_rect(current, size, delta)
             } else {
                 Some(crate::offset_texture_rect(current, delta))
@@ -1070,6 +1180,26 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
             put_vector(call, actor, &format!("__songlua_state_{key}"), &value)?;
             song_media::record(call, actor, key);
         }
+        "get_use_effect_clock_for_texcoords" => {
+            let enabled = call.store().actors[&actor]
+                .sprite_animation
+                .as_ref()
+                .is_some_and(|state| state.use_effect_clock_for_texcoords);
+            return call.push(Value::Boolean(enabled));
+        }
+        "set_use_effect_clock_for_texcoords" => {
+            let Value::Boolean(enabled) = value else {
+                return Err(call.error(b"boolean expected"));
+            };
+            if let Some(state) = call
+                .store()
+                .actors
+                .get_mut(&actor)
+                .and_then(|actor| actor.sprite_animation.as_mut())
+            {
+                state.use_effect_clock_for_texcoords = enabled;
+            }
+        }
         "CropTo" | "scaletoclipped" => {
             let (Some(w), Some(h)) = (
                 float_scalar(call, value, false),
@@ -1093,6 +1223,10 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
                     action_capture::prepare_write(call, actor)?;
                     size(call.store(), actor, target);
                     capture::property(call, actor, "size");
+                    let crop = call.store().actors[&actor]
+                        .sprite_animation
+                        .as_ref()
+                        .map_or(crop, |state| state.image_rect(crop));
                     rect(call, actor, crop)?;
                     let guard = call.store();
                     let pose = guard.actors.get_mut(&actor).unwrap().destination_mut();
