@@ -474,13 +474,11 @@ impl Window {
             && self.layouts[2].v == self.layouts[1].v;
         let half_height = self.layouts[1].v * 2 == max_v;
         for y in start..(start + rows).min(height) {
-            let samplers: [Row<'_>; 4] = core::array::from_fn(|i| {
-                if i < self.components {
-                    Row::new(cache, self.layouts[i], y, self.max_h, self.max_v, method)
-                } else {
-                    Row::empty()
-                }
-            });
+            // A plain loop: the from_fn closure stayed out of line per row.
+            let mut samplers = [Row::empty(); 4];
+            for (i, sampler) in samplers.iter_mut().enumerate().take(self.components) {
+                *sampler = Row::new(cache, self.layouts[i], y, self.max_h, self.max_v, method);
+            }
             if self.color == ColorSpace::YCbCr && half && method == Upsampling::Linear {
                 ycbcr420_row(
                     samplers[0].top,
@@ -774,18 +772,28 @@ impl<'a> Row<'a> {
         } else {
             let sy = ((2 * y + 1) * c.v) as i32 - max_v as i32;
             let dy = 2 * max_v as i32;
-            let iy = sy.div_euclid(dy);
+            // Euclidean division; shifts and masks for power-of-two factors.
+            let (iy, fy) = if (dy as u32).is_power_of_two() {
+                (sy >> dy.trailing_zeros(), sy & (dy - 1))
+            } else {
+                (sy.div_euclid(dy), sy.rem_euclid(dy))
+            };
             (
                 iy.clamp(0, c.height as i32 - 1) as usize,
                 (iy + 1).clamp(0, c.height as i32 - 1) as usize,
-                sy.rem_euclid(dy),
+                fy,
                 dy,
             )
         };
         let get = |y: usize| {
-            let start = c.offset
-                + (y / c.band_rows % c.slots) * c.band_rows * c.stride
-                + y % c.band_rows * c.stride;
+            let (band, row) = if c.band_rows.is_power_of_two() {
+                let shift = c.band_rows.trailing_zeros();
+                (y >> shift, y & (c.band_rows - 1))
+            } else {
+                (y / c.band_rows, y % c.band_rows)
+            };
+            let slot = if c.slots == 1 { 0 } else { band % 3 };
+            let start = c.offset + (slot * c.band_rows + row) * c.stride;
             &cache[start..start + c.width]
         };
         Self {
@@ -801,7 +809,9 @@ impl<'a> Row<'a> {
     /// Interpolated samples for `x` in `start..start + out.len()`. The source
     /// position advances by `2h` per pixel instead of dividing per sample;
     /// power-of-two denominators shift. Every sum is non-negative.
-    #[inline(always)]
+    // Out of line on purpose: compiled for AVX2, LLVM turned the indexed
+    // loads into gathers, which were several times slower here.
+    #[inline(never)]
     fn fill(&self, start: usize, out: &mut [i16]) {
         let last = self.top.len() as i32 - 1;
         if self.method == Upsampling::Nearest {
@@ -827,13 +837,21 @@ impl<'a> Row<'a> {
             .then(|| denominator.trailing_zeros());
         let source = ((2 * start + 1) * self.h) as i32 - self.max_h as i32;
         let (mut ix, mut fx) = (source.div_euclid(dx), source.rem_euclid(dx));
+        // The bilinear sum factors exactly through one vertical blend per
+        // source sample: V[j] = top[j] * (dy - fy) + bottom[j] * fy, then
+        // V[left] * (dx - fx) + V[right] * fx. The last pixel reads source
+        // `base + span - 1`; h <= max_h keeps span <= out.len() + 1.
+        let base = ix;
+        let span = ((out.len() as i32 - 1) * step + fx) / dx + 2;
+        let mut blend = [0i32; CHUNK + 2];
+        for (j, value) in blend.iter_mut().enumerate().take(span as usize) {
+            let at = (base + j as i32).clamp(0, last) as usize;
+            *value = i32::from(self.top[at]) * (self.dy - self.fy)
+                + i32::from(self.bottom[at]) * self.fy;
+        }
         for value in out {
-            let left = ix.clamp(0, last) as usize;
-            let right = (ix + 1).clamp(0, last) as usize;
-            let top = i32::from(self.top[left]) * (dx - fx) + i32::from(self.top[right]) * fx;
-            let bottom =
-                i32::from(self.bottom[left]) * (dx - fx) + i32::from(self.bottom[right]) * fx;
-            let sum = top * (self.dy - self.fy) + bottom * self.fy + half;
+            let j = (ix - base) as usize;
+            let sum = blend[j] * (dx - fx) + blend[j + 1] * fx + half;
             *value = shift.map_or(sum / denominator, |s| sum >> s) as i16;
             fx += step;
             if fx >= dx {
