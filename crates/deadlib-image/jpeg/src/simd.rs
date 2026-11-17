@@ -8,6 +8,9 @@
 //! declined to inline a large closure body and compiled it for the baseline. Both versions
 //! evaluate identical integer and IEEE single-precision operations (AVX2 does
 //! not enable FMA contraction), so their output is bit-identical.
+//!
+//! Building with `--cfg deadlib_image_jpeg_portable` compiles dispatch out, to
+//! measure or fuzz the baseline kernels on an AVX2-capable machine.
 
 /// A unit of hot work; `run` must be `#[inline(always)]`.
 pub(crate) trait Kernel {
@@ -18,7 +21,7 @@ pub(crate) trait Kernel {
 /// Run `kernel`, compiled with AVX2 when the CPU supports it.
 #[inline(always)]
 pub(crate) fn dispatch<K: Kernel>(kernel: K) -> K::Output {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
     if !portable_forced() && std::is_x86_feature_detected!("avx2") {
         // SAFETY: AVX2 support was detected on this CPU just above; `avx2`
         // only inlines the safe kernel into AVX2-enabled code.
@@ -28,7 +31,7 @@ pub(crate) fn dispatch<K: Kernel>(kernel: K) -> K::Output {
     kernel.run()
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
 #[target_feature(enable = "avx2")]
 fn avx2<K: Kernel>(kernel: K) -> K::Output {
     kernel.run()
@@ -48,7 +51,7 @@ pub(crate) fn portable<R>(f: impl FnOnce() -> R) -> R {
     result
 }
 
-#[cfg(any(test, target_arch = "x86_64"))]
+#[cfg(any(test, all(target_arch = "x86_64", not(deadlib_image_jpeg_portable))))]
 #[inline(always)]
 fn portable_forced() -> bool {
     #[cfg(test)]
@@ -72,7 +75,7 @@ pub(crate) fn idct8(
     out: &mut [u8],
     stride: usize,
 ) -> bool {
-    #[cfg(target_arch = "x86_64")]
+    #[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
     if !portable_forced() && std::is_x86_feature_detected!("avx2") {
         // SAFETY: AVX2 support was detected just above. All loads read
         // fixed-size arrays and every store targets a checked 8-byte slice.
@@ -86,7 +89,7 @@ pub(crate) fn idct8(
     false
 }
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", not(deadlib_image_jpeg_portable)))]
 #[allow(unsafe_code)]
 mod x86 {
     use std::arch::x86_64::*;

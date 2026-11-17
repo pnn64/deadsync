@@ -10,5 +10,9 @@ repository = "https://github.com/pnn64/deadsync"
 [dependencies]
 deadlib-image = { path = "..", version = "0.1.0" }
 
+[lints.rust]
+# `--cfg deadlib_image_jpeg_portable` disables runtime SIMD dispatch (see src/simd.rs).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(deadlib_image_jpeg_portable)"] }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
