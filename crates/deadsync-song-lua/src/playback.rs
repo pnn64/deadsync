@@ -7321,13 +7321,6 @@ struct SongLuaLayerDepth {
 }
 
 impl SongLuaLayerDepth {
-    fn shifted(self, z: f32) -> Self {
-        Self {
-            base: song_lua_add_z(self.base, song_lua_rounded_z(z)),
-            ..self
-        }
-    }
-
     fn draw_z(self, draw_idx: usize) -> i16 {
         song_lua_add_z(self.base, draw_idx.min(i16::MAX as usize) as i16).min(self.ceiling)
     }
@@ -7346,29 +7339,14 @@ const SONG_LUA_FOREGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
     ceiling: LUA_FOREGROUND_Z_MAX,
 };
 
-fn song_lua_rounded_z(value: f32) -> i16 {
-    if !value.is_finite() {
-        return 0;
+fn song_lua_player_layer_z(song_lua_active: bool) -> i16 {
+    // Actor::SetZ changes geometry, independently of Actor::SetDrawOrder.
+    // Player depth must not move receptors above SongForeground's pad model.
+    if song_lua_active {
+        SONG_LUA_PLAYER_LAYER_Z_BASE
+    } else {
+        0
     }
-    value
-        .round()
-        .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16
-}
-
-fn song_lua_player_layer_z(
-    song_lua_active: bool,
-    actor: &SongLuaCapturedActor,
-    current: SongLuaOverlayState,
-    runtime_z: f32,
-) -> i16 {
-    if !song_lua_active {
-        return 0;
-    }
-    let _ = actor;
-    song_lua_add_z(
-        SONG_LUA_PLAYER_LAYER_Z_BASE,
-        song_lua_rounded_z(current.z + runtime_z),
-    )
 }
 
 fn song_lua_style_capture_actor(
@@ -13427,7 +13405,6 @@ fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
         out,
         overlays,
         overlay_states,
-        song_foreground_state,
         order_cache,
         order_scratch,
         aft_capture_scratch,
@@ -13439,7 +13416,6 @@ fn prepare_active_song_lua_layer<S: NoteskinSlot + Clone>(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor<S>],
     overlay_states: &[SongLuaOverlayState],
-    song_foreground_state: SongLuaOverlayState,
     order_cache: &mut SongLuaOverlayOrderCache,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
@@ -13448,7 +13424,9 @@ fn prepare_active_song_lua_layer<S: NoteskinSlot + Clone>(
     aft_capture_scratch.begin_frame();
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    depth.shifted(song_foreground_state.z)
+    // Parent Z is composed into each child's geometry. Authored draworder and
+    // explicit child Z sorting determine traversal within this screen layer.
+    depth
 }
 
 /// Foreground::Update advances actors from the FGCHANGE's start, undoing
@@ -15146,12 +15124,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 notefield_view,
             );
             let target_y = player_transform.y.unwrap_or(player_state.y);
-            let z_shift = song_lua_player_layer_z(
-                song_lua_active,
-                player_actor,
-                player_state,
-                player_transform.z,
-            );
+            let z_shift = song_lua_player_layer_z(song_lua_active);
             let player_blend = match player_state.blend {
                 SongLuaOverlayBlendMode::NoEffect => Some(BlendMode::NoEffect),
                 SongLuaOverlayBlendMode::Alpha => None,

@@ -4928,8 +4928,8 @@ return Def.ActorFrame{
             let mut assets = deadlib_assets::AssetManager::new();
             load_gpu_capture_assets(&mut assets, &mut backend).unwrap();
             prewarm_gpu_noteskins(state, &mut assets, &mut backend).unwrap();
-            // Lua sprites bind during actor construction, before the compositor
-            // can discover missing texture keys. Load their resources first.
+            // Lua sprites bind and Models check texture availability during actor
+            // construction, before the compositor can discover missing keys.
             let visuals = state.gameplay.song_lua_visuals();
             for overlay in visuals.overlays.iter().chain(
                 visuals
@@ -4938,19 +4938,40 @@ return Def.ActorFrame{
                     .chain(&visuals.foreground_visual_layers)
                     .flat_map(|layer| &layer.overlays),
             ) {
-                if let deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
-                    texture_key,
-                    textures,
-                    ..
-                } = &overlay.kind
-                {
-                    for key in
-                        std::iter::once(texture_key).chain(textures.iter().map(|texture| &texture.key))
-                    {
-                        if !deadlib_assets::dynamic::is_dynamic_video_path(Path::new(key.as_ref())) {
-                            ensure_gpu_capture_texture(&mut assets, &mut backend, key, None).unwrap();
+                match &overlay.kind {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
+                        texture_key,
+                        textures,
+                        ..
+                    } => {
+                        for key in std::iter::once(texture_key)
+                            .chain(textures.iter().map(|texture| &texture.key))
+                        {
+                            if !deadlib_assets::dynamic::is_dynamic_video_path(Path::new(key.as_ref())) {
+                                ensure_gpu_capture_texture(&mut assets, &mut backend, key, None).unwrap();
+                            }
                         }
                     }
+                    deadsync_assets::song_lua::SongLuaOverlayKind::Model { layers } => {
+                        for layer in layers.iter() {
+                            for key in std::iter::once(&layer.texture_key)
+                                .chain(layer.additive.as_ref())
+                                .chain(
+                                    layer.texture_frames.iter()
+                                        .chain(layer.additive_frames.iter())
+                                        .filter_map(|frame| frame.texture_key.as_ref()),
+                                )
+                            {
+                                ensure_gpu_capture_texture(
+                                    &mut assets,
+                                    &mut backend,
+                                    key,
+                                    Some(deadsync_assets::textures::model_texture_sampler(key)),
+                                ).unwrap();
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
             fs::create_dir_all(&output).unwrap();
@@ -7193,9 +7214,11 @@ return Def.ActorFrame{}
     /// Bumpy gives every note depth. Native draws the notefield through that
     /// whole chain under a perspective centered on the Player's own X/Y.
     /// The song-Lua replay compares only authored actors, so these engine
-    /// note draws need the native notefield trace.
+    /// note draws need the native notefield trace. The foreground pad draws
+    /// over flat receptor sprites; moving Player in Z must not reorder it
+    /// above SongForeground (Actor::SetZ and SetDrawOrder are independent).
     #[test]
-    fn dyscontrolled_pad_notes_match_native_player_wrapper_geometry() {
+    fn dyscontrolled_pad_matches_native_geometry_and_draw_order() {
         let native: serde_json::Value = serde_json::from_slice(&zstd::stream::decode_all(
             include_bytes!("../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-pad-native.json.zst").as_slice(),
         ).unwrap()).unwrap();
@@ -7204,11 +7227,71 @@ return Def.ActorFrame{}
         assert_eq!(native["input"]["player_options"], "m690, -10% mini, cel");
         assert_eq!(native["input"]["native_source"]["revision"], "663525dcb86eb570d0ef6a2e209678436660ae26");
         assert_eq!(native["input"]["native_source"]["modified_src"], false);
+        assert_eq!(native["input"]["scene_draws"], true);
+        assert_eq!(native["capabilities"]["native_receptor_geometry_protocol"], 1);
+        for field in ["dropped_model_geometry_samples", "dropped_drawable_samples",
+            "dropped_receptor_visits", "dropped_script_errors"]
+        {
+            assert_eq!(native[field], 0, "incomplete native capture: {field}");
+        }
+        assert!(native["script_errors"].as_array().unwrap().is_empty());
+        // The foreground's sole Model is the platform. Its first mesh is
+        // Plane04 in lua/pad/platform meshes.txt. Graphics submission IDs span
+        // the sprite and model channels, so they retain native painter order.
+        let mut native_pad_order = std::collections::BTreeMap::<u64, u64>::new();
+        for sample in native["model_geometry_samples"].as_array().unwrap() {
+            let state = &sample["state"];
+            if state["render_target"] == 0 && state["mesh_index"] == 0
+                && state["mesh_name"] == "Plane04" && state["note_context"].is_null()
+            {
+                let update = sample["update_sequence"].as_u64().unwrap();
+                let order = state["native_draw_sequence"].as_u64().unwrap();
+                native_pad_order.entry(update).and_modify(|first| *first = (*first).min(order))
+                    .or_insert(order);
+            }
+        }
+        let mut native_receptors = std::collections::BTreeMap::<u32, Vec<[f32; 3]>>::new();
+        for sample in native["drawable_samples"].as_array().unwrap() {
+            let state = &sample["state"];
+            let context = &state["note_context"];
+            if context["kind"] != "receptor" || context["player"] != 0 || state["render_target"] != 0 {
+                continue;
+            }
+            let beat = context["draw_beat"].as_f64().unwrap() as f32;
+            if !(34.6..42.9).contains(&beat) { continue; }
+            let update = sample["update_sequence"].as_u64().unwrap();
+            let pad_order = native_pad_order.get(&update).expect("native pad draw in receptor frame");
+            assert!(state["native_draw_sequence"].as_u64().unwrap() < *pad_order,
+                "native receptors draw before the foreground pad at beat {beat}");
+            let vertices = sample["vertices"].as_array().unwrap();
+            assert_eq!(vertices.len(), 4, "Cel receptor Sprite submits one quad");
+            let clip: [f64; 4] = std::array::from_fn(|axis| vertices.iter()
+                .map(|vertex| vertex[3 + axis].as_f64().unwrap()).sum::<f64>() / 4.0);
+            let point = [((1.0 + clip[0] / clip[3]) * 427.0) as f32,
+                ((1.0 - clip[1] / clip[3]) * 240.0) as f32, clip[3] as f32];
+            let receptors = native_receptors.entry(beat.to_bits()).or_default();
+            if !receptors.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+                receptors.push(point);
+            }
+        }
+        let mut visible_native_visits = 0;
+        for visit in native["receptor_visits"].as_array().unwrap() {
+            let state = &visit["state"];
+            let beat = state["note_context"]["draw_beat"].as_f64().unwrap();
+            if (35.5..42.9).contains(&beat) && state["render_target"] == 0 {
+                assert_eq!(state["base_alpha"], 1.0, "native Dark has ended at beat {beat}");
+                assert_eq!(state["visible"], true);
+                visible_native_visits += 1;
+            }
+        }
+        assert!(visible_native_visits > 500, "native receptor visits: {visible_native_visits}");
         // Screen-target model origins of every drawn tap, per native frame.
         let mut native_frames = std::collections::BTreeMap::<u32, Vec<[f32; 3]>>::new();
         for sample in native["model_geometry_samples"].as_array().unwrap() {
             let state = &sample["state"];
-            if state["render_target"] != 0 || state["mesh_index"] != 0 {
+            if state["render_target"] != 0 || state["mesh_index"] != 0
+                || state["note_context"]["kind"] != "actor"
+            {
                 continue;
             }
             let beat = state["note_context"]["draw_beat"].as_f64().unwrap() as f32;
@@ -7250,12 +7333,51 @@ return Def.ActorFrame{}
                 let mut state = build_test_state_with_renderer(&simfile, GameplayViewport::design(),
                     GameplaySession::default(), profiles, "OpenGL");
                 state.set_live_autoplay_enabled(true);
-                let assets = fixture_assets();
+                let mut assets = fixture_assets();
                 let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
                 let tap_handles: std::collections::HashSet<_> = ns.notes.iter()
                     .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
                     .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
                     .collect();
+                let receptor_handles: std::collections::HashSet<_> = state.noteskin_assets
+                    .receptor_noteskin[0].as_ref().unwrap_or(ns)
+                    .receptor_off.iter()
+                    .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key()))
+                    .collect();
+                let visuals = state.gameplay.song_lua_visuals();
+                let mut pad_handles = std::collections::HashSet::new();
+                // Models check AssetManager before emitting actors. Register their
+                // keys even though this geometry-only compositor uses hashed handles.
+                for overlay in visuals.overlays.iter().chain(
+                    visuals.background_visual_layers.iter()
+                        .chain(&visuals.foreground_visual_layers)
+                        .flat_map(|layer| &layer.overlays),
+                ) {
+                    let deadsync_assets::song_lua::SongLuaOverlayKind::Model { layers } = &overlay.kind
+                        else { continue; };
+                    for layer in layers.iter() {
+                        let is_pad = layer.texture_key.replace('\\', "/").contains("/lua/pad/");
+                        for key in std::iter::once(&layer.texture_key)
+                            .chain(layer.additive.as_ref())
+                            .chain(
+                                layer.texture_frames.iter()
+                                    .chain(layer.additive_frames.iter())
+                                    .filter_map(|frame| frame.texture_key.as_ref()),
+                            )
+                        {
+                            assets.reserve_texture_handle(key.to_string());
+                            if is_pad {
+                                pad_handles.insert(FIXTURE_TEXTURES.texture_handle(key));
+                            }
+                        }
+                    }
+                }
+                assert!(!pad_handles.is_empty(), "foreground pad model textures");
+                #[cfg(target_os = "windows")]
+                let mut capture = std::env::var_os("DEADSYNC_DYSCONTROLLED_CAPTURE_DIR")
+                    .map(|output| SongLuaNotePixelCapture::new(&state, &metrics, PathBuf::from(output)));
+                #[cfg(target_os = "windows")]
+                let mut next_capture = 0;
                 let timing = state.gameplay.gameplay_chart(0).unwrap().timing.clone();
                 let step = |state: &mut screen_gameplay::State, at: f32, delta: f32| {
                     let music = deadsync_core::song_time::song_time_ns_from_seconds(at);
@@ -7285,7 +7407,44 @@ return Def.ActorFrame{}
                     now = target;
                     let frame = compose_fixture_frame(&mut state, &assets, &metrics, &mut Vec::new(),
                         &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default());
-                    assert!(frame.render_targets.is_empty(), "pad section draws the Player to the screen");
+                    assert!(frame.render_targets.is_empty(), "pad section draws the Player to the screen at beat {beat}");
+                    let last_receptor = frame.ops.iter().rposition(|op| {
+                        matches!(op, DrawOp::Sprite(run) if receptor_handles.contains(&run.texture_handle))
+                    }).unwrap_or_else(|| panic!("native Dark is restored: receptor sprites are still submitted at beat {beat}"));
+                    let first_pad = frame.ops.iter().position(|op| {
+                        matches!(op, DrawOp::TexturedMesh(run) if pad_handles.contains(&run.texture_handle))
+                    }).unwrap_or_else(|| panic!("foreground pad model is drawn at beat {beat}"));
+                    assert!(last_receptor < first_pad,
+                        "Player Z must not raise receptors above the pad at beat {beat}: receptor op {last_receptor}, pad op {first_pad}");
+                    let mut receptor_points: Vec<[f32; 3]> = Vec::new();
+                    for op in &frame.ops {
+                        let DrawOp::Sprite(run) = op else { continue };
+                        if !receptor_handles.contains(&run.texture_handle) { continue; }
+                        let camera = frame.cameras.get(run.camera as usize).copied()
+                            .unwrap_or_else(|| metrics.projection());
+                        for instance in &frame.sprite_instances[run.instance_start as usize
+                            ..(run.instance_start + run.instance_count) as usize]
+                        {
+                            let clip = camera.mul_vec4([instance.center[0], instance.center[1],
+                                instance.center[2], 1.0].into());
+                            let point = [427.0 + clip.x / clip.w * 427.0,
+                                240.0 - clip.y / clip.w * 240.0, clip.w];
+                            if !receptor_points.iter().any(|seen| (0..3).all(|axis| (seen[axis] - point[axis]).abs() < 0.01)) {
+                                receptor_points.push(point);
+                            }
+                        }
+                    }
+                    let expected_receptors = native_receptors.get(&beat.to_bits())
+                        .expect("native receptor geometry in tap frame");
+                    assert_eq!(expected_receptors.len(), 4, "all native pad columns at beat {beat}");
+                    assert_eq!(receptor_points.len(), expected_receptors.len(), "receptor count at beat {beat}");
+                    for expected in expected_receptors {
+                        let index = receptor_points.iter().position(|actual| {
+                            (actual[0] - expected[0]).hypot(actual[1] - expected[1]) < 0.5
+                                && (actual[2] - expected[2]).abs() < 0.5
+                        }).unwrap_or_else(|| panic!("native receptor {expected:?} at beat {beat}, actual {receptor_points:?}"));
+                        receptor_points.swap_remove(index);
+                    }
                     let mut actual: Vec<[f32; 3]> = Vec::new();
                     for op in &frame.ops {
                         let DrawOp::TexturedMesh(run) = op else { continue };
@@ -7309,15 +7468,40 @@ return Def.ActorFrame{}
                         "taps at beat {beat}: deadsync {actual:?} vs native {expected:?}");
                     for note in expected {
                         let distance = |p: &[f32; 3]| (p[0] - note[0]).hypot(p[1] - note[1]);
-                        let nearest = actual.iter().min_by(|a, b| distance(a).total_cmp(&distance(b))).unwrap();
+                        let nearest_index = actual.iter().enumerate()
+                            .min_by(|(_, a), (_, b)| distance(a).total_cmp(&distance(b)))
+                            .map(|(index, _)| index).unwrap();
+                        // Match one submitted tap to each native tap; a correct
+                        // origin must not conceal a second misplaced note.
+                        let nearest = actual.swap_remove(nearest_index);
                         assert!(
-                            distance(nearest) < 0.5 && (nearest[2] - note[2]).abs() < 0.5,
+                            distance(&nearest) < 0.5 && (nearest[2] - note[2]).abs() < 0.5,
                             "native tap at beat {beat}: {note:?}, nearest deadsync {nearest:?}"
                         );
+                    }
+                    #[cfg(target_os = "windows")]
+                    if let Some(capture) = capture.as_mut()
+                        && next_capture < 3 && *beat >= [36.0, 39.0, 42.0][next_capture]
+                    {
+                        let pixels = capture.capture_named(&mut state, &metrics, *beat, "dyscontrolled");
+                        if next_capture < 2 {
+                            assert!(pixels > 100, "thrown notes must remain visible at beat {beat}");
+                        } else {
+                            // ITGmania defaults FastNoteRendering to false (PrefsManager.cpp),
+                            // so NoteDisplay.cpp clears depth after every tap. At this sample
+                            // near beat 42, the later foreground pad covers every on-screen tap.
+                            assert_eq!(pixels, 0, "foreground pad fully occludes taps at beat {beat}");
+                        }
+                        next_capture += 1;
                     }
                     compared += 1;
                 }
                 assert!(compared > 40, "compared pad frames: {compared}");
+                #[cfg(target_os = "windows")]
+                if capture.is_some() {
+                    assert_eq!(next_capture, 3, "all requested pad captures must run");
+                }
+                eprintln!("Dyscontrolled Galaxy matched native geometry and draw order in {compared} frames");
             });
         }).unwrap().join().unwrap();
     }

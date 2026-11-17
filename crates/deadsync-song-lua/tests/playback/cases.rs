@@ -12576,19 +12576,96 @@ fn song_lua_overlay_order_sorts_children_by_z_when_enabled() {
 }
 
 #[test]
+fn song_lua_layer_parent_depth_preserves_geometry_and_authored_order() {
+    deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+        640.0, 480.0,
+    ));
+    for depth in [SONG_LUA_BACKGROUND_DEPTH, SONG_LUA_FOREGROUND_DEPTH] {
+        for parent_z in [-256.0, 167.5] {
+            for draw_by_z_position in [false, true] {
+                let mut overlays = vec![
+                    test_order_overlay(SongLuaOverlayKind::ActorFrame, None, 0),
+                    test_order_overlay(SongLuaOverlayKind::Quad, Some(0), 100),
+                    test_order_overlay(SongLuaOverlayKind::Quad, Some(0), -100),
+                ];
+                overlays[0].initial_state.draw_by_z_position = draw_by_z_position;
+                for (index, local_z) in [(1, -20.0), (2, 5.0)] {
+                    let state = &mut overlays[index].initial_state;
+                    state.x = 100.0 * index as f32;
+                    state.y = 120.0;
+                    state.z = local_z;
+                    state.size = Some([16.0, 16.0]);
+                }
+                let states: Vec<_> = overlays.iter().map(|actor| actor.initial_state).collect();
+                let mut order = song_lua_overlay_order_cache_from(&overlays, &[]);
+                let topology = SongLuaOverlayTopologyIndex::new(&overlays);
+                let mut captures = SongLuaAftCaptureScratch::new(&overlays, &topology);
+                let mut projected = song_lua_projected_mesh_scratch_for(&overlays);
+                let mut actors = Vec::new();
+                let mut targets = Vec::new();
+                let mut traversal = Vec::new();
+                push_song_lua_layer_actors(
+                    &mut actors,
+                    &mut targets,
+                    &overlays,
+                    &mut order,
+                    &topology,
+                    &states,
+                    &states,
+                    SongLuaOverlayState { z: parent_z, ..SongLuaOverlayState::default() },
+                    None,
+                    &mut Vec::new(),
+                    None,
+                    &SongLuaScreenProxySources::default(),
+                    None,
+                    None,
+                    &AssetManager::new(),
+                    640.0,
+                    480.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    &mut traversal,
+                    &mut Vec::new(),
+                    &mut Vec::new(),
+                    &mut captures,
+                    &mut projected,
+                    depth,
+                );
+                let children = if draw_by_z_position { [1, 2] } else { [2, 1] };
+                assert_eq!(traversal, [0, children[0], children[1]]);
+                assert!(targets.is_empty());
+                assert_eq!(actors.len(), 2);
+                for (draw_index, (actor, child)) in actors.iter().zip(children).enumerate() {
+                    let (z, local_transform) = match actor {
+                        Actor::TexturedMesh { z, local_transform, .. }
+                        | Actor::ReusableTexturedMesh { z, local_transform, .. } => (*z, *local_transform),
+                        _ => panic!("a quad with physical Z must retain projected geometry"),
+                    };
+                    assert_eq!(z, depth.draw_z(draw_index + 1),
+                        "parent Z {parent_z} must not move a {:?} screen layer", depth);
+                    // Native's default orthographic camera spans +/-1000. The
+                    // mesh keeps physical Z in that projection, independently
+                    // of its integer draw layer and the chosen sibling order.
+                    let origin = local_transform * Vector4::new(0.0, 0.0, 0.0, 1.0);
+                    assert!((origin.x - states[child].x).abs() < 0.001);
+                    assert!((origin.y - states[child].y).abs() < 0.001);
+                    assert!((origin.z * 1000.0 - (parent_z + states[child].z)).abs() < 0.001,
+                        "parent Z {parent_z}, child Z {}: projected origin {origin:?}", states[child].z);
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_layers_keep_background_player_foreground_order() {
-    let highest_background = SONG_LUA_BACKGROUND_DEPTH
-        .shifted(f32::MAX)
-        .draw_z(usize::MAX);
-    let player_layer = song_lua_player_layer_z(
-        true,
-        &SongLuaCapturedActor::default(),
-        SongLuaOverlayState::default(),
-        0.0,
-    );
+    let highest_background = SONG_LUA_BACKGROUND_DEPTH.draw_z(usize::MAX);
+    let player_layer = song_lua_player_layer_z(true);
     let highest_notefield_layer = song_lua_add_z(player_layer, 200);
     let foreground_layer = song_lua_add_z(SONG_LUA_OVERLAY_LAYER_Z_BASE, 0);
 
+    assert_eq!(song_lua_player_layer_z(false), 0);
     assert!(
         highest_background < player_layer,
         "background Lua must stay below the isolated player/notefield subtree"
@@ -12601,10 +12678,7 @@ fn song_lua_layers_keep_background_player_foreground_order() {
     // to cross the transition's z=1200 solely because of its draw index.
     for draw_index in [0, 100, 357, usize::MAX] {
         assert!(
-            SONG_LUA_FOREGROUND_DEPTH
-                .shifted(f32::MAX)
-                .draw_z(draw_index)
-                <= LUA_FOREGROUND_Z_MAX
+            SONG_LUA_FOREGROUND_DEPTH.draw_z(draw_index) <= LUA_FOREGROUND_Z_MAX
         );
     }
 }
