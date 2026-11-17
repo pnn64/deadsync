@@ -1,0 +1,59 @@
+{
+  "successful_executions": 200000,
+  "campaigns": [
+    {
+      "target": "png_stream",
+      "requested_runs": 100000,
+      "runs": 100000,
+      "initial_corpus": {
+        "files": 48347,
+        "bytes": 11326022,
+        "maximum_file_bytes": 63435,
+        "sha256": "fddab7a489327745fb40cd77cfd300aa3fc11e9b721fa8f20cf674fa0baf390a",
+        "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+      },
+      "binary": "/tmp/png-pipelined-asan-target-20261117/x86_64-unknown-linux-gnu/release/png_stream",
+      "binary_sha256": "93efd9f3f970d51bac32a0acd3a4ca4ca3e4181248e801ebbb4903c393738d5b",
+      "asan_init_defined": true,
+      "fuzz_seconds": 104,
+      "peak_rss_mib": 562
+    },
+    {
+      "target": "inflate_stream",
+      "requested_runs": 100000,
+      "runs": 100000,
+      "initial_corpus": {
+        "files": 7064,
+        "bytes": 4369339,
+        "maximum_file_bytes": 34575,
+        "sha256": "ac1d2f2928a17da6b20afedf6398234bd42a4d8f6644321c21ed61d6cd7914bf",
+        "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+      },
+      "binary": "/tmp/png-pipelined-asan-target-20261117/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "binary_sha256": "7f9f619a787103e710e89a8aa2f00cd9ad3c90a8719bc1bca5a91d033ad8dc60",
+      "asan_init_defined": true,
+      "fuzz_seconds": 143,
+      "peak_rss_mib": 440
+    }
+  ],
+  "isolation_verified": true,
+  "final_source_hashes_verified": true,
+  "seed_archive_sha256": "e93b5bb897f579029d0ef13e9db0b7790a63a5586b140891d392c5ac2b1e896d",
+  "preflight": [
+    "rustup",
+    "run",
+    "nightly",
+    "cargo",
+    "metadata",
+    "--locked",
+    "--offline",
+    "--manifest-path",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/Cargo.toml",
+    "--format-version",
+    "1",
+    "--filter-platform",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "manifest_sha256": "0c724b81a8cfe2b240465e096429589a728057260b8e4c4cff2ce81aebd9570d",
+  "scope": "Feedback from native image crates only. Harnesses/reference crates retain ASan but no SanitizerCoverage. Native-crate std/alloc monomorphizations can contribute feedback. This is not source-only coverage or conformance proof."
+}

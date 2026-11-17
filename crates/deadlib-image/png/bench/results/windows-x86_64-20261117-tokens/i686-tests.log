@@ -1,0 +1,41 @@
+cargo :    Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+At line:2 char:287
++ ...  $result }; cargo test -p deadlib-image-png --release --offline --tar ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...dlib-image\png):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `release` profile [optimized] target(s) in 28.08s
+     Running unittests src\lib.rs (target/png-portable-check\i686-pc-windows-msvc\release\build\deadlib-image-png/d66ad
+45b1e707933\out\deadlib_image_png-d66ad45b1e707933.exe)
+
+running 16 tests
+test checksum::tests::known_checksums ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test checksum::tests::crc_every_byte_value_in_word_lanes_and_fragmented_tails ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+test zlib::tests::word_match_copies_preserve_overlapping_history_and_every_output_tail ... ok
+test zlib::tests::idat_boundaries_and_empty_chunks_preserve_huffman_payloads ... ok
+test zlib::tests::sized_inflation_matches_independent_huffman_fixtures ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.33s
+
+     Running tests\static_png.rs (target/png-portable-check\i686-pc-windows-msvc\release\build\deadlib-image-png/7032e6
+ae920fb0e7\out\static_png-7032e6ae920fb0e7.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+

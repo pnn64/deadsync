@@ -28,6 +28,7 @@ pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
     )
 }
 use crate::{AncillaryChunk, ChunkPosition, ColorType, Error, Limits, Png, zlib};
+use std::borrow::Cow;
 use std::collections::HashSet;
 
 /// Native integer metadata values. Fixed-point integers retain the exact wire
@@ -172,7 +173,13 @@ pub(crate) fn encoding_data<'a>(
     }
 }
 
-fn parse(
+// Validation needs scalar values and suggested-palette names for cross-chunk
+// checks, but does not need owned copies of the remaining fields.
+fn retained<const COLLECT: bool, T: Clone>(bytes: &[T]) -> Vec<T> {
+    if COLLECT { bytes.to_vec() } else { Vec::new() }
+}
+
+fn parse<const COLLECT: bool>(
     c: &AncillaryChunk,
     h: Header,
     palette: usize,
@@ -214,7 +221,7 @@ fn parse(
             if d.len() != n || d.iter().any(|&b| b == 0 || b > max) {
                 return Err(invalid());
             }
-            Metadata::SignificantBits(d.to_vec())
+            Metadata::SignificantBits(retained::<COLLECT, _>(d))
         }
         b"sRGB" if d.len() == 1 && d[0] <= 3 => Metadata::Srgb(d[0]),
         b"cICP" if d.len() == 4 && d[2] == 0 && d[3] <= 1 => {
@@ -224,7 +231,7 @@ fn parse(
             } else if !encoding {
                 Metadata::Unknown {
                     kind: c.kind,
-                    data: d.to_vec(),
+                    data: retained::<COLLECT, _>(d),
                 }
             } else {
                 return Err(Error::Invalid("reserved cICP primaries or transfer"));
@@ -244,12 +251,12 @@ fn parse(
             let bytes = inflate(d, remaining)?;
             match profile::icc(&bytes, Some(h.color)) {
                 Ok(()) => Metadata::IccProfile {
-                    name: name.to_vec(),
-                    profile: bytes,
+                    name: retained::<COLLECT, _>(name),
+                    profile: if COLLECT { bytes } else { Vec::new() },
                 },
                 Err(Error::Invalid(_)) if !encoding => Metadata::Unknown {
                     kind: c.kind,
-                    data: c.data.clone(),
+                    data: retained::<COLLECT, _>(&c.data),
                 },
                 Err(error) => return Err(error),
             }
@@ -281,6 +288,7 @@ fn parse(
             d.as_chunks::<2>()
                 .0
                 .iter()
+                .take(if COLLECT { usize::MAX } else { 0 })
                 .map(|&v| u16::from_be_bytes(v))
                 .collect(),
         ),
@@ -301,8 +309,18 @@ fn parse(
             if !d.len().is_multiple_of(stride) {
                 return Err(invalid());
             }
+            if d.chunks(stride)
+                .map(|v| be16(&v[stride - 2..]))
+                .try_fold(u16::MAX, |previous, frequency| {
+                    (frequency <= previous).then_some(frequency)
+                })
+                .is_none()
+            {
+                return Err(Error::Invalid("sPLT frequency order"));
+            }
             let entries: Vec<[u16; 5]> = d
                 .chunks(stride)
+                .take(if COLLECT { usize::MAX } else { 0 })
                 .map(|v| {
                     if depth == 8 {
                         [
@@ -317,9 +335,6 @@ fn parse(
                     }
                 })
                 .collect();
-            if entries.windows(2).any(|v| v[0][4] < v[1][4]) {
-                return Err(Error::Invalid("sPLT frequency order"));
-            }
             Metadata::SuggestedPalette {
                 name: name.to_vec(),
                 depth,
@@ -327,10 +342,10 @@ fn parse(
             }
         }
         b"eXIf" => match profile::exif(d) {
-            Ok(()) => Metadata::Exif(d.to_vec()),
+            Ok(()) => Metadata::Exif(retained::<COLLECT, _>(d)),
             Err(_) if !encoding => Metadata::Unknown {
                 kind: c.kind,
-                data: d.to_vec(),
+                data: retained::<COLLECT, _>(d),
             },
             Err(error) => return Err(error),
         },
@@ -359,9 +374,9 @@ fn parse(
                 if take(&mut d, 1)?[0] != 0 {
                     return Err(Error::Invalid("text compression method"));
                 }
-                inflate(d, remaining)?
+                Cow::Owned(inflate(d, remaining)?)
             } else {
-                d.to_vec()
+                Cow::Borrowed(d)
             };
             if encoding {
                 latin1_text(&text)?;
@@ -369,8 +384,12 @@ fn parse(
                 text_valid(&text)?;
             }
             Metadata::Text {
-                keyword: key.to_vec(),
-                text,
+                keyword: retained::<COLLECT, _>(key),
+                text: if COLLECT {
+                    text.into_owned()
+                } else {
+                    Vec::new()
+                },
                 compressed,
             }
         }
@@ -394,14 +413,14 @@ fn parse(
                 // registry versions without interpreting an invalid tag.
                 return Ok(Metadata::Unknown {
                     kind: c.kind,
-                    data: c.data.clone(),
+                    data: retained::<COLLECT, _>(&c.data),
                 });
             }
             let translated = nul(&mut d)?;
             let text = if flags[0] == 1 {
-                inflate(d, remaining)?
+                Cow::Owned(inflate(d, remaining)?)
             } else {
-                d.to_vec()
+                Cow::Borrowed(d)
             };
             text_valid(&text)?;
             if encoding
@@ -410,10 +429,22 @@ fn parse(
                 return Err(Error::Invalid("iTXt UTF-8"));
             }
             Metadata::InternationalText {
-                keyword: key.to_vec(),
-                language: String::from_utf8_lossy(language).into_owned(),
-                translated_keyword: utf8_decode(translated),
-                text: utf8_decode(&text),
+                keyword: retained::<COLLECT, _>(key),
+                language: if COLLECT {
+                    String::from_utf8_lossy(language).into_owned()
+                } else {
+                    String::new()
+                },
+                translated_keyword: if COLLECT {
+                    utf8_decode(translated)
+                } else {
+                    String::new()
+                },
+                text: if COLLECT {
+                    utf8_decode(&text)
+                } else {
+                    String::new()
+                },
                 compressed: flags[0] == 1,
             }
         }
@@ -422,7 +453,7 @@ fn parse(
         }
         _ => Metadata::Unknown {
             kind: c.kind,
-            data: d.to_vec(),
+            data: retained::<COLLECT, _>(d),
         },
     })
 }
@@ -434,6 +465,19 @@ pub(crate) fn validate(
     limits: Limits,
 ) -> Result<Vec<Metadata>, Error> {
     validate_impl(chunks, h, palette, limits, false)
+}
+
+pub(crate) fn validate_only(
+    chunks: &[AncillaryChunk],
+    h: Header,
+    palette: usize,
+    limits: Limits,
+) -> Result<(), Error> {
+    let mut validator = Validator::new(limits.max_metadata_bytes);
+    for c in chunks {
+        validator.check_impl::<false>(c, h, palette)?;
+    }
+    validator.finish()
 }
 
 pub(crate) fn validate_encoding(
@@ -463,7 +507,7 @@ fn validate_impl(
 }
 
 pub(crate) struct Validator {
-    unique: HashSet<[u8; 4]>,
+    unique: u16,
     names: HashSet<Vec<u8>>,
     remaining: usize,
     encoding: bool,
@@ -472,7 +516,7 @@ pub(crate) struct Validator {
 impl Validator {
     pub(crate) fn new(limit: usize) -> Self {
         Self {
-            unique: HashSet::new(),
+            unique: 0,
             names: HashSet::new(),
             remaining: limit,
             encoding: false,
@@ -483,9 +527,17 @@ impl Validator {
         self.remaining
     }
     pub(crate) fn has(&self, kind: &[u8; 4]) -> bool {
-        self.unique.contains(kind)
+        self.unique & singleton(kind) != 0
     }
     pub(crate) fn check(
+        &mut self,
+        c: &AncillaryChunk,
+        h: Header,
+        palette: usize,
+    ) -> Result<Metadata, Error> {
+        self.check_impl::<true>(c, h, palette)
+    }
+    fn check_impl<const COLLECT: bool>(
         &mut self,
         c: &AncillaryChunk,
         h: Header,
@@ -512,12 +564,12 @@ impl Validator {
         {
             return Err(Error::Invalid("ancillary chunk must follow PLTE"));
         }
-        if (early || matches!(&c.kind, b"bKGD" | b"hIST" | b"pHYs" | b"eXIf" | b"tIME"))
-            && !self.unique.insert(c.kind)
-        {
+        let bit = singleton(&c.kind);
+        if self.unique & bit != 0 {
             return Err(Error::Invalid("duplicate ancillary chunk"));
         }
-        let value = parse(c, h, palette, &mut self.remaining, self.encoding)?;
+        self.unique |= bit;
+        let value = parse::<COLLECT>(c, h, palette, &mut self.remaining, self.encoding)?;
         // PNG 11.3.2.5, Table 17: optional fallback gAMA/cHRM accompanying
         // sRGB must describe sRGB, even if a still higher color chunk exists.
         match &value {
@@ -537,13 +589,32 @@ impl Validator {
         Ok(value)
     }
     pub(crate) fn finish(&self) -> Result<(), Error> {
-        if self.encoding && self.unique.contains(b"sRGB") && !self.srgb_compatible {
+        if self.encoding && self.has(b"sRGB") && !self.srgb_compatible {
             return Err(Error::Invalid("gAMA or cHRM does not match sRGB"));
         }
-        if self.unique.contains(b"mDCV") && !self.unique.contains(b"cICP") {
+        if self.has(b"mDCV") && !self.has(b"cICP") {
             return Err(Error::Invalid("mDCV requires cICP"));
         }
         Ok(())
+    }
+}
+
+fn singleton(kind: &[u8; 4]) -> u16 {
+    match kind {
+        b"cHRM" => 1 << 0,
+        b"gAMA" => 1 << 1,
+        b"iCCP" => 1 << 2,
+        b"sBIT" => 1 << 3,
+        b"sRGB" => 1 << 4,
+        b"cICP" => 1 << 5,
+        b"mDCV" => 1 << 6,
+        b"cLLI" => 1 << 7,
+        b"bKGD" => 1 << 8,
+        b"hIST" => 1 << 9,
+        b"pHYs" => 1 << 10,
+        b"eXIf" => 1 << 11,
+        b"tIME" => 1 << 12,
+        _ => 0,
     }
 }
 
@@ -598,7 +669,7 @@ impl Png {
                     .checked_sub(chunk.data.len())
                     .ok_or(Error::LimitExceeded)?;
                 if !matches!(
-                    parse(chunk, h, self.palette.len(), &mut remaining, false)?,
+                    parse::<false>(chunk, h, self.palette.len(), &mut remaining, false)?,
                     Metadata::Unknown { .. }
                 ) {
                     return Ok(Some(chunk));

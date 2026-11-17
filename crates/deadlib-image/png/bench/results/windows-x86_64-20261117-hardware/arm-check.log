@@ -1,0 +1,13 @@
+cargo :     Blocking waiting for file lock on package cache
+At line:2 char:1
++ cargo check -p deadlib-image-png --lib --offline --target aarch64-unk ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...n package cache:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.55s

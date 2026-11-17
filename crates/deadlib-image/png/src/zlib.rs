@@ -1,9 +1,16 @@
 //! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
 use crate::{Error, checksum::adler32, reserve};
 
+#[path = "zlib/deflate.rs"]
 mod deflate;
+#[path = "zlib/inflate.rs"]
 mod inflate;
+#[path = "zlib/matcher.rs"]
 mod matcher;
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[path = "zlib/x86.rs"]
+mod x86;
 pub use deflate::{DeflateProgress, Deflater};
 pub use inflate::{InflateProgress, Inflater, StreamStatus};
 
@@ -28,6 +35,8 @@ struct Bits<'a> {
     pos: usize,
     word: u64,
     count: u8,
+    chunks: &'a [u8],
+    prior: usize,
 }
 impl<'a> Bits<'a> {
     fn new(input: &'a [u8]) -> Self {
@@ -36,21 +45,53 @@ impl<'a> Bits<'a> {
             pos: 0,
             word: 0,
             count: 0,
+            chunks: &[],
+            prior: 0,
         }
     }
+    fn idat(chunks: &'a [u8]) -> Self {
+        Self {
+            chunks,
+            ..Self::new(&[])
+        }
+    }
+    // Only the buffered PNG parser supplies this wire span. Its consecutive
+    // IDAT framing and every CRC have already been verified.
+    #[cold]
+    #[inline(never)]
+    fn advance(&mut self) -> bool {
+        while self.chunks.len() >= 12 {
+            let len = u32::from_be_bytes(self.chunks[..4].try_into().unwrap()) as usize;
+            if len > self.chunks.len() - 12 {
+                return false;
+            }
+            self.prior += self.input.len();
+            self.input = &self.chunks[8..8 + len];
+            self.chunks = &self.chunks[12 + len..];
+            self.pos = 0;
+            if len != 0 {
+                return true;
+            }
+        }
+        false
+    }
+    #[inline]
     fn fill(&mut self, n: u8) {
-        while self.count < n && self.pos < self.input.len() {
+        while self.count < n {
+            if self.pos == self.input.len() && !self.advance() {
+                break;
+            }
             self.word |= u64::from(self.input[self.pos]) << self.count;
             self.pos += 1;
             self.count += 8;
         }
     }
+    #[inline]
     fn fill_huffman(&mut self, n: u8) {
-        // Only Huffman lookahead may refill this widely. Fast lookahead starts
-        // with at most 8 bits; a slow miss starts with at most 14 and consumes
-        // at least 10. After EOB and alignment, at most four bytes remain: the
-        // zlib Adler trailer. A streaming caller's suffix is never accepted.
-        // General field/checksum reads retain their conservative byte refill.
+        // Prefetch for primary lookups and canonical misses. consumed()
+        // subtracts still-buffered whole bytes, preserving the exact prefix
+        // boundary even when lookahead reaches the trailer or a suffix.
+        // Field and checksum reads retain their conservative byte refill.
         if self.count < n {
             if self.input.len() - self.pos >= 4 {
                 let bytes = self.input[self.pos..self.pos + 4].try_into().unwrap();
@@ -62,19 +103,38 @@ impl<'a> Bits<'a> {
             }
         }
     }
+    #[inline]
+    fn fill_wide(&mut self) {
+        if self.input.len() - self.pos >= 8 {
+            debug_assert!(self.count < 64);
+            let bytes = self.input[self.pos..self.pos + 8].try_into().unwrap();
+            self.word |= u64::from_le_bytes(bytes) << self.count;
+            // Account only for complete bytes fitting in the accumulator.
+            // The last loaded byte is reread on the following refill.
+            let bytes = (63 - self.count) / 8;
+            self.pos += usize::from(bytes);
+            self.count |= 56;
+        }
+    }
+    #[inline(always)]
     fn read(&mut self, n: u8) -> Result<u32, Error> {
         self.fill(n);
         if self.count < n {
             return Err(Error::Truncated);
         }
+        Ok(self.take(n))
+    }
+    #[inline(always)]
+    fn take(&mut self, n: u8) -> u32 {
+        debug_assert!(n <= self.count);
         let value = self.word as u32 & ((1u64 << n) - 1) as u32;
         self.word >>= n;
         self.count -= n;
-        Ok(value)
+        value
     }
     fn consumed(&self) -> usize {
         // ceil((pos * 8 - count) / 8), without overflowing the byte cursor.
-        self.pos - usize::from(self.count / 8)
+        self.prior + self.pos - usize::from(self.count / 8)
     }
     fn align(&mut self) {
         let n = self.count % 8;
@@ -184,7 +244,7 @@ impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
     }
     // A small primary lookup can inline at symbol call sites; keep the
     // canonical long-code and error paths in a separate function.
-    #[inline]
+    #[inline(always)]
     fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
         bits.fill_huffman(9);
         let entry = self.fast[(bits.word & 511) as usize];
@@ -195,6 +255,19 @@ impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
             return Ok((entry >> 4) as usize);
         }
         self.decode_slow(bits)
+    }
+
+    #[inline]
+    fn decode_buffered(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+        debug_assert!(bits.count >= 15);
+        let entry = self.fast[(bits.word & 511) as usize];
+        let n = (entry & 15) as u8;
+        if n != 0 {
+            bits.take(n);
+            Ok((entry >> 4) as usize)
+        } else {
+            self.decode_slow(bits)
+        }
     }
 
     #[inline(never)]
@@ -218,6 +291,25 @@ impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
         } else {
             Err(Error::Invalid("invalid Huffman code"))
         }
+    }
+
+    fn wide_primary(&self) -> [u16; 4096] {
+        let mut fast = [0; 4096];
+        for prefix in fast.as_chunks_mut::<512>().0 {
+            *prefix = self.fast;
+        }
+        for n in 10..=12 {
+            for offset in 0..self.counts[n] {
+                let symbol = self.symbols[(self.offsets[n] + offset) as usize];
+                let code = self.first[n] + offset;
+                let mut index = (code.reverse_bits() >> (16 - n)) as usize;
+                while index < fast.len() {
+                    fast[index] = (symbol << 4) | n as u16;
+                    index += 1 << n;
+                }
+            }
+        }
+        fast
     }
 }
 
@@ -324,7 +416,15 @@ fn inflate_codes(
                     return Err(Error::LimitExceeded);
                 }
                 if output.len() == output.capacity() {
-                    reserve_output(output, 1, limit)?;
+                    // A bounded compressed-size hint avoids a chain of tiny
+                    // reallocations for text/profile streams. Defer it until
+                    // the first actual byte, and never exceed the output cap.
+                    let additional = if output.is_empty() {
+                        (bits.input.len() - bits.pos).clamp(1, 4096).min(limit)
+                    } else {
+                        1
+                    };
+                    reserve_output(output, additional, limit)?;
                 }
                 output.push(literal as u8);
                 let mut room = (limit - output.len()).min(output.capacity() - output.len());
@@ -380,6 +480,370 @@ fn inflate_codes(
     Ok(())
 }
 
+// An image's filtered size is known before inflation. Using a slice and a
+// cursor removes Vec growth and length updates from the symbol loop.
+#[inline(always)]
+fn sized_length(bits: &mut Bits<'_>, index: usize, buffered: bool) -> Result<usize, Error> {
+    match index {
+        0..=7 => Ok(index + 3),
+        28 => Ok(258),
+        _ if buffered => Ok(LENGTH_BASE[index] + bits.take(LENGTH_EXTRA[index]) as usize),
+        _ => Ok(LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize),
+    }
+}
+
+// A full refill holds the maximum 48-bit match token. Keep the accumulator
+// local while input and output have enough room for every legal token.
+#[inline(always)]
+fn inflate_sized_fast(
+    bits: &mut Bits<'_>,
+    output: &mut [u8],
+    pos: &mut usize,
+    dist: &Huffman<32>,
+    fast: &[u16; 4096],
+    distance_fast: &[u32; 512],
+    window: usize,
+) -> Result<bool, Error> {
+    if bits.input.len() < 8 || output.len() < 258 {
+        return Ok(false);
+    }
+    let input_end = bits.input.len() - 8;
+    let output_end = output.len() - 258;
+    let mut cursor = bits.pos;
+    let mut word = bits.word;
+    let mut count = bits.count;
+    let mut produced = *pos;
+    let mut ended = false;
+    if cursor > input_end || produced > output_end {
+        return Ok(false);
+    }
+    debug_assert!(count < 64);
+    let bytes = u64::from_le_bytes(bits.input[cursor..cursor + 8].try_into().unwrap());
+    word |= bytes << count;
+    cursor += usize::from((63 - count) / 8);
+    count |= 56;
+    let mut entry = fast[(word & 4095) as usize];
+    'decode: loop {
+        'token: {
+            let n = (entry & 15) as u8;
+            if n == 0 {
+                break 'decode;
+            }
+            word >>= n;
+            count -= n;
+            let symbol = usize::from(entry >> 4);
+            if symbol < 256 {
+                let second = fast[(word & 4095) as usize];
+                let n2 = (second & 15) as u8;
+                let third = fast[((word >> n2) & 4095) as usize];
+                let n3 = (third & 15) as u8;
+                let fourth = fast[((word >> (n2 + n3)) & 4095) as usize];
+                let (literals, used) = if !(1..4096).contains(&second) {
+                    (1, 0)
+                } else if !(1..4096).contains(&third) {
+                    (2, n2)
+                } else if !(1..4096).contains(&fourth) {
+                    (3, n2 + n3)
+                } else {
+                    (4, n2 + n3 + (fourth & 15) as u8)
+                };
+                output[produced..produced + 4].copy_from_slice(&[
+                    symbol as u8,
+                    (second >> 4) as u8,
+                    (third >> 4) as u8,
+                    (fourth >> 4) as u8,
+                ]);
+                word >>= used;
+                count -= used;
+                produced += literals;
+                break 'token;
+            }
+            let index = symbol.wrapping_sub(257);
+            if index > 28 {
+                if symbol == 256 {
+                    ended = true;
+                    break 'decode;
+                }
+                return Err(Error::Invalid("reserved literal symbol"));
+            }
+            let len = match index {
+                0..=7 => index + 3,
+                28 => 258,
+                _ => {
+                    let n = LENGTH_EXTRA[index];
+                    let extra = (word & ((1u64 << n) - 1)) as usize;
+                    word >>= n;
+                    count -= n;
+                    LENGTH_BASE[index] + extra
+                }
+            };
+            let entry = distance_fast[(word & 511) as usize];
+            let n = (entry & 15) as u8;
+            let distance = if n != 0 {
+                let extra = ((entry >> 4) & 15) as u8;
+                let distance =
+                    (entry >> 8) as usize + ((word >> n) & ((1u64 << extra) - 1)) as usize;
+                word >>= n + extra;
+                count -= n + extra;
+                if entry >> 8 == 0 {
+                    return Err(Error::Invalid("reserved distance symbol"));
+                }
+                distance
+            } else {
+                // The accumulator already holds every possible distance field.
+                bits.word = word;
+                bits.count = count;
+                bits.pos = cursor;
+                let symbol = dist.decode_slow(bits)?;
+                word = bits.word;
+                count = bits.count;
+                if symbol >= 30 {
+                    return Err(Error::Invalid("reserved distance symbol"));
+                }
+                let n = DIST_EXTRA[symbol];
+                let distance = DIST_BASE[symbol] + (word & ((1u64 << n) - 1)) as usize;
+                word >>= n;
+                count -= n;
+                distance
+            };
+            if distance > produced || distance > window {
+                return Err(Error::Invalid("distance outside history window"));
+            }
+            let start = produced - distance;
+            if len <= 8 && distance >= 8 {
+                output.copy_within(start..start + 8, produced);
+            } else if len == 3 {
+                let first = output[start];
+                let second = if distance > 1 {
+                    output[start + 1]
+                } else {
+                    first
+                };
+                let third = if distance > 2 {
+                    output[start + 2]
+                } else {
+                    first
+                };
+                output[produced..produced + 3].copy_from_slice(&[first, second, third]);
+            } else if len <= 16 && distance >= 8 {
+                output.copy_within(start..start + 8, produced);
+                let next = produced + 8 - distance;
+                output.copy_within(next..next + 8, produced + 8);
+            } else if distance == 1 {
+                let byte = output[start];
+                output[produced..produced + len].fill(byte);
+            } else {
+                let mut left = len;
+                while left != 0 {
+                    let n = (produced - start).min(left);
+                    output.copy_within(start..start + n, produced);
+                    produced += n;
+                    left -= n;
+                }
+                break 'token;
+            }
+            produced += len;
+        }
+        // A full load supplies 64 physical bits, even when only 56..63 are
+        // accounted. A token consumes at most 48 (four 12-bit literals; a
+        // match uses at most 45), leaving at least sixteen valid bits here.
+        // Load the next primary entry before refilling the accumulator so
+        // the two memory reads can proceed independently. The lookup itself
+        // consumes no bits and is discarded if the boundary path is needed.
+        let next = fast[(word & 4095) as usize];
+        if cursor > input_end || produced > output_end {
+            break 'decode;
+        }
+        debug_assert!(count < 64);
+        let bytes = u64::from_le_bytes(bits.input[cursor..cursor + 8].try_into().unwrap());
+        word |= bytes << count;
+        cursor += usize::from((63 - count) / 8);
+        count |= 56;
+        entry = next;
+    }
+    bits.pos = cursor;
+    bits.word = word;
+    bits.count = count;
+    *pos = produced;
+    Ok(ended)
+}
+
+#[inline(always)]
+fn inflate_sized_codes(
+    bits: &mut Bits<'_>,
+    output: &mut [u8],
+    written: &mut usize,
+    fixed_codes: bool,
+    window: usize,
+) -> Result<(), Error> {
+    let dynamic_tables;
+    let (lit, dist) = if fixed_codes {
+        (&FIXED.0, &FIXED.1)
+    } else {
+        dynamic_tables = dynamic(bits)?;
+        (&dynamic_tables.0, &dynamic_tables.1)
+    };
+    let fast = lit.wide_primary();
+    // Pack code length, extra-bit count and distance base in a single lookup.
+    // Longer primary misses retain the canonical decoder. Reserved codes have
+    // a zero base, which no valid distance uses. Repeat the shortest prefix to
+    // avoid translating all 512 entries for common small distance trees.
+    let mut distance_fast = [0u32; 512];
+    let prefix = 1usize << dist.max.min(9);
+    for (index, value) in distance_fast[..prefix].iter_mut().enumerate() {
+        let entry = dist.fast[index];
+        let symbol = usize::from(entry >> 4);
+        *value = if entry == 0 {
+            0
+        } else if symbol >= 30 {
+            u32::from(entry & 15)
+        } else {
+            ((DIST_BASE[symbol] as u32) << 8)
+                | (u32::from(DIST_EXTRA[symbol]) << 4)
+                | u32::from(entry & 15)
+        };
+    }
+    let mut initialized = prefix;
+    while initialized < 512 {
+        let (prefix, rest) = distance_fast.split_at_mut(initialized);
+        rest[..initialized].copy_from_slice(prefix);
+        initialized *= 2;
+    }
+    let mut pos = *written;
+    loop {
+        if inflate_sized_fast(bits, output, &mut pos, dist, &fast, &distance_fast, window)? {
+            break;
+        }
+        bits.fill_wide();
+        bits.fill_huffman(12);
+        let entry = fast[(bits.word & 4095) as usize];
+        let n = (entry & 15) as u8;
+        if bits.count >= 48 && output.len() - pos >= 4 && (1..4096).contains(&entry) {
+            // Look ahead before committing stores, keeping table loads ahead
+            // of the branches that distinguish literals from matches/EOB.
+            let second = fast[((bits.word >> n) & 4095) as usize];
+            let n2 = (second & 15) as u8;
+            let third = fast[((bits.word >> (n + n2)) & 4095) as usize];
+            let n3 = (third & 15) as u8;
+            let fourth = fast[((bits.word >> (n + n2 + n3)) & 4095) as usize];
+            let (count, consumed) = if !(1..4096).contains(&second) {
+                (1, n)
+            } else if !(1..4096).contains(&third) {
+                (2, n + n2)
+            } else if !(1..4096).contains(&fourth) {
+                (3, n + n2 + n3)
+            } else {
+                (4, n + n2 + n3 + (fourth & 15) as u8)
+            };
+            // As for short matches below, surplus initialized bytes are not
+            // produced history and are overwritten before they can be read.
+            output[pos..pos + 4].copy_from_slice(&[
+                (entry >> 4) as u8,
+                (second >> 4) as u8,
+                (third >> 4) as u8,
+                (fourth >> 4) as u8,
+            ]);
+            pos += count;
+            bits.take(consumed);
+            continue;
+        }
+        let symbol = if n != 0 && n <= bits.count {
+            bits.word >>= n;
+            bits.count -= n;
+            (entry >> 4) as usize
+        } else {
+            lit.decode_slow(bits)?
+        };
+        match symbol {
+            literal @ 0..=255 => {
+                let remaining = output.get_mut(pos..).ok_or(Error::LimitExceeded)?;
+                let (first, rest) = remaining.split_first_mut().ok_or(Error::LimitExceeded)?;
+                *first = literal as u8;
+                pos += 1;
+                let mut word = bits.word;
+                let mut count = bits.count;
+                for byte in rest {
+                    if count < 12 {
+                        break;
+                    }
+                    let entry = fast[(word & 4095) as usize];
+                    if !(1..4096).contains(&entry) {
+                        break;
+                    }
+                    let n = (entry & 15) as u8;
+                    *byte = (entry >> 4) as u8;
+                    word >>= n;
+                    count -= n;
+                    pos += 1;
+                }
+                bits.word = word;
+                bits.count = count;
+            }
+            256 => break,
+            symbol @ 257..=285 => {
+                let index = symbol - 257;
+                let (len, distance) = if bits.count >= 33 {
+                    // At most 5 length, 15 distance-code and 13 extra bits.
+                    // The wide refill normally makes all of them available.
+                    let len = sized_length(bits, index, true)?;
+                    let symbol = dist.decode_buffered(bits)?;
+                    if symbol >= 30 {
+                        return Err(Error::Invalid("reserved distance symbol"));
+                    }
+                    (
+                        len,
+                        DIST_BASE[symbol] + bits.take(DIST_EXTRA[symbol]) as usize,
+                    )
+                } else {
+                    let len = sized_length(bits, index, false)?;
+                    let symbol = dist.decode(bits)?;
+                    if symbol >= 30 {
+                        return Err(Error::Invalid("reserved distance symbol"));
+                    }
+                    (
+                        len,
+                        DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize,
+                    )
+                };
+                if distance > pos || distance > window {
+                    return Err(Error::Invalid("distance outside history window"));
+                }
+                if len > output.len() - pos {
+                    return Err(Error::LimitExceeded);
+                }
+                let start = pos - distance;
+                if distance == 1 {
+                    let byte = output[start];
+                    output[pos..pos + len].fill(byte);
+                } else if len <= 8 && distance >= 8 && output.len() - pos >= 8 {
+                    // Extra bytes are initialized but remain outside produced
+                    // history. Every future sample overwrites them before use.
+                    output.copy_within(start..start + 8, pos);
+                } else if len <= 16 && distance >= 8 && output.len() - pos >= 16 {
+                    output.copy_within(start..start + 8, pos);
+                    // The next word can refer to the eight bytes just written.
+                    // Surplus bytes stay outside produced history.
+                    let next = pos + 8 - distance;
+                    output.copy_within(next..next + 8, pos + 8);
+                } else {
+                    let mut left = len;
+                    while left != 0 {
+                        let count = (pos - start).min(left);
+                        output.copy_within(start..start + count, pos);
+                        pos += count;
+                        left -= count;
+                    }
+                    continue;
+                }
+                pos += len;
+            }
+            _ => return Err(Error::Invalid("reserved literal symbol")),
+        }
+    }
+    *written = pos;
+    Ok(())
+}
+
 /// Decode exactly one zlib stream, rejecting trailing data. `limit` bounds output.
 pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     let (output, used) = decompress_prefix(input, limit)?;
@@ -391,19 +855,58 @@ pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
 
 /// Decode the first zlib stream and return the number of input bytes consumed.
 pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize), Error> {
+    decompress_impl(input, limit, false)
+}
+
+// PNG framing has already checked the exact filtered size against its limits.
+// Reserve it once rather than repeatedly growing/copying the image buffer.
+pub(crate) fn decompress_prefix_sized(
+    input: &[u8],
+    size: usize,
+) -> Result<(Vec<u8>, usize), Error> {
+    decompress_impl(input, size, true)
+}
+
+pub(crate) fn decompress_idat(
+    input: &[u8],
+    payload_len: usize,
+    size: usize,
+) -> Result<Vec<u8>, Error> {
+    if payload_len < 6 {
+        return Err(Error::Truncated);
+    }
+    decompress_bits::<true>(Bits::idat(input), size, true).map(|(output, _)| output)
+}
+
+fn decompress_impl(input: &[u8], limit: usize, sized: bool) -> Result<(Vec<u8>, usize), Error> {
     if input.len() < 6 {
         return Err(Error::Truncated);
     }
-    let cmf = input[0];
-    if cmf & 15 != 8 || cmf >> 4 > 7 || (u16::from(cmf) * 256 + u16::from(input[1])) % 31 != 0 {
+    decompress_bits::<true>(Bits::new(input), limit, sized)
+}
+
+fn decompress_bits<const DISPATCH: bool>(
+    mut bits: Bits<'_>,
+    limit: usize,
+    sized: bool,
+) -> Result<(Vec<u8>, usize), Error> {
+    let cmf = bits.read(8)? as u8;
+    let flags = bits.read(8)? as u8;
+    if cmf & 15 != 8 || cmf >> 4 > 7 || (u16::from(cmf) * 256 + u16::from(flags)) % 31 != 0 {
         return Err(Error::Invalid("zlib header"));
     }
-    if input[1] & 32 != 0 {
+    if flags & 32 != 0 {
         return Err(Error::Invalid("zlib dictionary not permitted"));
     }
     let window = 1usize << ((cmf >> 4) + 8);
-    let mut bits = Bits::new(&input[2..]);
     let mut output = Vec::new();
+    let mut written = 0;
+    if sized {
+        output
+            .try_reserve_exact(limit)
+            .map_err(|_| Error::Allocation)?;
+        output.resize(limit, 0);
+    }
     loop {
         let last = bits.read(1)? != 0;
         let kind = bits.read(2)?;
@@ -413,7 +916,8 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
             if len ^ bits.read(16)? as usize != 65535 {
                 return Err(Error::Invalid("stored block length"));
             }
-            if len > limit.saturating_sub(output.len()) {
+            let produced = if sized { written } else { output.len() };
+            if len > limit.saturating_sub(produced) {
                 return Err(Error::LimitExceeded);
             }
             // A nonfinal stored block can amortize the next payload's growth.
@@ -423,19 +927,51 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
                 len.saturating_mul(2)
                     .min(limit.saturating_sub(output.len()))
             };
-            reserve_output(&mut output, additional, limit)?;
+            if !sized {
+                reserve_output(&mut output, additional, limit)?;
+            }
             // Drain bytes prefetched by a preceding Huffman block, then copy
             // the byte-aligned payload directly without bit-reader dispatch.
             let mut left = len;
             while left != 0 && bits.count >= 8 {
-                output.push(bits.read(8)? as u8);
+                let byte = bits.read(8)? as u8;
+                if sized {
+                    output[written] = byte;
+                    written += 1;
+                } else {
+                    output.push(byte);
+                }
                 left -= 1;
             }
-            let end = bits.pos.checked_add(left).ok_or(Error::LimitExceeded)?;
-            output.extend_from_slice(bits.input.get(bits.pos..end).ok_or(Error::Truncated)?);
-            bits.pos = end;
+            while left != 0 {
+                if bits.pos == bits.input.len() && !bits.advance() {
+                    return Err(Error::Truncated);
+                }
+                let count = left.min(bits.input.len() - bits.pos);
+                let end = bits.pos + count;
+                let bytes = &bits.input[bits.pos..end];
+                if sized {
+                    output[written..written + count].copy_from_slice(bytes);
+                    written += count;
+                } else {
+                    output.extend_from_slice(bytes);
+                }
+                bits.pos = end;
+                left -= count;
+            }
         } else if kind == 1 || kind == 2 {
-            inflate_codes(&mut bits, &mut output, kind == 1, window, limit)?;
+            if sized {
+                #[cfg(target_arch = "x86_64")]
+                if DISPATCH {
+                    x86::inflate(&mut bits, &mut output, &mut written, kind == 1, window)?;
+                } else {
+                    inflate_sized_codes(&mut bits, &mut output, &mut written, kind == 1, window)?;
+                }
+                #[cfg(not(target_arch = "x86_64"))]
+                inflate_sized_codes(&mut bits, &mut output, &mut written, kind == 1, window)?;
+            } else {
+                inflate_codes(&mut bits, &mut output, kind == 1, window, limit)?;
+            }
         } else {
             return Err(Error::Invalid("reserved block type"));
         }
@@ -443,12 +979,15 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
             break;
         }
     }
-    let used = 2 + bits.consumed();
-    let checksum = input.get(used..used + 4).ok_or(Error::Truncated)?;
-    if u32::from_be_bytes(checksum.try_into().unwrap()) != adler32(&output) {
+    if sized {
+        output.truncate(written);
+    }
+    bits.align();
+    let checksum = bits.read(32)?.swap_bytes();
+    if checksum != adler32(&output) {
         return Err(Error::Checksum);
     }
-    Ok((output, used + 4))
+    Ok((output, bits.consumed()))
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -662,8 +1201,273 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
 }
 
 #[cfg(test)]
+#[path = "../tests/support/huffman.rs"]
+mod huffman_fixtures;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wide_code_lookahead_preserves_prefetched_prefixes() {
+        use huffman_fixtures::{Codes, Wire, lengths};
+        for depth in 12..=15 {
+            let mut lens = [0; 257];
+            for n in 1..depth {
+                lens[n - 1] = n as u8;
+            }
+            lens[depth - 1] = depth as u8;
+            lens[256] = depth as u8;
+            let codes = Codes::new(&lens);
+            for offset in 0..8 {
+                let mut wire = Wire::default();
+                lengths(&mut wire, &lens, &[0]);
+                let mut raw = vec![0; offset];
+                for _ in 0..offset {
+                    codes.symbol(&mut wire, 0);
+                }
+                // Four 12-bit literals leave only 8..15 accounted bits, but
+                // their next 12-bit prefix is already physically present.
+                // Longer codes exercise transitions to the canonical path.
+                for _ in 0..600 {
+                    codes.symbol(&mut wire, depth - 1);
+                    raw.push((depth - 1) as u8);
+                }
+                codes.symbol(&mut wire, 256);
+                let bytes = wire.finish(&raw, offset & 1 != 0);
+                let mut suffix = bytes.clone();
+                suffix.extend_from_slice(b"unconsumed lookahead suffix for wide codes");
+                for slack in [0, 258, 516] {
+                    for input in [&bytes, &suffix] {
+                        assert_eq!(
+                            decompress_prefix_sized(input, raw.len() + slack).unwrap(),
+                            (raw.clone(), bytes.len()),
+                            "depth={depth} offset={offset} slack={slack}"
+                        );
+                        assert_eq!(
+                            decompress_bits::<false>(Bits::new(input), raw.len() + slack, true)
+                                .unwrap(),
+                            (raw.clone(), bytes.len()),
+                            "portable depth={depth} offset={offset} slack={slack}"
+                        );
+                    }
+                }
+                for fragment in [1, 7, 8, 9, 31, 1024] {
+                    let mut framed = Vec::new();
+                    for payload in bytes.chunks(fragment) {
+                        framed.extend_from_slice(b"\0\0\0\0IDAT\0\0\0\0");
+                        framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+                        framed.extend_from_slice(b"IDAT");
+                        framed.extend_from_slice(payload);
+                        framed.extend_from_slice(&[0; 4]);
+                    }
+                    assert_eq!(
+                        decompress_idat(&framed, bytes.len(), raw.len()).unwrap(),
+                        raw,
+                        "depth={depth} offset={offset} fragment={fragment}"
+                    );
+                    assert_eq!(
+                        decompress_bits::<false>(Bits::idat(&framed), raw.len(), true).unwrap(),
+                        (raw.clone(), bytes.len()),
+                        "portable depth={depth} offset={offset} fragment={fragment}"
+                    );
+                }
+                for missing in 1..=4 {
+                    assert!(
+                        decompress_prefix_sized(&bytes[..bytes.len() - missing], raw.len())
+                            .is_err()
+                    );
+                    assert!(
+                        decompress_bits::<false>(
+                            Bits::new(&bytes[..bytes.len() - missing]),
+                            raw.len(),
+                            true
+                        )
+                        .is_err()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn word_match_copies_preserve_overlapping_history_and_every_output_tail() {
+        use huffman_fixtures::{Codes, Wire};
+        let mut lengths = [8; 288];
+        lengths[144..256].fill(9);
+        lengths[256..280].fill(7);
+        let literals = Codes::new(&lengths);
+        let distances = Codes::new(&[5; 32]);
+        let bases = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33];
+        let extras = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4];
+        for distance in 1..=40 {
+            for length in 3..=16 {
+                for tail in (0..=17).chain([255, 256, 257, 258, 259, 511]) {
+                    let mut raw: Vec<u8> = (0..64).map(|n| (n * 37 + 11) as u8).collect();
+                    let mut wire = Wire::default();
+                    wire.stored(&raw, false);
+                    wire.put(3, 3); // Final fixed-Huffman block.
+                    let (symbol, extra) = match length {
+                        3..=10 => (length + 254, None),
+                        11..=12 => (265, Some(length - 11)),
+                        13..=14 => (266, Some(length - 13)),
+                        _ => (267, Some(length - 15)),
+                    };
+                    literals.symbol(&mut wire, symbol);
+                    if let Some(extra) = extra {
+                        wire.put(extra as u32, 1);
+                    }
+                    let code = bases.iter().rposition(|&base| base <= distance).unwrap();
+                    distances.symbol(&mut wire, code);
+                    wire.put((distance - bases[code]) as u32, extras[code]);
+                    for _ in 0..length {
+                        raw.push(raw[raw.len() - distance]);
+                    }
+                    for n in 0..tail {
+                        let byte = (103 + n * 19) as u8;
+                        literals.symbol(&mut wire, byte as usize);
+                        raw.push(byte);
+                    }
+                    literals.symbol(&mut wire, 256);
+                    let bytes = wire.finish(&raw, (distance ^ length ^ tail) & 1 != 0);
+                    for actual in [
+                        decompress_prefix(&bytes, raw.len()),
+                        decompress_prefix_sized(&bytes, raw.len()),
+                        decompress_bits::<false>(Bits::new(&bytes), raw.len(), true),
+                        decompress_prefix_sized(&bytes, raw.len() + 258),
+                        decompress_bits::<false>(Bits::new(&bytes), raw.len() + 258, true),
+                    ] {
+                        assert_eq!(
+                            actual.unwrap(),
+                            (raw.clone(), bytes.len()),
+                            "distance={distance} length={length} tail={tail}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sized_inflation_matches_independent_huffman_fixtures() {
+        for case in huffman_fixtures::all_cases() {
+            let limit = case.output.as_ref().map_or(1 << 20, Vec::len);
+            let expected = decompress_prefix(&case.bytes, limit);
+            assert_eq!(
+                decompress_prefix_sized(&case.bytes, limit),
+                expected,
+                "{}",
+                case.name
+            );
+            if case.bytes.len() >= 6 {
+                assert_eq!(
+                    decompress_bits::<false>(Bits::new(&case.bytes), limit, true),
+                    expected,
+                    "portable {}",
+                    case.name
+                );
+            }
+            if let Some(raw) = &case.output {
+                assert_eq!(
+                    expected.unwrap(),
+                    (raw.clone(), case.bytes.len()),
+                    "{}",
+                    case.name
+                );
+                let mut suffix = case.bytes.clone();
+                suffix.extend_from_slice(b"unconsumed sized-inflation suffix");
+                assert_eq!(
+                    decompress_prefix_sized(&suffix, limit).unwrap(),
+                    (raw.clone(), case.bytes.len()),
+                    "{}",
+                    case.name
+                );
+                assert_eq!(
+                    decompress_bits::<false>(Bits::new(&suffix), limit, true).unwrap(),
+                    (raw.clone(), case.bytes.len()),
+                    "portable suffix {}",
+                    case.name
+                );
+                for slack in [257, 258, 259, 516] {
+                    assert_eq!(
+                        decompress_prefix_sized(&suffix, limit + slack).unwrap(),
+                        (raw.clone(), case.bytes.len()),
+                        "prefetched EOB {} slack={slack}",
+                        case.name
+                    );
+                    assert_eq!(
+                        decompress_bits::<false>(Bits::new(&suffix), limit + slack, true).unwrap(),
+                        (raw.clone(), case.bytes.len()),
+                        "portable prefetched EOB {} slack={slack}",
+                        case.name
+                    );
+                }
+                if limit != 0 {
+                    assert_eq!(
+                        decompress_prefix_sized(&case.bytes, limit - 1),
+                        Err(Error::LimitExceeded),
+                        "{}",
+                        case.name
+                    );
+                    assert_eq!(
+                        decompress_bits::<false>(Bits::new(&case.bytes), limit - 1, true),
+                        Err(Error::LimitExceeded),
+                        "portable limit {}",
+                        case.name
+                    );
+                }
+                for missing in 1..=4.min(case.bytes.len()) {
+                    assert!(
+                        decompress_prefix_sized(&case.bytes[..case.bytes.len() - missing], limit)
+                            .is_err(),
+                        "{} missing={missing}",
+                        case.name
+                    );
+                    assert!(
+                        decompress_bits::<false>(
+                            Bits::new(&case.bytes[..case.bytes.len() - missing]),
+                            limit,
+                            true
+                        )
+                        .is_err(),
+                        "portable {} missing={missing}",
+                        case.name
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn idat_boundaries_and_empty_chunks_preserve_huffman_payloads() {
+        for case in huffman_fixtures::all_cases() {
+            let Some(raw) = case.output else { continue };
+            for fragment in [1, 7, 16384] {
+                let mut wire = Vec::new();
+                for bytes in case.bytes.chunks(fragment) {
+                    // Empty IDAT before each fragment, including the header
+                    // and Adler trailer; CRCs are checked by the PNG parser.
+                    wire.extend_from_slice(b"\0\0\0\0IDAT\0\0\0\0");
+                    wire.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+                    wire.extend_from_slice(b"IDAT");
+                    wire.extend_from_slice(bytes);
+                    wire.extend_from_slice(&[0; 4]);
+                }
+                assert_eq!(
+                    decompress_idat(&wire, case.bytes.len(), raw.len()).unwrap(),
+                    raw,
+                    "{} fragment={fragment}",
+                    case.name
+                );
+                assert_eq!(
+                    decompress_bits::<false>(Bits::idat(&wire), raw.len(), true).unwrap(),
+                    (raw.clone(), case.bytes.len()),
+                    "portable {} fragment={fragment}",
+                    case.name
+                );
+            }
+        }
+    }
 
     #[test]
     fn consumed_prefix_byte_count_avoids_large_position_overflow() {
@@ -688,6 +1492,8 @@ mod tests {
                     pos,
                     word: 0,
                     count,
+                    chunks: &[],
+                    prior: 0,
                 };
                 let expected = (pos as u128 * 8 - u128::from(count)).div_ceil(8);
                 assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");

@@ -1,5 +1,5 @@
 //! Independent PNG codec. See the coverage document for verified capabilities.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 mod apng;
 mod checksum;

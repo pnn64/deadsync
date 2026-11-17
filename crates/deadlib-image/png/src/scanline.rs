@@ -1,6 +1,11 @@
 use crate::codec::Filter;
 use crate::{ColorType, Error, Image, Samples, reserve};
 
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+#[path = "scanline/x86.rs"]
+mod x86;
+
 const ADAM7: [(u32, u32, u32, u32); 7] = [
     (0, 0, 8, 8),
     (4, 0, 8, 8),
@@ -50,49 +55,63 @@ pub(crate) fn filtered_size(
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
+    paeth_wide(i16::from(a), i16::from(b), i16::from(c))
+}
+
+fn paeth_wide(a: i16, b: i16, c: i16) -> u8 {
     // Equivalent nearest-neighbor regions, including the prescribed ties.
     // The threshold is in -510..=765, so all arithmetic fits in i16.
-    let low = i16::from(a.min(b));
-    let high = i16::from(a.max(b));
-    let threshold = 3 * i16::from(c) - i16::from(a) - i16::from(b);
-    if threshold <= low {
-        high as u8
-    } else if threshold >= high {
-        low as u8
-    } else {
-        c
-    }
+    let low = a.min(b);
+    let high = a.max(b);
+    let threshold = 3 * c - a - b;
+    // Compute both selections independently. An early-return chain makes
+    // unpredictable pixel values branch on the preceding pixel's result.
+    let candidate = if threshold >= high { low } else { c };
+    (if threshold <= low { high } else { candidate }) as u8
 }
 
 fn unfilter_pixels<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8]) {
     let prev = &prev[..row.len()];
     let (pixels, tail) = row.as_chunks_mut::<N>();
     let (above, above_tail) = prev.as_chunks::<N>();
-    let mut left = [0; N];
-    let mut upper_left = [0; N];
+    let mut left = [0i16; N];
+    let mut upper_left = [0i16; N];
     for (pixel, up) in pixels.iter_mut().zip(above) {
         for n in 0..N {
             let predictor = if PAETH {
-                paeth(left[n], up[n], upper_left[n])
+                paeth_wide(left[n], i16::from(up[n]), upper_left[n])
             } else {
-                ((u16::from(left[n]) + u16::from(up[n])) / 2) as u8
+                ((left[n] + i16::from(up[n])) / 2) as u8
             };
             pixel[n] = pixel[n].wrapping_add(predictor);
+            left[n] = i16::from(pixel[n]);
+            upper_left[n] = i16::from(up[n]);
         }
-        left = *pixel;
-        upper_left = *up;
     }
     for (n, (value, &up)) in tail.iter_mut().zip(above_tail).enumerate() {
         let predictor = if PAETH {
-            paeth(left[n], up, upper_left[n])
+            paeth_wide(left[n], i16::from(up), upper_left[n])
         } else {
-            ((u16::from(left[n]) + u16::from(up)) / 2) as u8
+            ((left[n] + i16::from(up)) / 2) as u8
         };
         *value = value.wrapping_add(predictor);
     }
 }
 
 fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let handled = match bpp {
+            3 => x86::unfilter::<3, PAETH>(row, prev),
+            4 => x86::unfilter::<4, PAETH>(row, prev),
+            6 => x86::unfilter::<6, PAETH>(row, prev),
+            8 => x86::unfilter::<8, PAETH>(row, prev),
+            _ => false,
+        };
+        if handled {
+            return;
+        }
+    }
     // A fixed pixel width makes its byte lanes independent and keeps the
     // preceding pixel in registers instead of indexing reconstructed bytes.
     match bpp {

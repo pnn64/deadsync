@@ -2,7 +2,11 @@
 
 Independent pure-Rust PNG implementation. The only production dependency is
 `deadlib-image` for native sample storage. PNG framing, CRC-32, Adler-32,
-zlib/DEFLATE, filters and Adam7 are implemented locally in safe Rust.
+zlib/DEFLATE, filters and Adam7 are implemented locally in Rust with checked
+buffer accesses. On x86-64, runtime feature checks select BMI2 inflation,
+PCLMUL CRC folding, SSSE3 Adler sums and SSE4.1 Average/Paeth reconstruction
+for three-, four-, six- and eight-byte strides. Their dispatch modules use `unsafe` for CPU
+feature contracts; byte reads and writes use checked slices and fixed-size arrays.
 
 ```rust
 use deadlib_image_png::decode;
@@ -18,6 +22,10 @@ Build/test independently using `cargo test -p deadlib-image-png` or
 `cargo test --manifest-path crates/deadlib-image/png/Cargo.toml`. Development
 dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
+
+The separate [benchmark workspace](bench/README.md) measures decoder CPU cycles
+and allocation requests against Rust png and image, checking native samples
+and RGBA16 pixels before measurement.
 
 For reference color samples with 1–16 significant bits per channel, use
 `Png::from_reference_samples(width, height, color_type, channel_depths, samples)`.

@@ -1,0 +1,9 @@
+cargo :     Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+At line:2 char:442
++ ... EXITCODE }; cargo clippy --manifest-path crates/deadlib-image/png/ben ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking de...dlib-image\png):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking png-decode-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\png\bench)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.52s
