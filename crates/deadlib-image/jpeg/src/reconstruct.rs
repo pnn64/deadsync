@@ -653,7 +653,7 @@ fn ycbcr420_rgb8(components: &[ComponentPlane], width: usize, height: usize, out
     }
 }
 
-const CHUNK: usize = 64;
+pub(crate) const CHUNK: usize = 64;
 
 #[inline(always)]
 fn high(a: i16, c: i16) -> i16 {
@@ -666,7 +666,7 @@ fn high(a: i16, c: i16) -> i16 {
 /// `((2x * c >> 16) + 1) >> 1 == (x * c + 32768) >> 16`; green keeps its
 /// 32-bit sum, which LLVM forms with pmaddwd. All 2^24 inputs are tested.
 #[inline(always)]
-fn ycbcr_chunk(y: &[i16; CHUNK], cb: &[i16; CHUNK], cr: &[i16; CHUNK], out: &mut [u8; CHUNK * 3]) {
+pub(crate) fn ycbcr_chunk(y: &[i16; CHUNK], cb: &[i16; CHUNK], cr: &[i16; CHUNK], out: &mut [u8; CHUNK * 3]) {
     for i in 0..CHUNK {
         let (luma, cb, cr) = (y[i], cb[i] - 128, cr[i] - 128);
         let red = luma + cr + ((high(cr * 2, 26345) + 1) >> 1);
@@ -692,7 +692,7 @@ fn load<T: Copy + Into<i32>>(source: &[T]) -> [i16; CHUNK] {
 /// constant halves: SSE2 inlines copies of at most 128 bytes, while larger
 /// ones call memcpy once per chunk.
 #[inline(always)]
-fn emit_chunk(out: &mut Vec<u8>, rgb: &[u8; CHUNK * 3], pixels: usize) {
+pub(crate) fn emit_chunk(out: &mut Vec<u8>, rgb: &[u8; CHUNK * 3], pixels: usize) {
     if pixels == CHUNK {
         for half in rgb.as_chunks::<{ CHUNK * 3 / 2 }>().0 {
             out.extend_from_slice(half);

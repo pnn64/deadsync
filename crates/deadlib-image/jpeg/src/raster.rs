@@ -1,9 +1,10 @@
 //! Pixel output without retaining full-image coefficients for sequential scans.
 use crate::decode::{parse_huffman, parse_quant};
-use crate::fast::{self, Reader, Table};
+use crate::fast::{self, Reader};
 use crate::transform::{FloatQuant, idct8, idct8_dc};
 use crate::reconstruct::{
-    ColorHints, cmyk_to_rgb, infer_components_with_hints, ycbcr_row, ycbcr_to_rgb, ycbcr420_row, ycck_to_cmyk,
+    ColorHints, CHUNK, cmyk_to_rgb, emit_chunk, infer_components_with_hints, ycbcr_chunk, ycbcr_row, ycbcr420_row,
+    ycck_to_cmyk,
 };
 use crate::{
     CmykPolarity, CoefficientImage, ColorSpace, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
@@ -20,7 +21,8 @@ pub fn decode(input: &[u8], limits: Limits) -> Result<Image> {
 }
 
 pub fn decode_with_upsampling(input: &[u8], limits: Limits, method: Upsampling) -> Result<Image> {
-    if let Some(plan) = prepare(input, limits)? {
+    let mut tables = Tables::new();
+    if let Some(plan) = prepare(input, limits, &mut tables)? {
         return plan.decode(limits, method);
     }
     // Choose the existing process decoder without changing its validation or
@@ -58,7 +60,8 @@ pub fn decode_with_upsampling(input: &[u8], limits: Limits, method: Upsampling) 
 
 struct Plan<'a> {
     frame: FrameHeader,
-    tables: Tables,
+    // Borrowed from the caller: moving ~20 KB of tables cost a memcpy each.
+    tables: &'a Tables,
     selected: [(usize, usize); 4],
     entropy: &'a [u8],
     interval: usize,
@@ -67,9 +70,8 @@ struct Plan<'a> {
     metadata_bytes: usize,
 }
 
-fn prepare(input: &[u8], limits: Limits) -> Result<Option<Plan<'_>>> {
+fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Result<Option<Plan<'a>>> {
     let mut reader = MarkerReader::new(input)?;
-    let mut tables = Tables::new();
     let mut frame = None;
     let mut jfif = false;
     let mut adobe = None;
@@ -484,22 +486,31 @@ impl Window {
                     ]);
                 }
             } else {
-                for x in 0..width {
-                    let values = core::array::from_fn(|i| {
-                        if i < self.components {
-                            samplers[i].sample(x)
-                        } else {
-                            0
+                // Other grids: interpolate a chunk of each component, then convert.
+                let mut rgb = [0u8; CHUNK * 3];
+                for start in (0..width).step_by(CHUNK) {
+                    let n = (start + CHUNK).min(width) - start;
+                    let mut values = [[0i16; CHUNK]; 4];
+                    for (sampler, row) in samplers.iter().zip(&mut values).take(self.components) {
+                        sampler.fill(start, &mut row[..n]);
+                    }
+                    if self.color == ColorSpace::YCbCr {
+                        ycbcr_chunk(&values[0], &values[1], &values[2], &mut rgb);
+                    } else {
+                        for x in 0..n {
+                            let v = values.map(|row| i32::from(row[x]));
+                            let pixel = match self.color {
+                                ColorSpace::Rgb => [v[0], v[1], v[2]],
+                                ColorSpace::Cmyk => cmyk_to_rgb(v, self.polarity, 8),
+                                ColorSpace::Ycck => {
+                                    cmyk_to_rgb(ycck_to_cmyk(v, 8), self.polarity, 8)
+                                }
+                                _ => unreachable!(),
+                            };
+                            rgb[3 * x..3 * x + 3].copy_from_slice(&pixel.map(|v| v as u8));
                         }
-                    });
-                    let rgb = match self.color {
-                        ColorSpace::YCbCr => ycbcr_to_rgb(values[..3].try_into().unwrap(), 8),
-                        ColorSpace::Rgb => values[..3].try_into().unwrap(),
-                        ColorSpace::Cmyk => cmyk_to_rgb(values, self.polarity, 8),
-                        ColorSpace::Ycck => cmyk_to_rgb(ycck_to_cmyk(values, 8), self.polarity, 8),
-                        _ => unreachable!(),
-                    };
-                    out.extend(rgb.map(|v| v as u8));
+                    }
+                    emit_chunk(out, &rgb, n);
                 }
             }
         }
@@ -513,12 +524,6 @@ impl Plan<'_> {
             + self.frame.components.capacity() * core::mem::size_of::<crate::ComponentSpec>();
         let (mut output, mut cache) = window.allocate(retained, limits)?;
         let n = self.frame.components.len();
-        let tables: [Option<Table>; 8] = core::array::from_fn(|t| {
-            self.selected[..n]
-                .iter()
-                .any(|&(dc, ac)| dc == t || ac == t)
-                .then(|| Table::new(self.tables.huffman[t].as_ref().unwrap()))
-        });
         let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
             FloatQuant::new(&self.frame.components.get(i).map_or([0; 64], |spec| {
                 self.tables.quant[usize::from(spec.quantization_table)]
@@ -541,8 +546,8 @@ impl Plan<'_> {
                 }
                 for i in 0..n {
                     let l = window.layouts[i];
-                    let dc = tables[self.selected[i].0].as_ref().unwrap();
-                    let ac = tables[self.selected[i].1].as_ref().unwrap();
+                    let dc = self.tables.huffman[self.selected[i].0].as_ref().unwrap();
+                    let ac = self.tables.huffman[self.selected[i].1].as_ref().unwrap();
                     let quant = &quants[i];
                     for by in 0..l.v {
                         for bx in 0..l.h {
@@ -676,24 +681,47 @@ impl<'a> Row<'a> {
             method,
         }
     }
-    #[inline]
-    fn sample(self, x: usize) -> i32 {
+    /// Interpolated samples for `x` in `start..start + out.len()`. The source
+    /// position advances by `2h` per pixel instead of dividing per sample;
+    /// power-of-two denominators shift. Every sum is non-negative.
+    fn fill(&self, start: usize, out: &mut [i16]) {
+        let last = self.top.len() as i32 - 1;
         if self.method == Upsampling::Nearest {
-            return i32::from(
-                self.top[((2 * x + 1) * self.h / (2 * self.max_h)).min(self.top.len() - 1)],
-            );
+            for (k, value) in out.iter_mut().enumerate() {
+                let x = start + k;
+                let source = ((2 * x + 1) * self.h / (2 * self.max_h)).min(last as usize);
+                *value = i16::from(self.top[source]);
+            }
+            return;
         }
         if self.h == self.max_h && self.fy == 0 {
-            return i32::from(self.top[x]);
+            for (value, &sample) in out.iter_mut().zip(&self.top[start..]) {
+                *value = i16::from(sample);
+            }
+            return;
         }
-        let sx = ((2 * x + 1) * self.h) as i32 - self.max_h as i32;
         let dx = 2 * self.max_h as i32;
-        let ix = sx.div_euclid(dx);
-        let fx = sx.rem_euclid(dx);
-        let left = ix.clamp(0, self.top.len() as i32 - 1) as usize;
-        let right = (ix + 1).clamp(0, self.top.len() as i32 - 1) as usize;
-        let top = i32::from(self.top[left]) * (dx - fx) + i32::from(self.top[right]) * fx;
-        let bottom = i32::from(self.bottom[left]) * (dx - fx) + i32::from(self.bottom[right]) * fx;
-        (top * (self.dy - self.fy) + bottom * self.fy + dx * self.dy / 2) / (dx * self.dy)
+        let step = 2 * self.h as i32;
+        let denominator = dx * self.dy;
+        let half = denominator / 2;
+        let shift = (denominator as u32)
+            .is_power_of_two()
+            .then(|| denominator.trailing_zeros());
+        let source = ((2 * start + 1) * self.h) as i32 - self.max_h as i32;
+        let (mut ix, mut fx) = (source.div_euclid(dx), source.rem_euclid(dx));
+        for value in out {
+            let left = ix.clamp(0, last) as usize;
+            let right = (ix + 1).clamp(0, last) as usize;
+            let top = i32::from(self.top[left]) * (dx - fx) + i32::from(self.top[right]) * fx;
+            let bottom =
+                i32::from(self.bottom[left]) * (dx - fx) + i32::from(self.bottom[right]) * fx;
+            let sum = top * (self.dy - self.fy) + bottom * self.fy + half;
+            *value = shift.map_or(sum / denominator, |s| sum >> s) as i16;
+            fx += step;
+            if fx >= dx {
+                fx -= dx;
+                ix += 1;
+            }
+        }
     }
 }

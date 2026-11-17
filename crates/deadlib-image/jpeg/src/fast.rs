@@ -165,79 +165,37 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// A Huffman table with an additional AC lookup that also decodes the value
-/// whenever code and magnitude bits together fit in the prefix.
-pub(crate) struct Table {
-    /// `length << 8 | symbol`, or zero for codes longer than the prefix.
-    lookup: [u16; 1 << FAST],
-    /// `value << 16 | run << 8 | total length`, or zero.
-    ac: [i32; 1 << FAST],
-    /// Largest left-aligned 16-bit code for each length, or -1.
-    max_code: [i32; 17],
-    offsets: [i32; 17],
-    values: [u8; 256],
+/// Decode one symbol; the caller guarantees at least 16 buffered bits.
+#[inline(always)]
+fn symbol(table: &Huffman, reader: &mut Reader<'_>) -> Result<u32> {
+    let entry = table.lookup[reader.peek(FAST) as usize];
+    if entry != 0 {
+        reader.consume(u32::from(entry >> 8));
+        return Ok(u32::from(entry & 0xff));
+    }
+    let (symbol, length) = long_symbol(table, reader.peek(16) as i32)?;
+    reader.consume(length);
+    Ok(symbol)
 }
 
-impl Table {
-    pub fn new(huffman: &Huffman) -> Self {
-        let mut table = Self {
-            lookup: huffman.lookup,
-            ac: [0; 1 << FAST],
-            max_code: [-1; 17],
-            offsets: huffman.offsets,
-            values: huffman.values,
-        };
-        for length in 1..=16 {
-            let max = huffman.max_code[length];
-            // Left-align so that one 16-bit peek compares against every length.
-            if max >= 0 {
-                table.max_code[length] = ((max + 1) << (16 - length)) - 1;
-            }
+// A prefix miss means the code is longer than FAST bits or unassigned:
+// canonical codes give no shorter match, as in the bitwise decoder.
+#[cold]
+#[inline(never)]
+fn long_symbol(table: &Huffman, peek: i32) -> Result<(u32, u32)> {
+    for length in FAST + 1..=16 {
+        let code = peek >> (16 - length);
+        if code <= table.max_code[length as usize] {
+            let index = code + table.offsets[length as usize];
+            let value = table
+                .values
+                .get(index as usize)
+                .copied()
+                .ok_or(Error::Invalid("Huffman code"))?;
+            return Ok((u32::from(value), length));
         }
-        for (prefix, &entry) in huffman.lookup.iter().enumerate() {
-            let length = u32::from(entry >> 8);
-            let symbol = u32::from(entry & 0xff);
-            let (run, size) = (symbol >> 4, symbol & 15);
-            if entry != 0 && size != 0 && length + size <= FAST {
-                let bits = (prefix as u32 >> (FAST - length - size)) & ((1 << size) - 1);
-                table.ac[prefix] =
-                    extend(bits, size) << 16 | (run << 8) as i32 | (length + size) as i32;
-            }
-        }
-        table
     }
-
-    /// Decode one symbol; the caller guarantees at least 16 buffered bits.
-    #[inline(always)]
-    fn symbol(&self, reader: &mut Reader<'_>) -> Result<u32> {
-        let entry = self.lookup[reader.peek(FAST) as usize];
-        if entry != 0 {
-            reader.consume(u32::from(entry >> 8));
-            return Ok(u32::from(entry & 0xff));
-        }
-        let (symbol, length) = self.long_symbol(reader.peek(16) as i32)?;
-        reader.consume(length);
-        Ok(symbol)
-    }
-
-    // A prefix miss means the code is longer than FAST bits or unassigned:
-    // canonical codes give no shorter match, as in the bitwise decoder.
-    #[cold]
-    #[inline(never)]
-    fn long_symbol(&self, code: i32) -> Result<(u32, u32)> {
-        for length in FAST + 1..=16 {
-            if code <= self.max_code[length as usize] {
-                let index = (code >> (16 - length)) + self.offsets[length as usize];
-                let value = self
-                    .values
-                    .get(index as usize)
-                    .copied()
-                    .ok_or(Error::Invalid("Huffman code"))?;
-                return Ok((u32::from(value), length));
-            }
-        }
-        Err(Error::Invalid("unassigned Huffman code"))
-    }
+    Err(Error::Invalid("unassigned Huffman code"))
 }
 
 /// Decode one sequential 8-bit block. Returns the largest zigzag index
@@ -246,12 +204,12 @@ impl Table {
 pub(crate) fn block(
     block: &mut [i16; 64],
     reader: &mut Reader<'_>,
-    dc: &Table,
-    ac: &Table,
+    dc: &Huffman,
+    ac: &Huffman,
     predictor: &mut i32,
 ) -> Result<usize> {
     reader.fill();
-    let size = dc.symbol(reader)?;
+    let size = symbol(dc, reader)?;
     if size > 11 {
         return Err(Error::Invalid("DC magnitude category"));
     }
@@ -268,17 +226,17 @@ pub(crate) fn block(
         reader.fill();
         let fast = ac.ac[reader.peek(FAST) as usize];
         if fast != 0 {
-            k += (fast >> 8 & 0xff) as usize;
+            k += (fast >> 4 & 15) as usize;
             if k >= 64 {
                 return Err(Error::Invalid("AC run or magnitude"));
             }
-            reader.consume((fast & 0xff) as u32);
-            block[ZIGZAG[k]] = (fast >> 16) as i16;
+            reader.consume((fast & 15) as u32);
+            block[ZIGZAG[k]] = fast >> 8;
             last = k;
             k += 1;
             continue;
         }
-        let symbol = ac.symbol(reader)?;
+        let symbol = symbol(ac, reader)?;
         let (run, size) = ((symbol >> 4) as usize, symbol & 15);
         if size == 0 {
             if run == 0 {
