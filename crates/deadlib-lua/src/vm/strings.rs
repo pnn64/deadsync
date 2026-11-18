@@ -376,12 +376,11 @@ impl Vm {
             }
             STR_REVERSE | STR_LOWER | STR_UPPER => {
                 let mut bytes = self.try_take_buffer(len)?;
-                let text = &self.strings.bytes[slot_index(source.0)];
+                bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
                 if id == STR_REVERSE {
-                    bytes.extend_from_slice(text);
                     bytes.reverse();
                 } else {
-                    crate::locale::map_case(text, id == STR_UPPER, &mut bytes);
+                    crate::locale::map_case(&mut bytes, id == STR_UPPER);
                 }
                 self.try_finish_buffer(bytes)?
             }

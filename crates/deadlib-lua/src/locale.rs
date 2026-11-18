@@ -238,24 +238,20 @@ pub(crate) fn class(byte: u8, class: u8) -> bool {
     };
     hit != class.is_ascii_uppercase()
 }
-pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut crate::memory::Buffer<u8>) {
+pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
     let ctype = CTYPE
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if ctype.is_c {
-        for byte in source.iter().map(|b| {
-            if upper {
-                b.to_ascii_uppercase()
-            } else {
-                b.to_ascii_lowercase()
-            }
-        }) {
-            output.push(byte);
+        if upper {
+            bytes.make_ascii_uppercase();
+        } else {
+            bytes.make_ascii_lowercase();
         }
     } else {
         let shift = if upper { 8 } else { 0 };
-        for &byte in source {
-            output.push((ctype.values[usize::from(byte)] >> shift) as u8);
+        for byte in bytes {
+            *byte = (ctype.values[usize::from(*byte)] >> shift) as u8;
         }
     }
 }
