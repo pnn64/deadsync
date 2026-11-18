@@ -207,15 +207,22 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 fn byte_run(bytes: &[u8], byte: u8) -> usize {
+    let (blocks, tail) = bytes.as_chunks::<32>();
+    let block = [byte; 32];
+    let (prefix, rest) = match blocks.iter().position(|bytes| *bytes != block) {
+        Some(index) => (index * 32, blocks[index].as_slice()),
+        None => (bytes.len() - tail.len(), tail),
+    };
     let expected = u64::from_le_bytes([byte; 8]);
-    let (words, tail) = bytes.as_chunks::<8>();
+    let (words, tail) = rest.as_chunks::<8>();
     for (index, &word) in words.iter().enumerate() {
         let different = u64::from_le_bytes(word) ^ expected;
         if different != 0 {
-            return index * 8 + (different.trailing_zeros() / 8) as usize;
+            return prefix + index * 8 + (different.trailing_zeros() / 8) as usize;
         }
     }
-    words.len() * 8
+    prefix
+        + words.len() * 8
         + tail
             .iter()
             .position(|&candidate| candidate != byte)
