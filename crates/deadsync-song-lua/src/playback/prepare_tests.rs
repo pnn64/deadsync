@@ -109,6 +109,95 @@ fn lua_submission_rejects_a_failed_shared_session_even_if_layers_recover() {
 }
 
 #[test]
+fn lua_submission_statistics_selectors_and_chart_totals_stay_baked() {
+    let (dir, song, context) = fixture();
+    std::fs::write(
+        dir.path().join("foreground.lua"),
+        r#"
+local stage = STATSMAN:GetCurStageStats()
+local stats = stage:GetPlayerStageStats(PLAYER_1)
+local total = stats:GetPossibleDancePoints()
+return Def.ActorFrame{
+    OnCommand=function(self)
+        assert(stage == STATSMAN:GetCurStageStats())
+        assert(stats == stage:GetPlayerStageStats(PLAYER_1))
+        assert(stats:GetPossibleDancePoints() == total)
+        self:sleep(0.25)
+    end
+}
+"#,
+    )
+    .unwrap();
+    let mut prepared = prepare(&song, &context);
+    assert!(prepared.compile_succeeded());
+    assert!(prepared.primary.is_some());
+    assert!(prepared.take_live_scene().unwrap().is_none());
+}
+
+#[test]
+fn lua_submission_mutable_statistics_require_and_retain_runtime() {
+    for (case, commands) in [
+        (
+            "startup percentage",
+            r#"InitCommand=function(self)
+                local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+                assert(stats:GetPercentDancePoints() == 0)
+            end"#,
+        ),
+        (
+            "delayed life read inside pcall",
+            r#"OnCommand=function(self) self:sleep(0.25) end,
+            Def.Actor{
+                OnCommand=function(self)
+                    self:sleep(0.125):queuecommand('Sample')
+                end,
+                SampleCommand=function(self)
+                    local ok, life = pcall(function()
+                        return STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetCurrentLife()
+                    end)
+                    assert(ok and life >= 0)
+                end,
+            }"#,
+        ),
+    ] {
+        let (dir, song, context) = fixture();
+        let entry = dir.path().join("foreground.lua");
+        std::fs::write(&entry, format!("return Def.ActorFrame{{{commands}}}"))
+            .unwrap();
+        let error = deadsync_assets::song_lua::compile_song_lua(&entry, &context)
+            .expect_err(case);
+        assert_eq!(error, crate::runtime_fallback::STATISTICS_REQUIRED, "{case}");
+        let mut prepared = prepare(&song, &context);
+        assert!(prepared.compile_succeeded(), "{case}");
+        assert!(prepared.take_live_scene().unwrap().is_some(), "{case}");
+        assert!(!context.live, "the requested mode stays unchanged");
+    }
+}
+
+#[test]
+fn lua_submission_statistics_dependency_preserves_authored_load_errors() {
+    let (dir, song, context) = fixture();
+    let entry = dir.path().join("foreground.lua");
+    std::fs::write(
+        &entry,
+        r#"
+STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetCurrentLife()
+error('broken after statistics read')
+"#,
+    )
+    .unwrap();
+    let mut attempts = 0;
+    let error = crate::runtime_fallback::compile(&context, |context| {
+        attempts += 1;
+        deadsync_assets::song_lua::compile_song_lua(&entry, context)
+    })
+    .expect_err("an authored load failure must remain a failure");
+    assert!(error.contains("broken after statistics read"), "{error}");
+    assert_eq!(attempts, 1, "only a completed dependency rejection retries");
+    assert!(!prepare(&song, &context).compile_succeeded());
+}
+
+#[test]
 fn captured_screen_and_draw_clocks_rebase_only_the_calibration_difference() {
     use crate::{
         SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTarget as Target,

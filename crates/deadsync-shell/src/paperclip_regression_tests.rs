@@ -120,19 +120,19 @@ mod paperclip {
         result
     }
 
-    fn compare_note_draws(baked: &NoteDraws, live: &NoteDraws) -> Result<(), String> {
-        if baked.draws.len() != live.draws.len() {
+    fn compare_note_draws(reference: &NoteDraws, actual: &NoteDraws) -> Result<(), String> {
+        if reference.draws.len() != actual.draws.len() {
             return Err(format!(
-                "draw count: baked {}, runtime {}",
-                baked.draws.len(),
-                live.draws.len()
+                "draw count: reference {}, actual {}",
+                reference.draws.len(),
+                actual.draws.len()
             ));
         }
-        for (index, (baked, live)) in baked.draws.iter().zip(&live.draws).enumerate() {
-            if baked.receptor != live.receptor
-                || baked.texture != live.texture
-                || baked.blend != live.blend
-                || (baked.alpha - live.alpha).abs() > 0.0001
+        for (index, (reference, actual)) in reference.draws.iter().zip(&actual.draws).enumerate() {
+            if reference.receptor != actual.receptor
+                || reference.texture != actual.texture
+                || reference.blend != actual.blend
+                || (reference.alpha - actual.alpha).abs() > 0.0001
             {
                 return Err(format!(
                     "draw {index} has different kind, texture, blend or alpha"
@@ -141,16 +141,18 @@ mod paperclip {
             // Compare submitted geometry after the final camera/Player transforms.
             // Sprite and transformed-quad winding can differ between composition
             // paths, so match unique vertices without depending on vertex order.
-            if baked.vertices.len() != live.vertices.len() {
+            if reference.vertices.len() != actual.vertices.len() {
                 return Err(format!("draw {index} has different vertex counts"));
             }
-            let mut remaining = live.vertices.clone();
-            for baked in &baked.vertices {
-                let Some(matched) = remaining
-                    .iter()
-                    .position(|live| baked.iter().zip(live).all(|(a, b)| (a - b).abs() < 0.001))
-                else {
-                    return Err(format!("draw {index} differs at clip vertex {baked:?}"));
+            let mut remaining = actual.vertices.clone();
+            for reference in &reference.vertices {
+                let Some(matched) = remaining.iter().position(|actual| {
+                    reference
+                        .iter()
+                        .zip(actual)
+                        .all(|(a, b)| (a - b).abs() < 0.001)
+                }) else {
+                    return Err(format!("draw {index} differs at clip vertex {reference:?}"));
                 };
                 remaining.swap_remove(matched);
             }
@@ -273,17 +275,276 @@ return Def.ActorFrame {
         }).unwrap().join().unwrap();
     }
 
+    fn published_overlay<'a>(
+        state: &'a screen_gameplay::State,
+        name: &str,
+    ) -> &'a deadsync_assets::song_lua::SongLuaOverlayActor {
+        let visuals = state.song_lua_visuals();
+        visuals
+            .overlays
+            .iter()
+            .chain(
+                visuals
+                    .background_visual_layers
+                    .iter()
+                    .chain(&visuals.foreground_visual_layers)
+                    .flat_map(|layer| &layer.overlays),
+            )
+            .find(|actor| actor.name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("Paperclip actor {name:?} is present"))
+    }
+
+    fn image_draw_count(
+        frame: &deadlib_render_core::RenderFrame,
+        handle: deadlib_render_core::TextureHandle,
+    ) -> usize {
+        frame
+            .ops
+            .iter()
+            .map(|op| match op {
+                DrawOp::Sprite(run) if run.texture_handle == handle => frame.sprite_instances[run
+                    .instance_start
+                    as usize
+                    ..(run.instance_start + run.instance_count) as usize]
+                    .iter()
+                    .filter(|instance| {
+                        instance.tint[3] > 0.0 && instance.size.iter().all(|size| size.abs() > 0.0)
+                    })
+                    .count(),
+                DrawOp::TexturedMesh(run) if run.texture_handle == handle => frame.tmesh_instances
+                    [run.instance_start as usize
+                        ..(run.instance_start + run.instance_count) as usize]
+                    .iter()
+                    .filter(|instance| instance.tint[3] > 0.0)
+                    .count(),
+                _ => 0,
+            })
+            .sum()
+    }
+
+    #[test]
+    fn paperclip_score_life_and_failure_follow_gameplay_in_requested_modes() {
+        std::thread::Builder::new().name("paperclip-gameplay-stats".into())
+            .stack_size(16 * 1024 * 1024).spawn(|| {
+                let fixture = song_fixture::from_source("Paperclip/Paperclip.ssc");
+                let mut failures = Vec::new();
+                for runtime in [false, true] {
+                    for (style, side, joined) in [
+                        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P1, [true, false]),
+                        (profile_data::PlayStyle::Single, profile_data::PlayerSide::P2, [false, true]),
+                        (profile_data::PlayStyle::Versus, profile_data::PlayerSide::P1, [true, true]),
+                    ] {
+                        with_session(style, side, joined[0], joined[1], || {
+                            let versus = style == profile_data::PlayStyle::Versus;
+                            let label = format!("requested_runtime={runtime}, style={style:?}, side={side:?}");
+                            let metrics = space::Metrics::centered(854.0, 480.0);
+                            space::set_current_metrics(metrics);
+                            space::set_current_window_px(854, 480);
+                            space::set_overscan(0, 0, 0, 0);
+                            let session = GameplaySession {
+                                play_style: if versus { deadsync_gameplay::GameplayInputPlayStyle::Versus }
+                                    else { deadsync_gameplay::GameplayInputPlayStyle::Single },
+                                player_side: if side == profile_data::PlayerSide::P2 {
+                                    deadsync_gameplay::GameplayInputPlayerSide::P2
+                                } else { deadsync_gameplay::GameplayInputPlayerSide::P1 },
+                                joined_sides: joined,
+                                ..Default::default()
+                            };
+                            let profiles = std::array::from_fn(|_| profile_data::Profile {
+                                noteskin: profile_data::NoteSkin::new("cel"),
+                                attack_mode: profile_data::AttackMode::On,
+                                ..Default::default()
+                            });
+                            let mut state = build_test_state_with_lua_preparation(&fixture.simfile,
+                                GameplayViewport::new(854.0, 480.0), session, profiles,
+                                "Software", Some(60.0), runtime, None,
+                                Some(GameplayConfig { global_offset_seconds: -0.008, ..Default::default() }), true);
+                            assert!(state.mods.song_lua_compile_succeeded, "{label}: preparation");
+                            if state.song_lua.is_none() {
+                                failures.push(format!("{label}: mutable stage-stat reads require retained runtime"));
+                            }
+                            let mut assets = fixture_assets();
+                            let visuals = state.song_lua_visuals();
+                            let (bsod_path, bsod_key) = visuals.overlays.iter().chain(
+                                visuals.background_visual_layers.iter().chain(&visuals.foreground_visual_layers)
+                                    .flat_map(|layer| &layer.overlays),
+                            ).find_map(|actor| match &actor.kind {
+                                deadsync_assets::song_lua::SongLuaOverlayKind::Sprite { texture_path, texture_key, .. }
+                                    if texture_path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.eq_ignore_ascii_case("BSOD.png")) =>
+                                    Some((texture_path.clone(), Arc::clone(texture_key))),
+                                _ => None,
+                            }).expect("Paperclip includes the failure background");
+                            assets.queue_texture_upload(bsod_key.to_string(), image::open(bsod_path).unwrap().into_rgba8());
+                            let bsod_handle = assets.texture_context().texture_handle(&bsod_key);
+                            let mut actors = Vec::new();
+                            let mut text = compose::TextLayoutCache::default();
+                            let mut scratch = compose::ComposeScratch::default();
+                            let advance = |state: &mut screen_gameplay::State, ticks: std::ops::RangeInclusive<u32>| {
+                                for tick in ticks { set_fixture_time(state, tick as f32 / 60.0); }
+                            };
+                            let check_text = |state: &screen_gameplay::State, lives: [f32; 2], full_score: [bool; 2], failures: &mut Vec<String>| {
+                                for player in 0..if versus { 2 } else { 1 } {
+                                    let meter = published_overlay(state, &format!("{}P meter", player + 1));
+                                    let score = published_overlay(state, &format!("{}P score", player + 1));
+                                    let deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText { text: meter_text, .. } = &meter.kind
+                                        else { panic!("life meter is BitmapText"); };
+                                    let deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText { text: score_text, .. } = &score.kind
+                                        else { panic!("score is BitmapText"); };
+                                    let expected_meter = "1".repeat((18.0 * lives[player]) as usize);
+                                    let expected_score = if full_score[player] { "100.00" } else { "00.00" };
+                                    if meter_text.as_ref() != expected_meter || meter.initial_state.rainbow_scroll != (lives[player] == 1.0)
+                                        || score_text.as_ref() != expected_score {
+                                        failures.push(format!("{label}, t={}, player{player}: meter={meter_text:?}, rainbow={}, score={score_text:?}; expected {expected_meter:?}, {}, {expected_score:?}",
+                                            state.current_music_time_display(), meter.initial_state.rainbow_scroll, lives[player] == 1.0));
+                                    }
+                                }
+                            };
+                            let set_stats = |state: &mut screen_gameplay::State, player: usize, life: f32, full_score: bool| {
+                                let possible = state.stage_itg_score_inputs(player).unwrap().possible_grade_points;
+                                // Use the gameplay setter to keep life history in
+                                // sync while bypassing judgment recovery gating.
+                                state.set_player_life_from_script(player, life);
+                                let player = &mut state.players_runtime.players[player];
+                                player.earned_grade_points = if full_score { possible } else { 0 };
+                                assert_eq!(player.life, life);
+                                assert_eq!(player.life_history.last().unwrap().1, life);
+                            };
+                            advance(&mut state, 0..=900);
+                            check_text(&state, [0.5, 0.5], [false, false], &mut failures);
+                            for (ticks, lives, scores) in [
+                                (901..=915, [1.0, 0.25], [true, false]),
+                                (916..=930, [0.25, 0.75], [false, true]),
+                            ] {
+                                for player in 0..if versus { 2 } else { 1 } {
+                                    set_stats(&mut state, player, lives[player], scores[player]);
+                                }
+                                advance(&mut state, ticks);
+                                check_text(&state, lives, scores, &mut failures);
+                                let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
+                                    &mut actors, &mut text, &mut scratch, assets.texture_context());
+                                if image_draw_count(&frame, bsod_handle) != 0 {
+                                    failures.push(format!("{label}: BSOD is drawn while all joined players have life"));
+                                }
+                            }
+                            set_stats(&mut state, 0, 0.0, false);
+                            advance(&mut state, 931..=966);
+                            if versus {
+                                check_text(&state, [0.0, 0.75], [false, true], &mut failures);
+                                let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
+                                    &mut actors, &mut text, &mut scratch, assets.texture_context());
+                                if image_draw_count(&frame, bsod_handle) != 0
+                                    || !published_overlay(&state, "Microsoft Word").initial_state.visible {
+                                    failures.push(format!("{label}: one failed player must leave Word visible and BSOD hidden"));
+                                }
+                                set_stats(&mut state, 1, 0.0, true);
+                                advance(&mut state, 967..=1002);
+                            }
+                            let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
+                                &mut actors, &mut text, &mut scratch, assets.texture_context());
+                            let draws = image_draw_count(&frame, bsod_handle);
+                            if draws != 1 || published_overlay(&state, "Microsoft Word").initial_state.visible {
+                                failures.push(format!("{label}: draining every joined meter must hide Word and submit one visible BSOD draw; got {draws}"));
+                            }
+                        });
+                    }
+                }
+                assert!(failures.is_empty(), "Paperclip gameplay-stat mismatches:\n{}", failures.join("\n"));
+            }).unwrap().join().unwrap();
+    }
+
+    #[test]
+    fn finite_player_reveal_preserves_visibility_alpha_and_transform() {
+        std::thread::Builder::new().name("finite-player-reveal".into())
+            .stack_size(16 * 1024 * 1024).spawn(|| {
+                with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+                    true, false, || {
+                    let metrics = space::Metrics::centered(854.0, 480.0);
+                    space::set_current_metrics(metrics);
+                    space::set_current_window_px(854, 480);
+                    space::set_overscan(0, 0, 0, 0);
+                    let directory = tempfile::tempdir().unwrap();
+                    let simfile = directory.path().join("song.ssc");
+                    fs::write(&simfile, "#TITLE:Finite Player reveal;\n#BPMS:0=120;\n#FGCHANGES:0=foreground.lua=1=0=0=1;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n0000\n0000\n0000\n0000\n,\n1000\n0100\n0010\n0001\n;\n").unwrap();
+                    // Preserve finite Player render-state coverage independently
+                    // of Paperclip, whose stage-stat queries require a live VM.
+                    fs::write(directory.path().join("foreground.lua"), r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        for name, child in pairs(SCREENMAN:GetTopScreen():GetChildren()) do
+            if name ~= 'SongBackground' then child:visible(false) end
+        end
+        self:sleep(.5):queuecommand('Reveal'):sleep(3)
+    end,
+    RevealCommand=function(self)
+        for _, child in pairs(SCREENMAN:GetTopScreen():GetChildren()) do
+            child:visible(true)
+        end
+        SCREENMAN:GetTopScreen():GetChild('PlayerP1'):diffusealpha(.6):addx(13):addy(9)
+    end,
+}
+"#).unwrap();
+                    let assets = fixture_assets();
+                    let mut baked = Vec::new();
+                    for runtime in [false, true] {
+                        let profiles = std::array::from_fn(|_| profile_data::Profile {
+                            noteskin: profile_data::NoteSkin::new("cel"),
+                            scroll_speed: ScrollSpeedSetting::MMod(600.0),
+                            attack_mode: profile_data::AttackMode::On,
+                            ..Default::default()
+                        });
+                        let mut state = build_test_state_with_lua_mode(&simfile,
+                            GameplayViewport::new(854.0, 480.0), GameplaySession::default(),
+                            profiles, "Software", Some(8.0), runtime);
+                        assert!(state.mods.song_lua_compile_succeeded);
+                        assert_eq!(state.song_lua.is_some(), runtime,
+                            "noninteractive Player visibility must remain finitely compilable");
+                        let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
+                        let taps: HashSet<_> = ns.notes.iter()
+                            .chain(ns.note_layers.iter().flat_map(|layers| layers.iter()))
+                            .map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
+                        let receptors: HashSet<_> = state.noteskin_assets.receptor_noteskin[0].as_ref().unwrap_or(ns)
+                            .receptor_off.iter().map(|slot| FIXTURE_TEXTURES.texture_handle(slot.texture_key())).collect();
+                        let mut actors = Vec::new();
+                        let mut text = compose::TextLayoutCache::default();
+                        let mut scratch = compose::ComposeScratch::default();
+                        for tick in 0..=90 {
+                            set_fixture_time(&mut state, tick as f32 / 60.0);
+                            refresh_active_attack_masks(&mut state.gameplay, 1.0 / 60.0);
+                            let Some(probe) = [15, 90].iter().position(|&at| at == tick) else { continue; };
+                            let frame = compose_fixture_frame(&mut state, &assets, &metrics,
+                                &mut actors, &mut text, &mut scratch);
+                            let draws = note_draws(&frame, &metrics, &receptors, &taps);
+                            assert_eq!(draws.receptors, if tick == 15 { 0 } else { 4 },
+                                "runtime={runtime}, tick={tick}: Player reveal");
+                            if tick == 90 {
+                                assert!(draws.taps > 0, "arrows are visible after the queued reveal");
+                                assert!(draws.draws.iter().filter(|draw| draw.receptor)
+                                    .all(|draw| (draw.alpha - 0.6).abs() < 0.0001),
+                                    "Player render-state alpha reaches the final receptor draw");
+                            }
+                            if runtime {
+                                assert_eq!(compare_note_draws(&baked[probe], &draws), Ok(()),
+                                    "finite Player transforms apply once, tick={tick}");
+                            } else {
+                                baked.push(draws);
+                            }
+                        }
+                    }
+                });
+            }).unwrap().join().unwrap();
+    }
+
     // Native ITGmania's captured Paperclip run has no receptors at 14.340249 s,
     // all eight opaque receptors by 14.498889 s, and the first arrow at
     // 15.709864 s. Exercise the final gameplay draw stream around that reveal.
     #[test]
-    fn paperclip_visibility_after_startup_in_baked_and_runtime_modes() {
+    fn paperclip_visibility_after_startup_in_requested_modes() {
         std::thread::Builder::new().name("paperclip-visibility".into())
             .stack_size(16 * 1024 * 1024).spawn(|| {
                 let fixture = song_fixture::from_source("Paperclip/Paperclip.ssc");
                 let mut failures = Vec::new();
-                let mut baked_frames: [Vec<NoteDraws>; 2] = std::array::from_fn(|_| Vec::new());
-                for live in [false, true] {
+                let mut requested_baked_frames: [Vec<NoteDraws>; 2] = std::array::from_fn(|_| Vec::new());
+                for requested_runtime in [false, true] {
                     for versus in [false, true] {
                         let style = if versus { profile_data::PlayStyle::Versus }
                             else { profile_data::PlayStyle::Single };
@@ -304,12 +565,12 @@ return Def.ActorFrame {
                                 joined_sides: [true, versus],
                                 ..Default::default()
                             };
-                            let mut state = build_test_state_with_lua_mode_and_clocks(&fixture.simfile,
+                            let mut state = build_test_state_with_lua_preparation(&fixture.simfile,
                                 GameplayViewport::new(854.0, 480.0), session, profiles,
-                                "Vulkan (wgpu)", Some(70.0), live, None,
-                                Some(GameplayConfig { global_offset_seconds: -0.008, ..Default::default() }));
+                                "Vulkan (wgpu)", Some(70.0), requested_runtime, None,
+                                Some(GameplayConfig { global_offset_seconds: -0.008, ..Default::default() }), true);
                             assert!(state.mods.song_lua_compile_succeeded);
-                            assert_eq!(state.song_lua.is_some(), live);
+                            assert!(state.song_lua.is_some(), "Paperclip's mutable stage-stat reads retain the VM in either requested mode");
                             let assets = fixture_assets();
                             let ns = state.noteskin_assets.noteskin[0].as_ref().unwrap();
                             let taps: HashSet<_> = ns.notes.iter()
@@ -330,14 +591,14 @@ return Def.ActorFrame {
                                 let draws = note_draws(&frame, &metrics, &receptors, &taps);
                                 let expected_receptors = if second < 14.34 { 0 } else if versus { 8 } else { 4 };
                                 if draws.receptors != expected_receptors || (second == 20.0 && draws.taps == 0) {
-                                    failures.push(format!("live={live}, versus={versus}, t={second}: {} receptors / {} taps; expected {expected_receptors} receptors and arrows by 20 s", draws.receptors, draws.taps));
+                                    failures.push(format!("requested_runtime={requested_runtime}, versus={versus}, t={second}: {} receptors / {} taps; expected {expected_receptors} receptors and arrows by 20 s", draws.receptors, draws.taps));
                                 }
-                                if live {
-                                    if let Err(error) = compare_note_draws(&baked_frames[usize::from(versus)][probe], &draws) {
-                                        failures.push(format!("Baked/Runtime geometry, versus={versus}, t={second}: {error}"));
+                                if requested_runtime {
+                                    if let Err(error) = compare_note_draws(&requested_baked_frames[usize::from(versus)][probe], &draws) {
+                                        failures.push(format!("requested-mode geometry, versus={versus}, t={second}: {error}"));
                                     }
                                 } else {
-                                    baked_frames[usize::from(versus)].push(draws);
+                                    requested_baked_frames[usize::from(versus)].push(draws);
                                 }
                             }
                         });

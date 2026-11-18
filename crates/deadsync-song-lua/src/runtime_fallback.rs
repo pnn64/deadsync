@@ -2,13 +2,17 @@
 use crate::SongLuaCompileContext;
 pub(crate) const REQUIRED: &str =
     "song Lua registers input callbacks and requires runtime Lua (context.live = true)";
+pub(crate) const STATISTICS_REQUIRED: &str =
+    "song Lua reads gameplay statistics and requires runtime Lua (context.live = true)";
 
 pub(crate) fn compile<T>(
     context: &SongLuaCompileContext,
     mut work: impl FnMut(&SongLuaCompileContext) -> Result<T, String>,
 ) -> Result<T, String> {
     match work(context) {
-        Err(error) if !context.live && error == REQUIRED => {
+        Err(error)
+            if !context.live && matches!(error.as_str(), REQUIRED | STATISTICS_REQUIRED) =>
+        {
             let mut runtime = context.clone();
             runtime.live = true;
             runtime.defer_initial_live_update = true;
@@ -64,7 +68,11 @@ mod tests {
 
     #[test]
     fn unrelated_errors_and_live_rejections_are_not_retried() {
-        for (live, error) in [(false, "missing asset"), (true, REQUIRED)] {
+        for (live, error) in [
+            (false, "missing asset"),
+            (true, REQUIRED),
+            (true, STATISTICS_REQUIRED),
+        ] {
             let mut context = SongLuaCompileContext::new(Path::new("."), "policy");
             context.live = live;
             let mut calls = 0;

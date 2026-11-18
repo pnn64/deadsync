@@ -497,8 +497,8 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     })
 }
 
-/// Prefer compiled playback, retrying input-dependent sources as one live
-/// session. The first runtime update waits for the gameplay clock handoff.
+/// Prefer compiled playback, retrying sources that depend on input or player
+/// statistics as one live session. Its first update waits for the gameplay clock handoff.
 /// Other compiler errors retain the ordinary preparation behavior.
 pub fn prepare_song_lua_with_runtime_fallback<S: Clone + std::fmt::Debug>(
     song: &SongData,

@@ -17,9 +17,19 @@ pub(super) struct State {
     pub players: Option<[crate::SongLuaLivePlayer; LUA_PLAYERS]>,
     pub routine: Option<crate::SongLuaLivePlayer>,
     pub writes: Vec<SongLuaLivePlayerWrite>,
+    /// Sticky across preparation phases: these values depend on actual play.
+    pub requires_live: bool,
 }
 
 impl SongRuntime {
+    pub(crate) fn require_statistics_offline_compatible(&self) -> Result<(), String> {
+        if self.statistics.lock().unwrap().requires_live {
+            Err(crate::runtime_fallback::STATISTICS_REQUIRED.into())
+        } else {
+            Ok(())
+        }
+    }
+
     /// Reset the retained stage fields and selected-step arrays at a load boundary.
     /// This is distinct from STATSMAN:Reset(), whose existing policy is a no-op.
     pub fn reset_stage_statistics(&mut self, context: &SongLuaCompileContext) -> Result<(), Error> {

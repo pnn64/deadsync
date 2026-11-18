@@ -105,6 +105,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
     timer.push_stage("startup_commands");
     context.report_bake_progress(0.10);
     runtime.require_input_offline_compatible()?;
+    runtime.require_statistics_offline_compatible()?;
     runtime
         .discover_song_startup_commands(screen, &activation)
         .map_err(|e| e.to_string())?;
@@ -576,6 +577,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .collect();
     crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
     runtime.require_input_offline_compatible()?;
+    runtime.require_statistics_offline_compatible()?;
     runtime
         .release_song_static_tables(&mut tables)
         .map_err(|e| e.to_string())?;

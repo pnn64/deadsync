@@ -33,6 +33,22 @@ enum Op {
     GameplaySeconds,
     Host,
 }
+impl Op {
+    fn reads_gameplay_statistics(self) -> bool {
+        match self {
+            Self::Integer("__songlua_possible_dance_points") => false,
+            Self::Integer(_)
+            | Self::Grade
+            | Self::Failed
+            | Self::Percent
+            | Self::Life
+            | Self::Combo(_)
+            | Self::Taps
+            | Self::Record => true,
+            _ => false,
+        }
+    }
+}
 struct Setup {
     context: crate::SongLuaCompileContext,
     state: Shared,
@@ -401,6 +417,12 @@ fn percent(actual: i64, possible: i64) -> f32 {
 }
 fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     let binding = call.function_data::<Binding>().unwrap().clone();
+    if binding.op.reads_gameplay_statistics() && !binding.clock.live.load(Ordering::Relaxed) {
+        // Finite preparation has no player judgments or changing life history.
+        // Keep this outside Lua errors so pcall cannot hide the dependency.
+        // Selectors and static possible points still permit baked playback.
+        binding.state.lock().unwrap().requires_live = true;
+    }
     if matches!(binding.op, Op::Host) {
         let phase = binding.state.lock().unwrap().pending.take();
         return match phase {

@@ -644,6 +644,26 @@ pub(crate) mod tests {
         configure_compile_clocks: Option<&dyn Fn(&mut deadsync_song_lua::SongLuaCompileContext)>,
         config_override: Option<GameplayConfig>,
     ) -> screen_gameplay::State {
+        build_test_state_with_lua_preparation(
+            simfile, viewport, session, player_profiles, renderer, until_beat,
+            live_diagnostic, configure_compile_clocks, config_override, false,
+        )
+    }
+
+    // Bounded gameplay fixtures can exercise the same dependency fallback as
+    // production without changing tests that explicitly verify finite capture.
+    fn build_test_state_with_lua_preparation(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+        until_beat: Option<f32>,
+        live_diagnostic: bool,
+        configure_compile_clocks: Option<&dyn Fn(&mut deadsync_song_lua::SongLuaCompileContext)>,
+        config_override: Option<GameplayConfig>,
+        runtime_fallback: bool,
+    ) -> screen_gameplay::State {
         // Ordinary fixtures use zero global offset. Native-oracle fixtures can
         // supply recorded preferences consistently to parsing and playback.
         let config = config_override.unwrap_or(GameplayConfig {
@@ -736,12 +756,19 @@ pub(crate) mod tests {
             if let Some(configure_clocks) = configure_compile_clocks {
                 configure_clocks(&mut context);
             }
-            deadsync_song_lua::playback::prepare_song_lua(
-                &song,
-                &context,
-                deadsync_assets::song_lua::compile_song_lua,
-                deadsync_assets::song_lua::compile_song_lua_layers,
-            )
+            if runtime_fallback {
+                deadsync_song_lua::playback::prepare_song_lua_with_runtime_fallback(
+                    &song, &context, deadsync_assets::song_lua::compile_song_lua,
+                    deadsync_assets::song_lua::compile_song_lua_layers,
+                )
+            } else {
+                deadsync_song_lua::playback::prepare_song_lua(
+                    &song,
+                    &context,
+                    deadsync_assets::song_lua::compile_song_lua,
+                    deadsync_assets::song_lua::compile_song_lua_layers,
+                )
+            }
         };
         screen_gameplay::init(
             song,

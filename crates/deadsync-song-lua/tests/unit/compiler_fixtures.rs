@@ -14672,7 +14672,7 @@ return Def.ActorFrame{}
 }
 
 #[test]
-fn compile_song_lua_accepts_stage_stat_and_high_score_helpers() {
+fn compile_song_lua_stage_stat_and_high_score_helpers_require_runtime() {
     let song_dir = test_dir("stage-stat-high-score-helpers");
     let entry = song_dir.join("default.lua");
     fs::write(
@@ -14765,18 +14765,19 @@ return Def.ActorFrame{}
         )
         .unwrap();
 
-    let compiled = test_compile_song_lua(
-        &entry,
-        &SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers"),
-    )
-    .unwrap();
-    assert_eq!(
-        compiled.info.unsupported_function_actions, 0,
-        "{:?}",
-        compiled.info
-    );
-    assert!(compiled.messages.is_empty());
-    assert!(compiled.overlays.is_empty());
+    let mut context = SongLuaCompileContext::new(&song_dir, "Stage Stat High Score Helpers");
+    let error = test_compile_song_lua(&entry, &context)
+        .expect_err("mutable stage statistics cannot be frozen during preparation");
+    assert!(error.contains("statistics") && error.contains("requires runtime Lua"), "{error}");
+    context.live = true;
+    let mut compiled = test_compile_song_lua(&entry, &context)
+        .expect("statistics helpers remain available live");
+    let scene = compiled.live_scene.as_mut().expect("retained statistics owners");
+    let mut runtime = scene.runtime_mut();
+    runtime.set_values(1.0, 1.0).unwrap();
+    let action = deadlib_lua::compile(b"mod_actions[1][2]()").unwrap();
+    runtime.vm_mut().execute(&action)
+        .expect("the retained action keeps every setter and native statistics assertion");
 }
 
 #[test]
@@ -18028,20 +18029,26 @@ mod_actions = {
     },
 }
 
-return Def.ActorFrame{}
+return Def.ActorFrame{
+    OnCommand=function(self) MESSAGEMAN:Broadcast(mod_actions[1][2]) end,
+}
 "#,
     )
     .unwrap();
 
-    let compiled = test_compile_song_lua(
-        &entry,
-        &SongLuaCompileContext::new(&song_dir, "Theme Manager Compat"),
-    )
-    .unwrap();
-
-    assert_eq!(compiled.messages.len(), 1);
+    let mut context = SongLuaCompileContext::new(&song_dir, "Theme Manager Compat");
+    context.live = true;
+    let mut compiled = test_compile_song_lua(&entry, &context).unwrap();
+    let output = compiled.live_scene.as_mut().expect("live statistics queries")
+        .take_startup_output();
+    assert!(output.errors.is_empty(), "{:?}", output.errors);
+    let messages = output.broadcasts.iter()
+        .filter(|event| event.1.starts_with("2:Simply Love:Simply Love:"))
+        .map(|event| event.1.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(messages.len(), 1, "startup output: {output:?}");
     assert_eq!(
-        compiled.messages[0].message,
+        messages[0],
         "2:Simply Love:Simply Love:0:false:1:1:1:1:1:Theme Manager Compat:true:0:0:0:Grade_Tier17:Player:1"
     );
     assert_eq!(compiled.info.unsupported_function_actions, 0);
@@ -19575,6 +19582,7 @@ fn stage_points_match_native() {
     )
     .expect("stage point control script");
     let mut context = SongLuaCompileContext::new(&song_dir, "Native stage points");
+    context.live = true;
     context.players[1].enabled = true;
     test_compile_song_lua(&entry, &context).expect("same stage point assertions as native");
 }
@@ -19599,10 +19607,9 @@ fn stage_grade_matches_native() {
         ),
     )
     .expect("stage grade control script");
-    test_compile_song_lua(
-        &entry,
-        &SongLuaCompileContext::new(&song_dir, "Native grade"),
-    )
+    let mut context = SongLuaCompileContext::new(&song_dir, "Native grade");
+    context.live = true;
+    test_compile_song_lua(&entry, &context)
     .expect("same empty and failed stage grades as native");
 }
 
