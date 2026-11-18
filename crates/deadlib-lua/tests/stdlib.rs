@@ -382,6 +382,29 @@ fn replacements_preserve_values_callbacks_and_error_unwinding() {
 }
 
 #[test]
+fn replacement_literals_preserve_escapes_at_output_buffer_boundaries() {
+    let program = compile(
+        br#"
+        local binary = string.rep('\000\255', 20)
+        for _, n in ipairs{31, 32, 33, 511, 512, 513, 8191, 8192, 8193} do
+            local prefix = string.rep('a', n)
+            local out, count = string.gsub('xyz', '(.)', prefix .. '%1%%' .. binary .. '%0%')
+            local expected = prefix .. 'x%' .. binary .. 'x\000'
+                          .. prefix .. 'y%' .. binary .. 'y\000'
+                          .. prefix .. 'z%' .. binary .. 'z\000'
+            assert(out == expected and count == 3)
+        end
+        return true
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[test]
 fn formatted_strings_and_platform_integer_width() {
     for source in [
         "return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)",

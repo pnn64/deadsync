@@ -780,40 +780,40 @@ impl Vm {
         let state = &self.substitutions[index];
         let found = state.matched.expect("substitution has a match");
         let source = state.source;
-        while pos < self.strings.bytes[slot_index(text.0)].len() {
-            let c = self.strings.bytes[slot_index(text.0)][pos];
-            if c != b'%' {
+        let slot = slot_index(text.0);
+        while let Some(&c) = self.strings.bytes[slot].get(pos) {
+            let complete = if c != b'%' {
+                let rest = &self.strings.bytes[slot][pos..];
+                if rest.len() >= 16 {
+                    let output = &mut self.substitutions[index].output;
+                    // Leave flushes and their resumptions to substitution_byte.
+                    let available = &rest[..rest.len().min(io::LINE_BUFFER - output.len())];
+                    if let [_, tail @ ..] = available {
+                        let len = find_byte(tail, b'%').map_or(available.len(), |at| at + 1);
+                        output.extend_from_slice(&available[..len]);
+                        pos += len;
+                        continue;
+                    }
+                }
                 pos += 1;
-                if !self.substitution_byte(index, c)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
-                continue;
-            }
-            pos += 1;
-            let c = self.strings.bytes[slot_index(text.0)]
-                .get(pos)
-                .copied()
-                .unwrap_or(0);
-            pos += 1;
-            if c == b'0' {
-                if !self.substitution_string(index, source, found.start..found.end)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
-            } else if crate::locale::is_digit(c) {
-                let capture = found.capture(usize::from(c - b'1'))?;
-                let value = self.capture_value(source, capture)?;
-                self.substitution_push(index, value)?;
-                if !self.substitution_value(index)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
+                self.substitution_byte(index, c)?
             } else {
-                if !self.substitution_byte(index, c)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
+                let c = self.strings.bytes[slot].get(pos + 1).copied().unwrap_or(0);
+                pos += 2;
+                if c == b'0' {
+                    self.substitution_string(index, source, found.start..found.end)?
+                } else if crate::locale::is_digit(c) {
+                    let capture = found.capture(usize::from(c - b'1'))?;
+                    let value = self.capture_value(source, capture)?;
+                    self.substitution_push(index, value)?;
+                    self.substitution_value(index)?
+                } else {
+                    self.substitution_byte(index, c)?
                 }
+            };
+            if !complete {
+                self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
+                return Ok(false);
             }
         }
         Ok(true)
