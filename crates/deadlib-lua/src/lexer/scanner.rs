@@ -97,13 +97,18 @@ fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
             .unwrap_or(tail.len())
 }
 
-fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
-    let boundary = |byte| (byte == quote) | (byte == b'\\') | (byte == b'\n') | (byte == b'\r');
+fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
     let (prefix, rest) = bytes.split_at(bytes.len().min(8));
     prefix
         .iter()
         .position(|&byte| boundary(byte))
         .unwrap_or_else(|| prefix.len() + scan_boundary(rest, boundary))
+}
+
+fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
+    scan_token_boundary(bytes, |byte| {
+        (byte == quote) | (byte == b'\\') | (byte == b'\n') | (byte == b'\r')
+    })
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -292,12 +297,8 @@ impl Scanner {
         let next = input.get(start + 1).copied();
         let (kind, end) = match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
-                let end = start
-                    + 1
-                    + input[start + 1..]
-                        .iter()
-                        .position(|&b| !word(b))
-                        .unwrap_or(input.len() - start - 1);
+                let tail = &input[start + 1..];
+                let end = start + 1 + scan_token_boundary(tail, |byte| !word(byte));
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -876,6 +877,7 @@ mod tests {
     #[test]
     fn chunk_boundaries_preserve_tokens_and_failures() {
         let corpus: &[&[u8]] = &[
+            b"local Identifier_With_0123456789_And_Enough_Bytes_For_Multiple_Blocks_Name = 42",
             b"and break do else elseif end false for function if in local nil not or repeat return then true until while",
             b"-- comment\r\nlocal a,b=0xff,1.25e-3;return a..'x',a~=b,a<=b,a>=b,...",
             b"'a\\000\\25\\255z\\q\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'' \"x\\\r\ny\"",
