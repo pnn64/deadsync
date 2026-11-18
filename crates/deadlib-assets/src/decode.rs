@@ -756,6 +756,11 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             if vertical {
                 for (row, (top, bottom, weight)) in rows.zip(zoom_axis(image.height(), next[1])) {
                     let upper = &source[top as usize * width..(top as usize + 1) * width];
+                    // Blending a source row with itself yields the same bytes.
+                    if top == bottom {
+                        row.copy_from_slice(upper);
+                        continue;
+                    }
                     let lower = &source[bottom as usize * width..(bottom as usize + 1) * width];
                     for ((pixel, &a), &b) in row.iter_mut().zip(upper).zip(lower) {
                         *pixel = blend(a, b, weight, 0x0080_0000_0080_0000);

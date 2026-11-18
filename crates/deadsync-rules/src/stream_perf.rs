@@ -55,3 +55,13 @@ fn capped_progress_preserves_thresholds_run_bounds_and_early_end() {
     assert_eq!(stream_run_progress(&data, 4, 16, 4), None);
     assert_eq!(stream_run_progress(b";\n1111\n", 4, 1, 0), None);
 }
+
+#[test]
+fn capped_scan_skips_markers_inside_comments_and_rows() {
+    let mut data = b"1111\r\n".repeat(33);
+    data.extend_from_slice(b" \t// ; ,\r\n1000;,,\n \t, ignored\r\n0000\n\t;\n1111");
+    assert_eq!(measure_densities(&data, 4), [34, 0]);
+    assert_eq!(stream_measure_densities(&data, 4), [32, 0]);
+    assert_eq!(stream_run_progress(&data, 4, 16, 0), Some((1, 1)));
+    assert_eq!(stream_run_progress(&data, 4, 0, 1), Some((2, 2)));
+}
