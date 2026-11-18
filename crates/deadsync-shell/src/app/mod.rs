@@ -81,9 +81,8 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::{
-    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, ThemeEffectRouteContext,
-    evaluation_summary_return_to, late_join_side, profile_selection_plan, select_music_join_plan,
-    theme_effect_route_plan,
+    LateJoinContext, ProfileSelectionContext, ThemeEffectRouteContext,
+    evaluation_summary_return_to, late_join_side, profile_selection_plan, theme_effect_route_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -203,8 +202,8 @@ use deadsync_theme_simply_love::views::{
     MusicWheelSlotRuntimeView, PostSelectStageView, ScoreboxLocalView, ScoreboxMachineView,
     ScoreboxSideView, ScreenBarBackgroundView, SelectCourseContextView, SelectCoursePolicyView,
     SelectCourseRuntimeView, SelectCourseScoreRequest, SelectCourseScoreView, SelectFlowPlayerView,
-    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
-    SimplyLoveVisualPolicyView, VisualBackgroundView,
+    SelectMusicSessionView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SimplyLoveGrooveStatsService, SimplyLoveVisualPolicyView, VisualBackgroundView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveContentRequest, SimplyLoveDebugRequest,
@@ -1859,12 +1858,108 @@ fn execute_platform_request(dirs: &AppDirs, request: PlatformRequest) {
 }
 
 fn apply_music_preferences(state: &mut select_music::State, p1: usize, p2: usize) {
-    state.selected_steps_index = p1;
-    state.preferred_difficulty_index = p1;
-    state.p2_selected_steps_index = p2;
-    state.p2_preferred_difficulty_index = p2;
-    select_music::select_preferred_steps(state);
-    select_music::trigger_immediate_refresh(state);
+    select_music::apply_profile_preferences(state, [Some(p1), Some(p2)]);
+}
+
+fn music_session_view(
+    session: profile_data::SessionSnapshot,
+    guest: [bool; MAX_PLAYERS],
+) -> SelectMusicSessionView {
+    SelectMusicSessionView {
+        play_style: session.play_style,
+        player_side: session.player_side,
+        joined: std::array::from_fn(|idx| {
+            session.side_joined(profile_data::player_side_for_index(idx))
+        }),
+        guest,
+        music_rate: session.music_rate,
+    }
+}
+
+fn prepare_music_profile_selection(
+    state: &mut select_music::State,
+    previous: SelectMusicSessionView,
+    selected: SelectMusicSessionView,
+    changed_profiles: [bool; MAX_PLAYERS],
+    preferred_difficulties: [usize; MAX_PLAYERS],
+) -> [Option<usize>; MAX_PLAYERS] {
+    let previous_versus = previous.play_style.is_versus();
+    let selected_versus = selected.play_style.is_versus();
+    let previous_side = profile_data::player_side_index(previous.player_side);
+    let selected_side = profile_data::player_side_index(selected.player_side);
+    let slots = [
+        (state.selected_steps_index, state.preferred_difficulty_index),
+        (
+            state.p2_selected_steps_index,
+            state.p2_preferred_difficulty_index,
+        ),
+    ];
+    let retained: [Option<(usize, usize)>; MAX_PLAYERS] = std::array::from_fn(|side| {
+        (previous.joined[side] && (previous_versus || side == previous_side))
+            .then_some(slots[if previous_versus { side } else { 0 }])
+    });
+    let same_chart_type = previous.play_style.chart_type() == selected.play_style.chart_type();
+    if same_chart_type && !previous_versus && selected_versus && retained[previous_side].is_some() {
+        select_music::apply_player_join(
+            state,
+            SelectMusicSessionView {
+                player_side: previous.player_side,
+                ..selected
+            },
+            profile_data::player_side_for_index(1 - previous_side),
+            preferred_difficulties,
+        );
+    } else if same_chart_type {
+        for slot in 0..if selected_versus { MAX_PLAYERS } else { 1 } {
+            let side = if selected_versus { slot } else { selected_side };
+            let selection = retained[side].or_else(|| {
+                selected.guest[side].then(|| {
+                    let first = match state.entries.get(state.selected_index) {
+                        Some(select_music::MusicWheelEntry::Song(song)) => song
+                            .best_steps_index(selected.play_style.chart_type(), 0)
+                            .unwrap_or(preferred_difficulties[side]),
+                        _ => preferred_difficulties[side],
+                    };
+                    (first, preferred_difficulties[side])
+                })
+            });
+            if let Some((steps, preferred)) = selection {
+                if slot == 0 {
+                    state.selected_steps_index = steps;
+                    state.preferred_difficulty_index = preferred;
+                } else {
+                    state.p2_selected_steps_index = steps;
+                    state.p2_preferred_difficulty_index = preferred;
+                }
+            }
+        }
+    }
+
+    std::array::from_fn(|slot| {
+        if slot == 1 && !selected_versus {
+            return None;
+        }
+        let side = if selected_versus { slot } else { selected_side };
+        // Simply Love's LoadGuest preserves current steps. Local profiles import
+        // their preference only when loaded or when this player has no selection.
+        let preserve = selected.guest[side] || !changed_profiles[side];
+        if same_chart_type && (selected.guest[side] || (preserve && retained[side].is_some())) {
+            return None;
+        }
+        let preferred = retained[side]
+            .filter(|_| preserve)
+            .map_or(preferred_difficulties[side], |(_, preferred)| preferred);
+        if !same_chart_type {
+            // The normal runtime sync rebuilds the catalog for a new chart type.
+            // Transfer preferences before that rebuild, never old-type chart indices.
+            if slot == 0 {
+                state.preferred_difficulty_index = preferred;
+            } else {
+                state.p2_preferred_difficulty_index = preferred;
+            }
+        }
+        Some(preferred)
+    })
 }
 
 fn written_song_offset_changes(
@@ -5694,8 +5789,15 @@ impl App {
                     p2_joined,
                     fast_switch,
                 }) => {
+                    let previous_session = profile::get_session_snapshot();
+                    let previous_profiles = profile_data::runtime_active_profiles();
+                    let changed_profiles = [previous_profiles[0] != p1, previous_profiles[1] != p2];
+                    let selected_guest = [
+                        profile_data::active_profile_is_guest(&p1),
+                        profile_data::active_profile_is_guest(&p2),
+                    ];
                     let session = profile_selection_session_plan(
-                        profile::get_session_play_style(),
+                        previous_session.play_style,
                         p1_joined,
                         p2_joined,
                     );
@@ -5720,11 +5822,12 @@ impl App {
                     };
                     self.state.session.combo_carry =
                         profile_data::profile_combo_carry(&profile_data);
+                    let preferred_difficulties = profile_data::preferred_difficulty_indices(
+                        &profile_data,
+                        session.play_style,
+                    );
                     let plan = profile_selection_plan(ProfileSelectionContext {
-                        preferred_difficulties: profile_data::preferred_difficulty_indices(
-                            &profile_data,
-                            session.play_style,
-                        ),
+                        preferred_difficulties,
                         active_side: session.active_side,
                         fast_switch,
                         current_screen: self.state.screens.current_screen,
@@ -5746,30 +5849,31 @@ impl App {
                         );
                     }
 
-                    self.state.session.preferred_difficulty_index = plan.preferred_active;
-
-                    if plan.refresh_select_music {
+                    if plan.refresh_select_music
+                        && self.state.screens.current_screen == CurrentScreen::SelectMusic
+                    {
+                        let preference_updates = prepare_music_profile_selection(
+                            &mut self.state.screens.select_music_state,
+                            music_session_view(
+                                previous_session,
+                                previous_profiles
+                                    .each_ref()
+                                    .map(profile_data::active_profile_is_guest),
+                            ),
+                            music_session_view(profile::get_session_snapshot(), selected_guest),
+                            changed_profiles,
+                            preferred_difficulties,
+                        );
+                        self.sync_select_music_runtime_view(self.select_music_policy);
                         let current_color_index =
                             self.state.screens.select_profile_state.active_color_index;
-                        self.state.screens.select_music_state.active_color_index =
-                            current_color_index;
-                        self.state
-                            .screens
-                            .select_music_state
-                            .preferred_difficulty_index = plan.preferred_active;
-                        self.state.screens.select_music_state.selected_steps_index =
-                            plan.preferred_active;
-                        self.state
-                            .screens
-                            .select_music_state
-                            .p2_preferred_difficulty_index = plan.preferred_p2;
-                        self.state
-                            .screens
-                            .select_music_state
-                            .p2_selected_steps_index = plan.preferred_p2;
-                        select_music::trigger_immediate_refresh(
-                            &mut self.state.screens.select_music_state,
-                        );
+                        let sm = &mut self.state.screens.select_music_state;
+                        sm.active_color_index = current_color_index;
+                        select_music::apply_profile_preferences(sm, preference_updates);
+                        self.state.session.preferred_difficulty_index =
+                            sm.preferred_difficulty_index;
+                    } else {
+                        self.state.session.preferred_difficulty_index = plan.preferred_active;
                     }
                     if let Some(target) = plan.navigation_target {
                         // ProfileLoad asynchronously prepares SelectMusic/SelectCourse state;
@@ -7500,25 +7604,16 @@ impl App {
         let p2_pref =
             profile::preferred_difficulty_for_side(profile_data::PlayerSide::P2, play_style);
 
-        let side = session.player_side;
+        let active_profiles = profile_data::runtime_active_profiles();
+        let session_view = music_session_view(
+            session,
+            active_profiles
+                .each_ref()
+                .map(profile_data::active_profile_is_guest),
+        );
         let sm = &mut self.state.screens.select_music_state;
-        let plan = select_music_join_plan(SelectMusicJoinContext {
-            active_side: side,
-            join_side,
-            selected_steps: sm.selected_steps_index,
-            preferred_difficulty: sm.preferred_difficulty_index,
-            p1_profile_preferred: p1_pref,
-            p2_profile_preferred: p2_pref,
-        });
-        sm.selected_steps_index = plan.selected_steps;
-        sm.preferred_difficulty_index = plan.preferred_difficulty;
-        sm.p2_selected_steps_index = plan.p2_selected_steps;
-        sm.p2_preferred_difficulty_index = plan.p2_preferred_difficulty;
-        select_music::select_preferred_steps(sm);
-
+        select_music::apply_player_join(sm, session_view, join_side, [p1_pref, p2_pref]);
         self.state.session.preferred_difficulty_index = sm.preferred_difficulty_index;
-        select_music::trigger_immediate_refresh(sm);
-        select_music::prime_displayed_chart_data(sm);
     }
 
     fn try_handle_late_join(&mut self, ev: &InputEvent) -> bool {
@@ -11909,6 +12004,180 @@ mod tests {
         assert_eq!(state.selected_steps_index, 3);
         assert_eq!(state.p2_selected_steps_index, 3);
         assert_eq!(state.preferred_difficulty_index, 2);
+    }
+
+    fn profile_music_session(
+        play_style: profile_data::PlayStyle,
+        player_side: profile_data::PlayerSide,
+    ) -> SelectMusicSessionView {
+        SelectMusicSessionView {
+            play_style,
+            player_side,
+            joined: std::array::from_fn(|side| {
+                play_style.is_versus() || side == profile_data::player_side_index(player_side)
+            }),
+            guest: [true; MAX_PLAYERS],
+            music_rate: 1.0,
+        }
+    }
+
+    fn sync_profile_music_session(
+        state: &mut select_music::State,
+        session: SelectMusicSessionView,
+    ) {
+        select_music::sync_runtime_view(
+            state,
+            deadsync_theme_simply_love::views::SelectMusicRuntimeView {
+                session: Some(session),
+                ..Default::default()
+            },
+        );
+    }
+
+    fn profile_music_state(session: SelectMusicSessionView) -> select_music::State {
+        let mut song = test_song("song.ssc", 0.0, ["easy", "expert"]);
+        song.charts = vec![
+            test_chart_with(session.play_style.chart_type(), "Easy", "easy"),
+            test_chart_with(session.play_style.chart_type(), "Challenge", "expert"),
+        ];
+        for chart in &mut song.charts {
+            chart.music_path = Some(PathBuf::from("song.ogg"));
+        }
+        let mut state = select_music::init_placeholder();
+        sync_profile_music_session(&mut state, session);
+        state.entries = vec![select_music::MusicWheelEntry::Song(Arc::new(song))];
+        state.selected_steps_index = 4;
+        state.preferred_difficulty_index = 4;
+        state.p2_selected_steps_index = 1;
+        state.p2_preferred_difficulty_index = 1;
+        select_music::prime_displayed_chart_data(&mut state);
+        state
+    }
+
+    fn apply_test_music_profile_selection(
+        state: &mut select_music::State,
+        previous: SelectMusicSessionView,
+        selected: SelectMusicSessionView,
+        changed_profiles: [bool; MAX_PLAYERS],
+        preferred_difficulties: [usize; MAX_PLAYERS],
+    ) {
+        let updates = prepare_music_profile_selection(
+            state,
+            previous,
+            selected,
+            changed_profiles,
+            preferred_difficulties,
+        );
+        sync_profile_music_session(state, selected);
+        select_music::apply_profile_preferences(state, updates);
+    }
+
+    #[test]
+    fn music_profile_selection_retains_physical_charts_when_players_unjoin_and_rejoin() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for (single, versus) in [
+            (PlayStyle::Single, PlayStyle::Versus),
+            (PlayStyle::PumpSingle, PlayStyle::PumpVersus),
+        ] {
+            let both = profile_music_session(versus, PlayerSide::P1);
+            let solo_p2 = profile_music_session(single, PlayerSide::P2);
+            let mut state = profile_music_state(both);
+            state.selected_steps_index = 1;
+            state.preferred_difficulty_index = 1;
+            state.p2_selected_steps_index = 4;
+            state.p2_preferred_difficulty_index = 4;
+            select_music::prime_displayed_chart_data(&mut state);
+
+            apply_test_music_profile_selection(&mut state, both, solo_p2, [false; 2], [2; 2]);
+            assert_eq!(
+                (state.selected_steps_index, state.preferred_difficulty_index),
+                (4, 4)
+            );
+
+            apply_test_music_profile_selection(&mut state, solo_p2, both, [true, false], [2; 2]);
+            assert_eq!(
+                (state.selected_steps_index, state.p2_selected_steps_index),
+                (1, 4)
+            );
+            assert_eq!(
+                (
+                    state.preferred_difficulty_index,
+                    state.p2_preferred_difficulty_index
+                ),
+                (2, 4)
+            );
+        }
+    }
+
+    #[test]
+    fn music_profile_selection_preserves_current_charts_when_switching_to_guest() {
+        use profile_data::{PlayStyle, PlayerSide};
+        let guest = profile_music_session(PlayStyle::Versus, PlayerSide::P1);
+        let local = SelectMusicSessionView {
+            guest: [false; 2],
+            ..guest
+        };
+        for (selected, changed) in [(guest, [true; 2]), (local, [false; 2])] {
+            let mut state = profile_music_state(local);
+            apply_test_music_profile_selection(&mut state, local, selected, changed, [2; 2]);
+            assert_eq!(
+                (state.selected_steps_index, state.p2_selected_steps_index),
+                (4, 1)
+            );
+            assert_eq!(
+                (
+                    state.preferred_difficulty_index,
+                    state.p2_preferred_difficulty_index
+                ),
+                (4, 1)
+            );
+        }
+    }
+
+    #[test]
+    fn music_profile_selection_applies_local_preferences_only_to_changed_physical_side() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for style in [PlayStyle::Single, PlayStyle::Versus, PlayStyle::PumpVersus] {
+            for side in [PlayerSide::P1, PlayerSide::P2] {
+                let guest = profile_music_session(style, side);
+                let local = SelectMusicSessionView {
+                    guest: [false; 2],
+                    ..guest
+                };
+                let mut state = profile_music_state(guest);
+                let mut changed = [false; 2];
+                changed[profile_data::player_side_index(side)] = true;
+                apply_test_music_profile_selection(&mut state, guest, local, changed, [2, 4]);
+                let expected = match (style.is_versus(), side) {
+                    (true, PlayerSide::P1) => (1, 1),
+                    (true, PlayerSide::P2) => (4, 4),
+                    (false, PlayerSide::P1) => (1, 1),
+                    (false, PlayerSide::P2) => (4, 1),
+                };
+                assert_eq!(
+                    (state.selected_steps_index, state.p2_selected_steps_index),
+                    expected
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn music_profile_selection_new_solo_guest_starts_on_first_available_chart() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for (old_side, new_side) in [
+            (PlayerSide::P1, PlayerSide::P2),
+            (PlayerSide::P2, PlayerSide::P1),
+        ] {
+            let previous = profile_music_session(PlayStyle::Single, old_side);
+            let selected = profile_music_session(PlayStyle::Single, new_side);
+            let mut state = profile_music_state(previous);
+            apply_test_music_profile_selection(&mut state, previous, selected, [false; 2], [2; 2]);
+            assert_eq!(
+                (state.selected_steps_index, state.preferred_difficulty_index),
+                (1, 2)
+            );
+        }
     }
 
     fn test_score_info(

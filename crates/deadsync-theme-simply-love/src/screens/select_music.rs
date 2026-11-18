@@ -2205,13 +2205,65 @@ fn apply_initial_steps_for_song(
     false
 }
 
-/// Resolve both player slots to real charts without changing their preferences.
-pub fn select_preferred_steps(state: &mut State) {
-    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() else {
-        return;
+/// Apply loaded preferences to changed wheel slots, retaining unchanged charts.
+/// The primary slot belongs to the active side in singles and P1 in versus.
+pub fn apply_profile_preferences(state: &mut State, preferred_difficulties: [Option<usize>; 2]) {
+    let song = match state.entries.get(state.selected_index) {
+        Some(MusicWheelEntry::Song(song)) => Some(song.clone()),
+        _ => None,
     };
     let chart_type = state.session.play_style.chart_type();
-    apply_initial_steps_for_song(state, song.as_ref(), chart_type, None);
+    if let Some(preferred) = preferred_difficulties[0] {
+        state.preferred_difficulty_index = preferred;
+        state.selected_steps_index = song
+            .as_ref()
+            .and_then(|song| song.best_steps_index(chart_type, preferred))
+            .unwrap_or(preferred);
+    }
+    if let Some(preferred) = preferred_difficulties[1] {
+        state.p2_preferred_difficulty_index = preferred;
+        state.p2_selected_steps_index = song
+            .as_ref()
+            .and_then(|song| song.best_steps_index(chart_type, preferred))
+            .unwrap_or(preferred);
+    }
+    trigger_immediate_refresh(state);
+    prime_displayed_chart_data(state);
+}
+
+/// ITGmania's PlayerJoined selects the first playable chart for the new player.
+pub fn apply_player_join(
+    state: &mut State,
+    session: SelectMusicSessionView,
+    join_side: profile_data::PlayerSide,
+    preferred_difficulties: [usize; 2],
+) {
+    let plan = super::select_music_join_plan(super::SelectMusicJoinContext {
+        active_side: session.player_side,
+        join_side,
+        selected_steps: state.selected_steps_index,
+        preferred_difficulty: state.preferred_difficulty_index,
+        p1_profile_preferred: preferred_difficulties[0],
+        p2_profile_preferred: preferred_difficulties[1],
+    });
+    state.session = session;
+    state.selected_steps_index = plan.selected_steps;
+    state.preferred_difficulty_index = plan.preferred_difficulty;
+    state.p2_selected_steps_index = plan.p2_selected_steps;
+    state.p2_preferred_difficulty_index = plan.p2_preferred_difficulty;
+
+    // Difficulty rows include gaps. Index zero in ITGmania's playable list is
+    // the easiest available chart, which need not be the Beginner display row.
+    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index)
+        && let Some(first) = song.best_steps_index(session.play_style.chart_type(), 0)
+    {
+        match join_side {
+            profile_data::PlayerSide::P1 => state.selected_steps_index = first,
+            profile_data::PlayerSide::P2 => state.p2_selected_steps_index = first,
+        }
+    }
+    trigger_immediate_refresh(state);
+    prime_displayed_chart_data(state);
 }
 
 fn meter_steps_index(song: &SongData, chart_type: &str, meter: u32) -> Option<usize> {
@@ -15942,8 +15994,233 @@ mod tests {
         assert!(effects.is_empty());
     }
 
+    fn late_join_chart_state(
+        style: profile_data::PlayStyle,
+        active_side: profile_data::PlayerSide,
+        difficulties: &[&str],
+        selected_steps: usize,
+    ) -> super::State {
+        let mut song = (*super::test_folder_stats_song(0)).clone();
+        let template = song.charts[0].clone();
+        song.charts = difficulties
+            .iter()
+            .enumerate()
+            .map(|(index, difficulty)| {
+                let mut chart = template.clone();
+                chart.chart_type = style.chart_type().to_string();
+                chart.difficulty = (*difficulty).to_string();
+                chart.description = format!("Chart {index}");
+                chart.short_hash = format!("join-{index}");
+                chart.music_path = Some(PathBuf::from("Songs/Join/music.ogg"));
+                chart.max_nps = 4.0 * (index + 1) as f64;
+                chart.measure_nps_vec = vec![chart.max_nps];
+                chart.measure_seconds_vec = vec![0.0];
+                chart
+            })
+            .collect();
+        let mut incompatible = template;
+        incompatible.chart_type = "dance-double".to_string();
+        song.charts.push(incompatible);
+
+        let mut state = init_placeholder();
+        state.session.play_style = style;
+        state.session.player_side = active_side;
+        state.session.joined = [
+            active_side == profile_data::PlayerSide::P1,
+            active_side == profile_data::PlayerSide::P2,
+        ];
+        state.entries = vec![super::MusicWheelEntry::Song(Arc::new(song))];
+        state.selected_index = 0;
+        state.selected_steps_index = selected_steps;
+        state.preferred_difficulty_index = 4;
+        state.p2_selected_steps_index = 2;
+        state.p2_preferred_difficulty_index = 2;
+        state.policy.media.show_previews = false;
+        super::prime_displayed_chart_data(&mut state);
+        state
+    }
+
+    fn assert_late_join_charts_and_density(state: &mut super::State, expected: [usize; 2]) {
+        assert_eq!(
+            [state.selected_steps_index, state.p2_selected_steps_index],
+            expected
+        );
+        let super::MusicWheelEntry::Song(song) = &state.entries[state.selected_index] else {
+            panic!("expected selected song");
+        };
+        let song = song.clone();
+        let charts = expected.map(|index| {
+            song.chart_for_steps_index(state.session.play_style.chart_type(), index)
+                .expect("selection must resolve to a compatible chart")
+        });
+        for (displayed, chart) in [
+            state.displayed_chart_p1.as_ref(),
+            state.displayed_chart_p2.as_ref(),
+        ]
+        .into_iter()
+        .zip(charts)
+        {
+            let displayed = displayed.expect("chart details must be available immediately");
+            assert_eq!(
+                displayed.song.charts[displayed.chart_ix].short_hash,
+                chart.short_hash
+            );
+        }
+
+        let mut graphs = [None, None];
+        for _ in 0..12 {
+            let mut effects = Vec::new();
+            super::update(
+                state,
+                1.0 / 60.0,
+                &super::SmxAssignmentView::default(),
+                &mut effects,
+            );
+            for effect in effects {
+                if let ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                    crate::SimplyLoveMediaRequest::DensityGraph { slot, chart_opt },
+                )) = effect
+                {
+                    let index = match slot {
+                        super::DensityGraphSlot::SelectMusicP1 => 0,
+                        super::DensityGraphSlot::SelectMusicP2 => 1,
+                    };
+                    graphs[index] = chart_opt;
+                }
+            }
+            if graphs.iter().all(Option::is_some) {
+                break;
+            }
+        }
+        for (graph, chart) in graphs.into_iter().zip(charts) {
+            let graph = graph.expect("density must refresh without moving the wheel");
+            assert!(!graph.measure_nps_vec.is_empty());
+            assert_eq!(graph.max_nps, chart.max_nps);
+            assert_eq!(graph.measure_nps_vec, chart.measure_nps_vec);
+            assert_eq!(graph.measure_seconds_vec, chart.measure_seconds_vec);
+        }
+        assert_eq!(
+            [state.selected_steps_index, state.p2_selected_steps_index],
+            expected
+        );
+    }
+
+    #[test]
+    fn late_join_guest_uses_first_playable_chart_and_retains_expert() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for (single, versus) in [
+            (PlayStyle::Single, PlayStyle::Versus),
+            (PlayStyle::PumpSingle, PlayStyle::PumpVersus),
+        ] {
+            for active_side in [PlayerSide::P1, PlayerSide::P2] {
+                for (difficulties, first) in [
+                    (&["Challenge"][..], 4),
+                    (&["Hard", "Challenge"][..], 3),
+                    (&["Easy", "Challenge"][..], 1),
+                ] {
+                    for preferred in [2, 4] {
+                        let mut state = late_join_chart_state(single, active_side, difficulties, 4);
+                        let join_side = if active_side == PlayerSide::P1 {
+                            PlayerSide::P2
+                        } else {
+                            PlayerSide::P1
+                        };
+                        let joined = super::SelectMusicSessionView {
+                            play_style: versus,
+                            joined: [true, true],
+                            ..state.session
+                        };
+                        super::apply_player_join(&mut state, joined, join_side, [preferred; 2]);
+                        let expected = if active_side == PlayerSide::P1 {
+                            [4, first]
+                        } else {
+                            [first, 4]
+                        };
+                        assert_late_join_charts_and_density(&mut state, expected);
+
+                        // Confirming the already assigned Guest profile must not
+                        // replace either current chart with its saved preference.
+                        super::apply_profile_preferences(&mut state, [None, None]);
+                        assert_late_join_charts_and_density(&mut state, expected);
+                        let incumbent_preferred = if active_side == PlayerSide::P1 {
+                            state.preferred_difficulty_index
+                        } else {
+                            state.p2_preferred_difficulty_index
+                        };
+                        assert_eq!(incumbent_preferred, 4);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn late_join_retains_selected_edit_and_supports_edit_only_song() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for active_side in [PlayerSide::P1, PlayerSide::P2] {
+            let mut state =
+                late_join_chart_state(PlayStyle::Single, active_side, &["Edit", "Edit"], 6);
+            let join_side = if active_side == PlayerSide::P1 {
+                PlayerSide::P2
+            } else {
+                PlayerSide::P1
+            };
+            let joined = super::SelectMusicSessionView {
+                play_style: PlayStyle::Versus,
+                joined: [true, true],
+                ..state.session
+            };
+            super::apply_player_join(&mut state, joined, join_side, [2; 2]);
+            super::apply_profile_preferences(&mut state, [None, None]);
+            let expected = if active_side == PlayerSide::P1 {
+                [6, 5]
+            } else {
+                [5, 6]
+            };
+            assert_late_join_charts_and_density(&mut state, expected);
+        }
+    }
+
+    #[test]
+    fn late_join_changed_profile_resolves_missing_preference_without_resetting_partner() {
+        use profile_data::{PlayStyle, PlayerSide};
+        for active_side in [PlayerSide::P1, PlayerSide::P2] {
+            let mut state = late_join_chart_state(
+                PlayStyle::Single,
+                active_side,
+                &["Easy", "Hard", "Challenge"],
+                4,
+            );
+            let join_side = if active_side == PlayerSide::P1 {
+                PlayerSide::P2
+            } else {
+                PlayerSide::P1
+            };
+            let joined = super::SelectMusicSessionView {
+                play_style: PlayStyle::Versus,
+                joined: [true, true],
+                ..state.session
+            };
+            super::apply_player_join(&mut state, joined, join_side, [2; 2]);
+            let preferences = if join_side == PlayerSide::P1 {
+                [Some(2), None]
+            } else {
+                [None, Some(2)]
+            };
+            super::apply_profile_preferences(&mut state, preferences);
+            // Missing Medium is equally far from Easy and Hard: the first wins.
+            let expected = if active_side == PlayerSide::P1 {
+                [4, 1]
+            } else {
+                [1, 4]
+            };
+            assert_late_join_charts_and_density(&mut state, expected);
+        }
+    }
+
     #[test]
     fn late_join_profile_selection_emits_fast_request() {
+        crate::tests::init_paths();
         let joining_side = profile_data::PlayerSide::P2;
         let mut overlay = profile_boxes::init_late_join(
             ProfilePickerView::default(),
@@ -15975,6 +16252,7 @@ mod tests {
 
     #[test]
     fn opening_late_join_returns_its_preview_stop_request() {
+        crate::tests::init_paths();
         let mut state = init_placeholder();
 
         let effect = open_late_join_profile_overlay(&mut state, profile_data::PlayerSide::P2);
