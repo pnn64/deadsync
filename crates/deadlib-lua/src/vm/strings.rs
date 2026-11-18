@@ -343,11 +343,11 @@ impl Vm {
                     }
                     self.reserve_registers(base + results)?;
                     self.resize_registers(self.registers.len().max(base + results));
-                    for (i, &byte) in self.strings.bytes[slot_index(source.0)][range]
-                        .iter()
-                        .enumerate()
+                    let bytes = &self.strings.bytes[slot_index(source.0)][range];
+                    for (register, &byte) in
+                        self.registers[base..base + results].iter_mut().zip(bytes)
                     {
-                        self.registers[base + i] = Value::Number(f64::from(byte));
+                        *register = Value::Number(f64::from(byte));
                     }
                     return Ok(results);
                 }
