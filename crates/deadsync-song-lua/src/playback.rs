@@ -7900,13 +7900,6 @@ fn song_lua_clamp_float_output_colors(tint: &mut [f32; 4], glow: &mut [f32; 4]) 
     }
 }
 
-#[inline(always)]
-fn song_lua_apply_vibration(position: &mut [f32; 3], magnitude: [f32; 3], jitter: [f32; 3]) {
-    for axis in 0..3 {
-        position[axis] += magnitude[axis] * jitter[axis];
-    }
-}
-
 fn song_lua_vibration_input(effect_time: f32, actor_seed: u32) -> [f32; 3] {
     let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
     std::array::from_fn(|axis| {

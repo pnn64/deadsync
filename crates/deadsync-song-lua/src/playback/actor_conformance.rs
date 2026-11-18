@@ -56,7 +56,9 @@ pub fn transform_state(state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOv
 
 #[must_use]
 pub fn vibration_sample(mut position: [f32; 3], magnitude: [f32; 3], jitter: [f32; 3]) -> [f32; 3] {
-    song_lua_apply_vibration(&mut position, magnitude, jitter);
+    for axis in 0..3 {
+        position[axis] += magnitude[axis] * jitter[axis];
+    }
     position
 }
 
