@@ -225,15 +225,24 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
             members = rest;
             continue;
         }
-        let last = if let [b'-', last, rest @ ..] = rest {
+        if let [b'-', last, rest @ ..] = rest {
             members = rest;
-            *last
+            if start <= last {
+                let first_word = usize::from(*start / 64);
+                let last_word = usize::from(*last / 64);
+                let head = u64::MAX << (*start % 64);
+                let tail = u64::MAX >> (63 - *last % 64);
+                if first_word == last_word {
+                    set[first_word] |= head & tail;
+                } else {
+                    set[first_word] |= head;
+                    set[first_word + 1..last_word].fill(u64::MAX);
+                    set[last_word] |= tail;
+                }
+            }
         } else {
             members = rest;
-            *start
-        };
-        for byte in *start..=last {
-            set[usize::from(byte) / 64] |= 1u64 << (byte % 64);
+            set[usize::from(*start / 64)] |= 1u64 << (*start % 64);
         }
     }
     if negate {
