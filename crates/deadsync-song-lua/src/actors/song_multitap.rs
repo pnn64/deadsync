@@ -92,6 +92,7 @@ impl Actors {
         root: Value,
         frame: usize,
         delta: f64,
+        catalog: Root,
     ) -> Result<bool, Error> {
         let Some(seconds) = self.set_song_replay_frame(vm, screen, frame) else {
             return Ok(false);
@@ -103,12 +104,15 @@ impl Actors {
         };
         let previous = std::mem::replace(&mut vm.store().replay_advancing, true);
         let result = (|| {
+            let catalog = vm.rooted(catalog)?;
             let function = vm.new_host_function_with_data(
                 advance,
                 &[
                     Value::Table(self.registry),
                     Value::Table(self.helpers),
                     root,
+                    Value::Nil,
+                    catalog,
                 ],
                 Advance {
                     delta,
@@ -267,7 +271,11 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                 }
                 Job::PlayerFeedback(_) => {
                     let catalog = table(call, call.captures()[4])?;
-                    live_feedback::update(call, statistics.as_ref().unwrap(), catalog, actor)?;
+                    if let Some(statistics) = statistics.as_ref() {
+                        live_feedback::update(call, statistics, catalog, actor)?;
+                    } else {
+                        live_feedback::hud_position(call, catalog, actor)?;
+                    }
                 }
                 Job::Transition(_) => {
                     if deltas[slot].children.0.is_some() {
@@ -693,7 +701,7 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
                 let attached = matches!(top, Value::Table(screen)
                     if call.store_ref().actors.get(&screen)
                         .is_some_and(|screen| screen.children.contains(&player)));
-                if live && attached {
+                if attached {
                     plan.jobs.push(Job::PlayerFeedback(player));
                 }
             }

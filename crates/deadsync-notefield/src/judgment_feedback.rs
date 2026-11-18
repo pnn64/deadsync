@@ -72,6 +72,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub tap_xy: [f32; 2],
     pub judgment_back: bool,
     pub judgment_zoom: f32,
+    pub tap_zoom: Option<f32>,
     pub judgment_animation: TapJudgmentAnimation,
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
     pub held_miss_sprite: Option<&'a IndicatorSprite>,
@@ -98,12 +99,15 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
 pub(crate) fn compose_judgment_feedback(
     draws: &mut Vec<FlatDraw>,
     request: JudgmentFeedbackRequest<'_>,
-) {
+) -> std::ops::Range<usize> {
+    let start = draws.len();
     if request.blind {
-        return;
+        return start..start;
     }
     append_tap_judgment(draws, &request);
+    let end = draws.len();
     append_hold_indicators(draws, &request);
+    start..end
 }
 
 fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequest<'_>) {
@@ -111,8 +115,11 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
-    let Some(zoom) = tap_judgment_zoom(elapsed, request.judgment_zoom, request.judgment_animation)
-    else {
+    let Some(zoom) = tap_judgment_zoom(
+        elapsed,
+        request.tap_zoom.unwrap_or(request.judgment_zoom),
+        request.judgment_animation,
+    ) else {
         return;
     };
     let columns = sprite.frame_cols.max(1);
@@ -555,6 +562,7 @@ mod tests {
             tap_xy: [320.0, 150.0],
             judgment_back: false,
             judgment_zoom: 1.0,
+            tap_zoom: None,
             judgment_animation: TapJudgmentAnimation::Default,
             held_misses,
             held_miss_sprite: None,

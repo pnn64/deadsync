@@ -628,6 +628,8 @@ pub(crate) fn compose_frame(
     center_1player_notefield: bool,
     song_lua_judgment_visible: bool,
     song_lua_combo_visible: bool,
+    song_lua_judgment_transform: Option<deadsync_notefield::HudActorTransform>,
+    song_lua_combo_transform: Option<deadsync_notefield::HudActorTransform>,
     show_song_visuals: bool,
     apply_attacks: bool,
     capture_requests: ProxyCaptureRequests,
@@ -1041,6 +1043,7 @@ pub(crate) fn compose_frame(
             combo_color,
             font: notefield_plan.combo_font,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
+            transform: song_lua_combo_transform,
         }
     });
 
@@ -1128,7 +1131,11 @@ pub(crate) fn compose_frame(
         && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
         && let Some(sprite) = judgment_sprite
     {
-        Some(TapJudgmentHudFrame { render, sprite })
+        Some(TapJudgmentHudFrame {
+            render,
+            sprite,
+            transform: song_lua_judgment_transform,
+        })
     } else {
         None
     };

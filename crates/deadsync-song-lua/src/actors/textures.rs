@@ -189,6 +189,7 @@ pub(super) fn install(
         "GetImageWidth",
         "GetImageHeight",
         "GetNumFrames",
+        "position",
         "loop",
         "rate",
     ] {
@@ -219,10 +220,16 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         "GetImageWidth" => info.image[0],
         "GetImageHeight" => info.image[1],
         "GetNumFrames" => return call.push(Value::Number(info.frames as f64)),
-        "loop" | "rate" => {
+        "position" | "loop" | "rate" => {
             let actor = table(call, call.captures()[2])?;
             let offset = usize::from(matches!(arg(call, 0), Value::Table(_)));
-            sprites::texture_parameter(call, actor, name, arg(call, offset))?;
+            if name == "position" {
+                if let Some(seconds) = float_scalar(call, arg(call, offset), false) {
+                    sprite_animation::seek_movie(call, actor, seconds)?;
+                }
+            } else {
+                sprites::texture_parameter(call, actor, name, arg(call, offset))?;
+            }
             return call.push(call.captures()[3]);
         }
         _ => unreachable!(),

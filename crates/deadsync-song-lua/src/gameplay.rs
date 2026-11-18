@@ -571,6 +571,7 @@ pub const fn song_lua_overlay_delta_mask(
     field!(size);
     field!(stretch_rect);
     field!(sound_play);
+    field!(movie_position_seconds);
 
     let _ = bit;
     mask

@@ -1003,6 +1003,7 @@ fn finalize_tracked<S, V>(
                 out.player_actors[player].judgment = crate::SongLuaCapturedChildActor {
                     initial_state: row.actor.initial_state,
                     message_commands: row.actor.message_commands,
+                    render_frames: row.actor.player_wrapper_frames,
                     textures: take_events(events, n),
                 };
             }
@@ -1010,6 +1011,7 @@ fn finalize_tracked<S, V>(
                 out.player_actors[player].combo = crate::SongLuaCapturedChildActor {
                     initial_state: row.actor.initial_state,
                     message_commands: row.actor.message_commands,
+                    render_frames: row.actor.player_wrapper_frames,
                     ..Default::default()
                 }
             }

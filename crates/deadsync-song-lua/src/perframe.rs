@@ -362,6 +362,27 @@ pub(crate) fn reference_screen_actor_frames(
     Ok(None)
 }
 
+pub(crate) fn reference_option_clock_deltas(
+    _context: &SongLuaCompileContext,
+) -> Result<Option<&[[f32; LUA_PLAYERS + 1]]>, String> {
+    #[cfg(feature = "test-support")]
+    if !_context.compile_option_clock_deltas.is_empty() {
+        if _context.compile_option_clock_deltas.len() != _context.compile_clock_inputs.len() {
+            return Err("option clock deltas must align with compiler clock inputs".into());
+        }
+        if _context
+            .compile_option_clock_deltas
+            .iter()
+            .flatten()
+            .any(|delta| !delta.is_finite() || *delta < 0.0)
+        {
+            return Err("option clock deltas must be finite and nonnegative".into());
+        }
+        return Ok(Some(&_context.compile_option_clock_deltas));
+    }
+    Ok(None)
+}
+
 #[must_use]
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
     let step = update_function_sample_step(end - start);
@@ -674,6 +695,7 @@ pub fn push_update_mod_targets(
         last_windows,
         &mut (0, String::new()),
         SongLuaTimeUnit::Beat,
+        [false; LUA_PLAYERS],
     );
 }
 
@@ -689,12 +711,16 @@ pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
     last_windows: &mut BTreeMap<(usize, String), usize>,
     lookup_key: &mut (usize, String),
     unit: SongLuaTimeUnit,
+    sampled_speed_players: [bool; LUA_PLAYERS],
 ) {
     if from_players.iter().all(ModState::is_empty) {
         return;
     }
     for player in 0..LUA_PLAYERS {
         for (key, &from) in from_players[player].entries() {
+            if sampled_speed_players[player] && matches!(key, "xmod" | "cmod" | "mmod") {
+                continue;
+            }
             // Classify without allocating the name of a coalesced speed target.
             let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;

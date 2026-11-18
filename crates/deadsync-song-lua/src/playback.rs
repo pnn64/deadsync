@@ -62,6 +62,8 @@ mod native;
 mod prepare;
 #[path = "playback/live_topology.rs"]
 mod live_topology;
+#[path = "playback/movie.rs"]
+mod movie;
 use deadlib_assets::present_dsl::cover_sprite;
 pub use prepare::{
     PreparedGameplaySongLua, prepare_song_lua, prepare_song_lua_with_runtime_fallback,
@@ -6829,6 +6831,7 @@ pub fn apply_overlay_update(
     set_value!(SpriteLoop, Bool, sprite_loop);
     set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
     set_value!(SpriteStateDelay, F32, sprite_state_delay);
+    set_value!(MoviePositionSeconds, F32, movie_position_seconds);
     set_option!(SpriteStateIndex, U32, sprite_state_index);
     set_option!(VertSpacing, I32, vert_spacing);
     set_option!(WrapWidthPixels, I32, wrap_width_pixels);
@@ -6906,10 +6909,13 @@ fn apply_song_lua_overlay_runtime_updates_for(
         {
             t = snap.t;
         }
-        // Timer phase changes and native base rotations take effect immediately.
+        // Native clocks and base rotations take effect on their recorded frame.
+        // In particular, interpolating toward a future movie seek would show
+        // its frames early, before SetSecondsIntoAnimation actually ran.
         let value = if matches!(
             track.target,
             crate::SongLuaOverlayUpdateTarget::EffectTime
+                | crate::SongLuaOverlayUpdateTarget::MoviePositionSeconds
                 | crate::SongLuaOverlayUpdateTarget::BaseRotation
                 | crate::SongLuaOverlayUpdateTarget::BaseAlpha
         ) {
@@ -7315,13 +7321,25 @@ fn song_lua_captured_actor_state_from(
     )
 }
 
-fn song_lua_child_visible(
+fn song_lua_child_render(
     now: f32,
+    clock: [f32; 2],
     actor: &SongLuaCapturedChildActor,
     events: &[SongLuaOverlayMessageRuntime],
     message_cache: &mut SongLuaMessageStateCache,
     captured: bool,
-) -> bool {
+) -> (Option<deadsync_notefield::HudActorTransform>, bool) {
+    if actor
+        .render_frames
+        .first()
+        .is_some_and(|frame| frame.second <= clock[0])
+    {
+        let (matrix, tint, visible) = song_lua_render_chain(&actor.render_frames, clock, captured);
+        return (
+            Some(deadsync_notefield::HudActorTransform { matrix, tint }),
+            visible,
+        );
+    }
     let state = song_lua_captured_state_from(
         now,
         actor.initial_state,
@@ -7329,7 +7347,7 @@ fn song_lua_child_visible(
         Some(events),
         message_cache,
     );
-    !state.hibernating && (state.visible || captured)
+    (None, !state.hibernating && (state.visible || captured))
 }
 
 fn song_lua_captured_state_from(
@@ -14374,6 +14392,7 @@ pub struct SongMedia {
     next_song_lua_sound_event_ix: usize,
     active_song_lua_video_paths: Vec<PathBuf>,
     static_song_lua_video_path_count: usize,
+    movies: movie::Movies,
     // Authored primary foreground start in the gameplay music clock, resolved
     // once at screen entry. Actor animation must exclude the screen lead-in.
     foreground_start_second: f32,
@@ -14405,6 +14424,7 @@ impl SongMedia {
             next_song_lua_sound_event_ix: 0,
             active_song_lua_video_paths,
             static_song_lua_video_path_count,
+            movies: movie::Movies::new(visuals),
             foreground_start_second,
             foreground_media_initialized: false,
             next_foreground_change_ix: 0,
@@ -14482,6 +14502,32 @@ impl SongMedia {
     pub fn video_paths(&self) -> &[PathBuf] {
         &self.active_song_lua_video_paths
     }
+
+    /// Visit movie clocks from actor updates, including paused/invisible movies.
+    pub fn for_each_video_position<
+        P: deadsync_gameplay::GameplayProfileData,
+        S: NoteskinSlot + Clone,
+    >(
+        &mut self,
+        gameplay: &GameplayCoreState<P, S>,
+        mut visit: impl FnMut(&Path, f32, bool),
+    ) {
+        self.movies.sample(gameplay, &mut visit);
+        if let Some(path) = self.current_foreground_path.as_deref()
+            && crate::is_song_lua_video_path(path)
+            && let Some(change) = self
+                .next_foreground_change_ix
+                .checked_sub(1)
+                .and_then(|index| gameplay.song().foreground_changes.get(index))
+        {
+            let start = gameplay.music_time_for_beat(change.start_beat);
+            visit(
+                path,
+                (gameplay.current_music_time_display() - start).max(0.0),
+                true,
+            );
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -14526,6 +14572,8 @@ pub struct FieldFrame {
     pub placement: FieldPlacement,
     pub judgment_visible: bool,
     pub combo_visible: bool,
+    pub judgment_transform: Option<deadsync_notefield::HudActorTransform>,
+    pub combo_transform: Option<deadsync_notefield::HudActorTransform>,
     pub capture: ProxyCaptureRequests,
     pub wrapper: Matrix4,
     pub wrapper_visible: bool,
@@ -14544,6 +14592,14 @@ fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) 
 fn song_lua_wrapper_chain(
     frames: &[crate::SongLuaNoteFieldFrame],
     clock: [f32; 2],
+) -> (Matrix4, [f32; 4], bool) {
+    song_lua_render_chain(frames, clock, false)
+}
+
+fn song_lua_render_chain(
+    frames: &[crate::SongLuaNoteFieldFrame],
+    clock: [f32; 2],
+    captured_child: bool,
 ) -> (Matrix4, [f32; 4], bool) {
     let next = frames.partition_point(|frame| frame.second <= clock[0]);
     let Some(from) = next.checked_sub(1).map(|index| &frames[index]) else {
@@ -14566,7 +14622,9 @@ fn song_lua_wrapper_chain(
         {
             crate::overlay_state_lerp(&mut state, &delta, t);
         }
-        visible &= state.draw_visible() && state.diffuse[3] > 0.0;
+        visible &= !state.hibernating
+            && (state.visible || (captured_child && index + 1 == from.wrappers.len()))
+            && state.diffuse[3] > 0.0;
         let (model, diffuse) = song_lua_draw_matrix(state, clock);
         matrix *= model;
         tint = std::array::from_fn(|channel| tint[channel] * diffuse[channel]);
@@ -14936,11 +14994,19 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     });
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_judgments[player] != 0
+            && song_lua_visuals.player_actors[player]
+                .judgment
+                .render_frames
+                .is_empty()
             && !proxy_analysis.captured.players[player].judgment
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
     let direct_combo_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_combos[player] != 0
+            && song_lua_visuals.player_actors[player]
+                .combo
+                .render_frames
+                .is_empty()
             && !proxy_analysis.captured.players[player].combo
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
@@ -15151,25 +15217,28 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     lua_player_state.map_or_else(screen_center_y, |player_state| player_state.y)
                 }),
             };
-            let (judgment_visible, combo_visible) = if show_song_visuals {
-                let judgment_visible = song_lua_child_visible(
-                    song_lua_now,
-                    &player_actor.judgment,
-                    &song_lua_visuals.player_judgment_events[player_idx],
-                    &mut song_lua_player_judgment_message_state_cache[player_idx],
-                    requests.judgment,
-                );
-                let combo_visible = song_lua_child_visible(
-                    song_lua_now,
-                    &player_actor.combo,
-                    &song_lua_visuals.player_combo_events[player_idx],
-                    &mut song_lua_player_combo_message_state_cache[player_idx],
-                    requests.combo,
-                );
-                (judgment_visible, combo_visible)
-            } else {
-                (true, true)
-            };
+            let ((judgment_transform, judgment_visible), (combo_transform, combo_visible)) =
+                if show_song_visuals {
+                    let judgment = song_lua_child_render(
+                        song_lua_now,
+                        song_lua_clock,
+                        &player_actor.judgment,
+                        &song_lua_visuals.player_judgment_events[player_idx],
+                        &mut song_lua_player_judgment_message_state_cache[player_idx],
+                        requests.judgment,
+                    );
+                    let combo = song_lua_child_render(
+                        song_lua_now,
+                        song_lua_clock,
+                        &player_actor.combo,
+                        &song_lua_visuals.player_combo_events[player_idx],
+                        &mut song_lua_player_combo_message_state_cache[player_idx],
+                        requests.combo,
+                    );
+                    (judgment, combo)
+                } else {
+                    ((None, true), (None, true))
+                };
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -15190,6 +15259,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     placement,
                     judgment_visible,
                     combo_visible,
+                    judgment_transform,
+                    combo_transform,
                     capture: ProxyCaptureRequests {
                         player: requests.player && !direct_player_candidates[player_idx],
                         // Whole-player captures consume the same field source, so
@@ -16091,16 +16162,12 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         );
     }
     let screen_actor_end = actors.len();
-    if !hide_overlay_hud {
-        // These are separate top-screen actors in ITGmania. Append them only
-        // after every ScreenGameplay/song-local layer so ActorProxy/AFT effects
-        // cannot capture or post-process them. The segment boundary also keeps
-        // their camera independent of ScreenGameplay's transform.
-        let system_start = actors.len();
+    if !hide_gameplay_hud {
+        // ScreenManager draws ScreenSystemLayer and ScreenSyncOverlay after
+        // ScreenGameplay. Its Overlay child cannot hide or tint these separate
+        // screens. Keep them outside song captures and the gameplay camera,
+        // while retaining the explicit application/Practice HUD override.
         draw_layer(ScreenLayer::System, actors, layout);
-        for actor in &mut actors[system_start..] {
-            song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
-        }
     }
     let direct_proxy_len = song_lua_direct_proxies.len();
     GameplayActorSegments {

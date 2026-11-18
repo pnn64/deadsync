@@ -534,6 +534,9 @@ pub(super) fn reset_actor(call: &mut HostCall<'_>, actor: TableId) -> Result<(),
             render.draw_by_z_position = p.draw_by_z_position;
             render.mask_source = p.mask_source;
             render.mask_dest = p.mask_dest;
+            // Sprite::InitState resets sheet animation, not the RageTexture's
+            // movie position. Reload/focus can explicitly seek it afterwards.
+            render.movie_position_seconds = p.movie_position_seconds;
         }
         {
             let guard = call.store();
@@ -547,7 +550,7 @@ pub(super) fn reset_actor(call: &mut HostCall<'_>, actor: TableId) -> Result<(),
                 a.started = false;
                 a.effects = Default::default();
                 if let Some(sprite) = &mut a.sprite_animation {
-                    sprite.set_state(0);
+                    sprite.reset();
                 }
                 a.state.render = render;
                 a.base_transform = Default::default();

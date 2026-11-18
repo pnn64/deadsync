@@ -939,6 +939,9 @@ pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Res
         "animate" | "texturewrapping" => {
             let enabled = boolish(call, value).unwrap_or(true);
             action_capture::prepare_write(call, actor)?;
+            if name == "animate" {
+                sprite_animation::enable_animation(call, actor, enabled);
+            }
             let guard = call.store();
             let render = &mut guard.actors.get_mut(&actor).unwrap().state.render;
             if name == "animate" {

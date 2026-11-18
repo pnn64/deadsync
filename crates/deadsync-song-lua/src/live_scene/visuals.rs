@@ -194,6 +194,35 @@ impl SongLiveScene {
                 T::ScreenLayer(layer) => visuals.screen_layers[layer].initial_state = state,
             }
         }
+        for &(target, value) in &self.tracked {
+            use crate::SongLuaTrackedActorTarget as T;
+            let child = match target {
+                T::PlayerJudgment(p) => &mut visuals.player_actors[p].judgment,
+                T::PlayerCombo(p) => &mut visuals.player_actors[p].combo,
+                _ => continue,
+            };
+            let SongRuntime { actors, vm, .. } = &mut *runtime;
+            let super::super::actors::chronological::Answer::Hud(states) = actors
+                .chronological_read(
+                    vm,
+                    value,
+                    super::super::actors::chronological::Query::Hud([
+                        self.last_music,
+                        self.last_beat,
+                    ]),
+                )
+                .map_err(|e| e.to_string())?
+            else {
+                unreachable!()
+            };
+            child.render_frames.clear();
+            if !states.is_empty() {
+                child.render_frames.push(crate::SongLuaNoteFieldFrame {
+                    second: self.last_music,
+                    wrappers: states.into(),
+                });
+            }
+        }
         visuals.hidden_players =
             std::array::from_fn(|p| !visuals.player_actors[p].initial_state.visible);
         Ok(())

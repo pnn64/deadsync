@@ -3918,6 +3918,112 @@ return root
         );
     }
 
+    #[test]
+    fn system_overlay_ignores_song_gameplay_overlay_visibility_and_tint() {
+        // ScreenManager::Draw renders ScreenSyncOverlay and ScreenSystemLayer
+        // after ScreenGameplay. Dyscontrolled Galaxy hides the latter's
+        // Overlay child; that must not hide or tint the separate system screens.
+        for (name, overlay_state) in [
+            ("tinted", "diffuse(0.1, 0.2, 0.3, 0.25)"),
+            ("hidden", "visible(false)"),
+        ] {
+            let simfile = write_fixture(
+                &format!("system-overlay-{name}"),
+                generated_pipeline_song_lua_simfile(),
+            );
+            let lua_dir = simfile.parent().unwrap().join("lua");
+            fs::create_dir_all(&lua_dir).unwrap();
+            fs::write(
+                lua_dir.join("default.lua"),
+                r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        local screen = SCREENMAN:GetTopScreen()
+        screen:xy(100, 50):rotationz(35):zoom(0.7):diffuse(0.2, 0.3, 0.4, 0.15)
+        screen:GetChild("Underlay"):visible(false)
+        screen:GetChild("Overlay"):OVERLAY_STATE
+        self:sleep(1000)
+    end,
+}
+"#
+                .replace("OVERLAY_STATE", overlay_state),
+            )
+            .unwrap();
+            with_session(
+                profile_data::PlayStyle::Single,
+                profile_data::PlayerSide::P1,
+                true,
+                false,
+                || {
+                    space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+                    space::set_current_window_px(1280, 720);
+                    space::set_overscan(0, 0, 0, 0);
+                    let mut profiles = std::array::from_fn(|_| profile_data::Profile::default());
+                    profiles[0].display_name = "SystemPlayer".to_string();
+                    let mut state = build_compiled_test_state(
+                        &simfile,
+                        GameplayViewport::new(1280.0, 720.0),
+                        GameplaySession::default(),
+                        profiles,
+                    );
+                    set_fixture_time(&mut state, 2.5);
+                    let assets = fixture_assets();
+                    let mut actors = Vec::new();
+                    for (autoplay, hide_gameplay_hud) in
+                        [(true, false), (false, false), (true, true)]
+                    {
+                        state.set_live_autoplay_enabled(autoplay);
+                        actors.clear();
+                        crate::gameplay_runtime::push_actors(
+                            &mut actors,
+                            &mut state,
+                            &assets,
+                            screen_gameplay::ActorViewOverride {
+                                hide_gameplay_hud,
+                                ..Default::default()
+                            },
+                            123.0,
+                            deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default(
+                            ),
+                        );
+                        assert_eq!(
+                            actor_tree_has_text(&actors, "AutoPlay"),
+                            autoplay && !hide_gameplay_hud,
+                            "{name} gameplay overlay, autoplay={autoplay}, hidden HUD={hide_gameplay_hud}"
+                        );
+                        if hide_gameplay_hud {
+                            assert!(!actor_tree_has_text(&actors, "SystemPlayer"));
+                            continue;
+                        }
+                        assert_eq!(
+                            top_screen_text_draw(&actors, "SystemPlayer", 0, 1.0)
+                                .unwrap()
+                                .1,
+                            1.0,
+                            "gameplay tint must not reach the system footer"
+                        );
+                        if autoplay {
+                            let (position, color) = actors
+                                .iter()
+                                .find_map(|actor| match actor {
+                                    Actor::Text {
+                                        content,
+                                        offset,
+                                        color,
+                                        ..
+                                    } if content.as_str() == "AutoPlay" => Some((*offset, *color)),
+                                    _ => None,
+                                })
+                                .expect("Autoplay should be a separate system actor");
+                            assert_eq!(position, [427.0, 390.0]);
+                            assert_eq!(color, [1.0; 4]);
+                        }
+                    }
+                },
+            );
+        }
+    }
+
     fn write_direct_note_field_proxy_fixture() -> PathBuf {
         let simfile = write_fixture(
             "f6-direct-note-field",
@@ -8638,6 +8744,7 @@ return Def.ActorFrame{}
                     let mut previous_actor_time = timing.get_song_time_for_beat(0.0, rate);
                     let mut inputs = vec![[f64::from(origin), 0.0, 0.0]];
                     let mut screen_deltas = vec![0.0];
+                    let mut option_deltas = vec![[0.0; 3]];
                     // Match generated_foreground_clock_inputs in the semantic
                     // harness. Foreground.cpp advances actors by music-time
                     // differences, not the screen's update delta. Its initial
@@ -8654,11 +8761,17 @@ return Def.ActorFrame{}
                         // Player/wrapper tweens advance on Screen::Update's
                         // delta; Foreground replaces that with music elapsed.
                         screen_deltas.push(update.delta);
+                        option_deltas.push([
+                            update.option_deltas.song,
+                            update.option_deltas.players[0],
+                            update.option_deltas.players[1],
+                        ]);
                         previous_actor_time = update.seconds;
                     }
                     assert!(inputs.len() > 2);
                     context.compile_clock_inputs = inputs;
                     context.compile_screen_actor_deltas = screen_deltas;
+                    context.compile_option_clock_deltas = option_deltas;
                 };
                 let mut state = build_test_state_with_lua_mode_and_clocks(
                     &simfile, GameplayViewport::design(), session(), profiles(),

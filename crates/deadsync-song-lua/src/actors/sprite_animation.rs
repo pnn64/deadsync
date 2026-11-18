@@ -13,10 +13,21 @@ pub(super) struct State {
     texture_size: [f32; 2],
     render_uses_backing_coords: bool,
     resource: Option<String>,
+    movie: bool,
+    skip_movie_update: bool,
     pub(super) use_effect_clock_for_texcoords: bool,
 }
 
 impl State {
+    pub(super) fn is_movie(&self) -> bool {
+        self.movie
+    }
+
+    pub(super) fn reset(&mut self) {
+        self.set_state(0);
+        self.skip_movie_update = true;
+    }
+
     pub(super) fn set_state(&mut self, index: u32) -> u32 {
         self.index = (index as usize).min(self.states.len().saturating_sub(1));
         self.seconds = 0.0;
@@ -156,11 +167,13 @@ pub(super) fn initialize(
     actor: TableId,
     template: bool,
 ) -> Result<(), Error> {
-    if !call
+    let movie = sprites::is_video(call, actor)?;
+    if (!call
         .store()
         .clock
         .live
         .load(std::sync::atomic::Ordering::Relaxed)
+        && !movie)
         || (template && call.store().actors[&actor].sprite_animation.is_some())
     {
         return Ok(());
@@ -190,6 +203,8 @@ pub(super) fn initialize(
         texture_size,
         render_uses_backing_coords,
         resource,
+        movie,
+        skip_movie_update: true,
         use_effect_clock_for_texcoords: false,
     };
     state.set_states(states, sheet);
@@ -206,6 +221,7 @@ pub(super) fn load(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> R
         return Ok(());
     }
     let resource = resource(call, actor)?;
+    let movie = sprites::is_video(call, actor)?;
     let (image_to_texture, texture_size, render_uses_backing_coords) = texture_size(call, actor)?;
     let sheet = sprites::sheet(call, actor)?.unwrap_or((1, 1));
     let instance = call.store().actors.get_mut(&actor).unwrap();
@@ -214,8 +230,10 @@ pub(super) fn load(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> R
     // the same texture preserves the current frame's accumulated time.
     if state.resource.is_some() && state.resource != resource {
         state.set_state(0);
+        instance.state.render.movie_position_seconds = 0.0;
     }
     state.resource = resource;
+    state.movie = movie;
     state.image_to_texture = image_to_texture;
     state.texture_size = texture_size;
     state.render_uses_backing_coords = render_uses_backing_coords;
@@ -300,18 +318,96 @@ pub(super) fn set_seconds(
     actor: TableId,
     seconds: f32,
 ) -> Result<bool, Error> {
-    let Some(state) = call
-        .store()
-        .actors
-        .get_mut(&actor)
-        .and_then(|actor| actor.sprite_animation.as_mut())
-    else {
+    let Some(instance) = call.store().actors.get_mut(&actor) else {
+        return Ok(false);
+    };
+    let Some(state) = instance.sprite_animation.as_mut() else {
         return Ok(false);
     };
     state.set_state(0);
     state.seconds = seconds;
+    let movie = state.movie;
+    if movie {
+        seek_movie(call, actor, seconds)?;
+    }
     update_animation_state(call, actor)?;
     Ok(true)
+}
+
+pub(super) fn seek_movie(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+    seconds: f32,
+) -> Result<(), Error> {
+    // MovieTexture_Generic::SetPosition only supports rewind. Sprite still
+    // applies nonzero SetSecondsIntoAnimation values to its sheet animation,
+    // but the native decoder ignores the corresponding movie seek.
+    if seconds != 0.0 || !sprites::is_video(call, actor)? {
+        return Ok(());
+    }
+    action_capture::prepare_write(call, actor)?;
+    sprites::set(
+        call,
+        actor,
+        "__songlua_state_movie_position_seconds",
+        Value::Number(seconds as f64),
+    )?;
+    call.store()
+        .actors
+        .get_mut(&actor)
+        .unwrap()
+        .state
+        .render
+        .movie_position_seconds = seconds;
+    capture::write(
+        call,
+        actor,
+        crate::SongLuaOverlayStateDelta {
+            movie_position_seconds: Some(seconds),
+            ..Default::default()
+        },
+        true,
+    );
+    publish_movie_position(call, actor);
+    Ok(())
+}
+
+pub(super) fn enable_animation(call: &mut HostCall<'_>, actor: TableId, enabled: bool) {
+    let instance = call.store().actors.get_mut(&actor).unwrap();
+    if enabled
+        && !instance.state.render.sprite_animate
+        && let Some(state) = &mut instance.sprite_animation
+    {
+        state.skip_movie_update = true;
+    }
+}
+
+// Movie progression is a native update result, not a queued Actor tween. In
+// finite preparation retain every sample, including paused intervals; playback
+// then reads the same clock without running a decoder during compilation.
+fn publish_movie_position(call: &mut HostCall<'_>, actor: TableId) {
+    let guard = call.store();
+    let Some((owner, index)) = song_immediate::context(&guard, actor) else {
+        return;
+    };
+    let seconds = guard.actors[&actor].state.render.movie_position_seconds;
+    guard
+        .scenes
+        .get_mut(&owner)
+        .unwrap()
+        .song_session
+        .as_mut()
+        .unwrap()
+        .messages
+        .as_mut()
+        .unwrap()
+        .immediate
+        .record(
+            index,
+            crate::SongLuaOverlayUpdateTarget::MoviePositionSeconds,
+            crate::SongLuaOverlayUpdateValue::F32(seconds),
+            None,
+        );
 }
 
 pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Result<(), Error> {
@@ -319,6 +415,25 @@ pub(super) fn advance(call: &mut HostCall<'_>, actor: TableId, delta: f32) -> Re
         return Ok(());
     };
     let effect_delta = effects::delta(instance);
+    let movie = if let Some(state) = &mut instance.sprite_animation {
+        let skip = std::mem::replace(&mut state.skip_movie_update, false);
+        if state.movie
+            && !skip
+            && instance.state.render.sprite_animate
+            && instance.state.render.sprite_texture
+            && instance.state.render.decode_movie
+        {
+            instance.state.render.movie_position_seconds +=
+                effect_delta.max(0.0) * instance.state.render.sprite_playback_rate;
+        }
+        state.movie
+    } else {
+        false
+    };
+    if movie {
+        publish_movie_position(call, actor);
+    }
+    let instance = call.store().actors.get_mut(&actor).unwrap();
     if !instance.state.render.sprite_animate || !instance.state.render.sprite_texture {
         return Ok(());
     }

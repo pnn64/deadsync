@@ -381,6 +381,9 @@ fn read_fields(
     if let Some(value) = flag(call, r, Field::STATE_DECODE_MOVIE, live)? {
         state.decode_movie = value;
     }
+    if let Some(value) = number(call, r, Field::STATE_MOVIE_POSITION_SECONDS, live)? {
+        state.movie_position_seconds = value;
+    }
     if let Some(value) = flag(call, r, Field::STATE_TEXTURE_FILTERING, live)? {
         state.texture_filtering = value;
     }

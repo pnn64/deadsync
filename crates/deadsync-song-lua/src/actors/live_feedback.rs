@@ -12,7 +12,7 @@ pub(super) fn update(
 ) -> Result<(), Error> {
     holds(call, statistics, actor)?;
     judgment(call, statistics, actor)?;
-    judgment_position(call, catalog, actor)?;
+    hud_position(call, catalog, actor)?;
     note_field_zoom(call, catalog, actor)
 }
 
@@ -283,7 +283,7 @@ fn current_option_state(
     optional_table(call, state)
 }
 
-fn judgment_position(
+pub(super) fn hud_position(
     call: &mut HostCall<'_>,
     catalog: TableId,
     actor: TableId,
@@ -291,11 +291,12 @@ fn judgment_position(
     let Some(player) = player(call, actor)?.filter(|i| *i < crate::LUA_PLAYERS) else {
         return Ok(());
     };
-    let frame = child(call, actor, "Judgment")?;
-    let Some(frame) = optional_table(call, frame)? else {
+    let judgment = child(call, actor, "Judgment")?;
+    let combo = child(call, actor, "Combo")?;
+    if judgment == Value::Nil && combo == Value::Nil {
         return Ok(());
-    };
-    call.with_roots(&[Value::Table(frame)], |call| {
+    }
+    call.with_roots(&[judgment, combo], |call| {
         let state = current_option_state(call, catalog, player)?;
         let mut read = |key| {
             state
@@ -330,28 +331,30 @@ fn judgment_position(
             columns,
         ) == 1.;
 
-        // The supported Simply Love judgment inherits _fallback's
-        // JudgmentTransform[Shared]Command. Its two Centered endpoints are
-        // identical. Player::Update still interpolates the complete TweenState
-        // and uses an exact full-Reverse comparison, not a halfway threshold.
-        let transform = TweenPose::from(crate::SongLuaOverlayState {
-            y: if reverse { 30. } else { -30. },
-            ..Default::default()
-        });
-        let mut destination = transform.lerp(transform, centered);
         let scale = 0.5_f32.powf(mini + tiny);
-        let zoom = destination.zoom_x * if 1. < scale { 1. } else { scale };
-        destination.zoom = zoom;
-        destination.zoom_x = zoom;
-        destination.zoom_y = zoom;
-        destination.zoom_z = zoom;
-
-        if let Some(node) = call.store().actors.get_mut(&frame) {
-            // Native replaces DestTweenState after this player's subtree has
-            // advanced. Keep its current pose and every queued tween intact;
-            // the last destination is the only state the engine overwrites.
-            *node.destination_mut() = destination;
-            node.sync_rotation_getters();
+        for (value, standard_y) in [(judgment, -30.0), (combo, 30.0)] {
+            let Some(frame) = optional_table(call, value)? else {
+                continue;
+            };
+            // The supported Simply Love HUD has identical Centered endpoints.
+            // Player::Update still interpolates complete TweenStates and uses
+            // an exact full-Reverse comparison, not a halfway threshold.
+            let transform = TweenPose::from(crate::SongLuaOverlayState {
+                y: if reverse { -standard_y } else { standard_y },
+                ..Default::default()
+            });
+            let mut destination = transform.lerp(transform, centered);
+            let zoom = destination.zoom_x * if 1. < scale { 1. } else { scale };
+            destination.zoom = zoom;
+            destination.zoom_x = zoom;
+            destination.zoom_y = zoom;
+            destination.zoom_z = zoom;
+            if let Some(node) = call.store().actors.get_mut(&frame) {
+                // Native replaces the destination after this player's subtree
+                // advances. Keep current pose and every queued tween intact.
+                *node.destination_mut() = destination;
+                node.sync_rotation_getters();
+            }
         }
         Ok(())
     })

@@ -5091,6 +5091,28 @@ impl App {
                     gameplay_time,
                     total_elapsed,
                 );
+                let screens = &mut self.state.screens;
+                let song = match current_screen {
+                    CurrentScreen::Gameplay => screens.gameplay_state.as_mut(),
+                    CurrentScreen::Practice => screens
+                        .practice_state
+                        .as_mut()
+                        .map(|state| &mut state.gameplay),
+                    _ => None,
+                };
+                if let Some(state) = song {
+                    state.song_media.for_each_video_position(
+                        &state.gameplay,
+                        |path, seconds, looped| {
+                            self.dynamic_media.queue_song_lua_video_frame(
+                                &mut self.asset_manager,
+                                path,
+                                seconds,
+                                looped,
+                            );
+                        },
+                    );
+                }
             }
             self.asset_manager.queue_pending_generated_textures();
             self.asset_manager.drain_texture_uploads(

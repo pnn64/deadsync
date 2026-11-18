@@ -311,6 +311,7 @@ pub(crate) fn overlay_state_update_value(
         Target::SpriteLoop => value!(Bool, sprite_loop),
         Target::SpritePlaybackRate => value!(F32, sprite_playback_rate),
         Target::SpriteStateDelay => value!(F32, sprite_state_delay),
+        Target::MoviePositionSeconds => value!(F32, movie_position_seconds),
         Target::SpriteStateIndex => option!(U32, sprite_state_index),
         Target::VertSpacing => option!(I32, vert_spacing),
         Target::WrapWidthPixels => option!(I32, wrap_width_pixels),
@@ -459,6 +460,7 @@ pub(crate) fn set_overlay_state_update_value(
     set_value!(SpriteLoop, Bool, sprite_loop);
     set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
     set_value!(SpriteStateDelay, F32, sprite_state_delay);
+    set_value!(MoviePositionSeconds, F32, movie_position_seconds);
     set_option!(SpriteStateIndex, U32, sprite_state_index);
     set_option!(VertSpacing, I32, vert_spacing);
     set_option!(WrapWidthPixels, I32, wrap_width_pixels);

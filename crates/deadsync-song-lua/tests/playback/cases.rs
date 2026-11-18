@@ -1793,7 +1793,7 @@ fn song_lua_hidden_judgment_and_combo_remain_capturable() {
     let mut cache = SongLuaMessageStateCache::default();
     for captured in [false, true, false, true] {
         assert_eq!(
-            song_lua_child_visible(18.0, &child, &[], &mut cache, captured),
+            song_lua_child_render(18.0, [18.0, 36.0], &child, &[], &mut cache, captured).1,
             captured
         );
         assert!(
@@ -1801,6 +1801,52 @@ fn song_lua_hidden_judgment_and_combo_remain_capturable() {
             "proxy capture must not unhide the original"
         );
     }
+}
+
+#[test]
+fn song_lua_hud_wrapper_chain_preserves_order_tint_and_capture_visibility() {
+    let mut child = SongLuaCapturedChildActor {
+        render_frames: vec![crate::SongLuaNoteFieldFrame {
+            second: 0.0,
+            wrappers: Arc::from([
+                SongLuaOverlayState {
+                    x: 10.0,
+                    y: 20.0,
+                    rot_z_deg: 90.0,
+                    diffuse: [0.5, 1.0, 0.75, 0.8],
+                    ..Default::default()
+                },
+                SongLuaOverlayState {
+                    x: 30.0,
+                    ..Default::default()
+                },
+                SongLuaOverlayState {
+                    y: -30.0,
+                    zoom_x: 0.5,
+                    zoom_y: 0.25,
+                    visible: false,
+                    diffuse: [1.0, 0.5, 1.0, 0.5],
+                    ..Default::default()
+                },
+            ]),
+        }],
+        ..Default::default()
+    };
+    let mut cache = SongLuaMessageStateCache::default();
+    for captured in [false, true] {
+        let (transform, visible) =
+            song_lua_child_render(1.0, [1.0, 2.0], &child, &[], &mut cache, captured);
+        assert_eq!(visible, captured);
+        let transform = transform.expect("native child chain");
+        let point = transform.matrix.transform_point3(Vector3::ZERO);
+        assert!((point - Vector3::new(40.0, 50.0, 0.0)).length() < 0.00001);
+        assert_eq!(transform.tint, [0.5, 0.5, 0.75, 0.4]);
+    }
+    Arc::get_mut(&mut child.render_frames[0].wrappers).unwrap()[0].visible = false;
+    assert!(
+        !song_lua_child_render(1.0, [1.0, 2.0], &child, &[], &mut cache, true).1,
+        "ActorProxy bypasses the child's visibility, not its wrapper's Draw gate"
+    );
 }
 
 fn test_sprite_kind(key: &str) -> SongLuaOverlayKind {

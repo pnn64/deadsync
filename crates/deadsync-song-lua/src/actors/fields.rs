@@ -90,6 +90,7 @@ fields! {
     plain STATE_MAX_H_PRE_ZOOM = "__songlua_state_max_h_pre_zoom",
     plain STATE_MAX_DIMENSION_USES_ZOOM = "__songlua_state_max_dimension_uses_zoom",
     plain STATE_DECODE_MOVIE = "__songlua_state_decode_movie",
+    native STATE_MOVIE_POSITION_SECONDS = "__songlua_state_movie_position_seconds",
     native STATE_TEXTURE_FILTERING = "__songlua_state_texture_filtering",
     native STATE_TEXTURE_WRAPPING = "__songlua_state_texture_wrapping",
     plain STATE_EFFECT_TIMER = "__songlua_state_effect_timer",

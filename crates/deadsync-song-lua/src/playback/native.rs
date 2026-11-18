@@ -58,6 +58,8 @@ pub(super) fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: Notesk
                 placement,
                 judgment_visible: true,
                 combo_visible: true,
+                judgment_transform: None,
+                combo_transform: None,
                 capture: ProxyCaptureRequests::default(),
                 wrapper: Matrix4::IDENTITY,
                 wrapper_visible: true,

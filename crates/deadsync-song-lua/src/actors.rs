@@ -143,6 +143,8 @@ struct Actor {
     state: ActorSnapshot,
     base_transform: crate::base_transform::BaseTransform,
     pose_exported: bool,
+    // Lua transform/tint setters opt engine HUD roots into captured rendering.
+    authored_transform: bool,
     current: TweenPose,
     queue: VecDeque<TweenStep>,
     replay: Option<song_replay::State>,
@@ -175,6 +177,7 @@ struct TemplateState {
     state: ActorSnapshot,
     base_transform: crate::base_transform::BaseTransform,
     pose_exported: bool,
+    authored_transform: bool,
     pose: TweenPose,
     hibernate: f32,
     update_rate: f32,
@@ -191,6 +194,7 @@ impl From<&Actor> for TemplateState {
             state: actor.state.clone(),
             base_transform: actor.base_transform,
             pose_exported: actor.pose_exported,
+            authored_transform: actor.authored_transform,
             pose: *actor.destination(),
             hibernate: actor.hibernate,
             update_rate: actor.update_rate,
@@ -215,6 +219,7 @@ impl Actor {
             raw_live_epoch: false,
             base_transform: Default::default(),
             pose_exported: false,
+            authored_transform: false,
             load_name,
             current: crate::SongLuaOverlayState::default().into(),
             queue: VecDeque::new(),
@@ -1991,6 +1996,7 @@ fn build(
             instance.state.render = template.state.render;
             instance.base_transform = template.base_transform;
             instance.pose_exported = template.pose_exported;
+            instance.authored_transform = template.authored_transform;
             instance.state.rotation = template.state.rotation;
             instance.effects = template.effects;
             instance.sprite_animation = template.sprite_animation.clone();

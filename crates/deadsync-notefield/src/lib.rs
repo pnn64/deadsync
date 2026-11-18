@@ -49,8 +49,9 @@ pub use field_frame::{
 };
 pub use frame_feedback::{HoldEmitterState, NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
-    ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
-    NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
+    ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, HudActorTransform, JudgmentHudFrame,
+    MiniHudFrame, NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame,
+    compose_notefield_hud,
 };
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};

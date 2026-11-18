@@ -87,6 +87,10 @@ const FIELDS: &[(Target, &str)] = &[
     (Target::SpriteAnimate, "__songlua_state_sprite_animate"),
     (Target::SpriteLoop, "__songlua_state_sprite_loop"),
     (
+        Target::MoviePositionSeconds,
+        "__songlua_state_movie_position_seconds",
+    ),
+    (
         Target::SpritePlaybackRate,
         "__songlua_state_sprite_playback_rate",
     ),

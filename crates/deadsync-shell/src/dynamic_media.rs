@@ -221,6 +221,8 @@ impl BannerVideoPrepState {
 struct SongLuaVideoState {
     player: video::Player,
     upload_handle: TextureHandle,
+    position_seconds: f32,
+    looped: bool,
 }
 
 const MAX_CACHED_BANNER_VIDEO_PATHS: usize = 8;
@@ -1104,6 +1106,8 @@ impl DynamicMedia {
                         SongLuaVideoState {
                             player: prepared.player,
                             upload_handle,
+                            position_seconds: 0.0,
+                            looped: true,
                         },
                     );
                 }
@@ -1232,15 +1236,41 @@ impl DynamicMedia {
                 assets.queue_video_frame_upload(state.upload_handle, frame);
             }
         }
+    }
 
-        let song_lua_play_time = gameplay_time_sec.unwrap_or(0.0).max(0.0);
-        for state in self.active_song_lua_videos.values_mut() {
-            if assets.has_pending_texture_upload_handle(state.upload_handle) {
-                continue;
+    pub fn queue_song_lua_video_frame(
+        &mut self,
+        assets: &mut AssetManager,
+        path: &Path,
+        position_seconds: f32,
+        looped: bool,
+    ) {
+        let key = path.to_string_lossy();
+        let Some(state) = self.active_song_lua_videos.get_mut(key.as_ref()) else {
+            return;
+        };
+        if !position_seconds.is_finite() {
+            return;
+        }
+        let position_seconds = position_seconds.max(0.0);
+        if position_seconds < state.position_seconds || looped != state.looped {
+            match video::open_player(path, looped) {
+                Ok(player) => retire_video_player(std::mem::replace(&mut state.player, player)),
+                Err(error) => {
+                    warn!(
+                        "Failed to seek song Lua movie '{}': {error}",
+                        path.display()
+                    );
+                    return;
+                }
             }
-            if let Some(frame) = state.player.take_due_frame(song_lua_play_time) {
-                assets.queue_video_frame_upload(state.upload_handle, frame);
-            }
+        }
+        state.position_seconds = position_seconds;
+        state.looped = looped;
+        if !assets.has_pending_texture_upload_handle(state.upload_handle)
+            && let Some(frame) = state.player.take_due_frame(position_seconds)
+        {
+            assets.queue_video_frame_upload(state.upload_handle, frame);
         }
     }
 

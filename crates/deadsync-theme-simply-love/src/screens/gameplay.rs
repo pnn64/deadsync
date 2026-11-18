@@ -5731,6 +5731,8 @@ pub fn draw_field(
         center_1player_notefield,
         judgment_visible,
         combo_visible,
+        request.judgment_transform,
+        request.combo_transform,
         view.show_song_visuals,
         view.apply_attacks,
         request.capture,

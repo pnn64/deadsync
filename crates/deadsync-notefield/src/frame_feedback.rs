@@ -1244,6 +1244,7 @@ mod tests {
                     combo_color: [1.0; 4],
                     font: Some("combo"),
                     number_text_slot: 0,
+                    transform: None,
                 }),
                 error_bar: None,
                 counter: None,
@@ -1256,6 +1257,7 @@ mod tests {
                 judgment: Some(JudgmentHudFrame {
                     tap: Some(TapJudgmentHudFrame {
                         render: &render,
+                        transform: None,
                         sprite: TapJudgmentSprite {
                             source: SpriteSource::Texture("judgment".into()),
                             frame_size: [100.0, 40.0],
@@ -1299,6 +1301,162 @@ mod tests {
                 );
                 assert_eq!(result.combo_draw_range, Some(0..1));
                 assert_eq!(result.judgment_draw_range, Some(1..2));
+            }
+        }
+    }
+
+    #[test]
+    fn hud_child_transform_positions_tap_without_moving_hold_results() {
+        use crate::{
+            CapturedActorScratch, HudActorTransform, IndicatorSprite, JudgmentHudFrame,
+            NotefieldHudFrameView, TapJudgmentHudFrame, TapJudgmentSprite, compose_notefield_hud,
+        };
+        use deadlib_present::compose::{ActorSegment, ComposeScratch, TextLayoutCache};
+        use deadsync_gameplay::{HoldJudgmentRenderInfo, JudgmentRenderInfo};
+        use deadsync_rules::{
+            judgment::{Judgment, TimingWindow},
+            note::HoldResult,
+        };
+        use glam::{Mat4, Vec3, Vec4};
+
+        struct Textures;
+        impl deadlib_present::texture::TextureContext for Textures {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<deadlib_present::texture::TextureMeta> {
+                Some(deadlib_present::texture::TextureMeta { w: 80, h: 40 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, name: &str) -> u64 {
+                if name == "tap" { 1 } else { 2 }
+            }
+        }
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let render = JudgmentRenderInfo {
+            judgment: Judgment {
+                time_error_ms: -12.0,
+                time_error_music_ns: -12_000_000,
+                grade: JudgeGrade::Great,
+                window: Some(TimingWindow::W3),
+                miss_because_held: false,
+            },
+            started_at_screen_s: 0.0,
+        };
+        let holds = [Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 0.0,
+        })];
+        // Native Actor::Draw order: wrapper translation/rotation/scale, then
+        // Player's Judgment position and zoom. The theme sprite is a child.
+        let native = HudActorTransform {
+            matrix: Mat4::from_translation(Vec3::new(80.0, 40.0, 0.0))
+                * Mat4::from_rotation_z(std::f32::consts::FRAC_PI_2)
+                * Mat4::from_scale(Vec3::new(2.0, 3.0, 1.0))
+                * Mat4::from_translation(Vec3::new(0.0, -30.0, 0.0))
+                * Mat4::from_scale(Vec3::new(0.5, 0.25, 1.0)),
+            tint: [0.2, 0.4, 0.6, 0.8],
+        };
+        let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+        let mut hold_reference = None;
+        for (transformed, captured) in [(false, false), (true, false), (true, true)] {
+            let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            req.visual.mini_percent = 100.0;
+            req.options.judgment_animation = crate::TapJudgmentAnimation::Still;
+            req.capture_requests.judgment = captured;
+            let prepared = prepare_notefield(&req).unwrap();
+            let hud = NotefieldHudFrameView {
+                combo: None,
+                error_bar: None,
+                counter: None,
+                mini: None,
+                judgment: Some(JudgmentHudFrame {
+                    tap: Some(TapJudgmentHudFrame {
+                        render: &render,
+                        sprite: TapJudgmentSprite {
+                            source: SpriteSource::Texture("tap".into()),
+                            frame_size: [80.0, 40.0],
+                            frame_cols: 1,
+                            frame_rows: 7,
+                        },
+                        transform: transformed.then_some(native),
+                    }),
+                    held_misses: &[],
+                    held_miss_sprite: None,
+                    hold_judgments: &holds,
+                    hold_sprite: Some(IndicatorSprite {
+                        source: SpriteSource::Texture("hold".into()),
+                        frame_size: [80.0, 40.0],
+                        frame_cols: 1,
+                        frame_rows: 2,
+                        scale: 1.0,
+                    }),
+                }),
+            };
+            let mut actors = Vec::new();
+            let mut draws = Vec::new();
+            let result = compose_notefield_hud(
+                &mut actors,
+                &mut draws,
+                &req,
+                &prepared,
+                &hud,
+                &mut CapturedActorScratch::with_capacities(16, 8),
+            );
+            assert_eq!(result.judgment_actors.is_some(), captured);
+            let frame = deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&actors).with_flat_draws(&draws, None)], [0.0; 4], &metrics,
+                &deadlib_present::font::FontMap::default(), 0.1,
+                &mut TextLayoutCache::default(), &mut ComposeScratch::default(),
+                &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
+            );
+            assert_eq!(frame.sprite_instances.len(), 2, "tap and independent hold");
+            for op in &frame.ops {
+                let deadlib_render_core::DrawOp::Sprite(run) = op else {
+                    continue;
+                };
+                let sprite = &frame.sprite_instances[run.instance_start as usize];
+                let camera = frame.cameras[run.camera as usize];
+                if run.texture_handle == 2 {
+                    let geometry = (sprite.center, sprite.size, sprite.tint, camera);
+                    if let Some(expected) = hold_reference {
+                        assert_eq!(
+                            geometry, expected,
+                            "tap transform must not change hold geometry or Mini"
+                        );
+                    } else {
+                        hold_reference = Some(geometry);
+                    }
+                } else if transformed {
+                    assert_eq!(sprite.tint, native.tint);
+                    for (local, expected_local) in [
+                        ([0.0, 0.0], [170.0, 40.0]),
+                        ([-30.0, 15.0], [181.25, 10.0]),
+                        ([30.0, -15.0], [158.75, 70.0]),
+                    ] {
+                        let clip = camera
+                            * Vec4::new(
+                                sprite.center[0] + local[0],
+                                sprite.center[1] + local[1],
+                                sprite.center[2],
+                                1.0,
+                            );
+                        let expected = [
+                            (prepared.field.playfield_center_x + expected_local[0] - 320.0) / 320.0,
+                            -expected_local[1] / 240.0,
+                        ];
+                        for axis in 0..2 {
+                            assert!(
+                                (clip[axis] / clip.w - expected[axis]).abs() < 0.000002,
+                                "captured={captured}, corner={local:?}: {clip:?} != {expected:?}"
+                            );
+                        }
+                    }
+                }
             }
         }
     }

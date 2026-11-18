@@ -49,6 +49,7 @@ pub struct SongLiveScene {
     primary_index: usize,
     startup_output: SongLuaLiveOutput,
     last_music: f32,
+    last_beat: f32,
     prepared: bool,
     outro_started: bool,
     outro_reset: bool,
@@ -163,6 +164,7 @@ impl SongLiveScene {
             primary_index: b.primary_index,
             startup_output: Default::default(),
             last_music: -9999.,
+            last_beat: 0.,
             prepared: false,
             outro_started: false,
             outro_reset: false,
@@ -335,6 +337,7 @@ impl SongLiveScene {
         }
         self.outro_started |= frame.gameplay_outro;
         self.last_music = frame.music_seconds as f32;
+        self.last_beat = beat as f32;
         self.read_states(runtime)?;
         let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
         if !paused && let Err(e) = self.frames.finish_health_update(runtime) {

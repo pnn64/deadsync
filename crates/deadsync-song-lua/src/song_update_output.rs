@@ -54,6 +54,7 @@ impl SongRuntime {
                 &mut BTreeMap::new(),
                 &mut (0, String::new()),
                 unit,
+                [false; LUA_PLAYERS],
             );
             let columns = self.read_song_note_column_transform_samples()?;
             crate::append_column_transform_windows_from_samples(
