@@ -1,6 +1,6 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work};
+use crate::pattern::{Capture, Matched, Pattern, Work, find_byte};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -390,16 +390,19 @@ impl Vm {
                     .saturating_sub(1)
                     .clamp(0, len as i64) as usize;
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
-                let c_pattern = &raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())];
                 let plain = id == STR_FIND
                     && (self.argument(base, count, 3).is_truthy()
-                        || !c_pattern.iter().any(|b| b"^$*+?.([%-".contains(b)));
+                        || !raw[..find_byte(raw, 0).unwrap_or(raw.len())]
+                            .iter()
+                            .any(|b| b"^$*+?.([%-".contains(b)));
                 if plain {
                     let text = &self.strings.bytes[slot_index(source.0)];
                     let found = if raw.is_empty() {
                         Some(start)
                     } else if raw.len() > len - start {
                         None
+                    } else if let [byte] = raw {
+                        find_byte(&text[start..], *byte).map(|offset| start + offset)
                     } else {
                         // For long searches, use whichever end of the needle
                         // occurs less often in a small sample of the haystack.
@@ -418,10 +421,9 @@ impl Vm {
                             }
                         }
                         let mut cursor = start + anchor;
+                        let candidates = &text[..len - raw.len() + anchor + 1];
                         loop {
-                            let Some(offset) =
-                                text[cursor..].iter().position(|&byte| byte == raw[anchor])
-                            else {
+                            let Some(offset) = find_byte(&candidates[cursor..], raw[anchor]) else {
                                 break None;
                             };
                             cursor += offset;
@@ -1083,10 +1085,7 @@ impl Vm {
         let mut at = cursor;
         let result = loop {
             if let Some(byte) = first {
-                at += text[at..limit]
-                    .iter()
-                    .position(|&b| b == byte)
-                    .unwrap_or(limit - at);
+                at += find_byte(&text[at..limit], byte).unwrap_or(limit - at);
             }
             if at == limit && (at < text.len() || first.is_some()) {
                 break Ok(None);

@@ -161,6 +161,28 @@ fn set_has(set: &[u64; 4], byte: u8) -> bool {
     set[usize::from(byte) / 64] & (1u64 << (byte % 64)) != 0
 }
 
+pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
+    if bytes.len() < 16 {
+        return bytes.iter().position(|&candidate| candidate == byte);
+    }
+    if bytes[0] == byte {
+        return Some(0);
+    }
+    let needle = u64::from_le_bytes([byte; 8]);
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let xor = u64::from_le_bytes(word) ^ needle;
+        let hits = xor.wrapping_sub(0x0101_0101_0101_0101) & !xor & 0x8080_8080_8080_8080;
+        if hits != 0 {
+            // Borrows can flag a later lane. The least significant hit is exact.
+            return Some(index * 8 + (hits.trailing_zeros() / 8) as usize);
+        }
+    }
+    tail.iter()
+        .position(|&candidate| candidate == byte)
+        .map(|index| words.len() * 8 + index)
+}
+
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
 fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut first = start + 1;
@@ -205,10 +227,7 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
 impl Pattern {
     pub fn compile(pattern: &[u8], anchor: bool, memory: Memory) -> Result<Self, Error> {
         // Lua 5.1's pattern interpreter treats a zero byte as the pattern terminator.
-        let pattern = &pattern[..pattern
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(pattern.len())];
+        let pattern = &pattern[..find_byte(pattern, 0).unwrap_or(pattern.len())];
         let anchored = anchor && pattern.first() == Some(&b'^');
         let mut p = usize::from(anchored);
         let mut code = Buffer::new_in(memory.clone());
@@ -385,7 +404,7 @@ impl Pattern {
         let mut pos = start;
         while pos <= source.len() {
             if let Some(byte) = first {
-                match source[pos..].iter().position(|&b| b == byte) {
+                match find_byte(&source[pos..], byte) {
                     Some(offset) => pos += offset,
                     None => return Ok(None),
                 }
@@ -593,6 +612,29 @@ impl Pattern {
                 continue 'match_loop;
             }
             return Ok(None);
+        }
+    }
+}
+
+#[cfg(test)]
+mod byte_search_tests {
+    use super::find_byte;
+
+    #[test]
+    fn byte_search_returns_the_first_match_across_word_and_tail_boundaries() {
+        for needle in 0..=u8::MAX {
+            // A lane differing by one can inherit a borrow from a match.
+            let mut bytes = [needle ^ 1; 40];
+            for start in 0..8 {
+                for len in 0..=32 {
+                    assert_eq!(find_byte(&bytes[start..start + len], needle), None);
+                    for index in 0..len {
+                        bytes[start + index] = needle;
+                        assert_eq!(find_byte(&bytes[start..start + len], needle), Some(index));
+                        bytes[start + index] = needle ^ 1;
+                    }
+                }
+            }
         }
     }
 }
