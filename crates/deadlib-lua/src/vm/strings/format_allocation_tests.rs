@@ -8,6 +8,10 @@ fn formatting_strings_quoting_padding_and_numbers_recover_after_each_owned_failu
         br#"local input=string.char(0,13,10,34,92,255)..string.rep('z',600);local text=string.format('%q',input);return #text==615"#.as_slice(),
         br#"local text=string.format('%+#099.99d|%#99.99x|%#99.99o|%-99c|%99c|%.99f|%#.99g|% .99e|%+g',-2147483648,427,1,65,0,1.7976931348623157e308,1e-300,-0,0/0);return #text>700"#.as_slice(),
         br#"local text=string.format('%%/%s/%s/%s/%s',string.rep('a',700),12345.5,string.rep('b',900),string.rep('c',1100));return #text==2712"#.as_slice(),
+        br#"local literal=string.rep('a\000',130)
+            local template='%s'..literal..'%%%d'
+            local input=string.rep('x',#template-17)
+            return string.format(template,input,42)==input..literal..'%42'"#.as_slice(),
     ] {
         let program = crate::compile(source).unwrap();
         let mut total = 0;

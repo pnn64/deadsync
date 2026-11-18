@@ -1141,19 +1141,23 @@ impl Vm {
         scratch: &mut crate::format::Scratch,
     ) -> Result<usize, Error> {
         let id = self.string_argument(base, count, 0)?;
-        let mut output =
-            crate::format::buffer(scratch, self.strings.bytes[slot_index(id.0)].len())?;
+        let slot = slot_index(id.0);
+        let mut output = crate::format::buffer(scratch, self.strings.bytes[slot].len())?;
         let mut pos = 0;
         let mut arg = 0;
-        while pos < self.strings.bytes[slot_index(id.0)].len() {
-            let bytes = &self.strings.bytes[slot_index(id.0)];
-            let c = bytes[pos];
-            pos += 1;
-            if c != b'%' {
-                scratch.reserve(&mut output, 1)?;
-                output.push(c);
+        while pos < self.strings.bytes[slot].len() {
+            let bytes = &self.strings.bytes[slot];
+            if bytes[pos] != b'%' {
+                // Fill the current buffer before requesting its next growth.
+                let room = (output.capacity() - output.len()).max(1);
+                let literal = &bytes[pos..pos + room.min(bytes.len() - pos)];
+                let len = find_byte(&literal[1..], b'%').map_or(literal.len(), |at| at + 1);
+                scratch.reserve(&mut output, len)?;
+                output.extend_from_slice(&literal[..len]);
+                pos += len;
                 continue;
             }
+            pos += 1;
             if bytes.get(pos) == Some(&b'%') {
                 scratch.reserve(&mut output, 1)?;
                 output.push(b'%');
