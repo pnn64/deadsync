@@ -1,6 +1,6 @@
 //! Lua 5.1 byte patterns with compact instructions and explicit backtracking.
 use crate::memory::{Buffer, Memory};
-use crate::{Error, locale::class};
+use crate::{Error, locale::add_class_bits};
 
 mod cache;
 pub(crate) use cache::Cache;
@@ -199,14 +199,6 @@ fn byte_run(bytes: &[u8], byte: u8) -> usize {
             .unwrap_or(tail.len())
 }
 
-fn add_class(set: &mut [u64; 4], code: u8) {
-    for byte in 0..=255u8 {
-        if class(byte, code) {
-            set[usize::from(byte) / 64] |= 1u64 << (byte % 64);
-        }
-    }
-}
-
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
 fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut first = start + 1;
@@ -229,7 +221,7 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut members = &pattern[first..end];
     while let [start, rest @ ..] = members {
         if let [b'%', code, rest @ ..] = members {
-            add_class(&mut set, *code);
+            add_class_bits(&mut set, *code);
             members = rest;
             continue;
         }
@@ -356,8 +348,8 @@ impl Pattern {
                         Some(c) => {
                             kind = Kind::Set;
                             arg = sets.len() as u32;
-                            let mut set = [0u64; 4];
-                            add_class(&mut set, c);
+                            let mut set = [0; 4];
+                            add_class_bits(&mut set, c);
                             sets.try_reserve(1).map_err(|_| Error::memory())?;
                             sets.push(set);
                             quantifiable = true;

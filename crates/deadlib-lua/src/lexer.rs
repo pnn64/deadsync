@@ -118,7 +118,7 @@ impl Kind {
     pub(crate) fn try_label(self) -> Result<Vec<u8>, crate::Error> {
         use crate::memory::fallible::{self, SliceExt};
         if let Self::Byte(byte) = self {
-            return if crate::locale::class(byte, b'c') {
+            return if crate::locale::is_control(byte) {
                 Ok(fallible::format(format_args!("char({byte})"))?.into_bytes())
             } else {
                 fallible::vec([byte])
