@@ -97,6 +97,15 @@ fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
             .unwrap_or(tail.len())
 }
 
+fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
+    let boundary = |byte| (byte == quote) | (byte == b'\\') | (byte == b'\n') | (byte == b'\r');
+    let (prefix, rest) = bytes.split_at(bytes.len().min(8));
+    prefix
+        .iter()
+        .position(|&byte| boundary(byte))
+        .unwrap_or_else(|| prefix.len() + scan_boundary(rest, boundary))
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 enum Buffer {
     #[default]
@@ -327,13 +336,10 @@ impl Scanner {
             }
             b'\'' | b'"' => {
                 let rest = &input[start + 1..];
-                let Some(len) = rest
-                    .iter()
-                    .position(|&b| b == c || matches!(b, b'\\' | b'\n' | b'\r'))
-                    .filter(|&len| rest[len] == c)
-                else {
+                let len = quoted_boundary(rest, c);
+                if rest.get(len) != Some(&c) {
                     return Ok(false);
-                };
+                }
                 text = Text::new(&rest[..len])?;
                 (Kind::String, start + len + 2)
             }
@@ -765,10 +771,7 @@ impl Scanner {
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
-                        let count = rest
-                            .iter()
-                            .position(|&b| b == quote || matches!(b, b'\\' | b'\n' | b'\r'))
-                            .unwrap_or(rest.len());
+                        let count = quoted_boundary(rest, quote);
                         self.text.try_extend_from_slice(&rest[..count])?;
                         self.pos += count;
                     }
@@ -937,6 +940,33 @@ mod tests {
             assert_eq!(slow.kind, token.kind, "{source:?}");
             assert_eq!(slow.text.as_ref(), token.text.as_ref(), "{source:?}");
             assert_eq!((slow.line, slow.end_line), (token.line, token.end_line));
+        }
+    }
+
+    #[test]
+    fn quoted_literals_stop_at_escapes_and_closing_quotes_across_blocks() {
+        for quote in [b'\'', b'"'] {
+            for len in [7, 8, 39, 40, 41, 72] {
+                let mut decoded = vec![b'a'; len];
+                decoded[0] = if quote == b'"' { b'\'' } else { b'"' };
+                decoded[1] = 0;
+                for escape in [false, true] {
+                    let mut source = vec![quote];
+                    source.extend_from_slice(&decoded);
+                    let mut expected = decoded.clone();
+                    if escape {
+                        source.extend_from_slice(b"\\n");
+                        expected.push(b'\n');
+                    }
+                    source.push(quote);
+                    let expected = vec![
+                        (Kind::String, 1, 1, expected, 0),
+                        (Kind::Eof, 1, 1, Vec::new(), 0),
+                    ];
+                    assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
+                    assert_eq!(tokens(&source, &[len / 2, source.len()]), Ok(expected));
+                }
+            }
         }
     }
 
