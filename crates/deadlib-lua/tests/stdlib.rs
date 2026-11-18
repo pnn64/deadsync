@@ -90,13 +90,14 @@ fn byte_string_primitives_and_methods() {
 #[test]
 fn repeated_binary_strings_copy_complete_source_at_all_boundaries() {
     let source = br#"
-        local piece=string.char(0,255,65,66,0,67,68)
-        for _,count in ipairs({0,1,2,3,7,19,20001}) do
-            local result=string.rep(piece,count)
-            assert(#result==count*#piece)
-            for i=1,count do
-                local at=(i-1)*#piece+1
-                assert(string.sub(result,at,at+#piece-1)==piece)
+        for _,piece in ipairs({string.char(0), string.char(255), string.char(0,255,65,66,0,67,68)}) do
+            for _,count in ipairs({0,1,2,3,7,19,20001}) do
+                local result=string.rep(piece,count)
+                assert(#result==count*#piece)
+                for i=1,count do
+                    local at=(i-1)*#piece+1
+                    assert(string.sub(result,at,at+#piece-1)==piece)
+                end
             end
         end
         return 42

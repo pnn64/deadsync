@@ -365,12 +365,17 @@ impl Vm {
                 bytes
                     .try_reserve_exact(size)
                     .map_err(|_| self.memory_failure())?;
-                bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
-                while bytes.len() < size {
-                    let used = bytes.len();
-                    let copied = used.min(size - used);
-                    bytes.resize(used + copied, 0);
-                    bytes.copy_within(..copied, used);
+                let text = &self.strings.bytes[slot_index(source.0)];
+                if let [byte] = text.as_ref() {
+                    bytes.resize(size, *byte);
+                } else {
+                    bytes.extend_from_slice(text);
+                    while bytes.len() < size {
+                        let used = bytes.len();
+                        let copied = used.min(size - used);
+                        bytes.resize(used + copied, 0);
+                        bytes.copy_within(..copied, used);
+                    }
                 }
                 self.try_finish_buffer(bytes)?
             }
