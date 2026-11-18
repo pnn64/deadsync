@@ -55,6 +55,7 @@ pub(crate) mod tests {
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
     include!("looping_rooms_regression_tests.rs");
+    include!("paperclip_regression_tests.rs");
 
 
     #[test]

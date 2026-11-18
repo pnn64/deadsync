@@ -772,9 +772,12 @@ impl DrawChecks {
             });
             let sampler_ok = frame.ops.iter().all(|op| match op {
                 DrawOp::TexturedMesh(r) => r.sampler.is_some_and(|s| {
-                    (s.filter == deadlib_present::render::SamplerFilter::Linear)
+                    let deadlib_present::render::MeshSampler::Override { filter, wrap } = s else {
+                        return false;
+                    };
+                    (filter == deadlib_present::render::SamplerFilter::Linear)
                         == (sample["state"]["texture_filtering"] == true)
-                        && (s.wrap == deadlib_present::render::SamplerWrap::Repeat)
+                        && (wrap == deadlib_present::render::SamplerWrap::Repeat)
                             == (sample["state"]["texture_wrapping"] == true)
                 }),
                 _ => true,

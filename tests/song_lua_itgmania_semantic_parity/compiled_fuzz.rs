@@ -3,7 +3,7 @@ use super::{
     Parity, compare_compile_info, compiled_local_states_at, compiled_overlay_states_at,
     native_gameplay,
 };
-use deadlib_present::render::{DrawOp, RenderFrame, SamplerFilter, SamplerWrap};
+use deadlib_present::render::{DrawOp, MeshSampler, RenderFrame, SamplerFilter, SamplerWrap};
 use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
@@ -354,8 +354,10 @@ fn compare_pass(
         return Err("unexpected external texture in generated scene".into());
     }
     if let DrawOp::TexturedMesh(r) = frame.ops[0] {
-        let filter = r.sampler.map_or(SamplerFilter::Linear, |s| s.filter);
-        let wrap = r.sampler.map_or(SamplerWrap::Clamp, |s| s.wrap);
+        let (filter, wrap) = match r.sampler {
+            Some(MeshSampler::Override { filter, wrap }) => (filter, wrap),
+            Some(MeshSampler::Texture) | None => (SamplerFilter::Linear, SamplerWrap::Clamp),
+        };
         if !expected_texture.is_empty()
             && ((filter == SamplerFilter::Linear) != (state["texture_filtering"] == true)
                 || (wrap == SamplerWrap::Repeat) != (state["texture_wrapping"] == true))
