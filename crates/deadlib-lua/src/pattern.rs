@@ -168,6 +168,9 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
     if bytes[0] == byte {
         return Some(0);
     }
+    if bytes.len() >= 32 {
+        return find_byte_in_blocks(bytes, byte);
+    }
     let needle = u64::from_le_bytes([byte; 8]);
     let (words, tail) = bytes.as_chunks::<8>();
     for (index, &word) in words.iter().enumerate() {
@@ -181,6 +184,26 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
     tail.iter()
         .position(|&candidate| candidate == byte)
         .map(|index| words.len() * 8 + index)
+}
+
+#[inline(never)]
+fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
+    let (blocks, tail) = bytes.as_chunks::<32>();
+    for (index, block) in blocks.iter().enumerate() {
+        // Reduce the whole block so LLVM can compare its bytes in parallel.
+        if block
+            .iter()
+            .fold(false, |hit, &candidate| hit | (candidate == byte))
+        {
+            return block
+                .iter()
+                .position(|&candidate| candidate == byte)
+                .map(|offset| index * 32 + offset);
+        }
+    }
+    tail.iter()
+        .position(|&candidate| candidate == byte)
+        .map(|offset| bytes.len() - tail.len() + offset)
 }
 
 fn byte_run(bytes: &[u8], byte: u8) -> usize {
@@ -655,13 +678,13 @@ mod byte_search_tests {
     use super::{byte_run, find_byte};
 
     #[test]
-    fn byte_scans_preserve_word_and_tail_boundaries() {
+    fn byte_scans_preserve_word_block_and_tail_boundaries() {
         for needle in 0..=u8::MAX {
             // A lane differing by one can inherit a borrow from a match.
             let fill = needle ^ 1;
-            let mut bytes = [fill; 40];
+            let mut bytes = [fill; 76];
             for start in 0..8 {
-                for len in 0..=32 {
+                for len in 0..=68 {
                     let text = &bytes[start..start + len];
                     assert_eq!(find_byte(text, needle), None);
                     assert_eq!(byte_run(text, fill), len);
