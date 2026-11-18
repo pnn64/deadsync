@@ -322,11 +322,90 @@ return Def.ActorFrame {
             .sum()
     }
 
+    fn life_meter_glyph_colors(
+        frame: &deadlib_render_core::RenderFrame,
+        metrics: &space::Metrics,
+        font_atlas: deadlib_render_core::TextureHandle,
+        versus: bool,
+        player: usize,
+    ) -> Vec<[[f32; 4]; 6]> {
+        // Paperclip places the meters on the header at y=40. Use the actual
+        // Wendy atlas and projected positions to isolate them in the complete
+        // submitted frame, including retained actors and text-layout caches.
+        let start_x = if versus {
+            if player == 0 { 15.0 } else { 442.0 }
+        } else {
+            117.0
+        };
+        let mut glyphs = Vec::new();
+        for op in &frame.ops {
+            let DrawOp::TexturedMesh(run) = op else {
+                continue;
+            };
+            if run.texture_handle != font_atlas {
+                continue;
+            }
+            let camera = frame
+                .cameras
+                .get(run.camera as usize)
+                .copied()
+                .unwrap_or_else(|| metrics.projection());
+            let geometry = &frame.tmesh_geometries[run.geometry as usize];
+            for instance in &frame.tmesh_instances
+                [run.instance_start as usize..(run.instance_start + run.instance_count) as usize]
+            {
+                let transform = camera * instance.transform();
+                for quad in geometry.vertices.chunks_exact(6) {
+                    let mut center = [0.0; 2];
+                    for vertex in quad {
+                        let clip = transform
+                            .mul_vec4([vertex.pos[0], vertex.pos[1], vertex.pos[2], 1.0].into());
+                        center[0] +=
+                            (clip.x / clip.w + 1.0) * 0.5 * (metrics.right - metrics.left) / 6.0;
+                        center[1] +=
+                            (1.0 - clip.y / clip.w) * 0.5 * (metrics.top - metrics.bottom) / 6.0;
+                    }
+                    if !(start_x - 2.0..start_x + 130.0).contains(&center[0])
+                        || !(25.0..55.0).contains(&center[1])
+                    {
+                        continue;
+                    }
+                    let colors = std::array::from_fn(|vertex| {
+                        std::array::from_fn(|channel| {
+                            quad[vertex].color[channel] * instance.tint[channel]
+                        })
+                    });
+                    glyphs.push((center[0], colors));
+                }
+            }
+        }
+        glyphs.sort_by(|left, right| left.0.total_cmp(&right.0));
+        glyphs.into_iter().map(|(_, colors)| colors).collect()
+    }
+
     #[test]
     fn paperclip_score_life_and_failure_follow_gameplay_in_requested_modes() {
         std::thread::Builder::new().name("paperclip-gameplay-stats".into())
             .stack_size(16 * 1024 * 1024).spawn(|| {
                 let fixture = song_fixture::from_source("Paperclip/Paperclip.ssc");
+                let native: serde_json::Value = serde_json::from_str(include_str!(
+                    "../../../tests/fixtures/interactive_song_lua/paperclip-live-stats-2026-11-18/rainbow-observations.json"
+                )).expect("native Paperclip glyph-color observations");
+                let sample = |sequence| native["samples"].as_array().unwrap().iter()
+                    .find(|sample| sample["update_sequence"].as_u64() == Some(sequence))
+                    .expect("retained native color sample");
+                let full_life_samples = [1122, 1128].map(|sequence| {
+                    let sample = sample(sequence);
+                    assert_eq!(sample["glyph_count"].as_u64(), Some(18));
+                    assert_eq!(sample["all_quad_corner_colors_equal"].as_bool(), Some(true));
+                    let colors: Vec<[f32; 4]> = serde_json::from_value(sample["glyph_quad_rgba"].clone()).unwrap();
+                    assert_eq!(colors.len(), 18);
+                    (sample["update_wall_seconds"].as_f64().unwrap(), colors)
+                });
+                assert_ne!(full_life_samples[0].1, full_life_samples[1].1,
+                    "native samples span a rainbow color change");
+                let normal_meter_color: [f32; 4] =
+                    serde_json::from_value(sample(1134)["glyph_quad_rgba"][0].clone()).unwrap();
                 let mut failures = Vec::new();
                 for runtime in [false, true] {
                     for (style, side, joined) in [
@@ -376,6 +455,13 @@ return Def.ActorFrame {
                             }).expect("Paperclip includes the failure background");
                             assets.queue_texture_upload(bsod_key.to_string(), image::open(bsod_path).unwrap().into_rgba8());
                             let bsod_handle = assets.texture_context().texture_handle(&bsod_key);
+                            let meter_atlas_key = Arc::clone(&assets.fonts()["wendy"].glyph_map[&'1'].texture_key);
+                            let meter_atlas_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                                .join("../../assets").join(meter_atlas_key.as_ref());
+                            assets.queue_texture_upload(meter_atlas_key.to_string(),
+                                image::open(meter_atlas_path).unwrap().into_rgba8());
+                            let meter_atlas = assets.texture_context().texture_handle(&meter_atlas_key);
+                            assert_ne!(meter_atlas, 0, "the real life-meter font atlas is bound");
                             let mut actors = Vec::new();
                             let mut text = compose::TextLayoutCache::default();
                             let mut scratch = compose::ComposeScratch::default();
@@ -409,10 +495,39 @@ return Def.ActorFrame {
                                 assert_eq!(player.life, life);
                                 assert_eq!(player.life_history.last().unwrap().1, life);
                             };
+                            let check_meter_colors = |frame: &deadlib_render_core::RenderFrame, lives: [f32; 2], uptime: f64, native_full_colors: &[[f32; 4]], failures: &mut Vec<String>| {
+                                // ITGmania BitmapText::DrawPrimitives replaces glyph
+                                // diffuse every 0.2s of process uptime. Compare all
+                                // submitted corners against captured native RGBA,
+                                // allowing the native byte-color quantization.
+                                for player in 0..if versus { 2 } else { 1 } {
+                                    let glyphs = life_meter_glyph_colors(frame, &metrics, meter_atlas, versus, player);
+                                    let count = (18.0 * lives[player]) as usize;
+                                    if glyphs.len() != count {
+                                        failures.push(format!("{label}, uptime={uptime}, player{player}: expected {count} submitted life-meter glyphs, got {}", glyphs.len()));
+                                    }
+                                    for (index, colors) in glyphs.iter().enumerate() {
+                                        let expected = if lives[player] == 1.0 {
+                                            native_full_colors.get(index).copied().unwrap_or(normal_meter_color)
+                                        } else { normal_meter_color };
+                                        if colors.iter().any(|color| color.iter().zip(expected)
+                                            .any(|(actual, expected)| (actual - expected).abs() > 1.0 / 255.0 + 1e-5)) {
+                                            failures.push(format!("{label}, uptime={uptime}, player{player}, glyph{index}: submitted colors={colors:?}, expected {expected:?} at life={}", lives[player]));
+                                            break;
+                                        }
+                                    }
+                                }
+                            };
                             advance(&mut state, 0..=900);
                             check_text(&state, [0.5, 0.5], [false, false], &mut failures);
+                            let first_uptime = full_life_samples[0].0;
+                            let second_uptime = full_life_samples[1].0;
+                            let frame = compose_fixture_frame_with_view_and_clock(&mut state, &assets, &metrics,
+                                &mut actors, &mut text, &mut scratch, screen_gameplay::ActorViewOverride::default(),
+                                assets.texture_context(), Some(first_uptime - 0.25));
+                            check_meter_colors(&frame, [0.5, 0.5], first_uptime - 0.25, &full_life_samples[0].1, &mut failures);
                             for (ticks, lives, scores) in [
-                                (901..=915, [1.0, 0.25], [true, false]),
+                                (901..=915, [1.0, 1.0], [true, false]),
                                 (916..=930, [0.25, 0.75], [false, true]),
                             ] {
                                 for player in 0..if versus { 2 } else { 1 } {
@@ -420,10 +535,24 @@ return Def.ActorFrame {
                                 }
                                 advance(&mut state, ticks);
                                 check_text(&state, lives, scores, &mut failures);
-                                let frame = compose_fixture_frame_with_textures(&mut state, &assets, &metrics,
-                                    &mut actors, &mut text, &mut scratch, assets.texture_context());
+                                let uptime = if lives[0] == 1.0 { first_uptime } else { second_uptime + 0.25 };
+                                let frame = compose_fixture_frame_with_view_and_clock(&mut state, &assets, &metrics,
+                                    &mut actors, &mut text, &mut scratch, screen_gameplay::ActorViewOverride::default(),
+                                    assets.texture_context(), Some(uptime));
+                                check_meter_colors(&frame, lives, uptime, &full_life_samples[0].1, &mut failures);
                                 if image_draw_count(&frame, bsod_handle) != 0 {
                                     failures.push(format!("{label}: BSOD is drawn while all joined players have life"));
+                                }
+                                if lives[0] == 1.0 {
+                                    // Keep music time and the published Lua state
+                                    // unchanged. The warmed frame must still cycle
+                                    // every glyph at the next native uptime sample.
+                                    let paused_music_time = state.current_music_time_display();
+                                    let frame = compose_fixture_frame_with_view_and_clock(&mut state, &assets, &metrics,
+                                        &mut actors, &mut text, &mut scratch, screen_gameplay::ActorViewOverride::default(),
+                                        assets.texture_context(), Some(second_uptime));
+                                    assert_eq!(state.current_music_time_display(), paused_music_time);
+                                    check_meter_colors(&frame, lives, second_uptime, &full_life_samples[1].1, &mut failures);
                                 }
                             }
                             set_stats(&mut state, 0, 0.0, false);

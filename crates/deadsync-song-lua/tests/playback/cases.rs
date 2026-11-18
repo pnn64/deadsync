@@ -473,6 +473,7 @@ fn manual_player_compositor_matches_native_geometry() {
         hide_gameplay_hud: false,
         apply_attacks: true,
         show_song_visuals: true,
+        uptime_seconds: 0.0,
     };
     let verify = |ops: &[deadlib_render_core::DrawOp],
                   instances: &[deadlib_render_core::SpriteInstanceRaw],
@@ -9971,6 +9972,168 @@ fn song_lua_bitmaptext_applies_rainbow_scroll_at_runtime() {
 }
 
 #[test]
+fn song_lua_bitmaptext_rainbow_replaces_inherited_diffuse_but_preserves_stroke_opacity() {
+    // ITGmania BitmapText::DrawPrimitives gates on diffuse alpha, draws the
+    // stroke with that alpha, then assigns opaque palette RGBA to every glyph.
+    let default_stroke = [0.6, 0.5, 0.4, 0.7];
+    let mut assets = AssetManager::new();
+    assets.register_font("rainbow_test", deadlib_present::font::Font {
+        glyph_map: Default::default(),
+        ascii_glyphs: Box::new(std::array::from_fn(|_| None)),
+        default_glyph: None,
+        line_spacing: 1,
+        height: 1,
+        fallback_font_name: None,
+        cache_tag: 0,
+        chain_key: 0,
+        default_stroke_color: default_stroke,
+        stroke_texture_map: Default::default(),
+        texture_hints_map: Default::default(),
+    });
+    let mut overlay = SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::BitmapText {
+            font_name: "rainbow_test",
+            font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+            text: Arc::from("111"),
+            text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
+            stroke_color: Some([0.2, 0.3, 0.4, 0.8]),
+            attributes: Arc::from([TextAttribute {
+                start: 0,
+                length: 3,
+                color: [0.1, 0.2, 0.3, 0.4],
+                vertex_colors: None,
+                glow: None,
+            }]),
+        },
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+    for requested_stroke in [Some([0.2, 0.3, 0.4, 0.8]), None] {
+        let SongLuaOverlayKind::BitmapText { stroke_color, .. } = &mut overlay.kind else {
+            unreachable!();
+        };
+        *stroke_color = requested_stroke;
+        for (alpha, effect_alpha) in [(1.0, 1.0), (0.5, 1.0), (0.0, 1.0), (1.0, 0.0)] {
+            let mut state = song_lua_overlay_compose_state(
+                &SongLuaOverlayKind::ActorFrame,
+                SongLuaOverlayState {
+                    diffuse: [0.5, 0.25, 0.75, 0.5],
+                    ..Default::default()
+                },
+                SongLuaOverlayState {
+                    rainbow_scroll: true,
+                    mult_attrs_with_diffuse: true,
+                    diffuse: [0.2255, 0.2255, 0.2255, alpha],
+                    ..Default::default()
+                },
+                640.0,
+                480.0,
+                [0.0; 2],
+            );
+            assert!(state.rainbow_scroll, "parent composition retains the text flag");
+            if effect_alpha == 0.0 {
+                // Composition evaluates child effects. Attach this effect after
+                // composition to exercise the builder's later zero-alpha gate.
+                assert!(state.diffuse[3] > 0.0);
+                state.effect_mode = deadlib_present::anim::EffectMode::DiffuseBlink;
+                state.effect_period = 1.0;
+                state.effect_color1 = [0.2255, 0.2255, 0.2255, 0.0];
+                state.effect_color2 = state.effect_color1;
+            }
+            let actors = build_song_lua_overlay_actor_with_scratch(
+                &overlay, state, None, &assets, 780, 640.0, 480.0,
+                0.0, 0.0, 0.05, None, scratch.first_mut(),
+            );
+            if alpha == 0.0 {
+                assert!(actors.is_none(), "zero diffuse alpha still suppresses the native diffuse pass");
+                continue;
+            }
+            let Actor::Text { color, stroke_color, attributes, .. } =
+                actors.expect_actor("nonzero source alpha reaches the text draw builder")
+            else {
+                panic!("expected bitmap text");
+            };
+            assert_eq!(attributes.len(), 3);
+            for (attribute, mut expected) in attributes.iter().zip([
+                [1.0, 0.0, 0.4, 1.0],
+                [0.8, 0.2, 0.6, 1.0],
+                [0.4, 0.3, 0.5, 1.0],
+            ]) {
+                expected[3] = effect_alpha;
+                let rendered: [f32; 4] = std::array::from_fn(|i| attribute.color[i] * color[i]);
+                assert_eq!(rendered, expected, "rainbow replaces RGBA while preserving the post-effect zero-alpha gate");
+            }
+            let mut expected_stroke = requested_stroke.unwrap_or(default_stroke);
+            expected_stroke[3] *= state.diffuse[3] * effect_alpha;
+            assert_eq!(stroke_color, Some(expected_stroke));
+        }
+    }
+}
+
+#[test]
+fn song_lua_bitmaptext_rainbow_tracks_live_text_after_prewarming() {
+    let mut overlay = SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::BitmapText {
+            font_name: "miso",
+            font_path: std::path::PathBuf::from("Fonts/Common Normal.ini"),
+            text: Arc::from("111111111"),
+            text_changes: Arc::from([]),
+            text_changes_in_seconds: false,
+            stroke_color: None,
+            attributes: empty_text_attributes(),
+        },
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let mut scratch = song_lua_projected_mesh_scratch_for(std::slice::from_ref(&overlay));
+    let palette = [
+        [1.0, 0.0, 0.4, 1.0], [0.8, 0.2, 0.6, 1.0],
+        [0.4, 0.3, 0.5, 1.0], [0.2, 0.6, 1.0, 1.0],
+        [0.2, 0.8, 0.8, 1.0], [0.2, 0.8, 0.4, 1.0],
+        [1.0, 0.8, 0.2, 1.0],
+    ];
+    for (phase, (published, uppercase, expected)) in [
+        ("111111111", false, "111111111"),
+        ("111111111111111111", false, "111111111111111111"),
+        ("1", false, "1"),
+        ("éé", false, "éé"),
+        ("abcd", false, "abcd"), // Same byte length as éé, different glyph count.
+        ("mélange", true, "MÉLANGE"),
+        ("ab", true, "AB"),
+    ].into_iter().enumerate() {
+        let SongLuaOverlayKind::BitmapText { text, .. } = &mut overlay.kind else {
+            unreachable!();
+        };
+        // Live content publication replaces this field without rebuilding the
+        // song's warmed draw scratch or adding baked text_changes entries.
+        *text = Arc::from(published);
+        let Actor::Text { content, attributes, .. } = build_song_lua_overlay_actor_with_scratch(
+            &overlay,
+            SongLuaOverlayState { rainbow_scroll: true, uppercase, ..Default::default() },
+            None, &AssetManager::new(), 780, 640.0, 480.0,
+            0.0, 0.0,
+            SongLuaDrawTime { animation_elapsed: 0.0, uptime_seconds: phase as f64 * 0.2 + 0.05 },
+            None, scratch.first_mut(),
+        ).expect_actor("live rainbow text should render") else {
+            panic!("expected bitmap text");
+        };
+        assert_eq!(content.as_str(), expected);
+        assert_eq!(attributes.len(), expected.chars().count(), "{published:?}");
+        for (index, attribute) in attributes.iter().enumerate() {
+            assert_eq!((attribute.start, attribute.length), (index, 1));
+            assert_eq!(attribute.color, palette[(phase + index) % palette.len()],
+                "live glyph {index} of {published:?} at palette phase {phase}");
+        }
+    }
+}
+
+#[test]
 fn song_lua_countdown_renders_precompiled_text() {
     let mut overlay = SongLuaOverlayActor {
         kind: SongLuaOverlayKind::BitmapText {
@@ -12938,6 +13101,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         hide_gameplay_hud: false,
         apply_attacks: true,
         show_song_visuals: true,
+        uptime_seconds: 0.0,
     };
     // Include a backward seek to exercise the reusable runtime state caches.
     for now in [0.0, 0.5, 1.0, 0.25] {

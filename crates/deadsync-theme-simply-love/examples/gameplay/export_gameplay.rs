@@ -743,6 +743,7 @@ fn compose(
         &mut song,
         assets,
         deadsync_song_lua::playback::FrameOptions {
+            uptime_seconds: 32.05,
             play_style: state.gameplay.setup.session.play_style,
             player_side: state.gameplay.setup.session.player_side,
             hide_song_bg: [false; 2],

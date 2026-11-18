@@ -390,8 +390,9 @@ struct SongLuaProjectedMeshScratch {
     noteskin_model_cache: Option<ModelMeshCache>,
     text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
     text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
+    uppercase_source: Option<Arc<str>>,
     uppercase_text: Option<Arc<str>>,
-    uppercase_changes: Vec<Arc<str>>,
+    uppercase_changes: Vec<(Arc<str>, Arc<str>)>,
     rainbow_text_attributes: Option<[Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()]>,
     capacity: usize,
     text_attribute_capacity: usize,
@@ -440,6 +441,7 @@ impl SongLuaProjectedMeshScratch {
             noteskin_model_cache: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
+            uppercase_source: None,
             uppercase_text: None,
             uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
@@ -466,6 +468,7 @@ impl SongLuaProjectedMeshScratch {
             noteskin_model_cache: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
+            uppercase_source: None,
             uppercase_text: None,
             uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
@@ -572,11 +575,30 @@ impl SongLuaProjectedMeshScratch {
         )
     }
 
-    fn rainbow_attributes(&mut self, text: &str, total_elapsed: f32) -> TextAttributes {
-        let phase = song_lua_rainbow_scroll_phase(total_elapsed);
-        if let Some(attributes) = self.rainbow_text_attributes.as_ref() {
+    fn uppercase(&mut self, text: &Arc<str>, index: Option<usize>) -> Arc<str> {
+        if let Some((source, uppercase)) = index.and_then(|index| self.uppercase_changes.get(index))
+            && source == text
+        {
+            return Arc::clone(uppercase);
+        }
+        if self.uppercase_source.as_ref() != Some(text) {
+            self.uppercase_source = Some(Arc::clone(text));
+            self.uppercase_text = Some(Arc::from(text.to_uppercase()));
+        }
+        Arc::clone(self.uppercase_text.as_ref().expect("uppercase text has a source"))
+    }
+
+    fn rainbow_attributes(&mut self, text: &str, uptime_seconds: f64) -> TextAttributes {
+        let phase = song_lua_rainbow_scroll_phase(uptime_seconds);
+        let char_count = text.chars().count();
+        // Live settext can change the number of glyphs after screen preparation.
+        // Reuse a prewarmed phase only while it covers the current text exactly.
+        if let Some(attributes) = self.rainbow_text_attributes.as_ref()
+            && attributes[phase].len() == char_count
+        {
             return TextAttributes::from(Arc::clone(&attributes[phase]));
         }
+        self.text_attribute_capacity = self.text_attribute_capacity.max(char_count);
         self.update_text_diffuse(|out| {
             append_song_lua_rainbow_scroll_attributes_at_phase(text, phase, out);
         })
@@ -819,10 +841,11 @@ fn song_lua_projected_mesh_scratch_for<S: NoteskinSlot + Clone>(
                     attributes.len(),
                     char_count.max(uppercase_text.chars().count()),
                 );
+                scratch.uppercase_source = Some(Arc::clone(text));
                 scratch.uppercase_text = Some(uppercase_text);
                 scratch.uppercase_changes = text_changes
                     .iter()
-                    .map(|(_, text)| Arc::from(text.to_uppercase()))
+                    .map(|(_, text)| (Arc::clone(text), Arc::from(text.to_uppercase())))
                     .collect();
                 if text_changes.is_empty()
                     && (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count)
@@ -3876,9 +3899,10 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
     assets: &AssetManager,
     screen: [f32; 2],
     clock: [f32; 2],
-    elapsed: f32,
+    elapsed: impl Into<SongLuaDrawTime>,
     z: i16,
 ) {
+    let elapsed = elapsed.into();
     let frame = &scratch.frames[frame_index];
     let Some(batch) = frame.owners.iter().position(|index| *index == owner) else {
         return;
@@ -3988,7 +4012,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                                 screen[1],
                                 clock[0],
                                 clock[1],
-                                elapsed,
+                                elapsed.animation_elapsed,
                                 mesh.as_deref_mut(),
                             )
                         {
@@ -4005,7 +4029,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                         screen[1],
                         clock[0],
                         clock[1],
-                        elapsed,
+                        elapsed.animation_elapsed,
                         mesh.as_deref_mut(),
                     )
                     .is_none()
@@ -6132,9 +6156,10 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(overlay) = overlays.get(index) else {
         return;
     };
@@ -6198,7 +6223,7 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
                 overlay_space_height,
                 effect_time,
                 effect_beat,
-                total_elapsed,
+                total_elapsed.animation_elapsed,
                 projected_mesh_scratch.get_mut(index),
             )
             .is_none()
@@ -6240,10 +6265,11 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
     render_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
 ) -> Option<Actor> {
+    let total_elapsed = total_elapsed.into();
     let mut target_state = local_overlay_states.get(target_index).copied()?;
     // ITG ActorProxy::DrawPrimitives temporarily unhides its target for the
     // proxied draw, then restores the target's hidden state.
@@ -6346,11 +6372,12 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     order_scratch: &mut Vec<usize>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(render_space) =
         song_lua_aft_size(&overlays[capture_index], overlay_states[capture_index])
     else {
@@ -6471,7 +6498,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
                     overlay_space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 ) {
                     out.extend(actors);
@@ -6490,7 +6517,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
                     overlay_space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 )
                 .is_none()
@@ -7979,8 +8006,8 @@ const SONG_LUA_TEXT_RAINBOW_COLORS: [[f32; 4]; 7] = [
     [1.0, 0.8, 0.2, 1.0],
 ];
 
-fn song_lua_rainbow_scroll_attributes(text: &str, total_elapsed: f32) -> Vec<TextAttribute> {
-    song_lua_rainbow_scroll_attributes_at_phase(text, song_lua_rainbow_scroll_phase(total_elapsed))
+fn song_lua_rainbow_scroll_attributes(text: &str, uptime_seconds: f64) -> Vec<TextAttribute> {
+    song_lua_rainbow_scroll_attributes_at_phase(text, song_lua_rainbow_scroll_phase(uptime_seconds))
 }
 
 fn song_lua_rainbow_scroll_attributes_at_phase(
@@ -8012,8 +8039,8 @@ fn append_song_lua_rainbow_scroll_attributes_at_phase(
 }
 
 #[inline(always)]
-fn song_lua_rainbow_scroll_phase(total_elapsed: f32) -> usize {
-    ((total_elapsed / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len()
+fn song_lua_rainbow_scroll_phase(uptime_seconds: f64) -> usize {
+    ((uptime_seconds / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len()
 }
 
 fn song_lua_rainbow_scroll_phases(
@@ -10354,6 +10381,18 @@ fn song_lua_projected_overlay_actor(
 
 type SongLuaActorList = SmallVec<[Actor; 2]>;
 
+#[derive(Clone, Copy)]
+struct SongLuaDrawTime {
+    animation_elapsed: f32,
+    uptime_seconds: f64,
+}
+
+impl From<f32> for SongLuaDrawTime {
+    fn from(elapsed: f32) -> Self {
+        Self { animation_elapsed: elapsed, uptime_seconds: f64::from(elapsed) }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn build_song_lua_aft_sprite_actor(
     state: SongLuaOverlayState,
@@ -10596,10 +10635,11 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
     z: i16,
     size: [f32; 2],
     clock: [f32; 2],
-    elapsed: f32,
+    elapsed: impl Into<SongLuaDrawTime>,
     texture: Option<TextureHandle>,
     mut scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) {
+    let elapsed = elapsed.into();
     let start = out.len();
     let flat_camera = camera.world != Matrix4::IDENTITY
         && (matches!(overlay.kind, SongLuaOverlayKind::BitmapText { .. })
@@ -10617,7 +10657,7 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
     }
     if append_song_lua_multi_actor_overlay(
         out, overlay, state, camera, assets, z, size[0], size[1],
-        clock[0], clock[1], elapsed, scratch.as_deref_mut(),
+        clock[0], clock[1], elapsed.animation_elapsed, scratch.as_deref_mut(),
     ).is_none()
         && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
             overlay, state, camera, assets, z, size[0], size[1],
@@ -10756,10 +10796,12 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    draw_time: impl Into<SongLuaDrawTime>,
     texture_handle: Option<TextureHandle>,
     mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
+    let draw_time = draw_time.into();
+    let total_elapsed = draw_time.animation_elapsed;
     let camera_state = camera_state.into();
     if !state.draw_visible() || !song_lua_overlay_has_visible_output(state) {
         return None;
@@ -11134,16 +11176,10 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let text = text_index.map_or(text, |index| &text_changes[index].1);
             let content = if state.uppercase {
                 projected_mesh_scratch
-                    .as_deref()
-                    .and_then(|scratch| {
-                        text_index.map_or_else(
-                            || scratch.uppercase_text.as_ref(),
-                            |index| scratch.uppercase_changes.get(index),
-                        )
-                    })
+                    .as_deref_mut()
                     .map_or_else(
                         || TextContent::from(text.to_uppercase()),
-                        |uppercase| TextContent::from(Arc::clone(uppercase)),
+                        |scratch| TextContent::from(scratch.uppercase(text, text_index)),
                     )
             } else {
                 TextContent::from(text)
@@ -11170,12 +11206,15 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_rot,
             );
             song_lua_clamp_float_output_colors(&mut color, &mut glow);
+            let diffuse_alpha = color[3];
             let (text_attributes, color) = if state.rainbow_scroll {
                 let attributes = projected_mesh_scratch.as_deref_mut().map_or_else(
-                    || song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed).into(),
-                    |scratch| scratch.rainbow_attributes(content.as_str(), total_elapsed),
+                    || song_lua_rainbow_scroll_attributes(content.as_str(), draw_time.uptime_seconds).into(),
+                    |scratch| scratch.rainbow_attributes(content.as_str(), draw_time.uptime_seconds),
                 );
-                (attributes, color)
+                // BitmapText::DrawPrimitives replaces diffuse RGBA per glyph.
+                // The visibility gate still uses the original actor opacity.
+                (attributes, [1.0, 1.0, 1.0, if diffuse_alpha == 0.0 { 0.0 } else { 1.0 }])
             } else {
                 song_lua_text_attributes_for_diffuse_mode(
                     attributes,
@@ -11185,6 +11224,23 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     projected_mesh_scratch.as_deref_mut(),
                 )
             };
+            let mut text_state = state;
+            let stroke_color = if state.rainbow_scroll {
+                // Native font loading initializes the stroke from the font.
+                // Resolve that default before replacing the text's base alpha.
+                let mut stroke = stroke_color.unwrap_or_else(|| {
+                    asset_manager.with_font(font, |font| font.default_stroke_color)
+                        .unwrap_or([0.0; 4])
+                });
+                stroke[3] *= diffuse_alpha;
+                Some(stroke)
+            } else {
+                *stroke_color
+            };
+            if state.rainbow_scroll {
+                // Stroke and shadow precede the native rainbow diffuse pass.
+                text_state.shadow_color[3] *= diffuse_alpha;
+            }
             let actor = Actor::Text {
                 align: [state.halign, state.valign],
                 offset: [
@@ -11197,7 +11253,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     state.skew_y,
                 ),
                 color,
-                stroke_color: *stroke_color,
+                stroke_color,
                 glow,
                 font,
                 content,
@@ -11229,9 +11285,12 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: deadlib_present::anim::EffectState::default(),
             };
-            Some(finalize_actor(
+            Some(song_lua_finalize_overlay_actor(
+                text_state,
                 actor,
                 glow,
+                x_scale,
+                y_scale,
                 projected_mesh_scratch.as_deref_mut(),
             ))
         }
@@ -13512,7 +13571,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     order_scratch: &mut Vec<usize>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     capture_order_scratch: &mut Vec<usize>,
@@ -13520,6 +13579,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
     depth: SongLuaLayerDepth,
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(song_lua_depth) = prepare_song_lua_layer(
         out,
         overlays,
@@ -13778,7 +13838,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                     space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 ) {
                     out.extend(actors);
@@ -14427,6 +14487,8 @@ impl SongMedia {
 #[derive(Clone, Copy)]
 /// Game/session viewing options, including editor overrides; not theme policy.
 pub struct FrameOptions {
+    /// Monotonic host draw time, independent of song rate, pauses and layer start.
+    pub uptime_seconds: f64,
     pub play_style: deadsync_gameplay::GameplayInputPlayStyle,
     pub player_side: deadsync_gameplay::GameplayInputPlayerSide,
     pub notefield: NotefieldViewOverride,
@@ -14972,7 +15034,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer.screen_height.max(1.0),
             song_lua_now,
             state.current_beat(),
-            state.total_elapsed_in_screen(),
+            SongLuaDrawTime {
+                animation_elapsed: state.total_elapsed_in_screen(),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -15936,11 +16001,14 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_space_height,
             state.current_music_time_display(),
             state.current_beat(),
-            foreground_elapsed(
-                song_lua_now,
-                media.foreground_start_second,
-                state.music_rate(),
-            ),
+            SongLuaDrawTime {
+                animation_elapsed: foreground_elapsed(
+                    song_lua_now,
+                    media.foreground_start_second,
+                    state.music_rate(),
+                ),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -16010,7 +16078,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer.screen_height.max(1.0),
             song_lua_now,
             state.current_beat(),
-            foreground_elapsed(song_lua_now, layer.start_second, state.music_rate()),
+            SongLuaDrawTime {
+                animation_elapsed: foreground_elapsed(song_lua_now, layer.start_second, state.music_rate()),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,

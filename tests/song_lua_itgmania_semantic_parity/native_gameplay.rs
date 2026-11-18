@@ -5212,7 +5212,8 @@ fn replay_mode(
             "replayed_scenes":scene_count,"checked_stage_samples":checked_samples,"compared_stage_fields":compared_fields,
             "interactive":interactive,"mismatches":mismatches,"errors":errors,
             "pending_coverage":["application build without test-support (run song_lua_execution)",
-                "full-song completion","sampled framebuffer pixels","production command/query instrumentation"]}),
+                "full-song completion","sampled framebuffer pixels","production command/query instrumentation",
+                "BitmapText submitted glyph geometry, texture bindings and RGBA (live text content is compared)"]}),
         );
     }
     if scope != Scope::Full {

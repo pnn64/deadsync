@@ -683,8 +683,9 @@ impl DrawChecks {
                 compose_layer_overlay_states(overlays, &local, screen, clock, parents)
             });
             self.samples += 1;
-            // Glyph geometry has a separate font oracle. Here compare the live
-            // text value, which was previously frozen at scene preparation.
+            // This adapter compares content only: it does not load font assets
+            // or retain gameplay's text caches. Report that limit explicitly;
+            // glyph colors need the final-frame regression with native samples.
             if let SongLuaOverlayKind::BitmapText { text, .. } = &overlays[index].kind {
                 self.text_samples += 1;
                 if sample["state"]["text"].as_str() != Some(text.as_ref()) {
@@ -838,6 +839,7 @@ impl DrawChecks {
     pub fn report(&self, inputs: usize) -> Value {
         json!({"input_events_replayed":inputs,"draw_samples_compared":self.samples,
             "submitted_vertices_compared":self.vertices,"live_text_samples_compared":self.text_samples,
+            "live_text_comparison":"content only; submitted glyph geometry, textures and RGBA are not compared",
             "draw_mismatches":self.failures,"equivalent_offscreen_culls":self.culled_samples,
             "batched_native_draw_samples":self.batched_samples,
             "draw_mismatch_counts":self.failure_counts,
