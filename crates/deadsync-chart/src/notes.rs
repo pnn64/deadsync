@@ -65,36 +65,27 @@ pub(crate) fn parse_chart_notes_as<T>(
     new_note: impl FnMut(usize, usize, NoteType) -> T,
     set_tail: impl FnMut(&mut T, usize),
 ) -> Vec<T> {
-    let (words, tail) = minimized_note_data.as_chunks::<8>();
+    let is_head = |byte| {
+        let folded = byte | 0x20;
+        (byte == b'1')
+            | (byte == b'2')
+            | (byte == b'4')
+            | (folded == b'f')
+            | (folded == b'm')
+            | (folded == b'l')
+    };
+    let (blocks, tail) = minimized_note_data.as_chunks::<64>();
     let mut note_capacity = 0;
-    for &bytes in words {
-        let word = u64::from_ne_bytes(bytes);
-        // Case folding also maps control bytes 0x11/12/14 to digits. Keep
-        // their original bit 5 as a high-bit mask for the digit comparisons.
-        let digit_mask = (word & 0x2020_2020_2020_2020) << 2;
-        let word = word | 0x2020_2020_2020_2020;
-        let equal = |byte: u8| {
-            let xor = word ^ (u64::from(byte) * 0x0101_0101_0101_0101);
-            // Set each zero byte's high bit. Masking before the addition
-            // prevents carries between bytes, so every match is exact.
-            !(((xor & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | xor | 0x7f7f_7f7f_7f7f_7f7f)
-        };
-        let matches = ((equal(b'1') | equal(b'2') | equal(b'4')) & digit_mask)
-            | equal(b'f')
-            | equal(b'm')
-            | equal(b'l');
-        // Sum eight independent 0/1 lanes without requiring a POPCNT target.
-        note_capacity += ((matches >> 7).wrapping_mul(0x0101_0101_0101_0101) >> 56) as usize;
+    for block in blocks {
+        // The byte sum fits in u8, so the compiler can count in SIMD byte lanes.
+        note_capacity += usize::from(
+            block
+                .iter()
+                .map(|&byte| u8::from(is_head(byte)))
+                .sum::<u8>(),
+        );
     }
-    note_capacity += tail
-        .iter()
-        .filter(|&&ch| {
-            matches!(
-                ch,
-                b'1' | b'F' | b'f' | b'2' | b'4' | b'M' | b'm' | b'L' | b'l'
-            )
-        })
-        .count();
+    note_capacity += tail.iter().filter(|&&byte| is_head(byte)).count();
     parse_chart_notes_as_with_capacity(
         minimized_note_data,
         lanes,
