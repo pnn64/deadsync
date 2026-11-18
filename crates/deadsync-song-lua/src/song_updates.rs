@@ -334,19 +334,24 @@ impl SongRuntime {
                     baseline.push(state);
                 }
             }
-            let mut layers = Vec::new();
+            let mut render_states = Vec::new();
             for (i, (row, &value)) in tracked.actors.iter().zip(tracked_values).enumerate() {
-                if matches!(
-                    row.target,
-                    Tracked::SongForeground | Tracked::ScreenLayer(_)
-                ) {
-                    layers.push((i, values.len()));
-                    values.push(&mut self.vm, value)?;
-                    baseline.push(
-                        access
-                            .state(&mut self.vm, value)
-                            .map_err(|e| e.to_string())?,
-                    );
+                match row.target {
+                    Tracked::Player(player) => {
+                        if let Some(index) = player_indices[player] {
+                            render_states.push((i, index));
+                        }
+                    }
+                    Tracked::SongForeground | Tracked::ScreenLayer(_) => {
+                        render_states.push((i, values.len()));
+                        values.push(&mut self.vm, value)?;
+                        baseline.push(
+                            access
+                                .state(&mut self.vm, value)
+                                .map_err(|e| e.to_string())?,
+                        );
+                    }
+                    _ => {}
                 }
             }
             self.actors
@@ -745,13 +750,35 @@ impl SongRuntime {
                     &mut field_bytes,
                 )?;
                 prior_field = music;
-                let mut layer_message = None;
-                for &(tracked_index, i) in &layers {
-                    let prior = current[i];
+                let mut render_message = None;
+                for &(tracked_index, i) in &render_states {
+                    let next = replay_states[i];
+                    let prior = if matches!(tracked.actors[tracked_index].target, Tracked::Player(_)) {
+                        // Player motion is already sampled into modifier eases.
+                        // Capture the remaining actor state without applying that
+                        // motion a second time during baked playback.
+                        State {
+                            x: next.x,
+                            y: next.y,
+                            z: next.z,
+                            rot_x_deg: next.rot_x_deg,
+                            rot_y_deg: next.rot_y_deg,
+                            rot_z_deg: next.rot_z_deg,
+                            zoom: next.zoom,
+                            zoom_x: next.zoom_x,
+                            zoom_y: next.zoom_y,
+                            zoom_z: next.zoom_z,
+                            skew_x: next.skew_x,
+                            skew_y: next.skew_y,
+                            ..current[i]
+                        }
+                    } else {
+                        current[i]
+                    };
                     if let Some((_, delta)) =
-                        crate::overlay_delta_pair_from_states(prior, prior, replay_states[i])
+                        crate::overlay_delta_pair_from_states(prior, prior, next)
                     {
-                        let message = layer_message
+                        let message = render_message
                             .get_or_insert_with(|| format!("__songlua_layer_frame_{frame}"));
                         tracked.actors[tracked_index].actor.message_commands.push(
                             crate::SongLuaOverlayMessageCommand {
@@ -771,7 +798,7 @@ impl SongRuntime {
                         );
                     }
                 }
-                if let Some(message) = layer_message {
+                if let Some(message) = render_message {
                     broadcasts.push((next_beat, message, true));
                 }
                 std::mem::swap(&mut current, &mut replay_states);
