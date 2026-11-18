@@ -367,9 +367,11 @@ pub(super) fn record_pose_step(
         return;
     };
     let actor = &store.actors[&id];
-    // Actor::DestTweenState writes the back tween while a queue exists. An
-    // unscheduled setter changes the current pose on this frame, never before.
-    if !actor.queue.is_empty()
+    // Ordinary queues identify a live back tween. Sampled actors retain their
+    // physical entries after completion; their scheduled/retargeted updates
+    // decide whether a setter changes a pending tween instead. Otherwise the
+    // setter changes the current pose on this frame, never before.
+    if (!song_pose::mode(store, id) && !actor.queue.is_empty())
         || actor
             .capture
             .as_ref()

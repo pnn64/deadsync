@@ -253,6 +253,9 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub edit_measure_text_slot_base: u8,
     /// Global game clock, kept in native double precision until selection.
     pub arrow_effect_time_s: f64,
+    /// Optional raw game-clock input to native ArrowEffects::UpdateTipsy.
+    /// Its cache is sampled before drawing, independently of other effects.
+    pub arrow_tipsy_time_s: Option<f64>,
     /// Global music seconds, before player-specific visual delay/split timing.
     pub music_time_s: f32,
 }
@@ -394,6 +397,7 @@ pub struct PreparedNotefield<'a, S> {
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
     pub arrow_effect_time_s: f32,
+    pub tipsy_time_s: f32,
     pub current_time_s: f32,
     pub current_beat: f32,
     pub is_in_delay: bool,
@@ -700,6 +704,14 @@ pub fn prepare_notefield<'a, S>(
         request.visual.current_display_beat,
         request.music_time_s,
     );
+    let tipsy_time_s = request.arrow_tipsy_time_s.map_or(arrow_effect_time_s, |time| {
+        mod_timer_time(
+            request.visual.visual,
+            time,
+            request.visual.current_display_beat,
+            request.music_time_s,
+        )
+    });
     let notes = prepare_notes(
         request,
         frame_plan,
@@ -708,6 +720,7 @@ pub fn prepare_notefield<'a, S>(
         effect_height,
         draw_range,
         arrow_effect_time_s,
+        tipsy_time_s,
     )?;
     Some(PreparedNotefield {
         frame_plan,
@@ -716,6 +729,7 @@ pub fn prepare_notefield<'a, S>(
         scroll_speed,
         current_time_s,
         arrow_effect_time_s,
+        tipsy_time_s,
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
@@ -797,6 +811,7 @@ fn prepare_field<S>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn prepare_notes<'a, S>(
     request: &'a NotefieldComposeRequest<'a, S>,
     frame_plan: NotefieldFramePlan,
@@ -805,6 +820,7 @@ fn prepare_notes<'a, S>(
     effect_height: f32,
     draw_range: NoteDrawRange,
     arrow_effect_time_s: f32,
+    tipsy_time_s: f32,
 ) -> Option<Option<PreparedNotefieldNotes<'a, S>>> {
     let Some(base) = request.noteskin.base else {
         return Some(None);
@@ -899,6 +915,7 @@ fn prepare_notes<'a, S>(
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,
         arrow_effect_time_s,
+        tipsy_time_s: Some(tipsy_time_s),
         lane_tipsy: request.visual.visual.tipsy,
         lane_tipsy_offset: request.visual.visual.tipsy_offset,
         lane_tipsy_speed: request.visual.visual.tipsy_speed,

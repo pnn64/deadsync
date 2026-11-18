@@ -611,6 +611,7 @@ pub(crate) fn compose_frame(
     notefield_plan: &GameplayNotefieldPlan,
     player_idx: usize,
     arrow_effect_time_s: f64,
+    arrow_tipsy_time_s: Option<f64>,
     noteskin_assets: &GameplayNoteskinAssets,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
@@ -876,6 +877,7 @@ pub(crate) fn compose_frame(
         edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
             + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
         arrow_effect_time_s,
+        arrow_tipsy_time_s,
         music_time_s: state.current_music_time_seconds(),
     };
     let Some(prepared) = prepare_notefield(&request) else {

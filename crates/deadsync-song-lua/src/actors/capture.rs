@@ -794,13 +794,15 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
 // advancement. Captured commands outside the update instead drain synchronously.
 pub(super) fn enter_replay_queue(store: &mut Store, actor: TableId) {
     let guard = &mut *store;
-    // Full-timeline preparation retains its fallback capture and command queue.
-    // Streamed preparation continues to use the ordinary queue below.
-    if guard.replay_clock.is_some() {
+    // Full-timeline preparation retains capture for sampled actors. An omitted
+    // control actor has no sampled pose to publish back to its getters, so its
+    // frame-created tweens must use the ordinary native queue instead.
+    if guard.replay_clock.is_some() && song_immediate::context(guard, actor).is_some() {
         return;
     }
     if guard.replay_frame.is_some() && guard.replay_advancing {
-        let actor = guard.actors.get_mut(&actor).unwrap();
+        let id = actor;
+        let actor = guard.actors.get_mut(&id).unwrap();
         if actor
             .capture
             .as_ref()
@@ -813,6 +815,9 @@ pub(super) fn enter_replay_queue(store: &mut Store, actor: TableId) {
             // The first update-created queue starts its own clock; those old
             // durations must not postpone commands queued by this callback.
             actor.queue.clear();
+            if let Some(clock) = &mut guard.replay_clock {
+                clock.promote(id);
+            }
         }
     }
 }

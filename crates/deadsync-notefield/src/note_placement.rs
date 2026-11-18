@@ -59,6 +59,7 @@ mod tests {
             screen_height: 720.0,
             note_count_stats: &[],
             arrow_effect_time_s: expand_seconds,
+            tipsy_time_s: None,
             lane_tipsy: 0.0,
             lane_tipsy_offset: 0.0,
             lane_tipsy_speed: 0.0,

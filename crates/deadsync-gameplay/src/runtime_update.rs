@@ -1220,6 +1220,7 @@ where
                 attack_flags: AttackFlags::from_mode(profile.attack_mode()),
                 visual: base_visual_effects(profile),
                 scroll: profile.scroll_effects(),
+                perspective: profile.perspective_effects(),
                 mini_percent: profile.mini_percent(),
             },
             player_transform,

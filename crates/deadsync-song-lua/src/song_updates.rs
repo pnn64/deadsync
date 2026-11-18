@@ -1392,8 +1392,10 @@ fn finish_samples<M: crate::perframe::ModState>(
     baseline_players: &[Player; LUA_PLAYERS],
     baseline_mods: &[M; LUA_PLAYERS],
 ) -> (Vec<SongLuaEaseWindow>, Vec<SongLuaColumnOffsetWindow>) {
-    use crate::perframe::push_update_mod_targets_with_key;
-    use crate::{append_column_transform_windows_from_samples, push_perframe_player_targets};
+    use crate::append_column_transform_windows_from_samples;
+    use crate::perframe::{
+        push_perframe_player_targets_with_previous, push_update_mod_targets_with_key,
+    };
     let mut eases = Vec::new();
     let mut column_transforms = Vec::new();
     let mut last_mod_windows = BTreeMap::new();
@@ -1531,13 +1533,16 @@ fn finish_samples<M: crate::perframe::ModState>(
             .copied()
             .unwrap_or(from_players);
         let first_player_window = eases.len();
-        push_perframe_player_targets(
+        push_perframe_player_targets_with_previous(
             &mut eases,
             frame_start,
             frame_end,
             &from_players,
             &to_players,
             baseline_players,
+            index
+                .checked_sub(1)
+                .map(|previous| &player_samples[previous]),
         );
         for window in &mut eases[first_player_window..] {
             window.unit = frame_unit;

@@ -685,7 +685,7 @@ mod tests {
         let mut tipsy = [0.0; MAX_COLS];
         crate::fill_gameplay_lane_effects(
             &request.visual.visual,
-            prepared.arrow_effect_time_s,
+            prepared.tipsy_time_s,
             prepared.field_zoom,
             prepared.frame_plan.num_cols,
             &mut [crate::VisualEffectParams::default(); MAX_COLS],
@@ -1200,6 +1200,7 @@ mod tests {
             capture_requests: ProxyCaptureRequests::default(),
             edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
+            arrow_tipsy_time_s: None,
             music_time_s: 0.1,
         }
     }
@@ -4798,6 +4799,94 @@ mod tests {
                 assert!(opacity.is_empty(), "{mode:?}: {opacity:?}");
             }
         }
+    }
+
+    #[test]
+    fn native_tipsy_clock_is_independent_in_composed_fields() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("clock-note"))
+            .collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut tap = note(0);
+        tap.note_type = NoteType::Tap;
+        tap.beat = 3.0;
+        let notes = [tap];
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).unwrap()],
+            vec![],
+        ];
+        let render = |game, tipsy| {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.lane_note_row_indices = &lanes;
+            request.chart.note_itg_rows = &[144];
+            request.arrow_effect_time_s = game;
+            request.arrow_tipsy_time_s = tipsy;
+            request.visual.visual.tipsy = 1.0;
+            request.visual.visual.drunk = 1.0;
+            let prepared = prepare_notefield(&request).expect("field");
+            let lane_offset = prepared.notes.as_ref().unwrap().travel.lane_offset(0);
+            let frame = NotefieldFieldFrameView {
+                feedback: spline_feedback(&[]),
+                completed_rows: Default::default(),
+            };
+            let mut draws = Vec::new();
+            compose_notefield_field(
+                &mut Vec::new(),
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &mut HoldMeshScratch::with_columns(2),
+                &mut CapturedActorScratch::with_capacities(16, 0),
+                &mut NotefieldCameraCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            let mut arrow = None;
+            let mut receptor = None;
+            for draw in draws {
+                if let FlatDraw::Sprite(sprite) = draw {
+                    match sprite.source.texture_key() {
+                        Some("clock-note") => arrow = Some(sprite.center),
+                        Some("target0") => receptor = Some(sprite.center),
+                        _ => {}
+                    }
+                }
+            }
+            (arrow.expect("tap"), receptor.expect("receptor"), lane_offset)
+        };
+        let baseline = render(0.0, None);
+        let cache_time = f64::from(std::f32::consts::PI / 1.2);
+        let cached = render(0.0, Some(cache_time));
+        // Native column-zero Tipsy moves from +25.6 to -25.6 at these times.
+        // The travel/culling path and both visible actors must use that cache.
+        for (before, after) in [
+            (baseline.0[1], cached.0[1]),
+            (baseline.1[1], cached.1[1]),
+            (baseline.2, cached.2),
+        ] {
+            assert!((after - before + 51.2).abs() < 0.0001);
+        }
+        assert_eq!(baseline.0[0], cached.0[0], "Tipsy does not retime note Drunk");
+        assert_eq!(
+            baseline.1[0], cached.1[0],
+            "Tipsy does not retime receptor Drunk"
+        );
+        // A half-cycle gives both actors a decisive Drunk change, avoiding
+        // accidentally near-symmetric note phases around the cosine minimum.
+        let later_draw = render(std::f64::consts::PI, Some(cache_time));
+        assert_eq!(cached.0[1], later_draw.0[1]);
+        assert_eq!(cached.1[1], later_draw.1[1]);
+        assert!((cached.0[0] - later_draw.0[0]).abs() > 1.0);
+        assert!((cached.1[0] - later_draw.1[0]).abs() > 1.0);
+        assert_eq!(render(1.0, None), render(1.0, Some(1.0)), "normal fallback");
     }
 
     #[test]

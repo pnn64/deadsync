@@ -315,7 +315,8 @@ impl NotefieldCameraCache {
         let vanish_x = sm_scale(f32::from_bits(key.skew), 0.1, 1.0, position[0], 0.5 * width);
         let (projection, view) = menu_camera(width, height, vanish_x, position[1] + center_offset)?;
         let reverse = if key.reverse { -1.0 } else { 1.0 };
-        let tilt = f32::from_bits(key.tilt).clamp(-1.0, 1.0);
+        // PlayerNoteFieldPositioner extrapolates signed Tilt beyond +/-100%.
+        let tilt = f32::from_bits(key.tilt);
         let zoom = 0.1f32.mul_add(-tilt.abs(), 1.0);
         let y_offset = if tilt > 0.0 {
             -45.0 * tilt
@@ -432,7 +433,7 @@ fn notefield_camera_parts_at(
     let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, vanish_y)?;
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
-    let tilt = tilt.clamp(-1.0, 1.0);
+    // Native SCALE does not clamp: 200% Tilt rotates the field by 60 degrees.
     let tilt_deg = (-30.0 * tilt) * reverse_mult;
     let tilt_abs = tilt.abs();
     let tilt_scale = 0.1f32.mul_add(-tilt_abs, 1.0);
@@ -454,7 +455,7 @@ fn notefield_camera_parts_at(
     let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
         * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
         * Matrix4::from_rotation_x(tilt_deg.to_radians())
-        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
+        * Matrix4::from_scale(Vector3::splat(tilt_scale))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
     let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
@@ -962,6 +963,58 @@ mod tests {
         );
         assert_eq!(cache.stats().rebuilds, 2);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_preserves_signed_tilt_beyond_one() {
+        // ITGmania Player::PlayerNoteFieldPositioner: +/-200% Tilt uses
+        // +/-60 degrees, 0.8 zoom, and Y offsets of -90 / -40 pixels.
+        // The cached field model expresses those native points in Y-up space.
+        for (tilt, y_offset, z_probe) in [(2.0, -90.0, 69.282_03), (-2.0, -40.0, -69.282_03)] {
+            for reverse in [false, true] {
+                let sign = if reverse { -1.0 } else { 1.0 };
+                let mut cache = NotefieldCameraCache::default();
+                cache.resolve(854.0, 480.0, 427.0, 240.0, tilt, 0.0, reverse).unwrap();
+                let (_, field) = cache.camera_parts().unwrap();
+                for (point, expected) in [
+                    ([0.0, 0.0, 0.0], [0.0, -y_offset * sign, 0.0]),
+                    ([100.0, 0.0, 0.0], [80.0, -y_offset * sign, 0.0]),
+                    ([0.0, 100.0, 0.0], [0.0, -y_offset * sign + 40.0, -z_probe * sign]),
+                    ([0.0, 0.0, 100.0], [0.0, (-y_offset + z_probe) * sign, 40.0]),
+                ] {
+                    let actual = field.transform_point3(glam::Vec3::from_array(point)).to_array();
+                    for (actual, expected) in actual.into_iter().zip(expected) {
+                        assert_near(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draw_camera_preserves_native_tilt_depth_beyond_one() {
+        // The Player capture uses native Y-down coordinates and uniform zoom,
+        // including Z. Check the complete local basis for both tilt signs and
+        // Reverse, independently of projection and Lua wrapper transforms.
+        for (tilt, y_offset, z_probe) in [(2.0, -90.0, 69.282_03), (-2.0, -40.0, -69.282_03)] {
+            for reverse in [false, true] {
+                let sign = if reverse { -1.0 } else { 1.0 };
+                let mut cache = NotefieldCameraCache::default();
+                cache.resolve(854.0, 480.0, 427.0, 240.0, tilt, 0.0, reverse).unwrap();
+                let (_, field) = cache.draw_camera([427.0, 240.0]).unwrap();
+                for (point, expected) in [
+                    ([0.0, 0.0, 0.0], [0.0, y_offset * sign, 0.0]),
+                    ([100.0, 0.0, 0.0], [80.0, y_offset * sign, 0.0]),
+                    ([0.0, 100.0, 0.0], [0.0, y_offset * sign + 40.0, z_probe * sign]),
+                    ([0.0, 0.0, 100.0], [0.0, (y_offset - z_probe) * sign, 40.0]),
+                ] {
+                    let actual = field.transform_point3(glam::Vec3::from_array(point)).to_array();
+                    for (actual, expected) in actual.into_iter().zip(expected) {
+                        assert_near(actual, expected);
+                    }
+                }
+            }
+        }
     }
 
     fn style() -> NotefieldHudStyle {

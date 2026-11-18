@@ -2573,6 +2573,7 @@ mod tests {
                 base_appearance: AppearanceEffects::default(),
                 base_visual: VisualEffects::default(),
                 base_scroll: ScrollEffects::default(),
+                base_perspective: PerspectiveEffects::default(),
                 base_mini_percent: 10.0,
                 attack_windows: &attack_windows,
                 song_lua_ease_windows: &lua_windows,
@@ -2584,6 +2585,7 @@ mod tests {
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
                 active_attack_scroll: ScrollOverrides::default(),
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: None,
                 outro_attack_visual: VisualOverrides::default(),
             },
@@ -2631,6 +2633,7 @@ mod tests {
                 base_appearance: AppearanceEffects::default(),
                 base_visual: VisualEffects::default(),
                 base_scroll: ScrollEffects::default(),
+                base_perspective: PerspectiveEffects::default(),
                 base_mini_percent: 0.0,
                 attack_windows: &[],
                 song_lua_ease_windows: &lua_windows,
@@ -2645,6 +2648,7 @@ mod tests {
                     reverse: Some(1.0),
                     ..ScrollOverrides::default()
                 },
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: Some(50.0),
                 outro_attack_visual: outro_visual,
             },
@@ -2687,6 +2691,7 @@ mod tests {
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
                 active_attack_scroll: ScrollOverrides::default(),
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: None,
                 outro_attack_visual: VisualOverrides::default(),
             },
@@ -2711,6 +2716,10 @@ mod tests {
                     reverse: Some(1.0),
                     split: Some(0.5),
                     ..ScrollOverrides::default()
+                },
+                active_attack_perspective: PerspectiveOverrides {
+                    tilt: Some(-1.0),
+                    skew: Some(0.75),
                 },
                 active_attack_mini_percent: Some(65.0),
                 outro_attack_visual: active_visual,
@@ -2737,6 +2746,7 @@ mod tests {
                         centered: 0.3,
                         ..ScrollEffects::default()
                     },
+                    base_perspective: PerspectiveEffects { tilt: 0.25, skew: -0.5 },
                     base_mini_percent: 20.0,
                     attack_windows: &[],
                     song_lua_ease_windows: &[],
@@ -4533,6 +4543,107 @@ mod tests {
         assert_eq!(mods.visibility.dark_cols[3], Some(0.75));
         assert!(mods.has_runtime_mask_effect());
         assert!(build_course_modifier_mask_window("dark4").is_some());
+    }
+
+    #[test]
+    fn perspective_lua_targets_approach_hallway_reset_and_freeze_per_player() {
+        // PlayerOptions.cpp::Approach applies delta * target speed separately
+        // to Tilt and Skew. Hallway writes Tilt=-level, Skew=0. The 20/4 pulse
+        // is the finite approach used at beat 303.9 of Dyscontrolled Galaxy.
+        let windows = std::array::from_fn(|player| {
+            let sign = if player == 0 { 1.0 } else { -1.0 };
+            let mut windows = Vec::new();
+            for (start, end, amount, speed) in [
+                (0.0, 0.3, 200.0 * sign, 20.0),
+                (0.3, 0.6, 0.0, 4.0),
+                (0.6, 1.0, 0.0, 0.0),
+                (1.0, 2.0, 0.0, 10000.0),
+            ] {
+                let first = windows.len();
+                assert!(append_song_lua_ease_targets(
+                    &mut windows, start, end, end, "Hallway", amount, amount, None, None, None,
+                ));
+                for window in &mut windows[first..] {
+                    window.approach_speed = Some(speed);
+                }
+            }
+            windows
+        });
+        let mut runtime = GameplayAttackRuntimeState::new([Vec::new(), Vec::new()], windows);
+        for (now, delta, magnitude) in [
+            (0.0, 0.0, 0.0),
+            (0.1, 0.1, 2.0),
+            (0.3, 0.2, 2.0),
+            (0.4, 0.1, 1.6),
+            (0.6, 0.2, 0.8),
+            (0.8, 0.2, 0.8),
+            (1.0, 0.2, 0.8),
+            (1.1, 0.1, 0.0),
+        ] {
+            for player in 0..2 {
+                let _ = runtime.refresh_player(
+                    player, now, delta, AppearanceEffects::default(),
+                    AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+                );
+                let sign = if player == 0 { -1.0 } else { 1.0 };
+                let perspective = runtime.perspective[player];
+                assert_near(perspective.tilt.unwrap(), sign * magnitude);
+                assert_eq!(perspective.skew, Some(0.0), "player {player} at {now}");
+            }
+        }
+    }
+
+    #[test]
+    fn perspective_attack_aliases_keep_independent_speeds_and_profile_values() {
+        let base = PerspectiveEffects { tilt: 0.4, skew: -0.25 };
+        for (mods, expected) in [
+            ("*0 200 Hallway", [0.4, -0.25]),
+            ("*2 150 Space,*0.5 -50 Tilt", [0.275, 0.25]),
+            ("*2 150 Incoming,*0 no Skew", [-0.1, -0.25]),
+        ] {
+            let parsed = parse_song_lua_runtime_mods(mods);
+            let mut runtime = GameplayAttackRuntimeState::new(
+                [vec![attack_mask_window(0.0, 1.0, parsed)], Vec::new()],
+                [Vec::new(), Vec::new()],
+            );
+            let _ = runtime.refresh_player(
+                0, 0.25, 0.25, AppearanceEffects::default(),
+                || AttackBaseEffects { perspective: base, ..Default::default() },
+                SongLuaPlayerTransform::default(),
+            );
+            assert_near(runtime.perspective[0].tilt.unwrap(), expected[0]);
+            assert_near(runtime.perspective[0].skew.unwrap(), expected[1]);
+            assert!(!runtime.perspective[1].any(), "P1 perspective stays local");
+            let _ = runtime.refresh_player(
+                0, 2.0, 1.0, AppearanceEffects::default(),
+                || AttackBaseEffects { perspective: base, ..Default::default() },
+                SongLuaPlayerTransform::default(),
+            );
+            assert!(!runtime.perspective[0].any(), "expired {mods} returns to the profile");
+        }
+    }
+
+    #[test]
+    fn perspective_lua_direct_samples_do_not_approach_twice() {
+        for target in [SongLuaEaseMaskTarget::PerspectiveTilt, SongLuaEaseMaskTarget::PerspectiveSkew] {
+            for (speed, expected) in [(Some(0.25), 0.05), (None, 0.5)] {
+                let mut window = song_lua_ease_mask_window(target, 0.0, 2.0, 3.0, 0.0, 1.0);
+                window.approach_speed = speed;
+                let mut runtime = GameplayAttackRuntimeState::new(
+                    [Vec::new(), Vec::new()], [vec![window], Vec::new()],
+                );
+                let _ = runtime.refresh_player(
+                    0, 1.0, 0.2, AppearanceEffects::default(),
+                    AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+                );
+                let actual = match target {
+                    SongLuaEaseMaskTarget::PerspectiveTilt => runtime.perspective[0].tilt,
+                    SongLuaEaseMaskTarget::PerspectiveSkew => runtime.perspective[0].skew,
+                    _ => unreachable!(),
+                };
+                assert_near(actual.unwrap(), expected);
+            }
+        }
     }
 
     #[test]

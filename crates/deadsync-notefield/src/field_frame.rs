@@ -268,7 +268,7 @@ fn compose_field_contents<S, F>(
     let mut lane_move_y_offsets = [0.0; deadsync_core::input::MAX_COLS];
     fill_gameplay_lane_effects(
         &visual,
-        travel.arrow_effect_time_s(),
+        prepared.tipsy_time_s,
         field_zoom,
         num_cols,
         &mut lane_effect_params,

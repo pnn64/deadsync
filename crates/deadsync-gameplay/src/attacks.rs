@@ -90,6 +90,31 @@ fn approach_attack_flags(
     }
 }
 
+// PlayerOptions::Approach owns Tilt and Skew independently, even when a
+// perspective alias writes both. An absent override starts at the profile.
+fn approach_perspective_overrides(
+    current: &mut PerspectiveOverrides,
+    target: PerspectiveOverrides,
+    speed: PerspectiveOverrides,
+    base: PerspectiveEffects,
+    clear_all: bool,
+    delta: f32,
+) {
+    for (current, target, speed, base) in [
+        (&mut current.tilt, target.tilt, speed.tilt, base.tilt),
+        (&mut current.skew, target.skew, speed.skew, base.skew),
+    ] {
+        approach_attack_value(
+            current,
+            target.or(clear_all.then_some(0.0)),
+            base,
+            speed.or(clear_all.then_some(1.0)),
+            delta,
+            1.0,
+        );
+    }
+}
+
 pub const RANDOM_ATTACK_RUN_TIME_SECONDS: f32 = 6.0;
 pub const RANDOM_ATTACK_OVERLAP_SECONDS: f32 = 0.5;
 pub const RANDOM_ATTACK_START_SECONDS_INIT: f32 = -1.0;
@@ -483,6 +508,7 @@ pub struct ParsedAttackMods {
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
+    pub perspective_speed: PerspectiveOverrides,
     pub scroll_speed: Option<ScrollSpeedSetting>,
     pub mini_percent: Option<f32>,
     pub mini_speed: Option<f32>,
@@ -510,6 +536,7 @@ impl Default for ParsedAttackMods {
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
+            perspective_speed: PerspectiveOverrides::default(),
             scroll_speed: None,
             mini_percent: None,
             mini_speed: None,
@@ -623,6 +650,7 @@ pub struct AttackMaskWindow {
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
+    pub perspective_speed: PerspectiveOverrides,
     pub scroll_speed: Option<ScrollSpeedSetting>,
     pub mini_percent: Option<f32>,
     pub mini_mode: MiniAttackMode,
@@ -664,6 +692,7 @@ pub fn build_song_lua_constant_attack_mask_window(
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
+        perspective_speed: mods.perspective_speed,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
         // PlayerOptions::Mini and FromString assign the Song value. The
@@ -701,6 +730,7 @@ pub fn build_course_modifier_mask_window(modifiers: &str) -> Option<AttackMaskWi
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
+        perspective_speed: mods.perspective_speed,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
         mini_mode: MiniAttackMode::Absolute,
@@ -3584,6 +3614,7 @@ fn attack_mask_window_from_values(
         scroll: mods.scroll,
         scroll_approach_speed: mods.scroll_approach_speed,
         perspective: mods.perspective,
+        perspective_speed: mods.perspective_speed,
         scroll_speed: mods.scroll_speed,
         mini_percent: mods.mini_percent,
         mini_mode: MiniAttackMode::Absolute,
@@ -5325,6 +5356,7 @@ pub struct ActiveAttackMaskValues {
     pub scroll: ScrollOverrides,
     pub scroll_approach_speed: ScrollOverrides,
     pub perspective: PerspectiveOverrides,
+    pub perspective_speed: PerspectiveOverrides,
     pub scroll_speed: Option<ScrollSpeedSetting>,
     pub mini_percent: Option<f32>,
     pub mini_speed: Option<f32>,
@@ -5351,6 +5383,7 @@ impl ActiveAttackMaskValues {
             scroll: ScrollOverrides::default(),
             scroll_approach_speed: ScrollOverrides::default(),
             perspective: PerspectiveOverrides::default(),
+            perspective_speed: PerspectiveOverrides::default(),
             scroll_speed: None,
             mini_percent: None,
             mini_speed: None,
@@ -5376,6 +5409,7 @@ pub struct ActiveAttackRefreshInput<'a> {
     pub base_accel: AccelEffects,
     pub base_attack_flags: AttackFlags,
     pub base_scroll: ScrollEffects,
+    pub base_perspective: PerspectiveEffects,
     pub base_mini_percent: f32,
     pub attack_windows: &'a [AttackMaskWindow],
     pub song_lua_ease_windows: &'a [SongLuaEaseMaskWindow],
@@ -5387,6 +5421,7 @@ pub struct AttackBaseEffects {
     pub attack_flags: AttackFlags,
     pub visual: VisualEffects,
     pub scroll: ScrollEffects,
+    pub perspective: PerspectiveEffects,
     pub mini_percent: f32,
 }
 
@@ -5398,6 +5433,7 @@ pub struct ActiveAttackRefreshState {
     pub active_attack_visual: VisualOverrides,
     pub active_attack_visibility: VisibilityOverrides,
     pub active_attack_scroll: ScrollOverrides,
+    pub active_attack_perspective: PerspectiveOverrides,
     pub active_attack_mini_percent: Option<f32>,
     pub outro_attack_visual: VisualOverrides,
 }
@@ -5964,6 +6000,7 @@ impl GameplayAttackRuntimeState {
                 base_accel: base.accel,
                 base_attack_flags: base.attack_flags,
                 base_scroll: base.scroll,
+                base_perspective: base.perspective,
                 base_mini_percent: base.mini_percent,
                 attack_windows: &self.mask_windows[player],
                 song_lua_ease_windows: &self.song_lua_ease_windows[player],
@@ -5975,6 +6012,7 @@ impl GameplayAttackRuntimeState {
                 active_attack_visual: self.visual[player],
                 active_attack_visibility: self.visibility[player],
                 active_attack_scroll: self.scroll[player],
+                active_attack_perspective: self.perspective[player],
                 active_attack_mini_percent: self.mini_percent[player],
                 outro_attack_visual: self.outro_visual[player],
             },
@@ -6465,6 +6503,8 @@ fn apply_song_lua_approach_targets(
             SongLuaEaseMaskTarget::VisualMoveZColumn(col) if col < MAX_COLS => {
                 attack.visual_speed.move_z_cols[col] = Some(speed)
             }
+            SongLuaEaseMaskTarget::PerspectiveTilt => attack.perspective_speed.tilt = Some(speed),
+            SongLuaEaseMaskTarget::PerspectiveSkew => attack.perspective_speed.skew = Some(speed),
             SongLuaEaseMaskTarget::MiniPercent => attack.mini_speed = Some(speed),
             _ => {}
         }
@@ -6571,9 +6611,11 @@ pub fn apply_active_attack_mask_window(
 
     if let Some(v) = window.perspective.tilt {
         values.perspective.tilt = Some(v);
+        values.perspective_speed.tilt = window.perspective_speed.tilt;
     }
     if let Some(v) = window.perspective.skew {
         values.perspective.skew = Some(v);
+        values.perspective_speed.skew = window.perspective_speed.skew;
     }
     if let Some(speed) = window.scroll_speed {
         values.scroll_speed = Some(speed);
@@ -6674,6 +6716,14 @@ fn refresh_idle_attack_player(
         input.base_scroll,
         input.delta_time,
     );
+    approach_perspective_overrides(
+        &mut state.active_attack_perspective,
+        PerspectiveOverrides::default(),
+        PerspectiveOverrides::default(),
+        input.base_perspective,
+        false,
+        input.delta_time,
+    );
     approach_attack_mini_percent_to_target(
         &mut state.active_attack_mini_percent,
         None,
@@ -6695,7 +6745,7 @@ fn refresh_idle_attack_player(
         active_attack_appearance: appearance,
         active_attack_visibility: state.active_attack_visibility,
         active_attack_scroll: state.active_attack_scroll,
-        active_attack_perspective: PerspectiveOverrides::default(),
+        active_attack_perspective: state.active_attack_perspective,
         active_attack_scroll_speed: None,
         active_attack_mini_percent: state.active_attack_mini_percent,
         outro_attack_visual: state.outro_attack_visual,
@@ -6869,6 +6919,16 @@ fn refresh_active_attack_player_full(
         input.delta_time,
     );
     attack.scroll = state.active_attack_scroll;
+
+    approach_perspective_overrides(
+        &mut state.active_attack_perspective,
+        attack.perspective,
+        attack.perspective_speed,
+        input.base_perspective,
+        attack.clear_all,
+        input.delta_time,
+    );
+    attack.perspective = state.active_attack_perspective;
 
     let base_mini_percent = if attack.clear_all {
         0.0
@@ -9269,31 +9329,39 @@ fn apply_runtime_mod(
             attack_level(percent_value),
             approach_speed,
         ),
-        "tilt" => out.perspective.tilt = attack_level(percent_value),
-        "skew" => out.perspective.skew = attack_level(percent_value),
-        "overhead" => {
-            out.perspective.tilt = Some(0.0);
-            out.perspective.skew = Some(0.0);
-        }
-        "incoming" => {
+        "tilt" => set_approached_mod(
+            &mut out.perspective.tilt,
+            &mut out.perspective_speed.tilt,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "skew" => set_approached_mod(
+            &mut out.perspective.skew,
+            &mut out.perspective_speed.skew,
+            attack_level(percent_value),
+            approach_speed,
+        ),
+        "overhead" | "incoming" | "space" | "hallway" | "distant" => {
             let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(-level);
-            out.perspective.skew = Some(level);
-        }
-        "space" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(level);
-            out.perspective.skew = Some(level);
-        }
-        "hallway" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(-level);
-            out.perspective.skew = Some(0.0);
-        }
-        "distant" => {
-            let level = attack_level(percent_value).unwrap_or(1.0);
-            out.perspective.tilt = Some(level);
-            out.perspective.skew = Some(0.0);
+            let (tilt, skew) = match key {
+                "overhead" => (0.0, 0.0),
+                "incoming" => (-level, level),
+                "space" => (level, level),
+                "hallway" => (-level, 0.0),
+                _ => (level, 0.0),
+            };
+            set_approached_mod(
+                &mut out.perspective.tilt,
+                &mut out.perspective_speed.tilt,
+                Some(tilt),
+                approach_speed,
+            );
+            set_approached_mod(
+                &mut out.perspective.skew,
+                &mut out.perspective_speed.skew,
+                Some(skew),
+                approach_speed,
+            );
         }
         _ => {}
     }

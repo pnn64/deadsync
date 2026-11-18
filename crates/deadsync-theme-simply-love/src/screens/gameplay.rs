@@ -791,6 +791,8 @@ pub struct State {
     song_lua_out: Option<SongLuaOut>,
     song_lua_ended: bool,
     song_lua_draw_reload_pending: bool,
+    #[cfg(feature = "test-support")]
+    pub(crate) arrow_tipsy_clock_inputs: [Option<f64>; MAX_PLAYERS],
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
@@ -1041,6 +1043,19 @@ impl State {
     #[cfg(feature = "test-support")]
     pub fn song_lua_draw_frames(&self) -> &[deadsync_song_lua::SongLuaDrawFrame] {
         &self.song_lua_output.draw_frames
+    }
+
+    /// Replay raw native cache clocks; actor/effect outputs remain locally computed.
+    #[cfg(feature = "test-support")]
+    pub fn set_notefield_tipsy_clock_inputs(&mut self, tipsy: [Option<f64>; MAX_PLAYERS]) {
+        assert!(
+            tipsy
+                .iter()
+                .flatten()
+                .all(|time| time.is_finite() && *time >= 0.0),
+            "native ArrowEffects clocks must be finite and nonnegative"
+        );
+        self.arrow_tipsy_clock_inputs = tipsy;
     }
 
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
@@ -1324,6 +1339,8 @@ impl State {
             song_lua_out: None,
             song_lua_ended: false,
             song_lua_draw_reload_pending: false,
+            #[cfg(feature = "test-support")]
+            arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
             hud_snapshot,
             noteskin_assets,
@@ -5714,6 +5731,16 @@ pub fn draw_field(
         state.notefield_plan(player_idx),
         player_idx,
         arrow_effect_time_s,
+        {
+            #[cfg(feature = "test-support")]
+            {
+                state.arrow_tipsy_clock_inputs[player_idx]
+            }
+            #[cfg(not(feature = "test-support"))]
+            {
+                None
+            }
+        },
         &state.noteskin_assets,
         &visual_policy.assets.effects,
         state.actor_resources(),

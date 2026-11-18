@@ -8122,23 +8122,166 @@ return Def.ActorFrame{}
     }
 
     #[test]
+    fn dyscontrolled_ending_baked_keeps_player_fields_separated() {
+        let fixture = song_fixture::from_source("Dyscontrolled Galaxy/steps.sm");
+        let simfile = fixture.simfile.clone();
+        std::thread::Builder::new()
+            .name("dyscontrolled-ending-baked".into())
+            .stack_size(256 << 20)
+            .spawn(move || {
+                with_session(
+                    profile_data::PlayStyle::Versus,
+                    profile_data::PlayerSide::P1,
+                    true,
+                    true,
+                    || {
+                        let viewport = GameplayViewport::design();
+                        space::set_current_metrics(space::Metrics::centered(
+                            viewport.width(), viewport.height()));
+                        space::set_current_window_px(1600, 900);
+                        let profiles = std::array::from_fn(|_| profile_data::Profile {
+                            noteskin: profile_data::NoteSkin::new("cel"),
+                            scroll_speed: ScrollSpeedSetting::MMod(690.0),
+                            mini_percent: -10,
+                            ..Default::default()
+                        });
+                        // Exercise production preparation for the entire chart:
+                        // no shortened horizon, imported clocks, or live Lua scene.
+                        let mut state = build_test_state_with_renderer(
+                            &simfile,
+                            viewport,
+                            GameplaySession {
+                                play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+                                joined_sides: [true, true],
+                                ..Default::default()
+                            },
+                            profiles,
+                            "Vulkan (wgpu)",
+                        );
+                        assert!(state.song_lua.is_none(), "ending regression must use Baked Lua");
+                        state.set_live_autoplay_enabled(true);
+                        state.set_current_music_time_ns(0);
+                        let timing = state.gameplay.timing().clone();
+                        let step = |state: &mut screen_gameplay::State, at: f32, delta: f32| {
+                            let music = deadsync_core::song_time::song_time_ns_from_seconds(at);
+                            let host = (f64::from(at) * 1e9) as u64 + 1_000_000;
+                            screen_gameplay::update(
+                                state,
+                                delta,
+                                deadsync_gameplay::GameplayAudioSnapshot {
+                                    stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
+                                        music_nanos: music,
+                                        has_music_mapping: true,
+                                        valid_at_host_nanos: host,
+                                        ..Default::default()
+                                    },
+                                    ..Default::default()
+                                },
+                                || host,
+                                &mut Vec::new(),
+                            );
+                            state.set_current_music_time_ns(music);
+                            let output = state.take_song_lua_output();
+                            assert!(output.errors.is_empty(),
+                                "ending Baked Lua at {at}s: {:?}", output.errors);
+                        };
+                        let mut now = 0.0f32;
+                        for beat in [294.0f32, 302.0, 315.0, 320.25, 322.25] {
+                            let target = timing.get_time_for_beat_exact(beat);
+                            while now + 1.0 / 60.0 < target {
+                                now += 1.0 / 60.0;
+                                step(&mut state, now, 1.0 / 60.0);
+                            }
+                            step(&mut state, target, target - now);
+                            now = target;
+                            // Read the consumed gameplay state, rather than the
+                            // last captured ease (which can hide application errors).
+                            let xs = [
+                                state.gameplay.song_lua_player_transform(0).x,
+                                state.gameplay.song_lua_player_transform(1).x,
+                            ];
+                            let [Some(p1), Some(p2)] = xs else {
+                                panic!("ending Player X missing at beat {beat}: P1/P2={xs:?}");
+                            };
+                            let xs = [p1, p2];
+                            assert!(xs.iter().all(|x| x.is_finite()),
+                                "ending Player X must be finite at beat {beat}: P1/P2={xs:?}");
+                            let center = viewport.center_x();
+                            let height = viewport.height() / 480.0;
+                            if beat < 320.0 {
+                                // default.lua's 286..320 update reads the current
+                                // dys_rotamp:GetX(), which reaches 180 by beat 288
+                                // (ITGmania Actor.h: GetX reads m_current.pos.x).
+                                // The two roots are in quadrature and both reverse
+                                // on each sleep(.02) callback. Accept either common
+                                // flicker phase and 12px of 60Hz callback quantization.
+                                let phase_beat = if beat > 305.0 { 305.0 - beat } else { beat };
+                                let theta = phase_beat * std::f32::consts::FRAC_PI_8;
+                                let offsets = [theta.sin(), theta.cos()]
+                                    .map(|value| 180.0 * height * value);
+                                assert!([-1.0f32, 1.0].into_iter().any(|flicker| {
+                                    (0..2).all(|player|
+                                        (xs[player] - (center - flicker * offsets[player])).abs()
+                                            < 12.0 * height)
+                                }), "ending orbit at beat {beat}: P1/P2={xs:?}, native offsets={offsets:?}");
+                                // These probes avoid the authored crossings at
+                                // beats 290/298/311: separation is 180*sqrt(2).
+                                assert!((p2 - p1).abs() > 230.0 * height,
+                                    "ending fields overlap at beat {beat}: P1/P2={xs:?}");
+                            } else {
+                                // The beat-320 action explicitly separates the
+                                // roots; subsequent gunfire commands tween zoom.
+                                let expected = [center - 320.0 * height, center + 320.0 * height];
+                                assert!((0..2).all(|player| (xs[player] - expected[player]).abs() < 1.0),
+                                    "ending split at beat {beat}: P1/P2={xs:?}, expected={expected:?}");
+                            }
+                        }
+                        assert!(state.song_lua.is_none(), "ending playback must remain Baked");
+                    },
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
     fn dyscontrolled_post_pad_matches_native_two_player_taps() {
-        dyscontrolled_post_pad_matches_native_taps(
+        dyscontrolled_matches_native_taps(
             include_bytes!(
                 "../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-post-pad-native.json.zst"
             ),
             true,
+            DyscontrolledNativeSection::PostPad,
         );
     }
 
     #[test]
     fn dyscontrolled_post_pad_matches_native_single_player_taps() {
-        dyscontrolled_post_pad_matches_native_taps(
+        dyscontrolled_matches_native_taps(
             include_bytes!(
                 "../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-post-pad-single-native.json.zst"
             ),
             false,
+            DyscontrolledNativeSection::PostPad,
         );
+    }
+
+    #[test]
+    fn dyscontrolled_ending_matches_native_two_player_taps() {
+        dyscontrolled_matches_native_taps(
+            include_bytes!(
+                "../../../tests/fixtures/itgmania-song-lua-micro/dyscontrolled-ending-native.json.zst"
+            ),
+            true,
+            DyscontrolledNativeSection::Ending,
+        );
+    }
+
+    #[derive(Clone, Copy)]
+    enum DyscontrolledNativeSection {
+        PostPad,
+        Ending,
     }
 
     /// The post-pad Mini/Bumpy transition and signed Hidden/Sudden modifiers
@@ -8147,10 +8290,19 @@ return Def.ActorFrame{}
     /// compares both meshes, material visibility and pass order with native
     /// input clocks during compilation and playback; no native actor state is
     /// imported. Optional GPU probes also exercise ordinary production Baked
-    /// compilation with its default clock.
-    fn dyscontrolled_post_pad_matches_native_taps(native_bytes: &[u8], versus: bool) {
+    /// compilation with its default clock. The ending also covers separated and
+    /// crossing Player orbits, the final split, and their return to the center.
+    fn dyscontrolled_matches_native_taps(
+        native_bytes: &[u8],
+        versus: bool,
+        section: DyscontrolledNativeSection,
+    ) {
         let player_count = if versus { 2 } else { 1 };
         let mode_name = if versus { "Versus" } else { "Single P1" };
+        let ending = matches!(section, DyscontrolledNativeSection::Ending);
+        let section_name = if ending { "ending" } else { "post-pad" };
+        let beat_range = if ending { 284.0..345.0 } else { 43.0..104.0 };
+        assert!(!ending || versus, "ending oracle captures both players");
         #[derive(serde::Deserialize)]
         struct NativeSource {
             revision: String,
@@ -8193,6 +8345,12 @@ return Def.ActorFrame{}
             native_fast_note_rendering: bool,
             native_song_position_clocks: bool,
             native_option_clock_deltas: bool,
+            #[serde(default)]
+            native_arrow_update_clocks: bool,
+            #[serde(default)]
+            native_player_actor_positions: bool,
+            #[serde(default)]
+            native_player_current_options: bool,
             native_pre_theme_preferences: bool,
             native_model_render_state_protocol: u32,
             native_model_render_state_backend: String,
@@ -8203,8 +8361,34 @@ return Def.ActorFrame{}
             players: [f32; 2],
         }
         #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum NativeArrowPlayerClocks {
+            Values {
+                tipsy_seconds: Option<f64>,
+                tan_tipsy_seconds: Option<f64>,
+            },
+            Empty([(); 0]),
+        }
+        impl NativeArrowPlayerClocks {
+            fn times(&self) -> [Option<f64>; 2] {
+                match self {
+                    Self::Values {
+                        tipsy_seconds,
+                        tan_tipsy_seconds,
+                    } => [*tipsy_seconds, *tan_tipsy_seconds],
+                    Self::Empty(_) => [None; 2],
+                }
+            }
+        }
+        #[derive(serde::Deserialize)]
+        struct NativeArrowClocks {
+            update_seconds: f64,
+            players: [NativeArrowPlayerClocks; 2],
+        }
+        #[derive(serde::Deserialize)]
         struct NativeUpdate {
             sequence: u64,
+            native_update_frame: u64,
             delta: f32,
             beat: f32,
             seconds: f32,
@@ -8213,6 +8397,30 @@ return Def.ActorFrame{}
             visible_seconds: f32,
             wall_seconds: f64,
             option_deltas: NativeOptionDeltas,
+            arrow_clock_inputs: Option<NativeArrowClocks>,
+        }
+        #[derive(Debug, serde::Deserialize)]
+        struct NativeCurrentOptions {
+            perspective_tilt: f32,
+            skew: f32,
+            mini: f32,
+            brake: f32,
+            drunk: f32,
+            tipsy: f32,
+        }
+        #[derive(Debug, serde::Deserialize)]
+        struct NativePlayerPosition {
+            player: usize,
+            x: f32,
+            y: f32,
+            z: f32,
+            current_options: Option<NativeCurrentOptions>,
+        }
+        #[derive(serde::Deserialize)]
+        struct NativePlayerPositionFrame {
+            update_sequence: u64,
+            native_update_frame: u64,
+            players: Vec<NativePlayerPosition>,
         }
         #[derive(serde::Deserialize)]
         struct NativeContext {
@@ -8303,6 +8511,8 @@ return Def.ActorFrame{}
             dropped_script_errors: u64,
             script_errors: Vec<serde_json::Value>,
             update_frames: Vec<NativeUpdate>,
+            #[serde(default)]
+            player_actor_position_samples: Vec<NativePlayerPositionFrame>,
             model_geometry_meshes: Vec<NativeGeometry>,
             model_geometry_samples: Vec<NativeModelSample>,
             receptor_visits: Vec<NativeReceptorVisit>,
@@ -8368,6 +8578,11 @@ return Def.ActorFrame{}
         assert!(native.capabilities.native_fast_note_rendering);
         assert!(native.capabilities.native_song_position_clocks);
         assert!(native.capabilities.native_option_clock_deltas);
+        if ending {
+            assert!(native.capabilities.native_arrow_update_clocks);
+            assert!(native.capabilities.native_player_actor_positions);
+            assert!(native.capabilities.native_player_current_options);
+        }
         assert!(native.capabilities.native_pre_theme_preferences);
         assert_eq!(native.capabilities.native_model_render_state_protocol, 1);
         assert_eq!(
@@ -8394,6 +8609,21 @@ return Def.ActorFrame{}
             native.input.preferences.music_rate
         );
         for update in &native.update_frames {
+            if ending && update.song_beat >= 0.0 {
+                let clocks = update
+                    .arrow_clock_inputs
+                    .as_ref()
+                    .expect("native ArrowEffects cache clocks on every active update");
+                assert!(clocks.update_seconds.is_finite() && clocks.update_seconds >= 0.0);
+                assert!(
+                    clocks
+                        .players
+                        .iter()
+                        .flat_map(NativeArrowPlayerClocks::times)
+                        .flatten()
+                        .all(|time| time.is_finite() && time >= 0.0)
+                );
+            }
             assert_eq!(
                 update.beat, update.visible_beat,
                 "legacy geometry beat aliases the visible clock"
@@ -8467,7 +8697,7 @@ return Def.ActorFrame{}
             .update_frames
             .iter()
             .filter(|update| {
-                (43.0..104.0).contains(&update.visible_beat)
+                beat_range.contains(&update.visible_beat)
                     && drawn_updates.contains(&update.sequence)
             })
             .map(|update| {
@@ -8481,8 +8711,8 @@ return Def.ActorFrame{}
             })
             .collect();
         assert!(
-            frames.len() > if versus { 2_300 } else { 1_400 },
-            "native {mode_name} post-pad draw coverage: {}",
+            frames.len() > if ending { 1_400 } else if versus { 2_300 } else { 1_400 },
+            "native {mode_name} {section_name} draw coverage: {}",
             frames.len()
         );
         let geometries: std::collections::HashMap<_, _> = native
@@ -8504,7 +8734,7 @@ return Def.ActorFrame{}
             if context.kind != "actor"
                 || !matches!(context.part, 0 | 4)
                 || state.render_target != 0
-                || !(43.0..104.0).contains(&context.draw_beat)
+                || !beat_range.contains(&context.draw_beat)
             {
                 continue;
             }
@@ -8633,7 +8863,24 @@ return Def.ActorFrame{}
             .filter(|frame| (72.0..96.0).contains(&frame.beat))
             .map(|frame| unique_counts(frame)[1])
             .sum();
-        if versus {
+        if ending {
+            assert!(frames.first_key_value().unwrap().1.beat < 284.1
+                && frames.last_key_value().unwrap().1.beat > 344.9,
+                "native ending covers the centered entrance through the outro");
+            for stage in [284.0..288.0, 288.0..304.0, 304.0..318.0,
+                318.0..320.0, 320.0..334.0, 334.0..344.0]
+            {
+                let counts = frames.values().filter(|frame| stage.contains(&frame.beat))
+                    .fold([0usize; 2], |mut total, frame| {
+                        for (total, count) in total.iter_mut().zip(unique_counts(frame)) {
+                            *total += count;
+                        }
+                        total
+                    });
+                assert!(counts.iter().all(|count| *count > 0),
+                    "native ending stage {stage:?} requires both players' taps: {counts:?}");
+            }
+        } else if versus {
             assert!(
                 p2_star_frames > 500 && p2_star_taps > 1_000,
                 "native P2 stars coverage: {p2_star_frames} frames, {p2_star_taps} taps"
@@ -8641,20 +8888,29 @@ return Def.ActorFrame{}
         } else {
             assert_eq!((p2_star_frames, p2_star_taps), (0, 0));
         }
-        let probes: Vec<f32> = [43.25, 43.5, 43.75]
-            .into_iter()
-            .chain((88..=104).map(|half| half as f32 * 0.5))
-            .chain((53..=71).map(|beat| beat as f32))
-            .chain((72..=96).map(|beat| beat as f32))
-            // Fractional zoom/flip, Tornado/Dizzy reversals, and the authored
-            // collapse to zero Player zoom must survive between integer beats.
-            .chain([
-                78.25, 78.5, 78.75, 86.5, 86.75, 87.25, 87.5, 87.75, 94.25, 94.5, 94.75,
-            ])
-            .chain((!versus).then_some(79.25))
-            .chain((!versus).then_some(91.25))
-            .chain([98.0, 100.0, 102.0, 103.5])
-            .collect();
+        let probes: Vec<f32> = if ending {
+            // Include genuine crossings as well as the separated orbit, the
+            // 304..305 phase pause, splitter, and final return to the center.
+            // Post-320 probes are outside the gunfire's half-beat shake windows.
+            vec![284.0, 286.0, 288.0, 290.0, 294.0, 298.0, 302.0, 304.5,
+                305.0, 311.0, 315.0, 318.25, 319.5, 321.5, 323.5, 327.5,
+                329.5, 331.5, 334.25, 338.0, 344.0]
+        } else {
+            [43.25, 43.5, 43.75]
+                .into_iter()
+                .chain((88..=104).map(|half| half as f32 * 0.5))
+                .chain((53..=71).map(|beat| beat as f32))
+                .chain((72..=96).map(|beat| beat as f32))
+                // Fractional zoom/flip, Tornado/Dizzy reversals, and the authored
+                // collapse to zero Player zoom must survive between integer beats.
+                .chain([
+                    78.25, 78.5, 78.75, 86.5, 86.75, 87.25, 87.5, 87.75, 94.25, 94.5, 94.75,
+                ])
+                .chain((!versus).then_some(79.25))
+                .chain((!versus).then_some(91.25))
+                .chain([98.0, 100.0, 102.0, 103.5])
+                .collect()
+        };
         let mut selected = std::collections::BTreeMap::new();
         for probe in probes {
             let (&sequence, frame) = frames
@@ -8668,25 +8924,42 @@ return Def.ActorFrame{}
             );
             selected.insert(sequence, frame.clone());
         }
-        assert_eq!(selected.len(), if versus { 79 } else { 81 });
-        // Mini reaches 200% at beat64. Integer-only probes can miss the brief
-        // interval where native field scale is below the reverse divisor's
-        // safety threshold. Retain every observed frame around that collapse.
-        let collapse_frames: Vec<_> = frames
-            .iter()
-            .filter(|(_, frame)| (63.95..=64.05).contains(&frame.beat))
-            .collect();
-        assert!(
-            collapse_frames.len() >= 2,
-            "native coverage around zero Mini scale"
-        );
-        for (&sequence, frame) in collapse_frames {
-            selected.insert(sequence, frame.clone());
+        assert_eq!(selected.len(), if ending { 21 } else if versus { 79 } else { 81 });
+        if ending {
+            const GUNFIRE_BEATS: [f32; 15] = [320.01, 320.75, 322.0, 322.75,
+                324.0, 324.75, 325.5, 326.25, 328.0, 328.75, 330.0, 330.75,
+                332.0, 332.75, 333.5];
+            assert!(selected.values().all(|frame| GUNFIRE_BEATS.iter()
+                .all(|&start| !(start..start + 0.5).contains(&frame.beat))),
+                "ending comparison must not absorb native random screen shake");
+            assert!(selected.last_key_value().unwrap().1.taps.is_empty(),
+                "native outro no longer submits tap models at beat 344");
+        } else {
+            // Mini reaches 200% at beat64. Integer-only probes can miss the brief
+            // interval where native field scale is below the reverse divisor's
+            // safety threshold. Retain every observed frame around that collapse.
+            let collapse_frames: Vec<_> = frames
+                .iter()
+                .filter(|(_, frame)| (63.95..=64.05).contains(&frame.beat))
+                .collect();
+            assert!(
+                collapse_frames.len() >= 2,
+                "native coverage around zero Mini scale"
+            );
+            for (&sequence, frame) in collapse_frames {
+                selected.insert(sequence, frame.clone());
+            }
         }
         drop(frames);
         let native_vertices =
             native_vertices.map(|vertices| vertices.expect("both native Cel meshes"));
         assert!(native_vertices.iter().all(|vertices| !vertices.is_empty()));
+        let native_player_positions: std::collections::BTreeMap<_, _> = native
+            .player_actor_position_samples.into_iter()
+            .map(|sample| (sample.update_sequence, sample)).collect();
+        if ending {
+            assert_eq!(native_player_positions.len(), drawn_updates.len());
+        }
         let updates = native.update_frames;
         let native_preferences = native.input.preferences;
         // Default/Game mod timers use process elapsed time, independently of
@@ -8823,8 +9096,15 @@ return Def.ActorFrame{}
                     .map(|output| SongLuaNotePixelCapture::new(&state, &metrics, PathBuf::from(output)));
                 #[cfg(target_os = "windows")]
                 let mut next_capture = 0;
+                #[cfg(target_os = "windows")]
+                let capture_beats = if ending {
+                    [288.0, 294.0, 315.0, 319.5, 321.5, 338.0]
+                } else {
+                    [46.0, 54.0, 74.0, 80.0, 88.0, 96.0]
+                };
                 let mut compared = 0;
                 let mut compared_p2_taps = 0;
+                let mut compared_player_taps = [0usize; 2];
                 let mut max_clip_error = 0.0f32;
                 let mut max_pixel_error = 0.0f32;
                 let mut bounded_shake_frames = 0;
@@ -8841,6 +9121,13 @@ return Def.ActorFrame{}
                     // ModsGroup::Update samples its own timer before the screen
                     // update. Reuse that observed input only for option approach.
                     state.gameplay.set_player_option_clock_deltas(update.option_deltas.players);
+                    if let Some(clocks) = &update.arrow_clock_inputs {
+                        state.set_notefield_tipsy_clock_inputs(
+                            clocks.players.each_ref().map(|player| player.times()[0]),
+                        );
+                    } else {
+                        state.set_notefield_tipsy_clock_inputs([None; 2]);
+                    }
                     screen_gameplay::update(&mut state, update.delta, deadsync_gameplay::GameplayAudioSnapshot {
                         stream_clock: deadsync_gameplay::GameplayStreamClockSnapshot {
                             music_nanos: music, has_music_mapping: true, valid_at_host_nanos: host,
@@ -8858,12 +9145,70 @@ return Def.ActorFrame{}
                         update.sequence, update.beat, output.errors);
                     let Some(expected) = selected.get(&update.sequence) else { continue; };
                     let beat = expected.beat;
+                    if ending {
+                        let positions = native_player_positions
+                            .get(&update.sequence)
+                            .expect("native Player current positions for selected drawn frame");
+                        assert_eq!(positions.native_update_frame, update.native_update_frame);
+                        assert_eq!(positions.players.len(), player_count);
+                        for (player, native_position) in positions.players.iter().enumerate() {
+                            assert_eq!(native_position.player, player);
+                            assert!(
+                                [native_position.x, native_position.y, native_position.z]
+                                    .into_iter()
+                                    .all(f32::is_finite)
+                            );
+                            let pose = state.gameplay.song_lua_player_transform(player);
+                            for (axis, actual, expected) in [
+                                ("X", pose.x.expect("ending Player X is authored"), native_position.x),
+                                ("Y", pose.y.unwrap_or(240.0), native_position.y),
+                                ("Z", pose.z, native_position.z),
+                            ] {
+                                if !actual.is_finite() || (actual - expected).abs() >= 0.01 {
+                                    parity_errors.push((beat, format!(
+                                        "update {}: Player{} current {axis}: native {expected}, actual {actual}",
+                                        update.sequence, player + 1,
+                                    )));
+                                }
+                            }
+                            // Current values are independently observed outputs.
+                            // Only the fixture's clocks enter the implementation.
+                            let expected_options = native_position.current_options.as_ref()
+                                .expect("native Player Current options for selected drawn frame");
+                            let perspective = state.gameplay
+                                .effective_perspective_effects_for_player_with_base(
+                                    player, deadsync_gameplay::PerspectiveEffects::default());
+                            let visual = state.gameplay
+                                .effective_visual_effects_for_player_with_mask(player, 0);
+                            let accel = state.gameplay
+                                .effective_accel_effects_for_player_with_mask(player, 0);
+                            let mini = state.gameplay
+                                .effective_mini_percent_for_player_with_base(player, -10.0) * 0.01;
+                            for (name, actual, expected) in [
+                                ("Tilt", perspective.tilt, expected_options.perspective_tilt),
+                                ("Skew", perspective.skew, expected_options.skew),
+                                ("Mini", mini, expected_options.mini),
+                                ("Brake", accel.brake, expected_options.brake),
+                                ("Drunk", visual.drunk, expected_options.drunk),
+                                ("Tipsy", visual.tipsy, expected_options.tipsy),
+                            ] {
+                                if !actual.is_finite() || !expected.is_finite()
+                                    || (actual - expected).abs() >= 0.0001
+                                {
+                                    parity_errors.push((beat, format!(
+                                        "update {}: Player{} Current {name}: native {expected}, actual {actual}",
+                                        update.sequence, player + 1,
+                                    )));
+                                }
+                            }
+                        }
+                    }
                     let frame = compose_fixture_frame_with_view_and_clock(
                         &mut state, &assets, &metrics, &mut Vec::new(),
                         &mut compose::TextLayoutCache::default(), &mut compose::ComposeScratch::default(),
                         screen_gameplay::ActorViewOverride::default(), &FIXTURE_TEXTURES,
                         Some(update.wall_seconds));
-                    assert!(frame.render_targets.is_empty(), "post-pad Player screen draws at beat {beat}");
+                    assert!(frame.render_targets.is_empty(), "{section_name} Player screen draws at beat {beat}");
                     let cel_geometries: Vec<_> = frame.tmesh_geometries.iter().map(|geometry| {
                         let vertices = geometry.vertices.as_ref();
                         let mesh = native_vertices.iter().position(|native| vertices.len() == native.len()
@@ -8913,7 +9258,7 @@ return Def.ActorFrame{}
                         continue;
                     }
                     let mut frame_error = None;
-                    let clip_translation = if (102.01..103.8).contains(&beat) {
+                    let clip_translation = if !ending && (102.01..103.8).contains(&beat) {
                         // The chart's TopScreen Vibrate magnitude is bounded
                         // by 30 native pixels in X/Y; GetZoom stays 1 here.
                         // Actor::PreDraw consumes independent randomf(-1,1)
@@ -8999,12 +9344,17 @@ return Def.ActorFrame{}
                         parity_errors.push((beat, error));
                     }
                     if (72.0..=96.1).contains(&beat) { compared_p2_taps += counts[1]; }
+                    for (total, count) in compared_player_taps.iter_mut().zip(counts) {
+                        *total += count;
+                    }
                     #[cfg(target_os = "windows")]
                     if let Some(capture) = capture.as_mut()
                         && parity_errors.is_empty()
-                        && next_capture < 6 && beat >= [46.0, 54.0, 74.0, 80.0, 88.0, 96.0][next_capture]
+                        && next_capture < capture_beats.len() && beat >= capture_beats[next_capture]
                     {
-                        let prefix = if versus {
+                        let prefix = if ending {
+                            "dyscontrolled-ending-native-clock"
+                        } else if versus {
                             "dyscontrolled-native-clock"
                         } else {
                             "dyscontrolled-single-native-clock"
@@ -9016,28 +9366,38 @@ return Def.ActorFrame{}
                         } else if expected.taps.iter().any(|tap| tap.tint[3] > 1.0 / 256.0 && tap.anchors[0][3] > 0.0
                             && (0..3).all(|axis| tap.anchors[0][axis].abs() < tap.anchors[0][3]))
                         {
-                            assert!(pixels > 100, "native-visible post-pad taps at beat {beat}: {pixels} pixels");
+                            assert!(pixels > 100, "native-visible {section_name} taps at beat {beat}: {pixels} pixels");
                         }
                         next_capture += 1;
                     }
                     compared += 1;
                 }
                 assert_eq!(compared, selected.len());
-                assert!(parity_errors.is_empty(),
-                    "native parity failures at beats {:?}; max clip error {max_clip_error}, max pixel error {max_pixel_error}; examples across sections: {:?}",
-                    parity_errors.iter().map(|(beat, _)| *beat).collect::<Vec<_>>(),
+                let error_sections = if ending {
+                    [284.0..288.0, 288.0..304.0, 304.0..306.0, 306.0..318.0,
+                        318.0..320.0, 320.0..334.0, 334.0..345.0]
+                } else {
                     [43.0..68.0, 68.0..72.0, 72.0..80.0, 80.0..86.0,
-                        86.0..90.0, 90.0..98.0, 98.0..104.0].into_iter()
+                        86.0..90.0, 90.0..98.0, 98.0..104.0]
+                };
+                assert!(parity_errors.is_empty(),
+                    "native {section_name} parity failures at beats {:?}; max clip error {max_clip_error}, max pixel error {max_pixel_error}; examples across sections: {:?}",
+                    parity_errors.iter().map(|(beat, _)| *beat).collect::<Vec<_>>(),
+                    error_sections.into_iter()
                         .filter_map(|section| parity_errors.iter().find(|(beat, _)| section.contains(beat)))
                         .collect::<Vec<_>>());
-                if versus {
+                if ending {
+                    assert!(compared_player_taps.iter().all(|count| *count > 50),
+                        "compared ending P1/P2 taps: {compared_player_taps:?}");
+                    assert_eq!(bounded_shake_frames, 0, "ending geometry has no shake allowance");
+                } else if versus {
                     assert!(compared_p2_taps > 100, "compared P2 stars taps: {compared_p2_taps}");
                 } else {
                     assert_eq!(compared_p2_taps, 0);
                 }
                 #[cfg(target_os = "windows")]
-                if capture.is_some() { assert_eq!(next_capture, 6, "all post-pad captures must run"); }
-                eprintln!("Dyscontrolled Galaxy {mode_name} post-pad matched {compared} frames and {compared_p2_taps} P2 stars taps; {bounded_shake_frames} frames allow only bounded common screen shake; max clip residual {max_clip_error}, max pixel residual {max_pixel_error}");
+                if capture.is_some() { assert_eq!(next_capture, capture_beats.len(), "all {section_name} captures must run"); }
+                eprintln!("Dyscontrolled Galaxy {mode_name} {section_name} matched {compared} frames and {compared_player_taps:?} P1/P2 taps ({compared_p2_taps} P2 stars taps); {bounded_shake_frames} frames allow only bounded common screen shake; max clip residual {max_clip_error}, max pixel residual {max_pixel_error}");
                 #[cfg(target_os = "windows")]
                 if let Some(capture) = capture.as_mut() {
                     // Reuse the GPU backend/EventLoop and identical texture
@@ -9070,7 +9430,13 @@ return Def.ActorFrame{}
                     let mut positive_captures = 0;
                     let mut empty_captures = 0;
                     let mut observational_captures = 0;
-                    let probes: &[(f32, Option<bool>)] = if versus {
+                    let probes: &[(f32, Option<bool>)] = if ending {
+                        // Callback cadence changes the flicker phase in ordinary
+                        // playback. Keep images for review; the native-clock path
+                        // above checks exact geometry and the final empty frame.
+                        &[(294.0, None), (302.0, None), (315.0, None),
+                            (321.5, None), (338.0, None), (344.0, Some(false))]
+                    } else if versus {
                         &[
                             (46.0, Some(true)),
                             (54.0, Some(true)),
@@ -9114,7 +9480,9 @@ return Def.ActorFrame{}
                         }
                         step(&mut production, target, target - now);
                         now = target;
-                        let prefix = if versus {
+                        let prefix = if ending {
+                            "dyscontrolled-ending-production"
+                        } else if versus {
                             "dyscontrolled-production"
                         } else {
                             "dyscontrolled-single-production"
@@ -9132,9 +9500,9 @@ return Def.ActorFrame{}
                             observational_captures += 1;
                         }
                     }
-                    assert_eq!(positive_captures, if versus { 6 } else { 4 });
-                    assert_eq!(empty_captures, if versus { 1 } else { 3 });
-                    assert_eq!(observational_captures, if versus { 0 } else { 2 });
+                    assert_eq!(positive_captures, if ending { 0 } else if versus { 6 } else { 4 });
+                    assert_eq!(empty_captures, if ending || versus { 1 } else { 3 });
+                    assert_eq!(observational_captures, if ending { 5 } else if versus { 0 } else { 2 });
                 }
             });
         }).unwrap().join().unwrap();

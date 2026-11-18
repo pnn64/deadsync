@@ -677,6 +677,7 @@ pub(crate) struct ScrollTravelRequest<'a> {
     pub screen_height: f32,
     pub note_count_stats: &'a [NoteCountStat],
     pub arrow_effect_time_s: f32,
+    pub tipsy_time_s: Option<f32>,
     pub lane_tipsy: f32,
     pub lane_tipsy_offset: f32,
     pub lane_tipsy_speed: f32,
@@ -961,7 +962,9 @@ impl ScrollTravel<'_> {
     pub fn lane_offset(&self, local_col: usize) -> f32 {
         tipsy_y_extra(
             local_col,
-            self.request.arrow_effect_time_s,
+            self.request
+                .tipsy_time_s
+                .unwrap_or(self.request.arrow_effect_time_s),
             self.request.lane_tipsy,
             self.request.lane_tipsy_offset,
             self.request.lane_tipsy_speed,
@@ -1549,6 +1552,7 @@ mod tests {
             screen_height: 720.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
+            tipsy_time_s: None,
             lane_tipsy: 0.0,
             lane_tipsy_offset: 0.0,
             lane_tipsy_speed: 0.0,
