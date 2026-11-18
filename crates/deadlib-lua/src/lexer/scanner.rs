@@ -2,6 +2,7 @@
 use super::{Kind, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::memory::text::Text;
+use crate::pattern::scan_boundary;
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -76,25 +77,6 @@ fn empty(line: u32) -> Token {
         text: Text::default(),
         number: 0.0,
     }
-}
-
-fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
-    let (chunks, tail) = bytes.as_chunks::<32>();
-    for (index, chunk) in chunks.iter().enumerate() {
-        // A non-short-circuiting reduction lets LLVM compare a block in parallel.
-        if chunk.iter().fold(false, |hit, &byte| hit | boundary(byte)) {
-            return index * 32
-                + chunk
-                    .iter()
-                    .position(|&byte| boundary(byte))
-                    .expect("delimiter in marked chunk");
-        }
-    }
-    bytes.len() - tail.len()
-        + tail
-            .iter()
-            .position(|&byte| boundary(byte))
-            .unwrap_or(tail.len())
 }
 
 fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {

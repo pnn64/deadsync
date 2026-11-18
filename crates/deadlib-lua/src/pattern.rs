@@ -161,6 +161,53 @@ fn set_has(set: &[u64; 4], byte: u8) -> bool {
     set[usize::from(byte) / 64] & (1u64 << (byte % 64)) != 0
 }
 
+pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    for (index, chunk) in chunks.iter().enumerate() {
+        // A non-short-circuiting reduction lets LLVM compare a block in parallel.
+        if chunk.iter().fold(false, |hit, &byte| hit | boundary(byte)) {
+            return index * 32
+                + chunk
+                    .iter()
+                    .position(|&byte| boundary(byte))
+                    .expect("delimiter in marked chunk");
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(|&byte| boundary(byte))
+            .unwrap_or(tail.len())
+}
+
+#[inline(never)]
+fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+    if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
+        return Some(0);
+    }
+    let mut words = set
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|&(_, bits)| bits != 0);
+    let (index, bits) = words.next()?;
+    if words.next().is_some() {
+        return None;
+    }
+    let offset = bits.trailing_zeros();
+    let normalized = bits >> offset;
+    if normalized & normalized.wrapping_add(1) != 0 {
+        return None;
+    }
+    let first = (index * 64) as u8 + offset as u8;
+    let width = normalized.ilog2() as u8;
+    Some(if width == 0 {
+        byte_run(bytes, first)
+    } else {
+        scan_boundary(bytes, |byte| byte.wrapping_sub(first) > width)
+    })
+}
+
 pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
     if bytes.len() < 16 {
         return bytes.iter().position(|&candidate| candidate == byte);
@@ -537,9 +584,15 @@ impl Pattern {
                                 Kind::Byte => byte_run(rest, i.arg as u8),
                                 Kind::Set => {
                                     let set = &self.sets[i.arg as usize];
-                                    rest.iter()
-                                        .position(|&byte| !set_has(set, byte))
-                                        .unwrap_or(rest.len())
+                                    if rest.len() >= 64
+                                        && let Some(run) = contiguous_set_run(rest, set)
+                                    {
+                                        run
+                                    } else {
+                                        rest.iter()
+                                            .position(|&byte| !set_has(set, byte))
+                                            .unwrap_or(rest.len())
+                                    }
                                 }
                                 _ => unreachable!("repeated pattern atom"),
                             };
@@ -682,7 +735,31 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::{byte_run, find_byte};
+    use super::{byte_run, contiguous_set_run, find_byte, set_has};
+
+    #[test]
+    fn contiguous_set_runs_match_bitmap_membership_across_blocks() {
+        for (first, last) in [(0, 0), (0, 63), (22, 38), (91, 97), (128, 191), (250, 255)] {
+            let mut set = [0u64; 4];
+            for byte in first..=last {
+                set[usize::from(byte / 64)] |= 1 << (byte % 64);
+            }
+            let mut bytes = [first; 73];
+            for index in [0, 1, 31, 32, 33, 63, 64, 72] {
+                for byte in 0..=u8::MAX {
+                    bytes[index] = byte;
+                    let end = bytes
+                        .iter()
+                        .position(|&byte| !set_has(&set, byte))
+                        .unwrap_or(bytes.len());
+                    assert_eq!(contiguous_set_run(&bytes, &set), Some(end));
+                }
+                bytes[index] = first;
+            }
+        }
+        assert_eq!(contiguous_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
+        assert_eq!(contiguous_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+    }
 
     #[test]
     fn byte_scans_preserve_word_block_and_tail_boundaries() {
