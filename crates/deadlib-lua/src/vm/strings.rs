@@ -392,9 +392,25 @@ impl Vm {
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
                 let plain = id == STR_FIND
                     && (self.argument(base, count, 3).is_truthy()
-                        || !raw[..find_byte(raw, 0).unwrap_or(raw.len())]
+                        || raw
                             .iter()
-                            .any(|b| b"^$*+?.([%-".contains(b)));
+                            .copied()
+                            .find(|&byte| {
+                                matches!(
+                                    byte,
+                                    0 | b'^'
+                                        | b'$'
+                                        | b'*'
+                                        | b'+'
+                                        | b'?'
+                                        | b'.'
+                                        | b'('
+                                        | b'['
+                                        | b'%'
+                                        | b'-'
+                                )
+                            })
+                            .is_none_or(|byte| byte == 0));
                 if plain {
                     let text = &self.strings.bytes[slot_index(source.0)];
                     let found = if raw.is_empty() {

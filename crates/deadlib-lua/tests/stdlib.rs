@@ -338,6 +338,12 @@ assert(string.find(s,'aaaaZ',1200,true)==nil)
 s=string.rep('abccddff',200)..'Za'
 a,b=string.find(s,'Za',1,true)
 assert(a==1601 and b==1602)
+local prefix=string.rep('p',73)
+a,b=string.find('x'..prefix..'\0+',prefix..'\0+')
+assert(a==2 and b==76)
+a,b=string.find('x'..prefix..'Z',prefix..'.\0[')
+assert(a==2 and b==75)
+assert(string.find('abc','b\0(')==nil)
 return 42
 "#;
     let mut vm = Vm::new();
