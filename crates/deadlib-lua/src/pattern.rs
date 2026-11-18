@@ -183,6 +183,14 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
         .map(|index| words.len() * 8 + index)
 }
 
+fn add_class(set: &mut [u64; 4], code: u8) {
+    for byte in 0..=255u8 {
+        if class(byte, code) {
+            set[usize::from(byte) / 64] |= 1u64 << (byte % 64);
+        }
+    }
+}
+
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
 fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut first = start + 1;
@@ -202,24 +210,26 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
         }
     }
     let mut set = [0u64; 4];
-    for byte in 0..=255u8 {
-        let mut p = first;
-        let mut hit = false;
-        while p < end {
-            if pattern[p] == b'%' && p + 1 < end {
-                hit |= class(byte, pattern[p + 1]);
-                p += 2;
-            } else if p + 2 < end && pattern[p + 1] == b'-' {
-                hit |= byte >= pattern[p] && byte <= pattern[p + 2];
-                p += 3;
-            } else {
-                hit |= byte == pattern[p];
-                p += 1;
-            }
+    let mut members = &pattern[first..end];
+    while let [start, rest @ ..] = members {
+        if let [b'%', code, rest @ ..] = members {
+            add_class(&mut set, *code);
+            members = rest;
+            continue;
         }
-        if hit != negate {
+        let last = if let [b'-', last, rest @ ..] = rest {
+            members = rest;
+            *last
+        } else {
+            members = rest;
+            *start
+        };
+        for byte in *start..=last {
             set[usize::from(byte) / 64] |= 1u64 << (byte % 64);
         }
+    }
+    if negate {
+        set = set.map(|word| !word);
     }
     Some((end + 1, set))
 }
@@ -331,11 +341,7 @@ impl Pattern {
                             kind = Kind::Set;
                             arg = sets.len() as u32;
                             let mut set = [0u64; 4];
-                            for b in 0..=255u8 {
-                                if class(b, c) {
-                                    set[usize::from(b) / 64] |= 1u64 << (b % 64);
-                                }
-                            }
+                            add_class(&mut set, c);
                             sets.try_reserve(1).map_err(|_| Error::memory())?;
                             sets.push(set);
                             quantifiable = true;
