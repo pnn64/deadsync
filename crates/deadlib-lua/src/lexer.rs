@@ -154,22 +154,26 @@ impl Default for Token {
 mod scanner;
 pub(crate) use scanner::Scanner;
 
-pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+pub(crate) fn short_decimal_integer(bytes: &[u8]) -> Option<f64> {
     // Every decimal integer with at most 15 digits is exactly representable
     // as binary64, including ones with leading zeroes.
-    if !bytes.is_empty() && bytes.len() <= 15 && bytes[0].is_ascii_digit() {
-        let mut integer = 0u64;
-        let mut all_digits = true;
-        for &byte in bytes {
-            if !byte.is_ascii_digit() {
-                all_digits = false;
-                break;
-            }
-            integer = integer * 10 + u64::from(byte - b'0');
+    if !(1..=15).contains(&bytes.len()) {
+        return None;
+    }
+    let mut integer = 0u64;
+    for &byte in bytes {
+        let digit = byte.wrapping_sub(b'0');
+        if digit > 9 {
+            return None;
         }
-        if all_digits {
-            return Some(integer as f64);
-        }
+        integer = integer * 10 + u64::from(digit);
+    }
+    Some(integer as f64)
+}
+
+pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
+    if let Some(integer) = short_decimal_integer(bytes) {
+        return Some(integer);
     }
     let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
     let text = std::str::from_utf8(bytes)

@@ -357,9 +357,11 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
         Some(b'+') => (false, &bytes[1..]),
         _ => (false, bytes),
     };
-    if unsigned.starts_with(b"0x") || unsigned.starts_with(b"0X") {
-        let hex = &unsigned[2..];
+    if let [b'0', b'x' | b'X', hex @ ..] = unsigned {
         return crate::numeric::hex_number(hex.iter().copied(), negative);
+    }
+    if let Some(integer) = crate::lexer::short_decimal_integer(unsigned) {
+        return Some(if negative { -integer } else { integer });
     }
     // UCRT's runtime converter truncates its decimal significand after 768
     // digits and clamps the textual exponent before adjusting for the radix
@@ -367,5 +369,5 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     if cfg!(all(windows, target_env = "msvc")) && bytes.len() > 768 {
         return crate::numeric::localized_number(bytes, b".");
     }
-    crate::lexer::parse_number(bytes)
+    std::str::from_utf8(bytes).ok()?.parse().ok()
 }
