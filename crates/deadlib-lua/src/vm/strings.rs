@@ -1,6 +1,6 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work, find_byte};
+use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -1164,6 +1164,18 @@ impl Vm {
             }
             pos += 1;
             if bytes.get(pos) == Some(&b'%') {
+                let tail = &bytes[pos + 1..];
+                if tail.starts_with(b"%%") {
+                    // Stop before a growth so the allocator sees the same prefix.
+                    let room = output.capacity() - output.len();
+                    if room > 1 {
+                        let limit = (tail.len() / 2).min(room - 1) * 2;
+                        let extra = byte_run(&tail[..limit], b'%') / 2;
+                        output.resize(output.len() + 1 + extra, b'%');
+                        pos += 1 + 2 * extra;
+                        continue;
+                    }
+                }
                 scratch.reserve(&mut output, 1)?;
                 output.push(b'%');
                 pos += 1;

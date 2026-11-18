@@ -206,7 +206,7 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
         .map(|offset| bytes.len() - tail.len() + offset)
 }
 
-fn byte_run(bytes: &[u8], byte: u8) -> usize {
+pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
     let (blocks, tail) = bytes.as_chunks::<32>();
     let block = [byte; 32];
     let (prefix, rest) = match blocks.iter().position(|bytes| *bytes != block) {

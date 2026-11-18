@@ -14,6 +14,9 @@ fn formatting_strings_quoting_padding_and_numbers_recover_after_each_owned_failu
             local template='%s'..literal..'%%%d'
             local input=string.rep('x',#template-17)
             return string.format(template,input,42)==input..literal..'%42'"#.as_slice(),
+        br#"local template='%s'..string.rep('%%',300)..'%%%d'
+            local input=string.rep('x',#template-11)
+            return string.format(template,input,42)==input..string.rep('%',301)..'42'"#.as_slice(),
     ] {
         let program = crate::compile(source).unwrap();
         let mut total = 0;
