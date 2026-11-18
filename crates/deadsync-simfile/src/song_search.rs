@@ -240,23 +240,34 @@ pub fn song_passes_search_filters(
 
 #[inline]
 fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    let haystack = haystack.as_bytes();
     let needle = needle.as_bytes();
-    if needle.is_empty() {
+    let Some((&first, rest)) = needle.split_first() else {
         return true;
+    };
+    if rest.is_empty() {
+        let lower = first.to_ascii_lowercase();
+        let upper = first.to_ascii_uppercase();
+        return if lower == upper {
+            memchr::memchr(lower, haystack).is_some()
+        } else {
+            memchr::memchr2(lower, upper, haystack).is_some()
+        };
     }
     if haystack.len() < 32 {
-        return haystack
-            .as_bytes()
-            .windows(needle.len())
-            .any(|window| window.eq_ignore_ascii_case(needle));
+        let lower = first.to_ascii_lowercase();
+        let upper = first.to_ascii_uppercase();
+        return haystack.windows(needle.len()).any(|window| {
+            ((window[0] == lower) | (window[0] == upper)) && window[1..].eq_ignore_ascii_case(rest)
+        });
     }
-    let Some(prefix) = haystack.as_bytes().get(..needle.len()) else {
+    let Some(prefix) = haystack.get(..needle.len()) else {
         return false;
     };
     if prefix.eq_ignore_ascii_case(needle) {
         return true;
     }
-    contains_ignore_ascii_case_long(haystack.as_bytes(), needle)
+    contains_ignore_ascii_case_long(haystack, needle)
 }
 // Sparse candidates use vectorized byte searches. Dense candidates retain
 // the scalar scan after four misses; keep this loop out of small callers.
