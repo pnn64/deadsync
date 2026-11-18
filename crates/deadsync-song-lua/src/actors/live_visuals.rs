@@ -45,6 +45,27 @@ impl Actors {
         actor: Value,
         kind: &mut Kind<N, M, TextAttribute>,
     ) -> Result<(), String> {
+        // Scheduled foreground/background On commands run after compilation.
+        // An empty Sprite can acquire its first texture there or in a later
+        // callback; promote its existing visual slot without replaying commands.
+        if matches!(kind, Kind::Actor)
+            && matches!(actor, Value::Table(id) if vm.store_ref().actors.get(&id)
+                .is_some_and(|actor| actor.state.class == "Sprite"))
+        {
+            if let Some(compiler::Kind::Sprite(texture_path, states)) = self
+                .compiler_read(vm, actor, compiler::Query::Late(0))
+                .map_err(|e| e.to_string())?
+                .kind
+            {
+                *kind = Kind::Sprite {
+                    texture_key: crate::lua_util::texture_path_key(&texture_path),
+                    texture_path,
+                    states: states.into(),
+                    textures: Arc::from([]),
+                };
+            }
+            return Ok(());
+        }
         let content = match kind {
             Kind::ActorMultiVertex {
                 vertices,

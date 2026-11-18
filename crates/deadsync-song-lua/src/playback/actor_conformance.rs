@@ -589,6 +589,11 @@ impl WholeSongComposer {
         screen_state: Option<SongLuaOverlayState>,
     ) -> deadlib_render_core::RenderFrame {
         self.refresh_layout(overlays);
+        // A retained Sprite can bind its first image, or replace it, after the
+        // composer was warmed. Resolve that published resource before drawing.
+        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlays[index].kind {
+            queue_texture(&mut self.assets, texture_key);
+        }
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));

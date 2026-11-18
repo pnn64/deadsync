@@ -5,8 +5,8 @@ use std::{path::Path, sync::Arc};
 
 type Kind = song::SongLuaOverlayKind<(), (), TextAttribute>;
 type Actor = song::SongLuaOverlayActor<Kind>;
-type Visuals = deadsync_gameplay::SongLuaRuntimeVisuals<
-    Actor,
+type Visuals<A = Actor> = deadsync_gameplay::SongLuaRuntimeVisuals<
+    A,
     song::SongLuaCapturedActor,
     song::gameplay::SongLuaRuntimeOverlayStateDelta,
 >;
@@ -35,7 +35,7 @@ return Def.ActorFrame {
 }
 "#;
 
-fn visuals(out: song::CompiledSongLua<Actor>) -> Visuals {
+fn visuals<A>(out: song::CompiledSongLua<A>) -> Visuals<A> {
     Visuals {
         overlays: out.overlays,
         screen_overlay_index: out.screen_overlay_index,
@@ -689,6 +689,87 @@ fn late_wrapper_visuals_keep_owned_slots_and_publish_all_layers() {
     assert!(scene.visual_bindings().unwrap().iter().any(|(path, target)|
         path == &format!("{owner_path}/WrapperState3")
             && matches!(target, Target::Background(0, local) if *local == newest)));
+    scene.end().unwrap();
+}
+
+#[test]
+fn scheduled_foreground_on_load_publishes_initially_textureless_sprite() {
+    use deadsync_assets::song_lua::SongLuaOverlayKind as RenderKind;
+    use song::playback::actor_conformance::WholeSongComposer;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("foreground.lua");
+    let texture = dir.path().join("header.png");
+    image::RgbaImage::new(854, 85).save(&texture).unwrap();
+    std::fs::write(&path, r#"
+        LOAD_COUNT=0
+        return Def.ActorFrame {
+            OnCommand=function(self) self:sleep(1000) end,
+            Def.Sprite {Name='Header', InitCommand=function(self) self:visible(false) end,
+                OnCommand=function(self)
+                    LOAD_COUNT=LOAD_COUNT+1
+                    self:Load('header.png'):x(427):y(42):SetWidth(854):visible(true)
+                end},
+        }
+    "#).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "scheduled sprite load");
+    context.live = true;
+    context.defer_initial_live_update = true;
+    context.layer_start_beats = vec![1.];
+    context.music_length_seconds = 10.;
+    context.players[0].step_statistics_enabled = false;
+    context.players[1].enabled = false;
+    let mut output: deadsync_assets::song_lua::CompiledSongLua = song::compile_song_lua_layers(
+        &[&path], 0, &context, Default::default(),
+        |_, _, _| Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([])),
+        |_| None, |_, _| None,
+    ).unwrap().remove(0);
+    let mut scene = output.live_scene.take().unwrap();
+    scene.bind_targets(output.live_actor_indices().iter().copied().enumerate()
+        .map(|(local, global)| (global, Target::Root(local))).collect()).unwrap();
+    let mut visual = visuals(output);
+    let index = visual.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("Header")).unwrap();
+    scene.write_visuals(&mut visual).unwrap();
+    assert!(matches!(visual.overlays[index].kind, RenderKind::Actor));
+    assert!(!visual.overlays[index].initial_state.sprite_texture);
+    let mut composer = WholeSongComposer::new(&visual.overlays);
+    for (seconds, beat, delta) in [(0., 0., 0.), (0.6, 1.2, 0.6)] {
+        let updated = scene.update(song::SongLuaLiveFrame {
+            music_seconds: seconds, screen_seconds: seconds, beat,
+            delta_seconds: delta, ..Default::default()
+        }).unwrap();
+        assert!(updated.errors.is_empty(), "{:?}", updated.errors);
+        scene.write_visuals(&mut visual).unwrap();
+        if beat < 1. {
+            assert!(matches!(visual.overlays[index].kind, RenderKind::Actor));
+        }
+    }
+    let RenderKind::Sprite { texture_path, texture_key, .. } = &visual.overlays[index].kind else {
+        panic!("OnCommand's texture did not reach the prepared visual: {:?}", visual.overlays[index]);
+    };
+    assert_eq!(texture_path, &texture);
+    assert_eq!(Path::new(texture_key.as_ref()), texture_path);
+    let state = visual.overlays[index].initial_state;
+    assert!(state.visible && state.sprite_texture);
+    assert_eq!(state.size, Some([854., 85.]));
+    assert_eq!([state.x, state.y], [427., 42.]);
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0.6, 1.2);
+    let [sprite] = frame.sprite_instances.as_slice() else {
+        panic!("expected one loaded Sprite: {:?}", frame.ops);
+    };
+    assert_eq!(sprite.size, [854., 85.]);
+    let [deadlib_render_core::DrawOp::Sprite(draw)] = frame.ops.as_slice() else {
+        panic!("expected one Sprite draw: {:?}", frame.ops);
+    };
+    assert_eq!(composer.texture_key(draw.texture_handle), texture_key.as_ref());
+    scene.write_visuals(&mut visual).unwrap();
+    {
+        let mut runtime = scene.runtime_mut();
+        let check = compile_named(b"assert(LOAD_COUNT==1)", b"@/scheduled-sprite-check.lua").unwrap();
+        runtime.vm_mut().execute(&check).unwrap();
+    }
     scene.end().unwrap();
 }
 

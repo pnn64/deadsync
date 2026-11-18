@@ -42,7 +42,9 @@ use crate::frame_stats::{
 };
 use crate::frame_stutter::{ComposeBreakdown, trace_frame_stutter};
 use crate::gameplay_entry::{gameplay_chart_entry_plan, gameplay_last_played_commands};
-use crate::gameplay_prewarm::{GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx};
+use crate::gameplay_prewarm::{
+    GameplayLiveTextures, GameplaySfx, prewarm_gameplay_assets, prewarm_gameplay_sfx,
+};
 pub use crate::input::UserEvent;
 use crate::input::{
     AppRawKeyShortcut, EvaluationRawKeyShortcut, QueuedInputBatchState, RawKeyScreenRoute,
@@ -1649,6 +1651,7 @@ pub struct App {
     /// Resolved song-lifetime gameplay sounds; replaced at Gameplay/Practice
     /// prewarm and borrowed by hot command submission.
     gameplay_sfx: GameplaySfx,
+    gameplay_live_textures: GameplayLiveTextures,
     ui_sfx: audio_requests::UiSfx,
     /// At most one CPU-only Gameplay or Practice construction job. Song Lua charts build
     /// their retained actor session here so the application thread can
@@ -2984,6 +2987,7 @@ impl App {
         mut gs: gameplay::State,
         finish: &GameplayInitFinish,
     ) -> Vec<Command> {
+        self.gameplay_live_textures.reset();
         // ITGmania destroys the previous Player sounds before a restart or
         // the next course stage. Gameplay-to-gameplay skips screen exit.
         self.audio.stop_mine_sfx();
@@ -4812,6 +4816,7 @@ impl App {
             frame_policy.show_course_individual_scores,
             frame_policy.show_select_music_video_banners,
         );
+        self.sync_live_gameplay_textures();
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let (mut actors, clear_color, gameplay_segments) =
@@ -5406,6 +5411,7 @@ impl App {
             arrowcloud_result_ready_scratch: Vec::with_capacity(MAX_PLAYERS),
             audio,
             gameplay_sfx: GameplaySfx::default(),
+            gameplay_live_textures: GameplayLiveTextures::default(),
             ui_sfx,
             pending_gameplay_init: None,
             pending_song_lua_reload: None,
@@ -7674,6 +7680,24 @@ impl App {
             .next_background_change_ix
             .checked_sub(1)
             .and_then(|ix| state.background_changes.get(ix))
+    }
+
+    fn sync_live_gameplay_textures(&mut self) {
+        let state = match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => self.state.screens.gameplay_state.as_ref(),
+            CurrentScreen::Practice => self.state.screens.practice_state.as_ref()
+                .map(|state| &state.gameplay),
+            _ => {
+                self.gameplay_live_textures.reset();
+                return;
+            }
+        };
+        let Some(state) = state.filter(|state| state.song_lua.is_some()) else { return; };
+        let Some(backend) = self.backend.as_mut() else { return; };
+        let visuals = state.song_lua_visuals();
+        self.gameplay_live_textures.sync(&mut self.asset_manager, backend,
+            visuals.overlays.iter().chain(visuals.background_visual_layers.iter()
+                .chain(&visuals.foreground_visual_layers).flat_map(|layer| &layer.overlays)));
     }
 
     fn sync_gameplay_background(&mut self, show_video_backgrounds: bool) {

@@ -68,6 +68,119 @@ fn prewarm_noteskin_textures(
     });
 }
 
+struct LiveImageBinding {
+    key: Arc<str>,
+    sampler: SamplerDesc,
+    failed: bool,
+}
+
+/// Published live image bindings, owned by one Gameplay/Practice attempt.
+/// Stable slots only compare retained keys/samplers. New bindings load before
+/// composition; failed bindings wait for a source change or an explicit reset.
+#[derive(Default)]
+pub struct GameplayLiveTextures {
+    bindings: Vec<Option<LiveImageBinding>>,
+    texture_revision: u64,
+}
+
+impl GameplayLiveTextures {
+    pub fn reset(&mut self) {
+        self.bindings.clear();
+        self.texture_revision = 0;
+    }
+
+    pub fn sync<'a>(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        overlays: impl IntoIterator<Item = &'a SongLuaOverlayActor>,
+    ) {
+        let revision = assets.texture_context().revision();
+        self.visit_changed(overlays, revision, |path, key, sampler, reload| {
+            if !reload && assets.has_uploaded_texture_key(key) {
+                return true;
+            }
+            let rgba = match media_cache::load_banner_source_rgba(path) {
+                Ok(rgba) => rgba,
+                Err(error) => {
+                    warn!("Failed to load live song Lua image {path:?}: {error}. Skipping.");
+                    return false;
+                }
+            };
+            match assets.update_texture_for_key_with_sampler(backend, key, &rgba, sampler) {
+                Ok(()) => true,
+                Err(error) => {
+                    warn!("Failed to upload live song Lua image {path:?}: {error}. Skipping.");
+                    false
+                }
+            }
+        });
+        // A successful upload invalidates retained Sprite bindings, including a
+        // previous miss. Remember the final revision after this resource batch.
+        self.texture_revision = assets.texture_context().revision();
+    }
+
+    fn visit_changed<'a>(
+        &mut self,
+        overlays: impl IntoIterator<Item = &'a SongLuaOverlayActor>,
+        revision: u64,
+        mut load: impl FnMut(&Path, &str, SamplerDesc, bool) -> bool,
+    ) {
+        let registry_changed = revision != self.texture_revision;
+        let mut count = 0;
+        for overlay in overlays {
+            if count == self.bindings.len() {
+                self.bindings.push(None);
+            }
+            let previous = &mut self.bindings[count];
+            count += 1;
+            let resource = match &overlay.kind {
+                SongLuaOverlayKind::Sprite {
+                    texture_path,
+                    texture_key,
+                    ..
+                }
+                | SongLuaOverlayKind::ActorMultiVertex {
+                    texture_path: Some(texture_path),
+                    texture_key: Some(texture_key),
+                    ..
+                } if !deadlib_assets::dynamic::is_dynamic_video_path(texture_path) => {
+                    Some((texture_path, texture_key))
+                }
+                _ => None,
+            };
+            let Some((path, key)) = resource else {
+                *previous = None;
+                continue;
+            };
+            let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
+            let same_key = previous
+                .as_ref()
+                .is_some_and(|old| Arc::ptr_eq(&old.key, key) || old.key.as_ref() == key.as_ref());
+            let same_binding =
+                same_key && previous.as_ref().is_some_and(|old| old.sampler == sampler);
+            if same_binding
+                && (!registry_changed || previous.as_ref().is_some_and(|old| old.failed))
+            {
+                continue;
+            }
+            let reload = same_key && !same_binding;
+            let failed = !load(path, key, sampler, reload);
+            if same_binding {
+                previous.as_mut().unwrap().failed = failed;
+            } else {
+                *previous = Some(LiveImageBinding {
+                    key: Arc::clone(key),
+                    sampler,
+                    failed,
+                });
+            }
+        }
+        self.bindings.truncate(count);
+        self.texture_revision = revision;
+    }
+}
+
 pub fn prewarm_gameplay_assets<StateDelta>(
     assets: &mut AssetManager,
     backend: &mut Backend,
@@ -240,6 +353,93 @@ pub fn prewarm_gameplay_assets<StateDelta>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn image_actor(path: &str) -> SongLuaOverlayActor {
+        SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::Sprite {
+                texture_path: PathBuf::from(path),
+                texture_key: Arc::from(path),
+                states: Arc::from([]),
+                textures: Arc::from([]),
+            },
+            name: None,
+            parent_index: None,
+            initial_state: Default::default(),
+            message_commands: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn live_song_images_detect_delayed_load_replacement_and_sampler_changes() {
+        let mut cache = GameplayLiveTextures::default();
+        let mut actor = image_actor("first.png");
+        actor.kind = SongLuaOverlayKind::Actor;
+        cache.visit_changed([&actor], 1, |_, _, _, _| {
+            panic!("unloaded Sprite has no image")
+        });
+        actor = image_actor("first.png");
+        let mut loaded = Vec::new();
+        cache.visit_changed([&actor], 1, |_, key, _, reload| {
+            loaded.push((key.to_owned(), reload));
+            true
+        });
+        // Publication may retain or reconstruct the Arc; unchanged keys do no work.
+        for _ in 0..3 {
+            actor = image_actor("first.png");
+            cache.visit_changed([&actor], 1, |_, _, _, _| panic!("unchanged image reloaded"));
+        }
+        actor = image_actor("second.png");
+        cache.visit_changed([&actor], 1, |_, key, _, reload| {
+            loaded.push((key.to_owned(), reload));
+            true
+        });
+        actor.initial_state.texture_wrapping = true;
+        cache.visit_changed([&actor], 1, |_, key, _, reload| {
+            loaded.push((key.to_owned(), reload));
+            true
+        });
+        cache.visit_changed([&actor], 1, |_, _, _, _| {
+            panic!("unchanged sampler reloaded")
+        });
+        assert_eq!(
+            loaded,
+            [
+                ("first.png".into(), false),
+                ("second.png".into(), false),
+                ("second.png".into(), true)
+            ]
+        );
+        cache.visit_changed([&actor], 2, |_, key, _, reload| {
+            assert_eq!(key, "second.png");
+            assert!(!reload);
+            true
+        });
+        cache.visit_changed([&actor], 2, |_, _, _, _| panic!("stable registry reloaded"));
+    }
+
+    #[test]
+    fn live_song_images_do_not_retry_failed_paths_until_binding_or_state_changes() {
+        let mut cache = GameplayLiveTextures::default();
+        let mut actor = image_actor("missing.png");
+        cache.visit_changed([&actor], 1, |_, _, _, _| false);
+        for revision in [1, 2, 3] {
+            cache.visit_changed([&actor], revision, |_, _, _, _| {
+                panic!("failed image retried")
+            });
+        }
+        cache.reset();
+        let mut retries = 0;
+        cache.visit_changed([&actor], 3, |_, _, _, _| {
+            retries += 1;
+            false
+        });
+        actor = image_actor("replacement.png");
+        cache.visit_changed([&actor], 3, |_, _, _, _| {
+            retries += 1;
+            true
+        });
+        assert_eq!(retries, 2);
+    }
 
     #[test]
     fn texture_key_insert_reports_only_first_owner() {
