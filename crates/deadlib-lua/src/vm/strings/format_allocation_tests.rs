@@ -5,6 +5,8 @@ use crate::{NativeCallStatus, memory::tests::with_vm};
 fn formatting_strings_quoting_padding_and_numbers_recover_after_each_owned_failure() {
     for source in [
         br#"local text=string.format('%99s|%-99s|%.2s','abc',string.rep('x',150),'abcdef');return #text==253"#.as_slice(),
+        br#"local input='abc\000def'..string.rep('x',180)
+            return string.format('%8.5s|%.2s|%.0s|%-5.3s',input,input,input,input)=='     abc|ab||abc  '"#.as_slice(),
         br#"local input=string.char(0,13,10,34,92,255)..string.rep('z',600);local text=string.format('%q',input);return #text==615"#.as_slice(),
         br#"local input=string.rep('Lua text and \255',80)
             return string.format('%q',input)=='"'..input..'"'"#.as_slice(),

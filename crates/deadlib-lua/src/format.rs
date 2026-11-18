@@ -143,11 +143,8 @@ impl Spec {
         if self.literal_len != 0 {
             return self.literal(false, memory);
         }
-        let len = bytes
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(bytes.len())
-            .min(self.precision.unwrap_or(usize::MAX));
+        let limit = bytes.len().min(self.precision.unwrap_or(usize::MAX));
+        let len = bytes[..limit].iter().position(|&b| b == 0).unwrap_or(limit);
         self.pad(copy(memory, &bytes[..len])?, 0, false, memory)
     }
     pub fn character(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
