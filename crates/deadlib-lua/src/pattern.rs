@@ -183,6 +183,22 @@ pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
         .map(|index| words.len() * 8 + index)
 }
 
+fn byte_run(bytes: &[u8], byte: u8) -> usize {
+    let expected = u64::from_le_bytes([byte; 8]);
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let different = u64::from_le_bytes(word) ^ expected;
+        if different != 0 {
+            return index * 8 + (different.trailing_zeros() / 8) as usize;
+        }
+    }
+    words.len() * 8
+        + tail
+            .iter()
+            .position(|&candidate| candidate != byte)
+            .unwrap_or(tail.len())
+}
+
 fn add_class(set: &mut [u64; 4], code: u8) {
     for byte in 0..=255u8 {
         if class(byte, code) {
@@ -451,17 +467,17 @@ impl Pattern {
             let mut matched = true;
             match i.kind {
                 Kind::Byte | Kind::Any | Kind::Set => {
-                    let one = source.get(pos).is_some_and(|&b| self.atom(pc, b));
+                    let one = || source.get(pos).is_some_and(|&b| self.atom(pc, b));
                     match i.repeat {
                         Repeat::One => {
-                            if one {
+                            if one() {
                                 pos += 1;
                             } else {
                                 matched = false;
                             }
                         }
                         Repeat::Minimal => {
-                            if one {
+                            if one() {
                                 work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos: pos + 1,
@@ -472,7 +488,7 @@ impl Pattern {
                             }
                         }
                         Repeat::Optional => {
-                            if one {
+                            if one() {
                                 work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos,
@@ -484,20 +500,31 @@ impl Pattern {
                             }
                         }
                         Repeat::Star | Repeat::Plus => {
-                            let min = pos + usize::from(i.repeat == Repeat::Plus);
-                            if i.repeat == Repeat::Plus && !one {
+                            let rest = source.get(pos..).unwrap_or_default();
+                            let run = match i.kind {
+                                Kind::Any => rest.len(),
+                                Kind::Byte => byte_run(rest, i.arg as u8),
+                                Kind::Set => {
+                                    let set = &self.sets[i.arg as usize];
+                                    rest.iter()
+                                        .position(|&byte| !set_has(set, byte))
+                                        .unwrap_or(rest.len())
+                                }
+                                _ => unreachable!("repeated pattern atom"),
+                            };
+                            let min = usize::from(i.repeat == Repeat::Plus);
+                            if run < min {
                                 matched = false;
                             } else {
-                                while source.get(pos).is_some_and(|&b| self.atom(pc, b)) {
-                                    pos += 1;
-                                }
-                                if pos > min {
+                                let start = pos;
+                                pos += run;
+                                if run > min {
                                     work.push_choice(Choice {
                                         pc: pc + 1,
                                         pos: pos - 1,
                                         undo: work.undo_len,
                                         count: work.count,
-                                        alternative: Alternative::Shorter(min),
+                                        alternative: Alternative::Shorter(start + min),
                                     })?;
                                 }
                             }
@@ -624,20 +651,25 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::find_byte;
+    use super::{byte_run, find_byte};
 
     #[test]
-    fn byte_search_returns_the_first_match_across_word_and_tail_boundaries() {
+    fn byte_scans_preserve_word_and_tail_boundaries() {
         for needle in 0..=u8::MAX {
             // A lane differing by one can inherit a borrow from a match.
-            let mut bytes = [needle ^ 1; 40];
+            let fill = needle ^ 1;
+            let mut bytes = [fill; 40];
             for start in 0..8 {
                 for len in 0..=32 {
-                    assert_eq!(find_byte(&bytes[start..start + len], needle), None);
+                    let text = &bytes[start..start + len];
+                    assert_eq!(find_byte(text, needle), None);
+                    assert_eq!(byte_run(text, fill), len);
                     for index in 0..len {
                         bytes[start + index] = needle;
-                        assert_eq!(find_byte(&bytes[start..start + len], needle), Some(index));
-                        bytes[start + index] = needle ^ 1;
+                        let text = &bytes[start..start + len];
+                        assert_eq!(find_byte(text, needle), Some(index));
+                        assert_eq!(byte_run(text, fill), index);
+                        bytes[start + index] = fill;
                     }
                 }
             }
