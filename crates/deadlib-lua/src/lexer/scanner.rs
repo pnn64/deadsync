@@ -79,36 +79,23 @@ fn empty(line: u32) -> Token {
 }
 
 fn long_boundary(bytes: &[u8], equals: usize) -> usize {
-    const ONE: u64 = 0x0101_0101_0101_0101;
-    const HIGH: u64 = 0x8080_8080_8080_8080;
-    let opening = u64::from_ne_bytes([if equals == 0 { b'[' } else { b']' }; 8]);
-    let (chunks, tail) = bytes.as_chunks::<8>();
+    let opening = if equals == 0 { b'[' } else { b']' };
+    let boundary = |byte| (byte == b']') | (byte == b'\n') | (byte == b'\r') | (byte == opening);
+    let (chunks, tail) = bytes.as_chunks::<32>();
     for (index, chunk) in chunks.iter().enumerate() {
-        let word = u64::from_ne_bytes(*chunk);
-        let a = word ^ opening;
-        let b = word ^ u64::from_ne_bytes([b']'; 8]);
-        let c = word ^ u64::from_ne_bytes([b'\n'; 8]);
-        let d = word ^ u64::from_ne_bytes([b'\r'; 8]);
-        // A zero byte in any XOR marks a possible delimiter. Subtraction can
-        // also flag a neighboring lane, so locate the first byte in that chunk.
-        if ((a.wrapping_sub(ONE) & !a)
-            | (b.wrapping_sub(ONE) & !b)
-            | (c.wrapping_sub(ONE) & !c)
-            | (d.wrapping_sub(ONE) & !d))
-            & HIGH
-            != 0
-        {
-            return index * 8
+        // A non-short-circuiting reduction lets LLVM compare a block in parallel.
+        if chunk.iter().fold(false, |hit, &byte| hit | boundary(byte)) {
+            return index * 32
                 + chunk
                     .iter()
-                    .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
+                    .position(|&byte| boundary(byte))
                     .expect("delimiter in marked chunk");
         }
     }
     bytes.len() - tail.len()
         + tail
             .iter()
-            .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
+            .position(|&byte| boundary(byte))
             .unwrap_or(tail.len())
 }
 
