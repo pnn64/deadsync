@@ -41,65 +41,29 @@ enum State {
     Emit,
 }
 
-/// A word of at most eight bytes as a zero-padded integer. Words contain no
-/// NUL byte, so the padding cannot make two different words equal.
-const fn word(text: &[u8]) -> u64 {
-    let mut bytes = [0; 8];
-    let mut index = 0;
-    while index < text.len() {
-        bytes[index] = text[index];
-        index += 1;
-    }
-    u64::from_le_bytes(bytes)
-}
-
 fn keyword(text: &[u8]) -> Kind {
-    const AND: u64 = word(b"and");
-    const BREAK: u64 = word(b"break");
-    const DO: u64 = word(b"do");
-    const ELSE: u64 = word(b"else");
-    const ELSEIF: u64 = word(b"elseif");
-    const END: u64 = word(b"end");
-    const FALSE: u64 = word(b"false");
-    const FOR: u64 = word(b"for");
-    const FUNCTION: u64 = word(b"function");
-    const IF: u64 = word(b"if");
-    const IN: u64 = word(b"in");
-    const LOCAL: u64 = word(b"local");
-    const NIL: u64 = word(b"nil");
-    const NOT: u64 = word(b"not");
-    const OR: u64 = word(b"or");
-    const REPEAT: u64 = word(b"repeat");
-    const RETURN: u64 = word(b"return");
-    const THEN: u64 = word(b"then");
-    const TRUE: u64 = word(b"true");
-    const UNTIL: u64 = word(b"until");
-    const WHILE: u64 = word(b"while");
-    if text.len() > 8 {
-        return Kind::Name;
-    }
-    match word(text) {
-        AND => Kind::And,
-        BREAK => Kind::Break,
-        DO => Kind::Do,
-        ELSE => Kind::Else,
-        ELSEIF => Kind::ElseIf,
-        END => Kind::End,
-        FALSE => Kind::False,
-        FOR => Kind::For,
-        FUNCTION => Kind::Function,
-        IF => Kind::If,
-        IN => Kind::In,
-        LOCAL => Kind::Local,
-        NIL => Kind::Nil,
-        NOT => Kind::Not,
-        OR => Kind::Or,
-        REPEAT => Kind::Repeat,
-        RETURN => Kind::Return,
-        THEN => Kind::Then,
-        TRUE => Kind::True,
-        UNTIL => Kind::Until,
-        WHILE => Kind::While,
+    match text {
+        b"and" => Kind::And,
+        b"break" => Kind::Break,
+        b"do" => Kind::Do,
+        b"else" => Kind::Else,
+        b"elseif" => Kind::ElseIf,
+        b"end" => Kind::End,
+        b"false" => Kind::False,
+        b"for" => Kind::For,
+        b"function" => Kind::Function,
+        b"if" => Kind::If,
+        b"in" => Kind::In,
+        b"local" => Kind::Local,
+        b"nil" => Kind::Nil,
+        b"not" => Kind::Not,
+        b"or" => Kind::Or,
+        b"repeat" => Kind::Repeat,
+        b"return" => Kind::Return,
+        b"then" => Kind::Then,
+        b"true" => Kind::True,
+        b"until" => Kind::Until,
+        b"while" => Kind::While,
         _ => Kind::Name,
     }
 }
