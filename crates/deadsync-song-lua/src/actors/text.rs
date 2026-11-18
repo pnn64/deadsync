@@ -327,10 +327,9 @@ pub(super) fn font(
         };
         font = if let Some(path) = resolved {
             Some((crate::bitmap_font::song_lua_font_name(&path), path))
-        } else if crate::bitmap_font::song_lua_uses_builtin_theme_font(&name) {
-            Some(("miso", PathBuf::from("assets/fonts/miso/_miso light.ini")))
         } else {
-            None
+            crate::bitmap_font::song_lua_builtin_theme_font(&name)
+                .map(|(name, path)| (name, PathBuf::from(path)))
         };
     }
     Ok(font)

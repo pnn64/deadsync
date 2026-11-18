@@ -1,4 +1,4 @@
-//! Shared font identity and existing theme fallback policy. No Lua handles.
+//! Shared font identity and bundled Simply Love font aliases. No Lua handles.
 use crate::SONG_LUA_THEME_PATH_PREFIX;
 use std::{
     collections::HashMap,
@@ -6,14 +6,31 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 
-pub(crate) fn song_lua_uses_builtin_theme_font(raw: &str) -> bool {
+pub(crate) fn song_lua_builtin_theme_font(raw: &str) -> Option<(&'static str, &'static str)> {
     let trimmed = raw.trim().trim_start_matches('/');
     if trimmed.is_empty() {
-        return false;
+        return None;
     }
     let normalized = trimmed.replace('\\', "/");
-    normalized.starts_with(SONG_LUA_THEME_PATH_PREFIX)
-        || (!normalized.contains('/') && Path::new(&normalized).extension().is_none())
+    let name = if let Some(path) = normalized.strip_prefix(SONG_LUA_THEME_PATH_PREFIX) {
+        path.strip_prefix("F/").unwrap_or(path)
+    } else if !normalized.contains('/') && Path::new(&normalized).extension().is_none() {
+        normalized.as_str()
+    } else {
+        return None;
+    };
+    // BitmapText resolves named fonts through ThemeManager. Simply Love's
+    // Common Header.redir selects Wendy/_wendy small; Common Normal.redir
+    // selects Miso/_miso light. GetPathF's group and element use a slash in
+    // our virtual paths, while the native theme filenames use a space.
+    if name.eq_ignore_ascii_case("Common Header")
+        || name.eq_ignore_ascii_case("Common/Header")
+        || name.eq_ignore_ascii_case("Wendy/_wendy small")
+    {
+        Some(("wendy", "assets/fonts/wendy/_wendy small.ini"))
+    } else {
+        Some(("miso", "assets/fonts/miso/_miso light.ini"))
+    }
 }
 
 pub(crate) fn song_lua_font_name(font_path: &Path) -> &'static str {

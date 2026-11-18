@@ -255,6 +255,108 @@ fn font_resolution_and_builtin_fallback_match_production() {
 }
 
 #[test]
+fn common_header_font_uses_native_life_meter_glyphs() {
+    use deadlib_assets::FontStore;
+    use deadlib_present::font::{find_glyph, measure_line_width_logical, parse};
+    use std::path::Path;
+
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let native: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(repo.join("tests/fixtures/itgmania-fonts/wendy/_wendy small.json")).unwrap(),
+    )
+    .unwrap();
+    let native_one = native["glyphs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|glyph| glyph["codepoint"] == u32::from('1'))
+        .unwrap();
+    let mut fonts = FontStore::new();
+    for live in [false, true] {
+        for expression in [
+            "'Common header'",
+            "'cOmMoN HeAdEr'",
+            "THEME:GetPathF('Common', 'Header')",
+            "THEME:GetPathF('', 'Common header')",
+        ] {
+            let files = tempfile::tempdir().unwrap();
+            let mut context = SongLuaCompileContext::new(files.path(), "header life meter");
+            context.live = live;
+            let mut runtime = SongRuntime::new(&context).unwrap();
+            let definition = execute(
+                &mut runtime,
+                &format!("return Def.BitmapText{{Font={expression},Text='111111111'}}"),
+            )[0];
+            let scene = runtime.instantiate_actor(definition).unwrap();
+            let actor = runtime.actor_scene_root(scene).unwrap();
+            let payload = runtime.actor_bitmap_text(actor).unwrap();
+            let (name, path) = payload.font.unwrap();
+            assert_eq!(name, "wendy", "{expression}, live={live}");
+            assert_eq!(path, Path::new("assets/fonts/wendy/_wendy small.ini"));
+
+            // Simply Love's Common Header.redir selects this native font.
+            // Paperclip draws its life meter with nine '1' glyphs at 50% life.
+            fonts.register_font(name, parse(repo.join(path).to_str().unwrap()).unwrap().font);
+            let font = fonts.fonts().get(name).unwrap();
+            let one = find_glyph(font, '1', fonts.fonts()).unwrap();
+            let expected_advance = native_one["advance"].as_i64().unwrap() as i32;
+            assert_eq!(one.advance_i32, expected_advance);
+            assert_eq!(
+                one.size,
+                [
+                    native_one["width"].as_f64().unwrap() as f32,
+                    native_one["height"].as_f64().unwrap() as f32,
+                ]
+            );
+            assert_eq!(
+                one.offset,
+                [
+                    native_one["horizontal_shift"].as_f64().unwrap() as f32,
+                    native_one["vertical_shift"].as_f64().unwrap() as f32,
+                ]
+            );
+            assert_eq!(font.height, native["height"].as_i64().unwrap() as i32);
+            assert_eq!(
+                measure_line_width_logical(font, &payload.text, fonts.fonts()),
+                9 * expected_advance
+            );
+        }
+    }
+}
+
+#[test]
+fn common_header_font_keeps_local_font_precedence() {
+    let files = tempfile::tempdir().unwrap();
+    let local = files.path().join("Common header.ini");
+    std::fs::write(&local, "[main]\nLineSpacing=12\n").unwrap();
+    let context = SongLuaCompileContext::new(files.path(), "local font precedence");
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let definition = execute(
+        &mut runtime,
+        "return Def.BitmapText{Font='Common header.ini'}",
+    )[0];
+    let scene = runtime.instantiate_actor(definition).unwrap();
+    let actor = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"label", actor).unwrap();
+    execute(
+        &mut runtime,
+        &format!(
+            "label.__songlua_script_dir={:?}",
+            deadsync_song_lua::file_path_string(files.path())
+        ),
+    );
+    assert_eq!(
+        runtime.actor_bitmap_text(actor).unwrap().font.unwrap().1,
+        local
+    );
+    execute(&mut runtime, "label.Font=THEME:GetPathF('Common','Normal')");
+    assert_eq!(
+        runtime.actor_bitmap_text(actor).unwrap().font.unwrap().0,
+        "miso"
+    );
+}
+
+#[test]
 fn text_layout_strict_flags_fit_bounds_and_zoom_ordering() {
     for live in [false, true] {
         let mut pair = Pair::new(live);
