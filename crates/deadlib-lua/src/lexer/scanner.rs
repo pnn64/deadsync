@@ -78,9 +78,7 @@ fn empty(line: u32) -> Token {
     }
 }
 
-fn long_boundary(bytes: &[u8], equals: usize) -> usize {
-    let opening = if equals == 0 { b'[' } else { b']' };
-    let boundary = |byte| (byte == b']') | (byte == b'\n') | (byte == b'\r') | (byte == opening);
+fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
     let (chunks, tail) = bytes.as_chunks::<32>();
     for (index, chunk) in chunks.iter().enumerate() {
         // A non-short-circuiting reduction lets LLVM compare a block in parallel.
@@ -573,12 +571,8 @@ impl Scanner {
                     }
                 }
                 State::LineComment => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|&c| !matches!(c, b'\n' | b'\r'))
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos +=
+                        scan_boundary(&input[self.pos..], |byte| (byte == b'\n') | (byte == b'\r'));
                     if self.pos < input.len() || closed {
                         self.state = State::Skip;
                     }
@@ -714,7 +708,10 @@ impl Scanner {
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
-                        let count = long_boundary(rest, equals);
+                        let opening = if equals == 0 { b'[' } else { b']' };
+                        let count = scan_boundary(rest, |byte| {
+                            (byte == b']') | (byte == b'\n') | (byte == b'\r') | (byte == opening)
+                        });
                         if !comment {
                             self.text.try_extend_from_slice(&rest[..count])?;
                         }
@@ -898,6 +895,25 @@ mod tests {
                 expected,
                 "one-byte input: {source:?}"
             );
+        }
+    }
+
+    #[test]
+    fn line_comments_stop_at_the_first_newline_across_blocks() {
+        for len in [31, 32, 33, 63, 64, 65] {
+            for newline in [b"\n".as_slice(), b"\r", b"\r\n", b"\n\r"] {
+                let mut source = b"--".to_vec();
+                source.extend((0..len).map(|i| if i % 2 == 0 { 0 } else { 255 }));
+                source.extend_from_slice(newline);
+                source.extend_from_slice(b"return");
+                let expected = vec![
+                    (Kind::Return, 2, 2, Vec::new(), 0),
+                    (Kind::Eof, 2, 2, Vec::new(), 0),
+                ];
+                assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
+                let ends = (0..=source.len()).collect::<Vec<_>>();
+                assert_eq!(tokens(&source, &ends), Ok(expected));
+            }
         }
     }
 
