@@ -8,9 +8,12 @@ use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
     score_leader_alphas,
 };
+use crate::screens::components::gameplay::layout::{
+    DIFFICULTY_METER_SIZE, gameplay_hud_x_positions, gameplay_top_row_layout,
+};
 use crate::screens::components::gameplay::{
-    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield,
-    step_stats_gifs,
+    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats,
+    notefield, step_stats_gifs,
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::density::{self, DensityHistCache};
@@ -107,7 +110,6 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
-const DIFFICULTY_METER_SIZE: f32 = 30.0;
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 const DEFAULT_NOTEFIELD_WIDTH: f32 = 256.0;
 
@@ -4816,7 +4818,8 @@ pub fn frame_layers<'a>(
             });
         }
         ScreenLayer::Hud => {
-            let hud_x = gameplay_hud_x_positions(screen_width(), screen_center_x(), is_wide());
+            let hud_x = gameplay_hud_x_positions(screen_width(), screen_height());
+            let top_row = gameplay_top_row_layout(screen_width(), screen_height());
             let hud_width = screen_width().min(854.0);
 
             let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
@@ -5224,7 +5227,7 @@ pub fn frame_layers<'a>(
             }
             // Song Title Box (SongMeter)
             {
-                let w = widescale(310.0, 417.0);
+                let w = top_row.song_meter_width;
                 let h = 22.0;
                 let box_cx = screen_center_x();
                 let box_cy = 20.0;
@@ -5342,30 +5345,19 @@ pub fn frame_layers<'a>(
                                 life_visual.hot_age,
                                 || player_life_color(player_idx),
                             );
-                            let w = 136.0;
+                            let w = top_row.health_meter_width;
                             let h = 18.0;
                             let meter_cy = 20.0;
                             let meter_cx = screen_center_x()
-                                + match play_style {
-                                    profile_data::PlayStyle::Versus
-                                    | profile_data::PlayStyle::PumpVersus
-                                    | profile_data::PlayStyle::Couple
-                                    | profile_data::PlayStyle::PumpCouple
-                                    | profile_data::PlayStyle::Routine
-                                    | profile_data::PlayStyle::PumpRoutine => match side {
-                                        profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                        profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
-                                    },
-                                    _ => match side {
-                                        profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                        profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
-                                    },
+                                + match side {
+                                    profile_data::PlayerSide::P1 => -top_row.health_meter_offset,
+                                    profile_data::PlayerSide::P2 => top_row.health_meter_offset,
                                 };
 
                             // Frames/border
                             presentation_skeleton.push(static_life_slot, actors, |actors| {
                                 actors.push(act!(quad:
-                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0 * top_row.scale, h + 4.0):
                                 diffuse(1.0, 1.0, 1.0, 1.0): z(90)
                             ));
                                 actors.push(act!(quad:
@@ -5408,9 +5400,19 @@ pub fn frame_layers<'a>(
                                 let life_text_color = player_life_color(player_idx);
                                 let (outer_x, inner_x, text_x, align_x) =
                                     if side == profile_data::PlayerSide::P1 {
-                                        (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                                    (
+                                        meter_cx - 76.0 * top_row.scale,
+                                        meter_cx - 77.0 * top_row.scale,
+                                        meter_cx - 77.0 * top_row.scale,
+                                        1.0,
+                                    )
                                     } else {
-                                        (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
+                                    (
+                                        meter_cx + 76.0 * top_row.scale,
+                                        meter_cx + 77.0 * top_row.scale,
+                                        meter_cx + 78.0 * top_row.scale,
+                                        0.0,
+                                    )
                                     };
                                 actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, meter_cy):
@@ -5497,24 +5499,34 @@ pub fn frame_layers<'a>(
                                 life_visual.hot_age,
                                 || player_life_color(player_idx),
                             );
-                            let bar_w = 16.0;
+                            let bar_w = 16.0 * top_row.scale;
                             let bar_h = 250.0;
 
                             let x = {
                                 // SL: default to _screen.cx +/- SL_WideScale(302, 400).
                                 let mut x = screen_center_x()
                                     + match side {
-                                        profile_data::PlayerSide::P1 => -widescale(302.0, 400.0),
-                                        profile_data::PlayerSide::P2 => widescale(302.0, 400.0),
+                                        profile_data::PlayerSide::P1 => {
+                                            -top_row.vertical_health_meter_offset
+                                        }
+                                        profile_data::PlayerSide::P2 => {
+                                            top_row.vertical_health_meter_offset
+                                        }
                                     };
 
                                 // SL: Double and Center1Player sit next to the notefield.
                                 if play_style.is_double() || centered_single_notefield {
-                                    let half_nf = state.notefield_width(player_idx) * 0.5;
+                                    let half_nf = state.notefield_width(player_idx)
+                                        * 0.5
+                                        * top_row.field_scale;
                                     x = screen_center_x()
                                         + match side {
-                                            profile_data::PlayerSide::P1 => -(half_nf + 10.0),
-                                            profile_data::PlayerSide::P2 => half_nf + 10.0,
+                                            profile_data::PlayerSide::P1 => {
+                                                -(half_nf + 10.0 * top_row.field_scale)
+                                            }
+                                            profile_data::PlayerSide::P2 => {
+                                                half_nf + 10.0 * top_row.field_scale
+                                            }
                                         };
                                 } else if screen_width() / screen_height().max(1.0) > (21.0 / 9.0)
                                     && state.num_players() > 1
@@ -5527,7 +5539,9 @@ pub fn frame_layers<'a>(
                                         };
                                 }
 
-                                x
+                                let half_bar_width =
+                                    ((bar_w + 2.0) * 0.5).min(screen_width() * 0.5);
+                                x.clamp(half_bar_width, screen_width() - half_bar_width)
                             };
 
                             let cy = bar_h + 10.0;
@@ -5785,34 +5799,6 @@ pub fn draw_field(
     )
 }
 
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct GameplayHudXPositions {
-    score_p1: f32,
-    score_p2: f32,
-    difficulty_p1: f32,
-    difficulty_p2: f32,
-}
-
-fn gameplay_hud_x_positions(
-    screen_w: f32,
-    screen_center_x: f32,
-    wide: bool,
-) -> GameplayHudXPositions {
-    let hud_width = screen_w.min(854.0);
-    let reference_width = if wide { 854.0 } else { 640.0 };
-    let difficulty_offset = (if wide { 342.5 } else { 292.5 })
-        * (hud_width / reference_width).clamp(0.0, 1.0);
-    let difficulty_half_width = (DIFFICULTY_METER_SIZE * 0.5).min(screen_w * 0.5);
-    GameplayHudXPositions {
-        score_p1: screen_center_x - hud_width / 4.3,
-        score_p2: screen_center_x + hud_width / 2.75,
-        difficulty_p1: (screen_center_x - difficulty_offset)
-            .clamp(difficulty_half_width, screen_w - difficulty_half_width),
-        difficulty_p2: (screen_center_x + difficulty_offset)
-            .clamp(difficulty_half_width, screen_w - difficulty_half_width),
-    }
-}
 
 // ─── SMX sensor display ────────────────────────────────────────────────────────
 
@@ -6281,37 +6267,6 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn gameplay_hud_anchors_scale_to_narrow_viewports() {
-        let four_three = super::gameplay_hud_x_positions(640.0, 320.0, false);
-        assert_eq!(four_three.difficulty_p1, 27.5);
-        assert_eq!(four_three.difficulty_p2, 612.5);
-
-        for (preset_width, preset_height) in [
-            (640.0, 480.0),
-            (800.0, 600.0),
-            (1024.0, 768.0),
-            (1280.0, 1024.0),
-            (1280.0, 720.0),
-            (640.0, 640.0),
-            (1280.0, 800.0),
-            (1280.0, 540.0),
-            (1720.0, 720.0),
-            (540.0, 960.0),
-        ] {
-            let aspect = preset_width / preset_height;
-            let width = 480.0 * aspect;
-            let wide = aspect >= 1.6;
-            let anchors = super::gameplay_hud_x_positions(width, width * 0.5, wide);
-            assert!(anchors.score_p1 > 0.0 && anchors.score_p1 < width);
-            assert!(anchors.score_p2 > 0.0 && anchors.score_p2 < width);
-            assert!(anchors.difficulty_p1 >= super::DIFFICULTY_METER_SIZE * 0.5);
-            assert!(
-                anchors.difficulty_p2 <= width - super::DIFFICULTY_METER_SIZE * 0.5
-            );
-        }
-    }
-
     #[test]
     fn autoplay_off_failure_preserves_life_and_player_identity() {
         let mut players = std::array::from_fn::<_, 2, _>(|_| deadsync_gameplay::init_player_runtime());

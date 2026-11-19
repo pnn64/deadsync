@@ -1,5 +1,6 @@
 use deadsync_profile::PlayerSide;
 use deadsync_theme_simply_love::scorebox::SCOREBOX_W;
+use deadsync_theme_simply_love::ui_layout::UILayoutType;
 use deadsync_theme_simply_love::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsPaneParams, density_graph_rect,
     judgment_count_center_x, pack_banner_placement, pane_layout, pane_rect, scorebox_frame,
@@ -19,10 +20,11 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
     assert!(step_stats_aspect_enabled(1280.0, 720.0));
     assert!(!step_stats_aspect_enabled(720.0, 1280.0));
 
-    for (screen_w, screen_h, notefield_center_x, wide) in
-        [(640.0, 480.0, 160.0, false), (1280.0, 720.0, 320.0, true)]
+    for (screen_w, screen_h, notefield_center_x) in
+        [(640.0, 480.0, 160.0), (1280.0, 720.0, 320.0)]
     {
         let screen_center_x = screen_w * 0.5;
+        let layout_type = UILayoutType::from_aspect_ratio(screen_w / screen_h);
         for player_side in [PlayerSide::P1, PlayerSide::P2] {
             let playfield_center_x = if player_side == PlayerSide::P1 {
                 notefield_center_x
@@ -38,19 +40,19 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
                 player_side,
                 num_players: 1,
                 notefield_width: Some(256.0),
-                wide,
+                layout_type,
             });
             let sidepane = pane_rect(layout, screen_h);
             let graph = density_graph_rect(0.0, layout);
-            let banner = song_banner_placement(layout, wide, player_side, 1);
-            let slide = song_info_slide(layout, player_side, wide, 1, true, 3, graph.y);
+            let banner = song_banner_placement(layout, player_side, 1);
+            let slide = song_info_slide(layout, player_side, 1, true, 3, graph.y);
             let pack_banner = pack_banner_placement(slide);
             let text = song_info_text_placement(slide, true, song_info_text_zoom(layout));
             let note_field = Rect {
                 left: playfield_center_x - 128.0,
                 right: playfield_center_x + 128.0,
             };
-            let count_center_x = judgment_count_center_x(layout, player_side, wide, 1);
+            let count_center_x = judgment_count_center_x(layout, player_side, 1);
 
             assert!(count_center_x >= sidepane.left && count_center_x <= sidepane.right);
             assert!(graph.x >= sidepane.left && graph.x + graph.w <= sidepane.right);
@@ -61,7 +63,7 @@ fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
             assert!(banner.x + banner_half_w <= sidepane.right);
             assert!(banner.y - banner_half_h >= sidepane.top);
             assert!(banner.y + banner_half_h <= sidepane.bottom);
-            let timing_frame = scorebox_frame(layout, wide, player_side, 1);
+            let timing_frame = scorebox_frame(layout, player_side, 1);
             let timing_half_width = SCOREBOX_W * timing_frame.zoom * 0.5;
             let expected_left = sidepane
                 .left

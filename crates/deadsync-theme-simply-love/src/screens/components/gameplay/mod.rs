@@ -1,4 +1,5 @@
 mod display_mods;
+pub(crate) mod layout;
 pub mod gameplay_stats;
 pub(crate) mod golf;
 pub mod notefield;
