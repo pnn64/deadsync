@@ -968,6 +968,13 @@ fn decompress_bits_into<const DISPATCH: bool>(
                 }
                 left -= 1;
             }
+            if left != 0 {
+                // Direct copying consumes any physically prefetched bytes that
+                // are no longer accounted in word. Discard their cached bits
+                // before a later refill combines them with subsequent input.
+                debug_assert_eq!(bits.count, 0);
+                bits.word = 0;
+            }
             while left != 0 {
                 if bits.pos == bits.input.len() && !bits.advance() {
                     return Err(Error::Truncated);
@@ -1490,6 +1497,133 @@ mod tests {
                     "portable {} fragment={fragment}",
                     case.name
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn stored_and_mixed_blocks_preserve_output_limits_and_prefixes() {
+        use huffman_fixtures::{Codes, Wire};
+        let mut lengths = [8; 288];
+        lengths[144..256].fill(9);
+        lengths[256..280].fill(7);
+        let literals = Codes::new(&lengths);
+        let distances = Codes::new(&[5; 32]);
+        let tail = [
+            13, 29, 47, 193, 211, 229, 0, 255, 7, 31, 63, 127, 128, 1, 2, 3, 4,
+        ];
+        for stored_len in [0, 1, 7, 8, 31, 258, 65535] {
+            let prefix: Vec<u8> = (0..stored_len)
+                .map(|n| (n * 73 + n / 13 + 19) as u8)
+                .collect();
+            for mixed in [false, true] {
+                let mut wire = Wire::default();
+                let mut raw = prefix.clone();
+                wire.stored(&prefix, false);
+                if mixed {
+                    wire.put(2, 3); // Nonfinal fixed-Huffman block.
+                    if raw.len() >= 3 {
+                        literals.symbol(&mut wire, 285); // Length 258.
+                        distances.symbol(&mut wire, 2); // Distance 3.
+                        let seed: [u8; 3] = raw[raw.len() - 3..].try_into().unwrap();
+                        raw.extend((0..258).map(|n| seed[n % 3]));
+                    }
+                    for byte in [0, 144, 255, 31, 1] {
+                        literals.symbol(&mut wire, byte as usize);
+                        raw.push(byte);
+                    }
+                    literals.symbol(&mut wire, 256);
+                }
+                let tail = if stored_len == 0 && !mixed {
+                    &[][..]
+                } else {
+                    &tail[..]
+                };
+                wire.stored(tail, true);
+                raw.extend_from_slice(tail);
+                let bytes = wire.finish(&raw, false);
+                let mut reference = Vec::new();
+                std::io::Read::read_to_end(
+                    &mut flate2::read::ZlibDecoder::new(bytes.as_slice()),
+                    &mut reference,
+                )
+                .unwrap();
+                assert_eq!(reference, raw, "fixture stored={stored_len} mixed={mixed}");
+                let mut with_suffix = bytes.clone();
+                with_suffix.extend_from_slice(b"unconsumed stored-block suffix");
+                for slack in [0, 1, 258] {
+                    let limit = raw.len() + slack;
+                    for input in [&bytes, &with_suffix] {
+                        for actual in [
+                            decompress_prefix_sized(input, limit),
+                            decompress_bits::<false>(Bits::new(input), limit, true),
+                        ] {
+                            assert_eq!(
+                                actual.unwrap_or_else(|error| {
+                                    panic!(
+                                        "stored={stored_len} mixed={mixed} slack={slack}: {error:?}"
+                                    )
+                                }),
+                                (raw.clone(), bytes.len()),
+                                "stored={stored_len} mixed={mixed} slack={slack}"
+                            );
+                        }
+                    }
+                }
+                for fragment in [1, 7, 4096] {
+                    let mut framed = Vec::new();
+                    for payload in bytes.chunks(fragment) {
+                        // Framing CRCs are validated by the PNG parser before
+                        // it calls this internal inflater.
+                        framed.extend_from_slice(b"\0\0\0\0IDAT\0\0\0\0");
+                        framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+                        framed.extend_from_slice(b"IDAT");
+                        framed.extend_from_slice(payload);
+                        framed.extend_from_slice(&[0; 4]);
+                    }
+                    for slack in [0, 258] {
+                        let limit = raw.len() + slack;
+                        assert_eq!(
+                            decompress_idat(&framed, bytes.len(), limit).unwrap(),
+                            raw,
+                            "stored={stored_len} mixed={mixed} fragment={fragment} slack={slack}"
+                        );
+                        assert_eq!(
+                            decompress_bits::<false>(Bits::idat(&framed), limit, true).unwrap(),
+                            (raw.clone(), bytes.len())
+                        );
+                    }
+                }
+                if !raw.is_empty() {
+                    assert_eq!(
+                        decompress_prefix_sized(&bytes, raw.len() - 1),
+                        Err(Error::LimitExceeded)
+                    );
+                    assert_eq!(
+                        decompress_bits::<false>(Bits::new(&bytes), raw.len() - 1, true),
+                        Err(Error::LimitExceeded)
+                    );
+                }
+                for missing in [1, 4, 5] {
+                    assert_eq!(
+                        decompress_prefix_sized(&bytes[..bytes.len() - missing], raw.len()),
+                        Err(Error::Truncated)
+                    );
+                }
+                let mut bad = bytes.clone();
+                *bad.last_mut().unwrap() ^= 1;
+                assert_eq!(
+                    decompress_prefix_sized(&bad, raw.len()),
+                    Err(Error::Checksum)
+                );
+                // Metadata keeps its unsized path and charges produced output
+                // even when the complete stream fails its checksum.
+                let mut remaining = raw.len() + 9;
+                assert_eq!(
+                    decompress_metadata(&bad, &mut remaining),
+                    Err(Error::Checksum)
+                );
+                assert_eq!(remaining, 9);
             }
         }
     }
