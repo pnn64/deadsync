@@ -259,6 +259,33 @@ fn line_reads_preserve_lua51_fgets_and_embedded_nul_behavior() {
 }
 
 #[test]
+fn line_reads_cross_physical_buffers_with_peek_and_embedded_nuls() {
+    let program = compile(
+        br#"
+        local first = string.rep('x', 9001)
+        for _, size in ipairs{1,7,31,32,510,511,512,513,4096} do
+            local f = assert(io.tmpfile())
+            assert(f:write(first .. '\na\0hidden\nb\nlast'))
+            assert(f:seek('set', 0))
+            assert(f:setvbuf(size == 1 and 'no' or 'full', size))
+            assert(f:read(0) == '')
+            assert(f:read('*l') == first)
+            assert(f:read('*l') == 'ab')
+            assert(f:read('*l') == 'last')
+            assert(f:read('*l') == nil)
+            assert(f:close())
+        end
+        return true
+    "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[test]
 fn zero_length_all_and_multiple_reads_keep_result_arity_and_stop_order() {
     compare(br#"
         local out={}

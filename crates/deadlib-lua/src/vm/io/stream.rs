@@ -1,5 +1,5 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
-use crate::memory::bytes::ByteOutput;
+use crate::{memory::bytes::ByteOutput, pattern::find_byte};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -238,6 +238,20 @@ impl Stream {
         loop {
             let mut len = 0;
             while len + 1 < chunk.len() {
+                if self.peek.is_none() && self.readable && self.position < self.read.len() {
+                    let room = chunk.len() - 1 - len;
+                    let buffered = &self.read[self.position..];
+                    let bytes = &buffered[..room.min(buffered.len())];
+                    let newline = find_byte(bytes, b'\n');
+                    let count = newline.map_or(bytes.len(), |index| index + 1);
+                    chunk[len..len + count].copy_from_slice(&bytes[..count]);
+                    self.position += count;
+                    len += count;
+                    if newline.is_some() {
+                        break;
+                    }
+                    continue;
+                }
                 let Some(byte) = self.get()? else {
                     break;
                 };
@@ -250,7 +264,7 @@ impl Stream {
             if len == 0 {
                 return Ok(!out.is_empty());
             }
-            let visible = chunk[..len].iter().position(|&b| b == 0).unwrap_or(len);
+            let visible = find_byte(&chunk[..len], 0).unwrap_or(len);
             out.reserve_bytes(visible).map_err(|_| 12)?;
             if visible != 0 && chunk[visible - 1] == b'\n' {
                 out.extend_bytes(&chunk[..visible - 1]).map_err(|_| 12)?;
