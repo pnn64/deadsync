@@ -186,6 +186,7 @@ fn polygon_clipping_preserves_interpolated_uvs_and_colors() {
                 let uv = [(pos[0] + 4.0) / 8.0, (pos[1] + 4.0) / 8.0];
                 ClipVertex {
                     pos,
+                    world_z: 0.0,
                     uv,
                     color: [uv[0], uv[1], 0.25, 0.8],
                 }
@@ -199,6 +200,7 @@ fn polygon_clipping_preserves_interpolated_uvs_and_colors() {
         for vertex in clipped {
             assert_eq!(vertex.pos[0].abs(), 2.0);
             assert_eq!(vertex.pos[1].abs(), 3.0);
+            assert_eq!(vertex.world_z, 0.0);
             assert_eq!(
                 vertex.uv,
                 [(vertex.pos[0] + 4.0) / 8.0, (vertex.pos[1] + 4.0) / 8.0]

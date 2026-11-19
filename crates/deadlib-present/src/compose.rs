@@ -8578,6 +8578,18 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
     } else {
         rot_z_deg.to_radians().sin_cos()
     };
+    // Sprite::DrawTexture crops local vertices before Actor's rotation. Keep
+    // that original pivot when the cropped quad uses the fast sprite path.
+    let (center_x, center_y) = if rot_z_deg == 0.0 {
+        (center_x, center_y)
+    } else {
+        let crop_x = center_x - base_center.x;
+        let crop_y = center_y - base_center.y;
+        (
+            cos_z.mul_add(crop_x, -sin_z * crop_y) + base_center.x,
+            sin_z.mul_add(crop_x, cos_z * crop_y) + base_center.y,
+        )
+    };
 
     let mut instance = renderer::SpriteInstanceRaw {
         center: [center_x, center_y, world_z, 0.0],
