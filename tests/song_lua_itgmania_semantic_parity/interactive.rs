@@ -322,15 +322,32 @@ pub(super) struct DrawChecks {
     pub degenerate_samples: usize,
     pub batched_samples: usize,
     pub uncompared_immediate_draws: usize,
+    pub uncompared_normal_draws: usize,
     pub missing_random_inputs: usize,
     failure_counts: BTreeMap<String, usize>,
     failure_examples: BTreeMap<(String, String), Value>,
     last_failure: Option<Value>,
 }
 
-struct ImmediateDraw {
+struct RecordedDraw {
     frame: RenderFrame,
     texture: Option<String>,
+    immediate: bool,
+}
+
+#[derive(Default)]
+struct RecordedDraws {
+    draws: BTreeMap<(i32, usize), VecDeque<RecordedDraw>>,
+    normal_owned: std::collections::BTreeSet<(i32, usize)>,
+}
+
+fn normal_draw_subtree(
+    overlays: &[SongLuaOverlayActor], owners: &std::collections::BTreeSet<usize>,
+) -> std::collections::BTreeSet<usize> {
+    (0..overlays.len()).filter(|&index| {
+        std::iter::successors(Some(index), |&index| overlays[index].parent_index)
+            .any(|index| owners.contains(&index))
+    }).collect()
 }
 
 fn native_draw_vertex_count(sample: &Value) -> Result<usize, String> {
@@ -628,12 +645,28 @@ fn native_draw_screen_projection_stops_at_texture_capture() {
     assert!(overlay_screen_state(&overlays, 0, None).is_none(), "missing screen state remains absent");
 }
 
+
+#[test]
+fn normal_draw_callbacks_suppress_only_their_owned_subtree() {
+    let actor = |parent_index| SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::ActorFrame, parent_index, name: None,
+        initial_state: SongLuaOverlayState::default(), message_commands: Vec::new(),
+    };
+    let overlays = vec![actor(None), actor(Some(0)), actor(Some(1)), actor(Some(0)), actor(None)];
+    assert!(normal_draw_subtree(&overlays, &std::collections::BTreeSet::new()).is_empty(),
+        "immediate draws add no normal owner and do not suppress automatic drawing");
+    assert_eq!(normal_draw_subtree(&overlays, &std::collections::BTreeSet::from([1])),
+        std::collections::BTreeSet::from([1,2]), "a quiet normal callback still owns its descendants");
+    assert_eq!(normal_draw_subtree(&overlays, &std::collections::BTreeSet::from([0])),
+        std::collections::BTreeSet::from([0,1,2,3]), "unrelated roots remain automatic");
+}
+
 impl DrawChecks {
-    fn immediate(
+    fn recorded(
         &self, state: &gameplay::State, screen: [f32; 2], clock: [f32; 2],
-    ) -> Result<BTreeMap<(i32, usize), VecDeque<ImmediateDraw>>, String> {
+    ) -> Result<RecordedDraws, String> {
         let frames = state.song_lua_draw_frames();
-        if frames.is_empty() { return Ok(BTreeMap::new()); }
+        if frames.is_empty() { return Ok(RecordedDraws::default()); }
         let scene = state.song_lua.as_ref().ok_or("draw submissions have no owned scene")?;
         let bindings = scene.visual_draw_bindings();
         let globals: BTreeMap<_, _> = bindings.iter().enumerate().map(|(dense, &(global, _))| (global, dense)).collect();
@@ -654,7 +687,8 @@ impl DrawChecks {
         }
         let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
         let mut composer = WholeSongComposer::new(&overlays);
-        let mut draws: BTreeMap<_, VecDeque<_>> = BTreeMap::new();
+        let mut recorded = RecordedDraws::default();
+        let mut normal_owners = std::collections::BTreeSet::new();
         for original in frames {
             let mut frame = original.clone();
             let remap = |index: &mut usize| -> Result<(), String> {
@@ -662,6 +696,7 @@ impl DrawChecks {
                 Ok(())
             };
             for owner in &mut frame.owners { remap(owner)?; }
+            if !frame.immediate { normal_owners.extend(frame.owners.iter().copied()); }
             for op in &mut frame.ops {
                 match op {
                     deadsync_song_lua::SongLuaDrawOp::Begin { capture, .. }
@@ -676,10 +711,13 @@ impl DrawChecks {
                     DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle).to_owned()),
                     _ => None,
                 });
-                draws.entry(target_slot(bindings[index].1)).or_default().push_back(ImmediateDraw { frame, texture });
+                recorded.draws.entry(target_slot(bindings[index].1)).or_default()
+                    .push_back(RecordedDraw { frame, texture, immediate: original.immediate });
             }
         }
-        Ok(draws)
+        recorded.normal_owned = normal_draw_subtree(&overlays, &normal_owners).into_iter()
+            .map(|index| target_slot(bindings[index].1)).collect();
+        Ok(recorded)
     }
 
     pub fn bind(
@@ -780,7 +818,7 @@ impl DrawChecks {
             self.targets = scene.visual_bindings()?.into_iter().collect();
         }
         let mut states = BTreeMap::new();
-        let mut immediate = self.immediate(state, screen, clock)?;
+        let mut recorded = self.recorded(state, screen, clock)?;
         let mut ordinary_draws = std::collections::BTreeSet::new();
         // ScreenGameplay is retained outside the independent song layer trees.
         // Use its live local pose for the same outer projection and fallback
@@ -848,14 +886,23 @@ impl DrawChecks {
                 }
                 continue;
             }
+            // A normal DrawFunction replaces automatic drawing of its owned
+            // subtree, even when it makes no submission for this actor.
+            if recorded.normal_owned.contains(&(group, index))
+                && recorded.draws.get(&(group, index)).is_none_or(VecDeque::is_empty)
+            {
+                self.fail(sample, "normal_draw_callback_did_not_submit_actor",
+                    json!({"group":group,"index":index}), mismatches);
+                continue;
+            }
             let composer = self
                 .composers
                 .entry(group)
                 .or_insert_with(|| WholeSongComposer::new(overlays));
-            let (frame, recorded_texture) = match immediate.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
+            let (frame, recorded_texture) = match recorded.draws.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
                 Some(draw) => {
                     if !random_ids.is_empty() {
-                        return Err("recorded immediate Draw needs raw random scope binding".into());
+                        return Err("recorded Draw needs raw random scope binding".into());
                     }
                     (draw.frame, Some(draw.texture))
                 },
@@ -955,7 +1002,10 @@ impl DrawChecks {
                     "first_actual_triangle":&rows[..rows.len().min(3)],"first_native_quad":&reference[..reference.len().min(4)]}),mismatches);
             }
         }
-        self.uncompared_immediate_draws += immediate.values().map(VecDeque::len).sum::<usize>();
+        for draw in recorded.draws.values().flatten() {
+            if draw.immediate { self.uncompared_immediate_draws += 1; }
+            else { self.uncompared_normal_draws += 1; }
+        }
         Ok(())
     }
 
@@ -984,6 +1034,7 @@ impl DrawChecks {
             "draw_mismatch_examples":self.failure_examples.values().collect::<Vec<_>>(),
             "equivalent_degenerate_culls":self.degenerate_samples,
             "uncompared_owned_immediate_draws":self.uncompared_immediate_draws,
+            "uncompared_owned_normal_draws":self.uncompared_normal_draws,
             "render_random_inputs_replayed":self.random.as_ref().map_or(0, render_random::Replay::used),
             "render_random_inputs_captured":self.random.as_ref().map_or(0, render_random::Replay::total),
             "unreplayed_render_random_inputs":self.random.as_ref().map_or(0, |random| random.total() - random.used()),

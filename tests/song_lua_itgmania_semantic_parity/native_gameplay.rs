@@ -2956,7 +2956,10 @@ return Def.ActorFrame {
         let early = super::interactive::submitted_rows(&first[0]);
         let late = super::interactive::submitted_rows(&first[1]);
         assert_eq!(early.len(), 6);
-        assert!(early.iter().all(|v| (v[6]-0.25).abs()<0.002 && (v[7]-0.5).abs()<0.002 && (v[8]-0.75).abs()<0.002));
+        // Native RageTypes.h::FTOC packs the submitted color into 256 bins.
+        let packed_diffuse = [64.0 / 255.0, 128.0 / 255.0, 192.0 / 255.0];
+        assert!(early.iter().all(|v| v[6..9].iter().zip(packed_diffuse)
+            .all(|(&actual, expected)| (actual - expected).abs() < 1e-6)), "{early:?}");
         let min = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::INFINITY,f32::min);
         let max = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::NEG_INFINITY,f32::max);
         assert!((min(&early,0) - (-1.0-1.0/screen[0])).abs()<0.00001);
@@ -2969,6 +2972,138 @@ return Def.ActorFrame {
         assert_eq!(second.len(), 1, "later frames keep automatic drawing without repeating the early pass");
         assert!(update_judgment_control(&mut state, 20_000_000, 1_004_000_000).draw_frames.is_empty());
         assert_eq!(frozen.diffuse, [0.25,0.5,0.75,1.0], "later commands cannot mutate the retained submission");
+    }
+
+
+    #[test]
+    fn gameplay_live_draw_callback_retains_each_submission_and_target_scope() {
+        use deadsync_song_lua::{SongLuaDrawOp as Op, SongLuaDrawSource as Source, SongLuaLiveTarget as Target};
+        use deadsync_song_lua::playback::actor_conformance::WholeSongComposer;
+        let mut state = owned_judgment_control("normal-live-draw", "1000\n0000\n0000\n0001\n", r#"
+return Def.ActorFrame {
+    InitCommand=function(self) self:xy(401,211):rotationz(30):fov(60) end,
+    OnCommand=function(self)
+        self:sleep(9999)
+        local q=self:GetChild('Paint')
+        q:xy(2,3):diffuse(1,1,0,1):Draw()
+        self:SetDrawFunction(function(self)
+            local target=self:GetChild('Target'):GetTexture()
+            q:xy(3,5):diffuse(1,0,0,1):Draw()
+            target:BeginRenderingTo(true)
+            q:xy(11,13):diffuse(0,1,0,1):Draw()
+            target:FinishRenderingTo()
+            q:xy(19,23):diffuse(0,0,1,1):Draw()
+            q:xy(100,101):diffuse(1,0,1,1)
+        end)
+    end,
+    Def.ActorFrameTexture {
+        Name='Target',
+        InitCommand=function(self)
+            self:SetTextureName('NormalLiveTarget'):SetWidth(SCREEN_WIDTH):SetHeight(SCREEN_HEIGHT)
+                :EnableAlphaBuffer(true):Create()
+        end,
+    },
+    Def.Quad { Name='Paint', InitCommand=function(self) self:zoomto(7,11) end },
+}
+"#, 0.0);
+        gameplay::update(&mut state, 0.002, GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot { music_nanos: -250_000_000,
+                has_music_mapping: true, valid_at_host_nanos: 1_000_000_000, ..Default::default() },
+            ..Default::default()
+        }, || 1_000_000_000, &mut Vec::new());
+        let scene = state.song_lua.as_ref().unwrap();
+        let screen = [scene.context().screen_width, scene.context().screen_height];
+        let mut checks = super::interactive::DrawChecks::default();
+        let mut mismatches = Vec::new();
+        checks.compare(&state, &[], screen, [0.0,0.0], std::path::Path::new("normal-live-draw.lua"), &mut mismatches)
+            .expect("the comparator can compose both immediate and normal submissions");
+        assert_eq!(checks.uncompared_immediate_draws, 1);
+        assert_eq!(checks.uncompared_normal_draws, 3, "normal RGB calls are not extra immediate calls");
+        assert_eq!(checks.failures, 0);
+        assert!(mismatches.is_empty());
+        let output = state.take_song_lua_output();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        assert_eq!(output.draw_frames.iter().map(|frame| frame.immediate).collect::<Vec<_>>(), [true, false],
+            "the command Draw precedes the completed normal callback");
+        assert!(state.song_lua_draw_frames().is_empty(), "taking output consumes both frame kinds once");
+        let normal = &output.draw_frames[1];
+        assert_eq!(normal.ops.len(), 5, "Draw, Begin, Draw, Finish, Draw");
+        let calls = normal.ops.iter().filter_map(|op| match op {
+            Op::Draw { source, state, parents, camera, .. } => Some((source, state, parents, camera)),
+            _ => None,
+        }).collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3);
+        assert!(calls.iter().all(|call| call.0 == calls[0].0), "all calls draw the same owned Quad");
+        for (call, (xy, color)) in calls.iter().zip([
+            ([3.0,5.0], [1.0,0.0,0.0,1.0]),
+            ([11.0,13.0], [0.0,1.0,0.0,1.0]),
+            ([19.0,23.0], [0.0,0.0,1.0,1.0]),
+        ]) {
+            assert_eq!([call.1.x, call.1.y], xy);
+            assert_eq!(call.1.diffuse, color, "later setters cannot replace an earlier submission");
+        }
+        assert!(!calls[0].2.is_empty() && calls[0].3.is_some());
+        assert!(calls[1].2.is_empty() && calls[1].3.is_none(), "BeginRenderingTo resets parents and camera");
+        assert_eq!(calls[0].2, calls[2].2, "FinishRenderingTo restores the caller transform");
+        assert_eq!(calls[0].3, calls[2].3, "FinishRenderingTo restores the caller camera");
+        assert_eq!(calls[0].3.as_ref().and_then(|camera| camera.fov), Some(60.0));
+        assert!(matches!(normal.ops[1], Op::Begin { preserve: true, .. }));
+        assert!(matches!((&normal.ops[1], &normal.ops[3]),
+            (Op::Begin { capture: a, .. }, Op::Finish { capture: b }) if a == b));
+
+        let bindings = state.song_lua.as_ref().unwrap().visual_draw_bindings();
+        let group = bindings.iter().find(|(global, _)| *global == normal.owners[0]).unwrap().1;
+        let local: std::collections::BTreeMap<_, _> = bindings.iter().filter_map(|&(global, target)| match (group, target) {
+            (Target::Root(_), Target::Root(index)) => Some((global, index)),
+            (Target::Foreground(a, _), Target::Foreground(b, index)) if a == b => Some((global, index)),
+            (Target::Background(a, _), Target::Background(b, index)) if a == b => Some((global, index)),
+            _ => None,
+        }).collect();
+        let mut frames = output.draw_frames.clone();
+        for frame in &mut frames {
+            for owner in &mut frame.owners { *owner = local[&*owner]; }
+            for op in &mut frame.ops {
+                match op {
+                    Op::Begin { capture, .. } | Op::Finish { capture } => *capture = local[&*capture],
+                    Op::Draw { source: Source::Overlay(index), .. } => *index = local[&*index],
+                    _ => {}
+                }
+            }
+        }
+        let visuals = &state.gameplay.mods.song_lua_visuals;
+        let overlays = match group {
+            Target::Root(_) => &visuals.overlays,
+            Target::Foreground(layer, _) => &visuals.foreground_visual_layers[layer].overlays,
+            Target::Background(layer, _) => &visuals.background_visual_layers[layer].overlays,
+        };
+        let states = overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+        let mut composer = WholeSongComposer::new(overlays);
+        let composed = frames.iter().flat_map(|frame|
+            composer.render_recorded_frame(overlays, &states, frame, screen, frame.second, 0.0))
+            .map(|(_, frame)| frame).collect::<Vec<_>>();
+        assert_eq!(composed.len(), 4);
+        let rows = composed.iter().map(super::interactive::submitted_rows).collect::<Vec<_>>();
+        for (rows, rgb) in rows.iter().zip([[1.0,1.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[0.0,0.0,1.0]]) {
+            assert_eq!(rows.len(), 6);
+            assert!(rows.iter().all(|row| row[6..9] == rgb), "each already-composed pass retains its own color");
+        }
+        assert!(rows[1].iter().any(|row| (row[3]-1.0).abs() > 0.1), "outside the target retains perspective");
+        assert!(rows[2].iter().all(|row| row[3] == 1.0), "the target draw is orthographic");
+        let min = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::INFINITY,f32::min);
+        let max = |rows: &[[f32;10]], axis: usize| rows.iter().map(|v|v[axis]).fold(f32::NEG_INFINITY,f32::max);
+        assert!((min(&rows[2],0) - (-1.0+15.0/screen[0])).abs()<0.00001);
+        assert!((max(&rows[2],0) - (-1.0+29.0/screen[0])).abs()<0.00001);
+        assert!((min(&rows[2],1) - (1.0-37.0/screen[1])).abs()<0.00001);
+        assert!((max(&rows[2],1) - (1.0-15.0/screen[1])).abs()<0.00001);
+        assert_ne!(rows[1][0][..4], rows[3][0][..4]);
+        composer.set_draw_frames(overlays, &frames);
+        let captures = composer.render_layer_capture_frames(overlays, &states, screen, normal.second, 0.0);
+        assert_eq!(captures.len(), 1, "normal callback ownership suppresses the target's automatic pass");
+        assert_eq!(super::interactive::submitted_rows(&captures[0]), rows[2]);
+        let later = update_judgment_control(&mut state, 20_000_000, 1_004_000_000);
+        assert_eq!(later.draw_frames.len(), 1, "later updates retain one new normal frame and no repeated immediate draw");
+        assert!(!later.draw_frames[0].immediate);
+        assert_eq!(calls[0].1.diffuse, [1.0,0.0,0.0,1.0]);
     }
 
     #[test]
@@ -5733,11 +5868,15 @@ fn replay_mode(
             sample["update_sequence"].as_u64() == Some(index as u64+1)) { draw_cursor += 1; }
         if draw_cursor > draw_start {
             let uncompared = draw_checks.uncompared_immediate_draws;
+            let normal_uncompared = draw_checks.uncompared_normal_draws;
             draw_checks.compare(&state, &draw_samples[draw_start..draw_cursor],
                 [context.screen_width, context.screen_height], [seconds as f32, number(frame,"beat")? as f32],
                 simfile, &mut mismatches)?;
             if draw_checks.uncompared_immediate_draws > uncompared {
                 runtime_coverage.insert("owned immediate Draw submissions without matching native drawable observations".into());
+            }
+            if draw_checks.uncompared_normal_draws > normal_uncompared {
+                runtime_coverage.insert("owned normal DrawFunction submissions without matching native drawable observations".into());
             }
             if draw_checks.missing_random_inputs > 0 {
                 runtime_coverage.insert("native render random inputs are missing for active vibration; recapture with the PreDraw random observer".into());
