@@ -107,22 +107,13 @@ impl Vm {
             None
         };
         let table = self.table_argument(base, count)?;
-        let len = self.tables[slot_index(table.0)].len() as i64;
+        let storage = &self.tables[slot_index(table.0)];
         let value = match id {
-            TAB_GETN => Value::Number(len as f64),
+            TAB_GETN => Value::Number(storage.len() as f64),
             TAB_SETN => return Err(failure("'setn' is obsolete")),
-            TAB_MAXN => {
-                let mut maximum = 0.0f64;
-                let mut current = Value::Nil;
-                while let Some((k, _)) = self.tables[slot_index(table.0)].next(current)? {
-                    if let Value::Number(n) = k {
-                        maximum = maximum.max(n);
-                    }
-                    current = k;
-                }
-                Value::Number(maximum)
-            }
+            TAB_MAXN => Value::Number(storage.max_numeric_key()),
             TAB_INSERT => {
+                let len = storage.len() as i64;
                 let position = match count {
                     2 => len + 1,
                     3 => self.integer_argument(base, count, 1, None)? as i32 as i64,
@@ -138,6 +129,7 @@ impl Vm {
                 return Ok(0);
             }
             TAB_REMOVE => {
+                let len = storage.len() as i64;
                 let position = self.integer_argument(base, count, 1, Some(len))? as i32 as i64;
                 if position < 1 || position > len {
                     return Ok(0);
@@ -151,6 +143,7 @@ impl Vm {
                 value
             }
             TAB_CONCAT => {
+                let len = storage.len() as i64;
                 let first = self.integer_argument(base, count, 2, Some(1))? as i32 as i64;
                 let last = self.integer_argument(base, count, 3, Some(len))? as i32 as i64;
                 let separator = separator.expect("concat has a separator");

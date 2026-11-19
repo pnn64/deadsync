@@ -720,6 +720,21 @@ impl Table {
         }
         hi
     }
+    pub(crate) fn max_numeric_key(&self) -> f64 {
+        let mut maximum = self
+            .array
+            .iter()
+            .rposition(|value| *value != Value::Nil)
+            .map_or(0.0, |index| (index + 1) as f64);
+        for entry in &self.entries {
+            if let Key::Number(bits) = entry.key
+                && entry.value != Value::Nil
+            {
+                maximum = maximum.max(f64::from_bits(bits));
+            }
+        }
+        maximum
+    }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)
             .map_err(|_| Error::new(ErrorKind::Runtime, 0, "invalid key to 'next'"))

@@ -452,6 +452,34 @@ fn table_operations_are_raw_and_callbacks_can_stop_or_mutate() {
 }
 
 #[test]
+fn maxn_uses_only_live_numeric_keys_in_both_table_layouts() {
+    let program = compile(
+        br#"
+        local t = {true, false, nil, true; ['900']=true, [-10]=true}
+        t[4] = nil
+        setmetatable(t, {__index=function() error('raw lookup expected') end})
+        assert(table.maxn(t) == 2)
+        t[100.5] = false
+        assert(table.maxn(t) == 100.5)
+        t[101] = true
+        assert(table.maxn(t) == 101)
+        t[math.huge] = true
+        assert(table.maxn(t) == math.huge)
+        t[math.huge], t[101], t[100.5], t[2], t[1] = nil, nil, nil, nil, nil
+        assert(table.maxn(t) == 0)
+        return 1 / table.maxn({[-0.0]=true})
+    "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            &[Value::Number(f64::INFINITY)]
+        );
+    }
+}
+
+#[test]
 fn table_sort_preserves_comparison_order_and_callback_mutations() {
     for source in [
         "local t={5,2,4,1,3,0,2};table.sort(t);return table.concat(t,',')",
