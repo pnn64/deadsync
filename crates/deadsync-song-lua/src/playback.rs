@@ -9724,12 +9724,9 @@ fn song_lua_overlay_uvs(
     ] = if let Some([u0, v0, u1, v1]) =
         song_lua_overlay_uv_rect(state, sheet_dims, states, animation_elapsed)
     {
-        [
-            (u1 - u0).abs().max(1e-6),
-            (v1 - v0).abs().max(1e-6),
-            u0.min(u1),
-            v0.min(v1),
-        ]
+        // Sprite::DrawTexture interpolates the authored endpoints in order.
+        // Reversed and constant texture coordinates remain valid when cropped.
+        [u1 - u0, v1 - v0, u0, v0]
     } else {
         [1.0, 1.0, 0.0, 0.0]
     };

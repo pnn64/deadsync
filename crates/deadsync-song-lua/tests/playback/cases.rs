@@ -11456,6 +11456,121 @@ fn song_lua_sprite_animation_applies_rate_and_loop_controls_at_runtime() {
 }
 
 #[test]
+fn song_lua_sprite_custom_uvs_preserve_native_endpoint_order() {
+    let key = "song-lua-signed-uv.png";
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    let overlay = SongLuaOverlayActor {
+        kind: test_sprite_kind(key),
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    // Native Sprite::TexCoordArrayFromRect retains left/right and top/bottom
+    // order. DrawTexture crops by interpolating those endpoints, without
+    // sorting them or expanding a constant coordinate into a nonzero span.
+    // Corners below are TL, TR, BR, BL in our submitted triangle order.
+    let cases = [
+        (
+            "reversed U",
+            [0.25, 0.125, -1.75, 1.125],
+            [0.0; 4],
+            [[0.25, 0.125], [-1.75, 0.125], [-1.75, 1.125], [0.25, 1.125]],
+        ),
+        (
+            "reversed V",
+            [0.25, 0.125, 2.25, -0.875],
+            [0.0; 4],
+            [[0.25, 0.125], [2.25, 0.125], [2.25, -0.875], [0.25, -0.875]],
+        ),
+        (
+            "both reversed",
+            [0.25, 0.125, -1.75, -0.875],
+            [0.0; 4],
+            [[0.25, 0.125], [-1.75, 0.125], [-1.75, -0.875], [0.25, -0.875]],
+        ),
+        (
+            "both reversed and cropped",
+            [0.25, 0.125, -1.75, -0.875],
+            [0.125, 0.25, 0.25, 0.125],
+            [[0.0, -0.125], [-1.25, -0.125], [-1.25, -0.75], [0.0, -0.75]],
+        ),
+        (
+            "constant U",
+            [0.25, 0.125, 0.25, 1.125],
+            [0.0; 4],
+            [[0.25, 0.125], [0.25, 0.125], [0.25, 1.125], [0.25, 1.125]],
+        ),
+        (
+            "constant V",
+            [0.25, 0.125, 2.25, 0.125],
+            [0.0; 4],
+            [[0.25, 0.125], [2.25, 0.125], [2.25, 0.125], [0.25, 0.125]],
+        ),
+    ];
+    for camera in [
+        None,
+        Some(SongLuaOverlayState {
+            fov: Some(45.0),
+            vanishpoint: Some([320.0, 240.0]),
+            ..Default::default()
+        }),
+    ] {
+        for cached in [false, true] {
+            let mut scratch = SongLuaProjectedMeshScratch::default();
+            for (label, rect, [left, right, top, bottom], corners) in cases {
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        x: 320.0,
+                        y: 240.0,
+                        custom_texture_rect: Some(rect),
+                        // Native SetCustomTextureRect enables wrapping.
+                        texture_wrapping: true,
+                        cropleft: left,
+                        cropright: right,
+                        croptop: top,
+                        cropbottom: bottom,
+                        ..Default::default()
+                    },
+                    camera,
+                    &assets,
+                    0,
+                    640.0,
+                    480.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    None,
+                    cached.then_some(&mut scratch),
+                )
+                .expect("custom UV sprite should render");
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors,
+                    [0.0; 4],
+                    &metrics,
+                    &font::FontMap::default(),
+                    0.0,
+                    assets.texture_context(),
+                );
+                assert_eq!(frame.ops.len(), 1, "{label}, camera={camera:?}, cached={cached}");
+                let deadlib_render_core::DrawOp::TexturedMesh(run) = &frame.ops[0] else {
+                    panic!("custom UV sprite must use the native mesh path");
+                };
+                let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                assert_eq!(
+                    vertices.iter().map(|vertex| vertex.uv).collect::<Vec<_>>(),
+                    [corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]],
+                    "{label}, camera={camera:?}, cached={cached}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
     let key = "song-lua-translate.png".to_string();
     let mut asset_manager = AssetManager::new();
