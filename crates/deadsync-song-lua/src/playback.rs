@@ -152,8 +152,9 @@ impl SongLuaOverlayIndex {
 /// by capture name and allocates a stable render-target handle for each AFT.
 /// Static camera scopes are resolved at screen entry; trees whose camera FOV can
 /// change retain the indexed ancestor fallback. Live wrapper insertion rebuilds
-/// the affected index while preserving its capture handles. Ordinary frames
-/// reuse the index without synchronization, allocation, eviction or pruning.
+/// the affected index while preserving its capture handles. Live allocation or
+/// sampling-name changes refresh only the target map. Unchanged frames reuse
+/// the index without synchronization, allocation, eviction or pruning.
 /// Storage follows the owned overlay count and is released with the screen.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
@@ -161,12 +162,32 @@ struct SongLuaOverlayTopologyIndex {
     aft_sprite_targets: Vec<SongLuaOverlayIndex>,
     aft_sprite_indices: Box<[usize]>,
     aft_texture_handles: Vec<TextureHandle>,
+    aft_texture_dependencies: Vec<(Option<String>, Option<String>)>,
     camera_ancestors: Vec<SongLuaOverlayIndex>,
     camera_states: Vec<SongLuaOverlayIndex>,
     dynamic_camera_scope: bool,
 }
 
 impl SongLuaOverlayTopologyIndex {
+    // Only allocated names can be targets; requested names/flags/sizes do not
+    // change the binding map. The second component is the current sampler name.
+    fn texture_dependency<S: NoteskinSlot + Clone>(
+        overlay: &SongLuaOverlayActor<S>,
+    ) -> (Option<&str>, Option<&str>) {
+        match &overlay.kind {
+            SongLuaOverlayKind::ActorFrameTexture {
+                capture_name,
+                capture_size: Some(_),
+                ..
+            } => (Some(capture_name), None),
+            SongLuaOverlayKind::AftSprite { capture_name } => (None, Some(capture_name)),
+            SongLuaOverlayKind::ActorMultiVertex { capture_name, .. } => {
+                (None, capture_name.as_deref())
+            }
+            _ => (None, None),
+        }
+    }
+
     fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
         let aft_ancestors = (0..overlays.len())
             .map(|index| SongLuaOverlayIndex::new(song_lua_overlay_aft_ancestor(overlays, index)))
@@ -214,6 +235,10 @@ impl SongLuaOverlayTopologyIndex {
                     .unwrap_or_default()
             })
             .collect::<Vec<_>>();
+        let aft_texture_dependencies = overlays.iter().map(|overlay| {
+            let (allocated, sampled) = Self::texture_dependency(overlay);
+            (allocated.map(str::to_owned), sampled.map(str::to_owned))
+        }).collect();
         let camera_ancestors = overlays
             .iter()
             .map(|overlay| {
@@ -245,6 +270,7 @@ impl SongLuaOverlayTopologyIndex {
             aft_sprite_targets,
             aft_sprite_indices,
             aft_texture_handles,
+            aft_texture_dependencies,
             camera_ancestors,
             camera_states,
             dynamic_camera_scope,

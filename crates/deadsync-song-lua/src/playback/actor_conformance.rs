@@ -314,7 +314,21 @@ pub struct WholeSongComposer {
 
 impl WholeSongComposer {
     fn refresh_layout<S: NoteskinSlot + Clone>(&mut self, overlays: &[SongLuaOverlayActor<S>]) {
+        // The GPU shell refreshes live Sprite and AMV resources before composition.
+        // Headless playback owns its own registry; refresh current published keys
+        // at this shared entry point, including recorded and AFT-layer draws.
+        // This scans the current overlay slice; existing keys return immediately.
+        for overlay in overlays {
+            match &overlay.kind {
+                SongLuaOverlayKind::Sprite { texture_key, .. }
+                | SongLuaOverlayKind::ActorMultiVertex {
+                    texture_key: Some(texture_key), ..
+                } => queue_texture(&mut self.assets, texture_key),
+                _ => {}
+            }
+        }
         if self.mesh_scratch.len() == overlays.len() {
+            self.topology.refresh_texture_bindings(overlays);
             return;
         }
         self.topology.refresh_wrappers(overlays);
@@ -591,11 +605,6 @@ impl WholeSongComposer {
         screen_state: Option<SongLuaOverlayState>,
     ) -> deadlib_render_core::RenderFrame {
         self.refresh_layout(overlays);
-        // A retained Sprite can bind its first image, or replace it, after the
-        // composer was warmed. Resolve that published resource before drawing.
-        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlays[index].kind {
-            queue_texture(&mut self.assets, texture_key);
-        }
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));

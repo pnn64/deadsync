@@ -13890,3 +13890,92 @@ fn parent_color_advances_without_local_writes() {
         }
     }
 }
+
+#[test]
+fn song_lua_live_aft_bindings_refresh_same_count_root_background_and_foreground() {
+    let actor = |kind, parent_index| SongLuaOverlayActor {
+        kind, parent_index, initial_state: SongLuaOverlayState::default(),
+        name: None, message_commands: Vec::new(),
+    };
+    let overlays = vec![
+        actor(SongLuaOverlayKind::ActorFrameTexture { capture_name: "a".into(), capture_size: None,
+            alpha_buffer: true, depth_buffer: false, float_buffer: false }, None),
+        actor(SongLuaOverlayKind::ActorFrameTexture { capture_name: "b".into(), capture_size: Some([64.;2]),
+            alpha_buffer: true, depth_buffer: false, float_buffer: false }, None),
+        actor(SongLuaOverlayKind::ActorMultiVertex { vertices: Arc::from([]), texture_path: None,
+            texture_key: None, capture_name: None }, None),
+    ];
+    let make_layer = || deadsync_gameplay::SongLuaVisualLayerRuntime {
+        start_second: 0., screen_width: 640., screen_height: 480., overlays: overlays.clone(),
+        overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
+        song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
+    };
+    let mut visual = SongLuaRuntimeVisuals {
+        overlays: overlays.clone(), screen_overlay_index: None, overlay_eases: Vec::new(),
+        overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
+        background_visual_layers: vec![make_layer()], foreground_visual_layers: vec![make_layer()],
+        player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        player_events: Default::default(), player_judgment_events: Default::default(), player_combo_events: Default::default(),
+        song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
+        hidden_players: [false;MAX_PLAYERS], screen_layers: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        screen_layer_events: Default::default(), note_hides: Default::default(), column_offsets: Default::default(),
+        column_splines: Default::default(), screen_width: 640., screen_height: 480.,
+    };
+    let mut scratch = FrameScratch {
+        dynamic_scene: true,
+        song_lua_overlay_order: song_lua_overlay_order_cache_from(&overlays, &[]),
+        song_lua_proxy_request_index: SongLuaProxyRequestIndex::new(&overlays),
+        song_lua_background_visual_layer_orders: vec![song_lua_overlay_order_cache_from(&overlays, &[])],
+        song_lua_background_overlay_topology_indices: vec![SongLuaOverlayTopologyIndex::new(&overlays)],
+        song_lua_foreground_visual_layer_orders: vec![song_lua_overlay_order_cache_from(&overlays, &[])],
+        song_lua_foreground_proxy_request_indices: vec![SongLuaProxyRequestIndex::new(&overlays)],
+        song_lua_aft_capture_scratch: SongLuaAftCaptureScratch::new(&overlays, &SongLuaOverlayTopologyIndex::new(&overlays)),
+        ..Default::default()
+    };
+    let handles = [scratch.song_lua_proxy_request_index.topology.aft_texture_handles.clone(),
+        scratch.song_lua_background_overlay_topology_indices[0].aft_texture_handles.clone(),
+        scratch.song_lua_foreground_proxy_request_indices[0].topology.aft_texture_handles.clone()];
+    let history: Arc<[SongLuaDrawFrame]> = Arc::from([SongLuaDrawFrame {
+        second: 0., immediate: true, owners: vec![2], owner_ends: vec![0], ops: Vec::new(),
+    }]);
+    scratch.song_lua_aft_capture_scratch.manual = SongLuaManualScratch::with_frames(&overlays, history.clone());
+    scratch.song_lua_aft_capture_scratch.manual.immediate_cursor = 1;
+    scratch.song_lua_aft_capture_scratch.active_bank = 1;
+    let bank = &mut scratch.song_lua_aft_capture_scratch.slots[0].as_mut().unwrap()[0];
+    let retained = bank.refill([0.;2], |actors| actors.push(Actor::Frame {
+        align: [0.;2], offset: [0.;2], size: [SizeSpec::Px(8.);2],
+        children: Vec::new(), background: None, z: 0,
+    })).unwrap();
+    let bank_stats = bank.stats();
+    for (allocated, sample, target) in [(false, Some("a"), None), (true, Some("a"), Some(0)),
+        (true, Some("b"), Some(1)), (true, None, None)] {
+        for layer in [&mut visual.overlays, &mut visual.background_visual_layers[0].overlays,
+            &mut visual.foreground_visual_layers[0].overlays] {
+            let SongLuaOverlayKind::ActorFrameTexture { capture_size, .. } = &mut layer[0].kind else { unreachable!() };
+            *capture_size = allocated.then_some([32.;2]);
+            let SongLuaOverlayKind::ActorMultiVertex { capture_name, .. } = &mut layer[2].kind else { unreachable!() };
+            *capture_name = sample.map(str::to_owned);
+        }
+        scratch.refresh_live_wrappers(&visual);
+        for (topology, expected_handles) in [(&scratch.song_lua_proxy_request_index.topology, &handles[0]),
+            (&scratch.song_lua_background_overlay_topology_indices[0], &handles[1]),
+            (&scratch.song_lua_foreground_proxy_request_indices[0].topology, &handles[2])] {
+            assert_eq!(topology.aft_sprite_targets[2].get(), target);
+            assert_eq!(topology.texture_handle(2), target.map(|i| expected_handles[i]));
+            assert_eq!(&topology.aft_texture_handles, expected_handles);
+            assert_eq!(topology.aft_sprite_indices.as_ref(), if sample.is_some() { &[2][..] } else { &[][..] });
+        }
+        let topology = &mut scratch.song_lua_proxy_request_index.topology;
+        let pointers = (topology.aft_sprite_targets.as_ptr(), topology.aft_sprite_indices.as_ptr(),
+            topology.aft_texture_dependencies.as_ptr());
+        assert!(!topology.refresh_texture_bindings(&visual.overlays), "unchanged dependencies retain the target map");
+        assert_eq!(pointers, (topology.aft_sprite_targets.as_ptr(), topology.aft_sprite_indices.as_ptr(),
+            topology.aft_texture_dependencies.as_ptr()));
+        assert_eq!(scratch.song_lua_aft_capture_scratch.active_bank, 1);
+        assert_eq!(scratch.song_lua_aft_capture_scratch.slots[0].as_ref().unwrap()[0].stats(), bank_stats);
+        assert!(Arc::ptr_eq(&scratch.song_lua_aft_capture_scratch.manual.frames, &history));
+        assert_eq!(scratch.song_lua_aft_capture_scratch.manual.immediate_cursor, 1);
+        assert_eq!(visual.overlays.len(), overlays.len());
+    }
+    drop(retained);
+}
