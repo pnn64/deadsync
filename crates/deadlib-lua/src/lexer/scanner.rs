@@ -262,7 +262,12 @@ impl Scanner {
     fn fast(&mut self, input: &[u8], out: &mut Token) -> Result<bool, Error> {
         loop {
             match input.get(self.pos) {
-                Some(b' ' | b'\t' | 11 | 12) => self.pos += 1,
+                Some(b' ' | b'\t' | 11 | 12) => {
+                    let tail = &input[self.pos + 1..];
+                    self.pos += 1 + scan_token_boundary(tail, |byte| {
+                        !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
+                    });
+                }
                 Some(b'\n' | b'\r') => {
                     self.newline(input, true)?;
                 }
@@ -882,6 +887,26 @@ mod tests {
                 expected,
                 "one-byte input: {source:?}"
             );
+        }
+    }
+
+    #[test]
+    fn horizontal_whitespace_preserves_newlines_across_blocks_and_reader_splits() {
+        for len in [0, 1, 8, 9, 39, 40, 41, 72] {
+            let whitespace: Vec<_> = b" \t\x0b\x0c".iter().copied().cycle().take(len).collect();
+            let mut source = whitespace.clone();
+            source.extend_from_slice(b"local\r\n");
+            source.extend_from_slice(&whitespace);
+            source.extend_from_slice(b"return\n\r");
+            source.extend_from_slice(&whitespace);
+            let expected = vec![
+                (Kind::Local, 1, 1, Vec::new(), 0),
+                (Kind::Return, 2, 2, Vec::new(), 0),
+                (Kind::Eof, 3, 3, Vec::new(), 0),
+            ];
+            assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
+            let ends = (0..=source.len()).collect::<Vec<_>>();
+            assert_eq!(tokens(&source, &ends), Ok(expected));
         }
     }
 
