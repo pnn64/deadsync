@@ -1239,6 +1239,10 @@ name = "deadlib-image"
 version = "0.1.0"
 
 [[package]]
+name = "deadlib-image-bmp"
+version = "0.1.0"
+
+[[package]]
 name = "deadlib-image-gif"
 version = "0.1.0"
 dependencies = [

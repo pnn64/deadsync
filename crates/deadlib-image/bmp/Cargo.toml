@@ -1,0 +1,13 @@
+[package]
+name = "deadlib-image-bmp"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent BMP codec with no dependencies"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+
+[lints.clippy]
+perf = "warn"
