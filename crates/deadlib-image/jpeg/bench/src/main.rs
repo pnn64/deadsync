@@ -83,16 +83,36 @@ mod cycles {
 use deadlib_image_jpeg as native;
 use zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions};
 const CODECS: [&str; 4] = ["native", "zune", "jpeg-decoder", "image"];
-fn native_pixels(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    let image = native::decode(bytes, native::Limits::default()).map_err(|e| e.to_string())?;
+fn options(rgba8: bool) -> native::DecodeOptions {
+    native::DecodeOptions {
+        strict: !rgba8,
+        ..native::DecodeOptions::default()
+    }
+}
+fn native_pixels(bytes: &[u8], rgba8: bool) -> Result<Vec<u8>, String> {
+    let image = native::decode_with_options(bytes, options(rgba8), native::Upsampling::Linear)
+        .map_err(|e| e.to_string())?;
     match image.samples {
         native_samples::Samples::U8(pixels) => Ok(pixels),
         _ => Err("8-bit comparison requires 8-bit native output".into()),
     }
 }
-fn pixels(codec: usize, bytes: &[u8], gray: bool) -> Result<Vec<u8>, String> {
-    match codec {
-        0 => native_pixels(bytes),
+fn into_rgba8(pixels: Vec<u8>, gray: bool) -> Vec<u8> {
+    let rgba: Vec<[u8; 4]> = if gray {
+        pixels.iter().map(|&v| [v, v, v, 255]).collect()
+    } else {
+        pixels
+            .as_chunks::<3>()
+            .0
+            .iter()
+            .map(|&[r, g, b]| [r, g, b, 255])
+            .collect()
+    };
+    rgba.into_flattened()
+}
+fn pixels(codec: usize, bytes: &[u8], gray: bool, rgba8: bool) -> Result<Vec<u8>, String> {
+    let pixels = match codec {
+        0 => native_pixels(bytes, rgba8),
         1 => {
             let options = DecoderOptions::default()
                 .set_max_width(65535)
@@ -129,6 +149,9 @@ fn pixels(codec: usize, bytes: &[u8], gray: bool) -> Result<Vec<u8>, String> {
         3 => {
             let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Jpeg)
                 .map_err(|e| e.to_string())?;
+            if rgba8 {
+                return Ok(image.into_rgba8().into_raw());
+            }
             match image {
                 image::DynamicImage::ImageLuma8(pixels) => Ok(pixels.into_raw()),
                 image::DynamicImage::ImageRgb8(pixels) => Ok(pixels.into_raw()),
@@ -136,7 +159,12 @@ fn pixels(codec: usize, bytes: &[u8], gray: bool) -> Result<Vec<u8>, String> {
             }
         }
         _ => unreachable!(),
-    }
+    }?;
+    Ok(if rgba8 {
+        into_rgba8(pixels, gray)
+    } else {
+        pixels
+    })
 }
 struct Stats {
     total_pixels: usize,
@@ -146,14 +174,14 @@ struct Stats {
     differences: Vec<(usize, u8, f64)>,
     unavailable: Vec<(usize, String)>,
 }
-fn verify(bytes: &[u8]) -> Result<Stats, String> {
-    let coefficients =
-        native::decode_coefficients(bytes, native::Limits::default()).map_err(|e| e.to_string())?;
+fn verify(bytes: &[u8], rgba8: bool) -> Result<Stats, String> {
+    let coefficients = native::decode_coefficients_with_options(bytes, options(rgba8))
+        .map_err(|e| e.to_string())?;
     if coefficients.frame.precision != 8 {
         return Err("higher-precision comparison pending; native output is preserved".into());
     }
     let gray = coefficients.color_space() == native::ColorSpace::Grayscale;
-    let actual = native_pixels(bytes)?;
+    let actual = pixels(0, bytes, gray, rgba8)?;
     let mut stats = Stats {
         total_pixels: coefficients.frame.width as usize * coefficients.frame.height as usize,
         gray,
@@ -164,10 +192,17 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
     };
     assert_eq!(
         stats.native.len(),
-        stats.total_pixels * if gray { 1 } else { 3 }
+        stats.total_pixels
+            * if rgba8 {
+                4
+            } else if gray {
+                1
+            } else {
+                3
+            }
     );
     for codec in 1..CODECS.len() {
-        match pixels(codec, bytes, gray) {
+        match pixels(codec, bytes, gray, rgba8) {
             Ok(expected) => {
                 assert_eq!(stats.native.len(), expected.len());
                 let max = stats
@@ -195,8 +230,8 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
     }
     Ok(stats)
 }
-fn decode(codec: usize, bytes: &[u8], gray: bool) {
-    black_box(pixels(codec, black_box(bytes), gray).unwrap());
+fn decode(codec: usize, bytes: &[u8], gray: bool, rgba8: bool) {
+    black_box(pixels(codec, black_box(bytes), gray, rgba8).unwrap());
 }
 fn files(path: &Path, out: &mut Vec<PathBuf>) {
     if path.is_dir() {
@@ -212,11 +247,46 @@ fn files(path: &Path, out: &mut Vec<PathBuf>) {
 }
 fn main() {
     let mut paths = Vec::new();
-    for arg in std::env::args_os().skip(1) {
-        files(Path::new(&arg), &mut paths);
+    let mut rgba8 = false;
+    let mut verify_only = false;
+    let mut native_only = false;
+    let mut args = std::env::args_os().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--rgba8" {
+            rgba8 = true;
+        } else if arg == "--verify-only" {
+            verify_only = true;
+        } else if arg == "--native-only" {
+            native_only = true;
+        } else if arg == "--files-from" {
+            let list = args.next().expect("--files-from needs a path");
+            for line in std::fs::read_to_string(list)
+                .unwrap()
+                .trim_start_matches('\u{feff}')
+                .lines()
+            {
+                let line = line.trim();
+                if !line.is_empty() && !line.starts_with('#') {
+                    files(Path::new(line), &mut paths);
+                }
+            }
+        } else {
+            assert!(
+                !arg.to_string_lossy().starts_with('-'),
+                "unknown option: {arg:?}"
+            );
+            files(Path::new(&arg), &mut paths);
+        }
     }
     paths.sort();
+    paths.dedup();
     assert!(!paths.is_empty(), "supply JPEG files or corpus directories");
+    eprintln!(
+        "MODE\t{}\tstrict={}\tfiles={}",
+        if rgba8 { "rgba8" } else { "raw" },
+        !rgba8,
+        paths.len()
+    );
     cycles::pin();
     #[cfg(feature = "allocations")]
     {
@@ -242,10 +312,10 @@ fn main() {
     }
     #[cfg(not(feature = "allocations"))]
     let sample_ms = std::env::var("JPEG_BENCH_MS").map_or(20, |v| v.parse::<u128>().unwrap());
-    println!("file\tcodec\tns\tprocess_cycles\talloc_calls\trequested_bytes");
+    println!("file\tcodec\tpixels\tns\tprocess_cycles\talloc_calls\trequested_bytes");
     for (file_index, path) in paths.into_iter().enumerate() {
         let bytes = std::fs::read(&path).unwrap();
-        let stats = match verify(&bytes) {
+        let stats = match verify(&bytes, rgba8) {
             Ok(stats) => stats,
             Err(error) => {
                 eprintln!("EXCLUDED\t{}\t{error}", path.display());
@@ -272,43 +342,30 @@ fn main() {
                 CODECS[*codec]
             );
         }
-        if let Some(root) = std::env::var_os("JPEG_SNAPSHOT_DIR") {
-            std::fs::create_dir_all(&root).unwrap();
-            std::fs::write(
-                Path::new(&root).join(format!("{file_index:04}.raw")),
-                &stats.native,
-            )
-            .unwrap();
-        }
-        if let Some(root) = std::env::var_os("JPEG_BASELINE_DIR") {
-            let expected =
-                std::fs::read(Path::new(&root).join(format!("{file_index:04}.raw"))).unwrap();
-            assert!(
-                expected == stats.native,
-                "native output changed: {}",
-                path.display()
-            );
+        if verify_only {
+            continue;
         }
         #[cfg(not(feature = "allocations"))]
         let group_size = if stats.total_pixels > 4_000_000 { 1 } else { 8 };
         for offset in 0..CODECS.len() {
             let codec = (offset + file_index) % CODECS.len();
-            if !stats.available[codec] {
+            if !stats.available[codec] || (native_only && codec != 0) {
                 continue;
             }
-            decode(codec, &bytes, stats.gray);
+            decode(codec, &bytes, stats.gray, rgba8);
             #[cfg(feature = "allocations")]
             {
                 use std::sync::atomic::Ordering::Relaxed;
                 allocations::CALLS.store(0, Relaxed);
                 allocations::BYTES.store(0, Relaxed);
                 allocations::ENABLED.store(true, Relaxed);
-                decode(codec, &bytes, stats.gray);
+                decode(codec, &bytes, stats.gray, rgba8);
                 allocations::ENABLED.store(false, Relaxed);
                 println!(
-                    "{}\t{}\t0\t0\t{}\t{}",
+                    "{}\t{}\t{}\t0\t0\t{}\t{}",
                     path.display(),
                     CODECS[codec],
+                    stats.total_pixels,
                     allocations::CALLS.load(Relaxed),
                     allocations::BYTES.load(Relaxed)
                 );
@@ -322,7 +379,7 @@ fn main() {
                     let mut iterations = 0;
                     loop {
                         for _ in 0..group_size {
-                            decode(codec, &bytes, stats.gray);
+                            decode(codec, &bytes, stats.gray, rgba8);
                         }
                         iterations += group_size;
                         if start.elapsed().as_millis() >= sample_ms {
@@ -339,9 +396,10 @@ fn main() {
                 cpu.sort_unstable();
                 let (ns, cycles) = (wall[2], cpu[2]);
                 println!(
-                    "{}\t{}\t{ns}\t{cycles}\t0\t0",
+                    "{}\t{}\t{}\t{ns}\t{cycles}\t0\t0",
                     path.display(),
-                    CODECS[codec]
+                    CODECS[codec],
+                    stats.total_pixels
                 );
             }
         }

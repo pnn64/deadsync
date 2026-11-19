@@ -2,7 +2,7 @@
 use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader};
 use crate::reconstruct::{
-    CHUNK, ColorHints, cmyk_to_rgb, emit_chunk, ycbcr_chunk, ycbcr_row, ycbcr420_row, ycck_to_cmyk,
+    CHUNK, ColorHints, cmyk_chunk, emit_chunk, ycbcr_chunk, ycbcr_row, ycbcr420_row, ycck_chunk,
 };
 use crate::simd::Kernel;
 use crate::transform::{FloatQuant, idct8_auto, idct8_dc};
@@ -536,21 +536,20 @@ impl Window {
                     for (sampler, row) in samplers.iter().zip(&mut values).take(self.components) {
                         sampler.fill(start, &mut row[..n]);
                     }
-                    if self.color == ColorSpace::YCbCr {
-                        ycbcr_chunk(&values[0], &values[1], &values[2], &mut rgb);
-                    } else {
-                        for x in 0..n {
-                            let v = values.map(|row| i32::from(row[x]));
-                            let pixel = match self.color {
-                                ColorSpace::Rgb => [v[0], v[1], v[2]],
-                                ColorSpace::Cmyk => cmyk_to_rgb(v, self.polarity, 8),
-                                ColorSpace::Ycck => {
-                                    cmyk_to_rgb(ycck_to_cmyk(v, 8), self.polarity, 8)
-                                }
-                                _ => unreachable!(),
-                            };
-                            rgb[3 * x..3 * x + 3].copy_from_slice(&pixel.map(|v| v as u8));
+                    match self.color {
+                        ColorSpace::YCbCr => {
+                            ycbcr_chunk(&values[0], &values[1], &values[2], &mut rgb);
                         }
+                        ColorSpace::Cmyk => cmyk_chunk(&values, self.polarity, &mut rgb),
+                        ColorSpace::Ycck => ycck_chunk(&values, self.polarity, &mut rgb),
+                        ColorSpace::Rgb => {
+                            for x in 0..n {
+                                rgb[3 * x] = values[0][x] as u8;
+                                rgb[3 * x + 1] = values[1][x] as u8;
+                                rgb[3 * x + 2] = values[2][x] as u8;
+                            }
+                        }
+                        _ => unreachable!(),
                     }
                     emit_chunk(out, &rgb, n);
                 }
@@ -860,6 +859,19 @@ impl<'a> Row<'a> {
             method,
         }
     }
+    /// Full-width vertical interpolation. Samples are at most 255 and
+    /// DY <= 8, so the weighted sum plus rounding is at most 2044.
+    #[inline(always)]
+    fn fill_vertical<const DY: i16>(&self, start: usize, out: &mut [i16]) {
+        let top = &self.top[start..start + out.len()];
+        let bottom = &self.bottom[start..start + out.len()];
+        let below = self.fy as i16;
+        let above = DY - below;
+        for ((value, &top), &bottom) in out.iter_mut().zip(top).zip(bottom) {
+            *value = (i16::from(top) * above + i16::from(bottom) * below + DY / 2) / DY;
+        }
+    }
+
     /// Interpolated samples for `x` in `start..start + out.len()`. The source
     /// position advances by `2h` per pixel instead of dividing per sample;
     /// power-of-two denominators shift. Every sum is non-negative.
@@ -867,18 +879,31 @@ impl<'a> Row<'a> {
     // loads into gathers, which were several times slower here.
     #[inline(never)]
     fn fill(&self, start: usize, out: &mut [i16]) {
+        if self.h == self.max_h {
+            if self.method == Upsampling::Nearest || self.fy == 0 {
+                for (value, &sample) in out.iter_mut().zip(&self.top[start..]) {
+                    *value = i16::from(sample);
+                }
+            } else {
+                // Full-width sampling has fx = 0 at every pixel. Cancel the
+                // horizontal scale before the single final rounding. Constant
+                // denominators also let the three-factor case vectorize.
+                match self.dy {
+                    2 => self.fill_vertical::<2>(start, out),
+                    4 => self.fill_vertical::<4>(start, out),
+                    6 => self.fill_vertical::<6>(start, out),
+                    8 => self.fill_vertical::<8>(start, out),
+                    _ => unreachable!("validated vertical sampling denominator"),
+                }
+            }
+            return;
+        }
         let last = self.top.len() as i32 - 1;
         if self.method == Upsampling::Nearest {
             for (k, value) in out.iter_mut().enumerate() {
                 let x = start + k;
                 let source = ((2 * x + 1) * self.h / (2 * self.max_h)).min(last as usize);
                 *value = i16::from(self.top[source]);
-            }
-            return;
-        }
-        if self.h == self.max_h && self.fy == 0 {
-            for (value, &sample) in out.iter_mut().zip(&self.top[start..]) {
-                *value = i16::from(sample);
             }
             return;
         }

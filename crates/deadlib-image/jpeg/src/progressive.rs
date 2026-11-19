@@ -1,4 +1,4 @@
-use crate::entropy::{Bits, Huffman};
+use crate::entropy::{Bits, Huffman, LOOK_BITS};
 use crate::{Error, Result, ZIGZAG};
 
 #[derive(Clone, Copy)]
@@ -95,7 +95,24 @@ impl ProgressiveScan {
         }
         let mut k = self.ss;
         while k <= self.se {
-            let rs = table.decode(bits)?;
+            let prefix = bits.peek(LOOK_BITS)?;
+            if let Some(prefix) = prefix {
+                let fast = table.ac[prefix as usize];
+                if fast != 0 {
+                    k += (fast >> 4 & 15) as usize;
+                    if k > self.se {
+                        return Err(Error::Invalid("progressive AC run or magnitude"));
+                    }
+                    bits.drop((fast & 15) as u8);
+                    // Combined entries have at most seven magnitude bits;
+                    // DCT frame precision is always eight or twelve.
+                    block[ZIGZAG[k]] = i16::try_from(i32::from(fast >> 8) << self.al)
+                        .map_err(|_| Error::Invalid("progressive AC range"))?;
+                    k += 1;
+                    continue;
+                }
+            }
+            let rs = table.decode_prefix(bits, prefix)?;
             let run = (rs >> 4) as usize;
             let size = rs & 15;
             if size == 0 {

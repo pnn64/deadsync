@@ -89,15 +89,26 @@ impl Huffman {
 
     #[inline]
     pub fn decode(&self, bits: &mut Bits<'_>) -> Result<u8> {
-        if let Some(prefix) = bits.peek(LOOK_BITS)? {
+        let prefix = bits.peek(LOOK_BITS)?;
+        self.decode_prefix(bits, prefix)
+    }
+
+    /// Decode using the prefix already fetched by the caller.
+    #[inline]
+    pub(crate) fn decode_prefix(&self, bits: &mut Bits<'_>, prefix: Option<u32>) -> Result<u8> {
+        let (mut code, start) = if let Some(prefix) = prefix {
             let entry = self.lookup[prefix as usize];
             if entry != 0 {
                 bits.drop((entry >> 8) as u8);
                 return Ok(entry as u8);
             }
-        }
-        let mut code = 0i32;
-        for length in 1..=16 {
+            // A missed prefix cannot match any code up to LOOK_BITS.
+            bits.drop(LOOK_BITS);
+            (prefix as i32, LOOK_BITS as usize + 1)
+        } else {
+            (0, 1)
+        };
+        for length in start..=16 {
             code = (code << 1) | bits.read(1)? as i32;
             if self.max_code[length] >= code {
                 let index = code + self.offsets[length];

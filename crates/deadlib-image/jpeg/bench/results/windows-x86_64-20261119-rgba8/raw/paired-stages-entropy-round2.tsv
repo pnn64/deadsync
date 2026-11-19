@@ -1,0 +1,106 @@
+file	codec	pixels	ns	process_cycles	alloc_calls	requested_bytes
+assets/fonts/_combo/Wendy (Cursed)/_Wendy (Cursed).jpg	native	224338	1509587	3307941	0	0
+assets/graphics/srpg10_shop/janus5kshopd.jpg	native	2073600	20846412	45682367	0	0
+assets/graphics/srpg10_shop/levitasshopc.jpg	native	2073600	20270025	44431189	0	0
+assets/graphics/srpg10_shop/remsshopc.jpg	native	2073600	21347187	46783379	0	0
+assets/graphics/srpg10_shop/tevshopc.jpg	native	2073600	20803512	45596048	0	0
+crates/deadlib-image/jpeg/tests/fixtures/metadata/ycck-8.jpg	native	775	33150	72760	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-420.jpg	native	775	36282	79578	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-422.jpg	native	775	44654	98003	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-440.jpg	native	775	45791	100519	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-444.jpg	native	775	60572	132993	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-cmyk.jpg	native	775	105883	232407	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-gray.jpg	native	775	18892	41472	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-optimized.jpg	native	775	33257	72982	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-restart.jpg	native	775	65369	143427	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-rgb.jpg	native	775	92573	203163	0	0
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-wide-quant.jpg	native	775	17964	39433	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-420.jpg	native	775	15752	34564	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-422.jpg	native	775	18005	39463	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-440.jpg	native	775	18219	39977	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-444.jpg	native	775	21209	46525	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-cmyk.jpg	native	775	26247	57604	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-gray.jpg	native	775	8020	17600	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-optimized.jpg	native	775	15366	33731	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-restart.jpg	native	775	21919	48098	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-rgb.jpg	native	775	22347	49044	0	0
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-wide-quant.jpg	native	775	9791	21481	0	0
+target/debug/Songs/Cringle Culmination/Dance with me tonight/bg.jpg	native	1325756	15063700	33013403	0	0
+target/debug/Songs/Cringle Culmination/Light Switch/PXL_20240118_234740355.jpg	native	8294400	59781700	131039414	0	0
+target/debug/Songs/Cringle Culmination/Million Dollar Baby/lua/2.jpg	native	667000	11446575	25095709	0	0
+target/debug/Songs/Cringle Culmination/Pyro/bg.jpg	native	8294400	57684300	126494009	0	0
+target/debug/Songs/Cringle Culmination/Rock With You/The Rock.jpg	native	1843200	24777512	54293462	0	0
+target/debug/Songs/Cringle Culmination/Say something/bg3.jpg	native	2304000	35943325	78757368	0	0
+target/debug/Songs/Cringle Culmination/Say something/bg5.jpg	native	8847360	256655900	562452727	0	0
+target/debug/Songs/Cringle Culmination/Video Game Lover/bg.jpg	native	921600	6805106	14917713	0	0
+target/debug/Songs/lua-songs/After Dark/lua/Starfield.jpg	native	2073600	21981337	48162278	0	0
+target/debug/Songs/lua-songs/Cold/Banner.jpg	native	218484	5051068	11071813	0	0
+target/debug/Songs/lua-songs/Goodbye/Goodbye_bn.jpg	native	115632	1806712	3961475	0	0
+target/debug/Songs/lua-songs/U.N. Owen Was Who [Hyperhero2]/bg.jpg	native	20250000	215397500	472039360	0	0
+target/debug/Songs/lua-songs/What A Wonderful World/bg.jpg	native	10885056	65615800	144027780	0	0
+target/debug/Songs/lua-songs/What A Wonderful World/bg2.jpg	native	10885056	48119050	105569511	0	0
+target/debug/Songs/Mawaru Collection/mawaru7/lua/doors/texture0.jpg	native	4096	53433	117340	0	0
+target/debug/Songs/New Year's Stepfile Feast 2022-23/PLAY (Initiate Remix)/nitg/core/jazz.jpg	native	786432	11081712	24318596	0	0
+target/debug/Songs/UPS 3/op.31 ~lyricism~/op.31-bn.jpg	native	20480	269812	592308	0	0
+target/debug/Songs/UPS5 SM5/Lower Times/lowertimesbn.jpg	native	68552	1895143	4160958	0	0
+target/debug/Songs/UPS5 SM5/Mii Channel liquified/wscbn.jpg	native	32400	714626	1565875	0	0
+target/jpeg-perf-20261119/photos/kodim01-baseline-420-q85.jpg	native	393216	4269312	9364460	0	0
+target/jpeg-perf-20261119/photos/kodim01-baseline-cmyk-444-q85.jpg	native	393216	7527000	16521929	0	0
+target/jpeg-perf-20261119/photos/kodim01-baseline-gray-q85.jpg	native	393216	2603795	5713786	0	0
+target/jpeg-perf-20261119/photos/kodim01-baseline-rgb-444-q85.jpg	native	393216	7634150	16765876	0	0
+target/jpeg-perf-20261119/photos/kodim01-progressive-420-q85.jpg	native	393216	10599787	23249686	0	0
+target/jpeg-perf-20261119/photos/kodim02-baseline-420-q85.jpg	native	393216	3725129	8174975	0	0
+target/jpeg-perf-20261119/photos/kodim02-progressive-420-q85.jpg	native	393216	8450675	18532274	0	0
+target/jpeg-perf-20261119/photos/kodim03-baseline-420-q85.jpg	native	393216	3391420	7429389	0	0
+target/jpeg-perf-20261119/photos/kodim03-progressive-420-q85.jpg	native	393216	7645225	16761541	0	0
+target/jpeg-perf-20261119/photos/kodim04-baseline-420-q85.jpg	native	393216	3671587	8044336	0	0
+target/jpeg-perf-20261119/photos/kodim04-progressive-420-q85.jpg	native	393216	8678862	19015477	0	0
+target/jpeg-perf-20261119/photos/kodim05-baseline-420-q85.jpg	native	393216	4315450	9457362	0	0
+target/jpeg-perf-20261119/photos/kodim05-progressive-420-q85.jpg	native	393216	10898425	23900394	0	0
+target/jpeg-perf-20261119/photos/kodim06-baseline-420-q85.jpg	native	393216	3782243	8292627	0	0
+target/jpeg-perf-20261119/photos/kodim06-baseline-cmyk-444-q85.jpg	native	393216	6753562	14802188	0	0
+target/jpeg-perf-20261119/photos/kodim06-baseline-gray-q85.jpg	native	393216	2236478	4907903	0	0
+target/jpeg-perf-20261119/photos/kodim06-baseline-rgb-444-q85.jpg	native	393216	6882243	15083134	0	0
+target/jpeg-perf-20261119/photos/kodim06-progressive-420-q85.jpg	native	393216	9449912	20726671	0	0
+target/jpeg-perf-20261119/photos/kodim07-baseline-420-q85.jpg	native	393216	3480125	7628429	0	0
+target/jpeg-perf-20261119/photos/kodim07-progressive-420-q85.jpg	native	393216	8018000	17578328	0	0
+target/jpeg-perf-20261119/photos/kodim08-baseline-420-q85.jpg	native	393216	4296506	9425110	0	0
+target/jpeg-perf-20261119/photos/kodim08-progressive-420-q85.jpg	native	393216	11805087	25859679	0	0
+target/jpeg-perf-20261119/photos/kodim09-baseline-420-q85.jpg	native	393216	3856193	8446318	0	0
+target/jpeg-perf-20261119/photos/kodim09-progressive-420-q85.jpg	native	393216	9428000	20652260	0	0
+target/jpeg-perf-20261119/photos/kodim10-baseline-420-q85.jpg	native	393216	4460668	9767338	0	0
+target/jpeg-perf-20261119/photos/kodim10-progressive-420-q85.jpg	native	393216	9117850	19976310	0	0
+target/jpeg-perf-20261119/photos/kodim11-baseline-420-q85.jpg	native	393216	4571156	10010201	0	0
+target/jpeg-perf-20261119/photos/kodim11-progressive-420-q85.jpg	native	393216	10346950	22661042	0	0
+target/jpeg-perf-20261119/photos/kodim12-baseline-420-q85.jpg	native	393216	4137481	9066186	0	0
+target/jpeg-perf-20261119/photos/kodim12-progressive-420-q85.jpg	native	393216	9010037	19737632	0	0
+target/jpeg-perf-20261119/photos/kodim13-baseline-420-q85.jpg	native	393216	4615818	10112831	0	0
+target/jpeg-perf-20261119/photos/kodim13-baseline-cmyk-444-q85.jpg	native	393216	9618700	21066814	0	0
+target/jpeg-perf-20261119/photos/kodim13-baseline-gray-q85.jpg	native	393216	3366883	7373032	0	0
+target/jpeg-perf-20261119/photos/kodim13-baseline-rgb-444-q85.jpg	native	393216	9566350	20961179	0	0
+target/jpeg-perf-20261119/photos/kodim13-progressive-420-q85.jpg	native	393216	12827250	28098523	0	0
+target/jpeg-perf-20261119/photos/kodim14-baseline-420-q85.jpg	native	393216	4934050	10807727	0	0
+target/jpeg-perf-20261119/photos/kodim14-progressive-420-q85.jpg	native	393216	10120225	22191340	0	0
+target/jpeg-perf-20261119/photos/kodim15-baseline-420-q85.jpg	native	393216	3544554	7769312	0	0
+target/jpeg-perf-20261119/photos/kodim15-progressive-420-q85.jpg	native	393216	8234412	18057304	0	0
+target/jpeg-perf-20261119/photos/kodim16-baseline-420-q85.jpg	native	393216	3927412	8611423	0	0
+target/jpeg-perf-20261119/photos/kodim16-progressive-420-q85.jpg	native	393216	8940975	19608182	0	0
+target/jpeg-perf-20261119/photos/kodim17-baseline-420-q85.jpg	native	393216	4201443	9213581	0	0
+target/jpeg-perf-20261119/photos/kodim17-progressive-420-q85.jpg	native	393216	8920950	19559644	0	0
+target/jpeg-perf-20261119/photos/kodim18-baseline-420-q85.jpg	native	393216	3892450	8533501	0	0
+target/jpeg-perf-20261119/photos/kodim18-progressive-420-q85.jpg	native	393216	10046450	22033739	0	0
+target/jpeg-perf-20261119/photos/kodim19-baseline-420-q85.jpg	native	393216	3683141	8073868	0	0
+target/jpeg-perf-20261119/photos/kodim19-progressive-420-q85.jpg	native	393216	9049637	19837010	0	0
+target/jpeg-perf-20261119/photos/kodim20-baseline-420-q85.jpg	native	393216	3214412	7046068	0	0
+target/jpeg-perf-20261119/photos/kodim20-progressive-420-q85.jpg	native	393216	7507300	16456175	0	0
+target/jpeg-perf-20261119/photos/kodim21-baseline-420-q85.jpg	native	393216	3639000	7978532	0	0
+target/jpeg-perf-20261119/photos/kodim21-progressive-420-q85.jpg	native	393216	8823337	19347937	0	0
+target/jpeg-perf-20261119/photos/kodim22-baseline-420-q85.jpg	native	393216	3751595	8221399	0	0
+target/jpeg-perf-20261119/photos/kodim22-progressive-420-q85.jpg	native	393216	9250862	20290552	0	0
+target/jpeg-perf-20261119/photos/kodim23-baseline-420-q85.jpg	native	393216	3384675	7396592	0	0
+target/jpeg-perf-20261119/photos/kodim23-baseline-cmyk-444-q85.jpg	native	393216	5533381	12132574	0	0
+target/jpeg-perf-20261119/photos/kodim23-baseline-gray-q85.jpg	native	393216	1913368	4196359	0	0
+target/jpeg-perf-20261119/photos/kodim23-baseline-rgb-444-q85.jpg	native	393216	5750468	12588517	0	0
+target/jpeg-perf-20261119/photos/kodim23-progressive-420-q85.jpg	native	393216	7458100	16344230	0	0
+target/jpeg-perf-20261119/photos/kodim24-baseline-420-q85.jpg	native	393216	3918731	8594371	0	0
+target/jpeg-perf-20261119/photos/kodim24-progressive-420-q85.jpg	native	393216	9874537	21616524	0	0

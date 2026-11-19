@@ -1,0 +1,22 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\mcu-alloc.exe",
+    "--rgba8",
+    "--native-only",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt"
+  ],
+  "binary_sha256": "2bd0eeef56cd4998b2bdbe11f8e316a36afec9280009d89a40aeb67c2d88f9c0",
+  "build": "mcu-build.json",
+  "lists": {
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt": "fffeacebfd13783ee68f2e184d7e92e248db993e907341656584f8030b4b78ac",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt": "766cac1d0f5ec61de05950174ac007d21a48270e79218f9dcc01d6e89814115f"
+  },
+  "RAYON_NUM_THREADS": "1",
+  "JPEG_BENCH_MS": "60",
+  "started_unix": 1795128034.9651115,
+  "elapsed_seconds": 11.447338819503784,
+  "exit_code": 0
+}

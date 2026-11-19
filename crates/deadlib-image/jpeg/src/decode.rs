@@ -523,90 +523,125 @@ pub(crate) fn decode_scan(
     let mut predictors = [0i32; 4];
     let mut restart = 0;
     let mut eob_run = 0;
-    for mcu in 0..cols * rows {
-        if interval > 0 && mcu > 0 && mcu % interval == 0 {
-            if eob_run != 0 {
-                return Err(Error::Invalid("EOB run crosses restart"));
-            }
-            if let Some((coder, statistics, classes)) = &mut arithmetic {
-                coder.restart(restart)?;
-                statistics.reset();
-                classes.fill(0);
-            } else {
-                if let Some(reader) = &mut reader {
-                    reader.restart(restart)?;
-                } else {
-                    bits.restart(restart)?;
-                }
-            }
-            restart = (restart + 1) & 7;
-            predictors.fill(0);
-        }
-        for (j, &(i, dc, ac)) in selected[..n].iter().enumerate() {
-            let c = &mut components[i];
-            let (h, v) = if n == 1 {
-                (1, 1)
-            } else {
-                (
-                    c.spec.horizontal_sampling as usize,
-                    c.spec.vertical_sampling as usize,
-                )
-            };
-            for y in 0..v {
-                for x in 0..h {
-                    let bx = mcu % cols * h + x;
-                    let by = mcu / cols * v + y;
-                    let block = &mut c.blocks[by * c.blocks_wide + bx];
-                    // Annex J transmits DC directly in every differential
-                    // block. Probability conditioning still follows the prior
-                    // coded DC value, so only the numerical predictor resets.
-                    if frame.process.is_differential() {
-                        predictors[j] = 0;
+    if let Some(scan) = progression.filter(|_| n == 1 && arithmetic.is_none()) {
+        let (i, dc, ac) = selected[0];
+        let c = &mut components[i];
+        let (dc, ac) = (tables[dc].as_ref(), tables[ac].as_ref());
+        let differential = frame.process.is_differential();
+        let mut mcu = 0;
+        // Noninterleaved scans visit only visible blocks in each padded row.
+        for row in c.blocks.chunks_exact_mut(c.blocks_wide).take(rows) {
+            for block in &mut row[..cols] {
+                if interval > 0 && mcu > 0 && mcu % interval == 0 {
+                    if eob_run != 0 {
+                        return Err(Error::Invalid("EOB run crosses restart"));
                     }
-                    if let Some((coder, statistics, classes)) = &mut arithmetic {
-                        if let Some(scan) = progression {
-                            statistics.progressive(
-                                scan,
+                    bits.restart(restart)?;
+                    restart = (restart + 1) & 7;
+                    predictors.fill(0);
+                }
+                if differential {
+                    predictors[0] = 0;
+                }
+                scan.decode(
+                    block,
+                    &mut bits,
+                    dc,
+                    ac,
+                    &mut predictors[0],
+                    &mut eob_run,
+                    frame.precision,
+                    differential,
+                )?;
+                mcu += 1;
+            }
+        }
+    } else {
+        for mcu in 0..cols * rows {
+            if interval > 0 && mcu > 0 && mcu % interval == 0 {
+                if eob_run != 0 {
+                    return Err(Error::Invalid("EOB run crosses restart"));
+                }
+                if let Some((coder, statistics, classes)) = &mut arithmetic {
+                    coder.restart(restart)?;
+                    statistics.reset();
+                    classes.fill(0);
+                } else {
+                    if let Some(reader) = &mut reader {
+                        reader.restart(restart)?;
+                    } else {
+                        bits.restart(restart)?;
+                    }
+                }
+                restart = (restart + 1) & 7;
+                predictors.fill(0);
+            }
+            for (j, &(i, dc, ac)) in selected[..n].iter().enumerate() {
+                let c = &mut components[i];
+                let (h, v) = if n == 1 {
+                    (1, 1)
+                } else {
+                    (
+                        c.spec.horizontal_sampling as usize,
+                        c.spec.vertical_sampling as usize,
+                    )
+                };
+                for y in 0..v {
+                    for x in 0..h {
+                        let bx = mcu % cols * h + x;
+                        let by = mcu / cols * v + y;
+                        let block = &mut c.blocks[by * c.blocks_wide + bx];
+                        // Annex J transmits DC directly in every differential
+                        // block. Probability conditioning still follows the prior
+                        // coded DC value, so only the numerical predictor resets.
+                        if frame.process.is_differential() {
+                            predictors[j] = 0;
+                        }
+                        if let Some((coder, statistics, classes)) = &mut arithmetic {
+                            if let Some(scan) = progression {
+                                statistics.progressive(
+                                    scan,
+                                    block,
+                                    coder,
+                                    dc,
+                                    ac - 4,
+                                    &mut classes[j],
+                                    &mut predictors[j],
+                                    conditioning,
+                                )?;
+                            } else {
+                                statistics.sequential(
+                                    block,
+                                    coder,
+                                    dc,
+                                    ac - 4,
+                                    &mut classes[j],
+                                    &mut predictors[j],
+                                    conditioning,
+                                )?;
+                            }
+                        } else if let Some(scan) = progression {
+                            scan.decode(
                                 block,
-                                coder,
-                                dc,
-                                ac - 4,
-                                &mut classes[j],
+                                &mut bits,
+                                tables[dc].as_ref(),
+                                tables[ac].as_ref(),
                                 &mut predictors[j],
-                                conditioning,
+                                &mut eob_run,
+                                frame.precision,
+                                frame.process.is_differential(),
                             )?;
-                        } else {
-                            statistics.sequential(
+                        } else if let Some(reader) = &mut reader {
+                            crate::fast::block(
                                 block,
-                                coder,
-                                dc,
-                                ac - 4,
-                                &mut classes[j],
+                                reader,
+                                tables[dc].as_ref().unwrap(),
+                                tables[ac].as_ref().unwrap(),
                                 &mut predictors[j],
-                                conditioning,
+                                frame.precision,
+                                frame.process.is_differential(),
                             )?;
                         }
-                    } else if let Some(scan) = progression {
-                        scan.decode(
-                            block,
-                            &mut bits,
-                            tables[dc].as_ref(),
-                            tables[ac].as_ref(),
-                            &mut predictors[j],
-                            &mut eob_run,
-                            frame.precision,
-                            frame.process.is_differential(),
-                        )?;
-                    } else if let Some(reader) = &mut reader {
-                        crate::fast::block(
-                            block,
-                            reader,
-                            tables[dc].as_ref().unwrap(),
-                            tables[ac].as_ref().unwrap(),
-                            &mut predictors[j],
-                            frame.precision,
-                            frame.process.is_differential(),
-                        )?;
                     }
                 }
             }

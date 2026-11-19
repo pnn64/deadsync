@@ -1,0 +1,19 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\baseline.exe",
+    "--rgba8",
+    "--native-only",
+    "--files-from",
+    "target/jpeg-perf-20261119/cmyk-repeat.txt"
+  ],
+  "binary_sha256": "bc75abb6922f7b146e669cc005302d19c32bd270028e4f4945162750d9d3522d",
+  "build": "baseline-build.json",
+  "lists": {
+    "target/jpeg-perf-20261119/cmyk-repeat.txt": "ee5e2e92de9aa40cceb6ca1b66c4e4e889055d484cd9f9aa6bb59209eb249be7"
+  },
+  "RAYON_NUM_THREADS": "1",
+  "JPEG_BENCH_MS": "120",
+  "started_unix": 1795126744.4657445,
+  "elapsed_seconds": 9.951049089431763,
+  "exit_code": 0
+}

@@ -1,0 +1,45 @@
+assets/fonts/_combo/Wendy (Cursed)/_Wendy (Cursed).jpg
+assets/graphics/srpg10_shop/janus5kshopd.jpg
+assets/graphics/srpg10_shop/levitasshopc.jpg
+assets/graphics/srpg10_shop/remsshopc.jpg
+assets/graphics/srpg10_shop/tevshopc.jpg
+crates/deadlib-image/jpeg/tests/fixtures/metadata/ycck-8.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-420.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-422.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-440.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-444.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-cmyk.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-gray.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-optimized.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-restart.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-rgb.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-wide-quant.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-420.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-422.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-440.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-444.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-cmyk.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-gray.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-optimized.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-restart.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-rgb.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-wide-quant.jpg
+target/debug/Songs/Cringle Culmination/Dance with me tonight/bg.jpg
+target/debug/Songs/Cringle Culmination/Light Switch/PXL_20240118_234740355.jpg
+target/debug/Songs/Cringle Culmination/Million Dollar Baby/lua/2.jpg
+target/debug/Songs/Cringle Culmination/Pyro/bg.jpg
+target/debug/Songs/Cringle Culmination/Rock With You/The Rock.jpg
+target/debug/Songs/Cringle Culmination/Say something/bg3.jpg
+target/debug/Songs/Cringle Culmination/Say something/bg5.jpg
+target/debug/Songs/Cringle Culmination/Video Game Lover/bg.jpg
+target/debug/Songs/Mawaru Collection/mawaru7/lua/doors/texture0.jpg
+target/debug/Songs/New Year's Stepfile Feast 2022-23/PLAY (Initiate Remix)/nitg/core/jazz.jpg
+target/debug/Songs/UPS 3/op.31 ~lyricism~/op.31-bn.jpg
+target/debug/Songs/UPS5 SM5/Lower Times/lowertimesbn.jpg
+target/debug/Songs/UPS5 SM5/Mii Channel liquified/wscbn.jpg
+target/debug/Songs/lua-songs/After Dark/lua/Starfield.jpg
+target/debug/Songs/lua-songs/Cold/Banner.jpg
+target/debug/Songs/lua-songs/Goodbye/Goodbye_bn.jpg
+target/debug/Songs/lua-songs/U.N. Owen Was Who [Hyperhero2]/bg.jpg
+target/debug/Songs/lua-songs/What A Wonderful World/bg.jpg
+target/debug/Songs/lua-songs/What A Wonderful World/bg2.jpg

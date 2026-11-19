@@ -1,0 +1,19 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\cmyk.exe",
+    "--rgba8",
+    "--native-only",
+    "--files-from",
+    "target/jpeg-perf-20261119/cmyk-repeat.txt"
+  ],
+  "binary_sha256": "0f535f32c57c93cf6b7a7aeb757a54a31ae37dab1e8c0f05f91629214222ea3f",
+  "build": "cmyk-build.json",
+  "lists": {
+    "target/jpeg-perf-20261119/cmyk-repeat.txt": "ee5e2e92de9aa40cceb6ca1b66c4e4e889055d484cd9f9aa6bb59209eb249be7"
+  },
+  "RAYON_NUM_THREADS": "1",
+  "JPEG_BENCH_MS": "120",
+  "started_unix": 1795126754.7120652,
+  "elapsed_seconds": 9.255663633346558,
+  "exit_code": 0
+}

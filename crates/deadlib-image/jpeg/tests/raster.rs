@@ -122,6 +122,8 @@ fn row_windows_match_all_sampling_ratios_and_odd_boundaries() {
                 Subsampling::S410,
                 Subsampling::Custom([(3, 1), (2, 1), (1, 1), (1, 1)]),
                 Subsampling::Custom([(1, 3), (1, 2), (1, 1), (1, 1)]),
+                Subsampling::Custom([(1, 4), (1, 1), (1, 1), (1, 1)]),
+                Subsampling::Custom([(1, 4), (1, 3), (1, 2), (1, 1)]),
                 Subsampling::Custom([(1, 1), (2, 1), (1, 1), (1, 1)]),
                 Subsampling::Custom([(2, 1), (3, 1), (1, 1), (1, 1)]),
                 Subsampling::Custom([(1, 1), (1, 2), (1, 1), (1, 1)]),

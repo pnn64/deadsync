@@ -1,0 +1,21 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\baseline.exe",
+    "--rgba8",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt"
+  ],
+  "binary_sha256": "bc75abb6922f7b146e669cc005302d19c32bd270028e4f4945162750d9d3522d",
+  "build": "baseline-build.json",
+  "lists": {
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt": "fffeacebfd13783ee68f2e184d7e92e248db993e907341656584f8030b4b78ac",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt": "766cac1d0f5ec61de05950174ac007d21a48270e79218f9dcc01d6e89814115f"
+  },
+  "RAYON_NUM_THREADS": "1",
+  "JPEG_BENCH_MS": "80",
+  "started_unix": 1795126076.4570227,
+  "elapsed_seconds": 256.4524848461151,
+  "exit_code": 0
+}

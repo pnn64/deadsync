@@ -1,0 +1,22 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\left-alloc.exe",
+    "--rgba8",
+    "--native-only",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt",
+    "--files-from",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt"
+  ],
+  "binary_sha256": "76b95af8f3ba5c22e6b6f2f9daef407f0645f4aad3a6c832b561a7df3ba98db1",
+  "build": "left-build.json",
+  "lists": {
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-speed.txt": "fffeacebfd13783ee68f2e184d7e92e248db993e907341656584f8030b4b78ac",
+    "C:\\GitHub\\deadsync\\target\\jpeg-perf-20261119\\jpeg-corpus-kodak.txt": "766cac1d0f5ec61de05950174ac007d21a48270e79218f9dcc01d6e89814115f"
+  },
+  "RAYON_NUM_THREADS": "1",
+  "JPEG_BENCH_MS": "60",
+  "started_unix": 1795128722.4877775,
+  "elapsed_seconds": 11.630842208862305,
+  "exit_code": 0
+}
