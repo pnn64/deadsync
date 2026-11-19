@@ -180,15 +180,20 @@ impl Spec {
             };
             (value, false)
         };
-        let mut digits = match self.conversion {
-            b'o' => Text::format(format_args!("{magnitude:o}")),
-            b'x' => Text::format(format_args!("{magnitude:x}")),
-            b'X' => Text::format(format_args!("{magnitude:X}")),
-            _ => Text::format(format_args!("{magnitude}")),
+        const LOWER: &[u8; 16] = b"0123456789abcdef";
+        const UPPER: &[u8; 16] = b"0123456789ABCDEF";
+        // Octal needs the most space: 22 digits for a u64.
+        let mut storage = [0; 22];
+        let digits = if magnitude == 0 && self.precision == Some(0) {
+            &[]
+        } else {
+            match self.conversion {
+                b'o' => integer_digits::<8>(magnitude, LOWER, &mut storage),
+                b'x' => integer_digits::<16>(magnitude, LOWER, &mut storage),
+                b'X' => integer_digits::<16>(magnitude, UPPER, &mut storage),
+                _ => integer_digits::<10>(magnitude, LOWER, &mut storage),
+            }
         };
-        if magnitude == 0 && self.precision == Some(0) {
-            digits.clear();
-        }
         let leading = self.precision.unwrap_or(0).saturating_sub(digits.len());
         let mut bytes = buffer(memory, leading + digits.len() + 3)?;
         if negative {
@@ -206,13 +211,13 @@ impl Spec {
                     b"0X"
                 });
             }
-            if self.conversion == b'o' && leading == 0 && digits.as_bytes().first() != Some(&b'0') {
+            if self.conversion == b'o' && leading == 0 && digits.first() != Some(&b'0') {
                 bytes.push(b'0');
             }
         }
         let prefix = bytes.len();
         bytes.resize(prefix + leading, b'0');
-        bytes.extend_from_slice(digits.as_bytes());
+        bytes.extend_from_slice(digits);
         self.pad(bytes, prefix, self.zero && self.precision.is_none(), memory)
     }
     pub fn float(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
@@ -293,6 +298,47 @@ impl Spec {
         self.pad(bytes, prefix, self.zero && value.is_finite(), memory)
     }
 }
+fn integer_digits<'a, const RADIX: u64>(
+    mut magnitude: u64,
+    alphabet: &'static [u8; 16],
+    storage: &'a mut [u8; 22],
+) -> &'a [u8] {
+    for (start, digit) in storage.iter_mut().enumerate().rev() {
+        *digit = alphabet[(magnitude % RADIX) as usize];
+        magnitude /= RADIX;
+        if magnitude == 0 {
+            return &storage[start..];
+        }
+    }
+    unreachable!("u64 fits in 22 digits for the supported radices")
+}
+
+#[cfg(test)]
+#[test]
+fn integer_digits_cover_each_radix_and_full_width() {
+    let mut storage = [0; 22];
+    let lower = b"0123456789abcdef";
+    let upper = b"0123456789ABCDEF";
+    for n in [0, 7, 8, 9, 10, 15, 16, 99, 100, 1 << 63, u64::MAX] {
+        assert_eq!(
+            integer_digits::<8>(n, lower, &mut storage),
+            format!("{n:o}").as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<10>(n, lower, &mut storage),
+            n.to_string().as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<16>(n, lower, &mut storage),
+            format!("{n:x}").as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<16>(n, upper, &mut storage),
+            format!("{n:X}").as_bytes()
+        );
+    }
+}
+
 pub(crate) fn nan_body(n: f64) -> &'static str {
     if cfg!(windows) && n.to_bits() == 0xfff8000000000000 {
         "nan(ind)"
@@ -390,9 +436,6 @@ impl Text {
         let mut value = Self::copy("");
         value.write_fmt(args).expect("bounded numeric format");
         value
-    }
-    fn clear(&mut self) {
-        self.len = 0;
     }
     fn push(&mut self, byte: char) {
         self.write_char(byte).expect("bounded numeric suffix");
