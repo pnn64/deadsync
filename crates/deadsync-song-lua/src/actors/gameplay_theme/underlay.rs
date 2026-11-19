@@ -71,7 +71,11 @@ fn step(
     path: &str,
     args: &[Value],
 ) -> Result<Value, Error> {
-    let name = path.strip_prefix("./").unwrap_or(path);
+    let name = match path {
+        // The shared versus pane loads this exact sibling resource.
+        "../PerPlayer/StepStatistics/TapNoteJudgments.lua" => "TapNoteJudgments.lua",
+        _ => path.strip_prefix("./").unwrap_or(path),
+    };
     let source = source::statistics(name).ok_or_else(|| {
         call.error(format!("unknown native StepStatistics resource {path}").as_bytes())
     })?;
@@ -305,6 +309,14 @@ pub(super) fn load(call: &mut HostCall<'_>, data: &Load) -> Result<(), Error> {
                     let container = note_field(call, "default.lua", &[player])?;
                     panes.push(attach(call, data, underlay, container, true, None)?);
                 }
+                let statistics =
+                    source::evaluate(call, source::VERSUS_STATISTICS, environment, &[])?;
+                if statistics != Value::Nil {
+                    let actor = attach(call, data, underlay, statistics, true, None)?;
+                    let role = call.intern_static(b"versus_statistics")?;
+                    set(call, actor, "__songlua_underlay_role", role)?;
+                    panes.push(actor);
+                }
                 let meter = source::evaluate(call, source::SONG_INFO, Value::Table(globals), &[])?;
                 panes.push(attach(
                     call,
@@ -343,6 +355,7 @@ fn reorder(call: &mut HostCall<'_>, underlay: TableId) -> Result<(), Error> {
         b"DangerP2",
         b"StepStatsPaneP2",
         b"filter1",
+        b"versus_statistics",
         b"Header",
         b"SongMeter",
         b"P1Score",

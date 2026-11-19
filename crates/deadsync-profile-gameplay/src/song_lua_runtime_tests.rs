@@ -31,6 +31,7 @@ fn catalog_note_bounds_include_pack_sync_before_global_offset() {
     std::fs::write(&path, "#TITLE:Catalog sync;#BPMS:0=80;#LASTSECONDHINT:103.502998;#NOTES:dance-single::Challenge:1:0,0,0,0,0:\n1000\n0000\n0000\n0001\n;").unwrap();
     let mut song = deadsync_simfile::app_runtime::parse_song_for_test(&path, 0.0).unwrap();
     song.first_second = 9.0;
+    song.precise_note_first_second_seconds = Some(9.0);
     song.last_second_hint = 103.502998;
     song.precise_note_last_second_seconds = Some(94.5);
     let chart = Arc::new(song.charts[0].clone());
@@ -64,6 +65,42 @@ fn catalog_note_bounds_include_pack_sync_before_global_offset() {
         Some([9.017, 103.502998]),
         "native catalog timing applies the ITG pack offset before resolving the cabinet offset; hints stay absolute"
     );
+}
+
+#[test]
+fn catalog_note_bounds_offset_raw_first_before_the_native_fallback() {
+    let dir = std::env::temp_dir().join(format!(
+        "deadsync-catalog-raw-first-{}", std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let options = deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+    for (name, notes, hint, offset, rate, sync, raw_first, expected) in [
+        ("real-zero", "1000\n,\n0000\n,\n0100\n", "", -0.125, 1.0, 0.0,
+            Some(0.0), [0.125, 8.125]),
+        ("singleton", "0000\n,\n0000\n,\n1000\n", "", -0.125, 1.0, 0.0,
+            Some(8.0), [0.0, 8.125]),
+        ("offset-before-hint", "0000\n,\n0000\n,\n1000\n", "#LASTSECONDHINT:7.875;", 0.25, 1.0, 0.0,
+            Some(8.0), [7.75, 7.875]),
+        ("rate-and-sync", "1000\n,\n0000\n,\n0100\n", "", 0.125, 1.5, 0.0625,
+            Some(0.0), [-0.25, 7.75]),
+        ("no-endpoints", "1000\n", "", -0.125, 1.0, 0.0,
+            None, [0.0, -1.0]),
+        ("hint-only", "1000\n", "#LASTSECONDHINT:12;", -0.125, 1.0, 0.0,
+            None, [0.0, 12.0]),
+    ] {
+        let path = dir.join(format!("{name}.ssc"));
+        std::fs::write(&path, format!(
+            "#VERSION:0.83;#TITLE:Catalog raw bounds;#BPMS:0=60;{hint}\n\
+             #NOTEDATA:;#STEPSTYPE:dance-single;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{notes};"
+        )).unwrap();
+        let song = deadsync_simfile::song::parse_song_meta_file(
+            &path, &options, offset, |_| 20.0,
+        ).unwrap();
+        assert_eq!(song.precise_first_second(), 0.0, "{name}");
+        assert_eq!(song.precise_note_first_second_seconds, raw_first, "{name}");
+        assert_eq!(super::song_lua_catalog_note_bounds(&song, offset, rate, sync), expected, "{name}");
+    }
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 fn deadsync_root() -> PathBuf {

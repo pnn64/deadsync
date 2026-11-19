@@ -710,6 +710,111 @@ return Def.ActorFrame {
 }
 
 #[test]
+fn compiled_manual_amv_draws_keep_frozen_native_samplers() {
+    use deadlib_render_core::{
+        DrawOp, SamplerDesc, SamplerFilter, SamplerWrap, is_render_target_texture,
+        texture_sampler_desc,
+    };
+
+    crate::tests::init_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("default.lua");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+        .save(dir.path().join("ordinary.png")).unwrap();
+    std::fs::write(&entry, r#"
+local vertices = {
+    {{-8,-8,0},{1,1,1,1},{0,0}},
+    {{8,-8,0},{1,1,1,1},{1,0}},
+    {{0,8,0},{1,1,1,1},{.5,1}},
+}
+local function draw(self)
+    for _, name in ipairs({'AftMesh', 'ImageMesh'}) do
+        local mesh = self:GetChild(name)
+        mesh:Draw() -- Native defaults: filtering enabled, wrapping disabled.
+        mesh:SetTextureFiltering(false):texturewrapping(false):Draw()
+        mesh:SetTextureFiltering(false):texturewrapping(true):Draw()
+        mesh:SetTextureFiltering(true):texturewrapping(true):Draw()
+        -- Later mutation must not change any of the four recorded samplers.
+        mesh:SetTextureFiltering(true):texturewrapping(false)
+    end
+end
+return Def.ActorFrame {
+    OnCommand=function(self)
+        self:GetChild('AftMesh'):SetTexture(self:GetChild('Capture'):GetTexture())
+        self:GetChild('ImageMesh'):SetTexture(self:GetChild('Image'):GetTexture())
+        self:SetDrawFunction(draw)
+        self:Draw() -- One immediate parent draw, then the normal callback.
+    end,
+    Def.ActorFrameTexture {
+        Name='Capture', InitCommand=function(self)
+            self:SetWidth(8):SetHeight(8):SetTextureName('manual-sampler'):Create()
+        end,
+    },
+    Def.ActorMultiVertex {
+        Name='AftMesh', InitCommand=function(self)
+            self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+        end,
+    },
+    Def.ActorMultiVertex {
+        Name='ImageMesh', InitCommand=function(self)
+            self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+        end,
+    },
+    Def.Sprite {
+        Name='Image', Texture='ordinary.png',
+        InitCommand=function(self) self:visible(false) end,
+    },
+}
+"#).unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir.path(), "Manual AMV samplers");
+    context.music_length_seconds = 0.1;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let compiled = compile_song_lua(&entry, &context).expect("compile authored manual AMV draws");
+    assert_eq!(compiled.info.unsupported_perframes, 0);
+    let index = |name| compiled.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some(name)).unwrap();
+    let meshes = [index("AftMesh"), index("ImageMesh")];
+    let states = compiled.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let expected = [(true, false), (false, false), (false, true), (true, true)];
+    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays);
+    for immediate in [true, false] {
+        let frozen = compiled.draw_frames.iter()
+            .find(|frame| frame.immediate == immediate && !frame.ops.is_empty())
+            .expect("authored immediate and normal manual draws are both captured");
+        assert_eq!(frozen.ops.len(), 8, "immediate={immediate}: {frozen:?}");
+        for (ordinal, op) in frozen.ops.iter().enumerate() {
+            let SongLuaDrawOp::Draw {
+                source: SongLuaDrawSource::Overlay(index), state, vertices, ..
+            } = op else { panic!("expected recorded AMV draw: {op:?}") };
+            assert_eq!(*index, meshes[ordinal / 4]);
+            assert_eq!((state.texture_filtering, state.texture_wrapping), expected[ordinal % 4]);
+            assert_eq!(vertices.as_ref().expect("frozen AMV vertices").len(), 3);
+        }
+        let rendered = composer.render_recorded_frame(
+            &compiled.overlays, &states, frozen, [640., 480.], frozen.second, frozen.second * 2.,
+        );
+        assert_eq!(rendered.len(), 8, "immediate={immediate}");
+        for (ordinal, (index, frame)) in rendered.iter().enumerate() {
+            assert_eq!(*index, meshes[ordinal / 4]);
+            let [DrawOp::TexturedMesh(run)] = frame.ops.as_slice() else {
+                panic!("expected one manual AMV mesh: {:?}", frame.ops);
+            };
+            assert_eq!(is_render_target_texture(run.texture_handle), ordinal < 4);
+            let (filtering, wrapping) = expected[ordinal % 4];
+            assert_eq!(
+                texture_sampler_desc(SamplerDesc::default(), run.texture_handle, true, run.sampler),
+                SamplerDesc {
+                    filter: if filtering { SamplerFilter::Linear } else { SamplerFilter::Nearest },
+                    wrap: if wrapping { SamplerWrap::Repeat } else { SamplerWrap::Clamp },
+                    mipmaps: false,
+                },
+                "frozen manual sampler: immediate={immediate}, ordinal={ordinal}, run={run:?}",
+            );
+        }
+    }
+}
+
+#[test]
 fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
     crate::tests::init_paths();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");
@@ -11456,6 +11561,121 @@ fn song_lua_sprite_animation_applies_rate_and_loop_controls_at_runtime() {
 }
 
 #[test]
+fn song_lua_sprite_custom_uvs_preserve_native_endpoint_order() {
+    let key = "song-lua-signed-uv.png";
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    let overlay = SongLuaOverlayActor {
+        kind: test_sprite_kind(key),
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    // Native Sprite::TexCoordArrayFromRect retains left/right and top/bottom
+    // order. DrawTexture crops by interpolating those endpoints, without
+    // sorting them or expanding a constant coordinate into a nonzero span.
+    // Corners below are TL, TR, BR, BL in our submitted triangle order.
+    let cases = [
+        (
+            "reversed U",
+            [0.25, 0.125, -1.75, 1.125],
+            [0.0; 4],
+            [[0.25, 0.125], [-1.75, 0.125], [-1.75, 1.125], [0.25, 1.125]],
+        ),
+        (
+            "reversed V",
+            [0.25, 0.125, 2.25, -0.875],
+            [0.0; 4],
+            [[0.25, 0.125], [2.25, 0.125], [2.25, -0.875], [0.25, -0.875]],
+        ),
+        (
+            "both reversed",
+            [0.25, 0.125, -1.75, -0.875],
+            [0.0; 4],
+            [[0.25, 0.125], [-1.75, 0.125], [-1.75, -0.875], [0.25, -0.875]],
+        ),
+        (
+            "both reversed and cropped",
+            [0.25, 0.125, -1.75, -0.875],
+            [0.125, 0.25, 0.25, 0.125],
+            [[0.0, -0.125], [-1.25, -0.125], [-1.25, -0.75], [0.0, -0.75]],
+        ),
+        (
+            "constant U",
+            [0.25, 0.125, 0.25, 1.125],
+            [0.0; 4],
+            [[0.25, 0.125], [0.25, 0.125], [0.25, 1.125], [0.25, 1.125]],
+        ),
+        (
+            "constant V",
+            [0.25, 0.125, 2.25, 0.125],
+            [0.0; 4],
+            [[0.25, 0.125], [2.25, 0.125], [2.25, 0.125], [0.25, 0.125]],
+        ),
+    ];
+    for camera in [
+        None,
+        Some(SongLuaOverlayState {
+            fov: Some(45.0),
+            vanishpoint: Some([320.0, 240.0]),
+            ..Default::default()
+        }),
+    ] {
+        for cached in [false, true] {
+            let mut scratch = SongLuaProjectedMeshScratch::default();
+            for (label, rect, [left, right, top, bottom], corners) in cases {
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        x: 320.0,
+                        y: 240.0,
+                        custom_texture_rect: Some(rect),
+                        // Native SetCustomTextureRect enables wrapping.
+                        texture_wrapping: true,
+                        cropleft: left,
+                        cropright: right,
+                        croptop: top,
+                        cropbottom: bottom,
+                        ..Default::default()
+                    },
+                    camera,
+                    &assets,
+                    0,
+                    640.0,
+                    480.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    None,
+                    cached.then_some(&mut scratch),
+                )
+                .expect("custom UV sprite should render");
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors,
+                    [0.0; 4],
+                    &metrics,
+                    &font::FontMap::default(),
+                    0.0,
+                    assets.texture_context(),
+                );
+                assert_eq!(frame.ops.len(), 1, "{label}, camera={camera:?}, cached={cached}");
+                let deadlib_render_core::DrawOp::TexturedMesh(run) = &frame.ops[0] else {
+                    panic!("custom UV sprite must use the native mesh path");
+                };
+                let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                assert_eq!(
+                    vertices.iter().map(|vertex| vertex.uv).collect::<Vec<_>>(),
+                    [corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]],
+                    "{label}, camera={camera:?}, cached={cached}",
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
     let key = "song-lua-translate.png".to_string();
     let mut asset_manager = AssetManager::new();
@@ -11958,6 +12178,211 @@ fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
             assert_eq!(blend, BlendMode::Subtract);
         }
         other => panic!("expected subtract quad actor, got {other:?}"),
+    }
+}
+
+#[test]
+fn lua_flat_sprites_and_quads_preserve_independent_depth_flags() {
+    use deadlib_render_core::DrawOp;
+    crate::tests::init_paths();
+    let directory = tempfile::tempdir().unwrap();
+    let image = image::RgbaImage::from_pixel(40, 30, image::Rgba([255; 4]));
+    image.save(directory.path().join("depth.png")).unwrap();
+    // Native Actor::ztest and ::zwrite are independent. Both are renderer state,
+    // including at Z=0, with no perspective camera or generic MaskSource/Dest.
+    let cases = [
+        ("default", "", false, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("test", "self:ztest(true)", true, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("write", "self:zwrite(true)", false, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("both", "self:zbuffer(true)", true, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_test", "self:zbuffer(true):ztest(false)", false, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_write", "self:zbuffer(true):zwrite(false)", true, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_both", "self:zbuffer(true):ztest(false):zwrite(false)", false, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("on_fail", "self:ztestmode('ZTestMode_WriteOnFail')", true, false, true, SongLuaOverlayBlendMode::Alpha),
+        ("mask_write", "self:blend('BlendMode_NoEffect'):zwrite(true)", false, true, false, SongLuaOverlayBlendMode::NoEffect),
+    ];
+    let mut source = String::from("return Def.ActorFrame {\n");
+    for kind in ["Sprite", "Quad"] {
+        for (label, command, ..) in cases {
+            let texture = if kind == "Sprite" { "Texture='depth.png'," } else { "" };
+            source.push_str(&format!(
+                "Def.{kind} {{ Name='{kind}_{label}', {texture} InitCommand=function(self) self:xy(320,240):zoomto(40,30); {command} end }},\n"
+            ));
+        }
+    }
+    source.push_str("}\n");
+    let entry = directory.path().join("default.lua");
+    std::fs::write(&entry, source).unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(directory.path(), "Flat depth");
+    context.music_length_seconds = 0.1;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let compiled = compile_song_lua(&entry, &context).expect("real Lua depth commands compile");
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(
+        white_texture_key().to_string(),
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+    );
+    for overlay in &compiled.overlays {
+        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlay.kind {
+            assets.queue_texture_upload(texture_key.to_string(), image.clone());
+        }
+    }
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    deadlib_present::space::set_current_metrics(metrics);
+    for kind in ["Sprite", "Quad"] {
+        for (label, _, test, write, on_fail, blend) in cases {
+            let name = format!("{kind}_{label}");
+            let overlay = compiled.overlays.iter()
+                .find(|actor| actor.name.as_deref() == Some(name.as_str()))
+                .expect("authored depth actor");
+            let state = overlay.initial_state;
+            assert_eq!((state.depth_test, state.depth_write, state.depth_test_on_fail),
+                (test, write, on_fail), "Lua flags: {name}");
+            assert_eq!(state.z, 0.0, "{name}");
+            assert!(!state.mask_source && !state.mask_dest, "{name}");
+            for cached in [false, true] {
+                let mut scratch = SongLuaProjectedMeshScratch::default();
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    overlay, state, None, &assets, 0, 640.0, 480.0,
+                    0.0, 0.0, 0.0, None, cached.then_some(&mut scratch),
+                ).expect("flat depth actor renders");
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+                    assets.texture_context(),
+                );
+                assert_eq!(frame.ops.len(), 1, "{name}, cached={cached}");
+                match &frame.ops[0] {
+                    DrawOp::TexturedMesh(run) => {
+                        assert!(test || write, "ordinary flat drawing stays depth-disabled: {name}");
+                        assert_eq!((run.depth_test, run.depth_write, run.depth_test_on_fail),
+                            (test, write, on_fail), "composed flags: {name}, cached={cached}");
+                        assert_eq!(run.blend, song_lua_overlay_blend(blend), "{name}");
+                        assert_eq!(run.instance_count, 1, "{name}");
+                        let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                        assert_eq!(vertices.len(), 6, "{name}");
+                        assert!(vertices.iter().all(|v| v.pos.iter().all(|p| p.is_finite())), "{name}");
+                    }
+                    DrawOp::Sprite(run) => {
+                        assert!(!test && !write, "flat path lost depth state: {name}, cached={cached}");
+                        assert_eq!(run.blend, song_lua_overlay_blend(blend), "{name}");
+                        assert_eq!(run.instance_count, 1, "{name}");
+                        let instance = &frame.sprite_instances[run.instance_start as usize];
+                        assert_eq!(instance.size, [40.0, 30.0], "{name}");
+                    }
+                    other => panic!("unexpected flat draw for {name}: {other:?}"),
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn song_lua_sprite_retains_tiny_diffuse_before_color_quantization() {
+    use deadlib_render_core::DrawOp;
+    let key = "song-lua-tiny-alpha.png";
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    let overlay = SongLuaOverlayActor {
+        kind: test_sprite_kind(key),
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    let tiny = f32::EPSILON * 0.5;
+    let glow_threshold = 0.0001_f32;
+    let visible_glow = f32::from_bits(glow_threshold.to_bits() + 1);
+    // Native Sprite::DrawTexture accepts any positive diffuse corner, then
+    // converts its color to a byte. Glow independently requires alpha > 0.0001.
+    // All positive alphas below quantize to zero.
+    let cases: [(&str, f32, Option<[f32; 4]>, f32, &[f32]); 11] = [
+        ("tiny diffuse", tiny, None, 0.0, &[0.0]),
+        ("epsilon diffuse", f32::EPSILON, None, 0.0, &[0.0]),
+        ("zero diffuse", 0.0, None, 0.0, &[]),
+        ("tiny glow", 0.0, None, tiny, &[]),
+        ("glow threshold", 0.0, None, glow_threshold, &[]),
+        ("glow above threshold", 0.0, None, visible_glow, &[1.0]),
+        ("diffuse and glow", tiny, None, visible_glow, &[0.0, 1.0]),
+        ("top left corner", tiny, Some([1.0, 0.0, 0.0, 0.0]), 0.0, &[0.0]),
+        ("top right corner", tiny, Some([0.0, 1.0, 0.0, 0.0]), 0.0, &[0.0]),
+        ("bottom left corner", tiny, Some([0.0, 0.0, 1.0, 0.0]), 0.0, &[0.0]),
+        ("bottom right corner", tiny, Some([0.0, 0.0, 0.0, 1.0]), 0.0, &[0.0]),
+    ];
+    for camera in [
+        None,
+        Some(SongLuaOverlayState {
+            fov: Some(45.0),
+            vanishpoint: Some([320.0, 240.0]),
+            ..Default::default()
+        }),
+    ] {
+        for cached in [false, true] {
+            let mut scratch = SongLuaProjectedMeshScratch::default();
+            for (label, alpha, corner_alphas, glow_alpha, expected_masks) in cases {
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        x: 320.0,
+                        y: 240.0,
+                        diffuse: [1.0, 1.0, 1.0, alpha],
+                        vertex_colors: corner_alphas.map(|alphas| {
+                            alphas.map(|alpha| [1.0, 1.0, 1.0, alpha])
+                        }),
+                        glow: [1.0, 1.0, 1.0, glow_alpha],
+                        ..Default::default()
+                    },
+                    camera,
+                    &assets,
+                    0,
+                    640.0,
+                    480.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    None,
+                    cached.then_some(&mut scratch),
+                )
+                .unwrap_or_default();
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors,
+                    [0.0; 4],
+                    &metrics,
+                    &font::FontMap::default(),
+                    0.0,
+                    assets.texture_context(),
+                );
+                let masks = frame.sprite_instances.iter().map(|instance| instance.texture_mask)
+                    .chain(frame.tmesh_instances.iter().map(|instance| instance.texture_mask))
+                    .collect::<Vec<_>>();
+                assert_eq!(masks, expected_masks, "{label}, camera={camera:?}, cached={cached}");
+                assert_eq!(frame.ops.is_empty(), expected_masks.is_empty(), "{label}");
+                for op in &frame.ops {
+                    match op {
+                        DrawOp::Sprite(run) => {
+                            for instance in &frame.sprite_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                assert!(instance.size.iter().all(|size| *size > 0.0), "{label}");
+                                assert_eq!(instance.tint[3], 0.0, "{label}");
+                            }
+                        }
+                        DrawOp::TexturedMesh(run) => {
+                            let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                            assert_eq!(vertices.len(), 6, "{label}");
+                            for instance in &frame.tmesh_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                assert!(vertices.iter().all(|vertex| {
+                                    vertex.color[3] * instance.tint[3] == 0.0
+                                }), "{label}");
+                            }
+                        }
+                        other => panic!("unexpected Sprite draw: {other:?}"),
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -13569,4 +13994,93 @@ fn parent_color_advances_without_local_writes() {
             assert_eq!((local.capacity(), composed.capacity()), capacity);
         }
     }
+}
+
+#[test]
+fn song_lua_live_aft_bindings_refresh_same_count_root_background_and_foreground() {
+    let actor = |kind, parent_index| SongLuaOverlayActor {
+        kind, parent_index, initial_state: SongLuaOverlayState::default(),
+        name: None, message_commands: Vec::new(),
+    };
+    let overlays = vec![
+        actor(SongLuaOverlayKind::ActorFrameTexture { capture_name: "a".into(), capture_size: None,
+            alpha_buffer: true, depth_buffer: false, float_buffer: false }, None),
+        actor(SongLuaOverlayKind::ActorFrameTexture { capture_name: "b".into(), capture_size: Some([64.;2]),
+            alpha_buffer: true, depth_buffer: false, float_buffer: false }, None),
+        actor(SongLuaOverlayKind::ActorMultiVertex { vertices: Arc::from([]), texture_path: None,
+            texture_key: None, capture_name: None }, None),
+    ];
+    let make_layer = || deadsync_gameplay::SongLuaVisualLayerRuntime {
+        start_second: 0., screen_width: 640., screen_height: 480., overlays: overlays.clone(),
+        overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
+        song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
+    };
+    let mut visual = SongLuaRuntimeVisuals {
+        overlays: overlays.clone(), screen_overlay_index: None, overlay_eases: Vec::new(),
+        overlay_ease_ranges: Vec::new(), overlay_events: Vec::new(),
+        background_visual_layers: vec![make_layer()], foreground_visual_layers: vec![make_layer()],
+        player_actors: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        player_events: Default::default(), player_judgment_events: Default::default(), player_combo_events: Default::default(),
+        song_foreground: SongLuaCapturedActor::default(), song_foreground_events: Vec::new(),
+        hidden_players: [false;MAX_PLAYERS], screen_layers: std::array::from_fn(|_| SongLuaCapturedActor::default()),
+        screen_layer_events: Default::default(), note_hides: Default::default(), column_offsets: Default::default(),
+        column_splines: Default::default(), screen_width: 640., screen_height: 480.,
+    };
+    let mut scratch = FrameScratch {
+        dynamic_scene: true,
+        song_lua_overlay_order: song_lua_overlay_order_cache_from(&overlays, &[]),
+        song_lua_proxy_request_index: SongLuaProxyRequestIndex::new(&overlays),
+        song_lua_background_visual_layer_orders: vec![song_lua_overlay_order_cache_from(&overlays, &[])],
+        song_lua_background_overlay_topology_indices: vec![SongLuaOverlayTopologyIndex::new(&overlays)],
+        song_lua_foreground_visual_layer_orders: vec![song_lua_overlay_order_cache_from(&overlays, &[])],
+        song_lua_foreground_proxy_request_indices: vec![SongLuaProxyRequestIndex::new(&overlays)],
+        song_lua_aft_capture_scratch: SongLuaAftCaptureScratch::new(&overlays, &SongLuaOverlayTopologyIndex::new(&overlays)),
+        ..Default::default()
+    };
+    let handles = [scratch.song_lua_proxy_request_index.topology.aft_texture_handles.clone(),
+        scratch.song_lua_background_overlay_topology_indices[0].aft_texture_handles.clone(),
+        scratch.song_lua_foreground_proxy_request_indices[0].topology.aft_texture_handles.clone()];
+    let history: Arc<[SongLuaDrawFrame]> = Arc::from([SongLuaDrawFrame {
+        second: 0., immediate: true, owners: vec![2], owner_ends: vec![0], ops: Vec::new(),
+    }]);
+    scratch.song_lua_aft_capture_scratch.manual = SongLuaManualScratch::with_frames(&overlays, history.clone());
+    scratch.song_lua_aft_capture_scratch.manual.immediate_cursor = 1;
+    scratch.song_lua_aft_capture_scratch.active_bank = 1;
+    let bank = &mut scratch.song_lua_aft_capture_scratch.slots[0].as_mut().unwrap()[0];
+    let retained = bank.refill([0.;2], |actors| actors.push(Actor::Frame {
+        align: [0.;2], offset: [0.;2], size: [SizeSpec::Px(8.);2],
+        children: Vec::new(), background: None, z: 0,
+    })).unwrap();
+    let bank_stats = bank.stats();
+    for (allocated, sample, target) in [(false, Some("a"), None), (true, Some("a"), Some(0)),
+        (true, Some("b"), Some(1)), (true, None, None)] {
+        for layer in [&mut visual.overlays, &mut visual.background_visual_layers[0].overlays,
+            &mut visual.foreground_visual_layers[0].overlays] {
+            let SongLuaOverlayKind::ActorFrameTexture { capture_size, .. } = &mut layer[0].kind else { unreachable!() };
+            *capture_size = allocated.then_some([32.;2]);
+            let SongLuaOverlayKind::ActorMultiVertex { capture_name, .. } = &mut layer[2].kind else { unreachable!() };
+            *capture_name = sample.map(str::to_owned);
+        }
+        scratch.refresh_live_wrappers(&visual);
+        for (topology, expected_handles) in [(&scratch.song_lua_proxy_request_index.topology, &handles[0]),
+            (&scratch.song_lua_background_overlay_topology_indices[0], &handles[1]),
+            (&scratch.song_lua_foreground_proxy_request_indices[0].topology, &handles[2])] {
+            assert_eq!(topology.aft_sprite_targets[2].get(), target);
+            assert_eq!(topology.texture_handle(2), target.map(|i| expected_handles[i]));
+            assert_eq!(&topology.aft_texture_handles, expected_handles);
+            assert_eq!(topology.aft_sprite_indices.as_ref(), if sample.is_some() { &[2][..] } else { &[][..] });
+        }
+        let topology = &mut scratch.song_lua_proxy_request_index.topology;
+        let pointers = (topology.aft_sprite_targets.as_ptr(), topology.aft_sprite_indices.as_ptr(),
+            topology.aft_texture_dependencies.as_ptr());
+        assert!(!topology.refresh_texture_bindings(&visual.overlays), "unchanged dependencies retain the target map");
+        assert_eq!(pointers, (topology.aft_sprite_targets.as_ptr(), topology.aft_sprite_indices.as_ptr(),
+            topology.aft_texture_dependencies.as_ptr()));
+        assert_eq!(scratch.song_lua_aft_capture_scratch.active_bank, 1);
+        assert_eq!(scratch.song_lua_aft_capture_scratch.slots[0].as_ref().unwrap()[0].stats(), bank_stats);
+        assert!(Arc::ptr_eq(&scratch.song_lua_aft_capture_scratch.manual.frames, &history));
+        assert_eq!(scratch.song_lua_aft_capture_scratch.manual.immediate_cursor, 1);
+        assert_eq!(visual.overlays.len(), overlays.len());
+    }
+    drop(retained);
 }

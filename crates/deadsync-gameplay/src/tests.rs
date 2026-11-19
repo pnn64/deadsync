@@ -14641,6 +14641,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: chart_end,
+            precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: Some(chart_end),
             last_second_hint: 0.0,
             charts: Vec::new(),

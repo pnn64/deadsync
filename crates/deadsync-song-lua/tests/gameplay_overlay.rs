@@ -210,8 +210,8 @@ fn original_judgment_listeners_keep_stage_data_and_off_callbacks_across_gc() {
                 GetTapNoteResult=function()return {GetHeld=function()return false end}end}
         "#,
         );
-        // Actual gameplay messages do not apply authored Broadcast defaults:
-        // that path inserts a truthy HoldNoteScore_None and skips offset tracking.
+        // Exercise actual gameplay delivery without authored Broadcast's
+        // note/result helper synthesis.
         for judgment in ["TapNoteScore_W1", "TapNoteScore_Miss"] {
             p.script(&format!("PARAMS={{Player=PLAYER_1,TapNoteScore='{judgment}',TapNoteOffset=0.005,Notes={{[1]=NOTE}}}}"));
 

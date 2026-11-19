@@ -95,15 +95,44 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
         let manager = songman(call, &context, song, first_steps, course)?;
         let globals = table(call, call.captures()[0])?;
         set(globals, "SONGMAN", manager, call)?;
-        let util = object(call, |call, util| {
-            for (name, filtered) in [
-                ("GetPlayableSteps", false),
-                ("GetPlayableStepsByStepsType", true),
-            ] {
-                let method = call.new_host_function_with_data(song_util, &[], filtered)?;
-                set(util, name, method, call)?;
+        let playable = object(call, |call, playable| {
+            // SongUtil is global: its sort metadata must not own a retired Song
+            // or Steps. Numeric ranks in a weak-key table keep only identities.
+            let metatable = object(call, |call, mt| set(mt, "__mode", "k", call))?;
+            call.with_roots(&[Value::Table(metatable)], |call| {
+                let set_metatable = get(call, Value::Table(globals), "setmetatable")?;
+                call.call(
+                    set_metatable,
+                    &[Value::Table(playable), Value::Table(metatable)],
+                )?;
+                Ok(())
+            })?;
+            if let Some(order) = playable_steps_order(&context.song_steps) {
+                set(playable, song, true, call)?;
+                let all = get(call, Value::Table(song), "__songlua_steps")?;
+                let all = table(call, all)?;
+                for (rank, index) in order.into_iter().enumerate() {
+                    let step = call.raw_table_get(all, Value::Number((index + 1) as f64))?;
+                    set(playable, step, rank, call)?;
+                }
             }
             Ok(())
+        })?;
+        let util = call.with_roots(&[Value::Table(playable)], |call| {
+            object(call, |call, util| {
+                for (name, filtered) in [
+                    ("GetPlayableSteps", false),
+                    ("GetPlayableStepsByStepsType", true),
+                ] {
+                    let method = call.new_host_function_with_data(
+                        song_util,
+                        &[Value::Table(playable)],
+                        filtered,
+                    )?;
+                    set(util, name, method, call)?;
+                }
+                Ok(())
+            })
         })?;
         set(globals, "SongUtil", util, call)?;
         Ok(())
@@ -471,6 +500,59 @@ fn select_steps(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.push(value)
 }
 
+fn playable_steps_order(steps: &[SongLuaStep]) -> Option<Vec<usize>> {
+    let mut order = steps
+        .iter()
+        .enumerate()
+        .map(|(index, step)| {
+            let kind = crate::with_compact_ascii_lowercase_song_key(&step.steps_type, |name| {
+                let name = name.trim_start_matches("stepstype");
+                STEPS_TYPES.iter().position(|kind| {
+                    crate::with_compact_ascii_lowercase_song_key(kind, |kind| kind == name)
+                })
+            })?;
+            Some((kind, step.difficulty as u8, index))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    // SongUtil::GetPlayableSteps ends with StepsUtil::SortStepsByTypeAndDifficulty.
+    // Keep its enum ordering separate from GetAllSteps and selected chart indices.
+    // Native first sorts meter/radar/description, but this metadata has no P1
+    // TapsAndHolds radar; its final std::sort also leaves equal keys unspecified.
+    // Preserve equal-key input order here without claiming those tie breakers.
+    order.sort_by_key(|&(kind, difficulty, _)| (kind, difficulty));
+    Some(order.into_iter().map(|(_, _, index)| index).collect())
+}
+
+fn sort_owned_playable_steps(
+    call: &mut HostCall<'_>,
+    song: Value,
+    result: Value,
+) -> Result<Value, Error> {
+    let ranks = table(call, call.captures()[0])?;
+    if call.raw_table_get(ranks, song)? != Value::Boolean(true) {
+        return Ok(result);
+    }
+    let Value::Table(list) = result else {
+        return Ok(result);
+    };
+    let mut ranked = Vec::with_capacity(call.raw_table_len(list)?);
+    for index in 1..=call.raw_table_len(list)? {
+        let step = call.raw_table_get(list, Value::Number(index as f64))?;
+        let Value::Number(rank) = call.raw_table_get(ranks, step)? else {
+            // Preserve the existing live-getter behavior for foreign results.
+            return Ok(result);
+        };
+        ranked.push((rank as usize, step));
+    }
+    if ranked.windows(2).all(|pair| pair[0].0 <= pair[1].0) {
+        return Ok(result);
+    }
+    ranked.sort_by_key(|&(rank, _)| rank);
+    call.with_roots(&[result], |call| {
+        array(call, ranked.into_iter().map(|(_, step)| step)).map(Value::Table)
+    })
+}
+
 fn song_util(call: &mut HostCall<'_>) -> Result<(), Error> {
     let filtered = *call.function_data::<bool>().expect("SongUtil method");
     for index in 0..call.arguments().len() {
@@ -501,6 +583,11 @@ fn song_util(call: &mut HostCall<'_>) -> Result<(), Error> {
                     .unwrap_or(Value::Nil)
             } else {
                 Value::Table(call.try_new_table()?)
+            };
+            let result = if filtered {
+                result
+            } else {
+                sort_owned_playable_steps(call, song, result)?
             };
             call.push(result)
         });

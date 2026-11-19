@@ -152,8 +152,9 @@ impl SongLuaOverlayIndex {
 /// by capture name and allocates a stable render-target handle for each AFT.
 /// Static camera scopes are resolved at screen entry; trees whose camera FOV can
 /// change retain the indexed ancestor fallback. Live wrapper insertion rebuilds
-/// the affected index while preserving its capture handles. Ordinary frames
-/// reuse the index without synchronization, allocation, eviction or pruning.
+/// the affected index while preserving its capture handles. Live allocation or
+/// sampling-name changes refresh only the target map. Unchanged frames reuse
+/// the index without synchronization, allocation, eviction or pruning.
 /// Storage follows the owned overlay count and is released with the screen.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
@@ -161,12 +162,32 @@ struct SongLuaOverlayTopologyIndex {
     aft_sprite_targets: Vec<SongLuaOverlayIndex>,
     aft_sprite_indices: Box<[usize]>,
     aft_texture_handles: Vec<TextureHandle>,
+    aft_texture_dependencies: Vec<(Option<String>, Option<String>)>,
     camera_ancestors: Vec<SongLuaOverlayIndex>,
     camera_states: Vec<SongLuaOverlayIndex>,
     dynamic_camera_scope: bool,
 }
 
 impl SongLuaOverlayTopologyIndex {
+    // Only allocated names can be targets; requested names/flags/sizes do not
+    // change the binding map. The second component is the current sampler name.
+    fn texture_dependency<S: NoteskinSlot + Clone>(
+        overlay: &SongLuaOverlayActor<S>,
+    ) -> (Option<&str>, Option<&str>) {
+        match &overlay.kind {
+            SongLuaOverlayKind::ActorFrameTexture {
+                capture_name,
+                capture_size: Some(_),
+                ..
+            } => (Some(capture_name), None),
+            SongLuaOverlayKind::AftSprite { capture_name } => (None, Some(capture_name)),
+            SongLuaOverlayKind::ActorMultiVertex { capture_name, .. } => {
+                (None, capture_name.as_deref())
+            }
+            _ => (None, None),
+        }
+    }
+
     fn new<S: NoteskinSlot + Clone>(overlays: &[SongLuaOverlayActor<S>]) -> Self {
         let aft_ancestors = (0..overlays.len())
             .map(|index| SongLuaOverlayIndex::new(song_lua_overlay_aft_ancestor(overlays, index)))
@@ -214,6 +235,10 @@ impl SongLuaOverlayTopologyIndex {
                     .unwrap_or_default()
             })
             .collect::<Vec<_>>();
+        let aft_texture_dependencies = overlays.iter().map(|overlay| {
+            let (allocated, sampled) = Self::texture_dependency(overlay);
+            (allocated.map(str::to_owned), sampled.map(str::to_owned))
+        }).collect();
         let camera_ancestors = overlays
             .iter()
             .map(|overlay| {
@@ -245,6 +270,7 @@ impl SongLuaOverlayTopologyIndex {
             aft_sprite_targets,
             aft_sprite_indices,
             aft_texture_handles,
+            aft_texture_dependencies,
             camera_ancestors,
             camera_states,
             dynamic_camera_scope,
@@ -3703,7 +3729,26 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         .and_then(|camera| song_lua_overlay_view_proj(camera, screen[0], screen[1]))
         .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
     Some(Actor::TexturedMesh {
-        environment: None,
+        environment: Some(deadlib_present::actors::MeshEnvironment {
+            // ActorMultiVertex applies the sampling state captured by each Draw,
+            // including its native default Clamp, before diffuse and glow.
+            sampler: Some(deadlib_render_core::MeshSampler::Override {
+                filter: if state.texture_filtering {
+                    deadlib_render_core::SamplerFilter::Linear
+                } else {
+                    deadlib_render_core::SamplerFilter::Nearest
+                },
+                wrap: if state.texture_wrapping {
+                    deadlib_render_core::SamplerWrap::Repeat
+                } else {
+                    deadlib_render_core::SamplerWrap::Clamp
+                },
+            }),
+            camera: None,
+            transform: Matrix4::IDENTITY,
+            additive_texture: None,
+            additive_uv: [0.0, 0.0, 1.0, 1.0],
+        }),
         vertex_color_encoding: Default::default(),
         align: [0.0; 2],
         offset: [0.0; 2],
@@ -7824,7 +7869,9 @@ fn song_lua_proxy_effect(
 fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     // Actor::BeginDraw multiplies glow effects by the original diffuse alpha.
     // Only an explicit, non-effect glow can outlive a transparent actor.
-    state.diffuse[3] > f32::EPSILON || state.glow[3] > f32::EPSILON
+    // Native diffuse submission tests the float before RageVColor quantization;
+    // even a positive alpha that packs to byte zero must retain its geometry.
+    state.diffuse[3] > 0.0 || state.glow[3] > f32::EPSILON
 }
 
 // Native color macros replace RGB and retain the original local diffuse alpha.
@@ -9724,12 +9771,9 @@ fn song_lua_overlay_uvs(
     ] = if let Some([u0, v0, u1, v1]) =
         song_lua_overlay_uv_rect(state, sheet_dims, states, animation_elapsed)
     {
-        [
-            (u1 - u0).abs().max(1e-6),
-            (v1 - v0).abs().max(1e-6),
-            u0.min(u1),
-            v0.min(v1),
-        ]
+        // Sprite::DrawTexture interpolates the authored endpoints in order.
+        // Reversed and constant texture coordinates remain valid when cropped.
+        [u1 - u0, v1 - v0, u0, v0]
     } else {
         [1.0, 1.0, 0.0, 0.0]
     };
@@ -10864,6 +10908,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     && state.rot_z_deg.abs() > f32::EPSILON;
                 let native_mesh = state.quaternion != crate::actor_quaternion::IDENTITY
                     || state.z != 0.0
+                    || state.depth_test
+                    || state.depth_write
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor

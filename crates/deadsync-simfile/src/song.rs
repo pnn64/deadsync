@@ -239,44 +239,46 @@ fn note_analysis_bytes<'a>(
     data: &'a [u8],
     entries: &[rssp::parse::ParsedChartEntry<'a>],
 ) -> Cow<'a, [u8]> {
-    // extract_sections yields disjoint note blocks in source order. Copy the
-    // retained bytes as annotations are found, without collecting/sorting gaps.
+    // Copy only changed note spans. Full-width rows retain the borrowed input.
     let mut notes = Vec::new();
     let mut copied = 0;
     for entry in entries {
         let Some(lanes) = rssp::supported_stepstype_lanes_bytes(entry.fields[0]) else { continue };
-        let mut search = 0;
-        while let Some(bracket) = memchr::memchr(b'[', &entry.note_data[search..]) {
-            let bracket = search + bracket;
-            let line_start = memchr::memrchr2(b'\n', b',', &entry.note_data[..bracket])
-                .map_or(0, |index| index + 1);
-            let line_end = memchr::memchr2(b'\n', b',', &entry.note_data[bracket..])
-                .map_or(entry.note_data.len(), |index| bracket + index);
-            let line = &entry.note_data[line_start..line_end];
-            search = (line_end + 1).min(entry.note_data.len());
-            let mut end = line.len();
-            if let Some(comment) = line[..end].windows(2).position(|bytes| bytes == b"//") {
-                end = comment;
-            }
-            while end > 0 && matches!(line[end - 1], b'\r' | b'\t' | b' ') { end -= 1; }
-            let mut cursor = 0;
-            while cursor < end && matches!(line[cursor], b'\r' | b'\t' | b' ') { cursor += 1; }
-            // NoteDataUtil::LoadFromSMNoteDataStringWithPlayer consumes one
-            // column, then skips its optional [keysound index] through ']'
-            // or the row end. Its digits must never enter RSSP as notes.
-            for _ in 0..lanes {
-                if cursor >= end { break; }
-                cursor += 1;
-                if cursor < end && line[cursor] == b'[' {
-                    let start = cursor;
+        for line in entry.note_data.split_inclusive(|byte| *byte == b'\n') {
+            // Commas in comments are not measure separators. Keep the original
+            // whitespace, comments and delimiters outside each changed span.
+            let content_end = line.windows(2).position(|bytes| bytes == b"//")
+                .unwrap_or(line.len());
+            for row in line[..content_end].split(|byte| *byte == b',') {
+                let mut end = row.len();
+                while end > 0 && matches!(row[end - 1], b'\r' | b'\n' | b'\t' | b' ') { end -= 1; }
+                let mut cursor = 0;
+                while cursor < end && matches!(row[cursor], b'\r' | b'\n' | b'\t' | b' ') { cursor += 1; }
+                let offset = row.as_ptr() as usize - data.as_ptr() as usize;
+                let mut columns = 0;
+                // Native consumes a column before its optional keysound index;
+                // invalid ordinary symbols still occupy a column.
+                while columns < lanes && cursor < end {
+                    columns += 1;
                     cursor += 1;
-                    while cursor < end && line[cursor] != b']' { cursor += 1; }
-                    if cursor < end { cursor += 1; }
-                    // Nonempty note blocks borrow directly from the source.
-                    let offset = entry.note_data.as_ptr() as usize - data.as_ptr() as usize;
+                    if cursor < end && row[cursor] == b'[' {
+                        let start = cursor;
+                        cursor += 1;
+                        while cursor < end && row[cursor] != b']' { cursor += 1; }
+                        if cursor < end { cursor += 1; }
+                        if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
+                        notes.extend_from_slice(&data[copied..offset + start]);
+                        copied = offset + cursor;
+                    }
+                }
+                // A native nonempty short row still subdivides its measure;
+                // only its absent trailing lanes are empty. RSSP needs those
+                // zero cells to retain the row instead of dropping it.
+                if columns > 0 && columns < lanes {
                     if notes.capacity() == 0 { notes.reserve_exact(data.len()); }
-                    notes.extend_from_slice(&data[copied..offset + line_start + start]);
-                    copied = offset + line_start + cursor;
+                    notes.extend_from_slice(&data[copied..offset + end]);
+                    notes.resize(notes.len() + lanes - columns, b'0');
+                    copied = offset + end;
                 }
             }
         }
@@ -285,7 +287,6 @@ fn note_analysis_bytes<'a>(
     notes.extend_from_slice(&data[copied..]);
     Cow::Owned(notes)
 }
-
 /// The parse both entry points share once the bytes are in hand.
 fn parse_song_source(
     source: SimfileSource<'_>,
@@ -410,13 +411,15 @@ fn parse_song_source(
             parsed_notes,
         },
     );
-    update_precise_song_bounds(&mut song, 0.0);
+    update_precise_song_bounds(&mut song);
     if let Some([first, last]) = additional_bounds {
-        song.first_second = if song.precise_note_last_second_seconds.is_some() {
-            song.first_second.min(first)
-        } else { first };
+        let first = song.precise_note_first_second_seconds.map_or(first, |value| value.min(first));
         let last = song.precise_note_last_second_seconds.map_or(last, |value| value.max(last));
+        song.precise_note_first_second_seconds = Some(first);
         song.precise_note_last_second_seconds = Some(last);
+        // Merge raw endpoints before Song's first>=last fallback. A playable
+        // singleton's finalized zero must not replace its real first note.
+        song.first_second = if first < last.max(song.last_second_hint) { first } else { 0.0 };
         song.precise_last_second_seconds = song.precise_last_second_seconds.max(last);
         song.total_length_seconds = song.total_length_seconds.max(last as i32);
     }
@@ -752,6 +755,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         first_second: 0.0,
         total_length_seconds: summary.total_length.max(last_second_hint as i32),
         precise_last_second_seconds: (summary.total_length.max(0) as f32).max(last_second_hint),
+        precise_note_first_second_seconds: None,
         precise_note_last_second_seconds: Some(summary.total_length.max(0) as f32),
         last_second_hint,
         charts,
@@ -1067,6 +1071,75 @@ mod tests {
             }
             assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
         }
+    }
+
+    #[test]
+    fn native_short_note_rows_preserve_columns_beats_and_totals() {
+        let root = test_dir("native-short-note-rows");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (kind, lanes) in [("dance-single", 4), ("pump-single", 5),
+            ("dance-double", 8), ("pump-double", 10)] {
+            for short in ["001[36]", "001"] {
+                // The first row is overlong; native ignores its extra tap.
+                // The short empty second row must retain its beat subdivision.
+                let notes = format!("1{}1[99]\r\n00\r\n{short}// [99], ignored\r\n{}1,01\r\n{}\r\n{}\r\n{}\r\n",
+                    "0".repeat(lanes - 1), "0".repeat(lanes - 1),
+                    "0".repeat(lanes), "0".repeat(lanes), "0".repeat(lanes));
+                for extension in ["sm", "ssc"] {
+                    let chart = if extension == "sm" {
+                        format!("#NOTES2:{kind}:[12] Author:Challenge:1:0,0,0,0,0:\n{notes};")
+                    } else {
+                        format!("#NOTEDATA:;\n#STEPSTYPE:{kind};\n#DESCRIPTION:[12] Author;\n\
+                            #DIFFICULTY:Challenge;\n#METER:1;\n#NOTES2:\n{notes};")
+                    };
+                    let source = format!("#VERSION:0.83;\n#TITLE:[36] Short rows;\n#BPMS:0=120;\n{chart}");
+                    let path = root.join(format!("{kind}.{extension}"));
+                    fs::write(&path, &source).unwrap();
+                    for song in [parse_song_file(&path, &options, |_| 4.0).unwrap(),
+                        parse_song_bytes(source.as_bytes(), extension, &path, &options, |_| 4.0).unwrap()] {
+                        assert_eq!(song.title, "[36] Short rows");
+                        assert_eq!(song.charts.len(), 1);
+                        let chart = &song.charts[0];
+                        assert_eq!(chart.description, "[12] Author");
+                        assert_eq!((chart.stats.total_steps, chart.stats.holds, chart.stats.rolls), (4, 0, 0));
+                        assert_eq!(chart.parsed_notes.len(), 4);
+                        assert_eq!(chart.parsed_notes.iter().map(|note| note.column).collect::<Vec<_>>(),
+                            [0, 2, lanes as u8 - 1, 1]);
+                        assert!(chart.parsed_notes.iter().all(|note| NoteType::from(note.note_type) == NoteType::Tap));
+                        assert_eq!(chart.parsed_notes.iter().map(|note| chart.row_to_beat[note.row_index as usize])
+                            .collect::<Vec<_>>(), [0.0, 2.0, 3.0, 4.0]);
+                        let song = build_song_meta(song, 0.0);
+                        assert_eq!(song.charts[0].possible_grade_points, 20);
+                        assert_eq!((song.charts[0].holds_total, song.charts[0].rolls_total), (0, 0));
+                    }
+                    assert_eq!(fs::read(&path).unwrap(), source.as_bytes());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn native_short_note_row_projection_keeps_unrelated_bytes() {
+        for (notes, expected) in [
+            ("001[36]", "0010"),
+            ("00", "0000"),
+            ("0x1", "0x10"),
+            ("001[36", "0010"),
+            (" \t001[36] \r\n// [12], ignored\n01,1[9]", " \t0010 \r\n// [12], ignored\n0100,1000"),
+            ("1000\n00010001\n \t\r\n// [12], ignored", "1000\n00010001\n \t\r\n// [12], ignored"),
+        ] {
+            let wrap = |rows| format!("#TITLE:[36] Metadata;\n#NOTES:dance-single:[12] Author:Challenge:1:0,0,0,0,0:\n{rows}\n;");
+            let source = wrap(notes);
+            let expected = wrap(expected);
+            let parsed = rssp::parse::extract_sections(source.as_bytes(), "sm").unwrap();
+            let projected = note_analysis_bytes(source.as_bytes(), &parsed.notes_list);
+            assert_eq!(projected.as_ref(), expected.as_bytes());
+            if source == expected { assert!(matches!(projected, Cow::Borrowed(_))); }
+        }
+        // Do not add support or reinterpret note syntax for unsupported types.
+        let source = b"#NOTES:dance-solo::Challenge:1:0,0,0,0,0:\n001[36]\n;";
+        let parsed = rssp::parse::extract_sections(source, "sm").unwrap();
+        assert!(matches!(note_analysis_bytes(source, &parsed.notes_list), Cow::Borrowed(_)));
     }
 
     #[test]
@@ -1512,6 +1585,59 @@ mod tests {
             assert_eq!(song.first_second, 0.0);
             assert_eq!(song.precise_note_last_second_seconds, Some(8.25));
             assert_eq!(song.precise_last_second_seconds, 8.25);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parsed_song_bounds_preserve_raw_first_before_fallback() {
+        let root = test_dir("raw-first-note-bounds");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (name, notes, first, last) in [
+            ("real-zero", "1000\n,\n0100\n", Some(0.0), Some(4.0)),
+            ("singleton", "0000\n,\n1000\n", Some(4.0), Some(4.0)),
+            ("row-zero-only", "1000\n", None, None),
+            ("empty", "0000\n,\n0000\n", None, None),
+        ] {
+            let path = root.join(format!("{name}.sm"));
+            let source = format!("#TITLE:Raw first note;#BPMS:0=60;#OFFSET:0;\n\
+                #NOTES:dance-single::Challenge:1:0,0,0,0,0:\n{notes};");
+            fs::write(&path, &source).unwrap();
+            for song in [
+                parse_song_data_file(&path, &options, -0.125, |_| 20.0).unwrap(),
+                parse_song_data_file(&path, &options, 0.25, |_| 20.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "sm", &path, &options, |_| 20.0).unwrap(),
+            ] {
+                assert_eq!(song.first_second, 0.0, "{name}");
+                assert_eq!(song.precise_note_first_second_seconds, first, "{name}");
+                assert_eq!(song.precise_note_last_second_seconds, last, "{name}");
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unplayed_chart_bounds_merge_before_the_first_second_fallback() {
+        let root = test_dir("raw-first-unplayed-merge");
+        let path = root.join("bounds.ssc");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (playable_notes, first, finalized_first) in [
+            ("0000\n,\n0000\n,\n1000\n", 8.0, 8.0),
+            ("0000\n,\n0000\n", 12.0, 0.0),
+        ] {
+            let source = format!("#VERSION:0.83;#TITLE:Raw unplayed bounds;#BPMS:0=60;\n\
+                #NOTEDATA:;#STEPSTYPE:dance-single;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{playable_notes};\n\
+                #NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Medium;#METER:1;#NOTES:\n000000\n,\n000000\n,\n000000\n,\n100000\n;");
+            fs::write(&path, &source).unwrap();
+            for song in [
+                parse_song_data_file(&path, &options, 0.125, |_| 20.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "ssc", &path, &options, |_| 20.0).unwrap(),
+            ] {
+                assert_eq!(song.charts.len(), 1);
+                assert_eq!(song.precise_note_first_second_seconds, Some(first));
+                assert_eq!(song.precise_note_last_second_seconds, Some(12.0));
+                assert_eq!(song.first_second, finalized_first);
+            }
         }
         fs::remove_dir_all(root).unwrap();
     }
