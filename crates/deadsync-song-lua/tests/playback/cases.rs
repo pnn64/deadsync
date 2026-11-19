@@ -710,6 +710,111 @@ return Def.ActorFrame {
 }
 
 #[test]
+fn compiled_manual_amv_draws_keep_frozen_native_samplers() {
+    use deadlib_render_core::{
+        DrawOp, SamplerDesc, SamplerFilter, SamplerWrap, is_render_target_texture,
+        texture_sampler_desc,
+    };
+
+    crate::tests::init_paths();
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("default.lua");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4]))
+        .save(dir.path().join("ordinary.png")).unwrap();
+    std::fs::write(&entry, r#"
+local vertices = {
+    {{-8,-8,0},{1,1,1,1},{0,0}},
+    {{8,-8,0},{1,1,1,1},{1,0}},
+    {{0,8,0},{1,1,1,1},{.5,1}},
+}
+local function draw(self)
+    for _, name in ipairs({'AftMesh', 'ImageMesh'}) do
+        local mesh = self:GetChild(name)
+        mesh:Draw() -- Native defaults: filtering enabled, wrapping disabled.
+        mesh:SetTextureFiltering(false):texturewrapping(false):Draw()
+        mesh:SetTextureFiltering(false):texturewrapping(true):Draw()
+        mesh:SetTextureFiltering(true):texturewrapping(true):Draw()
+        -- Later mutation must not change any of the four recorded samplers.
+        mesh:SetTextureFiltering(true):texturewrapping(false)
+    end
+end
+return Def.ActorFrame {
+    OnCommand=function(self)
+        self:GetChild('AftMesh'):SetTexture(self:GetChild('Capture'):GetTexture())
+        self:GetChild('ImageMesh'):SetTexture(self:GetChild('Image'):GetTexture())
+        self:SetDrawFunction(draw)
+        self:Draw() -- One immediate parent draw, then the normal callback.
+    end,
+    Def.ActorFrameTexture {
+        Name='Capture', InitCommand=function(self)
+            self:SetWidth(8):SetHeight(8):SetTextureName('manual-sampler'):Create()
+        end,
+    },
+    Def.ActorMultiVertex {
+        Name='AftMesh', InitCommand=function(self)
+            self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+        end,
+    },
+    Def.ActorMultiVertex {
+        Name='ImageMesh', InitCommand=function(self)
+            self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+        end,
+    },
+    Def.Sprite {
+        Name='Image', Texture='ordinary.png',
+        InitCommand=function(self) self:visible(false) end,
+    },
+}
+"#).unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(dir.path(), "Manual AMV samplers");
+    context.music_length_seconds = 0.1;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let compiled = compile_song_lua(&entry, &context).expect("compile authored manual AMV draws");
+    assert_eq!(compiled.info.unsupported_perframes, 0);
+    let index = |name| compiled.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some(name)).unwrap();
+    let meshes = [index("AftMesh"), index("ImageMesh")];
+    let states = compiled.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let expected = [(true, false), (false, false), (false, true), (true, true)];
+    let mut composer = actor_conformance::WholeSongComposer::new(&compiled.overlays);
+    for immediate in [true, false] {
+        let frozen = compiled.draw_frames.iter()
+            .find(|frame| frame.immediate == immediate && !frame.ops.is_empty())
+            .expect("authored immediate and normal manual draws are both captured");
+        assert_eq!(frozen.ops.len(), 8, "immediate={immediate}: {frozen:?}");
+        for (ordinal, op) in frozen.ops.iter().enumerate() {
+            let SongLuaDrawOp::Draw {
+                source: SongLuaDrawSource::Overlay(index), state, vertices, ..
+            } = op else { panic!("expected recorded AMV draw: {op:?}") };
+            assert_eq!(*index, meshes[ordinal / 4]);
+            assert_eq!((state.texture_filtering, state.texture_wrapping), expected[ordinal % 4]);
+            assert_eq!(vertices.as_ref().expect("frozen AMV vertices").len(), 3);
+        }
+        let rendered = composer.render_recorded_frame(
+            &compiled.overlays, &states, frozen, [640., 480.], frozen.second, frozen.second * 2.,
+        );
+        assert_eq!(rendered.len(), 8, "immediate={immediate}");
+        for (ordinal, (index, frame)) in rendered.iter().enumerate() {
+            assert_eq!(*index, meshes[ordinal / 4]);
+            let [DrawOp::TexturedMesh(run)] = frame.ops.as_slice() else {
+                panic!("expected one manual AMV mesh: {:?}", frame.ops);
+            };
+            assert_eq!(is_render_target_texture(run.texture_handle), ordinal < 4);
+            let (filtering, wrapping) = expected[ordinal % 4];
+            assert_eq!(
+                texture_sampler_desc(SamplerDesc::default(), run.texture_handle, true, run.sampler),
+                SamplerDesc {
+                    filter: if filtering { SamplerFilter::Linear } else { SamplerFilter::Nearest },
+                    wrap: if wrapping { SamplerWrap::Repeat } else { SamplerWrap::Clamp },
+                    mipmaps: false,
+                },
+                "frozen manual sampler: immediate={immediate}, ordinal={ordinal}, run={run:?}",
+            );
+        }
+    }
+}
+
+#[test]
 fn manual_rgb_passes_keep_geometry_and_preserve_flags() {
     crate::tests::init_paths();
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/song-lua");

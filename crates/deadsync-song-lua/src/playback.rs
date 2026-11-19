@@ -3729,7 +3729,26 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         .and_then(|camera| song_lua_overlay_view_proj(camera, screen[0], screen[1]))
         .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
     Some(Actor::TexturedMesh {
-        environment: None,
+        environment: Some(deadlib_present::actors::MeshEnvironment {
+            // ActorMultiVertex applies the sampling state captured by each Draw,
+            // including its native default Clamp, before diffuse and glow.
+            sampler: Some(deadlib_render_core::MeshSampler::Override {
+                filter: if state.texture_filtering {
+                    deadlib_render_core::SamplerFilter::Linear
+                } else {
+                    deadlib_render_core::SamplerFilter::Nearest
+                },
+                wrap: if state.texture_wrapping {
+                    deadlib_render_core::SamplerWrap::Repeat
+                } else {
+                    deadlib_render_core::SamplerWrap::Clamp
+                },
+            }),
+            camera: None,
+            transform: Matrix4::IDENTITY,
+            additive_texture: None,
+            additive_uv: [0.0, 0.0, 1.0, 1.0],
+        }),
         vertex_color_encoding: Default::default(),
         align: [0.0; 2],
         offset: [0.0; 2],
