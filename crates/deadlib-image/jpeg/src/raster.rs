@@ -1,15 +1,14 @@
 //! Pixel output without retaining full-image coefficients for sequential scans.
 use crate::decode::{parse_huffman, parse_quant};
 use crate::fast::{self, Reader};
+use crate::reconstruct::{
+    CHUNK, ColorHints, cmyk_to_rgb, emit_chunk, ycbcr_chunk, ycbcr_row, ycbcr420_row, ycck_to_cmyk,
+};
 use crate::simd::Kernel;
 use crate::transform::{FloatQuant, idct8_auto, idct8_dc};
-use crate::reconstruct::{
-    ColorHints, CHUNK, cmyk_to_rgb, emit_chunk, infer_components_with_hints, ycbcr_chunk, ycbcr_row, ycbcr420_row,
-    ycck_to_cmyk,
-};
 use crate::{
-    CmykPolarity, CoefficientImage, ColorSpace, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
-    Process, Result, Tables, Upsampling,
+    CmykPolarity, CoefficientImage, ColorSpace, DecodeOptions, Error, Event, FrameHeader, Limits,
+    MarkerReader, MetadataSegment, Process, Result, Tables, Upsampling,
 };
 use deadlib_image::{ColorType, Image, Samples};
 
@@ -22,22 +21,39 @@ pub fn decode(input: &[u8], limits: Limits) -> Result<Image> {
 }
 
 pub fn decode_with_upsampling(input: &[u8], limits: Limits, method: Upsampling) -> Result<Image> {
+    decode_with_options(
+        input,
+        DecodeOptions {
+            limits,
+            ..Default::default()
+        },
+        method,
+    )
+}
+
+/// Decode gray/RGB pixels with an explicit input policy and chroma interpolation.
+pub fn decode_with_options(
+    input: &[u8],
+    options: DecodeOptions,
+    method: Upsampling,
+) -> Result<Image> {
+    let limits = options.limits;
     let mut tables = Tables::new();
-    if let Some(plan) = prepare(input, limits, &mut tables)? {
+    if let Some(plan) = prepare(input, options, &mut tables)? {
         return plan.decode(limits, method);
     }
     // Choose the existing process decoder without changing its validation or
     // numerical model. This also handles DCT/lossless hierarchical mixtures.
-    for event in MarkerReader::new(input)? {
+    for event in MarkerReader::with_strict(input, options.strict)? {
         if let Event::Segment { marker, .. } = event? {
             if marker == 0xde {
-                return crate::decode_hierarchical(input, limits)?
+                return crate::decode_hierarchical_with_options(input, options)?
                     .reconstruct()?
                     .to_image(method);
             }
             if let Ok(process) = Process::try_from(marker) {
                 if process.is_lossless() {
-                    return crate::decode_lossless(input, limits)?
+                    return crate::decode_lossless_with_options(input, options)?
                         .into_planar()?
                         .to_image(method);
                 }
@@ -47,8 +63,13 @@ pub fn decode_with_upsampling(input: &[u8], limits: Limits, method: Upsampling) 
     }
     // Pixel output needs only color hints, not retained metadata segments.
     let mut hints = ColorHints::default();
-    let image =
-        crate::decode::decode_with_tables(input, limits, &mut Tables::new(), Some(&mut hints))?;
+    let image = crate::decode::decode_with_tables(
+        input,
+        limits,
+        &mut Tables::new(),
+        Some(&mut hints),
+        options.strict,
+    )?;
     let color = hints.color(&image.frame.components);
     if image.frame.precision == 8 && color != ColorSpace::Unknown {
         return from_coefficients(&image, color, hints.polarity(), limits, method);
@@ -69,14 +90,18 @@ struct Plan<'a> {
     color: ColorSpace,
     polarity: CmykPolarity,
     metadata_bytes: usize,
+    strict: bool,
 }
 
-fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Result<Option<Plan<'a>>> {
-    let mut reader = MarkerReader::new(input)?;
+fn prepare<'a>(
+    input: &'a [u8],
+    options: DecodeOptions,
+    tables: &'a mut Tables,
+) -> Result<Option<Plan<'a>>> {
+    let limits = options.limits;
+    let mut reader = MarkerReader::with_strict(input, options.strict)?;
     let mut frame = None;
-    let mut jfif = false;
-    let mut adobe = None;
-    let mut inverted = false;
+    let mut hints = ColorHints::default();
     let mut metadata_bytes = 0usize;
     let mut scan = None;
     let mut interval = 0;
@@ -110,7 +135,7 @@ fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Resul
             Event::Segment {
                 marker: marker @ (0xe0..=0xef | 0xfe),
                 data,
-                offset,
+                ..
             } => {
                 metadata_bytes = metadata_bytes
                     .checked_add(data.len() + core::mem::size_of::<MetadataSegment<'_>>())
@@ -121,20 +146,7 @@ fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Resul
                     return Err(Error::LimitExceeded("metadata"));
                 }
                 if scan.is_none() {
-                    jfif |= marker == 0xe0 && data.len() >= 14 && data.starts_with(b"JFIF\0");
-                    if let Some(value) = (MetadataSegment {
-                        marker,
-                        data,
-                        offset,
-                        preceding_scans: 0,
-                    })
-                    .adobe()
-                    .ok()
-                    .flatten()
-                    {
-                        adobe = Some(value.transform);
-                        inverted |= value.transform == 0 || value.transform == 2;
-                    }
+                    hints.observe(marker, data);
                 }
             }
             Event::Segment { marker, data, .. } if Process::try_from(marker).is_ok() => {
@@ -212,12 +224,8 @@ fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Resul
     if n > 1 && blocks > 10 {
         return Err(Error::Invalid("more than ten blocks per MCU"));
     }
-    let color = infer_components_with_hints(&frame.components, jfif, adobe);
-    let polarity = if inverted {
-        CmykPolarity::AdobeInverted
-    } else {
-        CmykPolarity::Conventional
-    };
+    let color = hints.color(&frame.components);
+    let polarity = hints.polarity();
     if color == ColorSpace::Unknown {
         return Ok(None);
     }
@@ -230,6 +238,7 @@ fn prepare<'a>(input: &'a [u8], limits: Limits, tables: &'a mut Tables) -> Resul
         color,
         polarity,
         metadata_bytes,
+        strict: options.strict,
     }))
 }
 
@@ -288,12 +297,20 @@ impl Window {
             .checked_mul(if gray { 1 } else { 3 })
             .ok_or(Error::LimitExceeded("output storage"))?;
         let factor = |f: fn(&crate::ComponentSpec) -> u8| {
-            frame.components.iter().map(|c| usize::from(f(c))).max().unwrap()
+            frame
+                .components
+                .iter()
+                .map(|c| usize::from(f(c)))
+                .max()
+                .unwrap()
         };
         let (max_h, max_v) = if gray {
             (1, 1)
         } else {
-            (factor(|c| c.horizontal_sampling), factor(|c| c.vertical_sampling))
+            (
+                factor(|c| c.horizontal_sampling),
+                factor(|c| c.vertical_sampling),
+            )
         };
         let cols = width.div_ceil(8 * max_h);
         let rows = height.div_ceil(8 * max_v);
@@ -464,7 +481,9 @@ impl Window {
         out: &mut Vec<u8>,
     ) {
         let (width, height, max_h, max_v) = (self.width, self.height, self.max_h, self.max_v);
-        let full = self.layouts[..3].iter().all(|c| c.h == max_h && c.v == max_v);
+        let full = self.layouts[..3]
+            .iter()
+            .all(|c| c.h == max_h && c.v == max_v);
         // 4:2:0 and 4:2:2: half-width chroma, half or full height.
         let half = self.layouts[0].h == max_h
             && self.layouts[0].v == max_v
@@ -564,7 +583,7 @@ impl Plan<'_> {
                     .values
             }))
         });
-        let mut reader = Reader::new(self.entropy);
+        let mut reader = Reader::new(self.entropy, self.strict);
         let mut predictors = [0; 4];
         let mut restart = 0;
         let mut block = [0i16; 64];
@@ -584,8 +603,15 @@ impl Plan<'_> {
                     let quant = &quants[i];
                     for by in 0..l.v {
                         for bx in 0..l.h {
-                            let last =
-                                fast::block(&mut block, &mut reader, dc, ac, &mut predictors[i], 8, false)?;
+                            let last = fast::block(
+                                &mut block,
+                                &mut reader,
+                                dc,
+                                ac,
+                                &mut predictors[i],
+                                8,
+                                false,
+                            )?;
                             let column = mx * l.h + bx;
                             window.put(
                                 i,
@@ -661,7 +687,13 @@ impl Kernel for CoefficientKernel<'_, '_> {
     type Output = Result<Image>;
     #[inline(always)]
     fn run(self) -> Result<Image> {
-        from_coefficients_body(self.image, self.color, self.polarity, self.limits, self.method)
+        from_coefficients_body(
+            self.image,
+            self.color,
+            self.polarity,
+            self.limits,
+            self.method,
+        )
     }
 }
 
@@ -702,7 +734,12 @@ fn from_coefficients_body(
     let window = Window::new(&image.frame, color, polarity, limits, method)?;
     let (mut output, mut cache) = window.allocate(image.memory_bytes, limits)?;
     let quants: [FloatQuant; 4] = core::array::from_fn(|i| {
-        FloatQuant::new(image.components.get(i).map_or(&[0; 64], |c| &c.quantization))
+        FloatQuant::new(
+            image
+                .components
+                .get(i)
+                .map_or(&[0; 64], |c| &c.quantization),
+        )
     });
     for my in 0..window.rows {
         let slot = my % window.layouts[0].slots;
@@ -716,7 +753,18 @@ fn from_coefficients_body(
                 }
                 for bx in 0..c.width.div_ceil(8) {
                     let block = &c.blocks[row * c.blocks_wide + bx];
-                    window.put(i, my, slot, by, bx, &mut cache, &mut output, block, quant, false);
+                    window.put(
+                        i,
+                        my,
+                        slot,
+                        by,
+                        bx,
+                        &mut cache,
+                        &mut output,
+                        block,
+                        quant,
+                        false,
+                    );
                 }
             }
         }
@@ -727,7 +775,13 @@ fn from_coefficients_body(
 }
 
 #[inline(always)]
-fn reconstruct(block: &[i16; 64], quant: &FloatQuant, dc_only: bool, out: &mut [u8], stride: usize) {
+fn reconstruct(
+    block: &[i16; 64],
+    quant: &FloatQuant,
+    dc_only: bool,
+    out: &mut [u8],
+    stride: usize,
+) {
     if dc_only {
         idct8_dc(block[0], quant, out, stride);
     } else {

@@ -268,14 +268,34 @@ pub(crate) fn allocate(
 
 /// Decode SOF3/SOF11 predictive Huffman/arithmetic JPEG into native sample planes.
 pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>> {
-    decode_with_tables(input, limits, &mut crate::Tables::new())
+    decode_lossless_with_options(
+        input,
+        crate::DecodeOptions {
+            limits,
+            ..Default::default()
+        },
+    )
+}
+
+/// Decode native predictive samples with an explicit input compatibility policy.
+pub fn decode_lossless_with_options(
+    input: &[u8],
+    options: crate::DecodeOptions,
+) -> Result<LosslessImage<'_>> {
+    decode_with_tables(
+        input,
+        options.limits,
+        &mut crate::Tables::new(),
+        options.strict,
+    )
 }
 pub(crate) fn decode_with_tables<'a>(
     input: &'a [u8],
     limits: Limits,
     tables: &mut crate::Tables,
+    strict: bool,
 ) -> Result<LosslessImage<'a>> {
-    let mut reader = MarkerReader::new(input)?;
+    let mut reader = MarkerReader::with_strict(input, strict)?;
     let mut frame = None;
     let mut components = Vec::new();
     let mut coding = Vec::new();
@@ -378,6 +398,7 @@ pub(crate) fn decode_with_tables<'a>(
                     limits
                         .max_memory_bytes
                         .saturating_sub(memory_bytes + metadata_bytes),
+                    strict,
                 )?;
             }
             Event::Segment { marker: 0xdc, .. } => {
@@ -394,6 +415,9 @@ pub(crate) fn decode_with_tables<'a>(
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
+    if reader.missing_eoi && frame.process.is_arithmetic() {
+        return Err(Error::Truncated);
+    }
     if scans == 0 || coding.iter().any(|c| c.point_transform == u8::MAX) {
         return Err(Error::Invalid("missing component scan"));
     }
@@ -421,6 +445,7 @@ pub(crate) fn scan(
     interval: usize,
     conditioning: Conditioning,
     available: usize,
+    strict: bool,
 ) -> Result<()> {
     if header.len() < 4 {
         return Err(Error::Invalid("SOS length"));
@@ -483,7 +508,7 @@ pub(crate) fn scan(
     if interval != 0 && !interval.is_multiple_of(cols) {
         return Err(Error::Invalid("lossless restart row boundary"));
     }
-    let mut bits = Bits::new(entropy);
+    let mut bits = Bits::with_strict(entropy, strict);
     let mut arithmetic = if frame.process.is_arithmetic() {
         let mut shapes = [(0, 0); 4];
         for (j, &(i, _)) in selected[..n].iter().enumerate() {

@@ -2,8 +2,8 @@ use crate::arithmetic::{Arithmetic, Conditioning, Statistics};
 use crate::entropy::{Bits, Huffman};
 use crate::progressive::ProgressiveScan;
 use crate::{
-    ComponentSpec, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment, Process,
-    Result, ZIGZAG,
+    ComponentSpec, DecodeOptions, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment,
+    Process, Result, ZIGZAG,
 };
 
 use crate::tables::{QuantizationTable as Quantization, Tables};
@@ -156,15 +156,36 @@ pub(crate) fn allocate_components(
 /// Accepts sequential/progressive Huffman/arithmetic DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
-    decode_with_tables(input, limits, &mut Tables::new(), None)
+    decode_coefficients_with_options(
+        input,
+        DecodeOptions {
+            limits,
+            ..Default::default()
+        },
+    )
+}
+
+/// Decode native coefficients with an explicit input compatibility policy.
+pub fn decode_coefficients_with_options(
+    input: &[u8],
+    options: DecodeOptions,
+) -> Result<CoefficientImage<'_>> {
+    decode_with_tables(
+        input,
+        options.limits,
+        &mut Tables::new(),
+        None,
+        options.strict,
+    )
 }
 pub(crate) fn decode_with_tables<'a>(
     input: &'a [u8],
     limits: Limits,
     tables: &mut Tables,
     mut hints: Option<&mut crate::reconstruct::ColorHints>,
+    strict: bool,
 ) -> Result<CoefficientImage<'a>> {
-    let mut reader = MarkerReader::new(input)?;
+    let mut reader = MarkerReader::with_strict(input, strict)?;
     let Tables { quant, huffman } = tables;
     let mut conditioning = Conditioning::default();
     let mut frame = None;
@@ -282,6 +303,7 @@ pub(crate) fn decode_with_tables<'a>(
                     huffman,
                     interval,
                     conditioning,
+                    strict,
                 )?;
             }
             Event::Segment { marker: 0xdc, .. } => {
@@ -307,6 +329,17 @@ pub(crate) fn decode_with_tables<'a>(
     if scans == 0 || seen[..frame.components.len()].iter().any(|&v| !v) {
         return Err(Error::Invalid("missing component scan"));
     }
+    // Without EOI, require full coefficient precision so an interrupted
+    // refinement is not mistaken for an intentionally partial progression.
+    // Arithmetic termination requires its real marker.
+    if reader.missing_eoi
+        && (frame.process.is_arithmetic()
+            || components
+                .iter()
+                .any(|c| c.successive_approximation.iter().any(|&al| al != 0)))
+    {
+        return Err(Error::Truncated);
+    }
     Ok(CoefficientImage {
         frame,
         components,
@@ -319,9 +352,8 @@ pub(crate) fn decode_with_tables<'a>(
 }
 
 pub(crate) fn parse_quant(mut data: &[u8], tables: &mut [Option<Quantization>; 4]) -> Result<()> {
-    if data.is_empty() {
-        return Err(Error::Invalid("empty DQT"));
-    }
+    // Some producers emit an empty segment. It defines no destinations and
+    // must neither clear existing tables nor supply a missing table.
     while !data.is_empty() {
         let info = data[0];
         let precision = info >> 4;
@@ -353,9 +385,8 @@ pub(crate) fn parse_quant(mut data: &[u8], tables: &mut [Option<Quantization>; 4
 }
 
 pub(crate) fn parse_huffman(mut data: &[u8], tables: &mut [Option<Huffman>; 8]) -> Result<()> {
-    if data.is_empty() {
-        return Err(Error::Invalid("empty DHT"));
-    }
+    // An empty segment is a no-op, unlike a definition with zero symbols,
+    // which intentionally replaces the selected destination with an empty tree.
     while !data.is_empty() {
         if data.len() < 17 {
             return Err(Error::Invalid("DHT length"));
@@ -387,6 +418,7 @@ pub(crate) fn decode_scan(
     tables: &[Option<Huffman>; 8],
     interval: usize,
     conditioning: Conditioning,
+    strict: bool,
 ) -> Result<()> {
     if header.len() < 4 {
         return Err(Error::Invalid("SOS length"));
@@ -475,10 +507,10 @@ pub(crate) fn decode_scan(
             (frame.height as usize).div_ceil(8 * max_v),
         )
     };
-    let mut bits = Bits::new(entropy);
+    let mut bits = Bits::with_strict(entropy, strict);
     // Sequential Huffman scans use the faster reader; acceptance is identical.
     let mut reader = (progression.is_none() && !frame.process.is_arithmetic())
-        .then(|| crate::fast::Reader::new(entropy));
+        .then(|| crate::fast::Reader::new(entropy, strict));
     let mut arithmetic = if frame.process.is_arithmetic() {
         Some((
             Arithmetic::new(entropy)?,

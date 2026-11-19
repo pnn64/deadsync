@@ -718,14 +718,34 @@ fn finish(active: Option<Active>, frames: &mut Vec<HierarchicalFrame>) -> Result
 /// the input and retain global scan positions. Frame DNL declarations are
 /// resolved before allocation; a zero DHP height is inferred at completion.
 pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalImage<'_>> {
-    decode_with_tables(input, limits, &mut crate::Tables::new())
+    decode_hierarchical_with_options(
+        input,
+        crate::DecodeOptions {
+            limits,
+            ..Default::default()
+        },
+    )
+}
+
+/// Decode every hierarchy frame with an explicit input compatibility policy.
+pub fn decode_hierarchical_with_options(
+    input: &[u8],
+    options: crate::DecodeOptions,
+) -> Result<HierarchicalImage<'_>> {
+    decode_with_tables(
+        input,
+        options.limits,
+        &mut crate::Tables::new(),
+        options.strict,
+    )
 }
 pub(crate) fn decode_with_tables<'a>(
     input: &'a [u8],
     limits: Limits,
     tables: &mut crate::Tables,
+    strict: bool,
 ) -> Result<HierarchicalImage<'a>> {
-    let mut reader = MarkerReader::new(input)?;
+    let mut reader = MarkerReader::with_strict(input, strict)?;
     let mut header = None;
     let mut rules = None;
     let mut frames = Vec::new();
@@ -909,6 +929,7 @@ pub(crate) fn decode_with_tables<'a>(
                         huffman,
                         interval,
                         conditioning,
+                        strict,
                     )?,
                     HierarchicalData::Lossless { components, coding } => crate::lossless::scan(
                         scan_header,
@@ -920,6 +941,7 @@ pub(crate) fn decode_with_tables<'a>(
                         interval,
                         conditioning,
                         available,
+                        strict,
                     )?,
                 }
                 current.frame.scans += 1;
@@ -943,7 +965,9 @@ pub(crate) fn decode_with_tables<'a>(
             check_memory(used, active_bytes, limits)?;
         }
     }
-    if !ended {
+    // A hierarchy can contain further refinement frames; EOF cannot prove
+    // that the final frame was intentional, so require its real EOI marker.
+    if !ended || reader.missing_eoi {
         return Err(Error::Truncated);
     }
     if pending.is_some() {

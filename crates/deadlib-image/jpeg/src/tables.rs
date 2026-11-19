@@ -201,21 +201,21 @@ impl Tables {
         input: &'a [u8],
         limits: Limits,
     ) -> Result<crate::CoefficientImage<'a>> {
-        crate::decode::decode_with_tables(input, limits, self, None)
+        crate::decode::decode_with_tables(input, limits, self, None, true)
     }
     pub fn decode_lossless<'a>(
         &mut self,
         input: &'a [u8],
         limits: Limits,
     ) -> Result<crate::LosslessImage<'a>> {
-        crate::lossless::decode_with_tables(input, limits, self)
+        crate::lossless::decode_with_tables(input, limits, self, true)
     }
     pub fn decode_hierarchical<'a>(
         &mut self,
         input: &'a [u8],
         limits: Limits,
     ) -> Result<crate::HierarchicalImage<'a>> {
-        crate::hierarchical::decode_with_tables(input, limits, self)
+        crate::hierarchical::decode_with_tables(input, limits, self, true)
     }
 }
 

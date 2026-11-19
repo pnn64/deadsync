@@ -78,21 +78,18 @@ for image in (original, normalized):
         target = prefix.with_suffix(".coef") if decoder == "ijg" else prefix
         result = subprocess.run([str(tools[decoder]), str(image), str(target)], capture_output=True)
         stderr = result.stderr.decode().strip()
-        if image == original and decoder == "native":
-            assert result.returncode != 0 and 'Invalid("empty DHT")' in stderr
-        else:
-            assert result.returncode == 0 and not stderr, (decoder, stderr)
-            coefficients = prefix.with_suffix(".coef").read_bytes()
-            if expected is None:
-                expected = coefficients
-            assert coefficients == expected
+        assert result.returncode == 0 and not stderr, (decoder, stderr)
+        coefficients = prefix.with_suffix(".coef").read_bytes()
+        if expected is None:
+            expected = coefficients
+        assert coefficients == expected
         record["decoders"][decoder] = {"returncode": result.returncode, "stderr": stderr}
     if image == normalized:
         record["removed_empty_DHT_original_offsets"] = removed
         record["coefficients"] = "exact against all original C decodes; entropy unchanged"
     shutil.copy2(image, args.fixtures / image.name)
     records.append(record)
-report = {"scope": "Explicit reference-producer limitations; C warnings expected only for optimized-restarts. Empty DHTs are silently ignored by C; native rejects them. Explicit removal copy leaves entropy unchanged.",
+report = {"scope": "Explicit reference-producer limitations; C warnings expected only for optimized-restarts. Empty DHTs are ignored by native and C decoders. Explicit removal copy leaves entropy unchanged.",
           "reference_commit": build["commit"], "archive_sha256": build["archive_sha256"],
           "tools": {k: sha(v.read_bytes()) for k, v in tools.items()},
           "driver_sha256": sha(Path(__file__).read_bytes()),

@@ -37,7 +37,10 @@ fn pinned_mozjpeg_coefficients_quantizers_and_float_idct() {
         // 8-bit planes follow jidctflt exactly; other precisions may differ by one.
         let tolerance = u16::from(image.frame.precision != 8);
         for (pair, &value) in expected.as_chunks::<2>().0.iter().zip(samples) {
-            assert!(u16::from_le_bytes(*pair).abs_diff(value) <= tolerance, "{path:?}");
+            assert!(
+                u16::from_le_bytes(*pair).abs_diff(value) <= tolerance,
+                "{path:?}"
+            );
         }
     }
     for process in [
@@ -130,11 +133,14 @@ fn mozjpeg_boundaries_mutations_and_reference_producer_defect() {
         .reconstruct()
         .unwrap();
     let empty_dht = include_bytes!("fixtures/mozjpeg-limitations/empty-dht.jpg");
-    assert!(matches!(
-        decode_coefficients(empty_dht, limits),
-        Err(Error::Invalid("empty DHT"))
-    ));
     let without_empty = include_bytes!("fixtures/mozjpeg-limitations/without-empty-dht.jpg");
-    decode_coefficients(without_empty, limits).unwrap();
+    let with_empty = decode_coefficients(empty_dht, limits).unwrap();
+    let without_empty = decode_coefficients(without_empty, limits).unwrap();
+    assert_eq!(with_empty.frame, without_empty.frame);
+    assert_eq!(with_empty.components.len(), without_empty.components.len());
+    for (a, b) in with_empty.components.iter().zip(&without_empty.components) {
+        assert_eq!(a.quantization, b.quantization);
+        assert_eq!(a.blocks, b.blocks);
+    }
     eprintln!("Checked {boundaries} mozjpeg prefixes/boundaries and {mutations} bounded mutations");
 }
