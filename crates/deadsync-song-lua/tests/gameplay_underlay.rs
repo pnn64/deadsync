@@ -400,3 +400,6 @@ fn failed_underlay_on_keeps_partial_construction_owned_until_screen_release() {
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;
+
+#[path = "gameplay_underlay/versus_statistics.rs"]
+mod versus_statistics;
