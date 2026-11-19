@@ -754,6 +754,87 @@ fn incoming_init_and_on_handlers_use_native_color_helpers_and_current_class_meth
     "#);
 }
 
+#[test]
+fn completion_targets_the_published_screen_without_retaining_the_last_constructor() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "completion publication");
+    context.live = true;
+    context.players[1].enabled = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let check = |runtime: &mut SongRuntime, source: &str| {
+        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=completion publication").unwrap()).unwrap();
+    };
+    let first = test_support::gameplay_screen(&mut runtime, &context).unwrap();
+    test_support::gameplay_transitions(&mut runtime, first).unwrap();
+    let first_screen = runtime.actor_scene_root(first).unwrap();
+    runtime.vm_mut().set_global(b"FIRST_SCREEN", first_screen).unwrap();
+    let players = runtime.vm_mut().execute(&compile_named(
+        b"return FIRST_SCREEN:GetChild('PlayerP1'),FIRST_SCREEN:GetChild('PlayerP2')",
+        b"=original published players",
+    ).unwrap()).unwrap().to_vec();
+    let second = test_support::gameplay_screen(&mut runtime, &context).unwrap();
+    test_support::gameplay_transitions(&mut runtime, second).unwrap();
+    check(&mut runtime, r#"
+        SECOND_SCREEN=SCREENMAN:GetTopScreen()
+        local function ready(screen)
+            for _,actor in ipairs(screen) do
+                if actor.__songlua_screen_actor_role=='Ready' then return actor end
+            end
+            error('missing Ready owner')
+        end
+        FIRST_READY=ready(FIRST_SCREEN);SECOND_READY=ready(SECOND_SCREEN)
+        assert(FIRST_READY.__songlua_transition_state==0 and SECOND_READY.__songlua_transition_state==0)
+        SECOND_WEAK=setmetatable({SECOND_SCREEN,SECOND_READY}, {__mode='v'})
+    "#);
+    runtime.publish_screen(first_screen, [players[0], players[1]]).unwrap();
+    let incoming = test_support::screen_part(&mut runtime, "In").unwrap();
+    let actor = runtime.actor_scene_root(incoming).unwrap();
+    runtime.vm_mut().set_global(b"INCOMING", actor).unwrap();
+    check(&mut runtime, "INCOMING:RunCommandsRecursively(function(self)self:stoptweening()end)");
+    test_support::start_actor_transition(&mut runtime, actor).unwrap();
+    runtime.advance_actor_scene(incoming, 0.0).unwrap();
+    check(&mut runtime, r#"
+        assert(INCOMING.__songlua_transition_state==2)
+        assert(FIRST_READY.__songlua_transition_state==1)
+        assert(SECOND_READY.__songlua_transition_state==0)
+        SECOND_SCREEN=nil;SECOND_READY=nil
+    "#);
+    assert!(runtime.release_actor_scene(second).unwrap());
+    check(&mut runtime, r#"
+        collectgarbage('collect');collectgarbage('collect')
+        assert(SECOND_WEAK[1]==nil and SECOND_WEAK[2]==nil)
+        local out=FIRST_SCREEN:GetChild('Out')
+        out[1].StartTransitioningCommand=function(self)self:stoptweening()end
+        FIRST_SCREEN:StartTransitioningScreen('SM_DoNextScreen')
+        assert(STATSMAN:GetStagesPlayed()==0)
+    "#);
+    runtime.advance_actor_scene(first, 0.0).unwrap();
+    check(&mut runtime, "assert(STATSMAN:GetStagesPlayed()==1)");
+}
+
+#[test]
+fn completion_without_a_published_screen_does_not_commit_a_stage() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "completion without screen");
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let scene = test_support::gameplay_screen(&mut runtime, &context).unwrap();
+    let check = |runtime: &mut SongRuntime, source: &str| {
+        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=completion without screen").unwrap()).unwrap();
+    };
+    check(&mut runtime, r#"
+        local screen=SCREENMAN:GetTopScreen();OUT=screen:GetChild('Out')
+        OUT[1].StartTransitioningCommand=function(self)self:stoptweening()end
+        screen:StartTransitioningScreen('SM_DoNextScreen')
+        assert(STATSMAN:GetStagesPlayed()==0)
+        __songlua_top_screen=nil
+        __songlua_top_screen_player_1=nil;__songlua_top_screen_player_2=nil;GetPlayerAF=nil
+    "#);
+    runtime.advance_actor_scene(scene, 0.0).unwrap();
+    check(&mut runtime, r#"
+        assert(OUT.__songlua_transition_state==2)
+        assert(STATSMAN:GetStagesPlayed()==0)
+    "#);
+}
+
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;

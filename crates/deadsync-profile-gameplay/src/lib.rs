@@ -447,10 +447,13 @@ fn song_lua_compile_player_screen_x(
 #[must_use]
 pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32, sync_offset: f32) -> [f32; 2] {
     let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
-    let first = (song.precise_first_second() - sync_offset) - rate * offset;
+    let first = song.precise_note_first_second_seconds
+        .map(|seconds| (seconds - sync_offset) - rate * offset);
     let last = song.precise_note_last_second_seconds
         .map(|seconds| (seconds - sync_offset) - rate * offset).unwrap_or(-1.0).max(specified_last);
-    [if first < last { first } else { 0.0 }, last]
+    // Native applies catalog offsets to actual endpoints, then uses literal
+    // zero when first>=last. That fallback must never acquire another offset.
+    [first.filter(|first| *first < last).unwrap_or(0.0), last]
 }
 
 #[must_use]

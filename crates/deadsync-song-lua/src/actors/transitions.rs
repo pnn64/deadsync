@@ -180,13 +180,12 @@ pub(super) fn start_with_message(call: &mut HostCall<'_>, actor: TableId, messag
 
 pub(super) fn bind_screen_completion(
     call: &mut HostCall<'_>,
-    screen: TableId,
     catalog: TableId,
     requests: Arc<Mutex<crate::managers::screen::Requests>>,
 ) -> Result<(), Error> {
     let function = call.new_host_function_with_data(
         complete_screen_transition,
-        &[call.captures()[0], call.captures()[1], Value::Table(screen), Value::Table(catalog)],
+        &[call.captures()[0], call.captures()[1], Value::Table(catalog)],
         requests.clone(),
     )?;
     set(call, table(call, call.captures()[1])?, "gameplay_transition_complete", function)?;
@@ -214,8 +213,17 @@ pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Erro
 }
 
 fn complete_screen_transition(call: &mut HostCall<'_>) -> Result<(), Error> {
+    // Native Transition sends to the current top screen. The process-owned
+    // helper must not retain whichever screen was last constructed.
+    let globals = helper(call, 5)?;
+    let screen = get_static(call, table(call, globals)?, b"__songlua_top_screen")?;
+    if screen == Value::Nil { return Ok(()); }
+    // Delivery may run authored commands and collect or replace globals.
+    call.with_roots(&[screen], |call| complete_screen_transition_to(call, table(call, screen)?))
+}
+
+fn complete_screen_transition_to(call: &mut HostCall<'_>, screen: TableId) -> Result<(), Error> {
     let requests = call.function_data::<Arc<Mutex<crate::managers::screen::Requests>>>().unwrap().clone();
-    let screen = table(call, call.captures()[2])?;
     let actor = table(call, arg(call, 0))?;
     let role = get_static(call, actor, b"__songlua_transition_role")?;
     let role = if role == Value::Nil {
@@ -229,7 +237,7 @@ fn complete_screen_transition(call: &mut HostCall<'_>) -> Result<(), Error> {
             // during Transition::Update, before this frame's gameplay timer.
             // Initial screen construction precedes late statistics installation;
             // resolve its current private owner rather than retaining that seed.
-            let catalog = table(call, call.captures()[3])?;
+            let catalog = table(call, call.captures()[2])?;
             let commit = get_static(call, catalog, b"statistics_commit")?;
             call.call(commit, &[])?;
         }

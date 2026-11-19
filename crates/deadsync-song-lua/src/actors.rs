@@ -1045,17 +1045,16 @@ impl Actors {
         sources: &[(Value, crate::SongLuaDrawSource)],
     ) -> Result<Vec<crate::SongLuaDrawFrame>, String> {
         if vm.store().draw_capture.as_ref().is_none_or(|capture| {
-            !capture.frames.iter().any(|frame| frame.immediate) || capture.context.is_some()
+            capture.frames.is_empty() || capture.context.is_some()
         }) {
             return Ok(Vec::new());
         }
         let bindings = self.draw_sources(vm, sources)?;
         let mut capture = vm.store().draw_capture.take().unwrap();
-        let immediate = capture
-            .frames
-            .extract_if(.., |frame| frame.immediate)
-            .collect();
-        let result = crate::draw_commands::convert(immediate, &capture.labels, &bindings);
+        // Completed normal callbacks carry per-call pose/camera state too.
+        // Drain both kinds once; the frame flag preserves their draw semantics.
+        let frames = std::mem::take(&mut capture.frames);
+        let result = crate::draw_commands::convert(frames, &capture.labels, &bindings);
         if capture.frames.is_empty() && capture.calls.is_empty() && capture.targets.is_empty() {
             capture.bytes = 0;
             capture.frame_ops = 0;

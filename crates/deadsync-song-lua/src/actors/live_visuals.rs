@@ -10,7 +10,9 @@ enum Content {
         vertices: Arc<[SongLuaOverlayMeshVertex]>,
         path: Option<PathBuf>,
         key: Option<Arc<str>>,
+        capture_name: Option<String>,
     },
+    FrameTexture(framebuffers::FrameTexture),
     Text {
         text: Arc<str>,
         attributes: Arc<[TextAttribute]>,
@@ -71,12 +73,26 @@ impl Actors {
                 vertices,
                 texture_path,
                 texture_key,
-                ..
+                capture_name,
             } => Content::Mesh {
                 vertices: vertices.clone(),
                 path: texture_path.clone(),
                 key: texture_key.clone(),
+                capture_name: capture_name.clone(),
             },
+            Kind::ActorFrameTexture {
+                capture_name,
+                capture_size,
+                alpha_buffer,
+                depth_buffer,
+                float_buffer,
+            } => Content::FrameTexture(framebuffers::FrameTexture {
+                capture_name: capture_name.clone(),
+                capture_size: *capture_size,
+                alpha_buffer: *alpha_buffer,
+                depth_buffer: *depth_buffer,
+                float_buffer: *float_buffer,
+            }),
             Kind::BitmapText {
                 text,
                 attributes,
@@ -129,17 +145,35 @@ impl Actors {
                     vertices: v,
                     path,
                     key,
+                    capture_name: capture,
                 },
                 Kind::ActorMultiVertex {
                     vertices,
                     texture_path,
                     texture_key,
-                    ..
+                    capture_name,
                 },
             ) => {
                 *vertices = v;
                 *texture_path = path;
                 *texture_key = key;
+                *capture_name = capture;
+            }
+            (
+                Content::FrameTexture(next),
+                Kind::ActorFrameTexture {
+                    capture_name,
+                    capture_size,
+                    alpha_buffer,
+                    depth_buffer,
+                    float_buffer,
+                },
+            ) => {
+                *capture_name = next.capture_name;
+                *capture_size = next.capture_size;
+                *alpha_buffer = next.alpha_buffer;
+                *depth_buffer = next.depth_buffer;
+                *float_buffer = next.float_buffer;
             }
             (
                 Content::Text {
@@ -202,6 +236,7 @@ fn publish(call: &mut HostCall<'_>) -> Result<(), Error> {
                 vertices,
                 path,
                 key,
+                capture_name,
             } => {
                 *vertices = meshes::vertices(call, actor)?.unwrap_or_else(|| Arc::from([]));
                 let next = meshes::texture_path(call, actor)?;
@@ -211,6 +246,22 @@ fn publish(call: &mut HostCall<'_>) -> Result<(), Error> {
                         .map(|p| Arc::from(p.to_string_lossy().as_ref()));
                     *path = next;
                 }
+                let next = framebuffers::capture_name(call, actor)?;
+                // Initial classification also accepts a declarative registered
+                // texture name. Retain that binding only while the same authored
+                // name remains; an ordinary/default load clears the old target.
+                let named = if next.is_none() && capture_name.is_some() {
+                    assets::field(call, actor, b"Texture")?
+                        .filter(|name| capture_name.as_deref() == Some(name.as_str()))
+                } else {
+                    None
+                };
+                *capture_name = next.or(named);
+            }
+            Content::FrameTexture(current) => {
+                // Read the retained allocation, not setters changed after Create.
+                // The existing state publication owns aft_created/preserve flags.
+                *current = framebuffers::read(call, actor)?;
             }
             Content::Text {
                 text: current,

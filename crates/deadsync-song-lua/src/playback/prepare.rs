@@ -258,6 +258,33 @@ fn compile_song_lua_session<S: Clone + std::fmt::Debug>(
     context.background_sources = song.background_lua_changes.iter().map(|change| change.source.clone()).collect();
     context.background_activations = song.background_lua_changes.iter()
         .map(|change| (change.layer, change.activations.clone())).collect();
+    context.background_media_activations = [&song.background_changes, &song.background_layer2_changes]
+        .into_iter().enumerate().flat_map(|(layer, changes)| {
+            changes.iter().filter_map(move |change| {
+                let deadsync_chart::song::SongBackgroundChangeTarget::File(path) = &change.target else {
+                    return None;
+                };
+                // A direct .lua target may also be retained in the media list.
+                // Compare resolved paths rather than logical source spellings.
+                if song.background_lua_changes.iter().any(|owner| owner.path == *path)
+                    || !(crate::is_song_lua_image_path(path) || crate::is_song_lua_video_path(path))
+                {
+                    return None;
+                }
+                // The separate parsed lists do not retain mixed-kind tie order.
+                // Preserve the existing Lua activation at that layer/beat.
+                if song.background_lua_changes.iter().any(|owner| {
+                    usize::from(owner.layer) == layer && owner.activations.iter()
+                        .any(|activation| activation.start_beat == change.start_beat)
+                }) {
+                    return None;
+                }
+                Some((layer as u8, deadsync_chart::song::SongBackgroundLuaActivation {
+                    start_beat: change.start_beat, rate: change.rate,
+                    transition: change.transition.clone(),
+                }))
+            })
+        }).collect();
     context.background_upper_left_colors = song.background_lua_changes.iter().map(|owner|
         (owner.effect.is_empty() || owner.effect.eq_ignore_ascii_case("UpperLeft"))
             .then_some(owner.color1.unwrap_or([1.0; 4]))).collect();
