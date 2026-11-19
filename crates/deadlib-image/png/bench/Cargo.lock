@@ -148,6 +148,7 @@ name = "png-decode-bench"
 version = "0.0.0"
 dependencies = [
  "deadlib-image-png",
+ "flate2",
  "image",
  "png",
 ]

@@ -492,7 +492,7 @@ fn sized_length(bits: &mut Bits<'_>, index: usize, buffered: bool) -> Result<usi
     }
 }
 
-// A full refill holds the maximum 48-bit match token. Keep the accumulator
+// A full refill holds the maximum 45-bit match token. Keep the accumulator
 // local while input and output have enough room for every legal token.
 #[inline(always)]
 fn inflate_sized_fast(
@@ -533,29 +533,8 @@ fn inflate_sized_fast(
             count -= n;
             let symbol = usize::from(entry >> 4);
             if symbol < 256 {
-                let second = fast[(word & 4095) as usize];
-                let n2 = (second & 15) as u8;
-                let third = fast[((word >> n2) & 4095) as usize];
-                let n3 = (third & 15) as u8;
-                let fourth = fast[((word >> (n2 + n3)) & 4095) as usize];
-                let (literals, used) = if !(1..4096).contains(&second) {
-                    (1, 0)
-                } else if !(1..4096).contains(&third) {
-                    (2, n2)
-                } else if !(1..4096).contains(&fourth) {
-                    (3, n2 + n3)
-                } else {
-                    (4, n2 + n3 + (fourth & 15) as u8)
-                };
-                output[produced..produced + 4].copy_from_slice(&[
-                    symbol as u8,
-                    (second >> 4) as u8,
-                    (third >> 4) as u8,
-                    (fourth >> 4) as u8,
-                ]);
-                word >>= used;
-                count -= used;
-                produced += literals;
+                output[produced] = symbol as u8;
+                produced += 1;
                 break 'token;
             }
             let index = symbol.wrapping_sub(257);
@@ -645,8 +624,8 @@ fn inflate_sized_fast(
             produced += len;
         }
         // A full load supplies 64 physical bits, even when only 56..63 are
-        // accounted. A token consumes at most 48 (four 12-bit literals; a
-        // match uses at most 45), leaving at least sixteen valid bits here.
+        // accounted. A token consumes at most 45 bits (12 for a literal),
+        // leaving at least nineteen valid bits here.
         // Load the next primary entry before refilling the accumulator so
         // the two memory reads can proceed independently. The lookup itself
         // consumes no bits and is discarded if the boundary path is needed.
@@ -926,11 +905,13 @@ fn decompress_bits_into<const DISPATCH: bool>(
     }
     let window = 1usize << ((cmf >> 4) + 8);
     let mut written = 0;
+    // Stored blocks append into the reservation until a coded block needs
+    // the initialized output slice. The produced prefix remains its history.
+    let mut sized_initialized = false;
     if sized {
         output
             .try_reserve_exact(limit)
             .map_err(|_| Error::Allocation)?;
-        output.resize(limit, 0);
     }
     loop {
         let last = bits.read(1)? != 0;
@@ -960,11 +941,13 @@ fn decompress_bits_into<const DISPATCH: bool>(
             let mut left = len;
             while left != 0 && bits.count >= 8 {
                 let byte = bits.read(8)? as u8;
-                if sized {
+                if sized_initialized {
                     output[written] = byte;
-                    written += 1;
                 } else {
                     output.push(byte);
+                }
+                if sized {
+                    written += 1;
                 }
                 left -= 1;
             }
@@ -982,17 +965,23 @@ fn decompress_bits_into<const DISPATCH: bool>(
                 let count = left.min(bits.input.len() - bits.pos);
                 let end = bits.pos + count;
                 let bytes = &bits.input[bits.pos..end];
-                if sized {
+                if sized_initialized {
                     output[written..written + count].copy_from_slice(bytes);
-                    written += count;
                 } else {
                     output.extend_from_slice(bytes);
+                }
+                if sized {
+                    written += count;
                 }
                 bits.pos = end;
                 left -= count;
             }
         } else if kind == 1 || kind == 2 {
             if sized {
+                if !sized_initialized {
+                    output.resize(limit, 0);
+                    sized_initialized = true;
+                }
                 #[cfg(target_arch = "x86_64")]
                 if DISPATCH {
                     x86::inflate(&mut bits, output, &mut written, kind == 1, window)?;
@@ -1497,6 +1486,110 @@ mod tests {
                     "portable {} fragment={fragment}",
                     case.name
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn maximum_match_token_after_four_wide_literals_preserves_boundaries() {
+        use huffman_fixtures::{Codes, Wire, lengths};
+
+        // Complete trees: ten successive short leaves plus four 12-bit leaves;
+        // fourteen successive short leaves plus two 15-bit distance leaves.
+        let mut lit = [0; 286];
+        for n in 1..=10 {
+            lit[n - 1] = n as u8;
+        }
+        for symbol in [250, 251, 256, 284] {
+            lit[symbol] = 12;
+        }
+        let mut dist = [0; 30];
+        for n in 1..=14 {
+            dist[n - 1] = n as u8;
+        }
+        dist[28] = 15;
+        dist[29] = 15;
+        let literals = Codes::new(&lit);
+        let distances = Codes::new(&dist);
+
+        for ones in [false, true] {
+            let mut state = 0x71e2_9b35u32;
+            let mut raw: Vec<u8> = (0..32768)
+                .map(|_| {
+                    state ^= state << 13;
+                    state ^= state >> 17;
+                    state ^= state << 5;
+                    state as u8
+                })
+                .collect();
+            let mut wire = Wire::default();
+            wire.stored(&raw, false);
+            lengths(&mut wire, &lit, &dist);
+            // Four literals use 48 bits, leaving a physically prefetched next
+            // prefix. The following match uses 12 + 5 + 15 + 13 = 45 bits.
+            // Each 93-bit group advances five bits; eight cover all alignments.
+            for _ in 0..8 {
+                for literal in [250, 251, 250, 251] {
+                    literals.symbol(&mut wire, literal);
+                    raw.push(literal as u8);
+                }
+                literals.symbol(&mut wire, 284);
+                wire.put(31, 5); // Preserve accepted base 227 + 31 = 258.
+                distances.symbol(&mut wire, 29);
+                wire.put(8191, 13); // Distance 24577 + 8191 = 32768.
+                for _ in 0..258 {
+                    raw.push(raw[raw.len() - 32768]);
+                }
+            }
+            literals.symbol(&mut wire, 256);
+            let bytes = wire.finish(&raw, ones);
+            let mut suffix = bytes.clone();
+            suffix.extend_from_slice(b"unconsumed maximum-match suffix");
+            for slack in [0, 258] {
+                for input in [&bytes, &suffix] {
+                    for actual in [
+                        decompress_prefix_sized(input, raw.len() + slack),
+                        decompress_bits::<false>(Bits::new(input), raw.len() + slack, true),
+                    ] {
+                        assert_eq!(
+                            actual.unwrap(),
+                            (raw.clone(), bytes.len()),
+                            "padding={ones} slack={slack} input={}",
+                            input.len()
+                        );
+                    }
+                }
+            }
+            // Keep the stored history in one IDAT, then fragment the Huffman
+            // header, tokens and trailer. Empty chunks also exercise transitions.
+            let stored_end = 2 + 5 + 32768; // zlib header + stored header + data.
+            for fragment in [1, 7, 31] {
+                let mut framed = Vec::new();
+                for payload in std::iter::once(&bytes[..stored_end])
+                    .chain(bytes[stored_end..].chunks(fragment))
+                {
+                    framed.extend_from_slice(b"\0\0\0\0IDAT\0\0\0\0");
+                    framed.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+                    framed.extend_from_slice(b"IDAT");
+                    framed.extend_from_slice(payload);
+                    framed.extend_from_slice(&[0; 4]);
+                }
+                assert_eq!(
+                    decompress_idat(&framed, bytes.len(), raw.len()).unwrap(),
+                    raw,
+                    "padding={ones} fragment={fragment}"
+                );
+                assert_eq!(
+                    decompress_bits::<false>(Bits::idat(&framed), raw.len(), true).unwrap(),
+                    (raw.clone(), bytes.len()),
+                    "portable padding={ones} fragment={fragment}"
+                );
+            }
+            for actual in [
+                decompress_prefix_sized(&bytes, raw.len() - 1),
+                decompress_bits::<false>(Bits::new(&bytes), raw.len() - 1, true),
+            ] {
+                assert_eq!(actual, Err(Error::LimitExceeded), "padding={ones}");
             }
         }
     }

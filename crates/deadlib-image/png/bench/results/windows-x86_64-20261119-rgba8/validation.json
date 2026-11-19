@@ -1,0 +1,70 @@
+{
+  "release_tests": {
+    "suites": 44,
+    "passed": 174,
+    "failed": 0,
+    "ignored": 21
+  },
+  "test_log": "raw/final-tests.log",
+  "reported_checks": {
+    "final_release": {
+      "log": "final-tests.log",
+      "counting": "Parse each test result footer and compare against the complete final log independently counted by two agents; do not carry forward historical totals.",
+      "expected_totals": {
+        "suites": 44,
+        "passed": 174,
+        "failed": 0,
+        "ignored": 21
+      }
+    },
+    "final_corpus": {
+      "paths": 1132,
+      "reported_stdout": "Verified 1132 PNG files against png samples, image RGBA16, and native reader decoding. All three RGBA8 adapters match the asset loader's pixel output.",
+      "progress_log": "final-verify.log",
+      "reported_by": "Coordinating agent, completed session 91228, exit 0."
+    },
+    "formatting": {
+      "checks": [
+        "rustfmt --check --edition 2024 --config skip_children=true on src/scanline.rs, src/zlib.rs, and bench/src/main.rs",
+        "git diff --check"
+      ],
+      "reported_by": "Coordinating agent, completed session 91228, exit 0; no separate full stdout log retained."
+    },
+    "portable_i686": {
+      "log": "portable-i686-tests.log",
+      "passed": 22,
+      "failed": 0,
+      "session": 8797,
+      "exit_code": 0,
+      "scope": "Release PNG --lib tests on i686-pc-windows-msvc; locked/offline/-j 2."
+    },
+    "portable_aarch64": {
+      "log": "portable-aarch64-check.log",
+      "session": 67339,
+      "exit_code": 0,
+      "scope": "Library compile check only for aarch64-unknown-linux-gnu; no link or runtime claim."
+    },
+    "clippy": {
+      "passing_stems": [
+        "clippy-frozen-reference-production",
+        "clippy-frozen-reference-bench-default-rerun1",
+        "clippy-frozen-reference-bench-all-features-rerun1"
+      ],
+      "historical_failures": [
+        "clippy-frozen-reference-bench-default",
+        "clippy-frozen-reference-bench-all-features"
+      ],
+      "resolution": "Add the already-resolved flate2 1.1.11 oracle as a benchmark-only dev dependency. Lock refresh adds one direct dependency entry; no resolved version/checksum changes."
+    },
+    "historical_logs": "Initial failures and empty stdout files remain evidence of those attempts, not evidence that the final gate failed or that every attempt passed."
+  },
+  "recorded_exit_codes": {
+    "clippy-frozen-reference-bench-all-features-rerun1": 0,
+    "clippy-frozen-reference-bench-all-features": 101,
+    "clippy-frozen-reference-bench-default-rerun1": 0,
+    "clippy-frozen-reference-bench-default": 101,
+    "clippy-frozen-reference-lock-refresh": 0,
+    "clippy-frozen-reference-production": 0
+  },
+  "fuzz_note": "No historical sanitizer/fuzz result is counted as a new run by this archive."
+}

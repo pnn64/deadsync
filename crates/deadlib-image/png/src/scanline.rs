@@ -116,20 +116,7 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
     // preceding pixel in registers instead of indexing reconstructed bytes.
     match bpp {
         1 => unfilter_pixels::<1, PAETH>(row, prev),
-        2 => {
-            let prefix = 2.min(row.len());
-            for (value, &up) in row[..prefix].iter_mut().zip(prev) {
-                *value = value.wrapping_add(if PAETH { up } else { up / 2 });
-            }
-            for n in 2..row.len() {
-                let predictor = if PAETH {
-                    paeth(row[n - 2], prev[n], prev[n - 2])
-                } else {
-                    ((u16::from(row[n - 2]) + u16::from(prev[n])) / 2) as u8
-                };
-                row[n] = row[n].wrapping_add(predictor);
-            }
-        }
+        2 => unfilter_pixels::<2, PAETH>(row, prev),
         3 => unfilter_pixels::<3, PAETH>(row, prev),
         4 => unfilter_pixels::<4, PAETH>(row, prev),
         6 => unfilter_pixels::<6, PAETH>(row, prev),
@@ -161,11 +148,43 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
     Ok(())
 }
 
-pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
-    for (samples, &byte) in out.chunks_mut(8 / DEPTH as usize).zip(row) {
-        for (n, sample) in samples.iter_mut().enumerate() {
-            *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
+static ONE_BIT_SAMPLES: [[u8; 8]; 256] = {
+    let mut table = [[0; 8]; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        let mut lane = 0;
+        while lane < 8 {
+            table[byte][lane] = ((byte >> (7 - lane)) & 1) as u8;
+            lane += 1;
         }
+        byte += 1;
+    }
+    table
+};
+
+pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+    match DEPTH {
+        1 => unpack_groups::<8>(row, out, |byte| ONE_BIT_SAMPLES[usize::from(byte)]),
+        2 => unpack_groups::<4>(row, out, |byte| {
+            [byte >> 6, (byte >> 4) & 3, (byte >> 2) & 3, byte & 3]
+        }),
+        4 => unpack_groups::<2>(row, out, |byte| [byte >> 4, byte & 15]),
+        _ => unreachable!("validated packed PNG depth"),
+    }
+}
+
+fn unpack_groups<const N: usize>(row: &[u8], out: &mut [u8], expand: impl Fn(u8) -> [u8; N]) {
+    // Complete bytes have a fixed number of independent output lanes. Keep the
+    // short final group out of this loop so its length cannot limit unrolling.
+    let (groups, tail) = out.as_chunks_mut::<N>();
+    for (samples, &byte) in groups.iter_mut().zip(row) {
+        *samples = expand(byte);
+    }
+    if !tail.is_empty()
+        && let Some(&byte) = row.get(groups.len())
+    {
+        let values = expand(byte);
+        tail.copy_from_slice(&values[..tail.len()]);
     }
 }
 
@@ -681,6 +700,114 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Read the PNG bit stream one bit at a time, independently of byte-group
+    // expansion. Leave unmatched output unchanged, as the unpacker's zip does.
+    fn reference_unpack_bits(depth: u8, row: &[u8], out: &mut [u8]) {
+        let mut bits = row
+            .iter()
+            .flat_map(|&byte| (0..8).rev().map(move |bit| (byte >> bit) & 1));
+        for sample in out {
+            let mut value = 0;
+            for _ in 0..depth {
+                let Some(bit) = bits.next() else { return };
+                value = value * 2 + bit;
+            }
+            *sample = value;
+        }
+    }
+
+    fn unpack_depth(depth: u8, row: &[u8], out: &mut [u8]) {
+        match depth {
+            1 => unpack::<1>(row, out),
+            2 => unpack::<2>(row, out),
+            4 => unpack::<4>(row, out),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn unpack_every_byte_and_partial_group() {
+        for depth in [1, 2, 4] {
+            for byte in 0..=u8::MAX {
+                for width in 0..=8 / usize::from(depth) {
+                    for offset in 0..8 {
+                        let mut actual = [0xa5; 32];
+                        let mut expected = actual;
+                        reference_unpack_bits(
+                            depth,
+                            &[byte],
+                            &mut expected[offset..offset + width],
+                        );
+                        unpack_depth(depth, &[byte], &mut actual[offset..offset + width]);
+                        assert_eq!(
+                            actual, expected,
+                            "depth={depth} byte={byte} width={width} offset={offset}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unpack_rows_keep_padding_and_slice_boundaries() {
+        for depth in [1, 2, 4] {
+            for width in [
+                0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256,
+                257, 2047, 2048, 2049,
+            ] {
+                let row_bytes = (width * usize::from(depth)).div_ceil(8);
+                for offset in [0, 1, 7, 15, 16, 31] {
+                    for pattern in 0..4 {
+                        let mut input = vec![0xa5; offset + 3 * row_bytes + 7];
+                        for y in 0..3 {
+                            for n in 0..row_bytes {
+                                input[offset + y * row_bytes + n] = match pattern {
+                                    0 => 0,
+                                    1 => u8::MAX,
+                                    2 => (n + y * 37) as u8,
+                                    _ => (n * 173 + n * n * 47 + y * 71) as u8,
+                                };
+                            }
+                        }
+                        let stride = width + 3;
+                        let mut actual = vec![0xa5; offset + 3 * stride + 7];
+                        let mut expected = actual.clone();
+                        for y in 0..3 {
+                            let row = &input[offset + y * row_bytes..offset + (y + 1) * row_bytes];
+                            let start = offset + y * stride;
+                            reference_unpack_bits(depth, row, &mut expected[start..start + width]);
+                            unpack_depth(depth, row, &mut actual[start..start + width]);
+                        }
+                        assert_eq!(
+                            actual, expected,
+                            "depth={depth} width={width} offset={offset} pattern={pattern}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unpack_preserves_short_and_extra_input_behavior() {
+        let bytes = [0x96, 0x69, 0x37, 0xc8, 0xff];
+        for depth in [1, 2, 4] {
+            for input_len in 0..=bytes.len() {
+                for width in 0..=4 * 8 / usize::from(depth) + 1 {
+                    let mut actual = vec![0xa5; width + 3];
+                    let mut expected = actual.clone();
+                    reference_unpack_bits(depth, &bytes[..input_len], &mut expected[1..1 + width]);
+                    unpack_depth(depth, &bytes[..input_len], &mut actual[1..1 + width]);
+                    assert_eq!(
+                        actual, expected,
+                        "depth={depth} input_len={input_len} width={width}"
+                    );
+                }
+            }
+        }
+    }
 
     // PNG Third Edition 9.4, expressed independently of the optimized regions.
     fn reference_paeth(a: u8, b: u8, c: u8) -> u8 {

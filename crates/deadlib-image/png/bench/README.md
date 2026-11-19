@@ -44,6 +44,58 @@ constant-depth byte groups. `png-packed` reports the underlying packed-byte PNG
 API separately. `image` measures `load_from_memory_with_format` without a further
 RGBA conversion. Its palette/sub-byte expansion is part of that API.
 
+## Equivalent RGBA8 asset output
+
+Add `--rgba8` to measure three adapters with the same RGBA8 pixel output:
+
+```powershell
+$env:PNG_BENCH_MS = '80'
+C:/GitHub/deadsync/target/png-bench/release/png-decode-bench.exe --rgba8 C:/GitHub/deadsync/target/png-formats C:/GitHub/deadsync/target/png-kodak
+```
+
+The adapter names in the TSV are `native-rgba8`, `png-assets-rgba8` and
+`image-rgba8`. Without this flag, the original four decoder names and output
+representations remain available. Both modes include a `pixels` column equal to
+width times height, alongside the existing timing and allocation columns.
+
+`native-rgba8` consumes the public decoder's owned samples directly. RGBA8
+reuses its sample allocation; other formats expand straight into RGBA8, with no
+RGBA16 intermediate. Palette alpha and sub-byte grayscale scaling are applied,
+and missing palette entries become opaque black. Sixteen-bit transparency keys
+are matched at full precision before retaining each channel's high byte.
+This adapter represents an efficient consumer of the current native API; it
+does not change production decoding or add a public conversion API.
+
+`png-assets-rgba8` mirrors `deadlib-assets::decode_png_from_reader` with color
+keying disabled: the same allocation limits, `STRIP_16`, indexed packed output,
+non-indexed `EXPAND`, palette expansion, and direct RGBA8 buffer reuse. It stops
+after `next_frame`, as the asset loader does. `image-rgba8` consumes the image
+decoder's output and normalizes sixteen-bit channels by taking their high byte.
+Calling `image.into_rgba8()` directly for those channels would instead round
+their values and would not match the asset loader.
+
+All adapters receive the same in-memory bytes. Filesystem access, hot-pink color
+keying, resizing, and texture upload are outside the measurement. Native still
+performs its complete PNG CRC, metadata, and stream validation; the asset
+adapter does not call `reader.finish()` or parse everything after its first
+frame. This difference in validation work is retained and must be considered
+when interpreting the results. No native validation is disabled for timing.
+The adapters agree on accepted corpus pixels, not on every resource-limit
+boundary. Native uses its decoder limits; the asset adapter also enforces the
+loader's final RGBA allocation limit. A native asset integration must retain that
+consumer guard.
+
+The existing raw-sample and RGBA16 comparisons run before either timing mode.
+With `--rgba8`, all three RGBA8 outputs must also match exactly before timing.
+The flag works with `--verify-only` and with the separate `allocations` build:
+
+```powershell
+target/png-bench/release/png-decode-bench.exe --verify-only --rgba8 assets courses crates/deadsync-song-lua/assets
+target/png-alloc/release/png-decode-bench.exe --rgba8 target/png-formats target/png-kodak
+```
+
+## Measurement procedure
+
 The uninstrumented binary reports median wall time and Windows
 `QueryThreadCycleTime` CPU cycles over five batches per file/codec. Each batch
 lasts at least `PNG_BENCH_MS` milliseconds (default 20), in groups of eight
@@ -73,9 +125,15 @@ remove a calibration request. Counts describe the instrumented executable;
 compiler allocation elision can affect the compiled allocation behavior.
 
 `python summarize.py <timing.tsv> <allocations.tsv> --output summary.json`
-checks that every image has all four decoder rows and reports each corpus
+checks that every image has all decoder rows for its mode and reports each corpus
 separately. Cycle ratios below 1 favor the native decoder. The JSON retains total
-cycles as well as geometric means of per-image ratios.
+cycles, cycles per pixel, megapixels per second, geometric means of per-image
+ratios, and the number of inputs where native wins. Totals represent one decode
+of each input; geometric means give each input equal weight.
+
+Add `--baseline <before.tsv>` to compare the native implementation before and
+after a change. Both files must contain the same input paths and decoder names.
+Compare timing and allocation files separately, using the corresponding baseline.
 
 `cargo run --release --bin stages -- <file.png>` times native CRC, Adler,
 inflation, unfiltering/sample conversion and the complete decode separately.

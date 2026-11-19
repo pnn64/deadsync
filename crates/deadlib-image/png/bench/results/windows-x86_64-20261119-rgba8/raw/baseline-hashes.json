@@ -1,0 +1,18 @@
+﻿[
+    {
+        "Path":  "C:\\GitHub\\deadsync\\target\\png-perf-20261119\\baseline-allocations.exe",
+        "Hash":  "16BD77CD35EDD7321A6E91ACA88A8FB0166F55D37D69F61122F69ED618F62E7C"
+    },
+    {
+        "Path":  "C:\\GitHub\\deadsync\\target\\png-perf-20261119\\baseline-stages.exe",
+        "Hash":  "4EBB50BDB7726ADC84925A460D694D59D890F2FA4F60E352E9348313DFFD55E0"
+    },
+    {
+        "Path":  "C:\\GitHub\\deadsync\\target\\png-perf-20261119\\baseline-timing.exe",
+        "Hash":  "876F69810D8B5076460B5E0B8CD3AD44055C87D4DFD95BB4443744D1F4714EAC"
+    },
+    {
+        "Path":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\bench\\src\\main.rs",
+        "Hash":  "A95F88818957A61B327777FE78CFF689EF80F9344F5A4CC4C1B716AB76CF390E"
+    }
+]

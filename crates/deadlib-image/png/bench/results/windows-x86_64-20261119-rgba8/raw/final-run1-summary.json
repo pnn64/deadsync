@@ -1,0 +1,305 @@
+[
+  {
+    "input": "target\\png-perf-20261119\\final-rgba8-run1.tsv",
+    "sha256": "8cef38ee08040c5671edd828275ae1973d3e021b0abd52e60a2e0e132b3ccea8",
+    "groups": {
+      "all": {
+        "cases": 116,
+        "totals": {
+          "native-rgba8": {
+            "ns": 393625502,
+            "thread_cycles": 862133190,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 54994264,
+            "cycles_per_pixel": 15.676783855130783,
+            "megapixels_per_second": 139.7121470041339
+          },
+          "png-assets-rgba8": {
+            "ns": 425774485,
+            "thread_cycles": 932476100,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 54994264,
+            "cycles_per_pixel": 16.955879253152656,
+            "megapixels_per_second": 129.16289241709728
+          },
+          "image-rgba8": {
+            "ns": 435912231,
+            "thread_cycles": 954747359,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 54994264,
+            "cycles_per_pixel": 17.360853470100082,
+            "megapixels_per_second": 126.15902947673887
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.7368781914177134,
+              "native_over_reference_total": 0.9244929319801772,
+              "native_wins": 100
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7369727176762322,
+              "native_over_reference_total": 0.9245633105234548,
+              "native_wins": 100
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.5143365720687116,
+              "native_over_reference_total": 0.9029925613626565,
+              "native_wins": 101
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.5143921508501957,
+              "native_over_reference_total": 0.9029961506287864,
+              "native_wins": 101
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 402047086,
+            "after_total": 393625502,
+            "after_over_before_total": 0.9790532395501556,
+            "after_over_before_geomean": 0.9247870075010117,
+            "improved_cases": 95
+          },
+          "thread_cycles": {
+            "before_total": 880484332,
+            "after_total": 862133190,
+            "after_over_before_total": 0.9791579005633004,
+            "after_over_before_geomean": 0.9249280392441839,
+            "improved_cases": 95
+          }
+        }
+      },
+      "formats": {
+        "cases": 60,
+        "totals": {
+          "native-rgba8": {
+            "ns": 8481885,
+            "thread_cycles": 18580981,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1989180,
+            "cycles_per_pixel": 9.341025447671905,
+            "megapixels_per_second": 234.52098206943387
+          },
+          "png-assets-rgba8": {
+            "ns": 12872272,
+            "thread_cycles": 28196374,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1989180,
+            "cycles_per_pixel": 14.174873063272303,
+            "megapixels_per_second": 154.5321602899628
+          },
+          "image-rgba8": {
+            "ns": 24646693,
+            "thread_cycles": 53990173,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1989180,
+            "cycles_per_pixel": 27.14192431051991,
+            "megapixels_per_second": 80.70778501602629
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.613109142683194,
+              "native_over_reference_total": 0.6589268001794866,
+              "native_wins": 58
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6131915763177513,
+              "native_over_reference_total": 0.6589847687507621,
+              "native_wins": 58
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.32347111999909156,
+              "native_over_reference_total": 0.3441388668248515,
+              "native_wins": 60
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.3235056236294145,
+              "native_over_reference_total": 0.3441548705539432,
+              "native_wins": 60
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 9235830,
+            "after_total": 8481885,
+            "after_over_before_total": 0.918367380083869,
+            "after_over_before_geomean": 0.8733973724201851,
+            "improved_cases": 56
+          },
+          "thread_cycles": {
+            "before_total": 20229256,
+            "after_total": 18580981,
+            "after_over_before_total": 0.9185202362360732,
+            "after_over_before_geomean": 0.8735477076444685,
+            "improved_cases": 56
+          }
+        }
+      },
+      "photos": {
+        "cases": 24,
+        "totals": {
+          "native-rgba8": {
+            "ns": 147835968,
+            "thread_cycles": 323792660,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 9437184,
+            "cycles_per_pixel": 34.31030485365126,
+            "megapixels_per_second": 63.83550720214448
+          },
+          "png-assets-rgba8": {
+            "ns": 160608374,
+            "thread_cycles": 351718089,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 9437184,
+            "cycles_per_pixel": 37.26938978830973,
+            "megapixels_per_second": 58.75897853246432
+          },
+          "image-rgba8": {
+            "ns": 159863829,
+            "thread_cycles": 350095916,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 9437184,
+            "cycles_per_pixel": 37.097498151991104,
+            "megapixels_per_second": 59.03264083584536
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.9180021839814568,
+              "native_over_reference_total": 0.9204748439829171,
+              "native_wins": 16
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9181288355545045,
+              "native_over_reference_total": 0.9206028069827253,
+              "native_wins": 16
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.9220165129170589,
+              "native_over_reference_total": 0.9247618358997269,
+              "native_wins": 14
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9221261132742021,
+              "native_over_reference_total": 0.9248684294849072,
+              "native_wins": 14
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 150120269,
+            "after_total": 147835968,
+            "after_over_before_total": 0.9847835271331682,
+            "after_over_before_geomean": 0.9854477767894064,
+            "improved_cases": 20
+          },
+          "thread_cycles": {
+            "before_total": 328740800,
+            "after_total": 323792660,
+            "after_over_before_total": 0.9849482023527351,
+            "after_over_before_geomean": 0.985610236674039,
+            "improved_cases": 20
+          }
+        }
+      },
+      "assets": {
+        "cases": 32,
+        "totals": {
+          "native-rgba8": {
+            "ns": 237307649,
+            "thread_cycles": 519759549,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 43567900,
+            "cycles_per_pixel": 11.929873806173811,
+            "megapixels_per_second": 183.59248083065373
+          },
+          "png-assets-rgba8": {
+            "ns": 252293839,
+            "thread_cycles": 552561637,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 43567900,
+            "cycles_per_pixel": 12.682769584946715,
+            "megapixels_per_second": 172.68713406830358
+          },
+          "image-rgba8": {
+            "ns": 251401709,
+            "thread_cycles": 550661270,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 43567900,
+            "cycles_per_pixel": 12.639151072234375,
+            "megapixels_per_second": 173.29993568182147
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.8821517057252309,
+              "native_over_reference_total": 0.9406002538175338,
+              "native_wins": 26
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.8822482506136863,
+              "native_over_reference_total": 0.9406363275994132,
+              "native_wins": 26
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.7920931128345705,
+              "native_over_reference_total": 0.9439380899355779,
+              "native_wins": 27
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.79217435115399,
+              "native_over_reference_total": 0.9438825232796925,
+              "native_wins": 27
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 242690987,
+            "after_total": 237307649,
+            "after_over_before_total": 0.9778181379269762,
+            "after_over_before_geomean": 0.9815303798554766,
+            "improved_cases": 19
+          },
+          "thread_cycles": {
+            "before_total": 531514276,
+            "after_total": 519759549,
+            "after_over_before_total": 0.9778844566726181,
+            "after_over_before_geomean": 0.9816348524761982,
+            "improved_cases": 19
+          }
+        }
+      }
+    },
+    "baseline": "target\\png-perf-20261119\\baseline-rgba8.tsv"
+  }
+]

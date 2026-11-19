@@ -1,0 +1,16 @@
+﻿file	codec	ns	thread_cycles	alloc_calls	requested_bytes	pixels
+target/png-kodak-20261117/kodim18.png	native-rgba8	6948331	15216370	0	0	393216
+target/png-kodak-20261117/kodim18.png	png-assets-rgba8	6427612	14075547	0	0	393216
+target/png-kodak-20261117/kodim18.png	image-rgba8	6396631	14008750	0	0	393216
+target/png-perf-20261119/assets/asset-00.png	png-assets-rgba8	16666112	36496264	0	0	1638400
+target/png-perf-20261119/assets/asset-00.png	image-rgba8	16031337	35049705	0	0	1638400
+target/png-perf-20261119/assets/asset-00.png	native-rgba8	14741962	32293086	0	0	1638400
+target/png-perf-20261119/assets/asset-22.png	image-rgba8	1871502	4097630	0	0	196608
+target/png-perf-20261119/assets/asset-22.png	native-rgba8	2070605	4534420	0	0	196608
+target/png-perf-20261119/assets/asset-22.png	png-assets-rgba8	1790670	3921065	0	0	196608
+target/png-perf-20261119/assets/asset-23.png	native-rgba8	74680712	163565885	0	0	6905360
+target/png-perf-20261119/assets/asset-23.png	png-assets-rgba8	68526750	150073027	0	0	6905360
+target/png-perf-20261119/assets/asset-23.png	image-rgba8	68201050	149379929	0	0	6905360
+target/png-perf-20261119/assets/asset-25.png	png-assets-rgba8	12300512	26935586	0	0	4194304
+target/png-perf-20261119/assets/asset-25.png	image-rgba8	12231312	26789042	0	0	4194304
+target/png-perf-20261119/assets/asset-25.png	native-rgba8	11501525	25194046	0	0	4194304

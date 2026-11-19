@@ -1,0 +1,3 @@
+target/png-decode-corpus-20261117/color-0-depth-01-adam7-1-noise-0.png
+target/png-decode-corpus-20261117/color-3-depth-01-adam7-1-noise-0.png
+target/png-perf-20261119/assets/asset-26.png

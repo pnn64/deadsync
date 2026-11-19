@@ -1,0 +1,36 @@
+﻿{
+    "started_utc":  "2026-11-19T21:08:24.1813693Z",
+    "finished_utc":  "2026-11-19T21:08:45.8092957Z",
+    "minimum_ms":  80,
+    "batches":  5,
+    "cases":  [
+                  "target/png-perf-20261119/assets/asset-20.png",
+                  "target/png-perf-20261119/assets/asset-24.png",
+                  "target/png-perf-20261119/assets/asset-31.png"
+              ],
+    "runs":  [
+                 {
+                     "Binary":  "baseline-timing.exe",
+                     "Output":  "outliers-before-run1"
+                 },
+                 {
+                     "Binary":  "final-timing.exe",
+                     "Output":  "outliers-final-run1"
+                 },
+                 {
+                     "Binary":  "final-timing.exe",
+                     "Output":  "outliers-final-run2"
+                 },
+                 {
+                     "Binary":  "baseline-timing.exe",
+                     "Output":  "outliers-before-run2"
+                 }
+             ],
+    "compiler_processes_before":  [
+
+                                  ],
+    "compiler_processes_after":  [
+
+                                 ],
+    "exit_code":  0
+}

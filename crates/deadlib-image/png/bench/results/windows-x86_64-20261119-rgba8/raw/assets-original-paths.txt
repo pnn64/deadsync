@@ -1,0 +1,32 @@
+assets/fonts/cjk/_jfonts 16px [kanji-jis1] 32x32 (doubleres).png
+assets/graphics/content_browser/nobanner.png
+assets/graphics/icon/icon-16.png
+assets/graphics/icon/icon-32.png
+assets/graphics/logo.png
+assets/noteskins/pump/default/_flash (doubleres).png
+courses/MostPlayed_13-16.png
+assets/graphics/heart.png
+assets/graphics/grades/d.png
+assets/noteskins/common/common/Fallback Tap Lift 4x1.png
+assets/noteskins/dance/ddr-note/Right Hold Body inactive (doubleres).png
+assets/noteskins/dance/cyber/_Down Receptor Go 4x1 (doubleres).png
+assets/fonts/miso/_miso light 15x15 (res 360x360).png
+assets/fonts/Unprofessional/_unprofessional monospace numbers 7x2 (doubleres).png
+assets/graphics/srpg10_logo_main.png
+assets/graphics/visual_styles/ducks/titlemenu_flybottom.png
+assets/noteskins/dance/enchantment/_Down Tap Note (doubleres) 16x8.png
+assets/noteskins/dance/ddr-rainbow/UpLeft Hold BottomCap Inactive (doubleres).png
+courses/ChallengingRandom5-bg.png
+courses/MostPlayed_09-12.png
+crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Thonk/GameplayIn splode (doubleres).png
+crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Stars/Combo 100milestone splode (doubleres).png
+assets/noteskins/pump/delta-note/_Center Tap Note 6x8.png
+assets/graphics/step_stats_gifs/catjam 11x14.png
+assets/graphics/step_stats_gifs/snoop 8x8.png
+assets/graphics/visual_styles/technique/shared_background.png
+assets/noteskins/pump/delta-note/_blank.png
+assets/fonts/wendy/_wendy monospace numbers 14x1 (doubleres).png
+assets/noteskins/pump/pad/UpRight Hold Body Active 6x1.png
+assets/graphics/visual_styles/hearts/combo_100milestone_minisplode.png
+crates/deadsync-song-lua/assets/simply-love/Graphics/_VisualStyles/Cats/Combo 1000milestone swoosh.png
+assets/graphics/step_stats_gifs/Rin Cat 2x3.png

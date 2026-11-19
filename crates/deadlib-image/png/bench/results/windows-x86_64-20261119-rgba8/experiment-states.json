@@ -1,0 +1,273 @@
+{
+  "schema": 1,
+  "baseline_commit": "b04e37657648a6af594c4591486faa3a301263ef",
+  "compatibility_fix_commit": "3fc2deedb61f6655641f8f235c32ec5b53a0e7e9",
+  "lineage_basis": "Application history confirmed by the coordinating agent, retained patches/source snapshots, and frozen binary hashes. Timestamps alone are not treated as source identity.",
+  "baseline": {
+    "source_state": "Original production at b04e37657, with the frozen RGBA8 measurement harness; no performance candidates or stored-prefetch fix.",
+    "files": [
+      "baseline-rgba8.tsv",
+      "baseline-raw.tsv",
+      "baseline-rgba8-allocations.tsv",
+      "baseline-raw-allocations.tsv",
+      "baseline-hashes.json",
+      "build-environment.json",
+      "frozen-harness.patch",
+      "baseline-summary.json",
+      "baseline-stages.json"
+    ]
+  },
+  "experiments": [
+    {
+      "id": "stride2-portable",
+      "status": "retained",
+      "before_state": "Initial production baseline.",
+      "after_state": "Portable stride-2 neighbor reconstruction uses the existing fixed-lane helper.",
+      "comparisons": [
+        [
+          "stride2-before.tsv",
+          "stride2-portable.tsv"
+        ]
+      ],
+      "evidence": [
+        "candidate-a-portable-stride2.patch",
+        "stride2-portable-summary.json"
+      ]
+    },
+    {
+      "id": "stride2-simd",
+      "status": "measured_rejected",
+      "before_state": "Same initial stride-2 comparison table.",
+      "after_state": "SSE4.1 dispatch enabled for stride 2; the exact portable fallback present in this historical executable is not separately proven by a source-build manifest.",
+      "comparisons": [
+        [
+          "stride2-before.tsv",
+          "stride2-simd.tsv"
+        ]
+      ],
+      "evidence": [
+        "candidate-b-sse41-stride2.patch",
+        "stride2-simd-summary.json"
+      ],
+      "limitation": "The candidate patch is independent of the portable candidate. This archive does not assume that proves which fallback was in the measured executable."
+    },
+    {
+      "id": "fixed-wide-tables",
+      "status": "measured_rejected",
+      "before_state": "Portable stride 2, before the packed-unpack changes.",
+      "after_state": "Same state plus static wide literal/distance tables for fixed-Huffman blocks.",
+      "comparisons": [
+        [
+          "fixed-tables-before.tsv",
+          "fixed-tables.tsv"
+        ],
+        [
+          "fixed-tables-before-run2.tsv",
+          "fixed-tables-run2.tsv"
+        ]
+      ],
+      "evidence": [
+        "fixed-tables.patch",
+        "fixed-tables-applied.patch",
+        "fixed-tables-summary.json"
+      ],
+      "note": "Temporarily remained present during both packed-unpack comparisons below, then removed."
+    },
+    {
+      "id": "packed-fixed-groups",
+      "status": "retained_with_refinement",
+      "before_state": "Portable stride 2 plus the temporary fixed-wide-table candidate.",
+      "after_state": "Same state plus fixed output groups for 1/2/4-bit samples. The 1-bit arithmetic expansion was subsequently replaced by the LUT.",
+      "fixed_wide_tables_in_both_states": true,
+      "lineage_confidence": "Confirmed application history.",
+      "comparisons": [
+        [
+          "packed-unpack-before.tsv",
+          "packed-unpack.tsv"
+        ]
+      ],
+      "evidence": [
+        "packed-unpack-fixed-groups.patch",
+        "packed-unpack-summary.json"
+      ]
+    },
+    {
+      "id": "packed-one-bit-lut",
+      "status": "retained",
+      "before_state": "Portable stride 2 and temporary fixed-wide tables. Whether the before executable used the original per-sample 1-bit expansion or the fixed-group candidate is not independently recorded.",
+      "after_state": "Portable stride 2 and temporary fixed-wide tables, with a 2 KiB table for 1-bit expansion and fixed groups for 2/4-bit expansion.",
+      "fixed_wide_tables_in_both_states": true,
+      "lineage_confidence": "Fixed-wide tables confirmed on both sides; exact preceding 1-bit unpack implementation is not independently reconstructed.",
+      "comparisons": [
+        [
+          "packed-unpack-lut-before.tsv",
+          "packed-unpack-lut.tsv"
+        ]
+      ],
+      "evidence": [
+        "packed-unpack-lut-summary.json"
+      ],
+      "note": "The final hybrid unpack remains after fixed-wide tables are removed. The final full-corpus comparison independently covers the final hybrid against the original baseline; this candidate pair alone does not isolate the LUT from the arithmetic 1-bit candidate. Final source is retained in final-performance.patch.gz."
+    },
+    {
+      "id": "packed-literal-lengths",
+      "status": "measured_rejected",
+      "before_state": "Retained stride-2/hybrid-unpack work; the exact fixed-wide-table state of the paired historical binaries is not independently reconstructed.",
+      "after_state": "Packed literal/length lookup candidate.",
+      "comparisons": [
+        [
+          "packed-lengths-before.tsv",
+          "packed-lengths.tsv"
+        ]
+      ],
+      "evidence": [
+        "packed-lengths.patch",
+        "packed-lengths-after-fixed-tables.patch",
+        "packed-lengths-applied.patch",
+        "packed-lengths-max-token-test.patch",
+        "packed-lengths-summary.json"
+      ],
+      "lineage_confidence": "Partial source evidence; no historical source-to-binary build manifest.",
+      "note": "The full packed-lengths-applied.patch is against original zlib blob 601e7653e and contains no FIXED_WIDE/FIXED_DISTANCE additions. That establishes the captured source snapshot, not by itself the executable's build provenance. The measured regression and removal are retained without guessing that link."
+    },
+    {
+      "id": "fused-up-compaction",
+      "status": "measured_rejected",
+      "before_state": "Portable stride 2 plus hybrid unpack; fixed-wide tables and packed-length changes removed.",
+      "after_state": "Same state plus safe fused Up reconstruction/compaction.",
+      "comparisons": [
+        [
+          "fused-up-before.tsv",
+          "fused-up.tsv"
+        ]
+      ],
+      "evidence": [
+        "candidate-fused-up-compaction.patch",
+        "remove-fused-up.patch",
+        "fused-up-summary.json"
+      ],
+      "lineage_confidence": "Confirmed application history."
+    },
+    {
+      "id": "single-literal-fast-loop",
+      "status": "retained",
+      "before_state": "Portable stride 2 plus hybrid unpack; no fixed-wide tables, packed-length changes, fused-Up, or compatibility fix.",
+      "after_state": "Same state plus one literal per hot-loop iteration; bounded fallback unchanged.",
+      "comparisons": [
+        [
+          "single-literal-before.tsv",
+          "single-literal.tsv"
+        ],
+        [
+          "single-literal-before-run2.tsv",
+          "single-literal-run2.tsv"
+        ]
+      ],
+      "evidence": [
+        "single-literal-fast-loop.patch",
+        "single-literal-summary.json",
+        "pre-stored-zlib.rs"
+      ],
+      "lineage_confidence": "Confirmed application history."
+    },
+    {
+      "id": "deferred-stored-initialization",
+      "status": "retained",
+      "before_state": "Portable stride 2, hybrid unpack, single-literal loop, and compatibility fix 3fc2deedb.",
+      "after_state": "Same state with initialized output length deferred until the first coded block.",
+      "comparisons": [
+        [
+          "stored-fixed-before.tsv",
+          "stored.tsv"
+        ]
+      ],
+      "evidence": [
+        "defer-stored-production.patch",
+        "defer-stored-initialization.patch",
+        "stored-summary.json",
+        "pre-stored-fixed-zlib.rs"
+      ],
+      "historical_only": [
+        "stored-before.tsv",
+        "remove-stored-production.patch"
+      ],
+      "note": "stored-before.tsv predates the compatibility correction and is not the accepted before-table. The first attempted candidate validation exposed the pre-existing bug and did not produce a qualifying candidate timing."
+    },
+    {
+      "id": "contiguous-chunk-crc",
+      "status": "prepared_unmeasured",
+      "before_state": "One-line proposal for buffered chunk CRC.",
+      "after_state": "Never applied or measured as part of the retained experiments.",
+      "comparisons": [],
+      "evidence": [
+        "candidate-contiguous-chunk-crc.patch",
+        "candidate-contiguous-chunk-crc.md"
+      ],
+      "note": "This is not a measured rejection and contributes no claimed speedup."
+    }
+  ],
+  "compatibility_fix": {
+    "commit": "3fc2deedb61f6655641f8f235c32ec5b53a0e7e9",
+    "title": "Discard stale unaccounted prefetch before direct stored payload copies.",
+    "classification": "Separate correctness fix, not a behavior-preserving performance optimization.",
+    "evidence": [
+      "stored-prefetch-before.log",
+      "stored-prefetch-after.log",
+      "stored-prefetch-fix-only.patch"
+    ],
+    "independent_fixture": "The committed stored_and_mixed_blocks_preserve_output_limits_and_prefixes fixture constructs RFC1951 bits independently and checks the same stream through flate2 before native comparisons.",
+    "note": "The before log reproduces Checksum on valid mixed blocks with the original production algorithm; the after log passes."
+  },
+  "validation_reports": {
+    "final_release": {
+      "log": "final-tests.log",
+      "counting": "Parse each test result footer and compare against the complete final log independently counted by two agents; do not carry forward historical totals.",
+      "expected_totals": {
+        "suites": 44,
+        "passed": 174,
+        "failed": 0,
+        "ignored": 21
+      }
+    },
+    "final_corpus": {
+      "paths": 1132,
+      "reported_stdout": "Verified 1132 PNG files against png samples, image RGBA16, and native reader decoding. All three RGBA8 adapters match the asset loader's pixel output.",
+      "progress_log": "final-verify.log",
+      "reported_by": "Coordinating agent, completed session 91228, exit 0."
+    },
+    "formatting": {
+      "checks": [
+        "rustfmt --check --edition 2024 --config skip_children=true on src/scanline.rs, src/zlib.rs, and bench/src/main.rs",
+        "git diff --check"
+      ],
+      "reported_by": "Coordinating agent, completed session 91228, exit 0; no separate full stdout log retained."
+    },
+    "portable_i686": {
+      "log": "portable-i686-tests.log",
+      "passed": 22,
+      "failed": 0,
+      "session": 8797,
+      "exit_code": 0,
+      "scope": "Release PNG --lib tests on i686-pc-windows-msvc; locked/offline/-j 2."
+    },
+    "portable_aarch64": {
+      "log": "portable-aarch64-check.log",
+      "session": 67339,
+      "exit_code": 0,
+      "scope": "Library compile check only for aarch64-unknown-linux-gnu; no link or runtime claim."
+    },
+    "clippy": {
+      "passing_stems": [
+        "clippy-frozen-reference-production",
+        "clippy-frozen-reference-bench-default-rerun1",
+        "clippy-frozen-reference-bench-all-features-rerun1"
+      ],
+      "historical_failures": [
+        "clippy-frozen-reference-bench-default",
+        "clippy-frozen-reference-bench-all-features"
+      ],
+      "resolution": "Add the already-resolved flate2 1.1.11 oracle as a benchmark-only dev dependency. Lock refresh adds one direct dependency entry; no resolved version/checksum changes."
+    },
+    "historical_logs": "Initial failures and empty stdout files remain evidence of those attempts, not evidence that the final gate failed or that every attempt passed."
+  }
+}

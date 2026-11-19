@@ -1,0 +1,6 @@
+target/png-decode-corpus-20261117/color-4-depth-08-adam7-0-noise-1.png
+target/png-decode-corpus-20261117/color-4-depth-08-adam7-0-noise-0.png
+target/png-decode-corpus-20261117/color-0-depth-16-adam7-0-noise-1.png
+target/png-decode-corpus-20261117/color-0-depth-16-adam7-0-noise-0.png
+assets/graphics/icon/icon-16.png
+assets/graphics/icon/icon-32.png

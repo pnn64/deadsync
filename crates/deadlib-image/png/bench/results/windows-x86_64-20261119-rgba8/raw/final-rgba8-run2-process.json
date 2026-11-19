@@ -1,0 +1,16 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\png-perf-20261119\\final-timing.exe",
+    "--rgba8",
+    "target/png-decode-corpus-20261117",
+    "target/png-kodak-20261117",
+    "target/png-perf-20261119/assets"
+  ],
+  "working_directory": "C:\\GitHub\\deadsync",
+  "PNG_BENCH_MS": "80",
+  "compiler_processes_before": [],
+  "started_utc": "2026-11-19T20:59:59.978329+00:00",
+  "finished_utc": "2026-11-19T21:02:52.385507+00:00",
+  "exit_code": 0,
+  "compiler_processes_after": []
+}
