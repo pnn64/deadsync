@@ -421,27 +421,40 @@ fn fail(message: &'static str) -> Error {
 }
 
 pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) -> Result<(), Error> {
+    const BLOCK: usize = 1024;
     let unescaped = bytes.len().checked_add(2).ok_or_else(Error::memory)?;
+    // Record one bit per block when the entire input fits in the mask.
+    let track = bytes.len() > BLOCK && bytes.len() <= BLOCK * u64::BITS as usize;
+    let mut escaped_blocks = 0u64;
     // A 4 KiB block adds at most 12 KiB, which fits in the narrow sum.
-    let size = bytes
-        .chunks(4096)
-        .try_fold(unescaped, |size, block| {
-            let extra: u16 = block
-                .iter()
-                .map(|&byte| match byte {
-                    0 => 3,
-                    b'"' | b'\\' | b'\n' | b'\r' => 1,
-                    _ => 0,
-                })
-                .sum();
-            size.checked_add(usize::from(extra))
+    let extra_bytes = |block: &[u8]| -> u16 {
+        block
+            .iter()
+            .map(|&byte| match byte {
+                0 => 3,
+                b'"' | b'\\' | b'\n' | b'\r' => 1,
+                _ => 0,
+            })
+            .sum()
+    };
+    let size = if track {
+        bytes
+            .chunks(BLOCK)
+            .enumerate()
+            .try_fold(unescaped, |size, (index, block)| {
+                let extra = extra_bytes(block);
+                escaped_blocks |= u64::from(extra != 0) << index;
+                size.checked_add(usize::from(extra))
+            })
+    } else {
+        bytes.chunks(4096).try_fold(unescaped, |size, block| {
+            size.checked_add(usize::from(extra_bytes(block)))
         })
-        .ok_or_else(Error::memory)?;
+    }
+    .ok_or_else(Error::memory)?;
     memory.reserve(out, size)?;
     out.push(b'"');
-    if size == unescaped {
-        out.extend_from_slice(bytes);
-    } else {
+    let write_escaped = |bytes: &[u8], out: &mut Buffer<u8>| {
         for &c in bytes {
             match c {
                 b'"' | b'\\' | b'\n' => {
@@ -453,9 +466,48 @@ pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) ->
                 _ => out.push(c),
             }
         }
+    };
+    if size == unescaped {
+        out.extend_from_slice(bytes);
+    } else if track && (escaped_blocks.trailing_ones() as usize) < bytes.len().div_ceil(BLOCK) {
+        let mut copied = 0;
+        while escaped_blocks != 0 {
+            let start = escaped_blocks.trailing_zeros() as usize * BLOCK;
+            let end = (start + BLOCK).min(bytes.len());
+            out.extend_from_slice(&bytes[copied..start]);
+            write_escaped(&bytes[start..end], out);
+            copied = end;
+            escaped_blocks &= escaped_blocks - 1;
+        }
+        out.extend_from_slice(&bytes[copied..]);
+    } else {
+        write_escaped(bytes, out);
     }
     out.push(b'"');
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn quoted_byte_runs_preserve_escapes_at_block_boundaries() {
+    let mut scratch = Scratch::new(Memory::default());
+    let mut output = buffer(&mut scratch, 8).unwrap();
+    output.extend_from_slice(b"prefix");
+    let mut input = [0xff; 2051];
+    input[1023] = b'\n';
+    input[2048] = 0;
+    input[2050] = b'\r';
+    quote(&input, &mut output, &mut scratch).unwrap();
+    let expected = [
+        b"prefix\"".as_slice(),
+        &[255; 1023],
+        b"\\\n",
+        &[255; 1024],
+        b"\\000\xff",
+        b"\\r\"",
+    ]
+    .concat();
+    assert_eq!(&*output, &expected);
 }
 
 pub(crate) fn buffer(memory: &mut Scratch, capacity: usize) -> Result<Buffer<u8>, Error> {
