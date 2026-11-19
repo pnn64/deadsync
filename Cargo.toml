@@ -152,6 +152,10 @@ hidapi = { path = "vendor/hidapi-win7" }
 dirs-sys = { path = "vendor/dirs-sys-win7" }
 # Opus must honor Rust's static MSVC runtime; its CMake default selects /MD.
 opusic-sys = { path = "vendor/opusic-sys" }
+# Retry the SMX read-handle open after a hot-plug permission race, so pads
+# powered on while the game runs connect reliably. Drop once
+# https://github.com/fchorney/rustmaniax-sdk/pull/15 is released.
+rustmaniax-sdk = { git = "https://github.com/ddrcoder/rustmaniax-sdk", branch = "fix/retry-read-open-after-hotplug" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
