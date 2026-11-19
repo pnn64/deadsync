@@ -72,7 +72,13 @@ impl Compositor {
         Self::with_options(header, CompositeOptions::default())
     }
     pub fn with_options(header: &Header, options: CompositeOptions) -> Result<Self, Error> {
-        header.validate()?;
+        if options.background == Background::LogicalScreen {
+            header.validate()?;
+        } else {
+            // Transparent and caller-supplied backgrounds never use the stored
+            // background index, which compatibility decoding may retain intact.
+            header.validate_structure()?;
+        }
         if let Some(p) = &options.external_palette {
             validate_palette(p)?;
         }

@@ -25,7 +25,11 @@ impl Default for Limits {
 #[derive(Clone, Debug)]
 pub struct DecodeOptions {
     pub limits: Limits,
-    /// Check reserved bits, block versions and duplicate/dangling controls.
+    /// Check reserved bits, block versions, duplicate/dangling controls and
+    /// the logical background index. Require LZW EOI and reject trailing bytes.
+    /// With false, a terminated image may omit EOI only when its decoded sample
+    /// count is exact, and monochrome streams may use a one-bit LZW minimum.
+    /// Invalid/overflowing LZW output is never recovered.
     pub strict: bool,
     /// Reject rectangles extending beyond the logical screen. With false,
     /// raw indices are retained and the compositor clips to the screen.
@@ -282,7 +286,12 @@ impl Decoder {
                     }
                     self.header.as_mut().unwrap().global_palette =
                         Some(palette(&self.scratch[..self.wanted])?);
-                    self.header.as_ref().unwrap().validate()?;
+                    let header = self.header.as_ref().unwrap();
+                    if self.options.strict {
+                        header.validate()?;
+                    } else {
+                        header.validate_structure()?;
+                    }
                     self.transition(State::Block, 0);
                     break Some(Event::Header);
                 }
@@ -477,7 +486,11 @@ impl Decoder {
                     let Some(minimum) = self.byte(input, &mut at)? else {
                         break None;
                     };
-                    self.lzw.reset(minimum)?;
+                    if self.options.strict {
+                        self.lzw.reset(minimum)?;
+                    } else {
+                        self.lzw.reset_compatible(minimum)?;
+                    }
                     self.state = State::ImageSize;
                 }
                 State::ImageSize => {
@@ -486,7 +499,12 @@ impl Decoder {
                     };
                     if size == 0 {
                         let count = self.frame.width as usize * self.frame.height as usize;
-                        if !self.lzw.ended() || self.frame.indices.len() != count {
+                        // The image-data terminator supplies the framing needed
+                        // to recover a missing EOI. LZW errors stay fatal, and
+                        // neither truncated framing nor missing pixels qualifies.
+                        if (self.options.strict && !self.lzw.ended())
+                            || self.frame.indices.len() != count
+                        {
                             return Err(Error::Invalid("incomplete LZW image"));
                         }
                         if self.frame.interlaced {
@@ -562,9 +580,13 @@ impl Decoder {
                     }
                 }
                 State::Done => {
-                    if !input[at..].is_empty() {
+                    if self.options.strict && !input[at..].is_empty() {
                         return Err(Error::Invalid("bytes after GIF trailer"));
                     }
+                    // A caller may stop at Event::End for an embedded stream.
+                    // If it submits the suffix, discarded bytes still count.
+                    self.charge_input(input.len() - at)?;
+                    at = input.len();
                     break None;
                 }
                 State::Failed => return Err(Error::Invalid("decoder is failed")),
@@ -678,7 +700,7 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
                 blocks.push(block);
             }
             Some(Event::End) => {
-                if at != input.len() {
+                if options.strict && at != input.len() {
                     return Err(Error::Invalid("bytes after GIF trailer"));
                 }
                 decoder.finish()?;

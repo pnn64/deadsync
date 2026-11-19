@@ -91,69 +91,46 @@ fn established_image_gif_samples() {
     assert_eq!(paths.len(), 13);
     let mut valid = 0;
     for path in paths {
-        let mut bytes = fs::read(&path).unwrap();
-        if path.file_name().unwrap() == "set_hsts.gif" {
-            assert!(matches!(
-                decode(&bytes),
-                Err(Error::Invalid("background index outside global palette"))
-            ));
-            continue;
-        }
-        if path.file_name().unwrap() == "gifplayer-muybridge.gif" {
-            // Upstream decode.rs documents missing EOI in frame 62.
-            assert!(
-                decode_with_options(
-                    &bytes,
-                    &DecodeOptions {
-                        strict: false,
-                        check_bounds: false,
-                        ..Default::default()
-                    }
-                )
-                .is_err()
-            );
-            continue;
-        }
-        let actual = if path.file_name().unwrap() == "moon_impact.gif" {
-            assert!(matches!(
-                decode(&bytes),
-                Err(Error::Invalid("graphic control block"))
-            ));
-            let options = DecodeOptions {
-                strict: false,
-                ..Default::default()
-            };
-            assert!(matches!(
-                decode_with_options(&bytes, &options),
-                Err(Error::Invalid("bytes after GIF trailer"))
-            ));
-            let mut d = Decoder::new(options);
-            let mut at = 0;
-            let mut g = None;
-            loop {
-                let p = d.update(&bytes[at..]).unwrap();
-                at += p.consumed;
-                match p.event {
-                    Some(Event::Header) => g = Some(Gif::new(d.header().unwrap().clone())),
-                    Some(Event::Block(b)) => g.as_mut().unwrap().blocks.push(b),
-                    Some(Event::End) => break,
-                    None => panic!("incomplete corpus stream"),
-                }
-            }
-            d.finish().unwrap();
-            assert!(at < bytes.len());
-            bytes.truncate(at);
-            g.unwrap()
+        let bytes = fs::read(&path).unwrap();
+        let compatibility = match path.file_name().unwrap().to_str().unwrap() {
+            "set_hsts.gif" => Some(("background index outside global palette", 1)),
+            // Frames 60 and 89 (zero-based) end after all pixels without EOI.
+            "gifplayer-muybridge.gif" => Some(("incomplete LZW image", 380)),
+            "moon_impact.gif" => Some(("graphic control block", 14)),
+            _ => None,
+        };
+        let actual = if let Some((reason, frames)) = compatibility {
+            assert_eq!(decode(&bytes).unwrap_err(), Error::Invalid(reason));
+            let actual = decode_with_options(
+                &bytes,
+                &DecodeOptions {
+                    strict: false,
+                    ..Default::default()
+                },
+            )
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert_eq!(actual.frames().count(), frames);
+            actual
         } else {
             decode(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
         };
         verify(&bytes, &actual, &path);
-        let roundtrip = encode(&actual, &EncodeOptions::default()).unwrap();
-        assert_eq!(decode(&roundtrip).unwrap(), actual);
-        verify(&roundtrip, &actual, &path);
+        if path.file_name().unwrap() == "set_hsts.gif" {
+            // Recovery preserves the invalid, unused background byte. Encoding
+            // remains strict instead of silently changing that metadata.
+            assert_eq!(actual.header.background_index, 255);
+            assert_eq!(
+                encode(&actual, &EncodeOptions::default()),
+                Err(Error::Invalid("background index outside global palette"))
+            );
+        } else {
+            let roundtrip = encode(&actual, &EncodeOptions::default()).unwrap();
+            assert_eq!(decode(&roundtrip).unwrap(), actual);
+            verify(&roundtrip, &actual, &path);
+        }
         valid += 1;
     }
-    assert_eq!(valid, 11);
+    assert_eq!(valid, 13);
 }
 
 #[test]

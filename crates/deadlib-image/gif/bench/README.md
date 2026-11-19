@@ -21,12 +21,33 @@ bands, random data, interlacing, one- and seven-byte image sub-blocks, local
 palettes, transparent frames, rectangles, and all defined disposal methods.
 Every generated file is decoded and checked against its intended indexed frames.
 
-Arguments accept GIF files or directories, searched recursively. Before measuring
-each input, the harness compares indexed frames, palettes, controls, and complete
-animation canvases against the reference decoders. Inputs rejected by the native
-strict decoder, inputs without image frames, and non-image graphics requiring a
-caller-supplied renderer are reported as `EXCLUDED` on stderr. Reference decode
-failures or output differences abort the run. Successful verification reports
+Arguments accept GIF files or directories, searched recursively and deduplicated.
+Default native decoding remains strict. Add `--compatibility` to use
+`DecodeOptions { strict: false, .. }` for verification and all three native
+measurement modes. This accepts the documented compatibility cases without
+changing strict benchmark comparisons or the archived measurements.
+
+For a correctness-only corpus check, use:
+
+```powershell
+cargo run --release --locked --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --bin gif-decode-bench -- --verify-only --compatibility assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples
+```
+
+`--verify-only` checks every indexed frame, palette, rectangle, control, rendered
+RGBA canvas and delay against the reference decoders, then exercises both native
+streaming modes with frame-buffer recycling. It reports the verified file and
+frame counts without timings or allocator measurements. Every rejection,
+unsupported case or comparison failure aborts verification; no inputs are
+silently excluded. Both native streaming modes submit trailing bytes after the
+End event so they are charged to the input budget in compatibility mode and
+rejected in strict mode.
+
+Before measuring each input, the harness compares indexed frames, palettes,
+controls, and complete animation canvases against the reference decoders. Inputs
+rejected by the native decoder under the selected policy, inputs without image
+frames, and non-image graphics requiring a caller-supplied renderer are reported
+as `EXCLUDED` on stderr. Reference decode failures or output differences abort
+the run. Successful verification reports
 the file, frame count, and total decoded frame pixels on stderr.
 An absent graphic control extension uses each API's default disposal: native
 preserves its absence, while `gif` returns `Keep`. Explicit disposal values are

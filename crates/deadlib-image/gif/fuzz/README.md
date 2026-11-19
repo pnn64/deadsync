@@ -1,7 +1,10 @@
 # Fuzzing
 
-`decode` checks bounded arbitrary input, all incremental states, exact native
-reencoding, compositor safety and indexed parity on reference-accepted files.
+`decode` checks bounded arbitrary input in strict and compatibility modes,
+collecting/incremental agreement including trailing-byte budgets, compositor
+safety and indexed parity on reference-accepted files. Strictly encodable models
+must roundtrip exactly; compatibility decoding can preserve invalid background
+metadata or version declarations that the encoder deliberately rejects.
 `lzw` checks arbitrary code streams, fragmented input, expansion limits and
 encoder roundtrips. Deterministic malformed tests separately cover frozen full
 dictionaries and the longest legal KwKwK chain.

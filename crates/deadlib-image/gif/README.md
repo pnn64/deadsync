@@ -44,9 +44,11 @@ No RGBA quantization or implicit lossy conversion is included.
 
 `Compositor::new(&gif.header)` uses the specification's logical-screen background
 color. `CompositeOptions` can select a transparent canvas or a supplied RGBA
-background instead. `render` borrows the reusable RGBA8 canvas until the next
-call. Transparent indices leave existing pixels untouched. Background disposal
-uses the configured background; previous disposal saves only the affected
+background instead; these modes permit an invalid unused logical background
+index retained by compatibility decoding. Logical-screen composition and encoding
+still reject an invalid background index. `render` borrows the reusable RGBA8
+canvas until the next call. Transparent indices leave existing pixels untouched.
+Background disposal uses the configured background; previous disposal saves only the affected
 rectangle. Unspecified (0) and reserved (4..7) disposal retain existing pixels.
 All reserved disposal values are preserved in the indexed model.
 
@@ -74,12 +76,29 @@ the wire representation. Delays are centiseconds with no zero-delay minimum;
 playback scheduling and user-input waits are the caller's responsibility.
 
 Default decoding checks reserved fields, version declarations, duplicate/dangling
-controls and frame bounds. `strict: false` permits mislabeled GIF87a streams,
-reserved packed bits, last-control-wins duplicates and dangling controls.
+controls, background indices and frame bounds. `strict: false` permits mislabeled
+GIF87a streams, reserved packed bits, last-control-wins duplicates and dangling
+controls, and preserves an invalid logical background index without substituting
+a color. It also accepts a missing LZW end-of-information (EOI) code only at the
+zero image-data sub-block terminator, after exactly the declared number of pixels
+has decoded. EOF before that terminator, underfilled/overflowing images and
+invalid LZW codes remain errors. Compatibility mode also permits a one-bit LZW
+minimum used by some monochrome writers, preserving its actual alphabet and code
+widths. Strict decoding and encoding require the specified minimum of two bits;
+standalone `lzw::decode` always requires that minimum and EOI.
 `check_bounds: false` separately permits oversized rectangles, which rendering
 clips. Missing palettes are retained in raw output: supply an external palette
 from an earlier stream for rendering, or select a background and use local image
-palettes. Missing colors are never fabricated. EOI is mandatory, and output size
-must match exactly; bytes after LZW EOI inside image sub-blocks are ignored as a
-compatibility policy. Bytes after the GIF trailer are rejected by whole-file
-decoding; incremental callers can stop at the End event for embedded streams.
+palettes. Missing colors are never fabricated. Bytes after LZW EOI inside image
+sub-blocks are ignored in both modes. Bytes after the GIF trailer are rejected in
+strict mode and discarded in compatibility mode. The whole-file input budget
+includes the discarded suffix; incremental decoding charges suffix bytes when
+they are submitted after `Event::End`. Incremental callers can stop at that event
+for embedded streams. All other resource limits and structural checks apply in
+both modes, including graphic-control lengths and terminators.
+
+The existing `set_hsts.gif`, `gifplayer-muybridge.gif` and `moon_impact.gif` corpus
+inputs are decoded without rewriting their bytes. Regression tests compare every
+frame's indices, palettes, controls, rectangle and transparent RGBA canvas with
+the reference decoders, and synthetic inputs check fragmented decoding and
+resource-limit boundaries for each recovery.

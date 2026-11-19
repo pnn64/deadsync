@@ -42,6 +42,14 @@ impl Decoder {
         if !(2..=8).contains(&minimum) {
             return Err(Error::Invalid("LZW minimum code size"));
         }
+        self.reset_compatible(minimum)
+    }
+    /// Some GIF writers use a one-bit minimum for monochrome images instead
+    /// of the required two. Keep the literal alphabet and control codes intact.
+    pub(crate) fn reset_compatible(&mut self, minimum: u8) -> Result<(), Error> {
+        if !(1..=8).contains(&minimum) {
+            return Err(Error::Invalid("LZW minimum code size"));
+        }
         self.minimum = minimum;
         self.clear = 1 << minimum;
         self.clear_table();
@@ -153,14 +161,16 @@ impl Decoder {
                             .try_reserve_exact(bound - self.dictionary.len())
                             .map_err(|_| Error::Allocation)?;
                     }
-                    // Before the table freezes there are at most 4091 phrases,
-                    // each at most 4091 bytes long. Thus relative offsets fit
+                    // Before the table freezes, even a one-bit minimum keeps
+                    // phrase lengths at most 4093. Thus relative offsets fit
                     // 24 bits even when a caller's output prefix exceeds 4 GiB.
                     // A frozen table adds no entries; CLEAR starts a new epoch.
                     let entry = ((offset - self.origin) as u64) << 12 | (previous_len + 1) as u64;
                     self.dictionary.push(entry);
                     self.next += 1;
-                    if self.next == 1 << self.width && self.width < 12 {
+                    // A one-bit minimum starts with next == 1 << width, so
+                    // its first insertion crosses (rather than reaches) it.
+                    if self.next >= 1 << self.width && self.width < 12 {
                         self.width += 1;
                     }
                 }

@@ -114,8 +114,8 @@ fn reject_invalid_syntax_dimensions_indices_and_controls() {
     ] {
         assert!(decode(&insert(&base, &bad)).is_err());
     }
-    // No EOI, too few pixels, and too many pixels are errors even in compatibility mode.
-    for compressed in [vec![4], vec![0x2c], vec![0x04, 0x0a]] {
+    // Too few or too many pixels remain errors even in compatibility mode.
+    for compressed in [vec![0x2c], vec![0x04, 0x0a]] {
         let mut bytes = base[..30].to_vec();
         bytes.push(compressed.len() as u8);
         bytes.extend(compressed);

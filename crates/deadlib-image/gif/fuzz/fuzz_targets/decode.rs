@@ -18,7 +18,7 @@ impl TextRasterizer for Font {
     }
 }
 
-fuzz_target!(|bytes: &[u8]| {
+fn check(bytes: &[u8], strict: bool) {
     let options = DecodeOptions {
         limits: Limits {
             max_input_bytes: 1 << 20,
@@ -28,6 +28,7 @@ fuzz_target!(|bytes: &[u8]| {
             max_blocks: 4096,
             max_frames: 64,
         },
+        strict,
         ..Default::default()
     };
     let actual = decode_with_options(bytes, &options);
@@ -50,8 +51,9 @@ fuzz_target!(|bytes: &[u8]| {
                 match p.event {
                     Some(Event::Header) => header = decoder.header().cloned(),
                     Some(Event::Block(b)) => blocks.push(b),
-                    Some(Event::End) => break,
-                    None => {}
+                    // Feed any suffix too: strict decoding rejects it, while
+                    // compatibility decoding consumes and charges its bytes.
+                    Some(Event::End) | None => {}
                 }
             }
         }
@@ -63,9 +65,19 @@ fuzz_target!(|bytes: &[u8]| {
     };
     assert_eq!(header.as_ref(), Some(&actual.header));
     assert_eq!(blocks, actual.blocks);
-    let encoded = encode(&actual, &EncodeOptions::default()).unwrap();
-    assert_eq!(decode(&encoded).unwrap(), actual);
-    if let Ok(mut compositor) = Compositor::new(&actual.header) {
+    match encode(&actual, &EncodeOptions::default()) {
+        Ok(encoded) => assert_eq!(decode(&encoded).unwrap(), actual),
+        // Relaxed decoding can retain an invalid background index or a version
+        // declaration that strict encoding requires the caller to repair.
+        Err(_) => assert!(!strict),
+    }
+    if let Ok(mut compositor) = Compositor::with_options(
+        &actual.header,
+        CompositeOptions {
+            background: Background::Transparent,
+            ..Default::default()
+        },
+    ) {
         for block in &actual.blocks {
             if let Block::Extension(Extension::PlainText(text)) = block {
                 let _ = compositor.render_text(text, &mut Font);
@@ -101,4 +113,9 @@ fuzz_target!(|bytes: &[u8]| {
         );
         assert_eq!(f.buffer.as_ref(), frame.indices);
     }
+}
+
+fuzz_target!(|bytes: &[u8]| {
+    check(bytes, true);
+    check(bytes, false);
 });
