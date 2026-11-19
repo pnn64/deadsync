@@ -11492,6 +11492,21 @@ fn song_lua_sprite_applies_texture_translate_to_uv_rect() {
             assert_eq!(z, 781);
             assert_eq!(uv_rect, Some([0.25, -0.5, 1.25, 0.5]));
         }
+        Actor::TexturedMesh { vertices, environment, z, .. } => {
+            use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
+            assert_eq!(z, 781);
+            // Explicit wrapping uses the mesh path. Preserve the same translated
+            // rectangle at all six submitted triangle vertices.
+            assert_eq!(
+                vertices.iter().map(|vertex| vertex.uv).collect::<Vec<_>>(),
+                [[0.25, -0.5], [1.25, -0.5], [1.25, 0.5],
+                 [0.25, -0.5], [1.25, 0.5], [0.25, 0.5]],
+            );
+            assert_eq!(
+                environment.and_then(|value| value.sampler),
+                Some(MeshSampler::Override { filter: SamplerFilter::Linear, wrap: SamplerWrap::Repeat }),
+            );
+        }
         other => panic!("expected translated sprite overlay, got {other:?}"),
     }
 }
@@ -11947,8 +11962,10 @@ fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
 }
 
 #[test]
-fn song_lua_sprite_glow_draws_once_with_native_blend() {
-    use deadlib_render_core::DrawOp;
+fn song_lua_sprite_glow_draws_once_with_native_blend_and_sampler() {
+    use deadlib_render_core::{
+        DrawOp, SamplerDesc, SamplerFilter, SamplerWrap, texture_sampler_desc,
+    };
     let key = "song-lua-cyber-glow.png";
     let mut assets = AssetManager::new();
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(64, 64));
@@ -11969,7 +11986,16 @@ fn song_lua_sprite_glow_draws_once_with_native_blend() {
         }),
     ] {
         for cached in [false, true] {
-            for blend in [SongLuaOverlayBlendMode::Alpha, SongLuaOverlayBlendMode::Add] {
+            for (blend, texture_filtering, texture_wrapping) in [
+                (SongLuaOverlayBlendMode::Alpha, true, false),
+                (SongLuaOverlayBlendMode::Add, true, false),
+                (SongLuaOverlayBlendMode::Alpha, false, false),
+                (SongLuaOverlayBlendMode::Add, false, false),
+                (SongLuaOverlayBlendMode::Alpha, true, true),
+                (SongLuaOverlayBlendMode::Add, true, true),
+                (SongLuaOverlayBlendMode::Alpha, false, true),
+                (SongLuaOverlayBlendMode::Add, false, true),
+            ] {
                 let mut scratch = SongLuaProjectedMeshScratch::default();
                 let actors = build_song_lua_overlay_actor_with_scratch(
                     &overlay,
@@ -11979,6 +12005,8 @@ fn song_lua_sprite_glow_draws_once_with_native_blend() {
                         diffuse: [1.0, 1.0, 1.0, 0.8],
                         glow: [1.0, 1.0, 1.0, 0.4],
                         blend,
+                        texture_filtering,
+                        texture_wrapping,
                         ..Default::default()
                     },
                     camera,
@@ -12007,12 +12035,34 @@ fn song_lua_sprite_glow_draws_once_with_native_blend() {
                     "Sprite::DrawTexture emits one diffuse and one glow: camera={camera:?}, cached={cached}"
                 );
                 for op in &frame.ops {
-                    let actual = match op {
-                        DrawOp::Sprite(run) => run.blend,
-                        DrawOp::TexturedMesh(run) => run.blend,
+                    let (actual, handle, repeat, sampler) = match op {
+                        DrawOp::Sprite(run) => (run.blend, run.texture_handle, false, None),
+                        DrawOp::TexturedMesh(run) => {
+                            (run.blend, run.texture_handle, true, run.sampler)
+                        }
                         other => panic!("unexpected Sprite draw: {other:?}"),
                     };
                     assert_eq!(actual, song_lua_overlay_blend(blend));
+                    // Native Sprite::DrawTexture sets these states once, before
+                    // both diffuse and glow. Check the renderer's effective
+                    // sampler: an omitted mesh override falls back to repeat.
+                    assert_eq!(
+                        texture_sampler_desc(SamplerDesc::default(), handle, repeat, sampler),
+                        SamplerDesc {
+                            filter: if texture_filtering {
+                                SamplerFilter::Linear
+                            } else {
+                                SamplerFilter::Nearest
+                            },
+                            wrap: if texture_wrapping {
+                                SamplerWrap::Repeat
+                            } else {
+                                SamplerWrap::Clamp
+                            },
+                            mipmaps: false,
+                        },
+                        "Sprite diffuse/glow sampler: camera={camera:?}, cached={cached}, filtering={texture_filtering}, wrapping={texture_wrapping}, op={op:?}"
+                    );
                 }
                 let masks = frame
                     .sprite_instances

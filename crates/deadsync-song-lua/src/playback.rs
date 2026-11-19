@@ -10849,7 +10849,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     let overlay_blend = song_lua_overlay_blend(state.blend);
     // Depth, tilted sprites and rotated anchors need the native matrix under an
     // orthographic camera. Generic sprites fold X/Y angles around their center,
-    // losing the rotated anchor and combined-axis geometry.
+    // losing the rotated anchor and combined-axis geometry. Per-actor filtering
+    // and wrapping also need the mesh path's explicit sampler override.
     let sprite_view_proj = || {
         // Generic Sprite composition owns mask registration and clipping. A
         // screen-only world transform must not replace it with an unmasked mesh.
@@ -10861,17 +10862,19 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             .or_else(|| {
                 let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
                     && state.rot_z_deg.abs() > f32::EPSILON;
-                let native_matrix = state.quaternion != crate::actor_quaternion::IDENTITY
+                let native_mesh = state.quaternion != crate::actor_quaternion::IDENTITY
                     || state.z != 0.0
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor
+                    || !state.texture_filtering
+                    || state.texture_wrapping
                     || matches!(
                         state.effect_mode,
                         deadlib_present::anim::EffectMode::Spin
                             | deadlib_present::anim::EffectMode::Wag
                     );
-                (native_matrix && !state.mask_source && !state.mask_dest)
+                (native_mesh && !state.mask_source && !state.mask_dest)
                     // RageDisplay::LoadMenuPerspective(0) uses +/-1000 depth.
                     .then(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)).into())
             })
@@ -12340,6 +12343,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
         }
         Actor::ReusableTexturedMesh {
             align,
+            environment,
             vertex_color_encoding,
             offset,
             world_z,
@@ -12374,7 +12378,16 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 |scratch| scratch.update_textured_glow(vertices),
             );
             Some(Actor::ReusableTexturedMesh {
-                environment: None,
+                environment: environment
+                    .as_ref()
+                    .and_then(|environment| environment.sampler)
+                    .map(|sampler| deadlib_present::actors::MeshEnvironment {
+                        sampler: Some(sampler),
+                        camera: None,
+                        transform: *local_transform,
+                        additive_texture: None,
+                        additive_uv: [0.0, 0.0, 1.0, 1.0],
+                    }),
                 vertex_color_encoding: *vertex_color_encoding,
                 align: *align,
                 offset: *offset,
