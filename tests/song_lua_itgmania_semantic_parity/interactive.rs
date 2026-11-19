@@ -337,9 +337,44 @@ fn native_draw_vertex_count(sample: &Value) -> Result<usize, String> {
     let count = sample["vertices"].as_array().ok_or("draw without vertices")?.len();
     match sample["primitive"].as_str() {
         Some("Quads") if count > 0 && count % 4 == 0 => Ok(count / 4 * 6),
+        Some("QuadStrip") if count >= 4 && count % 2 == 0 => Ok((count - 2) / 2 * 6),
         Some("Triangles") if count > 0 && count % 3 == 0 => Ok(count),
-        _ => Err("unsupported native primitive in draw comparison".into()),
+        _ => Err(format!("unsupported native primitive in draw comparison: {:?} with {count} vertices",
+            sample["primitive"].as_str())),
     }
+}
+
+fn native_draw_geometry_matches(
+    primitive: &str,
+    rows: &[[f32; 10]],
+    reference: &[Value],
+    matches: impl Fn(&[f32; 10], &Value) -> bool,
+) -> bool {
+    let (stride, order) = match primitive {
+        "Quads" => (4, [0, 1, 2, 3]),
+        // GL_QUAD_STRIP shares the last pair with the next quad. Its perimeter
+        // is 0,1,3,2, unlike four independent GL_QUADS vertices. Preserve every
+        // pair boundary and compare both complete triangles, including attributes.
+        "QuadStrip" => (2, [0, 1, 3, 2]),
+        "Triangles" => return !rows.is_empty() && rows.len() % 3 == 0
+            && rows.len() == reference.len()
+            && rows.iter().zip(reference).all(|(actual, native)| matches(actual, native)),
+        _ => return false,
+    };
+    if reference.len() < 4 || (reference.len() - 4) % stride != 0
+        || rows.len() != ((reference.len() - 4) / stride + 1) * 6
+    { return false; }
+    rows.chunks_exact(6).zip(reference.windows(4).step_by(stride)).all(|(actual, native)| {
+        // Native quads permit either diagonal. Retain both original triangles
+        // and their attributes; merely finding each corner somewhere is insufficient.
+        let triangle = |actual: &[[f32; 10]], indices: [usize; 3]| {
+            [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]].iter().any(|p|
+                (0..3).all(|i| matches(&actual[p[i]], &native[order[indices[i]]])))
+        };
+        [([0,1,2],[0,2,3]),([0,1,3],[1,2,3])].iter().any(|&(a,b)|
+            triangle(&actual[..3], a) && triangle(&actual[3..], b)
+                || triangle(&actual[..3], b) && triangle(&actual[3..], a))
+    })
 }
 
 fn native_sprite_piece_state_matches(first: &Value, previous: &Value, next: &Value) -> bool {
@@ -397,6 +432,67 @@ fn native_draw_batch<'a>(
         }
     }
     Ok((consumed, count, reference))
+}
+
+#[test]
+fn native_quad_strip_counts_keep_complete_pairs_and_submission_boundaries() {
+    let point = json!([0,0,0, 0,0,0,1, 0,0, 1,1,1,1]);
+    for (count, expected) in [
+        (0, None), (1, None), (2, None), (3, None), (4, Some(6)),
+        (5, None), (6, Some(12)), (7, None), (8, Some(18)),
+    ] {
+        let sample = json!({"primitive":"QuadStrip", "vertices":vec![point.clone();count]});
+        assert_eq!(native_draw_vertex_count(&sample).ok(), expected, "{count} source vertices");
+    }
+    let sample = json!({"actor":"mesh", "primitive":"QuadStrip",
+        "vertices":vec![point;6], "state":{"texture":"song:/capture"}});
+    let samples = [sample.clone(), sample];
+    for sprite_pieces in [false, true] {
+        let (used, count, vertices) = native_draw_batch(&samples, 24, sprite_pieces).unwrap();
+        assert_eq!((used, count, vertices.len()), (1, 12, 6),
+            "adjacent strip submissions cannot be pooled into one owned draw");
+    }
+    let error = native_draw_vertex_count(&json!({"primitive":"QuadStrip", "vertices":vec![0;5]})).unwrap_err();
+    assert!(error.contains("QuadStrip") && error.contains("5 vertices"));
+}
+
+#[test]
+fn native_quad_strip_geometry_checks_topology_shared_pairs_and_all_attributes() {
+    let positions = [[0.0,0.0], [0.0,1.0], [1.0,0.25], [1.0,1.5], [2.0,-0.5], [2.0,1.25]];
+    let reference = positions.into_iter().enumerate().map(|(i, [x,y])| {
+        let value = i as f32 / 10.0;
+        json!([0,0,0, x,y,value,1, value,1.0-value, 1.0,value,0.5,1.0])
+    }).collect::<Vec<_>>();
+    let actual = |indices: &[usize]| indices.iter().map(|&index|
+        std::array::from_fn(|axis| reference[index][axis+3].as_f64().unwrap() as f32)
+    ).collect::<Vec<[f32;10]>>();
+    let matches = |actual: &[f32;10], row: &Value| row_matches(actual, row, [1.0;2], false, [1.0,0.0]);
+    let first = [[0,1,3,3,2,0], [0,1,2,1,3,2]];
+    let second = [[2,3,5,5,4,2], [2,3,4,3,5,4]];
+    for a in first {
+        for b in second {
+            let indices = [a,b].concat();
+            assert!(native_draw_geometry_matches("QuadStrip", &actual(&indices), &reference, matches));
+        }
+    }
+    let valid = actual(&[0,1,3,3,2,0,2,3,5,5,4,2]);
+    for axis in 0..10 {
+        let mut changed = valid.clone();
+        changed[4][axis] += 0.125;
+        assert!(!native_draw_geometry_matches("QuadStrip", &changed, &reference, matches),
+            "changing clip/UV/RGBA axis {axis} must remain a mismatch");
+    }
+    for indices in [
+        [0,1,2,2,3,0,2,3,4,4,5,2], // Treating each pair window as an ordinary quad twists it.
+        [0,1,3,3,2,0,0,1,3,3,2,0], // Repeating a cell cannot replace its neighbor.
+        [0,1,5,5,4,0,2,3,5,5,4,2], // Corners from a different cell cannot bridge a missing pair.
+    ] {
+        assert!(!native_draw_geometry_matches("QuadStrip", &actual(&indices), &reference, matches));
+    }
+    assert!(!native_draw_geometry_matches("QuadStrip", &valid[..9], &reference, matches));
+    assert!(!native_draw_geometry_matches("QuadStrip", &valid, &reference[..5], matches));
+    assert!(native_draw_geometry_matches("Quads", &actual(&[0,1,2,2,3,0]), &reference[..4], matches));
+    assert!(native_draw_geometry_matches("Triangles", &actual(&[0,1,2]), &reference[..3], matches));
 }
 
 #[test]
@@ -853,23 +949,15 @@ impl DrawChecks {
             self.vertices += rows.len();
             let depth_range = native_depth_range(&sample["state"]);
             let matches = |actual: &[f32;10], row: &Value| row_matches(actual, row, image_uv_scale, expected_texture.is_none(), depth_range);
-            let geometry_ok = if sample["primitive"] == "Quads" {
-                rows.chunks_exact(6).zip(reference.chunks_exact(4)).all(|(actual, native)| {
-                    // GL_QUADS allows either diagonal. Both emitted triangles
-                    // must cover the complete native quad, including attributes.
-                    let triangle = |actual: &[[f32;10]], indices: [usize;3]| {
-                        [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]].iter().any(|p|
-                            (0..3).all(|i| matches(&actual[p[i]], &native[indices[i]])))
-                    };
-                    [([0,1,2],[0,2,3]),([0,1,3],[1,2,3])].iter().any(|&(a,b)|
-                        triangle(&actual[..3], a) && triangle(&actual[3..],b)
-                            || triangle(&actual[..3],b) && triangle(&actual[3..],a))
-                })
-            } else { rows.iter().zip(reference.iter()).all(|(actual,native)|matches(actual,native)) };
+            let primitive = sample["primitive"].as_str().unwrap_or("");
+            let geometry_ok = native_draw_geometry_matches(primitive, &rows, &reference, matches);
             if !geometry_ok {
                 let example=rows.iter().enumerate().find(|(vertex, actual)| {
-                    let candidates=if sample["primitive"]=="Quads" { &reference[vertex/6*4..vertex/6*4+4] }
-                        else { &reference[*vertex..*vertex+1] };
+                    let candidates = match primitive {
+                        "Quads" => &reference[vertex/6*4..vertex/6*4+4],
+                        "QuadStrip" => &reference[vertex/6*2..vertex/6*2+4],
+                        _ => &reference[*vertex..*vertex+1],
+                    };
                     !candidates.iter().any(|row|matches(actual,row))
                 });
                 self.fail(sample,"submitted_clip_uv_color_or_topology",json!({"example_vertex":example,
@@ -1107,13 +1195,14 @@ pub(crate) fn fully_clipped(rows: &[Value]) -> bool {
 // round a merely thin triangle down to zero area. Other diagonal collinearity
 // remains a mismatch rather than relying on a rounded determinant.
 pub(crate) fn fully_degenerate(primitive: &str, rows: &[Value]) -> bool {
-    let count = match primitive {
-        "Triangles" => 3,
-        "Quads" => 4,
+    let (count, stride) = match primitive {
+        "Triangles" => (3, 3),
+        "Quads" => (4, 4),
+        "QuadStrip" => (4, 2),
         _ => return false,
     };
-    if rows.is_empty() || rows.len() % count != 0 { return false; }
-    rows.chunks_exact(count).all(|group| {
+    if rows.len() < count || (rows.len() - count) % stride != 0 { return false; }
+    rows.windows(count).step_by(stride).all(|group| {
         let mut points = [[0.0f32; 4]; 4];
         for (point, row) in points.iter_mut().zip(group) {
             let Some(values) = row.as_array().filter(|values| values.len() == 13) else { return false; };
@@ -1193,6 +1282,21 @@ fn native_degenerate_culls_reject_invalid_geometry_and_transparency() {
     let transparent = [[-1, -1], [-1, 1], [1, 1], [1, -1]].map(|p|
         json!([0, 0, 0, p[0], p[1], 0, 1, 0, 0, 1, 1, 1, 0]));
     assert!(!fully_degenerate("Quads", &transparent), "alpha zero does not prove a safe depth or blend cull");
+}
+
+#[test]
+fn native_quad_strip_degeneracy_requires_every_complete_cell_to_collapse() {
+    let mut rows = (0..6).map(|i|
+        json!([0,0,0, i,0,0,1, 0,0, 1,1,1,1])
+    ).collect::<Vec<_>>();
+    assert!(fully_degenerate("QuadStrip", &rows));
+    assert!(!fully_degenerate("QuadStrip", &rows[..2]));
+    assert!(!fully_degenerate("QuadStrip", &rows[..5]));
+    rows[5][4] = json!(1);
+    assert!(!fully_degenerate("QuadStrip", &rows), "one visible cell keeps the native draw observable");
+    rows[5][4] = json!(0);
+    rows[5][6] = json!(0);
+    assert!(!fully_degenerate("QuadStrip", &rows), "invalid homogeneous input cannot establish a safe cull");
 }
 
 fn native_number(v: &Value) -> f32 {
