@@ -276,6 +276,41 @@ pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
             .unwrap_or(tail.len())
 }
 
+fn balance_end(source: &[u8], pos: usize, left: u8, right: u8) -> Option<usize> {
+    let rest = source.get(pos..)?.strip_prefix(&[left])?;
+    let (blocks, tail) = rest.as_chunks::<32>();
+    let scan = |bytes: &[u8], depth: &mut usize| {
+        for (index, &byte) in bytes.iter().enumerate() {
+            if byte == right {
+                *depth -= 1;
+                if *depth == 0 {
+                    return Some(index);
+                }
+            } else if byte == left {
+                *depth += 1;
+            }
+        }
+        None
+    };
+    let mut depth = 1usize;
+    for (index, block) in blocks.iter().enumerate() {
+        let (opens, closes) = block.iter().fold((0u8, 0u8), |(opens, closes), &byte| {
+            (
+                opens + u8::from(byte == left),
+                closes + u8::from(byte == right),
+            )
+        });
+        // Only inspect order when the closing delimiters could exhaust depth.
+        if usize::from(closes) < depth {
+            depth += usize::from(opens);
+            depth -= usize::from(closes);
+        } else if let Some(offset) = scan(block, &mut depth) {
+            return Some(pos + 2 + index * 32 + offset);
+        }
+    }
+    scan(tail, &mut depth).map(|offset| source.len() - tail.len() + offset + 1)
+}
+
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
 fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut first = start + 1;
@@ -639,28 +674,10 @@ impl Pattern {
                 Kind::Balance => {
                     let left = i.arg as u8;
                     let right = (i.arg >> 8) as u8;
-                    if source.get(pos) != Some(&left) {
-                        matched = false;
+                    if let Some(end) = balance_end(source, pos, left, right) {
+                        pos = end;
                     } else {
-                        let mut depth = 1usize;
-                        let mut end = pos + 1;
-                        while end < source.len() {
-                            let b = source[end];
-                            end += 1;
-                            if b == right {
-                                depth -= 1;
-                                if depth == 0 {
-                                    break;
-                                }
-                            } else if b == left {
-                                depth += 1;
-                            }
-                        }
-                        if depth == 0 {
-                            pos = end;
-                        } else {
-                            matched = false;
-                        }
+                        matched = false;
                     }
                 }
                 Kind::Frontier => {
@@ -735,7 +752,22 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::{byte_run, contiguous_set_run, find_byte, set_has};
+    use super::{balance_end, byte_run, contiguous_set_run, find_byte, set_has};
+
+    #[test]
+    fn balance_counts_nested_and_identical_delimiters_across_blocks() {
+        for close in [32, 33, 34, 64, 65, 66, 98] {
+            let mut bytes = [b'x'; 102];
+            bytes[1] = 0;
+            bytes[close - 1] = 0;
+            bytes[close] = 255;
+            bytes[close + 1] = 255;
+            assert_eq!(balance_end(&bytes, 0, 0, 255), None);
+            assert_eq!(balance_end(&bytes[..close + 1], 1, 0, 255), None);
+            assert_eq!(balance_end(&bytes, 1, 0, 255), Some(close + 2));
+            assert_eq!(balance_end(&bytes, 1, 0, 0), Some(close));
+        }
+    }
 
     #[test]
     fn contiguous_set_runs_match_bitmap_membership_across_blocks() {
