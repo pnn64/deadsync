@@ -1,3 +1,10 @@
+pub(super) use super::super::choice_viewport::{
+    ChoiceViewport as InlineChoiceViewport, SCROLL_HINT_GAP as INLINE_SCROLL_HINT_GAP,
+    SCROLL_HINT_SLOT as INLINE_SCROLL_HINT_SLOT,
+};
+use super::super::choice_viewport::{
+    choice_position_for_view, choice_start_for_focus, choice_viewport as shared_choice_viewport,
+};
 use super::*;
 
 /// Keep navigation's logical x positions in reading order. Only presentation
@@ -51,16 +58,137 @@ pub(super) fn inline_choice_scale(row: &Row) -> f32 {
     (available / first.max(second).max(1.0)).min(1.0)
 }
 
-pub(super) fn inline_choice_geometry(
+pub(super) fn inline_choice_available_width(left_x: f32) -> f32 {
+    let right = (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(screen_width() - 13.0);
+    (right - left_x - INLINE_SPACING).max(0.0)
+}
+
+pub(super) fn inline_choice_viewport(
+    row: &Row,
+    requested_start: usize,
+    left_x: f32,
+) -> InlineChoiceViewport {
+    let count = row.choices.len();
+    if inline_choice_line_break(row) < count {
+        return InlineChoiceViewport {
+            start: 0,
+            end: count,
+            has_previous: false,
+            has_next: false,
+        };
+    }
+    shared_choice_viewport(
+        &row.choice_offsets,
+        &row.choice_widths,
+        requested_start,
+        inline_choice_available_width(left_x),
+        INLINE_SCROLL_HINT_SLOT,
+    )
+}
+
+pub(super) fn inline_choice_start_for_focus(
+    row: &Row,
+    requested_start: usize,
+    focus_idx: usize,
+    left_x: f32,
+) -> usize {
+    if inline_choice_line_break(row) < row.choices.len() {
+        return 0;
+    }
+    choice_start_for_focus(
+        &row.choice_offsets,
+        &row.choice_widths,
+        requested_start,
+        focus_idx,
+        inline_choice_available_width(left_x),
+        INLINE_SCROLL_HINT_SLOT,
+    )
+}
+
+pub(super) fn prepare_active_inline_choice_focus(state: &mut State) {
+    let active = state.active;
+    let mut prepared_rows = [false; RowId::COUNT];
+    for player_idx in active_player_indices(active) {
+        let row_idx =
+            state.pane().selected_row[player_idx].min(state.pane().row_map.len().saturating_sub(1));
+        let Some(row) = inline_row(state, row_idx) else {
+            continue;
+        };
+        if state.pane().inline_choice_focus[player_idx]
+            .is_some_and(|(focused_row, _)| focused_row == row_idx)
+        {
+            continue;
+        }
+        let row_id = row.id;
+        if row.choices.is_empty() {
+            continue;
+        }
+        let row_key = row_id.index();
+        let left_x = inline_choice_left_x_for_row(state, row_idx);
+        let width_bits = inline_choice_available_width(left_x).to_bits();
+        let existing_focus = state.pane().inline_choice_focus[player_idx]
+            .filter(|(focused_row, _)| *focused_row == row_idx);
+        let width_changed = state.pane().inline_choice_width_bits[row_key] != width_bits;
+        if existing_focus.is_some() && !width_changed {
+            continue;
+        }
+        let focus_idx = existing_focus.map_or_else(
+            || row.selected_choice_index[player_idx].min(row.choices.len().saturating_sub(1)),
+            |(_, choice_idx)| choice_idx.min(row.choices.len().saturating_sub(1)),
+        );
+        if existing_focus.is_none() && prepared_rows[row_key] {
+            let start = state.pane().inline_choice_start[row_key];
+            let [target, _] = inline_choice_geometry_for_view(row, left_x, start, focus_idx);
+            state.pane_mut().inline_choice_focus[player_idx] = Some((row_idx, focus_idx));
+            state.pane_mut().inline_choice_x[player_idx] = target;
+            continue;
+        }
+        let start = inline_choice_start_for_focus(
+            row,
+            state.pane().inline_choice_start[row_key],
+            focus_idx,
+            left_x,
+        );
+        let [target_x, _] = inline_choice_geometry_for_view(row, left_x, start, focus_idx);
+        state.pane_mut().inline_choice_start[row_key] = start;
+        state.pane_mut().inline_choice_focus[player_idx] = Some((row_idx, focus_idx));
+        state.pane_mut().inline_choice_width_bits[row_key] = width_bits;
+        prepared_rows[row_key] = true;
+        state.pane_mut().inline_choice_x[player_idx] = target_x;
+    }
+}
+
+// Position lookup is total for valid indices; callers gate visibility separately.
+pub(super) fn inline_choice_position_for_view(
+    row: &Row,
+    requested_start: usize,
+    choice_idx: usize,
+    left_x: f32,
+) -> [f32; 2] {
+    let viewport = inline_choice_viewport(row, requested_start, left_x);
+    if inline_choice_line_break(row) < row.choices.len() {
+        return inline_choice_position(row, choice_idx);
+    }
+    [
+        choice_position_for_view(
+            &row.choice_offsets,
+            viewport,
+            choice_idx,
+            INLINE_SCROLL_HINT_SLOT,
+        ),
+        0.0,
+    ]
+}
+
+pub(super) fn inline_choice_geometry_for_view(
     row: &Row,
     left_x: f32,
+    requested_start: usize,
     choice_idx: usize,
-) -> Option<[f32; 2]> {
-    debug_assert_eq!(row.choice_offsets.len(), row.choices.len());
-    debug_assert_eq!(row.choice_widths.len(), row.choices.len());
-    let width = *row.choice_widths.get(choice_idx)?;
-    let offset = *row.choice_offsets.get(choice_idx)?;
-    Some([width.mul_add(0.5, left_x + offset), width])
+) -> [f32; 2] {
+    let [offset, _] = inline_choice_position_for_view(row, requested_start, choice_idx, left_x);
+    let width = row.choice_widths[choice_idx];
+    [left_x + offset + width * 0.5, width]
 }
 
 pub(super) fn prepare_choice_layouts(state: &mut State, asset_manager: &AssetManager) {
@@ -123,6 +251,11 @@ pub(super) fn focused_inline_choice_index(
 ) -> Option<usize> {
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     let row = inline_row(state, row_idx)?;
+    if let Some((focused_row, choice_idx)) = state.pane().inline_choice_focus[idx]
+        && focused_row == row_idx
+    {
+        return Some(choice_idx.min(row.choices.len().saturating_sub(1)));
+    }
     let mut focus_idx = row.selected_choice_index[idx].min(row.choices.len().saturating_sub(1));
     let anchor_x = state.pane().inline_choice_x[idx];
     if anchor_x.is_finite() {
@@ -131,13 +264,11 @@ pub(super) fn focused_inline_choice_index(
         debug_assert_eq!(row.choice_widths.len(), row.choices.len());
         let mut best_dist = f32::INFINITY;
         let left_x = inline_choice_left_x_for_row(state, row_idx);
-        for (i, (&offset, &width)) in row
-            .choice_offsets
-            .iter()
-            .zip(row.choice_widths.iter())
-            .enumerate()
-        {
-            let dist = (width.mul_add(0.5, left_x + offset) - anchor_x).abs();
+        let start = state.pane().inline_choice_start[row.id.index()];
+        let viewport = inline_choice_viewport(row, start, left_x);
+        for i in viewport.start..viewport.end {
+            let [center_x, _] = inline_choice_geometry_for_view(row, left_x, start, i);
+            let dist = (center_x - anchor_x).abs();
             if dist < best_dist {
                 best_dist = dist;
                 focus_idx = i;
@@ -161,6 +292,7 @@ pub(super) fn move_inline_focus(
     let Some(row) = inline_row(state, row_idx) else {
         return false;
     };
+    let row_key = row.id.index();
     let choice_count = row.choices.len();
     if choice_count == 0 {
         return false;
@@ -171,9 +303,15 @@ pub(super) fn move_inline_focus(
             if delta <= 0 {
                 return false;
             }
-            let Some([target, _]) = inline_choice_geometry(row, left_x, 0) else {
-                return false;
-            };
+            let start = inline_choice_start_for_focus(
+                row,
+                state.pane().inline_choice_start[row_key],
+                0,
+                left_x,
+            );
+            let [target, _] = inline_choice_geometry_for_view(row, left_x, start, 0);
+            state.pane_mut().inline_choice_start[row_key] = start;
+            state.pane_mut().inline_choice_focus[idx] = Some((row_idx, 0));
             state.pane_mut().arcade_row_focus[idx] = false;
             state.pane_mut().inline_choice_x[idx] = target;
             return true;
@@ -185,20 +323,35 @@ pub(super) fn move_inline_focus(
             if current_idx == 0 {
                 state.pane_mut().arcade_row_focus[idx] = true;
                 state.pane_mut().inline_choice_x[idx] = f32::NAN;
+                state.pane_mut().inline_choice_focus[idx] = None;
                 return true;
             }
-            let Some([target, _]) = inline_choice_geometry(row, left_x, current_idx - 1) else {
-                return false;
-            };
+            let next_idx = current_idx - 1;
+            let start = inline_choice_start_for_focus(
+                row,
+                state.pane().inline_choice_start[row_key],
+                next_idx,
+                left_x,
+            );
+            let [target, _] = inline_choice_geometry_for_view(row, left_x, start, next_idx);
+            state.pane_mut().inline_choice_start[row_key] = start;
+            state.pane_mut().inline_choice_focus[idx] = Some((row_idx, next_idx));
             state.pane_mut().inline_choice_x[idx] = target;
             return true;
         }
         if current_idx + 1 >= choice_count {
             return false;
         }
-        let Some([target, _]) = inline_choice_geometry(row, left_x, current_idx + 1) else {
-            return false;
-        };
+        let next_idx = current_idx + 1;
+        let start = inline_choice_start_for_focus(
+            row,
+            state.pane().inline_choice_start[row_key],
+            next_idx,
+            left_x,
+        );
+        let [target, _] = inline_choice_geometry_for_view(row, left_x, start, next_idx);
+        state.pane_mut().inline_choice_start[row_key] = start;
+        state.pane_mut().inline_choice_focus[idx] = Some((row_idx, next_idx));
         state.pane_mut().inline_choice_x[idx] = target;
         return true;
     }
@@ -214,9 +367,15 @@ pub(super) fn move_inline_focus(
     if next_idx == current_idx {
         return false;
     }
-    let Some([target, _]) = inline_choice_geometry(row, left_x, next_idx) else {
-        return false;
-    };
+    let start = inline_choice_start_for_focus(
+        row,
+        state.pane().inline_choice_start[row_key],
+        next_idx,
+        left_x,
+    );
+    let [target, _] = inline_choice_geometry_for_view(row, left_x, start, next_idx);
+    state.pane_mut().inline_choice_start[row_key] = start;
+    state.pane_mut().inline_choice_focus[idx] = Some((row_idx, next_idx));
     state.pane_mut().inline_choice_x[idx] = target;
     true
 }
@@ -265,24 +424,41 @@ fn write_inline_intent(state: &mut State, player_idx: usize, row_idx: usize, for
     let idx = player_idx.min(PLAYER_SLOTS - 1);
     if row_allows_arcade_next_row(state, row_idx) && state.pane().arcade_row_focus[idx] {
         state.pane_mut().inline_choice_x[idx] = f32::NAN;
+        state.pane_mut().inline_choice_focus[idx] = None;
         return;
     }
     let Some(row) = inline_row(state, row_idx) else {
         return;
     };
+    let row_key = row.id.index();
     if row.choices.is_empty() {
         return;
     }
-    let sel = row.selected_choice_index[idx].min(row.choices.len() - 1);
-    let Some([target, _]) =
-        inline_choice_geometry(row, inline_choice_left_x_for_row(state, row_idx), sel)
-    else {
-        return;
-    };
-    if force
+    let selected = row.selected_choice_index[idx].min(row.choices.len() - 1);
+    let focus = if force
         || state.current_pane == OptionsPane::Main
         || !state.pane().inline_choice_x[idx].is_finite()
     {
+        selected
+    } else {
+        focused_inline_choice_index(state, idx, row_idx).unwrap_or(selected)
+    };
+    let left_x = inline_choice_left_x_for_row(state, row_idx);
+    let start = inline_choice_start_for_focus(
+        row,
+        state.pane().inline_choice_start[row_key],
+        focus,
+        left_x,
+    );
+    let [target, _] = inline_choice_geometry_for_view(row, left_x, start, focus);
+    let anchor_is_finite = state.pane().inline_choice_x[idx].is_finite();
+    let update_anchor = force
+        || state.current_pane == OptionsPane::Main
+        || !anchor_is_finite
+        || state.pane().inline_choice_start[row_key] != start;
+    state.pane_mut().inline_choice_start[row_key] = start;
+    state.pane_mut().inline_choice_focus[idx] = Some((row_idx, focus));
+    if update_anchor {
         state.pane_mut().inline_choice_x[idx] = target;
     }
 }

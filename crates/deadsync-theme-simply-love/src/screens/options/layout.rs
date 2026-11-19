@@ -1,3 +1,7 @@
+use super::super::choice_viewport::{
+    ChoiceViewport, SCROLL_HINT_SLOT, choice_position_for_view, choice_start_for_focus,
+    choice_viewport,
+};
 use super::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -31,6 +35,49 @@ pub(super) struct SubmenuRowLayout {
     pub(super) value_zoom: f32,
     pub(super) inline_spacing: f32,
     pub(super) inline_row: bool,
+}
+
+pub(super) fn submenu_inline_choice_start_for_focus(
+    layout: &SubmenuRowLayout,
+    requested_start: usize,
+    focus_idx: usize,
+) -> usize {
+    let available_width =
+        (list_w_unscaled() - SUB_LABEL_COL_W - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
+    choice_start_for_focus(
+        &layout.x_positions,
+        &layout.widths,
+        requested_start,
+        focus_idx,
+        available_width,
+        SCROLL_HINT_SLOT,
+    )
+}
+
+pub(super) fn submenu_inline_choice_viewport(
+    layout: &SubmenuRowLayout,
+    requested_start: usize,
+    focus_idx: usize,
+) -> ChoiceViewport {
+    let start = submenu_inline_choice_start_for_focus(layout, requested_start, focus_idx);
+    let available_width =
+        (list_w_unscaled() - SUB_LABEL_COL_W - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
+    choice_viewport(
+        &layout.x_positions,
+        &layout.widths,
+        start,
+        available_width,
+        SCROLL_HINT_SLOT,
+    )
+}
+
+pub(super) fn submenu_inline_choice_x(
+    layout: &SubmenuRowLayout,
+    viewport: ChoiceViewport,
+    choice_idx: usize,
+) -> f32 {
+    choice_position_for_view(&layout.x_positions, viewport, choice_idx, SCROLL_HINT_SLOT)
+        + layout.widths[choice_idx] * 0.5
 }
 
 fn machine_choice_index(state: &State, id: SubRowId) -> usize {
@@ -369,7 +416,7 @@ pub(super) fn build_submenu_row_layout(
                 .map(|text| (text.chars().count().max(1) as f32) * 8.0 * value_zoom),
         );
     }
-    let inline_row = row.inline && submenu_inline_widths_fit(&widths, inline_spacing);
+    let inline_row = row.inline;
     let mut x_positions: Vec<f32> = Vec::new();
     let mut centers: Vec<f32> = Vec::new();
     if inline_row {
@@ -450,7 +497,7 @@ pub(super) fn sync_submenu_inline_x_from_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let x = {
+    let (start, x) = {
         let Some(layout) = borrow_submenu_row_layout(state, asset_manager, kind, row_idx) else {
             return;
         };
@@ -462,8 +509,20 @@ pub(super) fn sync_submenu_inline_x_from_row(
             .copied()
             .unwrap_or(0)
             .min(layout.centers.len().saturating_sub(1));
-        layout.centers[choice_idx]
+        let requested_start = state.sub[kind]
+            .inline_choice_starts
+            .get(row_idx)
+            .copied()
+            .unwrap_or(0);
+        let viewport = submenu_inline_choice_viewport(&layout, requested_start, choice_idx);
+        (
+            viewport.start,
+            submenu_inline_choice_x(&layout, viewport, choice_idx),
+        )
     };
+    if let Some(slot) = state.sub[kind].inline_choice_starts.get_mut(row_idx) {
+        *slot = start;
+    }
     state.sub_inline_x = x;
 }
 
@@ -476,7 +535,7 @@ pub(super) fn apply_submenu_inline_x_to_row(
     let Some(row_idx) = submenu_visible_row_to_actual(state, kind, visible_row_idx) else {
         return;
     };
-    let (choice_idx, x) = {
+    let (choice_idx, start, x) = {
         let Some(layout) = borrow_submenu_row_layout(state, asset_manager, kind, row_idx) else {
             return;
         };
@@ -488,10 +547,23 @@ pub(super) fn apply_submenu_inline_x_to_row(
             .copied()
             .unwrap_or(0)
             .min(layout.centers.len().saturating_sub(1));
-        (choice_idx, layout.centers[choice_idx])
+        let requested_start = state.sub[kind]
+            .inline_choice_starts
+            .get(row_idx)
+            .copied()
+            .unwrap_or(0);
+        let viewport = submenu_inline_choice_viewport(&layout, requested_start, choice_idx);
+        (
+            choice_idx,
+            viewport.start,
+            submenu_inline_choice_x(&layout, viewport, choice_idx),
+        )
     };
     if let Some(slot) = submenu_cursor_indices_mut(state, kind).get_mut(row_idx) {
         *slot = choice_idx;
+    }
+    if let Some(slot) = state.sub[kind].inline_choice_starts.get_mut(row_idx) {
+        *slot = start;
     }
     state.sub_inline_x = x;
 }

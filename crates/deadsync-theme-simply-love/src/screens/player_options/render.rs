@@ -723,6 +723,7 @@ pub(super) fn draw_multi_select_underlines(
     actors: &mut Vec<Actor>,
     state: &State,
     row: &Row,
+    row_idx: usize,
     active: [bool; PLAYER_SLOTS],
     choice_left_x: f32,
     x_offsets: &[f32],
@@ -749,21 +750,32 @@ pub(super) fn draw_multi_select_underlines(
         let underline_y = underline_y(player_idx);
         let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
         line_color[3] *= a;
+        let viewport = inline_choice_viewport(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            inline_choice_left_x_for_row(state, row_idx),
+        );
         while let Some(idx) = take_active_choice(&mut mask) {
-            if x_offsets.get(idx).is_some() {
-                let [offset_x, offset_y] = inline_choice_position(row, idx);
-                let sel_x = choice_left_x + offset_x;
-                let underline_y = underline_y + offset_y;
-                let draw_w = widths.get(idx).copied().unwrap_or(40.0) * scale;
-                let underline_w = draw_w.ceil();
-                actors.push(act!(quad:
-                    align(0.0, 0.5):
-                    xy(sel_x, underline_y):
-                    zoomto(underline_w, line_thickness):
-                    diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                    z(Z_ROW_FOREGROUND)
-                ));
+            if x_offsets.get(idx).is_none() || !viewport.contains(idx) {
+                continue;
             }
+            let [offset_x, offset_y] = inline_choice_position_for_view(
+                row,
+                state.pane().inline_choice_start[row.id.index()],
+                idx,
+                inline_choice_left_x_for_row(state, row_idx),
+            );
+            let sel_x = choice_left_x + offset_x;
+            let underline_y = underline_y + offset_y;
+            let draw_w = widths.get(idx).copied().unwrap_or(40.0) * scale;
+            let underline_w = draw_w.ceil();
+            actors.push(act!(quad:
+                align(0.0, 0.5):
+                xy(sel_x, underline_y):
+                zoomto(underline_w, line_thickness):
+                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+                z(Z_ROW_FOREGROUND)
+            ));
         }
     }
 }
@@ -775,6 +787,7 @@ pub(super) fn draw_single_select_underline(
     actors: &mut Vec<Actor>,
     state: &State,
     row: &Row,
+    row_idx: usize,
     active: [bool; PLAYER_SLOTS],
     choice_left_x: f32,
     x_offsets: &[f32],
@@ -795,20 +808,33 @@ pub(super) fn draw_single_select_underline(
     };
     for player_idx in active_player_indices(active) {
         let idx = row.selected_choice_index[player_idx].min(widths.len().saturating_sub(1));
-        if let Some(sel_x) = x_offsets.get(idx).map(|offset| choice_left_x + offset) {
-            let draw_w = widths.get(idx).copied().unwrap_or(40.0);
-            let underline_w = draw_w.ceil();
-            let underline_y = underline_y(player_idx);
-            let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
-            line_color[3] *= a;
-            actors.push(act!(quad:
-                align(0.0, 0.5):
-                xy(sel_x, underline_y):
-                zoomto(underline_w, line_thickness):
-                diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
-                z(Z_ROW_FOREGROUND)
-            ));
+        let viewport = inline_choice_viewport(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            inline_choice_left_x_for_row(state, row_idx),
+        );
+        if x_offsets.get(idx).is_none() || !viewport.contains(idx) {
+            continue;
         }
+        let [offset_x, _] = inline_choice_position_for_view(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            idx,
+            inline_choice_left_x_for_row(state, row_idx),
+        );
+        let sel_x = choice_left_x + offset_x;
+        let draw_w = widths.get(idx).copied().unwrap_or(40.0);
+        let underline_w = draw_w.ceil();
+        let underline_y = underline_y(player_idx);
+        let mut line_color = color::decorative_rgba(player_color_index(state, player_idx));
+        line_color[3] *= a;
+        actors.push(act!(quad:
+            align(0.0, 0.5):
+            xy(sel_x, underline_y):
+            zoomto(underline_w, line_thickness):
+            diffuse(line_color[0], line_color[1], line_color[2], line_color[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
     }
 }
 
@@ -921,6 +947,7 @@ pub(super) fn draw_inline_choices(
             actors,
             rc.fc.state,
             rc.row,
+            rc.item_idx,
             rc.fc.active,
             choice_inner_left,
             x_offsets,
@@ -934,6 +961,7 @@ pub(super) fn draw_inline_choices(
             actors,
             rc.fc.state,
             rc.row,
+            rc.item_idx,
             rc.fc.active,
             choice_inner_left,
             x_offsets,
@@ -948,6 +976,11 @@ pub(super) fn draw_inline_choices(
         draw_cursor_ring(actors, rc.fc.state, rc.fc.active, rc.item_idx, rc.a);
     }
     // Draw each option's text (rc.fc.active rc.row: all white; inactive: #808080)
+    let color_rgba = if rc.is_active {
+        [1.0, 1.0, 1.0, rc.a]
+    } else {
+        rc.sl_gray
+    };
     if let Some((next_row_x, _, _)) = next_row_item {
         let next_row_color = if rc.is_active {
             [1.0, 1.0, 1.0, rc.a]
@@ -965,14 +998,44 @@ pub(super) fn draw_inline_choices(
             z(Z_ROW_FOREGROUND)
         ));
     }
-    for (idx, text) in rc.row.choices.iter().enumerate() {
-        let [offset_x, offset_y] = inline_choice_position(rc.row, idx);
+    let viewport = inline_choice_viewport(
+        rc.row,
+        rc.fc.state.pane().inline_choice_start[rc.row.id.index()],
+        inline_choice_left_x_for_row(rc.fc.state, rc.item_idx),
+    );
+    if viewport.has_previous {
+        actors.push(act!(text: font("miso"): settext("<"):
+            align(0.0, 0.5): xy(choice_inner_left, rc.current_row_y):
+            zoom(value_zoom):
+            diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+    }
+    if viewport.has_next {
+        let last_idx = viewport.end - 1;
+        let [last_offset, _] = inline_choice_position_for_view(
+            rc.row,
+            viewport.start,
+            last_idx,
+            inline_choice_left_x_for_row(rc.fc.state, rc.item_idx),
+        );
+        let arrow_x = choice_inner_left + last_offset + widths[last_idx] + INLINE_SCROLL_HINT_GAP;
+        actors.push(act!(text: font("miso"): settext(">"):
+            align(0.0, 0.5): xy(arrow_x, rc.current_row_y):
+            zoom(value_zoom):
+            diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):
+            z(Z_ROW_FOREGROUND)
+        ));
+    }
+    for idx in viewport.start..viewport.end {
+        let [offset_x, offset_y] = inline_choice_position_for_view(
+            rc.row,
+            viewport.start,
+            idx,
+            inline_choice_left_x_for_row(rc.fc.state, rc.item_idx),
+        );
+        let text = &rc.row.choices[idx];
         let x = choice_inner_left + offset_x;
-        let color_rgba = if rc.is_active {
-            [1.0, 1.0, 1.0, rc.a]
-        } else {
-            rc.sl_gray
-        };
         actors.push(act!(text: font("miso"): settext(text.clone()):
             align(0.0, 0.5): xy(x, rc.current_row_y + offset_y): zoom(value_zoom):
             diffuse(color_rgba[0], color_rgba[1], color_rgba[2], color_rgba[3]):

@@ -1,7 +1,10 @@
 use askama::Template;
 use std::{collections::BTreeSet, path::Path};
 
-use super::{MENUS, PLAYER_VARIANT_MENUS, PLAYER_VARIANTS, Result, Size, screenshot_options};
+use super::{
+    MENUS, PLAYER_OPTIONS_PANES, PLAYER_VARIANT_MENUS, PLAYER_VARIANTS, Result, Size,
+    screenshot_options,
+};
 
 #[derive(Template)]
 #[template(path = "../examples/menus/export_menus_viewer.html")]
@@ -47,6 +50,16 @@ pub(super) fn write_index(output: &Path, sizes: &[Size]) -> Result<()> {
                                 resolution: size.name(),
                                 caption: format!("{} · {}", size.name(), label),
                                 src: format!("options/{}/{}.png", size.name(), page),
+                                disabled: false,
+                                variant: None,
+                            }
+                        }));
+                    } else if menu == "player-options" {
+                        images.extend(PLAYER_OPTIONS_PANES.iter().map(|&(page, label, _)| {
+                            GalleryImage {
+                                resolution: size.name(),
+                                caption: format!("{} · 2P · {}", size.name(), label),
+                                src: format!("{}/player-options-2p-{page}.png", size.name()),
                                 disabled: false,
                                 variant: None,
                             }

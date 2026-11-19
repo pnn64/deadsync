@@ -29,6 +29,24 @@ const MENUS: &[(&str, &str)] = &[
     ("content-browser", "Content Browser"),
 ];
 const PLAYER_VARIANT_MENUS: &[&str] = &["song-select"];
+const PLAYER_OPTIONS_PANES: &[(&str, &str, screens::player_options::OptionsPane)] = &[
+    ("main", "Main", screens::player_options::OptionsPane::Main),
+    (
+        "display",
+        "Display",
+        screens::player_options::OptionsPane::Display,
+    ),
+    (
+        "advanced",
+        "Advanced",
+        screens::player_options::OptionsPane::Advanced,
+    ),
+    (
+        "uncommon",
+        "Uncommon",
+        screens::player_options::OptionsPane::Uncommon,
+    ),
+];
 const PLAYER_VARIANTS: &[PlayerVariant] = &[
     PlayerVariant {
         suffix: "-1p",
@@ -222,8 +240,9 @@ fn export(
     println!(
         "Exported {} PNGs. Gallery: {}",
         options.sizes.len()
-            * (MENUS.len() - 2
+            * (MENUS.len() - 3
                 + PLAYER_VARIANT_MENUS.len() * (PLAYER_VARIANTS.len() + 2)
+                + PLAYER_OPTIONS_PANES.len()
                 + screenshot_options::PAGES.len()),
         output.join("index.html").display()
     );
@@ -252,7 +271,7 @@ fn export_resolution(
     backend.set_default_projection(metrics.projection());
     let mut captures = export_support::CaptureBatch::default();
     for &(name, _) in MENUS {
-        if name != "song-select" && name != "options" {
+        if name != "song-select" && name != "options" && name != "player-options" {
             export_menu(
                 name,
                 None,
@@ -303,6 +322,16 @@ fn export_resolution(
             }
         }
     }
+    export_player_options(
+        backend,
+        assets,
+        size,
+        output,
+        song,
+        metrics,
+        &mut captures,
+        &mut timer,
+    )?;
     screenshot_options::export_resolution(
         backend,
         assets,
@@ -314,6 +343,36 @@ fn export_resolution(
     )?;
     timer.record_captures(captures.finish(backend, size)?);
     timer.report("menu", size, None);
+    Ok(())
+}
+
+fn export_player_options(
+    backend: &mut Backend,
+    assets: &mut AssetManager,
+    size: &Size,
+    output: &Path,
+    song: Arc<deadsync_chart::SongData>,
+    metrics: Metrics,
+    captures: &mut export_support::CaptureBatch,
+    timer: &mut ScreenshotTimer,
+) -> Result<()> {
+    let folder = output.join(size.name());
+    std::fs::create_dir_all(&folder)?;
+    let mut state = player_options_state(song);
+    for &(name, _, pane) in PLAYER_OPTIONS_PANES {
+        state.current_pane = pane;
+        screens::player_options::prepare_presentation(&mut state, assets);
+        let prepare_started = Instant::now();
+        let actors = screens::player_options::get_actors(&state, assets);
+        let frame = prepare_frame(&actors, backend, assets, metrics)?;
+        captures.draw(
+            backend,
+            &frame,
+            assets.textures(),
+            folder.join(format!("player-options-2p-{name}.png")),
+        )?;
+        timer.record_prepare(prepare_started.elapsed());
+    }
     Ok(())
 }
 
@@ -495,12 +554,23 @@ fn content_browser_actors(assets: &AssetManager) -> Vec<Actor> {
 }
 
 fn player_options_actors(song: Arc<deadsync_chart::SongData>, assets: &AssetManager) -> Vec<Actor> {
+    let mut state = player_options_state(song);
+    screens::player_options::prepare_presentation(&mut state, assets);
+    screens::player_options::get_actors(&state, assets)
+}
+
+fn player_options_state(song: Arc<deadsync_chart::SongData>) -> screens::player_options::State {
     let chart_index = song
         .charts
         .iter()
         .position(|chart| chart.chart_type.eq_ignore_ascii_case("dance-single"))
         .unwrap_or(0);
-    let mut state = screens::player_options::init(
+    let init_view = views::PlayerOptionsInitView {
+        play_style: deadsync_profile::PlayStyle::Versus,
+        joined: [true, true],
+        ..Default::default()
+    };
+    let state = screens::player_options::init(
         song,
         [chart_index, chart_index],
         [2, 2],
@@ -510,8 +580,7 @@ fn player_options_actors(song: Arc<deadsync_chart::SongData>, assets: &AssetMana
         Default::default(),
         Default::default(),
         Default::default(),
-        views::PlayerOptionsInitView::default(),
+        init_view,
     );
-    screens::player_options::prepare_presentation(&mut state, assets);
-    screens::player_options::get_actors(&state, assets)
+    state
 }

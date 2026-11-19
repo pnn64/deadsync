@@ -81,6 +81,7 @@ impl SubmenuKind {
 pub(super) struct SubmenuState {
     pub(super) choice_indices: Vec<usize>,
     pub(super) cursor_indices: Vec<usize>,
+    pub(super) inline_choice_starts: Vec<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -494,6 +495,7 @@ pub fn init(view: OptionsInitView) -> State {
             SubmenuState {
                 choice_indices: vec![0; len],
                 cursor_indices: vec![0; len],
+                inline_choice_starts: vec![0; len],
             }
         }),
         system_scroll_speed_values,

@@ -1,3 +1,4 @@
+use super::super::choice_viewport::{SCROLL_HINT_GAP, SCROLL_HINT_SLOT, choice_position_for_view};
 use super::text_wrap::wrap_text_with_measure;
 use super::*;
 
@@ -451,7 +452,13 @@ pub(super) fn submenu_cursor_dest(
     let draw_w = layout.widths[selected_choice] * s;
     let center_x = if row.inline && layout.inline_row {
         let choice_inner_left = SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
-        choice_inner_left + layout.centers[selected_choice] * s
+        let requested_start = state.sub[kind]
+            .inline_choice_starts
+            .get(row_idx)
+            .copied()
+            .unwrap_or(0);
+        let viewport = submenu_inline_choice_viewport(&layout, requested_start, selected_choice);
+        choice_inner_left + submenu_inline_choice_x(&layout, viewport, selected_choice) * s
     } else {
         single_center_x
     };
@@ -945,8 +952,15 @@ pub fn push_actors(
                         .copied()
                         .unwrap_or(0)
                         .min(layout.centers.len().saturating_sub(1));
+                    let requested_start = state.sub[kind]
+                        .inline_choice_starts
+                        .get(actual_row_idx)
+                        .copied()
+                        .unwrap_or(0);
+                    let viewport =
+                        submenu_inline_choice_viewport(&layout, requested_start, sel_idx);
                     SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w)
-                        + layout.centers[sel_idx] * s
+                        + submenu_inline_choice_x(&layout, viewport, sel_idx) * s
                 };
 
                 let row_h = ROW_H * s;
@@ -1079,10 +1093,37 @@ pub fn push_actors(
                                 SUB_INLINE_ITEMS_LEFT_PAD.mul_add(s, list_x + label_bg_w);
 
                             if layout.inline_row {
-                                for (idx, choice) in layout.texts.iter().enumerate() {
-                                    let x = choice_inner_left
-                                        + layout.x_positions.get(idx).copied().unwrap_or_default()
-                                            * s;
+                                let requested_start = state.sub[kind]
+                                    .inline_choice_starts
+                                    .get(actual_row_idx)
+                                    .copied()
+                                    .unwrap_or(0);
+                                let viewport = submenu_inline_choice_viewport(
+                                    &layout,
+                                    requested_start,
+                                    selected_choice,
+                                );
+                                if viewport.has_previous {
+                                    let mut hint_color =
+                                        if is_active { col_white } else { sl_gray };
+                                    hint_color[3] *= row_alpha;
+                                    actors.push(act!(text: font("miso"): settext("<"):
+                                        align(0.0, 0.5):
+                                        xy(choice_inner_left, row_mid_y):
+                                        zoom(value_zoom * s):
+                                        diffuse(hint_color[0], hint_color[1], hint_color[2], hint_color[3]):
+                                        z(101)
+                                    ));
+                                }
+                                for idx in viewport.start..viewport.end {
+                                    let choice = &layout.texts[idx];
+                                    let choice_offset = choice_position_for_view(
+                                        &layout.x_positions,
+                                        viewport,
+                                        idx,
+                                        SCROLL_HINT_SLOT,
+                                    );
+                                    let x = choice_inner_left + choice_offset * s;
                                     let is_choice_selected = idx == selected_choice;
                                     if is_choice_selected {
                                         selected_left_x = Some(x);
@@ -1141,6 +1182,30 @@ pub fn push_actors(
                                         ));
                                     }
                                 }
+                                if viewport.has_next {
+                                    let last_idx = viewport.end - 1;
+                                    let choice_offset = choice_position_for_view(
+                                        &layout.x_positions,
+                                        viewport,
+                                        last_idx,
+                                        SCROLL_HINT_SLOT,
+                                    );
+                                    let arrow_x = choice_inner_left
+                                        + (choice_offset
+                                            + layout.widths[last_idx]
+                                            + SCROLL_HINT_GAP)
+                                            * s;
+                                    let mut hint_color =
+                                        if is_active { col_white } else { sl_gray };
+                                    hint_color[3] *= row_alpha;
+                                    actors.push(act!(text: font("miso"): settext(">"):
+                                        align(0.0, 0.5):
+                                        xy(arrow_x, row_mid_y):
+                                        zoom(value_zoom * s):
+                                        diffuse(hint_color[0], hint_color[1], hint_color[2], hint_color[3]):
+                                        z(101)
+                                    ));
+                                }
                             } else {
                                 let mut choice_color = if is_active { col_white } else { sl_gray };
                                 choice_color[3] *= row_alpha;
@@ -1185,7 +1250,17 @@ pub fn push_actors(
                                 let mut line_color =
                                     color::decorative_rgba(state.active_color_index);
                                 line_color[3] *= row_alpha;
-                                for idx in 0..layout.texts.len() {
+                                let requested_start = state.sub[kind]
+                                    .inline_choice_starts
+                                    .get(actual_row_idx)
+                                    .copied()
+                                    .unwrap_or(0);
+                                let viewport = submenu_inline_choice_viewport(
+                                    &layout,
+                                    requested_start,
+                                    selected_choice,
+                                );
+                                for idx in viewport.start..viewport.end {
                                     let enabled = if is_chart_info_row {
                                         let bit = select_music_chart_info_bit_from_choice(idx);
                                         bit != 0 && (chart_info_enabled_mask & bit) != 0
@@ -1199,9 +1274,13 @@ pub fn push_actors(
                                     if !enabled {
                                         continue;
                                     }
-                                    let underline_left_x = choice_inner_left
-                                        + layout.x_positions.get(idx).copied().unwrap_or_default()
-                                            * s;
+                                    let choice_offset = choice_position_for_view(
+                                        &layout.x_positions,
+                                        viewport,
+                                        idx,
+                                        SCROLL_HINT_SLOT,
+                                    );
+                                    let underline_left_x = choice_inner_left + choice_offset * s;
                                     let underline_w =
                                         (layout.widths.get(idx).copied().unwrap_or(40.0) * s)
                                             .ceil();

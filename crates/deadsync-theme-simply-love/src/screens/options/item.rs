@@ -341,20 +341,6 @@ pub(super) fn desc_wrap_extra_pad_unscaled() -> f32 {
     widescale(6.0, 0.0)
 }
 
-#[inline(always)]
-pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
-    if widths.is_empty() {
-        return false;
-    }
-    let total_w = spacing.mul_add(
-        widths.len().saturating_sub(1) as f32,
-        widths.iter().copied().sum::<f32>(),
-    );
-    let item_col_w = (list_w_unscaled() - SUB_LABEL_COL_W).max(0.0);
-    let inline_w = (item_col_w - SUB_INLINE_ITEMS_LEFT_PAD).max(0.0);
-    total_w <= inline_w
-}
-
 /// Builds the top-level rows shown for this host/config.
 pub(super) fn build_visible_items(
     capabilities: SimplyLoveUpdaterCapabilities,
