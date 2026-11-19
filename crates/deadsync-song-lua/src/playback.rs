@@ -7824,7 +7824,9 @@ fn song_lua_proxy_effect(
 fn song_lua_overlay_has_visible_output(state: SongLuaOverlayState) -> bool {
     // Actor::BeginDraw multiplies glow effects by the original diffuse alpha.
     // Only an explicit, non-effect glow can outlive a transparent actor.
-    state.diffuse[3] > f32::EPSILON || state.glow[3] > f32::EPSILON
+    // Native diffuse submission tests the float before RageVColor quantization;
+    // even a positive alpha that packs to byte zero must retain its geometry.
+    state.diffuse[3] > 0.0 || state.glow[3] > f32::EPSILON
 }
 
 // Native color macros replace RGB and retain the original local diffuse alpha.

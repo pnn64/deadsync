@@ -12077,6 +12077,116 @@ fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
 }
 
 #[test]
+fn song_lua_sprite_retains_tiny_diffuse_before_color_quantization() {
+    use deadlib_render_core::DrawOp;
+    let key = "song-lua-tiny-alpha.png";
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(40, 30));
+    let overlay = SongLuaOverlayActor {
+        kind: test_sprite_kind(key),
+        name: None,
+        parent_index: None,
+        initial_state: SongLuaOverlayState::default(),
+        message_commands: Vec::new(),
+    };
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    let tiny = f32::EPSILON * 0.5;
+    let glow_threshold = 0.0001_f32;
+    let visible_glow = f32::from_bits(glow_threshold.to_bits() + 1);
+    // Native Sprite::DrawTexture accepts any positive diffuse corner, then
+    // converts its color to a byte. Glow independently requires alpha > 0.0001.
+    // All positive alphas below quantize to zero.
+    let cases: [(&str, f32, Option<[f32; 4]>, f32, &[f32]); 11] = [
+        ("tiny diffuse", tiny, None, 0.0, &[0.0]),
+        ("epsilon diffuse", f32::EPSILON, None, 0.0, &[0.0]),
+        ("zero diffuse", 0.0, None, 0.0, &[]),
+        ("tiny glow", 0.0, None, tiny, &[]),
+        ("glow threshold", 0.0, None, glow_threshold, &[]),
+        ("glow above threshold", 0.0, None, visible_glow, &[1.0]),
+        ("diffuse and glow", tiny, None, visible_glow, &[0.0, 1.0]),
+        ("top left corner", tiny, Some([1.0, 0.0, 0.0, 0.0]), 0.0, &[0.0]),
+        ("top right corner", tiny, Some([0.0, 1.0, 0.0, 0.0]), 0.0, &[0.0]),
+        ("bottom left corner", tiny, Some([0.0, 0.0, 1.0, 0.0]), 0.0, &[0.0]),
+        ("bottom right corner", tiny, Some([0.0, 0.0, 0.0, 1.0]), 0.0, &[0.0]),
+    ];
+    for camera in [
+        None,
+        Some(SongLuaOverlayState {
+            fov: Some(45.0),
+            vanishpoint: Some([320.0, 240.0]),
+            ..Default::default()
+        }),
+    ] {
+        for cached in [false, true] {
+            let mut scratch = SongLuaProjectedMeshScratch::default();
+            for (label, alpha, corner_alphas, glow_alpha, expected_masks) in cases {
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    &overlay,
+                    SongLuaOverlayState {
+                        x: 320.0,
+                        y: 240.0,
+                        diffuse: [1.0, 1.0, 1.0, alpha],
+                        vertex_colors: corner_alphas.map(|alphas| {
+                            alphas.map(|alpha| [1.0, 1.0, 1.0, alpha])
+                        }),
+                        glow: [1.0, 1.0, 1.0, glow_alpha],
+                        ..Default::default()
+                    },
+                    camera,
+                    &assets,
+                    0,
+                    640.0,
+                    480.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    None,
+                    cached.then_some(&mut scratch),
+                )
+                .unwrap_or_default();
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors,
+                    [0.0; 4],
+                    &metrics,
+                    &font::FontMap::default(),
+                    0.0,
+                    assets.texture_context(),
+                );
+                let masks = frame.sprite_instances.iter().map(|instance| instance.texture_mask)
+                    .chain(frame.tmesh_instances.iter().map(|instance| instance.texture_mask))
+                    .collect::<Vec<_>>();
+                assert_eq!(masks, expected_masks, "{label}, camera={camera:?}, cached={cached}");
+                assert_eq!(frame.ops.is_empty(), expected_masks.is_empty(), "{label}");
+                for op in &frame.ops {
+                    match op {
+                        DrawOp::Sprite(run) => {
+                            for instance in &frame.sprite_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                assert!(instance.size.iter().all(|size| *size > 0.0), "{label}");
+                                assert_eq!(instance.tint[3], 0.0, "{label}");
+                            }
+                        }
+                        DrawOp::TexturedMesh(run) => {
+                            let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                            assert_eq!(vertices.len(), 6, "{label}");
+                            for instance in &frame.tmesh_instances[run.instance_start as usize
+                                ..(run.instance_start + run.instance_count) as usize]
+                            {
+                                assert!(vertices.iter().all(|vertex| {
+                                    vertex.color[3] * instance.tint[3] == 0.0
+                                }), "{label}");
+                            }
+                        }
+                        other => panic!("unexpected Sprite draw: {other:?}"),
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_sprite_glow_draws_once_with_native_blend_and_sampler() {
     use deadlib_render_core::{
         DrawOp, SamplerDesc, SamplerFilter, SamplerWrap, texture_sampler_desc,
