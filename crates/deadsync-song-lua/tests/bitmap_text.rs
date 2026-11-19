@@ -66,9 +66,21 @@ impl Pair {
         if read_error {
             assert!(actual.is_err(), "{phase}: Rust read");
         } else {
+            let actual = actual.unwrap();
+            if let Some((_, path)) = &actual.font
+                && path.starts_with(self._files.path())
+            {
+                assert_eq!(path, &self._files.path().join("custom.ini"), "{phase}");
+            }
+            // Compare the observed physical path above; only its copied debug
+            // presentation uses portable separators in the frozen snapshot.
+            let mut snapshot = actual.clone();
+            if let Some((_, path)) = &mut snapshot.font {
+                *path = deadsync_song_lua::file_path_string(path).into();
+            }
             reference_test::assert_debug(
                 "song/tests/rust_bitmap_text.rs::payload",
-                &(phase, &actual.unwrap()),
+                &(phase, &snapshot),
             );
         }
         let actual = self
@@ -252,6 +264,63 @@ fn font_resolution_and_builtin_fallback_match_production() {
         local mt=getmetatable(label);local old=mt.__index
         mt.__index=function(self,key) if key=='__songlua_script_dir' then collectgarbage();log('dir');error('path failure') end return old(self,key) end
     "#,false);
+}
+
+#[test]
+fn legacy_file_font_paths_precede_theme_aliases() {
+    let files = tempfile::tempdir().unwrap();
+    for name in ["font.ini", "legacy.ini", "42", "43"] {
+        std::fs::write(files.path().join(name), "[main]\nLineSpacing=12\n").unwrap();
+    }
+    for live in [false, true] {
+        for (font, file, expected) in [
+            ("nil", "legacy", Some("legacy.ini")),
+            ("'font.ini'", "legacy", Some("font.ini")),
+            ("'font.ini'", "false", Some("font.ini")),
+            ("'Common Header'", "legacy", Some("legacy.ini")),
+            ("'Common Header'", "false", Some("theme")),
+            ("'missing.ini'", "legacy", Some("legacy.ini")),
+            ("''", "legacy", Some("legacy.ini")),
+            ("999", "legacy", Some("legacy.ini")),
+            ("42", "legacy", Some("42")),
+            ("nil", "43", Some("43")),
+            ("nil", "'Common Header'", Some("theme")),
+            ("'Common Header'", "'Common Normal'", Some("theme")),
+            ("''", "'Common Header'", None),
+        ] {
+            let mut context = SongLuaCompileContext::new(files.path(), "legacy File font");
+            context.live = live;
+            let mut runtime = SongRuntime::new(&context).unwrap();
+            let definition = execute(
+                &mut runtime,
+                &format!(
+                    "legacy={:?};return Def.BitmapText{{Font={font},File={file},InitCommand=function(self) self:settext('0') end}}",
+                    deadsync_song_lua::file_path_string(&files.path().join("legacy.ini")),
+                ),
+            )[0];
+            let scene = runtime.instantiate_actor(definition).unwrap();
+            let actor = runtime.actor_scene_root(scene).unwrap();
+            runtime.vm_mut().set_global(b"label", actor).unwrap();
+            execute(
+                &mut runtime,
+                &format!(
+                    "label.__songlua_script_dir={:?}",
+                    deadsync_song_lua::file_path_string(files.path()),
+                ),
+            );
+            let payload = runtime.actor_bitmap_text(actor).unwrap();
+            let expected = expected.map(|name| {
+                if name == "theme" {
+                    std::path::PathBuf::from("assets/fonts/wendy/_wendy small.ini")
+                } else {
+                    files.path().join(name)
+                }
+            });
+            assert_eq!(payload.font.map(|(_, path)| path), expected,
+                "Font={font}, File={file}, live={live}");
+            assert_eq!(payload.text.as_ref(), "0");
+        }
+    }
 }
 
 #[test]

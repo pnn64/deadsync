@@ -156,7 +156,13 @@ fn prefix(base: &Path, path: &Path) -> Option<PathBuf> {
 // Missing paths are queried again, allowing files written during play.
 fn present(call: &mut HostCall<'_>, path: &Path) -> Option<PathBuf> {
     if let Some(found) = call.store_ref().present_paths.get(path) {
-        return Some(found.clone());
+        // Path keys equate alternate separators. Preserve the caller's exact
+        // spelling on those hits; case aliases still need the physical path.
+        return Some(if found.as_path() == path {
+            path.to_owned()
+        } else {
+            found.clone()
+        });
     }
     let found = existing_path(path)?;
     call.store()
