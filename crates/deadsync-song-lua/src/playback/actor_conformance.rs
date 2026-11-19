@@ -713,18 +713,26 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     // independent source image/movie's logical size before reserving its handle;
     // a 1px placeholder would overwrite the registry and shrink live sprites.
     let source_key = key.strip_suffix("#itg-model").unwrap_or(key);
-    let source_dims = image::image_dimensions(source_key).ok().or_else(|| {
-        let path = Path::new(source_key);
-        crate::is_song_lua_video_path(path)
-            .then(|| deadlib_video::dimensions(path).ok())
-            .flatten()
-    });
+    // Song assets can have a misleading extension. Use the same content-aware
+    // source dimensions as live Sprite loading before publishing the metadata.
+    let source_dims = deadlib_assets::texture_source_size(Path::new(source_key))
+        .ok()
+        .or_else(|| {
+            let path = Path::new(source_key);
+            crate::is_song_lua_video_path(path)
+                .then(|| deadlib_video::dimensions(path).ok())
+                .flatten()
+        });
     let dims = source_dims.map(|(w,h)| deadlib_assets::TexMeta { w,h })
         .or_else(|| deadlib_assets::texture_dims(key));
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
 }
+
+#[cfg(test)]
+#[path = "image_metadata_tests.rs"]
+mod image_metadata_tests;
 
 #[cfg(test)]
 #[path = "movie_metadata_tests.rs"]
