@@ -545,14 +545,17 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
+    fn required_first(&self) -> Option<Instruction> {
+        self.code
+            .first()
+            .copied()
+            .filter(|i| matches!(i.repeat, Repeat::One | Repeat::Plus))
+    }
     /// A byte every match must start with. Attempts elsewhere fail on the
     /// first instruction without reaching any later instruction or error.
     pub fn first_byte(&self) -> Option<u8> {
-        self.code
-            .first()
-            .filter(|i| {
-                matches!(i.kind, Kind::Byte) && matches!(i.repeat, Repeat::One | Repeat::Plus)
-            })
+        self.required_first()
+            .filter(|i| i.kind == Kind::Byte)
             .map(|i| i.arg as u8)
     }
     pub fn find(
@@ -561,15 +564,29 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        let first = self.first_byte().filter(|_| !self.anchored);
+        let first = self.required_first().filter(|_| !self.anchored);
         let mut pos = start;
         while pos <= source.len() {
-            if let Some(byte) = first {
-                match find_byte(&source[pos..], byte) {
-                    Some(offset) => pos += offset,
-                    None => return Ok(None),
+            let offset = match first {
+                Some(Instruction {
+                    kind: Kind::Byte,
+                    arg,
+                    ..
+                }) => find_byte(&source[pos..], arg as u8),
+                Some(Instruction {
+                    kind: Kind::Set,
+                    arg,
+                    ..
+                }) => {
+                    let set = &self.sets[arg as usize];
+                    source[pos..].iter().position(|&byte| set_has(set, byte))
                 }
-            }
+                _ => Some(0),
+            };
+            let Some(offset) = offset else {
+                return Ok(None);
+            };
+            pos += offset;
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
             }
@@ -778,7 +795,40 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::{balance_end, byte_run, contiguous_set_run, find_byte, find_pair, set_has};
+    use super::{
+        Memory, Pattern, Work, balance_end, byte_run, contiguous_set_run, find_byte, find_pair,
+        set_has,
+    };
+
+    #[test]
+    fn required_class_skips_only_positions_that_cannot_match() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let deferred = compile(b"%d[");
+        assert!(deferred.find(b"abc", 0, &mut work).unwrap().is_none());
+        assert!(deferred.find(b"abc1", 0, &mut work).is_err());
+        assert!(
+            compile(b"^%d")
+                .find(b"abc1", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+
+        for (pat, expected) in [
+            (b"%d+".as_slice(), (3, 5)),
+            (b"%d?", (0, 0)),
+            (b"%d-", (0, 0)),
+            (b"%d*", (0, 0)),
+            (b"[\xff0-9]", (1, 2)),
+            (b"%z", (2, 3)),
+        ] {
+            let matched = compile(pat)
+                .find(b"a\xff\x0042", 0, &mut work)
+                .unwrap()
+                .unwrap();
+            assert_eq!((matched.start, matched.end), expected);
+        }
+    }
 
     #[test]
     fn pair_search_keeps_first_match_across_blocks_and_binary_tails() {
