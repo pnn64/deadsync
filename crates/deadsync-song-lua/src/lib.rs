@@ -2485,6 +2485,9 @@ pub struct SongLuaCompileContext {
     pub layer_start_beats: Vec<f32>,
     /// Native background layer and complete activation schedule per cached owner.
     pub background_activations: Vec<(u8, Vec<deadsync_chart::song::SongBackgroundLuaActivation>)>,
+    /// Resolved image/movie activations that can transition an outgoing Lua owner.
+    /// These have no Lua actor; preparation excludes same-layer Lua beat collisions.
+    pub background_media_activations: Vec<(u8, deadsync_chart::song::SongBackgroundLuaActivation)>,
     /// Native UpperLeft effect colors for cached Lua background owners.
     pub background_upper_left_colors: Vec<Option<[f32; 4]>>,
     /// Authored foreground filenames, in foreground entry order. Empty when
@@ -2599,6 +2602,7 @@ impl SongLuaCompileContext {
             bake_progress: None,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
+            background_media_activations: Vec::new(),
             background_upper_left_colors: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
