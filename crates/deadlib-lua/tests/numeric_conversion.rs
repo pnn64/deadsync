@@ -252,6 +252,12 @@ fn runtime_conversion_keeps_exact_rounding_without_allocating() {
             Some((-42.0f64).to_bits()),
         );
     }
+    for len in [30, 31, 32, 61, 62, 63, 64, 65, 4098] {
+        let padding: String = " \t\u{b}\u{c}\r\n".chars().cycle().take(len).collect();
+        check(&format!("-42{padding}"), Some((-42.0f64).to_bits()));
+        check(&format!("42\u{ff}{padding}"), None);
+        check(&padding, None);
+    }
     let mut state = 0x8abc_de01_2345_6789u64;
     for i in 0..400 {
         state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
