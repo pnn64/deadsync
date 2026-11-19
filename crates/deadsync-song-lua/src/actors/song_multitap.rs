@@ -286,8 +286,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         } else if let Some(child) = transitions::child(call, actor)?
                             && lifecycle::time_left(call, child)? == 0.
                         {
-                            let key = call.intern_static(b"__songlua_transition_state")?;
-                            call.raw_table_set(actor, key, Value::Number(2.))?;
+                            transitions::finish(call, actor)?;
                         }
                     }
                 }

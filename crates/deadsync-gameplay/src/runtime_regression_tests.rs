@@ -2271,6 +2271,41 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn no_lua_immediate_continue_does_not_heal_after_failed_row() {
+        let mut state = regression_state();
+        assert!(state.life_changed_callback.is_none());
+        state.players_runtime.players[0].fail_type = GameplayFailType::ImmediateContinue;
+        let rows = [0, 48];
+        state.chart_runtime.notes = vec![
+            note_with_judgment(0, rows[0], NoteType::Tap, JudgeGrade::Miss, 0.0),
+            note_with_judgment(0, rows[1], NoteType::Tap, JudgeGrade::Fantastic, 0.0),
+        ];
+        state.chart_runtime.note_time_cache_ns = vec![
+            song_time_ns_from_seconds(1.0), song_time_ns_from_seconds(1.5),
+        ];
+        state.chart_runtime.row_entries = rows.iter().enumerate().map(|(index, &row)| {
+            test_row_entry_with_times(&state.chart_runtime.notes,
+                &state.chart_runtime.note_time_cache_ns, row, vec![index])
+        }).collect();
+        state.players_runtime.players[0].life = 0.01;
+        state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.0);
+        state.finalize_row_judgment(0, rows[0], 0, false);
+        let failed_at = state.players_runtime.players[0].fail_time;
+        assert_eq!(failed_at, Some(1.0));
+        assert!(state.players_runtime.players[0].is_failing);
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+        state.players_runtime.players[0].combo_after_miss = 1;
+        state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.5);
+        state.finalize_row_judgment(0, rows[1], 1, false);
+        let player = &state.players_runtime.players[0];
+        assert_eq!(player.life, 0.0);
+        assert!(player.is_failing);
+        assert_eq!(player.fail_time, failed_at);
+        assert!(state.player_score_is_blocked(0));
+        assert!(state.finish_gameplay_if_ready(false).is_none());
+    }
+
+    #[test]
     fn easy_failure_keeps_playing() {
         let mut state = regression_state();
         Arc::make_mut(&mut state.source.charts[0]).difficulty = "Easy".into();
@@ -2718,6 +2753,34 @@ mod runtime_regression_tests {
             state.finish_gameplay_if_ready(false),
             Some(GameplayAction::Navigate(GameplayExit::Complete))
         ));
+    }
+
+    #[test]
+    fn song_outro_uses_catalog_bound_when_selected_edit_runs_later() {
+        let mut state = regression_state_with_session_and_config(GameplaySession::default(),
+            GameplayConfig { global_offset_seconds: 0.0, ..Default::default() });
+        let song = Arc::make_mut(&mut state.source.song);
+        song.precise_note_last_second_seconds = Some(0.4);
+        song.precise_last_second_seconds = 0.4;
+        song.music_length_seconds = 8.0;
+        state.clock.end_timing = state.clock.end_timing.with_song_last_second_ns(400_000_000);
+        state.set_music_end_fade_timing(0.25, 5.0);
+        for rate in [1.0, 1.5, 0.75] {
+            state.set_music_rate(rate);
+            let window = song_time_ns_to_seconds(max_step_distance_ns(
+                &TimingProfile::default_itg_with_fa_plus(), rate));
+            // The native float fade-alignment arithmetic can round a few ulps
+            // above last+window even when it does not extend the transition.
+            assert!((state.music_end_time_ns() - song_time_ns_from_seconds(0.4 + window)).abs() <= 1_000);
+            assert!(state.notes_end_time_ns() > state.music_end_time_ns(),
+                "the selected Edit still retains its own late-judgment boundary");
+        }
+        state.disable_score_for_practice();
+        for rate in [1.0, 1.5, 0.75] {
+            state.set_music_rate(rate);
+            assert!(state.music_end_time_ns() >= state.notes_end_time_ns(),
+                "practice must keep the selected Edit playable after rate changes");
+        }
     }
 
     #[test]

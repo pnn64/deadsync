@@ -133,6 +133,8 @@ include!("autosync.rs");
 include!("display_clock.rs");
 include!("scroll_clock.rs");
 include!("controls.rs");
+include!("stage_life.rs");
+include!("stage_score.rs");
 include!("life.rs");
 include!("viewport.rs");
 include!("density_graph.rs");

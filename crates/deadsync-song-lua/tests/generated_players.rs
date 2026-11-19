@@ -148,10 +148,12 @@ fn set_life_updates_shared_stats_and_notifies_before_side_effect() {
         pair.publish();
         pair.script(
             r#"
+            local previous=.75
             p.LifeChangedMessageCommand=function(self,params)
                 assert(self==p and params.Player=='PlayerNumber_P1' and params.LifeMeter==m)
                 assert(p.__songlua_inside_set_life)
-                assert(ps.__songlua_life==m.__songlua_life and m:GetLife()==ps.__songlua_life)
+                assert(ps:GetCurrentLife()==previous and m:GetLife()==m.__songlua_life)
+                previous=m:GetLife()
                 log('message',m:GetLife(),__songlua_side_effect_count)
                 assert(not pcall(p.SetLife,p,.8));collectgarbage('collect')
             end
@@ -186,11 +188,11 @@ fn errors_keep_native_partial_writes_and_clear_recursion_guard() {
             assert(__songlua_side_effect_count==0)
             p.LifeChangedMessageCommand=nil
             p.__songlua_life_meter=false
-            assert(not pcall(p.SetLife,p,.25) and ps.__songlua_life==.25)
+            assert(not pcall(p.SetLife,p,.25) and ps.__songlua_life==.125)
             assert(m:GetLife()==.25 and m.__songlua_life==.125 and not p.__songlua_inside_set_life)
             p.__songlua_life_meter=m
             for _,bad in ipairs{false,{},'invalid'} do
-                assert(not pcall(p.SetLife,p,bad) and ps.__songlua_life==.25)
+                assert(not pcall(p.SetLife,p,bad) and ps.__songlua_life==.125)
             end
             p.__songlua_inside_set_life='wrong';assert(not pcall(p.SetLife,p,.5))
             p.__songlua_inside_set_life=nil

@@ -865,7 +865,7 @@ fn advance_node(
             if let Some(child) = transitions::child(call, actor)?
                 && time_left(call, child)? == 0.
             {
-                sprites::set(call, actor, "__songlua_transition_state", Value::Number(2.))?;
+                transitions::finish(call, actor)?;
             }
             true
         }

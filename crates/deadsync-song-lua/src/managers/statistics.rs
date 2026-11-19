@@ -30,7 +30,7 @@ enum Op {
     Taps,
     Record,
     Radar(f32),
-    GameplaySeconds,
+    Number(&'static str),
     Host,
 }
 impl Op {
@@ -38,6 +38,7 @@ impl Op {
         match self {
             Self::Integer("__songlua_possible_dance_points") => false,
             Self::Integer(_)
+            | Self::Number(_)
             | Self::Grade
             | Self::Failed
             | Self::Percent
@@ -130,11 +131,10 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
             stage,
             "GetGameplaySeconds",
             &binding,
-            Op::GameplaySeconds,
+            Op::Number("__songlua_gameplay_seconds"),
         )?;
-        for name in ["GetTotalPossibleStepsSeconds", "GetStepsSeconds"] {
-            method(call, stage, name, context.music_length_seconds.max(0.))?;
-        }
+        bound(call, stage, "GetStepsSeconds", &binding, Op::Number("__songlua_steps_seconds"))?;
+        method(call, stage, "GetTotalPossibleStepsSeconds", context.music_length_seconds.max(0.))?;
         method(call, stage, "GetStageIndex", 0_i32)?;
         method(call, stage, "GetStage", "Stage_1st")?;
         for name in [
@@ -258,6 +258,7 @@ fn player(
         for key in [
             "__songlua_score",
             "__songlua_cur_max_score",
+            "__songlua_alive_seconds",
             "__songlua_actual_dance_points",
             "__songlua_possible_dance_points",
             "__songlua_current_possible_dance_points",
@@ -312,6 +313,7 @@ fn player(
             ("GetCurrentMissCombo", Op::Combo("__songlua_miss_combo")),
             ("GetTapNoteScores", Op::Taps),
             ("GetLifeRecord", Op::Record),
+            ("GetAliveSeconds", Op::Number("__songlua_alive_seconds")),
             ("GetRadarActual", Op::Radar(0.)),
             ("GetRadarPossible", Op::Radar(1.)),
             ("GetRadarValues", Op::Radar(0.)),
@@ -323,7 +325,6 @@ fn player(
             "GetNumControllerSteps",
             "GetSurvivalSeconds",
             "GetLifeRemainingSeconds",
-            "GetAliveSeconds",
             "GetHoldNoteScores",
             "GetLessonScoreActual",
             "GetLessonScoreNeeded",
@@ -426,12 +427,16 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     if matches!(binding.op, Op::Host) {
         let phase = binding.state.lock().unwrap().pending.take();
         return match phase {
-            Some(Phase::Reset(context)) => reset(call, &context),
+            Some(Phase::Reset(context)) => {
+                binding.state.lock().unwrap().reset_life_records(&context);
+                reset(call, &context)
+            },
             Some(Phase::Feed {
                 seconds,
+                steps_seconds,
                 players,
                 routine,
-            }) => feed(call, seconds, players, routine),
+            }) => feed(call, seconds, steps_seconds, players, routine),
             None => Err(call.error(b"missing statistics phase")),
         };
     }
@@ -486,6 +491,28 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                 && score >= 0
             {
                 write(call, owner, key, Value::Number(score as f64))?;
+                let maximum = key == "__songlua_cur_max_score";
+                let owner = table(call, owner)?;
+                let routine = raw(call, owner, "__songlua_routine_stats")? == Value::Boolean(true);
+                let index = raw(call, owner, "__songlua_player_index")?;
+                let index = if let Value::Number(index) = index {
+                    (index >= 0.0 && index < crate::LUA_PLAYERS as f64).then_some(index as usize)
+                } else { None };
+                let mut state = binding.state.lock().unwrap();
+                let target = if routine { state.routine.as_mut() }
+                    else { state.players.as_mut().and_then(|players| index.map(|i| &mut players[i])) };
+                if let Some(target) = target {
+                    if maximum { target.current_max_score = Some(score as u32); }
+                    else { target.score = Some(score as u32); }
+                }
+                if binding.clock.live.load(Ordering::Relaxed) {
+                    let write = if routine {
+                        Some(crate::SongLuaLivePlayerWrite::SetRoutineScore { score: score as u32, maximum })
+                    } else {
+                        index.map(|player| crate::SongLuaLivePlayerWrite::SetScore { player, score: score as u32, maximum })
+                    };
+                    if let Some(write) = write { state.writes.push(write); }
+                }
             }
             super::side_effect(call, call.captures()[1], call.captures()[2])?;
             owner
@@ -548,20 +575,36 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             })
         }
         Op::Record => {
-            let samples = integer(call, arg(call, 1))
-                .unwrap_or(crate::GRAPH_DISPLAY_VALUE_RESOLUTION as i32)
-                .max(1) as usize;
+            let receiver = table(call, call.arguments().first().copied().unwrap_or(Value::Nil))?;
+            let last_second = number(call, arg(call, 0))? as f32;
+            let requested = arg(call, 1);
+            let requested = if requested == Value::Nil { 100 } else { number(call, requested)? as i32 };
+            let samples = if requested <= 0 { 100 } else { requested as usize };
+            let routine = raw(call, receiver, "__songlua_routine_stats")? == Value::Boolean(true);
+            let player = match raw(call, receiver, "__songlua_player_index")? {
+                Value::Number(index) if index >= 0.0 && index < crate::LUA_PLAYERS as f64 => Some(index as usize),
+                _ => None,
+            };
+            let values: Vec<f32> = {
+                let state = binding.state.lock().unwrap();
+                let history = if routine { Some(&state.routine_life_record) }
+                    else { player.map(|index| &state.life_records[index]) };
+                (0..samples).map(|i| {
+                    let seconds = (i as f32) * last_second / (samples as f32 - 1.0);
+                    history.map_or(0.0, |record| record.sample(seconds))
+                }).collect()
+            };
             let record = object(call, |call, record| {
-                for i in 1..=samples {
-                    set(record, i, crate::SONG_LUA_INITIAL_LIFE.clamp(0., 1.), call)?;
+                for (i, value) in values.iter().enumerate() {
+                    set(record, i + 1, *value, call)?;
                 }
                 Ok(())
             })?;
             Value::Table(record)
         }
         Op::Radar(fallback) => Value::Table(super::scores::radar(call, fallback)?),
-        Op::GameplaySeconds => {
-            let value = raw(call, table(call, owner)?, "__songlua_gameplay_seconds")?;
+        Op::Number(key) => {
+            let value = raw(call, table(call, owner)?, key)?;
             Value::Number(number(call, value)?)
         }
         Op::Host => unreachable!(),
@@ -572,6 +615,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
 fn reset(call: &mut HostCall<'_>, context: &crate::SongLuaCompileContext) -> Result<(), Error> {
     let stage = table(call, call.captures()[0])?;
     set(stage, "__songlua_gameplay_seconds", 0_f64, call)?;
+    set(stage, "__songlua_steps_seconds", 0_f64, call)?;
     let players = raw_table(call, stage, "__songlua_player_stats")?;
     let selected = table(call, call.captures()[5])?;
     call.with_roots(&[Value::Table(players)], |call| {
@@ -603,6 +647,7 @@ fn reset(call: &mut HostCall<'_>, context: &crate::SongLuaCompileContext) -> Res
                     "__songlua_current_possible_dance_points",
                     "__songlua_score",
                     "__songlua_cur_max_score",
+                    "__songlua_alive_seconds",
                 ] {
                     set(stats, key, 0_i32, call)?;
                 }
@@ -647,6 +692,7 @@ fn reset(call: &mut HostCall<'_>, context: &crate::SongLuaCompileContext) -> Res
 fn feed(
     call: &mut HostCall<'_>,
     seconds: f64,
+    steps_seconds: f64,
     values: [crate::SongLuaLivePlayer; crate::LUA_PLAYERS],
     routine: Option<crate::SongLuaLivePlayer>,
 ) -> Result<(), Error> {
@@ -656,6 +702,7 @@ fn feed(
         seconds,
         call,
     )?;
+    set(table(call, call.captures()[0])?, "__songlua_steps_seconds", steps_seconds, call)?;
     for (index, value) in values
         .into_iter()
         .chain([routine.unwrap_or_default()])
@@ -667,6 +714,9 @@ fn feed(
             index + 3
         };
         let stats = table(call, call.captures()[slot])?;
+        set(stats, "__songlua_alive_seconds", value.alive_seconds, call)?;
+        if let Some(score) = value.score { set(stats, "__songlua_score", f64::from(score), call)?; }
+        if let Some(score) = value.current_max_score { set(stats, "__songlua_cur_max_score", f64::from(score), call)?; }
         set(
             stats,
             "__songlua_possible_dance_points",

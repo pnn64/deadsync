@@ -116,6 +116,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let catalog = table(call, call.captures()[2])?;
     let slots = get_static(call, catalog, b"game_state_slots")?;
     let screen = table(call, call.captures()[3])?;
+    transitions::bind_screen_completion(call, screen, data.requests.clone())?;
     let mut captures = call.captures().to_vec();
     captures[2] = slots;
     let wheel = call.try_new_table()?;

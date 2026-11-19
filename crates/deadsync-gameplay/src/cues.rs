@@ -2,6 +2,10 @@
 pub struct GameplayBoundaryRuntimeState {
     pub commands: GameplayCommandQueue,
     pub total_elapsed_in_screen: f32,
+    /// ScreenGameplay's independent unscaled stage clocks, accumulated as f32.
+    pub gameplay_seconds: f32,
+    pub steps_seconds: f32,
+    pub(crate) stage_clock_last_read: Instant,
 }
 
 impl GameplayBoundaryRuntimeState {
@@ -14,6 +18,9 @@ impl GameplayBoundaryRuntimeState {
                 session_command_capacity,
             ),
             total_elapsed_in_screen: 0.0,
+            gameplay_seconds: 0.0,
+            steps_seconds: 0.0,
+            stage_clock_last_read: Instant::now(),
         }
     }
 }

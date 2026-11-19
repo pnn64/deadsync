@@ -2,6 +2,17 @@
 use super::*;
 
 impl SongLiveScene {
+    /// One independent raw timer read, or an explicit no-call observation.
+    /// The scene validates this against its own transition and pause state.
+    pub fn set_gameplay_clock_input(&mut self, delta_seconds: Option<f32>) {
+        assert!(delta_seconds.is_none_or(|delta| delta.is_finite() && delta >= 0.0));
+        self.gameplay_clock_input = Some(delta_seconds);
+    }
+
+    pub fn gameplay_clock_observation(&self) -> Option<crate::live::SongLuaGameplayClockObservation> {
+        self.gameplay_clock_observation
+    }
+
     /// Independent ModsGroup deltas consumed by the next unprepared frame.
     pub fn set_option_clock_deltas(&mut self, deltas: [f32; LUA_PLAYERS + 1]) {
         self.option_clock_deltas = Some(deltas);

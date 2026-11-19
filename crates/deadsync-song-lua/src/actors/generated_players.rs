@@ -435,16 +435,24 @@ fn change_life(
     // player is attached to a combined meter. SetLife still changes the shared
     // inner meter immediately, before LifeChanged listeners run.
     let recorded = if data.combined_life { 0.5 } else { life };
-    {
+    let before_latest = {
         let mut state = data.statistics.lock().unwrap();
+        let before = if data.combined_life { 0.5 } else {
+            state.players.as_ref().map_or_else(
+                || state.life_records[data.index].samples.last().map_or(crate::SONG_LUA_INITIAL_LIFE, |&(_, life)| life),
+                |players| players[data.index].life)
+        };
+        state.life_records[data.index].record(before);
+        let latest = state.life_records[data.index].samples.last().map_or(0.0, |&(_, life)| life);
         if let Some(players) = state.players.as_mut() {
             if data.combined_life {
                 for player in players.iter_mut() { player.life = life; }
             }
             players[data.index].life = life;
-            players[data.index].life_record_latest = Some(recorded);
+            players[data.index].life_record_latest = Some(latest);
         }
-    }
+        latest
+    };
     let catalog = table(call, call.captures()[2])?;
     let key = call.intern_static(b"live_statistics")?;
     let selected = call.raw_table_get(catalog, key)?;
@@ -464,7 +472,7 @@ fn change_life(
             )?,
         )?
     };
-    raw_set(call, stats, b"__songlua_life", Value::Number(recorded as f64))?;
+    raw_set(call, stats, b"__songlua_life", Value::Number(before_latest as f64))?;
     if call
         .store()
         .clock
@@ -484,11 +492,28 @@ fn change_life(
     let meter = table(call, call.raw_table_get(actor, key)?)?;
     raw_set(call, meter, b"__songlua_life", Value::Number(life as f64))?;
     let params = call.try_new_table()?;
-    call.with_roots(&[Value::Table(params)], |call| {
+    let result = call.with_roots(&[Value::Table(params)], |call| {
         let meter_owner = if data.combined_life { 0 } else { data.index };
         let player = call.try_intern(format!("PlayerNumber_P{}", meter_owner + 1).as_bytes())?;
         raw_set(call, params, b"Player", player)?;
         raw_set(call, params, b"LifeMeter", Value::Table(meter))?;
         messages::dispatch(call, b"LifeChanged", Some(Value::Table(params)), true)
-    })
+    });
+    // LifeMeterBar broadcasts synchronously inside Player::SetLife. Its
+    // listeners see the new meter and the preceding history entry; the final
+    // ChangeLifeRecord runs after the broadcast returns.
+    let latest = {
+        let mut state = data.statistics.lock().unwrap();
+        state.life_records[data.index].record(recorded);
+        // SM_NotesEnded can already have inserted a later gameplay-time
+        // sample. GetCurrentLife reads the map's last timestamp, even when
+        // SetLife subsequently records at the earlier steps-time position.
+        let latest = state.life_records[data.index].samples.last().map_or(0.0, |&(_, life)| life);
+        if let Some(players) = state.players.as_mut() {
+            players[data.index].life_record_latest = Some(latest);
+        }
+        latest
+    };
+    raw_set(call, stats, b"__songlua_life", Value::Number(latest as f64))?;
+    result
 }

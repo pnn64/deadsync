@@ -351,6 +351,38 @@ where
         GameplayAction::None
     }
 
+    /// Adopt the owning screen's timer, constructed before theme/song loading.
+    pub fn set_stage_clock_origin(&mut self, origin: Instant) {
+        self.boundary.stage_clock_last_read = origin;
+    }
+
+    /// Called once in ScreenGameplay's dancing branch, after actors and failure
+    /// resolution. A supplied delta is an independent timer read for replay;
+    /// normal gameplay samples its own monotonic timer at this same boundary.
+    /// Skipped intro/paused/outro frames do not reset the timer.
+    pub fn advance_stage_clock(
+        &mut self,
+        raw_delta_seconds: Option<f32>,
+        music_rate: f32,
+        steps_time_active: bool,
+    ) -> f32 {
+        let now = Instant::now();
+        let delta = raw_delta_seconds.unwrap_or_else(||
+            now.duration_since(self.boundary.stage_clock_last_read).as_secs_f64() as f32);
+        self.boundary.stage_clock_last_read = now;
+        assert!(delta.is_finite() && delta >= 0.0, "stage timer delta must be finite and nonnegative");
+        assert!(music_rate.is_finite(), "stage music rate must be finite");
+        self.boundary.gameplay_seconds += delta;
+        if steps_time_active { self.boundary.steps_seconds += delta; }
+        for player in self.players_runtime.players.iter_mut().take(self.setup.num_players) {
+            if !player.stage_failed {
+                player.alive_seconds += delta * music_rate;
+            }
+            player.stage_life_record.steps_seconds = self.boundary.steps_seconds;
+        }
+        delta
+    }
+
     pub fn set_gameplay_paused(&mut self, paused: bool) {
         if self.control.paused == paused || (paused && self.mods.attacks.cleared_for_outro) {
             return;
@@ -981,6 +1013,18 @@ where
             self.clock.end_timing.audio_end_time_ns(),
             self.clock.end_timing.song_last_second_ns(),
         );
+        // ScreenGameplay::GetMusicEndTiming starts from Song::GetLastSecond,
+        // not the selected Steps. A later Edit must not extend normal play:
+        // Song::ReCalculateStepStatsAndLastSecond excludes it when other
+        // charts exist. Keep the selected bounds for judging and practice.
+        let music_end_time_ns = if self.clock.end_timing.uses_song_last_second_for_music_end()
+            && self.source.song.precise_note_last_second_seconds.is_some()
+        {
+            let last = song_time_ns_to_seconds(self.clock.end_timing.song_last_second_ns());
+            let window = song_time_ns_to_seconds(max_step_distance_ns(
+                &TimingProfile::default_itg_with_fa_plus(), self.music_rate()));
+            song_time_ns_from_seconds(last + window)
+        } else { music_end_time_ns };
         let music_end_time_ns = self.clock.end_timing.apply_music_fade_timing(
             music_end_time_ns, self.source.song.music_length_seconds);
         self.clock.end_timing.set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
@@ -2189,9 +2233,12 @@ where
     }
 
     #[inline(always)]
-    pub const fn disable_score_for_practice(&mut self) {
+    pub fn disable_score_for_practice(&mut self) {
         self.progress.stage.disable_score();
         self.progress.replay.disable_replay_mode();
+        if self.clock.end_timing.use_selected_chart_music_end() {
+            self.recompute_end_times();
+        }
     }
 
     fn reset_practice_attacks(&mut self) {

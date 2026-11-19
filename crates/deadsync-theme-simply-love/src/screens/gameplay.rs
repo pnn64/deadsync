@@ -985,6 +985,7 @@ impl GameplayPresentationSkeleton {
 impl State {
     /// Transfer authored callbacks from the loading worker to the gameplay screen.
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
+        scene.initialize_gameplay_clock(&mut self.gameplay);
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
         scene.prepare_gameplay_player_options(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
@@ -998,6 +999,8 @@ impl State {
         scene.install_hold_judgment_callback(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_life_changed_callback(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
@@ -1027,6 +1030,7 @@ impl State {
         self.gameplay.tap_row_judgment_callback = None;
         self.gameplay.hold_judgment_callback = None;
         self.gameplay.avoided_mine_judgment_callback = None;
+        self.gameplay.life_changed_callback = None;
         self.gameplay.chart_runtime.mine_scan.pending_avoided_mine_judgments.clear();
         Ok(())
     }
@@ -1061,6 +1065,7 @@ impl State {
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
         scene.apply_pending_player_writes(&mut self.gameplay);
+        scene.runtime_mut().publish_gameplay_life_records(&self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
         let outro_before_actors = frame.gameplay_outro;
@@ -1068,11 +1073,17 @@ impl State {
         scene.apply_output_player_writes(&output, &mut self.gameplay);
         scene.prepare_gameplay_player_options(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
+        let gameplay_clock_active = scene.gameplay_clock_active();
+        scene.finish_gameplay_audio(&mut self.gameplay);
+        scene.finish_gameplay_failures(&mut self.gameplay, gameplay_clock_active)
+            .map_err(|error| error.to_string())?;
         // Native ScreenGameplay checks failure after updating its actor tree.
         // Lua can drain life during this update, after the core's earlier check.
         if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
             scene.note_gameplay_outro_after_actors();
         }
+        scene.finish_gameplay_clock(&mut self.gameplay, gameplay_clock_active)
+            .map_err(|error| error.to_string())?;
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
             && self.song_lua_out.is_none()

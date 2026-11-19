@@ -168,6 +168,66 @@ pub(super) fn start(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error
     Ok(())
 }
 
+pub(super) fn bind_screen_completion(
+    call: &mut HostCall<'_>,
+    screen: TableId,
+    requests: Arc<Mutex<crate::managers::screen::Requests>>,
+) -> Result<(), Error> {
+    let function = call.new_host_function_with_data(
+        complete_screen_transition,
+        &[call.captures()[0], call.captures()[1], Value::Table(screen)],
+        requests.clone(),
+    )?;
+    set(call, table(call, call.captures()[1])?, "gameplay_transition_complete", function)?;
+    let class = global_table(call, "GameState")?;
+    if get_static(call, class, b"GetGameplayLeadIn")? == Value::Nil {
+        let getter = call.new_host_function_with_data(|call| {
+            let state = call.function_data::<Arc<Mutex<crate::managers::screen::Requests>>>().unwrap();
+            let lead_in = state.lock().unwrap().gameplay_lead_in;
+            call.push(Value::Boolean(lead_in))
+        }, &[], requests)?;
+        set(call, class, "GetGameplayLeadIn", getter)?;
+    }
+    Ok(())
+}
+
+/// Transition sends its completion synchronously before updating its child.
+/// Use the actual retained transition owners, including authored tween writes.
+pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    set(call, actor, "__songlua_transition_state", Value::Number(2.))?;
+    let callback = get_static(call, table(call, call.captures()[1])?, b"gameplay_transition_complete")?;
+    if callback != Value::Nil {
+        call.call(callback, &[Value::Table(actor)])?;
+    }
+    Ok(())
+}
+
+fn complete_screen_transition(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let requests = call.function_data::<Arc<Mutex<crate::managers::screen::Requests>>>().unwrap().clone();
+    let screen = table(call, call.captures()[2])?;
+    let actor = table(call, arg(call, 0))?;
+    let role = get_static(call, actor, b"__songlua_transition_role")?;
+    let role = if role == Value::Nil {
+        get_static(call, actor, b"__songlua_screen_actor_role")?
+    } else { role };
+    let role = if role == Value::Nil { String::new() } else { assets::text(call, role)? };
+    let is_in = role == "In";
+    let is_ready = role == "Ready";
+    let target = if is_in { "Ready" } else if is_ready { "Go" } else { return Ok(()); };
+    native_children::with_children(call, screen, |call, candidate| {
+        let role = get_static(call, candidate, b"__songlua_screen_actor_role")?;
+        if role != Value::Nil && assets::text(call, role)? == target {
+            start(call, candidate)?;
+        }
+        Ok(())
+    })?;
+    if is_ready {
+        requests.lock().unwrap().gameplay_lead_in = false;
+        messages::dispatch(call, b"GameplayLeadInChanged", None, false)?;
+    }
+    Ok(())
+}
+
 #[cfg(feature = "test-support")]
 fn start_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     start(call, table(call, arg(call, 0))?)
@@ -246,6 +306,10 @@ fn commands(
 
 pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
     let actor = dummy(call, scene, "ActorFrame", name, None)?;
+    let role = call.try_intern(name.as_bytes())?;
+    // Named transitions already have a dedicated pass in the live traversal;
+    // screen_actor_role identifies the separate unnamed transition owners.
+    set(call, actor, "__songlua_transition_role", role)?;
     set(call, actor, "__songlua_transition_state", Value::Number(0.))?;
     if name.eq_ignore_ascii_case("In") {
         create_in(call, scene, actor)?;

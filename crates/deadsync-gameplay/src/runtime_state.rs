@@ -1105,6 +1105,13 @@ pub type GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActo
         usize, usize,
     ) + Send>;
 
+/// LifeMeterBar publishes the changed meter before Player records its history.
+pub type GameplayLifeChangedCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        usize,
+    ) + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1132,6 +1139,8 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
         Option<GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
     pub avoided_mine_judgment_callback:
         Option<GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
+    pub life_changed_callback:
+        Option<GameplayLifeChangedCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

@@ -115,6 +115,7 @@ pub struct PlayerRuntime {
     /// ScoreKeeperNormal advances this once per scored row/hold after failure,
     /// independently of combo-weighted judgments and frozen earned points.
     pub current_possible_points: i32,
+    pub stage_score: StageScore,
 
     pub combo_milestones: Vec<ActiveComboMilestone>,
     pub hands_achieved: u32,
@@ -139,6 +140,8 @@ pub struct PlayerRuntime {
     pub course_submit_life: Option<deadsync_rules::life::LifeMeter>,
 
     pub life_history: Vec<(f32, f32)>,
+    pub stage_life_record: StageLifeRecord,
+    pub alive_seconds: f32,
     pub life_record_source: LifeRecordSource,
 
     pub error_bar_mono_ticks: [Option<ErrorBarTick>; 15],
@@ -280,6 +283,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         ghost: GameplayGhostState::default(),
         earned_grade_points: 0,
         current_possible_points: 0,
+        stage_score: StageScore::default(),
         combo_milestones: Vec::with_capacity(caps.combo_milestones),
         hands_achieved: 0,
         holds_held: 0,
@@ -302,6 +306,8 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         failed_ex_score_inputs: None,
         course_submit_life: None,
         life_history: Vec::with_capacity(caps.life_history),
+        stage_life_record: StageLifeRecord::with_capacity(caps.life_history),
+        alive_seconds: 0.0,
         life_record_source: LifeRecordSource::Meter,
         error_bar_mono_ticks: [None; 15],
         error_bar_mono_next: 0,
@@ -338,6 +344,7 @@ pub fn init_player_runtime_for_practice_with_caps(
     player
         .life_history
         .push((judge_start_music_time, player.life));
+    player.stage_life_record.record(player.life);
     player
 }
 
@@ -416,27 +423,34 @@ pub fn init_player_runtime_for_song_with_course_life(
         course_carry,
     );
     player.life_history.push((init_music_time, player.life));
+    player.stage_life_record.record(player.life);
     player
 }
 
 pub fn reset_player_runtime_for_practice(player: &mut PlayerRuntime, judge_start_music_time: f32) {
     let mut combo_milestones = std::mem::take(&mut player.combo_milestones);
     let mut life_history = std::mem::take(&mut player.life_history);
+    let mut stage_life_record = std::mem::take(&mut player.stage_life_record);
     let mut error_bar_avg_samples = std::mem::take(&mut player.error_bar_avg_samples);
     let mut error_bar_long_avg_samples = std::mem::take(&mut player.error_bar_long_avg_samples);
     combo_milestones.clear();
     life_history.clear();
+    stage_life_record.clear();
     error_bar_avg_samples.clear();
     error_bar_long_avg_samples.clear();
 
     let mut reset = init_player_runtime_with_caps(PlayerBufferCaps::EMPTY);
     reset.life_record_source = player.life_record_source;
+    reset.stage_score = player.stage_score;
+    reset.stage_score.reset();
     reset.combo_milestones = combo_milestones;
     reset.life_history = life_history;
+    reset.stage_life_record = stage_life_record;
     reset.error_bar_avg_samples = error_bar_avg_samples;
     reset.error_bar_long_avg_samples = error_bar_long_avg_samples;
     if reset.life_record_source == LifeRecordSource::Meter {
         reset.life_history.push((judge_start_music_time, reset.life));
+        reset.stage_life_record.record(reset.life);
     }
     *player = reset;
 }

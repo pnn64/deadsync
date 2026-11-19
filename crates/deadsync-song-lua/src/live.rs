@@ -19,9 +19,13 @@ pub struct SongLuaLivePlayer {
     pub possible_points: i32,
     pub actual_points: i32,
     pub current_possible_points: i32,
+    /// None leaves a standalone or inactive statistics owner's setter intact.
+    pub score: Option<u32>,
+    pub current_max_score: Option<u32>,
     pub life: f32,
     /// PlayerStageStats history is separate from the current LifeMeter value.
     pub life_record_latest: Option<f32>,
+    pub alive_seconds: f32,
     pub failed: bool,
     pub combo: u32,
     pub recorded_max_combo: u32,
@@ -40,11 +44,41 @@ pub struct SongLuaLivePlayer {
 
 #[cfg(feature = "test-support")]
 #[derive(Clone, Debug)]
+pub struct SongLuaStagePlayerObservation {
+    pub player: String,
+    pub score: f64,
+    pub current_max_score: f64,
+    pub alive_seconds: f64,
+    pub life_begin: f64,
+    pub life_latest: f64,
+    pub autoplay: f64,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Debug)]
+pub struct SongLuaStageStatisticsObservation {
+    pub gameplay_seconds: f64,
+    pub steps_seconds: f64,
+    pub players: Vec<SongLuaStagePlayerObservation>,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Copy, Debug)]
+pub struct SongLuaGameplayClockObservation {
+    pub delta_seconds: f32,
+    pub music_rate: f32,
+    pub steps_time_active: bool,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Debug)]
 pub struct SongLuaOverlayStageObservation {
     pub beat: f32,
     pub music_seconds: f32,
     pub players: [SongLuaLivePlayer; LUA_PLAYERS],
     pub player_step_indices: [Option<usize>; LUA_PLAYERS],
+    /// Actual Lua getter results at the overlay boundary, before foregrounds.
+    pub statistics: Option<SongLuaStageStatisticsObservation>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -53,6 +87,8 @@ pub enum SongLuaLivePlayerWrite {
     RecordLife { player: usize, life: f32 },
     Fail { player: usize },
     FailRoutine,
+    SetScore { player: usize, score: u32, maximum: bool },
+    SetRoutineScore { score: u32, maximum: bool },
 }
 
 pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
@@ -71,6 +107,18 @@ pub(crate) fn apply_player_writes<P: deadsync_gameplay::GameplayProfileData, O, 
                 game.mark_player_stage_failed_from_script(player)
             }
             SongLuaLivePlayerWrite::FailRoutine => game.mark_routine_stage_failed_from_script(),
+            SongLuaLivePlayerWrite::SetScore { player, score, maximum } => {
+                if let Some(player) = game.players_runtime.players.get_mut(player) {
+                    if maximum { player.stage_score.current_max_score = score; }
+                    else { player.stage_score.score = score; }
+                }
+            }
+            SongLuaLivePlayerWrite::SetRoutineScore { score, maximum } => {
+                if let Some(routine) = &mut game.players_runtime.routine {
+                    if maximum { routine.stats.stage_score.current_max_score = score; }
+                    else { routine.stats.stage_score.score = score; }
+                }
+            }
         }
     }
 }
@@ -92,6 +140,8 @@ pub struct SongLuaLiveFrame {
     pub beat: f64,
     pub music_seconds: f64,
     pub screen_seconds: f64,
+    pub gameplay_seconds: f64,
+    pub steps_seconds: f64,
     pub delta_seconds: f64,
     /// Independent process clock; music can remain frozen while this advances.
     pub uptime_seconds: Option<f64>,
@@ -112,10 +162,13 @@ impl SongLuaLivePlayer {
             possible_points,
             actual_points: player.earned_grade_points,
             current_possible_points: player.current_possible_points,
+            score: player.stage_score.configured.then_some(player.stage_score.score),
+            current_max_score: player.stage_score.configured.then_some(player.stage_score.current_max_score),
             life: player.life,
-            life_record_latest: player.life_history.last().map(|&(_, life)| life).or_else(||
+            life_record_latest: player.stage_life_record.samples.last().map(|&(_, life)| life).or_else(||
                 matches!(player.life_record_source, deadsync_gameplay::LifeRecordSource::Combined(_)).then_some(0.)),
-            failed: player.stage_failed || player.fail_time.is_some(),
+            failed: player.stage_failed,
+            alive_seconds: player.alive_seconds,
             fail_enabled: player.fail_type != deadsync_gameplay::GameplayFailType::Off,
             combo: player.combo,
             recorded_max_combo: player.recorded_max_combo,
@@ -152,6 +205,8 @@ impl SongLuaLiveFrame {
             beat: f64::from(game.clock.song_position.current_beat),
             music_seconds: game.clock.song_position.current_music_time_ns as f64 / 1_000_000_000.0,
             screen_seconds: f64::from(game.boundary.total_elapsed_in_screen),
+            gameplay_seconds: f64::from(game.boundary.gameplay_seconds),
+            steps_seconds: f64::from(game.boundary.steps_seconds),
             delta_seconds: f64::from(delta_seconds),
             uptime_seconds: None,
             gameplay_outro: game.mods.attacks.cleared_for_outro,

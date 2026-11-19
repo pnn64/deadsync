@@ -191,6 +191,7 @@ pub fn update_course_life_time(
     }
     player.life = survival_life(*remaining_seconds);
     record_player_life_change(player, current_music_time, old_life);
+    player.stage_life_record.record(player.life_record_source.value(player.life));
     update_player_failure(player, current_music_time, false);
 }
 
@@ -204,6 +205,26 @@ pub fn apply_course_life_event(
         apply_life_change(player, current_music_time, normal_delta);
         return;
     }
+    let failed = player.stage_failed;
+    if apply_course_life_event_before_record(player, current_music_time, normal_delta, event, failed) {
+        player.stage_life_record.record(player.life_record_source.value(player.life));
+    }
+}
+
+// The screen-owned Player boundary can deliver LifeChanged after the meter
+// update and before the resulting PlayerStageStats history sample.
+fn apply_course_life_event_before_record(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    normal_delta: f32,
+    event: CourseLifeEvent,
+    meter_stage_failed: bool,
+) -> bool {
+    if matches!(player.course_life, CourseLifeState::Bar) {
+        let result = apply_player_runtime_life_delta_before_record(player, current_music_time, normal_delta, meter_stage_failed);
+        if result.failed_now { log::debug!("Player has failed!"); }
+        return true;
+    }
 
     if let Some(submit_life) = player.course_submit_life.as_mut() {
         let _ =
@@ -213,7 +234,7 @@ pub fn apply_course_life_event(
             );
     }
     if player.is_failing {
-        return;
+        return false;
     }
 
     let old_life = player.life;
@@ -237,6 +258,7 @@ pub fn apply_course_life_event(
     }
     record_player_life_change(player, current_music_time, old_life);
     update_player_failure(player, current_music_time, false);
+    true
 }
 
 #[must_use]
@@ -374,6 +396,8 @@ pub fn apply_player_runtime_life_delta(
     current_music_time: f32,
     delta: f32,
 ) -> GameplayLifeDeltaUpdate {
+    // Standalone callers have no retained actor phase to commit deferred
+    // failure. Preserve their established permanent failure policy.
     let mut meter = player_runtime_life_meter(player);
     let update = apply_gameplay_life_delta_with_record_source(
         &mut meter,
@@ -384,6 +408,47 @@ pub fn apply_player_runtime_life_delta(
         player.fail_type.fails_during_play(),
         player.life_record_source,
     );
+    write_player_runtime_life_meter(player, meter);
+    player.stage_life_record.record(player.life_record_source.value(player.life));
+    update
+}
+
+fn apply_player_runtime_life_delta_before_record(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    delta: f32,
+    stage_failed: bool,
+) -> GameplayLifeDeltaUpdate {
+    // Keep the independent course submission policy. The actual bar meter is
+    // stopped by committed stage failure, not an earlier zero-life sample.
+    if let Some(meter) = player.course_submit_life.as_mut() {
+        let _ = deadsync_rules::life::apply_life_delta_mode(
+            meter, current_music_time, delta, player.fail_type.fails_during_play());
+    }
+    if stage_failed {
+        return GameplayLifeDeltaUpdate { failed_now: false, was_dead: true };
+    }
+    let mut meter = player_runtime_life_meter(player);
+    let was_failing = meter.is_failing;
+    let previous_fail_time = meter.fail_time;
+    let was_dead = player_runtime_is_dead(player);
+    meter.is_failing = false;
+    meter.fail_time = None;
+    let mut update = apply_gameplay_life_delta_with_record_source(
+        &mut meter,
+        &mut player.life_history,
+        None,
+        current_music_time,
+        delta,
+        false,
+        player.life_record_source,
+    );
+    if player.fail_type.fails_during_play() && meter.life <= 0.0 {
+        meter.is_failing = true;
+        meter.fail_time = previous_fail_time.or(Some(current_music_time));
+        update.failed_now = !was_failing;
+    }
+    update.was_dead = was_dead;
     write_player_runtime_life_meter(player, meter);
     update
 }

@@ -72,6 +72,33 @@ mod tests {
     }
 
     #[test]
+    fn standalone_immediate_continue_life_does_not_recover_after_failure() {
+        for course_event in [false, true] {
+            let mut player = init_player_runtime();
+            player.fail_type = GameplayFailType::ImmediateContinue;
+            player.life = 0.01;
+            if course_event {
+                apply_course_life_event(&mut player, 1.0, -0.05,
+                    CourseLifeEvent::Tap(JudgeGrade::Miss));
+            } else {
+                assert!(apply_player_runtime_life_delta(&mut player, 1.0, -0.05).failed_now);
+            }
+            assert!(player.is_failing);
+            assert_eq!(player.fail_time, Some(1.0));
+            player.combo_after_miss = 1;
+            if course_event {
+                apply_course_life_event(&mut player, 2.0, 0.008,
+                    CourseLifeEvent::Tap(JudgeGrade::Fantastic));
+            } else {
+                assert!(apply_player_runtime_life_delta(&mut player, 2.0, 0.008).was_dead);
+            }
+            assert_eq!(player.life, 0.0);
+            assert!(player.is_failing);
+            assert_eq!(player.fail_time, Some(1.0));
+        }
+    }
+
+    #[test]
     fn joined_fail_modes() {
         let mut players = std::array::from_fn(|_| init_player_runtime());
         players[0].life = 0.0;
