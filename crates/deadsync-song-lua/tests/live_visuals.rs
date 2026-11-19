@@ -77,8 +77,13 @@ impl Drop for Pair {
 impl Pair {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        reference_test::register_path(dir.path());
         let path = dir.path().join("default.lua");
+        // Exact files precede their directory so its prefix cannot consume
+        // their portable snapshot tokens.
+        reference_test::register_path(&path);
+        reference_test::register_path(&dir.path().join("art.png"));
+        reference_test::register_path(&dir.path().join("second.png"));
+        reference_test::register_path(dir.path());
         std::fs::write(&path, SOURCE).unwrap();
         for name in ["art.png", "second.png"] {
             image::RgbaImage::new(2, 2)
