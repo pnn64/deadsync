@@ -399,6 +399,35 @@ fn fatal_broadcast_restores_scopes_and_guard_after_gc() {
     assert!(rust.take_actor_diagnostics().is_empty());
 }
 
+#[test]
+fn judgment_broadcast_preserves_absent_and_explicit_hold_scores() {
+    let mut rust = runtime();
+    let scene = instantiate(
+        &mut rust,
+        r#"calls=0;taps=0;holds=0
+        return Def.Quad{JudgmentMessageCommand=function(self,p)
+            assert(p==CURRENT)
+            calls=calls+1
+            if p.HoldNoteScore then holds=holds+1 else taps=taps+1 end
+        end}"#,
+    );
+    execute(
+        &mut rust,
+        r#"
+        CURRENT={Player=PLAYER_1,TapNoteScore='TapNoteScore_W1'}
+        MESSAGEMAN:Broadcast('Judgment',CURRENT)
+        assert(rawget(CURRENT,'HoldNoteScore')==nil and calls==1 and taps==1 and holds==0)
+        for _,value in ipairs{false,'HoldNoteScore_None','HoldNoteScore_Held'} do
+            CURRENT={Player=PLAYER_1,TapNoteScore='TapNoteScore_W1',HoldNoteScore=value}
+            MESSAGEMAN:Broadcast('Judgment',CURRENT)
+            assert(rawget(CURRENT,'HoldNoteScore')==value)
+        end
+        assert(calls==4 and taps==2 and holds==2)
+        "#,
+    );
+    assert!(rust.release_actor_scene(scene).unwrap());
+}
+
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;
