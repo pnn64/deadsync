@@ -1,4 +1,5 @@
 [submodule "tests/fixtures"]
 	path = tests/fixtures
 	url = https://github.com/pnn64/deadsync-tests.git
+	branch = main
 	shallow = true
