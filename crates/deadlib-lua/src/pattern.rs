@@ -253,6 +253,32 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
         .map(|offset| bytes.len() - tail.len() + offset)
 }
 
+#[inline(never)]
+pub(crate) fn find_pair(bytes: &[u8], needle: [u8; 2]) -> Option<usize> {
+    if bytes.starts_with(&needle) {
+        return Some(0);
+    }
+    let shifted = bytes.get(1..)?;
+    let (left, left_tail) = bytes[..shifted.len()].as_chunks::<32>();
+    let (right, right_tail) = shifted.as_chunks::<32>();
+    let matches = |(&a, &b): (&u8, &u8)| (a == needle[0]) & (b == needle[1]);
+    for (index, (a, b)) in left.iter().zip(right).enumerate() {
+        // The shifted slice includes pairs that straddle block boundaries.
+        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair)) {
+            return a
+                .iter()
+                .zip(b)
+                .position(matches)
+                .map(|offset| index * 32 + offset);
+        }
+    }
+    left_tail
+        .iter()
+        .zip(right_tail)
+        .position(matches)
+        .map(|offset| left.len() * 32 + offset)
+}
+
 pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
     let (blocks, tail) = bytes.as_chunks::<32>();
     let block = [byte; 32];
@@ -752,7 +778,26 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::{balance_end, byte_run, contiguous_set_run, find_byte, set_has};
+    use super::{balance_end, byte_run, contiguous_set_run, find_byte, find_pair, set_has};
+
+    #[test]
+    fn pair_search_keeps_first_match_across_blocks_and_binary_tails() {
+        for needle in [[0, 255], [255, 0], [b':'; 2]] {
+            for len in 0..=68 {
+                let mut bytes = vec![b'x'; len];
+                if let Some(last) = bytes.last_mut() {
+                    *last = needle[0];
+                }
+                assert_eq!(find_pair(&bytes, needle), None);
+                for start in 0..len.saturating_sub(1) {
+                    let mut subject = bytes.clone();
+                    subject[start..start + 2].copy_from_slice(&needle);
+                    let expected = subject.windows(2).position(|pair| pair == needle);
+                    assert_eq!(find_pair(&subject, needle), expected);
+                }
+            }
+        }
+    }
 
     #[test]
     fn balance_counts_nested_and_identical_delimiters_across_blocks() {

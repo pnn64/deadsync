@@ -1,6 +1,6 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte};
+use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte, find_pair};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -415,32 +415,41 @@ impl Vm {
                             })
                             .is_none_or(|byte| byte == 0));
                 if plain {
-                    let text = &self.strings.bytes[slot_index(source.0)];
-                    let found = if raw.is_empty() {
-                        Some(start)
-                    } else if raw.len() > len - start {
-                        None
-                    } else if let [byte] = raw {
-                        find_byte(&text[start..], *byte).map(|offset| start + offset)
-                    } else {
+                    let text = &self.strings.bytes[slot_index(source.0)][start..];
+                    let found = 'literal: {
+                        if raw.is_empty() {
+                            break 'literal Some(0);
+                        }
+                        if raw.len() > text.len() {
+                            break 'literal None;
+                        }
+                        if let [byte] = raw {
+                            break 'literal find_byte(text, *byte);
+                        }
                         // For long searches, use whichever end of the needle
                         // occurs less often in a small sample of the haystack.
-                        // This avoids rechecking a repeated leading byte.
                         let mut anchor = 0;
-                        if raw.len() > 1 && len - start >= 1024 {
+                        if text.len() >= 1024 {
                             let last = raw.len() - 1;
-                            let mut first_hits = 0;
-                            let mut last_hits = 0;
-                            for &byte in &text[start..start + 64] {
-                                first_hits += usize::from(byte == raw[0]);
-                                last_hits += usize::from(byte == raw[last]);
+                            let (first_hits, last_hits) =
+                                text[..64].iter().fold((0u8, 0u8), |(first, end), &byte| {
+                                    (
+                                        first + u8::from(byte == raw[0]),
+                                        end + u8::from(byte == raw[last]),
+                                    )
+                                });
+                            if first_hits.min(last_hits) >= 4
+                                && let [a, b] = raw
+                            {
+                                // Both anchors would produce many false candidates.
+                                break 'literal find_pair(text, [*a, *b]);
                             }
                             if last_hits < first_hits {
                                 anchor = last;
                             }
                         }
-                        let mut cursor = start + anchor;
-                        let candidates = &text[..len - raw.len() + anchor + 1];
+                        let mut cursor = anchor;
+                        let candidates = &text[..text.len() - raw.len() + anchor + 1];
                         loop {
                             let Some(offset) = find_byte(&candidates[cursor..], raw[anchor]) else {
                                 break None;
@@ -452,7 +461,8 @@ impl Vm {
                             cursor += 1;
                         }
                     };
-                    if let Some(pos) = found {
+                    if let Some(offset) = found {
+                        let pos = start + offset;
                         let end = pos + raw.len();
                         self.resize_registers(self.registers.len().max(base + 2));
                         self.registers[base] = Value::Number((pos + 1) as f64);
