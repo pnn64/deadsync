@@ -177,18 +177,33 @@ impl Replay {
             .ok_or("missing render random draw boundaries")?;
         let mut consumed = 0;
         let mut previous_update = 0;
+        let mut previous_samples = Some(0);
         for boundary in boundaries {
             let update = boundary["update_sequence"].as_u64().unwrap_or(0);
             let count = boundary["render_random_inputs"].as_u64()
                 .and_then(|n| usize::try_from(n).ok()).ok_or("missing random draw boundary count")?;
             if update == 0 || update < previous_update || update > frames.len() as u64
                 || count < consumed || count > inputs.len()
-                || boundary["scene"] != frames[update as usize - 1]["scene"]
+            { return Err("invalid render random draw boundary".into()); }
+            let frame = &frames[update as usize - 1];
+            let samples = boundary["samples"].as_u64();
+            // SongLuaTrace's AFTER_SCREEN_DRAW observes the current scene and
+            // the last captured update. A reload can occur between those two
+            // observations. Only an empty boundary may precede the next scene's
+            // first update; actual drawable/random inputs keep exact anchors.
+            let empty_transition = count == consumed && samples.is_some() && samples == previous_samples
+                && frame["scene"].as_u64().filter(|&scene| scene > 0)
+                    .and_then(|scene| scene.checked_add(1)).is_some_and(|next_scene|
+                        boundary["scene"].as_u64() == Some(next_scene)
+                            && frames.get(update as usize).is_some_and(|next|
+                                next["scene"].as_u64() == Some(next_scene)));
+            if boundary["scene"] != frame["scene"] && !empty_transition
                 || inputs[consumed..count].iter().any(|input|
                     input.update != update || boundary["scene"].as_u64() != Some(input.scene))
             { return Err("invalid render random draw boundary".into()); }
             consumed = count;
             previous_update = update;
+            previous_samples = samples;
         }
         if consumed != inputs.len() { return Err("incomplete render random boundary tail".into()); }
         Ok(Self { inputs, used: BTreeSet::new() })
@@ -368,6 +383,36 @@ mod tests {
         later_native_update["render_random_inputs"][2]["native_update_sequence"] = json!(9);
         later_native_update["render_random_inputs"][2]["draw_ordinal"] = json!(1);
         validate(&later_native_update).unwrap();
+    }
+
+    #[test]
+    fn native_render_random_empty_boundary_requires_an_observed_scene_transition() {
+        let mut good = trace();
+        good["update_frames"].as_array_mut().unwrap().push(json!({"scene":2}));
+        good["drawable_frames"][0]["samples"] = json!(3);
+        good["drawable_frames"].as_array_mut().unwrap().push(json!({
+            "scene":2,"update_sequence":1,"samples":3,"render_random_inputs":3}));
+        validate(&good).expect("empty draw after reload, before the next scene update");
+        for (path, value) in [
+            ("/drawable_frames/1/scene", json!(0)),
+            ("/drawable_frames/1/scene", json!(3)),
+            ("/update_frames/1/scene", json!(3)),
+            ("/drawable_frames/0/samples", Value::Null),
+            ("/drawable_frames/1/samples", Value::Null),
+            ("/drawable_frames/1/samples", json!(2)),
+            ("/drawable_frames/1/samples", json!(4)),
+            ("/drawable_frames/0/render_random_inputs", json!(2)),
+        ] {
+            let mut bad = good.clone();
+            *bad.pointer_mut(path).unwrap() = value;
+            assert!(validate(&bad).is_err(), "accepted nonempty or unproved transition at {path}");
+        }
+        let mut missing_next = good.clone();
+        missing_next["update_frames"].as_array_mut().unwrap().pop();
+        assert!(validate(&missing_next).is_err(), "an unobserved next scene cannot justify a boundary");
+        let mut relocated_sample = good;
+        relocated_sample["drawable_samples"][2]["scene"] = json!(2);
+        assert!(validate(&relocated_sample).is_err(), "real inputs cannot move across the empty boundary");
     }
 
     #[test]

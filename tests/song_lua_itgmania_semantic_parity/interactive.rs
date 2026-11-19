@@ -342,6 +342,28 @@ fn native_draw_vertex_count(sample: &Value) -> Result<usize, String> {
     }
 }
 
+fn native_sprite_piece_state_matches(first: &Value, previous: &Value, next: &Value) -> bool {
+    let (first, previous, next) = (&first["state"], &previous["state"], &next["state"]);
+    if first.get("actor_draw_sequence").is_none()
+        && previous.get("actor_draw_sequence").is_none()
+        && next.get("actor_draw_sequence").is_none()
+    {
+        return first == next;
+    }
+    // The native hook increments geometry submission IDs for every DrawQuad,
+    // but keeps Actor::Draw's scope ID across the faded pieces of one sprite.
+    let Some(scope) = first["actor_draw_sequence"].as_u64().filter(|&id| id > 0) else { return false; };
+    if previous["actor_draw_sequence"].as_u64() != Some(scope)
+        || next["actor_draw_sequence"].as_u64() != Some(scope)
+    { return false; }
+    let Some(first_id) = first["native_draw_sequence"].as_u64().filter(|&id| id > 0) else { return false; };
+    let Some(previous_id) = previous["native_draw_sequence"].as_u64().filter(|&id| id >= first_id) else { return false; };
+    if !next["native_draw_sequence"].as_u64().is_some_and(|id| id > previous_id) { return false; }
+    let (Some(first), Some(next)) = (first.as_object(), next.as_object()) else { return false; };
+    first.len() == next.len() && first.iter().all(|(key, value)|
+        key == "native_draw_sequence" || next.get(key) == Some(value))
+}
+
 fn native_draw_batch<'a>(
     samples: &'a [Value],
     owned_vertices: usize,
@@ -358,9 +380,10 @@ fn native_draw_batch<'a>(
     if sprite_pieces && first["primitive"] == "Quads" {
         for next in &samples[1..] {
             if count >= owned_vertices || ["actor", "definition_id", "scene", "update_sequence",
-                "primitive", "coordinate_space", "state", "render_random_sequences", "note_context",
+                "primitive", "coordinate_space", "render_random_sequences", "note_context",
                 "native_draw_sequence", "draw_ordinal"]
                 .into_iter().any(|key| next[key] != first[key])
+                || !native_sprite_piece_state_matches(first, &samples[consumed - 1], next)
             {
                 break;
             }
@@ -409,6 +432,42 @@ fn native_draw_batches_preserve_occurrences_and_all_piece_boundaries() {
     oversized[1]["vertices"] = json!(vec![json!([1]);8]);
     assert_eq!(native_draw_batch(&oversized, 12, true).unwrap().0, 1,
         "a native submission cannot be split across owned occurrences");
+}
+
+#[test]
+fn native_sprite_batches_use_actor_scope_and_ordered_geometry_submissions() {
+    let samples = (0..6).map(|piece| json!({
+        "actor":"sprite", "definition_id":"def-1", "scene":1, "update_sequence":2,
+        "primitive":"Quads", "coordinate_space":"native",
+        "state":{"texture":"song:/fire.png", "blend":1, "actor_draw_sequence":77 + piece / 3,
+            "native_draw_sequence":501 + piece},
+        "render_random_sequences":[], "vertices":vec![json!([piece]);4],
+    })).collect::<Vec<_>>();
+    let (used, count, vertices) = native_draw_batch(&samples, 18, true).unwrap();
+    assert_eq!((used, count, vertices.len()), (3, 18, 12));
+    assert_eq!(native_draw_batch(&samples[used..], 18, true).unwrap().0, 3);
+    assert_eq!(native_draw_batch(&samples, 36, true).unwrap().0, 3,
+        "a larger owned mesh cannot absorb the next Actor::Draw occurrence");
+    for (field, value) in [
+        ("actor_draw_sequence", json!(78)), ("actor_draw_sequence", Value::Null),
+        ("native_draw_sequence", json!(501)), ("native_draw_sequence", Value::Null),
+        ("texture", json!("song:/different.png")), ("blend", json!(2)),
+    ] {
+        let mut changed = samples[..3].to_vec();
+        changed[1]["state"][field] = value;
+        assert_eq!(native_draw_batch(&changed, 18, true).unwrap().0, 1, "crossed {field}");
+    }
+    let mut reordered = samples[..3].to_vec();
+    reordered[2]["state"]["native_draw_sequence"] = json!(501);
+    assert_eq!(native_draw_batch(&reordered, 18, true).unwrap().0, 2,
+        "geometry IDs must remain increasing across every piece");
+    let mut missing_scope = samples[..3].to_vec();
+    missing_scope[1]["state"].as_object_mut().unwrap().remove("actor_draw_sequence");
+    assert_eq!(native_draw_batch(&missing_scope, 18, true).unwrap().0, 1);
+    let mut new_state = samples[..3].to_vec();
+    new_state[1]["state"]["z_bias"] = json!(0);
+    assert_eq!(native_draw_batch(&new_state, 18, true).unwrap().0, 1,
+        "only the proved geometry counter may differ within one actor draw");
 }
 
 fn target_slot(target: SongLuaLiveTarget) -> (i32, usize) {
@@ -854,16 +913,13 @@ impl DrawChecks {
     }
 }
 
-// Native archives use portable separators and normalized source paths, while
-// owned handles retain the authored spelling. Resolve parent aliases through
-// the filesystem: lexical cancellation can select a different file at a symlink.
+// Native texture IDs retain the requested spelling, while FilenameDB resolves
+// the source without case sensitivity. Compare the resolved source identity;
+// parent aliases still follow filesystem traversal at a symlink.
 fn same_texture_key(expected: &str, actual: &str) -> bool {
     if expected.split(['/', '\\']).filter(|part| *part != ".")
         .eq(actual.split(['/', '\\']).filter(|part| *part != ".")) {
         return true;
-    }
-    if !expected.split(['/', '\\']).chain(actual.split(['/', '\\'])).any(|part| part == "..") {
-        return false;
     }
     let expected_source = deadsync_assets::textures::texture_source_key(expected);
     let actual_source = deadsync_assets::textures::texture_source_key(actual);
@@ -876,13 +932,36 @@ fn same_texture_key(expected: &str, actual: &str) -> bool {
     let actual_path = Path::new(&actual_source);
     // Filename hints affect texture preparation even when an alias happens to
     // reach the same file. Retain that spelling and the resource suffix above.
-    if expected_path.file_name() != actual_path.file_name() {
+    if !expected_path.file_name().and_then(|name| name.to_str()).zip(
+        actual_path.file_name().and_then(|name| name.to_str()))
+        .is_some_and(|(expected, actual)| expected.eq_ignore_ascii_case(actual)) {
         return false;
     }
-    match (expected_path.canonicalize(), actual_path.canonicalize()) {
-        (Ok(expected), Ok(actual)) => expected == actual,
+    match (native_texture_source_path(expected_path), native_texture_source_path(actual_path)) {
+        (Some(expected), Some(actual)) => expected == actual,
         _ => false,
     }
+}
+
+fn native_texture_source_path(path: &Path) -> Option<std::path::PathBuf> {
+    if let Ok(path) = path.canonicalize() { return Some(path); }
+    let parent = path.parent()?;
+    let parent = if parent.as_os_str().is_empty() {
+        std::env::current_dir().ok()?
+    } else {
+        native_texture_source_path(parent)?
+    };
+    if path.components().next_back() == Some(std::path::Component::ParentDir) {
+        return parent.join("..").canonicalize().ok();
+    }
+    let name = path.file_name()?.to_str()?;
+    let mut matches = std::fs::read_dir(parent).ok()?.filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_str().is_some_and(|entry| entry.eq_ignore_ascii_case(name)));
+    let source = matches.next()?;
+    // An archive with distinct case-colliding entries does not establish which
+    // file native FilenameDB selected. Never guess or merge those resources.
+    if matches.next().is_some() { return None; }
+    source.path().canonicalize().ok()
 }
 
 #[test]
@@ -917,6 +996,36 @@ fn native_texture_keys_resolve_parent_aliases_without_merging_resources() {
     for different in ["lua/../other/sky#grad.png", "lua/../bg/other.png", "lua/../missing/sky#grad.png"] {
         assert!(!same_texture_key(&expected, &song.path().join(different).to_string_lossy()));
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn native_texture_keys_reject_distinct_case_collisions() {
+    let song = tempfile::tempdir().unwrap();
+    std::fs::write(song.path().join("bg.mp4"), b"lowercase source").unwrap();
+    std::fs::write(song.path().join("BG.mp4"), b"different uppercase source").unwrap();
+    let lower = song.path().join("bg.mp4").to_string_lossy().into_owned();
+    assert!(!same_texture_key(&song.path().join("BG.mp4").to_string_lossy(), &lower));
+    assert!(!same_texture_key(&song.path().join("Bg.mp4").to_string_lossy(), &lower));
+}
+
+#[test]
+fn native_texture_keys_resolve_unique_case_aliases_without_merging_hints() {
+    let song = tempfile::tempdir().unwrap();
+    for directory in ["lua", "other"] {
+        std::fs::create_dir(song.path().join(directory)).unwrap();
+        std::fs::write(song.path().join(directory).join("bg.mp4"), b"same bytes").unwrap();
+    }
+    let actual = song.path().join("lua/bg.mp4").to_string_lossy().into_owned();
+    let expected = song.path().join("LUA/BG.mp4").to_string_lossy().into_owned();
+    assert!(same_texture_key(&expected, &actual));
+    assert!(same_texture_key(&format!("{expected}#itg-model"), &format!("{actual}#itg-model")));
+    assert!(!same_texture_key(&expected, &format!("{actual}#itg-model")));
+    for different in ["other/bg.mp4", "lua/bg (doubleres).mp4", "missing/BG.mp4"] {
+        assert!(!same_texture_key(&song.path().join(different).to_string_lossy(), &actual));
+    }
+    assert!(!same_texture_key(&song.path().join("missing/BG.mp4").to_string_lossy(),
+        &song.path().join("missing/bg.mp4").to_string_lossy()));
 }
 
 #[cfg(unix)]
