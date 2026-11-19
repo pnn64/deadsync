@@ -371,6 +371,157 @@ fn incoming_style_spooky_reload_and_stage_variants_match() {
 }
 
 #[test]
+fn reloaded_intro_keeps_hidden_child_tweens_until_the_native_completion_boundary() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "reloaded intro");
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    runtime.vm_mut().execute(&compile_named(
+        format!("{DEFAULTS}\nSL.Global.GameplayReloadCheck=true").as_bytes(),
+        b"=reload setup",
+    ).unwrap()).unwrap();
+    let scene = test_support::screen_part(&mut runtime, "In").unwrap();
+    let actor = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"part", actor).unwrap();
+    let check = |runtime: &mut SongRuntime, source: &str| {
+        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=reload check").unwrap()).unwrap();
+    };
+    check(&mut runtime, r#"
+        local child=part[1]; local visuals=child[1]
+        assert(#child==2 and #visuals==4 and not visuals:GetVisible())
+        assert(SL.Global.GameplayReloadCheck==true)
+        assert(visuals[1]:GetTweenTimeLeft()==2 and child[2]:GetTweenTimeLeft()==0)
+        assert(child[2]:GetDiffuseAlpha()==0)
+        for i=2,4 do assert(visuals[i]:GetNumStates()==1) end
+        assert(part:GetTweenTimeLeft()==0)
+        collectgarbage('collect')
+    "#);
+    test_support::start_actor_transition(&mut runtime, actor).unwrap();
+    check(&mut runtime, "assert(part:GetTweenTimeLeft()==2 and part.__songlua_transition_state==1)");
+    runtime.advance_actor_scene(scene, 0.5).unwrap();
+    check(&mut runtime, r#"
+        assert(not part[1][1]:GetVisible())
+        assert(part:GetTweenTimeLeft()==1.5 and part.__songlua_transition_state==1)
+    "#);
+    runtime.advance_actor_scene(scene, 1.5).unwrap();
+    check(&mut runtime, "assert(part:GetTweenTimeLeft()==0 and part.__songlua_transition_state==1)");
+    runtime.advance_actor_scene(scene, 0.01).unwrap();
+    check(&mut runtime, "assert(part.__songlua_transition_state==2 and not part[1][1]:GetVisible())");
+}
+
+#[test]
+fn screen_out_commits_before_its_final_child_update_and_later_clock_feed() {
+    let mut context = SongLuaCompileContext::new(Path::new("."), "stage completion");
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let check = |runtime: &mut SongRuntime, source: &str| {
+        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=stage completion").unwrap()).unwrap();
+    };
+    check(&mut runtime, DEFAULTS);
+    let scene = test_support::gameplay_screen(&mut runtime, &context).unwrap();
+    let first = deadsync_song_lua::SongLuaLiveFrame {
+        gameplay_seconds: 8.0, steps_seconds: 6.0, ..Default::default()
+    };
+    runtime.feed_stage_statistics(&first).unwrap();
+    check(&mut runtime, r#"
+        current=STATSMAN:GetCurStageStats();p=current:GetPlayerStageStats(0)
+        local screen=SCREENMAN:GetTopScreen();out=screen:GetChild('Out')
+        out[1].StartTransitioningCommand=function(self)
+            self:stoptweening():queuecommand('AfterCommit')
+        end
+        local updated=false
+        out[1].AfterCommitCommand=function(self)
+            assert(STATSMAN:GetStagesPlayed()==1)
+            assert(STATSMAN:GetPlayedStageStats(1):GetPlayerStageStats(0):GetScore()==17)
+            p:SetScore(99);updated=true
+        end
+        screen:StartTransitioningScreen('SM_DoNextScreen')
+        p:SetScore(17)
+        assert(STATSMAN:GetStagesPlayed()==0 and out:GetTweenTimeLeft()==0)
+        assert(not updated)
+    "#);
+    runtime.advance_actor_scene(scene, 0.125).unwrap();
+    check(&mut runtime, r#"
+        saved=STATSMAN:GetPlayedStageStats(1)
+        assert(out.__songlua_transition_state==2 and STATSMAN:GetStagesPlayed()==1)
+        assert(p:GetScore()==99 and saved:GetPlayerStageStats(0):GetScore()==17)
+        assert(saved:GetGameplaySeconds()==8 and saved:GetStepsSeconds()==6)
+    "#);
+    runtime.feed_stage_statistics(&deadsync_song_lua::SongLuaLiveFrame {
+        gameplay_seconds: 8.125, steps_seconds: 6.125, ..Default::default()
+    }).unwrap();
+    runtime.advance_actor_scene(scene, 0.125).unwrap();
+    check(&mut runtime, r#"
+        assert(STATSMAN:GetStagesPlayed()==1 and STATSMAN:GetPlayedStageStats(1)==saved)
+        assert(current:GetGameplaySeconds()==8.125 and current:GetStepsSeconds()==6.125)
+        assert(saved:GetGameplaySeconds()==8 and saved:GetStepsSeconds()==6)
+    "#);
+}
+
+#[test]
+fn natural_out_and_failed_transitions_commit_the_retained_stage() {
+    use deadsync_song_lua::{SongLuaLiveFrame, SongLuaNoteskinResolver, compile_song_lua};
+    for failed in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let entry = directory.path().join("natural-exit.lua");
+        std::fs::write(&entry, "return Def.ActorFrame {}").unwrap();
+        let mut context = SongLuaCompileContext::new(directory.path(), "natural stage completion");
+        context.live = true;
+        context.players[1].enabled = false;
+        let mut compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(std::sync::Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).unwrap();
+        let scene = compiled.live_scene.as_mut().unwrap();
+        let mut frame = SongLuaLiveFrame {
+            music_seconds: 2.0, beat: 4.0, gameplay_outro: true,
+            gameplay_seconds: 8.0, steps_seconds: 6.0, ..Default::default()
+        };
+        frame.players[0].failed = failed;
+        let check = |scene: &mut deadsync_song_lua::SongLiveScene, source: &str| {
+            scene.runtime_mut().vm_mut().execute(
+                &compile_named(source.as_bytes(), b"=natural stage completion").unwrap(),
+            ).unwrap_or_else(|error| panic!("failed={failed}, {source}: {error:?}"));
+        };
+        check(scene, r#"
+            screen=SCREENMAN:GetTopScreen();out=screen:GetChild('Out')
+            for _,actor in ipairs(screen) do
+                if actor.__songlua_screen_actor_role=='Failed' then failed_transition=actor end
+            end
+            assert(out and failed_transition)
+            assert(STATSMAN:GetStagesPlayed()==0)
+        "#);
+        for _ in 0..2 {
+            let output = scene.advance(frame.clone()).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+        }
+        if failed {
+            check(scene, "assert(failed_transition.__songlua_transition_state==0)");
+            let output = scene.advance(frame.clone()).unwrap();
+            assert!(output.errors.is_empty(), "{:?}", output.errors);
+            check(scene, "assert(failed_transition.__songlua_transition_state==1 and failed_transition.__songlua_transition_message=='SM_DoNextScreen')");
+        } else {
+            check(scene, "assert(out.__songlua_transition_state==1 and out.__songlua_transition_message=='SM_DoNextScreen')");
+            for (delta, left) in [(0.5, 1.0), (1.0, 0.0)] {
+                frame.delta_seconds = delta;
+                let output = scene.advance(frame.clone()).unwrap();
+                assert!(output.errors.is_empty(), "{:?}", output.errors);
+                check(scene, "assert(STATSMAN:GetStagesPlayed()==0)");
+                check(scene, &format!("assert(out[1]:GetTweenTimeLeft()=={left}, 'Out child time='..out[1]:GetTweenTimeLeft()..', state='..out.__songlua_transition_state..', inactive='..tostring(out.__songlua_live_inactive)..', delta='..tostring(out.__songlua_live_delta))"));
+            }
+        }
+        frame.delta_seconds = 0.0;
+        let output = scene.advance(frame).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        check(scene, r#"
+            assert(STATSMAN:GetStagesPlayed()==1, 'Out state='..out.__songlua_transition_state..', child time='..out[1]:GetTweenTimeLeft()..', role='..tostring(out.__songlua_transition_role)..', Failed state='..failed_transition.__songlua_transition_state)
+            local played=STATSMAN:GetPlayedStageStats(1)
+            assert(played:GetGameplaySeconds()==8 and played:GetStepsSeconds()==6)
+        "#);
+        scene.end().unwrap();
+    }
+}
+
+#[test]
 fn cancel_gates_children_and_callbacks_after_base_queue_and_completes_before_final_update() {
     let mut p = Pair::new("Cancel", true, "");
     p.script(r#"

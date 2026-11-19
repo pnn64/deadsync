@@ -552,7 +552,9 @@ fn coverage(trace: &Value, scope: Scope, calls: &Value, replayed: usize, total: 
     }
     json!({"scope":"captured-song-lua-context", "observed_song_operations":observed,
         "uncompared_song_operations":uncovered, "nested_theme_operations":theme, "pending":pending,
-        "global_pending":["full theme stage commitment and history", "stage statistics outside captured observation phases",
+        "global_pending":["complete stage finalization, aggregate/evaluation history and public STATSMAN:Reset",
+            "saved statistics getter functions explicitly invoked with another stage's player receiver",
+            "stage statistics outside captured observation phases",
             "additional game/style/input/course contexts", "production live mode activation"]})
 }
 
@@ -5032,8 +5034,12 @@ fn compare_stage_sample(
     let statistics = if let Some(observation) = overlay_observation {
         observation.statistics.as_ref().ok_or("missing stage getters at the owned overlay observation phase")?
     } else {
-        lifecycle_statistics = state.song_lua.as_ref().ok_or("missing Lua metadata")?
-            .runtime().observe_stage_statistics().map_err(|error| error.to_string())?;
+        let mut runtime = state.song_lua.as_ref().ok_or("missing Lua metadata")?.runtime();
+        lifecycle_statistics = if sample["phase"] == "gameplay-exit" {
+            runtime.observe_played_stage_statistics(1)
+        } else {
+            runtime.observe_stage_statistics()
+        }.map_err(|error| error.to_string())?;
         &lifecycle_statistics
     };
     let getters = json!({"gameplay_seconds":statistics.gameplay_seconds,"steps_seconds":statistics.steps_seconds,
@@ -5057,7 +5063,15 @@ fn compare_stage_sample(
         else { context.song_step_chart_indices.get(selected).copied().flatten() }
         .ok_or("GAMESTATE selected an unplayable chart")?;
     let metadata = song.charts.get(chart_index).ok_or("GAMESTATE selected an absent chart")?;
-    let mut actual = if let Some(observation) = overlay_observation {
+    let mut actual = if sample["phase"] == "gameplay-exit" {
+        let observed = statistics.players.get(p).ok_or("missing committed player getter observation")?;
+        let committed = observed.committed.as_ref().ok_or("missing committed player statistics")?;
+        json!({"possible":committed.possible, "current_possible":committed.current_possible,
+            "actual":committed.actual, "misses":committed.misses, "w1":committed.w1, "w2":committed.w2,
+            "failed":committed.failed, "life_latest":observed.life_latest,
+            "difficulty":format!("Difficulty_{}", metadata.difficulty),
+            "description":metadata.description, "meter":metadata.meter})
+    } else if let Some(observation) = overlay_observation {
         let observed = &observation.players[p];
         json!({"possible":observed.possible_points, "current_possible":observed.current_possible_points,
             "actual":observed.actual_points, "misses":observed.tap_scores[4],
@@ -5080,6 +5094,8 @@ fn compare_stage_sample(
     for key in fields {
         let equal = if key == "life_latest" {
             (number(native, key)? - number(&actual, key)?).abs() <= 1e-6
+        } else if let (Some(native), Some(actual)) = (native[key].as_f64(), actual[key].as_f64()) {
+            native == actual
         } else {
             native[key] == actual[key]
         };
@@ -5846,6 +5862,8 @@ fn replay_mode(
         let native_capture_bounded = trace["completion"]["reason"] == "beat-limit";
         let mut pending_coverage = vec!["application build without test-support",
             "full-song completion", "sampled framebuffer pixels", "production command/query instrumentation",
+            "complete stage finalization, aggregate/evaluation history and public STATSMAN:Reset",
+            "saved statistics getter functions explicitly invoked with another stage's player receiver",
             "BitmapText submitted glyph geometry, texture bindings and RGBA (live text content is compared)"];
         if trace["capabilities"]["native_gameplay_clock_inputs"] != true {
             pending_coverage.push("gameplay/alive/steps clock comparisons require independent native gameplay timer inputs");

@@ -4,7 +4,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) enum Phase {
     States(Arc<Mutex<[Vec<crate::SongLuaOverlayState>; 2]>>),
-    Off,
+    Off { failed: bool },
     ClearHistory,
     EndSounds,
     Health(Error),
@@ -194,17 +194,29 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
             let screen = top(call)?;
             diagnostics::report(call, screen, diagnostics::Callback::Health, error)?;
         }
-        Phase::Off => {
+        Phase::Off { failed } => {
             let screen = top(call)?;
             fn visit(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                 native_children::run_command_with_drain(call, actor, b"Off", None, true)?;
                 native_children::with_children(call, actor, |call, c| visit(call, c))
             }
             native_children::with_children(call, screen, |call, c| visit(call, c))?;
-            let out = native_children::named_child(call, screen, b"Out")?;
-            if out != Value::Nil {
-                let out = table(call, out)?;
-                call.with_roots(&[Value::Table(out)], |call| transitions::start(call, out))?;
+            let mut transition = None;
+            if failed {
+                native_children::with_children(call, screen, |call, child| {
+                    let role = get_static(call, child, b"__songlua_screen_actor_role")?;
+                    if role != Value::Nil && assets::text(call, role)? == "Failed" {
+                        transition = Some(child);
+                    }
+                    Ok(())
+                })?;
+            } else {
+                let out = native_children::named_child(call, screen, b"Out")?;
+                if out != Value::Nil { transition = Some(table(call, out)?); }
+            }
+            if let Some(transition) = transition {
+                call.with_roots(&[Value::Table(transition)], |call|
+                    transitions::start_with_message(call, transition, "SM_DoNextScreen"))?;
             }
         }
         Phase::EndSounds => {

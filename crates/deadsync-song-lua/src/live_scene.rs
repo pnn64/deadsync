@@ -590,7 +590,7 @@ impl SongLiveScene {
         let batch = runtime.vm.rooted(self.retained)?;
         runtime
             .actors
-            .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off)
+            .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off { failed: self.outro_failed })
     }
     fn take_output(&mut self, runtime: &mut SongRuntime) -> Result<SongLuaLiveOutput, Error> {
         let gameplay_pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);

@@ -22,17 +22,29 @@ impl crate::SongRuntime {
     pub fn observe_stage_statistics(
         &mut self,
     ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+        self.observe_statistics(None)
+    }
+
+    pub fn observe_played_stage_statistics(
+        &mut self, ago: usize,
+    ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+        self.observe_statistics(Some(ago))
+    }
+
+    fn observe_statistics(
+        &mut self, played: Option<usize>,
+    ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
         let output: StatisticsOutput = Default::default();
         let globals = self.vm.get_global(b"_G")?;
         let callback = self.vm.new_host_function_with_data(
             |call| {
-                let output = call.function_data::<StatisticsOutput>().unwrap().clone();
+                let (output, played) = call.function_data::<(StatisticsOutput, Option<usize>)>().unwrap().clone();
                 let globals = table(call, call.captures()[0])?;
-                *output.lock().unwrap() = Some(read_statistics(call, globals)?);
+                *output.lock().unwrap() = Some(read_statistics(call, globals, played)?);
                 Ok(())
             },
             &[globals],
-            output.clone(),
+            (output.clone(), played),
         )?;
         self.vm.call(callback, &[])?;
         let observed = output.lock().unwrap().take().expect("stage observer ran");
@@ -64,10 +76,16 @@ fn numeric_query(call: &mut HostCall<'_>, owner: Value, name: &[u8]) -> Result<f
 fn read_statistics(
     call: &mut HostCall<'_>,
     globals: TableId,
+    played: Option<usize>,
 ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
     let game = get_static(call, globals, b"GAMESTATE")?;
     let manager = get_static(call, globals, b"STATSMAN")?;
-    let stage = query(call, manager, b"GetCurStageStats", &[])?;
+    let stage = if let Some(ago) = played {
+        query(call, manager, b"GetPlayedStageStats", &[Value::Number(ago as f64)])?
+    } else {
+        query(call, manager, b"GetCurStageStats", &[])?
+    };
+    if stage == Value::Nil { return Err(call.error(b"no committed stage statistics at the owned completion boundary")); }
     call.with_roots(&[game, stage], |call| {
         let gameplay_seconds = numeric_query(call, stage, b"GetGameplaySeconds")?;
         let steps_seconds = numeric_query(call, stage, b"GetStepsSeconds")?;
@@ -101,12 +119,36 @@ fn read_statistics(
                         let options = query(call, state, b"GetPlayerOptions", &[current])?;
                         numeric_query(call, options, b"PlayerAutoPlay")
                     })?;
+                    let points = if played.is_some() {
+                        let possible = numeric_query(call, stats, b"GetPossibleDancePoints")?;
+                        let current_possible = numeric_query(call, stats, b"GetCurrentPossibleDancePoints")?;
+                        let actual = numeric_query(call, stats, b"GetActualDancePoints")?;
+                        Some([possible, current_possible, actual])
+                    } else { None };
                     let score = numeric_query(call, stats, b"GetScore")?;
                     let current_max_score = numeric_query(call, stats, b"GetCurMaxScore")?;
+                    let failed = if played.is_some() {
+                        let Value::Boolean(failed) = query(call, stats, b"GetFailed", &[])? else {
+                            return Err(call.error(b"committed GetFailed did not return a boolean"));
+                        };
+                        Some(failed)
+                    } else { None };
                     let alive_seconds = numeric_query(call, stats, b"GetAliveSeconds")?;
+                    let committed = if let Some([possible, current_possible, actual]) = points {
+                        let mut counts = [0.0; 3];
+                        for (index, name) in ["TapNoteScore_W1", "TapNoteScore_W2", "TapNoteScore_Miss"].into_iter().enumerate() {
+                            let name = call.try_intern(name.as_bytes())?;
+                            let value = query(call, stats, b"GetTapNoteScores", &[name])?;
+                            counts[index] = sprites::number(call, value)?;
+                        }
+                        Some(crate::live::SongLuaStagePlayerCounters {
+                            possible, current_possible, actual, failed: failed.unwrap(),
+                            w1: counts[0], w2: counts[1], misses: counts[2],
+                        })
+                    } else { None };
                     Ok(crate::live::SongLuaStagePlayerObservation {
                         player: identity, score, current_max_score, alive_seconds,
-                        life_begin, life_latest, autoplay,
+                        life_begin, life_latest, autoplay, committed,
                     })
                 })?;
                 players.push(observed);
@@ -249,7 +291,7 @@ fn record(call: &mut HostCall<'_>) -> Result<(), Error> {
     let music_seconds = sprites::number(call, seconds)? as f32;
     let helpers = table(call, call.captures()[2])?;
     let statistics = if get_static(call, helpers, OBSERVE_GETTERS)? == Value::Boolean(true) {
-        Some(read_statistics(call, globals)?)
+        Some(read_statistics(call, globals, None)?)
     } else {
         None
     };

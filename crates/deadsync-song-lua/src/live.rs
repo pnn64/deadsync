@@ -52,6 +52,20 @@ pub struct SongLuaStagePlayerObservation {
     pub life_begin: f64,
     pub life_latest: f64,
     pub autoplay: f64,
+    /// Full getter results from a committed stage, independently of live core state.
+    pub committed: Option<SongLuaStagePlayerCounters>,
+}
+
+#[cfg(feature = "test-support")]
+#[derive(Clone, Debug)]
+pub struct SongLuaStagePlayerCounters {
+    pub possible: f64,
+    pub current_possible: f64,
+    pub actual: f64,
+    pub failed: bool,
+    pub w1: f64,
+    pub w2: f64,
+    pub misses: f64,
 }
 
 #[cfg(feature = "test-support")]

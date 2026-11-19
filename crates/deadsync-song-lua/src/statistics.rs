@@ -68,6 +68,14 @@ impl SongRuntime {
     pub fn reset_stage_statistics(&mut self, context: &SongLuaCompileContext) -> Result<(), Error> {
         self.statistics_phase(Phase::Reset(Box::new(context.clone())))
     }
+    /// Save an owned stage at ScreenGameplay's completion boundary. Current
+    /// statistics continue receiving feeds after this independent copy exists.
+    pub fn commit_stage_statistics(&mut self) -> Result<(), Error> {
+        let Value::Table(catalog) = self.vm.rooted(self.catalog)? else { unreachable!() };
+        let key = self.vm.intern_static(b"statistics_commit")?;
+        let callback = self.vm.raw_table_get(catalog, key)?;
+        self.vm.call(callback, &[]).map(|_| ())
+    }
     /// Publish this frame to retained statistics and any bound life meters.
     /// It does not advance clocks, options, live players, health or messages.
     pub fn feed_stage_statistics(&mut self, frame: &crate::SongLuaLiveFrame) -> Result<(), Error> {

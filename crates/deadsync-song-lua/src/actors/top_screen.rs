@@ -116,7 +116,7 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     let catalog = table(call, call.captures()[2])?;
     let slots = get_static(call, catalog, b"game_state_slots")?;
     let screen = table(call, call.captures()[3])?;
-    transitions::bind_screen_completion(call, screen, data.requests.clone())?;
+    transitions::bind_screen_completion(call, screen, catalog, data.requests.clone())?;
     let mut captures = call.captures().to_vec();
     captures[2] = slots;
     let wheel = call.try_new_table()?;
@@ -379,7 +379,7 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
                     get_static(call, table(call, named)?, b"Out")
                 })?;
                 if out != Value::Nil {
-                    transitions::start(call, table(call, out)?)?;
+                    transitions::start_with_message(call, table(call, out)?, message.as_deref().unwrap())?;
                 }
                 data.requests.lock().unwrap().transition = message;
             }
