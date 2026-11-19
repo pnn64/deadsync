@@ -2535,6 +2535,15 @@ pub struct SongLuaCompileContext {
     /// These are external clocks, never expected actor states or draw results.
     #[cfg(feature = "test-support")]
     pub compile_clock_inputs: Vec<[f64; 3]>,
+    /// Optional Screen::Update actor deltas, aligned with compile_clock_inputs.
+    /// Empty keeps its existing actor delta for every root. When supplied,
+    /// screen/Player trees use these deltas and song layers retain the triplets.
+    #[cfg(feature = "test-support")]
+    pub compile_screen_actor_deltas: Vec<f32>,
+    /// Optional SongOptions/P1/P2 timer deltas, aligned with compile_clock_inputs.
+    /// Empty preserves the compiler's ordinary elapsed-time option clock.
+    #[cfg(feature = "test-support")]
+    pub compile_option_clock_deltas: Vec<[f32; LUA_PLAYERS + 1]>,
     pub music_length_seconds: f32,
     /// Whole-song note bounds resolved at catalog load, independently of
     /// audio duration. Note times include the load offset; hints stay absolute.
@@ -2620,6 +2629,10 @@ impl SongLuaCompileContext {
             host_clock_inputs: Vec::new(),
             #[cfg(feature = "test-support")]
             compile_clock_inputs: Vec::new(),
+            #[cfg(feature = "test-support")]
+            compile_screen_actor_deltas: Vec::new(),
+            #[cfg(feature = "test-support")]
+            compile_option_clock_deltas: Vec::new(),
             music_length_seconds: 0.0,
             song_note_bounds: None,
             style_name: "single".to_string(),
@@ -3032,6 +3045,9 @@ pub struct CompiledSongLua<OverlayActor> {
     pub overlay_eases: Vec<SongLuaOverlayEase>,
     /// Clock shared by rendered update samples; pauses need distinct song seconds.
     pub overlay_update_unit: SongLuaTimeUnit,
+    /// Global calibration already present in raw music-clock overlay and draw
+    /// captures. Runtime rebasing applies only the difference from this bake.
+    pub overlay_capture_calibration_seconds: f32,
     pub overlay_updates: Vec<SongLuaOverlayUpdateTrack>,
     /// Setter arguments retained only for reference audits; rendered tracks may tween them.
     #[cfg(feature = "test-support")]
@@ -3079,6 +3095,12 @@ impl<A: std::fmt::Debug> std::fmt::Debug for CompiledSongLua<A> {
         out.field("screen_overlay_index", &self.screen_overlay_index);
         out.field("overlay_eases", &self.overlay_eases);
         out.field("overlay_update_unit", &self.overlay_update_unit);
+        if self.overlay_capture_calibration_seconds != 0.0 {
+            out.field(
+                "overlay_capture_calibration_seconds",
+                &self.overlay_capture_calibration_seconds,
+            );
+        }
         out.field("overlay_updates", &self.overlay_updates);
         #[cfg(feature = "test-support")]
         out.field("overlay_writes", &self.overlay_writes);
@@ -3134,6 +3156,7 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             screen_overlay_index: None,
             overlay_eases: Vec::new(),
             overlay_update_unit: SongLuaTimeUnit::Beat,
+            overlay_capture_calibration_seconds: 0.0,
             overlay_updates: Vec::new(),
             #[cfg(feature = "test-support")]
             overlay_writes: Vec::new(),
@@ -3714,8 +3737,10 @@ pub fn sprite_image_frame_size(
 ) -> Option<(f32, f32)> {
     let (mut width, mut height) = texture_size?;
     if let Some((cols, rows)) = sheet_dims {
-        width /= cols.max(1) as f32;
-        height /= rows.max(1) as f32;
+        // RageTexture's source-frame dimensions use integer division. The
+        // fractional texture-coordinate rectangle does not set the default size.
+        width = (width / cols.max(1) as f32).floor();
+        height = (height / rows.max(1) as f32).floor();
     }
     Some((width, height))
 }
@@ -4026,8 +4051,12 @@ pub struct SongLuaOverlayState {
     pub blend: SongLuaOverlayBlendMode,
     pub vibrate: bool,
     pub effect_magnitude: [f32; 3],
-    /// Vibration contributed by composed ancestor ActorFrames.
-    pub inherited_vibrate: [f32; 3],
+    /// Raw signed random inputs for this draw, before native magnitude and zoom.
+    /// When absent, playback supplies its independent per-actor random sample.
+    pub vibrate_input: Option<[f32; 3]>,
+    /// Actor::GetZoom reads the destination tween's X zoom during PreDraw.
+    /// Live playback retains it separately from the current animated scale.
+    pub vibrate_zoom: Option<f32>,
     pub effect_clock: EffectClock,
     pub effect_timer: bool,
     pub effect_no_offset: bool,
@@ -4055,6 +4084,8 @@ pub struct SongLuaOverlayState {
     pub sprite_state_delay: f32,
     pub sprite_state_index: Option<u32>,
     pub sprite_animation_epoch: Option<f32>,
+    /// Position advanced by native Sprite movie updates, independent of song time.
+    pub movie_position_seconds: f32,
     pub decode_movie: bool,
     pub vert_spacing: Option<i32>,
     pub wrap_width_pixels: Option<i32>,
@@ -4138,7 +4169,8 @@ impl Default for SongLuaOverlayState {
             blend: SongLuaOverlayBlendMode::Alpha,
             vibrate: false,
             effect_magnitude: [0.0, 0.0, 0.0],
-            inherited_vibrate: [0.0, 0.0, 0.0],
+            vibrate_input: None,
+            vibrate_zoom: None,
             effect_clock: EffectClock::Time,
             effect_timer: true,
             effect_no_offset: false,
@@ -4163,6 +4195,7 @@ impl Default for SongLuaOverlayState {
             sprite_state_delay: 0.1,
             sprite_state_index: None,
             sprite_animation_epoch: None,
+            movie_position_seconds: 0.0,
             decode_movie: false,
             vert_spacing: None,
             wrap_width_pixels: None,
@@ -4317,6 +4350,7 @@ pub struct SongLuaOverlayStateDelta {
     pub sprite_playback_rate: Option<f32>,
     pub sprite_state_delay: Option<f32>,
     pub sprite_state_index: Option<u32>,
+    pub movie_position_seconds: Option<f32>,
     pub vert_spacing: Option<i32>,
     pub wrap_width_pixels: Option<i32>,
     pub max_width: Option<f32>,
@@ -4415,6 +4449,7 @@ impl SongLuaOverlayStateDelta {
             Target::SpriteLoop => self.sprite_loop.is_some(),
             Target::SpritePlaybackRate => self.sprite_playback_rate.is_some(),
             Target::SpriteStateDelay => self.sprite_state_delay.is_some(),
+            Target::MoviePositionSeconds => self.movie_position_seconds.is_some(),
             Target::SpriteStateIndex => self.sprite_state_index.is_some(),
             Target::VertSpacing => self.vert_spacing.is_some(),
             Target::WrapWidthPixels => self.wrap_width_pixels.is_some(),
@@ -4905,6 +4940,9 @@ pub const fn apply_overlay_delta(
     if let Some(value) = delta.sprite_state_index {
         state.sprite_state_index = Some(value);
     }
+    if let Some(value) = delta.movie_position_seconds {
+        state.movie_position_seconds = value;
+    }
     if let Some(value) = delta.vert_spacing {
         state.vert_spacing = Some(value);
     }
@@ -5183,6 +5221,9 @@ pub fn overlay_state_lerp(
     {
         from.sprite_state_index = Some(to);
     }
+    if let Some(to) = delta.movie_position_seconds {
+        from.movie_position_seconds = actor_lerp(from.movie_position_seconds, to, t);
+    }
     if let Some(to) = delta.vert_spacing
         && t >= 1.0 - f32::EPSILON
     {
@@ -5439,6 +5480,7 @@ const fn overlay_delta_is_empty(delta: &SongLuaOverlayStateDelta) -> bool {
         && delta.sprite_playback_rate.is_none()
         && delta.sprite_state_delay.is_none()
         && delta.sprite_state_index.is_none()
+        && delta.movie_position_seconds.is_none()
         && delta.vert_spacing.is_none()
         && delta.wrap_width_pixels.is_none()
         && delta.max_width.is_none()
@@ -5703,6 +5745,9 @@ const fn merge_overlay_delta(into: &mut SongLuaOverlayStateDelta, from: &SongLua
     if from.sprite_state_index.is_some() {
         into.sprite_state_index = from.sprite_state_index;
     }
+    if from.movie_position_seconds.is_some() {
+        into.movie_position_seconds = from.movie_position_seconds;
+    }
     if from.vert_spacing.is_some() {
         into.vert_spacing = from.vert_spacing;
     }
@@ -5852,6 +5897,7 @@ pub fn overlay_delta_intersection(
     copy_pair!(sprite_playback_rate);
     copy_pair!(sprite_state_delay);
     copy_pair!(sprite_state_index);
+    copy_pair!(movie_position_seconds);
     copy_pair!(vert_spacing);
     copy_pair!(wrap_width_pixels);
     copy_pair!(max_width);
@@ -5988,9 +6034,6 @@ pub fn push_song_lua_video_paths<'a, NoteskinSlot, ModelVertex, TextAttribute>(
         else {
             continue;
         };
-        if !overlay.initial_state.decode_movie {
-            continue;
-        }
         for (texture_path, texture_key) in std::iter::once((texture_path, texture_key))
             .chain(textures.iter().map(|texture| (&texture.path, &texture.key)))
         {
@@ -6193,6 +6236,7 @@ pub enum SongLuaOverlayUpdateTarget {
     Hibernating,
     DepthWrite,
     DepthTestOnFail,
+    MoviePositionSeconds,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -6304,6 +6348,9 @@ pub struct SongLuaOverlayRuntimeUpdateTrack {
 pub struct SongLuaCapturedChildActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+    /// Outermost wrapper first, with the resolved Judgment/Combo pose last.
+    /// An empty timeline keeps the ordinary theme placement path.
+    pub render_frames: Vec<SongLuaNoteFieldFrame>,
     /// Immutable sheet changes baked on the worker; all sheets are prewarmed.
     pub textures: Vec<SongLuaJudgmentTexture>,
 }
@@ -6339,6 +6386,9 @@ pub struct SongLuaCapturedActor {
     /// NoteField wrappers retain their own pose; they never modify Player.
     /// Baked on the song-loading worker, with no Lua calls during gameplay.
     pub note_field_frames: Vec<SongLuaNoteFieldFrame>,
+    /// The Player's own wrapper states (`AddWrapperState`), drawn outside the
+    /// Player's transform. Baked like `note_field_frames`.
+    pub player_wrapper_frames: Vec<SongLuaNoteFieldFrame>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

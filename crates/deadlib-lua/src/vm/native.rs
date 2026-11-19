@@ -70,7 +70,13 @@ impl Vm {
                 }
                 Ok(None)
             }
-            Value::Native(id)
+            Value::Native(id) => {
+                self.check_calls()?;
+                if matches!(id, 32..=41 | 43 | 44 | 46..=51 | 53 | 54)
+                    && let Some(actual) = self.try_fast_math(id, call, count)
+                {
+                    return Ok(Some(actual));
+                }
                 if matches!(
                     id,
                     PCALL
@@ -93,38 +99,34 @@ impl Vm {
                         | threads::CO_YIELD
                 ) || package::contains(id)
                     || self.scheduled_native(id) != 0
-                    || (self.hooks.mask != 0 && self.hooks.allowed()) =>
-            {
-                self.check_calls()?;
-                let base = self.registers.len();
-                self.reserve_registers(base + count.max(2) + 4)?;
-                self.resize_registers(base + count.max(2) + 4);
-                self.push_record(Frame {
-                    function: FrameKind::Native(id),
-                    pc: 0,
-                    base,
-                    stack_start: base,
-                    result: call,
-                    wanted: if tail {
-                        FRAME_OPEN
-                    } else {
-                        frame_wanted(wanted)
-                    },
-                    barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
-                    vararg_start: call + 1,
-                    vararg_count: count as u32,
-                    tail_calls: 0,
-                    c_level_bias: 0,
-                });
-                Ok(None)
-            }
-            Value::Native(id) => {
-                self.check_calls()?;
+                    || (self.hooks.mask != 0 && self.hooks.allowed())
+                {
+                    let base = self.registers.len();
+                    let end = base + count.max(2) + 4;
+                    self.reserve_registers(end)?;
+                    self.resize_registers(end);
+                    self.push_record(Frame {
+                        function: FrameKind::Native(id),
+                        pc: 0,
+                        base,
+                        stack_start: base,
+                        result: call,
+                        wanted: if tail {
+                            FRAME_OPEN
+                        } else {
+                            frame_wanted(wanted)
+                        },
+                        barriers: self.frames.last().map_or(1, |f| f.barriers + 1),
+                        vararg_start: call + 1,
+                        vararg_count: count as u32,
+                        tail_calls: 0,
+                        c_level_bias: 0,
+                    });
+                    return Ok(None);
+                }
                 if matches!(
                     id,
-                    0 | 3..=5 | NEXT | PAIRS_NEXT | 32..=41 | 43 | 44 | 46..=51 | 53 | 54
-                        | strings::STR_LEN
-                        | strings::STR_BYTE
+                    0 | 3..=5 | NEXT | PAIRS_NEXT | strings::STR_LEN | strings::STR_BYTE
                 ) && let Some(actual) = self.try_fast_native(id, call, count)
                 {
                     return Ok(Some(actual));

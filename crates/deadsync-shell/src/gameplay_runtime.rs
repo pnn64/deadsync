@@ -812,6 +812,7 @@ pub(crate) fn push_actors(
         .expect("theme scratch restored after every frame");
     let session = &state.gameplay.setup.session;
     let options = deadsync_song_lua::playback::FrameOptions {
+        uptime_seconds: arrow_effect_time_s,
         play_style: session.play_style,
         player_side: session.player_side,
         hide_song_bg: std::array::from_fn(|p| state.profiles()[p].hide_song_bg),

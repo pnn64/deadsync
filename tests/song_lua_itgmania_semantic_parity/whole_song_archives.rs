@@ -1171,7 +1171,7 @@ fn archive_reference_rejects_obsolete_replays() {
     assert!(std::panic::catch_unwind(|| validate_native_trace(&trace, &archive.manifest)).is_err());
 }
 
-const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--entry|--first-query|--through-second SECONDS]\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nUse --jobs N with --all or multiple positional selectors to replay independent fixtures on multiple cores. Each fixture preserves chronological Lua execution.\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
+const USAGE: &str = "Run one complete fixture:\n  cargo test --test full_song_lua <archive.tar.zst>\n\nCheck a native capture candidate before compression:\n  cargo test --test full_song_lua -- --archive <path.tar> --report <report.json> [--production] [--entry|--first-query|--through-second SECONDS]\n\n--production additionally exercises normal gameplay preparation and requires both the diagnostic comparisons and production gameplay checks to pass. Its report preserves both execution paths and their pending coverage. It requires native gameplay archives.\n\nDiagnostic cutoffs preserve all preceding frames and cannot accept an archive.\n\nCompressed candidates also accept .tar.zst.\n\nList fixtures:\n  cargo test --test full_song_lua -- --list\n\nRun the complete corpus:\n  cargo test --test full_song_lua -- --all\n\nUse --jobs N with --all or multiple positional selectors to replay independent fixtures on multiple cores. Each fixture preserves chronological Lua execution. --production is propagated to every selected worker.\n\nThe positional selector accepts a filename, SHA-256 prefix, or song title.\nNo selector prints this help; normal cargo test does not run the expensive corpus.";
 
 fn select_archive<'a>(
     index: &'a ArchiveIndex,
@@ -1248,6 +1248,11 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         args.drain(index..=index + 1);
         jobs
     } else { 1 };
+    let production_path = args.iter().position(|arg| arg == "--production")
+        .is_some_and(|index| {
+            args.remove(index);
+            true
+        });
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
@@ -1256,7 +1261,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     if args.first().is_some_and(|arg| arg == "--archive") {
         if !(args.len() == 4 || args.len() == 5 && matches!(args[4].as_str(), "--entry" | "--first-query")
             || args.len() == 6 && args[4] == "--through-second") || args[2] != "--report" {
-            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--entry|--first-query|--through-second SECONDS]");
+            eprintln!("expected --archive <path.tar|path.tar.zst> --report <report.json> [--production] [--entry|--first-query|--through-second SECONDS]");
             return ExitCode::FAILURE;
         }
         let path = Path::new(&args[1]);
@@ -1302,7 +1307,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             crate::paths::init();
             let reporter = progress::Reporter::start();
             let passed = replay_native_archive(&archive, scope, Path::new(&args[3]),
-                &reporter.progress, (path, &fixture_hash));
+                &reporter.progress, (path, &fixture_hash), production_path);
             assert_eq!(hash_file(path), fixture_hash, "candidate changed during replay");
             passed
         });
@@ -1364,7 +1369,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
         return ExitCode::FAILURE;
     };
     if jobs > 1 && selected.len() > 1 {
-        return run_parallel_archives(&selected, jobs);
+        return run_parallel_archives(&selected, jobs, production_path);
     }
     crate::paths::init();
     let started = std::time::Instant::now();
@@ -1391,8 +1396,9 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
             validate_archive(entry, &archive);
             if archive.manifest.itgmania.execution == "native_gameplay" {
                 return replay_native_archive(&archive, native_gameplay::Scope::Full,
-                    &archive.root.join("native-report.json"), progress, (&fixture_path, &entry.sha256));
+                    &archive.root.join("native-report.json"), progress, (&fixture_path, &entry.sha256), production_path);
             }
+            assert!(!production_path, "--production requires a native gameplay archive");
             progress.stage("reading native trace");
             let trace = read_trace_file(&archive.root.join(&archive.manifest.chart.trace));
             validate_native_trace(&trace, &archive.manifest);
@@ -1479,7 +1485,7 @@ pub(crate) fn run_cli(mut args: Vec<String>) -> std::process::ExitCode {
     }
 }
 
-fn run_parallel_archives(entries: &[&ArchiveEntry], jobs: usize) -> std::process::ExitCode {
+fn run_parallel_archives(entries: &[&ArchiveEntry], jobs: usize, production_path: bool) -> std::process::ExitCode {
     use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
     let executable = std::env::current_exe().expect("fixture runner executable");
     let next = AtomicUsize::new(0);
@@ -1497,6 +1503,7 @@ fn run_parallel_archives(entries: &[&ArchiveEntry], jobs: usize) -> std::process
                 command.arg(&entry.archive)
                     .env_remove("DEADSYNC_PERF_CONTROL")
                     .env_remove("DEADSYNC_PERF_ACK");
+                if production_path { command.arg("--production"); }
                 if let Some(mut metrics) = std::env::var_os("DEADSYNC_SONG_LUA_METRICS") {
                     metrics.push(format!(".worker-{index}.json"));
                     command.env("DEADSYNC_SONG_LUA_METRICS", metrics);
@@ -1522,6 +1529,7 @@ fn replay_native_archive(
     report_path: &Path,
     progress: &progress::Progress,
     fixture: (&Path, &str),
+    production_path: bool,
 ) -> bool {
     use std::io::Write as _;
     use std::sync::atomic::Ordering;
@@ -1553,6 +1561,17 @@ fn replay_native_archive(
             progress.frame.store(frame, Ordering::Relaxed);
             progress.frames.store(frames, Ordering::Relaxed);
         }).unwrap_or_else(|error| panic!("native gameplay replay failed: {error}"));
+    if production_path {
+        progress.stage("replaying production preparation and gameplay");
+        let production = native_gameplay::replay_production(
+            &trace, &trace_path, &archive.root.join(&archive.manifest.chart.simfile), scope,
+            |frame, frames| {
+                progress.frame.store(frame, Ordering::Relaxed);
+                progress.frames.store(frames, Ordering::Relaxed);
+            },
+        ).unwrap_or_else(|error| panic!("production gameplay replay failed: {error}"));
+        append_production_report(&mut report, production, scope);
+    }
     if let Some(observer) = &archive.manifest.runtime.command_observer {
         report["command_observer"] = serde_json::json!({
             "dynamic_commands": observer.dynamic_commands,
@@ -1567,7 +1586,10 @@ fn replay_native_archive(
     progress.checks.fetch_add(report["compared_stage_fields"].as_u64().expect("stage field count") as usize, Ordering::Relaxed);
     progress.failed.fetch_add(mismatches.iter().filter(|item|
         matches!(item["field"].as_str(), Some("possible" | "current_possible" | "actual" | "misses" |
-            "w1" | "w2" | "failed" | "life_latest" | "difficulty" | "description" | "meter"))).count(), Ordering::Relaxed);
+            "w1" | "w2" | "failed" | "life_latest" | "difficulty" | "description" | "meter" |
+            "gameplay_seconds" | "steps_seconds" | "enabled_player_count" | "player" | "score" |
+            "current_max_score" | "alive_seconds" | "life_begin" | "autoplay" | "life_latest_getter" |
+            "gameplay_clock_call" | "gameplay_clock_music_rate" | "gameplay_clock_steps_time_active"))).count(), Ordering::Relaxed);
     // Keep the full observations, but bind metadata before streaming once.
     // Reopening a large report to add two fields doubled serialization and I/O.
     let mut output = std::io::BufWriter::with_capacity(64 * 1024,
@@ -1579,7 +1601,91 @@ fn replay_native_archive(
     for mismatch in mismatches.iter().take(20) { eprintln!("  {mismatch}"); }
     for pending in coverage { eprintln!("  pending: {pending}"); }
     eprintln!("report: {}", report_path.display());
-    native_gameplay::archive_passes(scope, &report)
+    native_archive_report_passes(scope, &report)
+}
+
+fn native_archive_report_passes(scope: native_gameplay::Scope, report: &Value) -> bool {
+    native_gameplay::archive_passes(scope, report)
+        && (report.get("production_replay").is_none()
+            || (report["production_preparation_exercised"] == true
+                && report["production_gameplay_checks_passed"] == true
+                && report["diagnostic_replay_checks_passed"] == true))
+}
+
+fn append_production_report(report: &mut Value, production: Value, scope: native_gameplay::Scope) {
+    let diagnostic_passed = native_gameplay::archive_passes(scope, report);
+    report["diagnostic_replay_checks_passed"] = Value::Bool(diagnostic_passed);
+    report["production_preparation_exercised"] = production["production_preparation_exercised"].clone();
+    report["production_gameplay_checks_passed"] = production["production_gameplay_checks_passed"].clone();
+    report["execution_path"] = Value::String("production-and-diagnostic-live-lua".into());
+    report["diagnostic_compared_stage_fields"] = report["compared_stage_fields"].clone();
+    report["compared_stage_fields"] = serde_json::json!(
+        report["compared_stage_fields"].as_u64().expect("diagnostic comparison count")
+        + production["compared_stage_fields"].as_u64().expect("production comparison count"));
+    for mismatch in production["mismatches"].as_array().expect("production mismatches") {
+        let mut mismatch = mismatch.clone();
+        mismatch["execution_path"] = Value::String("production-live-lua".into());
+        report["mismatches"].as_array_mut().expect("diagnostic mismatches").push(mismatch);
+    }
+    for error in production["errors"].as_array().expect("production errors") {
+        report["errors"].as_array_mut().expect("diagnostic errors")
+            .push(Value::String(format!("production replay: {error}")));
+    }
+    for pending in production["pending_coverage"].as_array().expect("production pending coverage") {
+        report["pending_coverage"].as_array_mut().expect("diagnostic pending coverage")
+            .push(Value::String(format!("production replay: {}", pending.as_str().expect("coverage description"))));
+    }
+    report["production_replay"] = production;
+    let accepted = native_archive_report_passes(scope, report);
+    report["archive_accepted"] = Value::Bool(accepted);
+    report["diagnostic_only"] = Value::Bool(!accepted);
+    // Both paths retain explicit limits. A successful archive check cannot
+    // certify the application build, unobserved commands, or framebuffer pixels.
+    report["production_parity_proven"] = Value::Bool(false);
+    report["whole_song_parity_proven"] = Value::Bool(false);
+    report["pixel_parity_proven"] = Value::Bool(false);
+    report["acceptance_basis"] = Value::String("full diagnostic comparisons and production gameplay checks".into());
+}
+
+#[test]
+fn full_song_production_archive_requires_both_execution_paths() {
+    use native_gameplay::Scope;
+    let diagnostic = serde_json::json!({
+        "capture_completed_gameplay":true,"native_frames":3,"replayed_frames":3,
+        "compared_stage_fields":7,"mismatches":[],"errors":[],"pending_coverage":["diagnostic gap"],
+    });
+    let production = serde_json::json!({
+        "production_preparation_exercised":true,"production_gameplay_checks_passed":true,
+        "compared_stage_fields":5,"mismatches":[],"errors":[],"pending_coverage":["production gap"],
+    });
+    let combine = |diagnostic: Value, production: Value, scope| {
+        let mut report = diagnostic;
+        append_production_report(&mut report, production, scope);
+        report
+    };
+    let passed = combine(diagnostic.clone(), production.clone(), Scope::Full);
+    assert!(native_archive_report_passes(Scope::Full, &passed));
+    assert_eq!(passed["compared_stage_fields"], 12);
+    assert_eq!(passed["whole_song_parity_proven"], false);
+    assert_eq!(passed["pending_coverage"], serde_json::json!(["diagnostic gap", "production replay: production gap"]));
+    for field in ["production_preparation_exercised", "production_gameplay_checks_passed"] {
+        let mut failed = production.clone();
+        failed[field] = Value::Bool(false);
+        let report = combine(diagnostic.clone(), failed, Scope::Full);
+        assert!(!native_archive_report_passes(Scope::Full, &report), "accepted {field}");
+        assert_eq!(report["archive_accepted"], false);
+    }
+    let mut failed_diagnostic = diagnostic.clone();
+    failed_diagnostic["mismatches"] = serde_json::json!([{"field":"score"}]);
+    assert!(!native_archive_report_passes(Scope::Full, &combine(failed_diagnostic, production.clone(), Scope::Full)));
+    let mut failed_production = production.clone();
+    failed_production["mismatches"] = serde_json::json!([{"field":"life_latest"}]);
+    let failed = combine(diagnostic.clone(), failed_production, Scope::Full);
+    assert!(!native_archive_report_passes(Scope::Full, &failed));
+    assert_eq!(failed["mismatches"][0]["execution_path"], "production-live-lua");
+    let partial = combine(diagnostic, production, Scope::Entry);
+    assert!(!native_archive_report_passes(Scope::Entry, &partial));
+    assert_eq!(partial["archive_accepted"], false);
 }
 
 fn read_extracted_native_trace(archive: &ExtractedArchive) -> Value {

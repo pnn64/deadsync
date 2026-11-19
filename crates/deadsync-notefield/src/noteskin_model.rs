@@ -468,7 +468,9 @@ fn model_affine_transform(
 ) -> Matrix4 {
     let model_size = model.size();
     let model_h = model_size[1];
-    let scale = if model_h > f32::EPSILON && size[1] > f32::EPSILON {
+    // A zero or negative target height is an actual actor scale, including
+    // Mini's collapse/inversion; only unusable source bounds need a fallback.
+    let scale = if model_h > f32::EPSILON {
         size[1] / model_h
     } else {
         1.0
@@ -574,6 +576,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
     z: i16,
 ) -> Actor {
     Actor::TexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment,
         align: [0.0, 0.0],
         offset: xy,
@@ -620,7 +623,11 @@ fn flat_from_vertices<S: NoteskinSlot>(
     blend: BlendMode,
     z: i16,
 ) -> FlatTexturedMesh {
+    // Native Model::Model enables both Z test and Z write. Sprite masks compiled
+    // to mesh geometry keep sprite rendering semantics, independently of culling.
+    let use_depth = !slot.model_is_sprite_mesh();
     FlatTexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment,
         offset: xy,
         world_z: 0.0,
@@ -633,8 +640,8 @@ fn flat_from_vertices<S: NoteskinSlot>(
         uv_scale,
         uv_offset,
         uv_tex_shift,
-        depth_test: false,
-        depth_write: false,
+        depth_test: use_depth,
+        depth_write: use_depth,
         depth_test_on_fail: false,
         clear_depth: false,
         clear_depth_after: false,
@@ -764,11 +771,14 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
     }
 
     let tint = deadsync_noteskin::model_unlit_color(model.material, model_tint(color, draw));
-    let affine = model_affine_transform(model, size, rotation_deg, draw);
+    // Lane rotation is already in Y-up world coordinates. Actor::BeginDraw
+    // uses native screen-space XYZ rotation; Model::DrawPrimitives then flips
+    // its local Y axis. The compositor applies the outer screen-to-world flip.
+    let affine = model_affine_transform(model, size, -rotation_deg, draw);
     // Field draws inherit the Player or proxy/AFT camera. Preserve XYZ and
     // let that camera project them; a model-local focal distance also distorts
-    // orthographic AFT draws. The flat stream uses Y-up world coordinates.
-    let local_transform = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)) * affine;
+    // orthographic AFT draws. Keep the Model flip after the actor rotation.
+    let local_transform = affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
     let (geom_cache_key, vertices) = cache.model_geometry(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(flat_from_vertices(
@@ -779,7 +789,10 @@ pub(crate) fn noteskin_model_flat_draw_cached<S: NoteskinSlot>(
         vertices,
         geom_cache_key,
         local_transform,
-        model_environment(slot, affine, draw.texture_seconds, uv_rect),
+        model_environment(slot, affine, draw.texture_seconds, uv_rect).map(|mut environment| {
+            environment.transform = local_transform;
+            environment
+        }),
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -1432,6 +1445,74 @@ mod tests {
         assert!(depth_test);
         assert_eq!(blend, BlendMode::Alpha);
         assert_eq!(z, -9);
+    }
+
+    #[test]
+    fn flat_model_applies_native_rotation_before_model_y_flip() {
+        let slot = TestSlot::model();
+        let draw = ModelDrawState {
+            pos: [2.0, 3.0, 4.0],
+            rot: [30.0, 20.0, 15.0],
+            ..Default::default()
+        };
+        let mesh = noteskin_model_flat_draw_cached(
+            &slot,
+            draw,
+            [10.0, 20.0],
+            [64.0; 2],
+            [0.0, 0.0, 1.0, 1.0],
+            -90.0,
+            [1.0; 4],
+            BlendMode::Alpha,
+            140,
+            &mut ModelMeshCache::default(),
+        )
+        .unwrap();
+        // RageMatrixRotationXYZ uses negative X/Y and positive Z in column
+        // vector notation. The -90 world lane heading is +90 native degrees.
+        let flip_y = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+        let native = Matrix4::from_translation(Vector3::new(2.0, 3.0, 4.0))
+            * Matrix4::from_rotation_x(-30.0_f32.to_radians())
+            * Matrix4::from_rotation_y(-20.0_f32.to_radians())
+            * Matrix4::from_rotation_z(105.0_f32.to_radians())
+            * flip_y;
+        assert_matrix_eq(mesh.local_transform, native);
+        let world = flip_y * mesh.local_transform;
+        assert_matrix_eq(world, flip_y * native);
+        assert_eq!(world.w_axis.truncate(), Vector3::new(2.0, -3.0, 4.0));
+    }
+
+    #[test]
+    fn flat_model_preserves_zero_and_signed_target_scale() {
+        let slot = TestSlot::model();
+        let mut cache = ModelMeshCache::default();
+        for zoom in [0.0, 0.005, -0.005, 0.01, -0.01] {
+            let mesh = noteskin_model_flat_draw_cached(
+                &slot,
+                ModelDrawState::default(),
+                [10.0, 20.0],
+                [64.0 * zoom; 2],
+                [0.0, 0.0, 1.0, 1.0],
+                0.0,
+                [1.0; 4],
+                BlendMode::Alpha,
+                140,
+                &mut cache,
+            )
+            .expect("a degenerate target keeps its Model geometry");
+            assert_eq!(mesh.offset, [10.0, 20.0]);
+            // Player's uniform Mini scale preserves all three signed axes;
+            // the flat coordinate bridge negates the Model's Y axis.
+            assert_matrix_eq(
+                mesh.local_transform,
+                Matrix4::from_scale(Vector3::new(zoom, -zoom, zoom)),
+            );
+            for point in [Vector3::ZERO, Vector3::new(2.0, 3.0, 4.0)] {
+                let actual = mesh.local_transform.transform_point3(point);
+                let expected = Vector3::new(point.x * zoom, -point.y * zoom, point.z * zoom);
+                assert!((actual - expected).abs().max_element() < 0.000001);
+            }
+        }
     }
 
     #[test]

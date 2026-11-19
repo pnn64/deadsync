@@ -16,7 +16,7 @@ use deadlib_present::actors::{
     TextAttributes, TextContent,
 };
 use deadlib_present::anim::EffectState;
-use deadlib_present::compose::{ActorSegment, ActorXFold, FlatProxyStyle, TextLayoutCache};
+use deadlib_present::compose::{ActorSegment, FlatProxyStyle, TextLayoutCache};
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render_core::{
@@ -34,7 +34,6 @@ use deadsync_notefield::{
     ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride, actor_from_flat_draw,
     noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
-    song_lua_player_y_fold_actor,
 };
 use deadsync_noteskin::ModelDrawState;
 use deadsync_noteskin::NoteskinSlot;
@@ -61,6 +60,10 @@ pub type GameplayCoreState<P, S> = deadsync_gameplay::GameplayRuntimeState<
 mod native;
 #[path = "playback/prepare.rs"]
 mod prepare;
+#[path = "playback/live_topology.rs"]
+mod live_topology;
+#[path = "playback/movie.rs"]
+mod movie;
 use deadlib_assets::present_dsl::cover_sprite;
 pub use prepare::{
     PreparedGameplaySongLua, prepare_song_lua, prepare_song_lua_with_runtime_fallback,
@@ -78,10 +81,10 @@ const SONG_LUA_CHILD_ORDER_Z: u8 = 2;
 /// The gameplay frame thread owns it without synchronization. Screen entry
 /// sizes every child list, records the only actors whose state can change,
 /// propagates that set through descendants, and flattens immutable root order.
-/// Gameplay performs no insertion, growth, eviction, pruning, or destruction;
-/// dynamic ordering saturates at the compiled actor count and only re-sorts a
-/// bounded sibling list after a key change. All storage is released at the
-/// gameplay transition.
+/// Prepared timelines perform no insertion or growth during gameplay. Live
+/// wrapper insertion refreshes only the affected tree; ordinary frames reuse
+/// the resulting plan and only re-sort a sibling list after a key change. All
+/// storage is released at the gameplay transition.
 #[derive(Default)]
 struct SongLuaOverlayOrderCache {
     child_lists: Vec<Vec<usize>>,
@@ -144,13 +147,14 @@ impl SongLuaOverlayIndex {
 
 /// Song-lifetime topology lookup for Song Lua overlay rendering.
 ///
-/// The gameplay screen owns one immutable index for the root overlays and one
+/// The gameplay screen owns one index for the root overlays and one
 /// per visual layer. Construction runs during screen entry, groups AFT sprites
 /// by capture name and allocates a stable render-target handle for each AFT.
 /// Static camera scopes are resolved at screen entry; trees whose camera FOV can
-/// change retain the indexed ancestor fallback. There is no synchronization,
-/// gameplay allocation, miss, eviction, or pruning path. Storage is bounded by
-/// the compiled overlay count and is released with the gameplay screen.
+/// change retain the indexed ancestor fallback. Live wrapper insertion rebuilds
+/// the affected index while preserving its capture handles. Ordinary frames
+/// reuse the index without synchronization, allocation, eviction or pruning.
+/// Storage follows the owned overlay count and is released with the screen.
 #[derive(Default)]
 struct SongLuaOverlayTopologyIndex {
     aft_ancestors: Vec<SongLuaOverlayIndex>,
@@ -260,13 +264,13 @@ impl SongLuaOverlayTopologyIndex {
         camera_states: &mut [SongLuaOverlayIndex],
     ) {
         camera_states.fill(SongLuaOverlayIndex::default());
-        for (index, overlay) in overlays.iter().enumerate() {
+        let order = song_lua_parent_order(overlays);
+        for ordinal in 0..overlays.len() {
+            let index = order.as_ref().map_or(ordinal, |order| order[ordinal]);
+            let overlay = &overlays[index];
             let camera_index = overlay.parent_index.and_then(|parent_index| {
                 let parent = overlays.get(parent_index)?;
                 let parent_state = state_at(parent_index)?;
-                if parent_index >= index {
-                    return None;
-                }
                 if matches!(parent.kind, SongLuaOverlayKind::ActorFrameTexture { .. }) {
                     return None;
                 }
@@ -388,8 +392,9 @@ struct SongLuaProjectedMeshScratch {
     noteskin_model_cache: Option<ModelMeshCache>,
     text_diffuse_attributes: Option<Arc<Vec<TextAttribute>>>,
     text_glow_attributes: Option<Arc<Vec<TextAttribute>>>,
+    uppercase_source: Option<Arc<str>>,
     uppercase_text: Option<Arc<str>>,
-    uppercase_changes: Vec<Arc<str>>,
+    uppercase_changes: Vec<(Arc<str>, Arc<str>)>,
     rainbow_text_attributes: Option<[Arc<[TextAttribute]>; SONG_LUA_TEXT_RAINBOW_COLORS.len()]>,
     capacity: usize,
     text_attribute_capacity: usize,
@@ -438,6 +443,7 @@ impl SongLuaProjectedMeshScratch {
             noteskin_model_cache: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
+            uppercase_source: None,
             uppercase_text: None,
             uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
@@ -464,6 +470,7 @@ impl SongLuaProjectedMeshScratch {
             noteskin_model_cache: None,
             text_diffuse_attributes: None,
             text_glow_attributes: None,
+            uppercase_source: None,
             uppercase_text: None,
             uppercase_changes: Vec::new(),
             rainbow_text_attributes: None,
@@ -528,13 +535,14 @@ impl SongLuaProjectedMeshScratch {
         width: usize,
         height: usize,
         edge_fade: [f32; 4],
+        colors: SongLuaSpriteColors,
     ) -> Arc<Vec<TexturedMeshVertex>> {
         update_song_lua_shared_vec(
             &mut self.textured_vertices,
             self.capacity,
             &mut self.replacements,
             |vertices| {
-                append_projected_mesh_vertices(grid, width, height, edge_fade, vertices);
+                append_projected_mesh_vertices(grid, width, height, edge_fade, colors, vertices);
             },
         )
     }
@@ -569,11 +577,30 @@ impl SongLuaProjectedMeshScratch {
         )
     }
 
-    fn rainbow_attributes(&mut self, text: &str, total_elapsed: f32) -> TextAttributes {
-        let phase = song_lua_rainbow_scroll_phase(total_elapsed);
-        if let Some(attributes) = self.rainbow_text_attributes.as_ref() {
+    fn uppercase(&mut self, text: &Arc<str>, index: Option<usize>) -> Arc<str> {
+        if let Some((source, uppercase)) = index.and_then(|index| self.uppercase_changes.get(index))
+            && source == text
+        {
+            return Arc::clone(uppercase);
+        }
+        if self.uppercase_source.as_ref() != Some(text) {
+            self.uppercase_source = Some(Arc::clone(text));
+            self.uppercase_text = Some(Arc::from(text.to_uppercase()));
+        }
+        Arc::clone(self.uppercase_text.as_ref().expect("uppercase text has a source"))
+    }
+
+    fn rainbow_attributes(&mut self, text: &str, uptime_seconds: f64) -> TextAttributes {
+        let phase = song_lua_rainbow_scroll_phase(uptime_seconds);
+        let char_count = text.chars().count();
+        // Live settext can change the number of glyphs after screen preparation.
+        // Reuse a prewarmed phase only while it covers the current text exactly.
+        if let Some(attributes) = self.rainbow_text_attributes.as_ref()
+            && attributes[phase].len() == char_count
+        {
             return TextAttributes::from(Arc::clone(&attributes[phase]));
         }
+        self.text_attribute_capacity = self.text_attribute_capacity.max(char_count);
         self.update_text_diffuse(|out| {
             append_song_lua_rainbow_scroll_attributes_at_phase(text, phase, out);
         })
@@ -816,10 +843,11 @@ fn song_lua_projected_mesh_scratch_for<S: NoteskinSlot + Clone>(
                     attributes.len(),
                     char_count.max(uppercase_text.chars().count()),
                 );
+                scratch.uppercase_source = Some(Arc::clone(text));
                 scratch.uppercase_text = Some(uppercase_text);
                 scratch.uppercase_changes = text_changes
                     .iter()
-                    .map(|(_, text)| Arc::from(text.to_uppercase()))
+                    .map(|(_, text)| (Arc::clone(text), Arc::from(text.to_uppercase())))
                     .collect();
                 if text_changes.is_empty()
                     && (1..=SONG_LUA_RAINBOW_TEXT_PREWARM_MAX_CHARS).contains(&char_count)
@@ -1013,16 +1041,19 @@ fn song_lua_overlay_child_list_index(parent_index: Option<usize>) -> usize {
 }
 
 fn song_lua_order_source<S>(overlays: &[SongLuaOverlayActor<S>], mut index: usize) -> usize {
-    // The compiler emits each wrapper immediately before its sole draw child.
-    // Wrappers are states of that child, not siblings with their own draw order.
+    // Prepared wrappers precede their child; live wrappers append without moving
+    // existing visual slots. Both inherit their owner's sibling order.
     while matches!(overlays[index].kind, SongLuaOverlayKind::WrapperState) {
         let next = index + 1;
-        if !overlays
+        let next = if overlays
             .get(next)
             .is_some_and(|actor| actor.parent_index == Some(index))
         {
-            break;
-        }
+            Some(next)
+        } else {
+            overlays.iter().position(|actor| actor.parent_index == Some(index))
+        };
+        let Some(next) = next else { break };
         index = next;
     }
     index
@@ -1034,7 +1065,7 @@ fn song_lua_sort_static_children<S>(overlays: &[SongLuaOverlayActor<S>], childre
             overlays[song_lua_order_source(overlays, idx)]
                 .initial_state
                 .draw_order,
-            idx,
+            song_lua_order_source(overlays, idx),
         )
     });
 }
@@ -1112,10 +1143,12 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         .map(|overlay| {
             song_lua_compose_effect(overlay.initial_state.effect_mode)
                 || overlay.initial_state.rainbow
+                || overlay.initial_state.vibrate
                 || overlay.message_commands.iter().any(|command| {
                     command.blocks.iter().any(|block| {
                         block.delta.effect_mode.is_some_and(song_lua_compose_effect)
                             || block.delta.rainbow == Some(true)
+                            || block.delta.vibrate == Some(true)
                     })
                 })
         })
@@ -1185,7 +1218,8 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
             crate::SongLuaOverlayUpdateTarget::EffectMode => track.samples.iter().any(|sample| {
                 matches!(sample.value, crate::SongLuaOverlayUpdateValue::EffectMode(mode) if song_lua_compose_effect(mode))
             }),
-            crate::SongLuaOverlayUpdateTarget::Rainbow => track.samples.iter().any(|sample| {
+            crate::SongLuaOverlayUpdateTarget::Rainbow
+            | crate::SongLuaOverlayUpdateTarget::Vibrate => track.samples.iter().any(|sample| {
                 matches!(sample.value, crate::SongLuaOverlayUpdateValue::Bool(true))
             }),
             _ => false,
@@ -1223,11 +1257,14 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         .enumerate()
         .filter_map(|(index, dynamic)| dynamic.then_some(index))
         .collect::<Box<[_]>>();
-    let mut dynamic_composed = Vec::with_capacity(overlays.len());
+    let mut dynamic_composed = vec![false; overlays.len()];
     let mut dynamic_composed_indices = Vec::new();
     let mut effect_ancestors = vec![false; overlays.len()];
     let mut effect_composed_indices = Vec::new();
-    for (index, overlay) in overlays.iter().enumerate() {
+    let parent_order = song_lua_parent_order(overlays);
+    for ordinal in 0..overlays.len() {
+        let index = parent_order.as_ref().map_or(ordinal, |order| order[ordinal]);
+        let overlay = &overlays[index];
         let inherited_effect = overlay
             .parent_index
             .is_some_and(|parent| effect_ancestors[parent] || effect_capable[parent]);
@@ -1243,7 +1280,7 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
                 .and_then(|parent| dynamic_composed.get(parent))
                 .copied()
                 .unwrap_or(false);
-        dynamic_composed.push(dynamic);
+        dynamic_composed[index] = dynamic;
         if dynamic {
             dynamic_composed_indices.push(index);
         }
@@ -1620,7 +1657,7 @@ fn song_lua_sprite_sheet_index(
     let start = song_lua_valid_sprite_state_index(state).unwrap_or(0);
     let (cols, rows) = sheet;
     let total = cols.saturating_mul(rows).max(1);
-    let logical_state = if state.sprite_animate && states.len() > 1 {
+    let logical_state = if state.sprite_animate && !states.is_empty() {
         crate::sprite_custom_animation_state_from(
             states,
             start,
@@ -1990,14 +2027,6 @@ pub fn song_lua_overlay_compose_state<S: NoteskinSlot + Clone>(
     child.hibernating |= parent.hibernating;
     child.mask_source |= parent.mask_source;
     child.mask_dest |= parent.mask_dest;
-    for (axis, inherited) in child.inherited_vibrate.iter_mut().enumerate() {
-        *inherited += parent.inherited_vibrate[axis]
-            + if parent.vibrate {
-                parent.effect_magnitude[axis]
-            } else {
-                0.0
-            };
-    }
     child.rot_x_deg += parent.rot_x_deg;
     child.rot_y_deg += parent.rot_y_deg;
     if let Some(rotation) = song_lua_join_rotation(
@@ -2128,6 +2157,36 @@ fn song_lua_overlay_states_from_local<S: NoteskinSlot + Clone>(
     out
 }
 
+/// Live AddWrapperState appends a parent after its existing child. Visit each
+/// parent before its child without reindexing any visual resource.
+/// The ordinary prepared layout keeps its allocation-free numeric order.
+fn song_lua_parent_order<S>(overlays: &[SongLuaOverlayActor<S>]) -> Option<Vec<usize>> {
+    if overlays.iter().enumerate().all(|(index, actor)|
+        actor.parent_index.is_none_or(|parent| parent < index))
+    {
+        return None;
+    }
+    let mut visited = vec![0u8; overlays.len()];
+    let mut order = Vec::with_capacity(overlays.len());
+    let mut chain = Vec::new();
+    for start in 0..overlays.len() {
+        let mut next = Some(start);
+        while let Some(index) = next {
+            assert!(index < overlays.len(), "owned overlay parent is out of bounds");
+            if visited[index] == 2 { break; }
+            assert_eq!(visited[index], 0, "cycle in owned overlay parents");
+            visited[index] = 1;
+            chain.push(index);
+            next = overlays[index].parent_index;
+        }
+        while let Some(index) = chain.pop() {
+            visited[index] = 2;
+            order.push(index);
+        }
+    }
+    Some(order)
+}
+
 fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
     overlays: &[SongLuaOverlayActor<S>],
     local_states: &[SongLuaOverlayState],
@@ -2137,9 +2196,16 @@ fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
     clock: [f32; 2],
 ) {
     out.clear();
-    out.reserve(overlays.len());
-    for (idx, overlay) in overlays.iter().enumerate() {
-        let local = local_states.get(idx).copied().unwrap_or_default();
+    out.resize(overlays.len(), SongLuaOverlayState::default());
+    let order = song_lua_parent_order(overlays);
+    for ordinal in 0..overlays.len() {
+        let idx = order.as_ref().map_or(ordinal, |order| order[ordinal]);
+        let overlay = &overlays[idx];
+        let local = song_lua_draw_input_state(
+            local_states.get(idx).copied().unwrap_or_default(),
+            idx,
+            clock,
+        );
         let composed = overlay
             .parent_index
             .and_then(|parent_index| {
@@ -2158,7 +2224,7 @@ fn song_lua_overlay_states_from_local_all_into<S: NoteskinSlot + Clone>(
                 )
             })
             .unwrap_or_else(|| song_lua_pre_draw_state(local, clock));
-        out.push(composed);
+        out[idx] = composed;
     }
 }
 
@@ -2186,7 +2252,11 @@ fn song_lua_overlay_states_from_local_into<S: NoteskinSlot + Clone>(
         let Some(overlay) = overlays.get(idx) else {
             continue;
         };
-        let local = local_states.get(idx).copied().unwrap_or_default();
+        let local = song_lua_draw_input_state(
+            local_states.get(idx).copied().unwrap_or_default(),
+            idx,
+            clock,
+        );
         out[idx] = overlay
             .parent_index
             .and_then(|parent_index| {
@@ -2628,7 +2698,6 @@ struct SongLuaDirectProxySource {
     draw_end: usize,
     target: [f32; 2],
     tint: [f32; 4],
-    x_fold: Option<ActorXFold>,
     camera: Option<Matrix4>,
     player_camera: Option<SongLuaDirectPlayerCamera>,
 }
@@ -3499,23 +3568,90 @@ fn song_lua_screen_projection(
         return Matrix4::IDENTITY;
     }
     let (view, projection) = song_lua_overlay_view_proj(state, source_size[0], source_size[1])
-        .unwrap_or_else(|| {
-            (
-                Matrix4::IDENTITY,
-                glam::camera::rh::proj::opengl::orthographic(
-                    // Lua geometry carries LoadMenuPerspective(0)'s native depth,
-                    // even when the presentation camera itself spans -1/+1.
-                    0.0,
-                    source_size[0],
-                    source_size[1],
-                    0.0,
-                    -1000.0,
-                    1000.0,
-                ),
-            )
-        });
-    let camera = projection * view;
-    camera * model * camera.inverse()
+    .unwrap_or_else(|| {
+        (
+            Matrix4::IDENTITY,
+            glam::camera::rh::proj::opengl::orthographic(
+                // Lua geometry carries LoadMenuPerspective(0)'s native depth,
+                // even when the presentation camera itself spans -1/+1.
+                0.0,
+                source_size[0],
+                source_size[1],
+                0.0,
+                -1000.0,
+                1000.0,
+            ),
+        )
+    });
+    song_lua_camera_world_projection(projection * view, model)
+}
+
+fn song_lua_camera_world_projection(camera: Matrix4, model: Matrix4) -> Matrix4 {
+    if model == Matrix4::IDENTITY {
+        return Matrix4::IDENTITY;
+    }
+    let camera = camera.as_dmat4();
+    // Perspective depth and W are nearly equal at the screen plane. Inverting
+    // that camera in f32 amplifies cancellation into visible clip-coordinate
+    // errors. Keep the native f32 coefficients, but calculate this change of
+    // basis in f64 before storing the presentation matrix.
+    (camera * model.as_dmat4() * camera.inverse()).as_mat4()
+}
+
+#[derive(Clone, Copy)]
+struct SongLuaDrawCamera {
+    state: Option<SongLuaOverlayState>,
+    world: Matrix4,
+}
+
+impl From<Option<SongLuaOverlayState>> for SongLuaDrawCamera {
+    fn from(state: Option<SongLuaOverlayState>) -> Self {
+        Self { state, world: Matrix4::IDENTITY }
+    }
+}
+
+impl SongLuaDrawCamera {
+    fn with_screen(
+        state: Option<SongLuaOverlayState>,
+        screen: Option<SongLuaOverlayState>,
+        clock: [f32; 2],
+    ) -> Self {
+        Self {
+            state,
+            world: screen.map_or(Matrix4::IDENTITY, |screen| song_lua_draw_matrix(screen, clock).0),
+        }
+    }
+
+    fn is_active(self) -> bool {
+        self.state.is_some() || self.world != Matrix4::IDENTITY
+    }
+
+    fn uses_generic_mask(self, state: SongLuaOverlayState, size: [f32; 2]) -> bool {
+        (state.mask_source || state.mask_dest)
+            && self.state.and_then(|camera| song_lua_overlay_view_proj(camera, size[0], size[1])).is_none()
+    }
+
+    fn view_proj(self, width: f32, height: f32) -> Option<SongLuaDrawViewProjection> {
+        let camera = self.state.and_then(|state| song_lua_overlay_view_proj(state, width, height));
+        if camera.is_none() && self.world == Matrix4::IDENTITY {
+            return None;
+        }
+        let (view, projection) = camera.unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
+        Some(SongLuaDrawViewProjection { view, projection, world: self.world })
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SongLuaDrawViewProjection {
+    view: Matrix4,
+    projection: Matrix4,
+    world: Matrix4,
+}
+
+impl From<(Matrix4, Matrix4)> for SongLuaDrawViewProjection {
+    fn from((view, projection): (Matrix4, Matrix4)) -> Self {
+        Self { view, projection, world: Matrix4::IDENTITY }
+    }
 }
 
 fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
@@ -3568,6 +3704,7 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
         .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
     Some(Actor::TexturedMesh {
         environment: None,
+        vertex_color_encoding: Default::default(),
         align: [0.0; 2],
         offset: [0.0; 2],
         world_z: 0.0,
@@ -3764,9 +3901,10 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
     assets: &AssetManager,
     screen: [f32; 2],
     clock: [f32; 2],
-    elapsed: f32,
+    elapsed: impl Into<SongLuaDrawTime>,
     z: i16,
 ) {
+    let elapsed = elapsed.into();
     let frame = &scratch.frames[frame_index];
     let Some(batch) = frame.owners.iter().position(|index| *index == owner) else {
         return;
@@ -3876,7 +4014,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                                 screen[1],
                                 clock[0],
                                 clock[1],
-                                elapsed,
+                                elapsed.animation_elapsed,
                                 mesh.as_deref_mut(),
                             )
                         {
@@ -3893,7 +4031,7 @@ fn song_lua_draw_owner<S: NoteskinSlot + Clone>(
                         screen[1],
                         clock[0],
                         clock[1],
-                        elapsed,
+                        elapsed.animation_elapsed,
                         mesh.as_deref_mut(),
                     )
                     .is_none()
@@ -4061,6 +4199,13 @@ struct SongLuaCaptureTransform {
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
+    /// Player Z translation (BeginDraw), toward the camera.
+    target_z: f32,
+    /// Native screen-space matrix of the Player's wrapper states.
+    wrappers: Matrix4,
+    /// Menu camera and child NoteField model, kept apart so Player precedes
+    /// the child's wrappers and tilt even when either has zero zoom.
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
 }
 
 #[inline(always)]
@@ -4096,6 +4241,68 @@ fn song_lua_capture_new_actors(
             tint: [1.0; 4],
             blend: None,
         });
+    }
+}
+
+fn song_lua_capture_screen_actors(
+    dest: &mut Option<SongLuaActorSegments>,
+    actors: &mut Vec<Actor>,
+    start: usize,
+    scratch: Option<&mut SongLuaProxyActorScratch>,
+    retain_original: bool,
+    projections: &mut Vec<SongLuaScreenProjectionRange>,
+    originals: &SongLuaScreenCaptureOriginals,
+) {
+    if dest.is_none() {
+        return;
+    }
+    let has_projection = projections.last().is_some_and(|range| range.end > start);
+    let has_originals = originals.ranges.iter().any(|range| {
+        range.start >= start && range.end <= actors.len()
+    });
+    if !has_originals && (!retain_original || !has_projection) {
+        song_lua_capture_new_actors(dest, actors, start, scratch, retain_original);
+        if !retain_original {
+            projections.retain(|range| range.end <= start);
+        }
+        return;
+    }
+    // Background proxies capture their target before ScreenGameplay's model.
+    // Replace only leaves that baked that model, preserving HUD, AFT, and
+    // immediate-draw spans. Retained ordinary actors keep their original indices
+    // so the presentation's borrowed projection ranges remain valid.
+    let fill = |children: &mut Vec<Actor>| {
+        let mut cursor = start;
+        for range in originals.ranges.iter().filter(|range| {
+            range.start >= start && range.end <= actors.len()
+        }) {
+            debug_assert!(range.start >= cursor && range.end >= range.start);
+            children.extend_from_slice(&actors[cursor..range.start]);
+            children.extend_from_slice(
+                &originals.actors[range.original_start..range.original_end],
+            );
+            cursor = range.end;
+        }
+        children.extend_from_slice(&actors[cursor..]);
+    };
+    let children = scratch
+        .and_then(SongLuaProxyActorScratch::next_screen)
+        .and_then(|scratch| {
+            scratch.refill([0.0; 2], fill)
+        })
+        .or_else(|| {
+            let mut children = Vec::with_capacity(actors.len() - start + originals.actors.len());
+            fill(&mut children);
+            (!children.is_empty()).then(|| Arc::from(children))
+        });
+    if let Some(children) = children {
+        dest.as_mut()
+            .expect("capture destination was checked")
+            .push(children);
+    }
+    if !retain_original {
+        actors.truncate(start);
+        projections.retain(|range| range.end <= start);
     }
 }
 
@@ -4185,6 +4392,9 @@ fn song_lua_render_captured_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])
@@ -4285,6 +4495,9 @@ fn prepare_flat_proxy_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])?;
@@ -4349,6 +4562,9 @@ fn prepare_field_proxy_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])?;
@@ -4410,6 +4626,9 @@ fn capture_player_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
+                transform.field_camera_parts,
             );
             append_song_lua_player_transform(
                 std::iter::empty(),
@@ -4432,6 +4651,9 @@ fn capture_player_source(
                 transform.zoom_x,
                 transform.zoom_y,
                 transform.zoom_z,
+                transform.target_z,
+                transform.wrappers,
+                transform.field_camera_parts,
             );
         })
         .map(|source| [source])
@@ -4473,6 +4695,34 @@ fn song_lua_captured_segment_actors(segment: &[Actor]) -> &[Actor] {
         ] => children,
         _ => segment,
     }
+}
+
+fn song_lua_captured_camera_range(actors: &[Actor], camera: Matrix4) -> Option<[usize; 2]> {
+    for (start, actor) in actors.iter().enumerate() {
+        match actor {
+            Actor::Camera { view_proj, .. } if *view_proj == camera => {
+                return Some([start, start + 1]);
+            }
+            Actor::CameraPush { view_proj } if *view_proj == camera => {
+                let mut depth = 1usize;
+                for (offset, actor) in actors[start + 1..].iter().enumerate() {
+                    match actor {
+                        Actor::CameraPush { .. } => depth += 1,
+                        Actor::CameraPop => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some([start, start + offset + 2]);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn song_lua_note_field_proxy_actors(segment: &[Actor]) -> &[Actor] {
@@ -5355,7 +5605,7 @@ fn song_lua_direct_proxy(
         draw_end: source.draw_end,
         offset,
         z,
-        style: FlatProxyStyle::new(source.tint, state.diffuse, source.x_fold),
+        style: FlatProxyStyle::new(source.tint, state.diffuse, None),
         blend: song_lua_overlay_blend(state.blend),
         enclosing_camera,
         camera,
@@ -5717,7 +5967,8 @@ fn song_lua_push_order<S: NoteskinSlot + Clone>(
             order_cache.child_lists[list_idx].sort_by(|&left, &right| {
                 let left_z = f32::from_bits(order_cache.last_z_keys[left]);
                 let right_z = f32::from_bits(order_cache.last_z_keys[right]);
-                left_z.total_cmp(&right_z).then_with(|| left.cmp(&right))
+                left_z.total_cmp(&right_z).then_with(||
+                    song_lua_order_source(overlays, left).cmp(&song_lua_order_source(overlays, right)))
             });
         }
         order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_Z;
@@ -5742,7 +5993,7 @@ fn song_lua_push_order<S: NoteskinSlot + Clone>(
         }
         if changed {
             order_cache.child_lists[list_idx]
-                .sort_by_key(|&idx| (order_cache.last_draw_orders[idx], idx));
+                .sort_by_key(|&idx| (order_cache.last_draw_orders[idx], song_lua_order_source(overlays, idx)));
         }
         order_cache.sort_modes[list_idx] = SONG_LUA_CHILD_ORDER_DRAW;
     } else if order_cache
@@ -5862,7 +6113,11 @@ fn song_lua_capture_overlay_child_states<S: NoteskinSlot + Clone>(
         let Some(overlay) = overlays.get(idx) else {
             continue;
         };
-        let local = local_overlay_states.get(idx).copied().unwrap_or_default();
+        let local = song_lua_draw_input_state(
+            local_overlay_states.get(idx).copied().unwrap_or_default(),
+            idx,
+            clock,
+        );
         let parent = out.get(parent_index).copied().unwrap_or_default();
         let parent_overlay = &overlays[parent_index];
         out[idx] = song_lua_overlay_compose_state(
@@ -5903,9 +6158,10 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(overlay) = overlays.get(index) else {
         return;
     };
@@ -5969,7 +6225,7 @@ fn song_lua_append_local_proxy_target<S: NoteskinSlot + Clone>(
                 overlay_space_height,
                 effect_time,
                 effect_beat,
-                total_elapsed,
+                total_elapsed.animation_elapsed,
                 projected_mesh_scratch.get_mut(index),
             )
             .is_none()
@@ -6011,10 +6267,11 @@ fn song_lua_build_local_proxy_actor<S: NoteskinSlot + Clone>(
     render_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
 ) -> Option<Actor> {
+    let total_elapsed = total_elapsed.into();
     let mut target_state = local_overlay_states.get(target_index).copied()?;
     // ITG ActorProxy::DrawPrimitives temporarily unhides its target for the
     // proxied draw, then restores the target's hidden state.
@@ -6117,11 +6374,12 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     order_scratch: &mut Vec<usize>,
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(render_space) =
         song_lua_aft_size(&overlays[capture_index], overlay_states[capture_index])
     else {
@@ -6242,7 +6500,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
                     overlay_space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 ) {
                     out.extend(actors);
@@ -6261,7 +6519,7 @@ fn song_lua_capture_children_into<S: NoteskinSlot + Clone>(
                     overlay_space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 )
                 .is_none()
@@ -6573,6 +6831,7 @@ pub fn apply_overlay_update(
     set_value!(SpriteLoop, Bool, sprite_loop);
     set_value!(SpritePlaybackRate, F32, sprite_playback_rate);
     set_value!(SpriteStateDelay, F32, sprite_state_delay);
+    set_value!(MoviePositionSeconds, F32, movie_position_seconds);
     set_option!(SpriteStateIndex, U32, sprite_state_index);
     set_option!(VertSpacing, I32, vert_spacing);
     set_option!(WrapWidthPixels, I32, wrap_width_pixels);
@@ -6650,10 +6909,13 @@ fn apply_song_lua_overlay_runtime_updates_for(
         {
             t = snap.t;
         }
-        // Timer phase changes and native base rotations take effect immediately.
+        // Native clocks and base rotations take effect on their recorded frame.
+        // In particular, interpolating toward a future movie seek would show
+        // its frames early, before SetSecondsIntoAnimation actually ran.
         let value = if matches!(
             track.target,
             crate::SongLuaOverlayUpdateTarget::EffectTime
+                | crate::SongLuaOverlayUpdateTarget::MoviePositionSeconds
                 | crate::SongLuaOverlayUpdateTarget::BaseRotation
                 | crate::SongLuaOverlayUpdateTarget::BaseAlpha
         ) {
@@ -7015,6 +7277,26 @@ fn song_lua_player_render_state<
     )
 }
 
+fn song_lua_layer_parent_state<S: NoteskinSlot + Clone>(
+    outer: SongLuaOverlayState,
+    inner: SongLuaOverlayState,
+    size: [f32; 2],
+    clock: [f32; 2],
+) -> SongLuaOverlayState {
+    if outer == SongLuaOverlayState::default() {
+        inner
+    } else {
+        song_lua_overlay_compose_state(
+            &SongLuaOverlayKind::<S>::ActorFrame,
+            outer,
+            inner,
+            size[0],
+            size[1],
+            clock,
+        )
+    }
+}
+
 fn song_lua_song_foreground_state_from(
     now: f32,
     song_foreground: &SongLuaCapturedActor,
@@ -7039,13 +7321,25 @@ fn song_lua_captured_actor_state_from(
     )
 }
 
-fn song_lua_child_visible(
+fn song_lua_child_render(
     now: f32,
+    clock: [f32; 2],
     actor: &SongLuaCapturedChildActor,
     events: &[SongLuaOverlayMessageRuntime],
     message_cache: &mut SongLuaMessageStateCache,
     captured: bool,
-) -> bool {
+) -> (Option<deadsync_notefield::HudActorTransform>, bool) {
+    if actor
+        .render_frames
+        .first()
+        .is_some_and(|frame| frame.second <= clock[0])
+    {
+        let (matrix, tint, visible) = song_lua_render_chain(&actor.render_frames, clock, captured);
+        return (
+            Some(deadsync_notefield::HudActorTransform { matrix, tint }),
+            visible,
+        );
+    }
     let state = song_lua_captured_state_from(
         now,
         actor.initial_state,
@@ -7053,7 +7347,7 @@ fn song_lua_child_visible(
         Some(events),
         message_cache,
     );
-    !state.hibernating && (state.visible || captured)
+    (None, !state.hibernating && (state.visible || captured))
 }
 
 fn song_lua_captured_state_from(
@@ -7113,13 +7407,6 @@ struct SongLuaLayerDepth {
 }
 
 impl SongLuaLayerDepth {
-    fn shifted(self, z: f32) -> Self {
-        Self {
-            base: song_lua_add_z(self.base, song_lua_rounded_z(z)),
-            ..self
-        }
-    }
-
     fn draw_z(self, draw_idx: usize) -> i16 {
         song_lua_add_z(self.base, draw_idx.min(i16::MAX as usize) as i16).min(self.ceiling)
     }
@@ -7138,29 +7425,14 @@ const SONG_LUA_FOREGROUND_DEPTH: SongLuaLayerDepth = SongLuaLayerDepth {
     ceiling: LUA_FOREGROUND_Z_MAX,
 };
 
-fn song_lua_rounded_z(value: f32) -> i16 {
-    if !value.is_finite() {
-        return 0;
+fn song_lua_player_layer_z(song_lua_active: bool) -> i16 {
+    // Actor::SetZ changes geometry, independently of Actor::SetDrawOrder.
+    // Player depth must not move receptors above SongForeground's pad model.
+    if song_lua_active {
+        SONG_LUA_PLAYER_LAYER_Z_BASE
+    } else {
+        0
     }
-    value
-        .round()
-        .clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16
-}
-
-fn song_lua_player_layer_z(
-    song_lua_active: bool,
-    actor: &SongLuaCapturedActor,
-    current: SongLuaOverlayState,
-    runtime_z: f32,
-) -> i16 {
-    if !song_lua_active {
-        return 0;
-    }
-    let _ = actor;
-    song_lua_add_z(
-        SONG_LUA_PLAYER_LAYER_Z_BASE,
-        song_lua_rounded_z(current.z + runtime_z),
-    )
 }
 
 fn song_lua_style_capture_actor(
@@ -7186,13 +7458,16 @@ fn song_lua_style_capture_actor_in_place(
             tint,
             glow,
             shadow_color,
+            vertex_color_encoding,
             blend: actor_blend,
             z,
             ..
         } => {
             *tint = song_lua_capture_tint(*tint, capture_tint);
             *glow = song_lua_capture_tint(*glow, capture_tint);
-            *shadow_color = song_lua_capture_tint(*shadow_color, capture_tint);
+            if *vertex_color_encoding == deadlib_present::actors::VertexColorEncoding::Float {
+                *shadow_color = song_lua_capture_tint(*shadow_color, capture_tint);
+            }
             *actor_blend = blend.unwrap_or(*actor_blend);
             *z = song_lua_add_z(*z, z_shift);
         }
@@ -7286,7 +7561,9 @@ fn song_lua_style_capture_actor_in_place(
             }
         }
         Actor::Shadow { color, child, .. } => {
-            *color = song_lua_capture_tint(*color, capture_tint);
+            if !song_lua_has_native_sprite_colors(child) {
+                *color = song_lua_capture_tint(*color, capture_tint);
+            }
             song_lua_style_capture_actor_in_place(child, capture_tint, blend, z_shift);
         }
         Actor::CameraPush { .. } | Actor::CameraPop => {}
@@ -7305,7 +7582,7 @@ const fn song_lua_overlay_blend(blend: SongLuaOverlayBlendMode) -> BlendMode {
 }
 
 fn song_lua_effect_clock(state: SongLuaOverlayState, mut clock: [f32; 2]) -> [f32; 2] {
-    if (state.rainbow || song_lua_compose_effect(state.effect_mode))
+    if (state.rainbow || state.vibrate || song_lua_compose_effect(state.effect_mode))
         && let Some([at, units]) = state.effect_time
     {
         let axis = matches!(state.effect_clock, deadlib_present::anim::EffectClock::Beat) as usize;
@@ -7432,6 +7709,16 @@ fn song_lua_apply_motion(
 fn song_lua_pre_draw_state(mut state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOverlayState {
     use deadlib_present::anim::EffectMode;
     let clock = song_lua_effect_clock(state, clock);
+    if state.vibrate {
+        let mut position = [state.x, state.y, state.z];
+        song_lua_apply_state_vibration(state, clock[0], 0, &mut position);
+        [state.x, state.y, state.z] = position;
+        // Each parent's sampled local translation is shared by its children.
+        // It must not be resampled or folded into a child's effect magnitude.
+        state.vibrate = false;
+        state.vibrate_input = None;
+        state.vibrate_zoom = None;
+    }
     // Actor::BeginDraw adds the independent base pose after tween/effect state.
     state.rot_x_deg += state.base_rotation[0];
     state.rot_y_deg += state.base_rotation[1];
@@ -7615,28 +7902,7 @@ fn song_lua_apply_overlay_effect(
     let effect = song_lua_overlay_effect_state(state);
     let [effect_time, effect_beat] = song_lua_effect_clock(state, [effect_time, effect_beat]);
     let rainbow = state.rainbow;
-    let vibrate_magnitude = song_lua_overlay_vibrate_magnitude(state);
-    if vibrate_magnitude
-        .iter()
-        .any(|value| value.abs() > f32::EPSILON)
-    {
-        // ITGmania chooses independent random offsets for each actor. Use
-        // a stable 60 Hz frame clock so high-refresh rendering keeps the same
-        // rapid shake cadence instead of becoming a several-hundred-Hz blur.
-        let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
-        let jitter = std::array::from_fn(|axis| {
-            let mut hash = frame
-                ^ actor_seed.wrapping_mul(0x85eb_ca6b)
-                ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
-            hash ^= hash >> 16;
-            hash = hash.wrapping_mul(0x7feb_352d);
-            hash ^= hash >> 15;
-            hash = hash.wrapping_mul(0x846c_a68b);
-            hash ^= hash >> 16;
-            (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
-        });
-        song_lua_apply_vibration(offset, vibrate_magnitude, jitter);
-    }
+    song_lua_apply_state_vibration(state, effect_time, actor_seed, offset);
     if matches!(effect.mode, deadlib_present::anim::EffectMode::Spin) {
         let units = deadlib_present::anim::effect_clock_units(effect, effect_time, effect_beat);
         for axis in 0..3 {
@@ -7667,35 +7933,71 @@ fn song_lua_apply_overlay_effect(
     offset[0] = offset[0].max(-1_000_000.0).min(1_000_000.0);
     offset[1] = offset[1].max(-1_000_000.0).min(1_000_000.0);
     offset[2] = offset[2].max(-1_000_000.0).min(1_000_000.0);
-    tint[0] = tint[0].clamp(0.0, 1.0);
-    tint[1] = tint[1].clamp(0.0, 1.0);
-    tint[2] = tint[2].clamp(0.0, 1.0);
-    tint[3] = tint[3].clamp(0.0, 1.0);
-    glow[0] = glow[0].clamp(0.0, 1.0);
-    glow[1] = glow[1].clamp(0.0, 1.0);
-    glow[2] = glow[2].clamp(0.0, 1.0);
-    glow[3] = glow[3].clamp(0.0, 1.0);
+    // Native RageColor remains floating point through corner and inherited
+    // color multiplication. RageVColor clamps only the final submitted value.
 }
 
-#[inline(always)]
-fn song_lua_apply_vibration(position: &mut [f32; 3], magnitude: [f32; 3], jitter: [f32; 3]) {
-    for axis in 0..3 {
-        position[axis] = magnitude[axis].mul_add(jitter[axis], position[axis]);
+fn song_lua_clamp_float_output_colors(tint: &mut [f32; 4], glow: &mut [f32; 4]) {
+    // Keep the existing output range for actors that do not yet submit
+    // RageVColor. Sprite and Quad colors are packed after all multiplication.
+    for channel in tint.iter_mut().chain(glow.iter_mut()) {
+        *channel = channel.clamp(0.0, 1.0);
     }
 }
 
-#[inline(always)]
-fn song_lua_overlay_vibrate_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
-    let own = if state.vibrate {
-        state.effect_magnitude
-    } else {
-        [0.0; 3]
-    };
-    [
-        own[0] + state.inherited_vibrate[0],
-        own[1] + state.inherited_vibrate[1],
-        own[2] + state.inherited_vibrate[2],
-    ]
+fn song_lua_vibration_input(effect_time: f32, actor_seed: u32) -> [f32; 3] {
+    let frame = (effect_time.max(0.0) * 60.0).floor() as u32;
+    std::array::from_fn(|axis| {
+        let mut hash = frame
+            ^ actor_seed.wrapping_mul(0x85eb_ca6b)
+            ^ (axis as u32 + 1).wrapping_mul(0x9e37_79b9);
+        hash ^= hash >> 16;
+        hash = hash.wrapping_mul(0x7feb_352d);
+        hash ^= hash >> 15;
+        hash = hash.wrapping_mul(0x846c_a68b);
+        hash ^= hash >> 16;
+        (hash as f32 / u32::MAX as f32).mul_add(2.0, -1.0)
+    })
+}
+
+fn song_lua_draw_input_state(
+    mut state: SongLuaOverlayState,
+    actor: usize,
+    clock: [f32; 2],
+) -> SongLuaOverlayState {
+    if state.vibrate && state.vibrate_input.is_none() {
+        state.vibrate_input = Some(song_lua_vibration_input(
+            song_lua_effect_clock(state, clock)[0],
+            actor as u32,
+        ));
+    }
+    state
+}
+
+fn song_lua_apply_state_vibration(
+    state: SongLuaOverlayState,
+    effect_time: f32,
+    actor_seed: u32,
+    position: &mut [f32; 3],
+) {
+    if !state.vibrate {
+        return;
+    }
+    let jitter = state
+        .vibrate_input
+        .unwrap_or_else(|| song_lua_vibration_input(effect_time, actor_seed));
+    let zoom = state.vibrate_zoom.unwrap_or_else(|| {
+        if (state.zoom_x - 1.0).abs() <= f32::EPSILON {
+            state.zoom
+        } else {
+            state.zoom_x
+        }
+    });
+    // Actor::PreDraw rounds each multiplication before adding the offset.
+    // GetZoom is the destination X scale; base zoom is applied by BeginDraw.
+    for axis in 0..3 {
+        position[axis] += state.effect_magnitude[axis] * jitter[axis] * zoom;
+    }
 }
 
 fn song_lua_color_mix(percent: f32) -> f32 {
@@ -7722,8 +8024,8 @@ const SONG_LUA_TEXT_RAINBOW_COLORS: [[f32; 4]; 7] = [
     [1.0, 0.8, 0.2, 1.0],
 ];
 
-fn song_lua_rainbow_scroll_attributes(text: &str, total_elapsed: f32) -> Vec<TextAttribute> {
-    song_lua_rainbow_scroll_attributes_at_phase(text, song_lua_rainbow_scroll_phase(total_elapsed))
+fn song_lua_rainbow_scroll_attributes(text: &str, uptime_seconds: f64) -> Vec<TextAttribute> {
+    song_lua_rainbow_scroll_attributes_at_phase(text, song_lua_rainbow_scroll_phase(uptime_seconds))
 }
 
 fn song_lua_rainbow_scroll_attributes_at_phase(
@@ -7755,8 +8057,8 @@ fn append_song_lua_rainbow_scroll_attributes_at_phase(
 }
 
 #[inline(always)]
-fn song_lua_rainbow_scroll_phase(total_elapsed: f32) -> usize {
-    ((total_elapsed / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len()
+fn song_lua_rainbow_scroll_phase(uptime_seconds: f64) -> usize {
+    ((uptime_seconds / 0.2).floor() as usize) % SONG_LUA_TEXT_RAINBOW_COLORS.len()
 }
 
 fn song_lua_rainbow_scroll_phases(
@@ -8106,7 +8408,7 @@ fn append_song_lua_model_actors(
     out: &mut impl Extend<Actor>,
     layers: &[SongLuaOverlayModelLayer],
     state: SongLuaOverlayState,
-    camera_state: Option<SongLuaOverlayState>,
+    camera_state: impl Into<SongLuaDrawCamera>,
     asset_manager: &AssetManager,
     z: i16,
     x_scale: f32,
@@ -8208,7 +8510,7 @@ fn append_song_lua_model_actors(
                     [state.skew_x, state.skew_y],
                 );
             let environment = Some(deadlib_present::actors::MeshEnvironment {
-                sampler: Some(deadlib_render_core::MeshSampler {
+                sampler: Some(deadlib_render_core::MeshSampler::Override {
                     filter: if state.texture_filtering {
                         deadlib_render_core::SamplerFilter::Linear
                     } else {
@@ -8227,6 +8529,7 @@ fn append_song_lua_model_actors(
             });
             let actor = Actor::TexturedMesh {
                 environment,
+                vertex_color_encoding: Default::default(),
                 align: [0.0, 0.0],
                 offset,
                 world_z: state.z + song_lua_biased_world_z(state, effect_offset[2]),
@@ -8350,9 +8653,14 @@ fn song_lua_secondary_model_actor(
     let sampler = environment
         .as_ref()
         .and_then(|environment| environment.sampler)
-        .map(|sampler| deadlib_render_core::MeshSampler {
-            filter: deadlib_render_core::SamplerFilter::Linear,
-            ..sampler
+        .map(|sampler| match sampler {
+            deadlib_render_core::MeshSampler::Override { wrap, .. } => {
+                deadlib_render_core::MeshSampler::Override {
+                    filter: deadlib_render_core::SamplerFilter::Linear,
+                    wrap,
+                }
+            }
+            deadlib_render_core::MeshSampler::Texture => sampler,
         });
     *environment = Some(deadlib_present::actors::MeshEnvironment {
         sampler,
@@ -8365,15 +8673,15 @@ fn song_lua_secondary_model_actor(
 }
 
 fn song_lua_model_camera(
-    camera: Option<SongLuaOverlayState>,
+    camera: impl Into<SongLuaDrawCamera>,
     x_scale: f32,
     y_scale: f32,
 ) -> [Matrix4; 3] {
-    let (view, projection) = camera
-        .and_then(|camera| {
-            song_lua_overlay_view_proj(camera, screen_width() / x_scale, screen_height() / y_scale)
-        })
-        .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
+    let camera = camera.into();
+    let SongLuaDrawViewProjection { view, projection, world } = camera
+        .view_proj(screen_width() / x_scale, screen_height() / y_scale)
+        .unwrap_or_else(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)).into());
+    let view = if world == Matrix4::IDENTITY { view } else { view * world };
     // Composition uses centered coordinates with positive Y up. RageDisplay
     // menu cameras consume top-left coordinates with positive Y down.
     let space = Matrix4::from_translation(Vector3::new(
@@ -8417,7 +8725,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     slots: &[S],
     texture_samples: &[Arc<[crate::SongLuaTextureSample]>],
     state: SongLuaOverlayState,
-    camera_state: Option<SongLuaOverlayState>,
+    camera_state: impl Into<SongLuaDrawCamera>,
     asset_manager: &AssetManager,
     z: i16,
     x_scale: f32,
@@ -8433,9 +8741,10 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
     effect_beat: f32,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> bool {
+    let camera_state = camera_state.into();
     let mut emitted = false;
     let camera =
-        (camera_state.is_some() || slots.iter().any(|slot| slot.model().is_some())).then(|| {
+        (camera_state.is_active() || slots.iter().any(|slot| slot.model().is_some())).then(|| {
             let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
             projection * view * space
         });
@@ -8631,7 +8940,7 @@ fn append_song_lua_noteskin_actors<S: NoteskinSlot + Clone>(
                             additive_uv: [0.0, 0.0, 1.0, 1.0],
                         }
                     });
-                    environment.sampler = Some(deadlib_render_core::MeshSampler {
+                    environment.sampler = Some(deadlib_render_core::MeshSampler::Override {
                         filter: if state.texture_filtering {
                             deadlib_render_core::SamplerFilter::Linear
                         } else {
@@ -8834,6 +9143,7 @@ fn song_lua_noteskin_sprite_actor<S: NoteskinSlot + Clone>(
     }
     Some(Actor::Sprite {
         align: [0.5, 0.5],
+        vertex_color_encoding: Default::default(),
         offset: [center[0] + draw.pos[0], center[1] - draw.pos[1]],
         world_z: 0.0,
         size: [SizeSpec::Px(size[0]), SizeSpec::Px(size[1])],
@@ -9448,22 +9758,6 @@ fn song_lua_overlay_uvs(
 }
 
 #[inline(always)]
-fn song_lua_projected_edge_factor(t: f32, feather_l: f32, feather_r: f32) -> f32 {
-    let mut left = 1.0;
-    let mut right = 1.0;
-    if feather_l > f32::EPSILON && t < feather_l {
-        left = (t / feather_l).clamp(0.0, 1.0);
-    }
-    // Sprite::DrawPrimitives preserves diffuse alpha at each inner fade edge.
-    // Recomputing (1 - (1 - feather_r)) / feather_r can round below one and
-    // change the native color byte, even when the fade is not cropped.
-    if feather_r > f32::EPSILON && t > 1.0 - feather_r {
-        right = ((1.0 - t) / feather_r).clamp(0.0, 1.0);
-    }
-    left.min(right)
-}
-
-#[inline(always)]
 fn song_lua_projected_overlay_edge_fade(
     state: SongLuaOverlayState,
     flip_x: bool,
@@ -9543,40 +9837,6 @@ fn song_lua_projected_overlay_uv_point(uv: [[f32; 2]; 4], x: f32, y: f32) -> [f3
         song_lua_effect_lerp(top_u, bottom_u, y),
         song_lua_effect_lerp(top_v, bottom_v, y),
     ]
-}
-
-#[inline(always)]
-fn song_lua_projected_color_coord(t: f32, start_fade: f32, end_fade: f32) -> f32 {
-    if t <= start_fade {
-        0.0
-    } else if t >= 1.0 - end_fade {
-        1.0
-    } else {
-        ((t - start_fade) / (1.0 - start_fade - end_fade).max(f32::EPSILON)).clamp(0.0, 1.0)
-    }
-}
-
-fn song_lua_overlay_vertex_color(
-    state: SongLuaOverlayState,
-    x: f32,
-    y: f32,
-    flip_x: bool,
-    flip_y: bool,
-    alpha: f32,
-) -> [f32; 4] {
-    let Some(colors) = state.vertex_colors else {
-        return [1.0, 1.0, 1.0, alpha];
-    };
-    let x = if flip_x { 1.0 - x } else { x }.clamp(0.0, 1.0);
-    let y = if flip_y { 1.0 - y } else { y }.clamp(0.0, 1.0);
-    let mut out = [0.0; 4];
-    for channel in 0..4 {
-        let top = song_lua_effect_lerp(colors[0][channel], colors[1][channel], x);
-        let bottom = song_lua_effect_lerp(colors[2][channel], colors[3][channel], x);
-        out[channel] = song_lua_effect_lerp(top, bottom, y);
-    }
-    out[3] *= alpha;
-    out
 }
 
 #[inline(always)]
@@ -9722,11 +9982,7 @@ fn song_lua_screen_proj(depth: f32) -> Matrix4 {
     )
 }
 
-fn song_lua_projected_local_transform(
-    (view, projection): (Matrix4, Matrix4),
-    model: Matrix4,
-    state: SongLuaOverlayState,
-) -> Matrix4 {
+fn song_lua_depth_range(state: SongLuaOverlayState) -> Matrix4 {
     // Actor::SetGlobalRenderStates gives NoEffect masks an implicit ZBias=1.
     // RageDisplay_OGL maps the depth range to [.05*(1-bias), 1-.05*bias].
     // Apply that range in homogeneous clip space before the screen projection
@@ -9741,7 +9997,81 @@ fn song_lua_projected_local_transform(
     if !state.depth_test && !state.depth_write {
         depth_range = Matrix4::IDENTITY;
     }
-    song_lua_screen_proj(1.0).inverse() * depth_range * projection * (view * model)
+    depth_range
+}
+
+fn song_lua_projected_local_transform(
+    camera: impl Into<SongLuaDrawViewProjection>,
+    model: Matrix4,
+    state: SongLuaOverlayState,
+) -> Matrix4 {
+    let SongLuaDrawViewProjection { view, projection, world } = camera.into();
+    // ActorFrame replaces the camera but leaves ScreenGameplay on the world
+    // stack. Apply that world matrix before projection, without recovering it
+    // through a nearly singular perspective inverse in clip space.
+    let model = if world == Matrix4::IDENTITY { model } else { world * model };
+    song_lua_screen_proj(1.0).inverse() * song_lua_depth_range(state) * projection * (view * model)
+}
+
+#[derive(Clone, Copy)]
+struct SongLuaSpriteColors {
+    corners: [[f32; 4]; 4],
+    fade_alpha: [f32; 4],
+    // Authored left/right/top/bottom after geometry mirrors its edge bands.
+    edge_order: [u8; 4],
+}
+
+impl SongLuaSpriteColors {
+    fn new(state: SongLuaOverlayState, flip_x: bool, flip_y: bool) -> Self {
+        let mut corners = state.vertex_colors.unwrap_or([[1.0; 4]; 4]);
+        let mut fade_alpha = [1.0; 4];
+        for (axis, crop, distances) in [
+            (
+                0,
+                [state.cropleft, state.cropright],
+                [state.fadeleft, state.faderight],
+            ),
+            (
+                2,
+                [state.croptop, state.cropbottom],
+                [state.fadetop, state.fadebottom],
+            ),
+        ] {
+            let remaining = 1.0 - (crop[0] + crop[1]);
+            let sum = distances[0] + distances[1];
+            if sum > 0.0 && remaining < sum {
+                let percent = distances[0] / sum;
+                let sizes = [percent * remaining, (1.0 - percent) * remaining];
+                for side in 0..2 {
+                    if distances[side] > 0.0 {
+                        // Preserve Sprite::DrawPrimitives' SCALE evaluation.
+                        fade_alpha[axis + side] =
+                            (sizes[side] - distances[side]) * -1.0 / -distances[side] + 1.0;
+                    }
+                }
+            }
+        }
+        if flip_x {
+            corners.swap(0, 1);
+            corners.swap(2, 3);
+            fade_alpha.swap(0, 1);
+        }
+        if flip_y {
+            corners.swap(0, 2);
+            corners.swap(1, 3);
+            fade_alpha.swap(2, 3);
+        }
+        Self {
+            corners,
+            fade_alpha,
+            edge_order: [
+                if flip_x { 2 } else { 1 },
+                if flip_x { 1 } else { 2 },
+                if flip_y { 4 } else { 3 },
+                if flip_y { 3 } else { 4 },
+            ],
+        }
+    }
 }
 
 fn append_projected_mesh_vertices(
@@ -9749,26 +10079,67 @@ fn append_projected_mesh_vertices(
     width: usize,
     height: usize,
     edge_fade: [f32; 4],
+    colors: SongLuaSpriteColors,
     vertices: &mut Vec<TexturedMeshVertex>,
 ) {
     vertices.reserve(width.saturating_sub(1) * height.saturating_sub(1) * 6);
-    for y in 0..height.saturating_sub(1) {
-        for x in 0..width.saturating_sub(1) {
-            let x_fade_band = (x == 0 && edge_fade[0] > f32::EPSILON)
-                || (x + 2 == width && edge_fade[1] > f32::EPSILON);
-            let y_fade_band = (y == 0 && edge_fade[2] > f32::EPSILON)
-                || (y + 2 == height && edge_fade[3] > f32::EPSILON);
-            // RageSprite emits the center plus four edge-fade quads. It does
-            // not draw diagonal corner cells where both axes are fading.
-            if x_fade_band && y_fade_band {
-                continue;
+    // Sprite::DrawPrimitives submits the inside, then left/right/top/bottom.
+    // Keep those primitive boundaries even when one mesh batches the pieces.
+    for region in std::iter::once(0).chain(colors.edge_order) {
+        for y in 0..height.saturating_sub(1) {
+            for x in 0..width.saturating_sub(1) {
+                let left = x == 0 && edge_fade[0] > f32::EPSILON;
+                let right = x + 2 == width && edge_fade[1] > f32::EPSILON;
+                let top = y == 0 && edge_fade[2] > f32::EPSILON;
+                let bottom = y + 2 == height && edge_fade[3] > f32::EPSILON;
+                // Native omits diagonal corner cells where both axes fade.
+                if (left || right) && (top || bottom) {
+                    continue;
+                }
+                let cell_region = if left { 1 } else if right { 2 } else if top { 3 }
+                    else if bottom { 4 } else { 0 };
+                if cell_region != region {
+                    continue;
+                }
+                let tl = y * width + x;
+                let tr = tl + 1;
+                let bl = (y + 1) * width + x;
+                let br = bl + 1;
+                let mut quad = [grid[tl], grid[tr], grid[br], grid[tl], grid[br], grid[bl]];
+                for (vertex, [cx, cy]) in
+                    quad.iter_mut()
+                        .zip([[0, 0], [1, 0], [1, 1], [0, 0], [1, 1], [0, 1]])
+                {
+                    let color_x = if left {
+                        0
+                    } else if right {
+                        1
+                    } else {
+                        cx
+                    };
+                    let color_y = if top {
+                        0
+                    } else if bottom {
+                        1
+                    } else {
+                        cy
+                    };
+                    let alpha = if left {
+                        if cx == 0 { 0.0 } else { colors.fade_alpha[0] }
+                    } else if right {
+                        if cx == 0 { colors.fade_alpha[1] } else { 0.0 }
+                    } else if top {
+                        if cy == 0 { 0.0 } else { colors.fade_alpha[2] }
+                    } else if bottom {
+                        if cy == 0 { colors.fade_alpha[3] } else { 0.0 }
+                    } else {
+                        1.0
+                    };
+                    vertex.color = colors.corners[color_y * 2 + color_x];
+                    vertex.color[3] *= alpha;
+                }
+                vertices.extend_from_slice(&quad);
             }
-            let tl = y * width + x;
-            let tr = tl + 1;
-            let bl = (y + 1) * width + x;
-            let br = bl + 1;
-            vertices
-                .extend_from_slice(&[grid[tl], grid[tr], grid[br], grid[tl], grid[br], grid[bl]]);
         }
     }
 }
@@ -9794,10 +10165,12 @@ fn song_lua_projected_mesh_actor_from_grid(
     width: usize,
     height: usize,
     edge_fade: [f32; 4],
+    colors: SongLuaSpriteColors,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Actor {
     if let Some(scratch) = scratch {
         return Actor::ReusableTexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: Some(deadlib_present::actors::MeshEnvironment {
                 sampler: Some(params.sampler),
                 camera: None,
@@ -9813,7 +10186,7 @@ fn song_lua_projected_mesh_actor_from_grid(
             texture: params.texture.into(),
             tint: params.tint,
             glow: params.glow,
-            vertices: scratch.update_projected(grid, width, height, edge_fade),
+            vertices: scratch.update_projected(grid, width, height, edge_fade, colors),
             geom_cache_key: INVALID_TMESH_CACHE_KEY,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
@@ -9835,8 +10208,9 @@ fn song_lua_projected_mesh_actor_from_grid(
             .saturating_mul(height.saturating_sub(1))
             .saturating_mul(6),
     );
-    append_projected_mesh_vertices(grid, width, height, edge_fade, &mut vertices);
+    append_projected_mesh_vertices(grid, width, height, edge_fade, colors, &mut vertices);
     Actor::TexturedMesh {
+        vertex_color_encoding: Default::default(),
         environment: Some(deadlib_present::actors::MeshEnvironment {
             sampler: Some(params.sampler),
             camera: None,
@@ -9902,29 +10276,18 @@ fn song_lua_flat_skewed_overlay_actor(
             let local_x = song_lua_effect_lerp(-half_w, half_w, x);
             let local_y = song_lua_effect_lerp(-half_h, half_h, y);
             let point = transform * Vector4::new(local_x, local_y, 0.0, 1.0);
-            let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
-            let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
-            let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
-            let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
                 normal: [0.0; 4],
                 pos: [point.x, point.y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
-                color: song_lua_overlay_vertex_color(
-                    state,
-                    color_x,
-                    color_y,
-                    flip_x,
-                    flip_y,
-                    fade_x.min(fade_y),
-                ),
+                color: [1.0; 4],
             });
         }
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
-            sampler: deadlib_render_core::MeshSampler {
+            sampler: deadlib_render_core::MeshSampler::Override {
                 filter: if state.texture_filtering {
                     deadlib_render_core::SamplerFilter::Linear
                 } else {
@@ -9952,6 +10315,7 @@ fn song_lua_flat_skewed_overlay_actor(
         xs.len(),
         ys.len(),
         edge_fade,
+        SongLuaSpriteColors::new(state, flip_x, flip_y),
         scratch,
     ))
 }
@@ -9967,7 +10331,7 @@ fn song_lua_projected_overlay_actor(
     state: SongLuaOverlayState,
     flip_x: bool,
     flip_y: bool,
-    view_proj: (Matrix4, Matrix4),
+    view_proj: impl Into<SongLuaDrawViewProjection>,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<Actor> {
     let half_w = 0.5 * size[0];
@@ -9989,29 +10353,18 @@ fn song_lua_projected_overlay_actor(
         for &x in &xs {
             let local_x = song_lua_effect_lerp(-half_w, half_w, x);
             let local_y = song_lua_effect_lerp(-half_h, half_h, y);
-            let fade_x = song_lua_projected_edge_factor(x, edge_fade[0], edge_fade[1]);
-            let fade_y = song_lua_projected_edge_factor(y, edge_fade[2], edge_fade[3]);
-            let color_x = song_lua_projected_color_coord(x, edge_fade[0], edge_fade[1]);
-            let color_y = song_lua_projected_color_coord(y, edge_fade[2], edge_fade[3]);
             grid.push(TexturedMeshVertex {
                 normal: [0.0; 4],
                 pos: [local_x, local_y, 0.0],
                 uv: song_lua_projected_overlay_uv_point(uv, x, y),
                 tex_matrix_scale: [1.0, 1.0],
-                color: song_lua_overlay_vertex_color(
-                    state,
-                    color_x,
-                    color_y,
-                    flip_x,
-                    flip_y,
-                    fade_x.min(fade_y),
-                ),
+                color: [1.0; 4],
             });
         }
     }
     Some(song_lua_projected_mesh_actor_from_grid(
         SongLuaProjectedMeshParams {
-            sampler: deadlib_render_core::MeshSampler {
+            sampler: deadlib_render_core::MeshSampler::Override {
                 filter: if state.texture_filtering {
                     deadlib_render_core::SamplerFilter::Linear
                 } else {
@@ -10039,11 +10392,24 @@ fn song_lua_projected_overlay_actor(
         xs.len(),
         ys.len(),
         edge_fade,
+        SongLuaSpriteColors::new(state, flip_x, flip_y),
         scratch,
     ))
 }
 
 type SongLuaActorList = SmallVec<[Actor; 2]>;
+
+#[derive(Clone, Copy)]
+struct SongLuaDrawTime {
+    animation_elapsed: f32,
+    uptime_seconds: f64,
+}
+
+impl From<f32> for SongLuaDrawTime {
+    fn from(elapsed: f32) -> Self {
+        Self { animation_elapsed: elapsed, uptime_seconds: f64::from(elapsed) }
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 fn build_song_lua_aft_sprite_actor(
@@ -10056,7 +10422,7 @@ fn build_song_lua_aft_sprite_actor(
     effect_time: f32,
     effect_beat: f32,
     total_elapsed: f32,
-    projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
+    mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
     if !state.draw_visible() || !state.sprite_texture || !song_lua_overlay_has_visible_output(state)
     {
@@ -10117,8 +10483,81 @@ fn build_song_lua_aft_sprite_actor(
     );
     offset[0] = effect_offset[0].mul_add(x_scale, offset[0]);
     offset[1] = effect_offset[1].mul_add(y_scale, offset[1]);
+    if (state.vertex_colors.is_some()
+        || state.fadeleft > 0.0
+        || state.faderight > 0.0
+        || state.fadetop > 0.0
+        || state.fadebottom > 0.0)
+        && !state.mask_source
+        && !state.mask_dest
+    {
+        let (center, size) = song_lua_overlay_rect(
+            state,
+            texture_size,
+            x_scale,
+            y_scale,
+            size_scale_x,
+            size_scale_y,
+        )?;
+        let uv_state = SongLuaOverlayState {
+            custom_texture_rect: Some(state.custom_texture_rect.unwrap_or([
+                0.0,
+                0.0,
+                viewport[0] as f32 / backing[0] as f32,
+                viewport[1] as f32 / backing[1] as f32,
+            ])),
+            ..state
+        };
+        let mut actor = song_lua_flat_skewed_overlay_actor(
+            white_texture_key(),
+            tint,
+            song_lua_overlay_blend(state.blend),
+            z,
+            [
+                effect_offset[0].mul_add(x_scale, center[0]),
+                effect_offset[1].mul_add(y_scale, center[1]),
+            ],
+            [size[0] * effect_scale[0], size[1] * effect_scale[1]],
+            effect_rot,
+            song_lua_overlay_uvs(
+                uv_state,
+                None,
+                &[],
+                flip_x,
+                flip_y,
+                total_elapsed,
+                total_elapsed,
+            ),
+            state,
+            flip_x,
+            flip_y,
+            song_lua_biased_world_z(state, effect_offset[2] / 1000.0),
+            projected_mesh_scratch.as_deref_mut(),
+        )?;
+        match &mut actor {
+            Actor::TexturedMesh { texture, .. } | Actor::ReusableTexturedMesh { texture, .. } => {
+                *texture = deadlib_present::actors::MeshTexture::Handle(
+                    render_target_sample_handle(texture_handle, !state.texture_filtering),
+                );
+            }
+            _ => unreachable!("sprite color grid is a textured mesh"),
+        }
+        let mut actors = song_lua_finalize_overlay_actor(
+            state,
+            actor,
+            glow,
+            x_scale,
+            y_scale,
+            projected_mesh_scratch,
+        );
+        for actor in &mut actors {
+            song_lua_set_native_sprite_colors(actor);
+        }
+        return Some(actors);
+    }
     let actor = Actor::Sprite {
         align,
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
         offset,
         // This sprite uses the main pass's normalized depth. ITG's menu
         // camera spans Â±1000, so a ten-pixel RGB vibration must not clip it.
@@ -10205,6 +10644,55 @@ fn build_song_lua_aft_sprite_actor(
     ))
 }
 
+fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
+    out: &mut Vec<Actor>,
+    overlay: &SongLuaOverlayActor<S>,
+    state: SongLuaOverlayState,
+    camera: SongLuaDrawCamera,
+    assets: &AssetManager,
+    z: i16,
+    size: [f32; 2],
+    clock: [f32; 2],
+    elapsed: impl Into<SongLuaDrawTime>,
+    texture: Option<TextureHandle>,
+    mut scratch: Option<&mut SongLuaProjectedMeshScratch>,
+) {
+    let elapsed = elapsed.into();
+    let start = out.len();
+    let flat_camera = camera.world != Matrix4::IDENTITY
+        && (matches!(overlay.kind, SongLuaOverlayKind::BitmapText { .. })
+            || texture.is_none()
+                && matches!(overlay.kind, SongLuaOverlayKind::ActorMultiVertex { texture_key: None, .. })
+            || matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad)
+                && camera.uses_generic_mask(state, size));
+    if flat_camera {
+        let [projection, view, space] = song_lua_model_camera(
+            camera, screen_width() / size[0].max(1.0), screen_height() / size[1].max(1.0),
+        );
+        out.push(Actor::CameraPush {
+            view_proj: song_lua_depth_range(state) * projection * view * space,
+        });
+    }
+    if append_song_lua_multi_actor_overlay(
+        out, overlay, state, camera, assets, z, size[0], size[1],
+        clock[0], clock[1], elapsed.animation_elapsed, scratch.as_deref_mut(),
+    ).is_none()
+        && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
+            overlay, state, camera, assets, z, size[0], size[1],
+            clock[0], clock[1], elapsed, texture, scratch,
+        )
+    {
+        out.extend(actors);
+    }
+    if flat_camera {
+        if out.len() > start + 1 {
+            out.push(Actor::CameraPop);
+        } else {
+            out.truncate(start);
+        }
+    }
+}
+
 /// Emits compiled multi-output overlays directly into the caller's reused
 /// frame buffer. Returning `None` means the overlay is a single-output kind and
 /// should continue through the compact inline builder.
@@ -10213,7 +10701,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
     out: &mut Vec<Actor>,
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
-    camera_state: Option<SongLuaOverlayState>,
+    camera_state: impl Into<SongLuaDrawCamera>,
     asset_manager: &AssetManager,
     z: i16,
     overlay_space_width: f32,
@@ -10223,6 +10711,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
     total_elapsed: f32,
     scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<bool> {
+    let camera_state = camera_state.into();
     if !matches!(
         overlay.kind,
         SongLuaOverlayKind::Model { .. } | SongLuaOverlayKind::NoteskinActor { .. }
@@ -10259,6 +10748,7 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
         &mut effect_scale,
         &mut effect_rot,
     );
+    song_lua_clamp_float_output_colors(&mut tint, &mut glow);
     let blend = song_lua_overlay_blend(state.blend);
 
     Some(match &overlay.kind {
@@ -10317,17 +10807,20 @@ fn append_song_lua_multi_actor_overlay<S: NoteskinSlot + Clone>(
 fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     overlay: &SongLuaOverlayActor<S>,
     state: SongLuaOverlayState,
-    camera_state: Option<SongLuaOverlayState>,
+    camera_state: impl Into<SongLuaDrawCamera>,
     asset_manager: &AssetManager,
     z: i16,
     overlay_space_width: f32,
     overlay_space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    draw_time: impl Into<SongLuaDrawTime>,
     texture_handle: Option<TextureHandle>,
     mut projected_mesh_scratch: Option<&mut SongLuaProjectedMeshScratch>,
 ) -> Option<SongLuaActorList> {
+    let draw_time = draw_time.into();
+    let total_elapsed = draw_time.animation_elapsed;
+    let camera_state = camera_state.into();
     if !state.draw_visible() || !song_lua_overlay_has_visible_output(state) {
         return None;
     }
@@ -10356,32 +10849,48 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
     let overlay_blend = song_lua_overlay_blend(state.blend);
     // Depth, tilted sprites and rotated anchors need the native matrix under an
     // orthographic camera. Generic sprites fold X/Y angles around their center,
-    // losing the rotated anchor and combined-axis geometry.
+    // losing the rotated anchor and combined-axis geometry. Per-actor filtering
+    // and wrapping also need the mesh path's explicit sampler override.
     let sprite_view_proj = || {
+        // Generic Sprite composition owns mask registration and clipping. A
+        // screen-only world transform must not replace it with an unmasked mesh.
+        if camera_state.uses_generic_mask(state, [overlay_space_width, overlay_space_height]) {
+            return None;
+        }
         camera_state
-            .and_then(|camera| {
-                song_lua_overlay_view_proj(camera, overlay_space_width, overlay_space_height)
-            })
+            .view_proj(overlay_space_width, overlay_space_height)
             .or_else(|| {
                 let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
                     && state.rot_z_deg.abs() > f32::EPSILON;
-                let native_matrix = state.quaternion != crate::actor_quaternion::IDENTITY
+                let native_mesh = state.quaternion != crate::actor_quaternion::IDENTITY
                     || state.z != 0.0
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor
+                    || !state.texture_filtering
+                    || state.texture_wrapping
                     || matches!(
                         state.effect_mode,
                         deadlib_present::anim::EffectMode::Spin
                             | deadlib_present::anim::EffectMode::Wag
                     );
-                (native_matrix && !state.mask_source && !state.mask_dest)
+                (native_mesh && !state.mask_source && !state.mask_dest)
                     // RageDisplay::LoadMenuPerspective(0) uses +/-1000 depth.
-                    .then(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)))
+                    .then(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)).into())
             })
     };
     let finalize_actor = |actor, glow, scratch| {
-        song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale, scratch)
+        let mut actors =
+            song_lua_finalize_overlay_actor(state, actor, glow, x_scale, y_scale, scratch);
+        if matches!(
+            overlay.kind,
+            SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad
+        ) {
+            for actor in &mut actors {
+                song_lua_set_native_sprite_colors(actor);
+            }
+        }
+        actors
     };
     match &overlay.kind {
         SongLuaOverlayKind::Actor => None,
@@ -10418,7 +10927,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let animation_elapsed =
                 epoch.map_or(total_elapsed, |epoch| (effect_time - epoch).max(0.0));
             let source_size = song_lua_overlay_sprite_size(state, binding)?;
-            if camera_state.is_none()
+            if !camera_state.is_active()
                 && state.stretch_rect.is_none()
                 && song_lua_overlay_sprite_offscreen(
                     state,
@@ -10491,7 +11000,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             }
             if (state.skew_x.abs() > f32::EPSILON
                 || state.skew_y.abs() > f32::EPSILON
-                || state.vertex_colors.is_some())
+                || state.vertex_colors.is_some()
+                || state.fadeleft > 0.0
+                || state.faderight > 0.0
+                || state.fadetop > 0.0
+                || state.fadebottom > 0.0)
                 && !state.mask_source
                 && !state.mask_dest
             {
@@ -10684,16 +11197,10 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             let text = text_index.map_or(text, |index| &text_changes[index].1);
             let content = if state.uppercase {
                 projected_mesh_scratch
-                    .as_deref()
-                    .and_then(|scratch| {
-                        text_index.map_or_else(
-                            || scratch.uppercase_text.as_ref(),
-                            |index| scratch.uppercase_changes.get(index),
-                        )
-                    })
+                    .as_deref_mut()
                     .map_or_else(
                         || TextContent::from(text.to_uppercase()),
-                        |uppercase| TextContent::from(Arc::clone(uppercase)),
+                        |scratch| TextContent::from(scratch.uppercase(text, text_index)),
                     )
             } else {
                 TextContent::from(text)
@@ -10719,12 +11226,16 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            song_lua_clamp_float_output_colors(&mut color, &mut glow);
+            let diffuse_alpha = color[3];
             let (text_attributes, color) = if state.rainbow_scroll {
                 let attributes = projected_mesh_scratch.as_deref_mut().map_or_else(
-                    || song_lua_rainbow_scroll_attributes(content.as_str(), total_elapsed).into(),
-                    |scratch| scratch.rainbow_attributes(content.as_str(), total_elapsed),
+                    || song_lua_rainbow_scroll_attributes(content.as_str(), draw_time.uptime_seconds).into(),
+                    |scratch| scratch.rainbow_attributes(content.as_str(), draw_time.uptime_seconds),
                 );
-                (attributes, color)
+                // BitmapText::DrawPrimitives replaces diffuse RGBA per glyph.
+                // The visibility gate still uses the original actor opacity.
+                (attributes, [1.0, 1.0, 1.0, if diffuse_alpha == 0.0 { 0.0 } else { 1.0 }])
             } else {
                 song_lua_text_attributes_for_diffuse_mode(
                     attributes,
@@ -10734,6 +11245,23 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     projected_mesh_scratch.as_deref_mut(),
                 )
             };
+            let mut text_state = state;
+            let stroke_color = if state.rainbow_scroll {
+                // Native font loading initializes the stroke from the font.
+                // Resolve that default before replacing the text's base alpha.
+                let mut stroke = stroke_color.unwrap_or_else(|| {
+                    asset_manager.with_font(font, |font| font.default_stroke_color)
+                        .unwrap_or([0.0; 4])
+                });
+                stroke[3] *= diffuse_alpha;
+                Some(stroke)
+            } else {
+                *stroke_color
+            };
+            if state.rainbow_scroll {
+                // Stroke and shadow precede the native rainbow diffuse pass.
+                text_state.shadow_color[3] *= diffuse_alpha;
+            }
             let actor = Actor::Text {
                 align: [state.halign, state.valign],
                 offset: [
@@ -10746,7 +11274,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     state.skew_y,
                 ),
                 color,
-                stroke_color: *stroke_color,
+                stroke_color,
                 glow,
                 font,
                 content,
@@ -10778,9 +11306,12 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: deadlib_present::anim::EffectState::default(),
             };
-            Some(finalize_actor(
+            Some(song_lua_finalize_overlay_actor(
+                text_state,
                 actor,
                 glow,
+                x_scale,
+                y_scale,
                 projected_mesh_scratch.as_deref_mut(),
             ))
         }
@@ -10805,6 +11336,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            song_lua_clamp_float_output_colors(&mut tint, &mut glow);
             let texture = if let Some(handle) = texture_handle {
                 Some(deadlib_present::actors::MeshTexture::Handle(
                     render_target_sample_handle(handle, !state.texture_filtering),
@@ -10834,22 +11366,17 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         effect_scale,
                     );
                 let view_proj = camera_state
-                    .and_then(|camera| {
-                        song_lua_overlay_view_proj(
-                            camera,
-                            overlay_space_width,
-                            overlay_space_height,
-                        )
-                    })
-                    .unwrap_or((Matrix4::IDENTITY, song_lua_screen_proj(1000.0)));
+                    .view_proj(overlay_space_width, overlay_space_height)
+                    .unwrap_or_else(|| (Matrix4::IDENTITY, song_lua_screen_proj(1000.0)).into());
                 let transform = song_lua_projected_local_transform(view_proj, model, state);
                 let mesh_actor = if let Some(scratch) = projected_mesh_scratch.as_deref_mut() {
                     let mesh = scratch.update_textured(|out| {
                         append_song_lua_actor_multi_vertex_textured_mesh(out, vertices);
                     });
                     Actor::ReusableTexturedMesh {
+                        vertex_color_encoding: Default::default(),
                         environment: Some(deadlib_present::actors::MeshEnvironment {
-                            sampler: Some(deadlib_render_core::MeshSampler {
+                            sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
                                     deadlib_render_core::SamplerFilter::Linear
                                 } else {
@@ -10892,8 +11419,9 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 } else {
                     let mesh = song_lua_actor_multi_vertex_textured_mesh(vertices);
                     Actor::TexturedMesh {
+                        vertex_color_encoding: Default::default(),
                         environment: Some(deadlib_present::actors::MeshEnvironment {
-                            sampler: Some(deadlib_render_core::MeshSampler {
+                            sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
                                     deadlib_render_core::SamplerFilter::Linear
                                 } else {
@@ -11015,6 +11543,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            song_lua_clamp_float_output_colors(&mut tint, &mut glow);
             let mut out = SongLuaActorList::new();
             let passes = projected_mesh_scratch
                 .as_deref()
@@ -11060,6 +11589,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
+            song_lua_clamp_float_output_colors(&mut tint, &mut glow);
             let mut out = SongLuaActorList::new();
             append_song_lua_noteskin_actors(
                 &mut out,
@@ -11201,7 +11731,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             }
             if (state.skew_x.abs() > f32::EPSILON
                 || state.skew_y.abs() > f32::EPSILON
-                || state.vertex_colors.is_some())
+                || state.vertex_colors.is_some()
+                || state.fadeleft > 0.0
+                || state.faderight > 0.0
+                || state.fadetop > 0.0
+                || state.fadebottom > 0.0)
                 && !state.mask_source
                 && !state.mask_dest
             {
@@ -11397,6 +11931,44 @@ fn build_song_lua_overlay_actor<S: NoteskinSlot + Clone>(
     )
 }
 
+fn song_lua_has_native_sprite_colors(actor: &Actor) -> bool {
+    match actor {
+        Actor::Sprite {
+            vertex_color_encoding,
+            ..
+        }
+        | Actor::TexturedMesh {
+            vertex_color_encoding,
+            ..
+        }
+        | Actor::ReusableTexturedMesh {
+            vertex_color_encoding,
+            ..
+        } => *vertex_color_encoding == deadlib_present::actors::VertexColorEncoding::RageVColor,
+        Actor::Shadow { child, .. } => song_lua_has_native_sprite_colors(child),
+        _ => false,
+    }
+}
+
+fn song_lua_set_native_sprite_colors(actor: &mut Actor) {
+    match actor {
+        Actor::Sprite {
+            vertex_color_encoding,
+            ..
+        }
+        | Actor::TexturedMesh {
+            vertex_color_encoding,
+            ..
+        }
+        | Actor::ReusableTexturedMesh {
+            vertex_color_encoding,
+            ..
+        } => *vertex_color_encoding = deadlib_present::actors::VertexColorEncoding::RageVColor,
+        Actor::Shadow { child, .. } => song_lua_set_native_sprite_colors(child),
+        _ => (),
+    }
+}
+
 fn song_lua_wrap_overlay_shadow(
     state: SongLuaOverlayState,
     mut actor: Actor,
@@ -11449,6 +12021,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
     match actor {
         Actor::Sprite {
             align,
+            vertex_color_encoding,
             offset,
             world_z,
             size,
@@ -11492,6 +12065,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             }
             Some(Actor::Sprite {
                 align: *align,
+                vertex_color_encoding: *vertex_color_encoding,
                 offset: *offset,
                 world_z: *world_z,
                 size: *size,
@@ -11625,6 +12199,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
         }
         Actor::TexturedMesh {
             environment,
+            vertex_color_encoding,
             align,
             offset,
             world_z,
@@ -11652,6 +12227,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 .map(|scratch| scratch.update_textured_glow(vertices.as_ref()));
             let actor = if let Some(vertices) = prewarmed_static_vertices {
                 Actor::TexturedMesh {
+                    vertex_color_encoding: *vertex_color_encoding,
                     environment: environment
                         .as_ref()
                         .and_then(|environment| environment.sampler)
@@ -11687,6 +12263,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 }
             } else if let Some(vertices) = glow_vertices {
                 Actor::ReusableTexturedMesh {
+                    vertex_color_encoding: *vertex_color_encoding,
                     environment: environment
                         .as_ref()
                         .and_then(|environment| environment.sampler)
@@ -11727,6 +12304,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                     vertex.color = [1.0; 4];
                 }
                 Actor::TexturedMesh {
+                    vertex_color_encoding: *vertex_color_encoding,
                     environment: environment
                         .as_ref()
                         .and_then(|environment| environment.sampler)
@@ -11765,6 +12343,8 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
         }
         Actor::ReusableTexturedMesh {
             align,
+            environment,
+            vertex_color_encoding,
             offset,
             world_z,
             size,
@@ -11798,7 +12378,17 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 |scratch| scratch.update_textured_glow(vertices),
             );
             Some(Actor::ReusableTexturedMesh {
-                environment: None,
+                environment: environment
+                    .as_ref()
+                    .and_then(|environment| environment.sampler)
+                    .map(|sampler| deadlib_present::actors::MeshEnvironment {
+                        sampler: Some(sampler),
+                        camera: None,
+                        transform: *local_transform,
+                        additive_texture: None,
+                        additive_uv: [0.0, 0.0, 1.0, 1.0],
+                    }),
+                vertex_color_encoding: *vertex_color_encoding,
                 align: *align,
                 offset: *offset,
                 world_z: *world_z,
@@ -11930,17 +12520,13 @@ fn append_song_lua_player_transform<F, H>(
     zoom_x: f32,
     zoom_y: f32,
     zoom_z: f32,
+    target_z: f32,
+    wrappers: Matrix4,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
 ) where
     F: IntoIterator<Item = Actor>,
     H: IntoIterator<Item = Actor>,
 {
-    let fold_y = |actor| {
-        if rotation_y_deg.is_finite() && rotation_y_deg.abs() > f32::EPSILON {
-            song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)
-        } else {
-            actor
-        }
-    };
     let Some(player_transform) = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
         screen_width: screen_width(),
         screen_height: screen_height(),
@@ -11949,18 +12535,21 @@ fn append_song_lua_player_transform<F, H>(
         target_x,
         target_y,
         rotation_x_deg,
+        rotation_y_deg,
         rotation_z_deg,
         skew_x,
         skew_y,
         zoom_x,
         zoom_y,
         zoom_z,
+        target_z,
+        wrappers,
     }) else {
         out.reserve(field_len.saturating_add(hud_len));
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
         }
-        for actor in field_actors.into_iter().map(fold_y) {
+        for actor in field_actors {
             push_song_lua_capture_actor(out, actor, [1.0; 4], None, z_shift);
         }
         return;
@@ -11981,10 +12570,10 @@ fn append_song_lua_player_transform<F, H>(
             blend,
             z_shift,
         );
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
-        for actor in field_actors.into_iter().map(fold_y) {
+        for actor in field_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
         push_song_lua_capture_actor(out, Actor::CameraPop, tint, blend, z_shift);
@@ -12002,12 +12591,12 @@ fn append_song_lua_player_transform<F, H>(
             blend,
             z_shift,
         );
-        for actor in hud_actors.into_iter().map(fold_y) {
+        for actor in hud_actors {
             push_song_lua_capture_actor(out, actor, tint, blend, z_shift);
         }
     }
     let mut field_camera_depth = 0usize;
-    for actor in field_actors.into_iter().map(fold_y) {
+    for actor in field_actors {
         match actor {
             Actor::Camera {
                 view_proj,
@@ -12020,7 +12609,10 @@ fn append_song_lua_player_transform<F, H>(
                 push_song_lua_capture_actor(
                     out,
                     Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
+                        view_proj: field_camera_parts.map_or_else(
+                            || view_proj * player_transform,
+                            |(camera, model)| camera * (player_transform * model),
+                        ),
                     },
                     tint,
                     blend,
@@ -12039,7 +12631,10 @@ fn append_song_lua_player_transform<F, H>(
                 push_song_lua_capture_actor(
                     out,
                     Actor::CameraPush {
-                        view_proj: view_proj * player_transform,
+                        view_proj: field_camera_parts.map_or_else(
+                            || view_proj * player_transform,
+                            |(camera, model)| camera * (player_transform * model),
+                        ),
                     },
                     tint,
                     blend,
@@ -12105,6 +12700,8 @@ fn song_lua_player_transform_has_identity_geometry_with_metrics(
         && (transform.zoom_z - 1.0).abs() <= f32::EPSILON
         && (transform.target_x - transform.playfield_center_x).abs() <= f32::EPSILON
         && (metrics.screen_center_y - transform.target_y).abs() <= f32::EPSILON
+        && transform.target_z.abs() <= f32::EPSILON
+        && transform.wrappers == Matrix4::IDENTITY
 }
 
 #[inline(always)]
@@ -12137,19 +12734,8 @@ fn song_lua_player_transform_is_direct_proxy(transform: SongLuaCaptureTransform)
         && transform.zoom_x.is_finite()
         && transform.zoom_y.is_finite()
         && transform.zoom_z.is_finite()
-}
-
-#[inline(always)]
-fn song_lua_player_x_fold(transform: SongLuaCaptureTransform) -> Option<ActorXFold> {
-    (transform.playfield_center_x.is_finite()
-        && transform.rotation_y.is_finite()
-        && transform.rotation_y.abs() > f32::EPSILON)
-        .then(|| {
-            ActorXFold::new(
-                transform.playfield_center_x,
-                transform.rotation_y.to_radians().cos(),
-            )
-        })
+        && transform.target_z.is_finite()
+        && transform.wrappers.is_finite()
 }
 
 #[inline(always)]
@@ -12163,8 +12749,19 @@ fn song_lua_direct_field_camera(
     transform: SongLuaCaptureTransform,
 ) -> Option<Matrix4> {
     let player_transform = song_lua_player_camera_suffix(transform);
+    song_lua_field_camera_with_player(field_camera, transform.field_camera_parts, player_transform)
+}
+
+fn song_lua_field_camera_with_player(
+    field_camera: Option<Matrix4>,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
+    player_transform: Option<Matrix4>,
+) -> Option<Matrix4> {
     match (field_camera, player_transform) {
-        (Some(camera), Some(player_transform)) => Some(camera * player_transform),
+        (Some(camera), Some(player_transform)) => Some(field_camera_parts.map_or_else(
+            || camera * player_transform,
+            |(camera, model)| camera * (player_transform * model),
+        )),
         (None, Some(player_transform)) => Some(song_lua_player_root_camera(player_transform)),
         (camera, None) => camera,
     }
@@ -12179,12 +12776,15 @@ fn song_lua_player_camera_suffix(transform: SongLuaCaptureTransform) -> Option<M
         target_x: transform.target_x,
         target_y: transform.target_y,
         rotation_x_deg: transform.rotation_x,
+        rotation_y_deg: transform.rotation_y,
         rotation_z_deg: transform.rotation_z,
         skew_x: transform.skew_x,
         skew_y: transform.skew_y,
         zoom_x: transform.zoom_x,
         zoom_y: transform.zoom_y,
         zoom_z: transform.zoom_z,
+        target_z: transform.target_z,
+        wrappers: transform.wrappers,
     })
 }
 
@@ -12195,18 +12795,39 @@ enum PlayerActorAssembly {
     DirectZ {
         z_shift: i16,
     },
-    DirectFold {
-        z_shift: i16,
-        x_fold: ActorXFold,
-    },
     DirectTransform {
         z_shift: i16,
         tint: [f32; 4],
         blend: Option<BlendMode>,
         root_camera: Matrix4,
         field_camera_suffix: Matrix4,
-        x_fold: Option<ActorXFold>,
     },
+}
+
+/// Retain the camera/Player/NoteField boundary for both actor and flat draws.
+/// Native Actor::Draw enters Player before the child's wrapper states. Keeping
+/// the child model on the suffix also supports singular authored field zooms.
+fn prepare_player_field_camera(
+    assembly: &mut PlayerActorAssembly,
+    field_camera: Option<Matrix4>,
+    field_camera_parts: Option<(Matrix4, Matrix4)>,
+    field_actors: &mut [Actor],
+) -> Option<Matrix4> {
+    let PlayerActorAssembly::DirectTransform { field_camera_suffix, .. } = assembly else {
+        return field_camera;
+    };
+    let (Some(original), Some((camera, model))) = (field_camera, field_camera_parts) else {
+        return field_camera;
+    };
+    for actor in field_actors {
+        if let Actor::Camera { view_proj, .. } | Actor::CameraPush { view_proj } = actor
+            && *view_proj == original
+        {
+            *view_proj = camera;
+        }
+    }
+    *field_camera_suffix *= model;
+    Some(camera)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -12217,7 +12838,8 @@ struct PlayerActorAssemblyKey {
     blend: Option<BlendMode>,
     metrics: [u32; 3],
     tint: [u32; 4],
-    geometry: [u32; 11],
+    geometry: [u32; 12],
+    wrappers: [u32; 16],
 }
 
 impl PlayerActorAssemblyKey {
@@ -12250,7 +12872,9 @@ impl PlayerActorAssemblyKey {
                 transform.zoom_x.to_bits(),
                 transform.zoom_y.to_bits(),
                 transform.zoom_z.to_bits(),
+                transform.target_z.to_bits(),
             ],
+            wrappers: transform.wrappers.to_cols_array().map(f32::to_bits),
         }
     }
 }
@@ -12431,13 +13055,38 @@ struct PlayerActorSegment {
     player: usize,
     assembly: PlayerActorAssembly,
     field_camera: Option<Matrix4>,
+    field_screen_projection: Matrix4,
+    captured_field_range: Option<[usize; 2]>,
     manual_hud_draw: bool,
     hud_parts: deadsync_notefield::NotefieldHudParts,
 }
 
 #[derive(Clone, Copy, Debug)]
+struct SongLuaScreenProjectionRange {
+    start: usize,
+    end: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SongLuaScreenCaptureRange {
+    start: usize,
+    end: usize,
+    original_start: usize,
+    original_end: usize,
+}
+
+#[derive(Default)]
+struct SongLuaScreenCaptureOriginals {
+    actors: Vec<Actor>,
+    ranges: Vec<SongLuaScreenCaptureRange>,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct GameplayActorSegments {
     insert: usize,
+    /// End of ScreenGameplay-owned actors. System actors and later application
+    /// overlays use the ordinary screen camera instead of chart transforms.
+    screen_actor_end: usize,
     players: [Option<PlayerActorSegment>; 2],
     direct_proxy_len: usize,
     underlay_visible: bool,
@@ -12492,6 +13141,7 @@ impl GameplayActorSegments {
         actors: &'a [Actor],
     ) -> impl Clone + Iterator<Item = ActorSegment<'a>> + 'a {
         let scratch = state;
+        let (actors, system_actors) = actors.split_at(self.screen_actor_end.min(actors.len()));
         GameplayActorSegmentIter {
             owner: self,
             scratch,
@@ -12503,8 +13153,11 @@ impl GameplayActorSegments {
             proxy: 0,
             proxy_draw: false,
             actor_start: self.insert.min(actors.len()),
+            pending_actor_start: 0,
+            pending_actor_end: 0,
+            projection_index: 0,
         }
-        .map(|segment| segment.with_projection(&self.screen_projection))
+        .chain((!system_actors.is_empty()).then(|| ActorSegment::new(system_actors)))
     }
 }
 
@@ -12520,9 +13173,38 @@ struct GameplayActorSegmentIter<'a> {
     proxy: usize,
     proxy_draw: bool,
     actor_start: usize,
+    pending_actor_start: usize,
+    pending_actor_end: usize,
+    projection_index: usize,
 }
 
 impl<'a> GameplayActorSegmentIter<'a> {
+    fn pending_actor_segment(&mut self) -> Option<ActorSegment<'a>> {
+        let start = self.pending_actor_start;
+        if start >= self.pending_actor_end {
+            return None;
+        }
+        let ranges = &self.scratch.song_lua_screen_projection_ranges;
+        while ranges
+            .get(self.projection_index)
+            .is_some_and(|range| range.end <= start)
+        {
+            self.projection_index += 1;
+        }
+        let (end, projection) = match ranges.get(self.projection_index) {
+            Some(range) if range.start <= start => {
+                (self.pending_actor_end.min(range.end), &Matrix4::IDENTITY)
+            }
+            Some(range) => (
+                self.pending_actor_end.min(range.start),
+                &self.owner.screen_projection,
+            ),
+            None => (self.pending_actor_end, &self.owner.screen_projection),
+        };
+        self.pending_actor_start = end;
+        Some(ActorSegment::new(&self.actors[start..end]).with_projection(projection))
+    }
+
     fn direct_draws(
         &self,
         player: usize,
@@ -12549,9 +13231,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
             return None;
         }
         if matches!(segment.assembly, PlayerActorAssembly::Captured) {
-            if part != 0 {
-                return None;
-            }
             debug_assert!(self.scratch.notefield_flat_draw_scratch[player].is_empty());
             debug_assert!(self.scratch.notefield_hud_flat_draw_scratch[player].is_empty());
             let source = self
@@ -12560,6 +13239,19 @@ impl<'a> GameplayActorSegmentIter<'a> {
                 .as_ref()
                 .and_then(|scratch| scratch.player_source(player, SONG_LUA_PLAYER_PROXY_SOURCE))
                 .expect("player proxy capture has song-lifetime backing");
+            let source = if let Some([start, end]) = segment.captured_field_range {
+                let actors = song_lua_captured_segment_actors(source);
+                match part {
+                    0 => &actors[..start],
+                    1 => &actors[start..end],
+                    2 => &actors[end..],
+                    _ => return None,
+                }
+            } else if part == 0 {
+                source
+            } else {
+                return None;
+            };
             return Some(ActorSegment::new(source));
         }
         let hud = &self.scratch.notefield_hud_actor_scratch[player];
@@ -12587,25 +13279,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                         segment.field_camera.as_ref(),
                     ),
             ),
-            (PlayerActorAssembly::DirectFold { z_shift, x_fold }, 0) => {
-                let hud = if segment.manual_hud_draw {
-                    ActorSegment::shifted(hud, *z_shift)
-                } else {
-                    ActorSegment::folded(hud, *z_shift, *x_fold)
-                };
-                Some(hud.with_flat_draws(hud_draws, None))
-            }
-            (PlayerActorAssembly::DirectFold { z_shift, x_fold }, 1) => Some(
-                ActorSegment::folded(
-                    &self.scratch.notefield_actor_scratch[player],
-                    *z_shift,
-                    *x_fold,
-                )
-                .with_flat_draws(
-                    &self.scratch.notefield_flat_draw_scratch[player],
-                    segment.field_camera.as_ref(),
-                ),
-            ),
             (
                 PlayerActorAssembly::DirectTransform {
                     z_shift,
@@ -12613,7 +13286,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     blend,
                     root_camera,
                     field_camera_suffix: _,
-                    x_fold,
                 },
                 0,
             ) => {
@@ -12628,7 +13300,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                             *blend,
                             root_camera,
                             &Matrix4::IDENTITY,
-                            *x_fold,
+                            None,
                         ),
                         Some(root_camera),
                     )
@@ -12642,7 +13314,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     blend,
                     root_camera,
                     field_camera_suffix,
-                    x_fold,
                 },
                 1,
             ) => Some(
@@ -12653,7 +13324,7 @@ impl<'a> GameplayActorSegmentIter<'a> {
                     *blend,
                     root_camera,
                     field_camera_suffix,
-                    *x_fold,
+                    None,
                 )
                 .with_flat_draws(
                     &self.scratch.notefield_flat_draw_scratch[player],
@@ -12662,7 +13333,6 @@ impl<'a> GameplayActorSegmentIter<'a> {
             ),
             (PlayerActorAssembly::Captured | PlayerActorAssembly::Hidden, _)
             | (PlayerActorAssembly::DirectZ { .. }, _)
-            | (PlayerActorAssembly::DirectFold { .. }, _)
             | (PlayerActorAssembly::DirectTransform { .. }, _) => None,
         }
     }
@@ -12673,10 +13343,15 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
+            if let Some(segment) = self.pending_actor_segment() {
+                return Some(segment);
+            }
             match self.phase {
                 0 => {
                     self.phase = 1;
-                    return Some(ActorSegment::new(&self.actors[..self.actor_start]));
+                    self.pending_actor_start = 0;
+                    self.pending_actor_end = self.actor_start;
+                    continue;
                 }
                 1 => {
                     while self.underlay_player < MAX_PLAYERS {
@@ -12688,7 +13363,8 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                                     .with_flat_draws(
                                         &self.scratch.notefield_underlay_draws[player],
                                         None,
-                                    ),
+                                    )
+                                    .with_projection(&self.owner.screen_projection),
                             );
                         }
                     }
@@ -12703,8 +13379,13 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                         let Some(segment) = self.owner.players[player].as_ref() else {
                             continue;
                         };
-                        if let Some(segment) = self.player_segment(segment, part) {
-                            return Some(segment);
+                        if let Some(draw) = self.player_segment(segment, part) {
+                            let projection = if part == 1 {
+                                &segment.field_screen_projection
+                            } else {
+                                &self.owner.screen_projection
+                            };
+                            return Some(draw.with_projection(projection));
                         }
                     }
                     self.phase = 2;
@@ -12728,9 +13409,9 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                         .clamp(self.actor_start, self.actors.len());
                     if !self.proxy_draw {
                         self.proxy_draw = true;
-                        return Some(ActorSegment::new(
-                            &self.actors[self.actor_start..actor_insert],
-                        ));
+                        self.pending_actor_start = self.actor_start;
+                        self.pending_actor_end = actor_insert;
+                        continue;
                     }
                     self.proxy_draw = false;
                     self.proxy += 1;
@@ -12741,19 +13422,24 @@ impl<'a> Iterator for GameplayActorSegmentIter<'a> {
                         proxy.draw_start,
                         proxy.draw_end,
                     );
-                    return Some(ActorSegment::flat_proxy_styled_with_cameras(
-                        draws,
-                        proxy.offset,
-                        proxy.z,
-                        &proxy.style,
-                        proxy.blend,
-                        proxy.enclosing_camera.as_ref(),
-                        proxy.camera.as_ref(),
-                    ));
+                    return Some(
+                        ActorSegment::flat_proxy_styled_with_cameras(
+                            draws,
+                            proxy.offset,
+                            proxy.z,
+                            &proxy.style,
+                            proxy.blend,
+                            proxy.enclosing_camera.as_ref(),
+                            proxy.camera.as_ref(),
+                        )
+                        .with_projection(&self.owner.screen_projection),
+                    );
                 }
                 3 => {
                     self.phase = 4;
-                    return Some(ActorSegment::new(&self.actors[self.actor_start..]));
+                    self.pending_actor_start = self.actor_start;
+                    self.pending_actor_end = self.actors.len();
+                    continue;
                 }
                 _ => return None,
             }
@@ -12788,7 +13474,6 @@ fn player_actor_assembly_for_transform_with_metrics(
     {
         return assembly;
     }
-    let x_fold = song_lua_player_x_fold(transform);
     let field_camera_suffix = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
         screen_width: metrics.screen_width,
         screen_height: metrics.screen_height,
@@ -12797,27 +13482,25 @@ fn player_actor_assembly_for_transform_with_metrics(
         target_x: transform.target_x,
         target_y: transform.target_y,
         rotation_x_deg: transform.rotation_x,
+        rotation_y_deg: transform.rotation_y,
         rotation_z_deg: transform.rotation_z,
         skew_x: transform.skew_x,
         skew_y: transform.skew_y,
         zoom_x: transform.zoom_x,
         zoom_y: transform.zoom_y,
         zoom_z: transform.zoom_z,
+        target_z: transform.target_z,
+        wrappers: transform.wrappers,
     });
-    match (field_camera_suffix, x_fold) {
-        (Some(field_camera_suffix), x_fold) => PlayerActorAssembly::DirectTransform {
+    match field_camera_suffix {
+        Some(field_camera_suffix) => PlayerActorAssembly::DirectTransform {
             z_shift: transform.z_shift,
             tint: transform.tint,
             blend: transform.blend,
             root_camera: song_lua_player_root_camera_with_metrics(field_camera_suffix, metrics),
             field_camera_suffix,
-            x_fold,
         },
-        (None, Some(x_fold)) => PlayerActorAssembly::DirectFold {
-            z_shift: transform.z_shift,
-            x_fold,
-        },
-        (None, None) => PlayerActorAssembly::DirectZ {
+        None => PlayerActorAssembly::DirectZ {
             z_shift: transform.z_shift,
         },
     }
@@ -12867,7 +13550,6 @@ fn prepare_song_lua_layer<S: NoteskinSlot + Clone>(
         out,
         overlays,
         overlay_states,
-        song_foreground_state,
         order_cache,
         order_scratch,
         aft_capture_scratch,
@@ -12879,7 +13561,6 @@ fn prepare_active_song_lua_layer<S: NoteskinSlot + Clone>(
     out: &mut Vec<Actor>,
     overlays: &[SongLuaOverlayActor<S>],
     overlay_states: &[SongLuaOverlayState],
-    song_foreground_state: SongLuaOverlayState,
     order_cache: &mut SongLuaOverlayOrderCache,
     order_scratch: &mut Vec<usize>,
     aft_capture_scratch: &mut SongLuaAftCaptureScratch,
@@ -12888,7 +13569,9 @@ fn prepare_active_song_lua_layer<S: NoteskinSlot + Clone>(
     aft_capture_scratch.begin_frame();
     out.reserve(overlays.len());
     song_lua_overlay_order_into(overlays, overlay_states, order_cache, None, order_scratch);
-    depth.shifted(song_foreground_state.z)
+    // Parent Z is composed into each child's geometry. Authored draworder and
+    // explicit child Z sorting determine traversal within this screen layer.
+    depth
 }
 
 /// Foreground::Update advances actors from the FGCHANGE's start, undoing
@@ -12908,7 +13591,9 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     local_overlay_states: &[SongLuaOverlayState],
     overlay_states: &[SongLuaOverlayState],
     song_foreground_state: SongLuaOverlayState,
-    screen_camera: Option<SongLuaOverlayState>,
+    screen_state: Option<SongLuaOverlayState>,
+    screen_projections: &mut Vec<SongLuaScreenProjectionRange>,
+    mut capture_originals: Option<&mut SongLuaScreenCaptureOriginals>,
     proxy_sources: &SongLuaScreenProxySources<'_>,
     mut direct_proxies: Option<&mut SongLuaDirectProxies>,
     mut proxy_actor_scratch: Option<&mut SongLuaProxyActorScratch>,
@@ -12917,7 +13602,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     space_height: f32,
     effect_time: f32,
     effect_beat: f32,
-    total_elapsed: f32,
+    total_elapsed: impl Into<SongLuaDrawTime>,
     order_scratch: &mut Vec<usize>,
     capture_states: &mut Vec<SongLuaOverlayState>,
     capture_order_scratch: &mut Vec<usize>,
@@ -12925,6 +13610,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
     projected_mesh_scratch: &mut [SongLuaProjectedMeshScratch],
     depth: SongLuaLayerDepth,
 ) {
+    let total_elapsed = total_elapsed.into();
     let Some(song_lua_depth) = prepare_song_lua_layer(
         out,
         overlays,
@@ -13183,48 +13869,64 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
                     space_height,
                     effect_time,
                     effect_beat,
-                    total_elapsed,
+                    total_elapsed.animation_elapsed,
                     projected_mesh_scratch.get_mut(idx),
                 ) {
                     out.extend(actors);
                 }
             }
             _ => {
-                if append_song_lua_multi_actor_overlay(
+                let start = out.len();
+                let camera_state = topology_index
+                    .camera_state(overlay_states, idx)
+                    .or(screen_state.filter(|screen| screen.fov.is_some()));
+                let camera = SongLuaDrawCamera::with_screen(
+                    camera_state, screen_state, [effect_time, effect_beat],
+                );
+                append_song_lua_overlay_output(
                     out,
                     overlay,
                     overlay_state,
-                    topology_index
-                        .camera_state(overlay_states, idx)
-                        .or(screen_camera),
+                    camera,
                     asset_manager,
                     z,
-                    space_width,
-                    space_height,
-                    effect_time,
-                    effect_beat,
+                    [space_width, space_height],
+                    [effect_time, effect_beat],
                     total_elapsed,
+                    topology_index.texture_handle(idx),
                     projected_mesh_scratch.get_mut(idx),
-                )
-                .is_none()
-                    && let Some(actors) = build_song_lua_overlay_actor_with_scratch(
-                        overlay,
-                        overlay_state,
-                        topology_index
-                            .camera_state(overlay_states, idx)
-                            .or(screen_camera),
-                        asset_manager,
-                        z,
-                        space_width,
-                        space_height,
-                        effect_time,
-                        effect_beat,
-                        total_elapsed,
-                        topology_index.texture_handle(idx),
-                        projected_mesh_scratch.get_mut(idx),
-                    )
+                );
+                if out.len() > start
+                    && camera.world != Matrix4::IDENTITY
                 {
-                    out.extend(actors);
+                    // These actors already include the screen on their world
+                    // stack. Other gameplay fragments keep the outer prefix.
+                    if let Some(previous) = screen_projections.last_mut()
+                        && previous.end == start
+                    {
+                        previous.end = out.len();
+                    } else {
+                        screen_projections.push(SongLuaScreenProjectionRange {
+                            start,
+                            end: out.len(),
+                        });
+                    }
+                    if let Some(originals) = capture_originals.as_deref_mut() {
+                        let original_start = originals.actors.len();
+                        append_song_lua_overlay_output(
+                            &mut originals.actors, overlay, overlay_state,
+                            camera_state.into(), asset_manager, z,
+                            [space_width, space_height], [effect_time, effect_beat],
+                            total_elapsed, topology_index.texture_handle(idx),
+                            projected_mesh_scratch.get_mut(idx),
+                        );
+                        originals.ranges.push(SongLuaScreenCaptureRange {
+                            start,
+                            end: out.len(),
+                            original_start,
+                            original_end: originals.actors.len(),
+                        });
+                    }
                 }
             }
         }
@@ -13248,6 +13950,7 @@ fn push_song_lua_layer_actors<S: NoteskinSlot + Clone>(
 #[derive(Default)]
 pub struct FrameScratch {
     song_lua_enabled: bool,
+    dynamic_scene: bool,
     render_targets: Vec<deadlib_present::actors::RenderTarget>,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -13285,6 +13988,8 @@ pub struct FrameScratch {
     song_lua_capture_visit_scratch: SongLuaCaptureVisitScratch,
     song_lua_proxy_actor_scratch: Option<SongLuaProxyActorScratch>,
     song_lua_direct_proxies: SongLuaDirectProxies,
+    song_lua_screen_projection_ranges: Vec<SongLuaScreenProjectionRange>,
+    screen_capture_originals: SongLuaScreenCaptureOriginals,
     notefield_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
     notefield_flat_draw_scratch: [Vec<FlatDraw>; MAX_PLAYERS],
     notefield_hud_actor_scratch: [Vec<Actor>; MAX_PLAYERS],
@@ -13304,9 +14009,10 @@ impl FrameScratch {
 
     /// Screen-entry-only warmup for a native program or diagnostic live scene. Every prepared actor
     /// may mutate, including ancestors, draw order and camera scope. The exact
-    /// lists are allocated once and reused; frames do not rebuild this plan.
+    /// lists are reused until a live callback appends a wrapper state.
     pub fn enable_dynamic_scene(&mut self) {
         self.song_lua_enabled = true;
+        self.dynamic_scene = true;
         // A foreground can bind or retarget a proxy after screen preparation.
         // Reserve the largest direct source (whole Player: three runs) for
         // every root proxy before any of those live callbacks execute.
@@ -13329,11 +14035,7 @@ impl FrameScratch {
             .chain(&mut self.song_lua_background_visual_layer_orders)
             .chain(&mut self.song_lua_foreground_visual_layer_orders)
         {
-            let count = order.last_draw_orders.len();
-            order.dynamic_local_indices = (0..count).collect();
-            order.dynamic_composed_indices = (0..count).collect();
-            order.dynamic_draw_order.fill(true);
-            order.static_root_order = None;
+            order.enable_dynamic();
         }
         self.song_lua_proxy_request_index
             .topology
@@ -13574,8 +14276,19 @@ impl FrameScratch {
                         .unwrap_or(0)
             })
             .sum();
+        let background_overlays = || song_lua_visuals.background_visual_layers.iter()
+            .flat_map(|layer| layer.overlays.iter());
+        let screen_capture_originals = SongLuaScreenCaptureOriginals {
+            actors: Vec::with_capacity(background_overlays().map(|overlay| {
+                // Model and noteskin draws can add camera scope markers.
+                song_lua_aft_actor_capacity(&overlay.kind).saturating_add(2)
+            }).sum()),
+            ranges: Vec::with_capacity(background_overlays().count()),
+        };
         let frame_scratch = Self {
             song_lua_enabled: true,
+            dynamic_scene: false,
+            screen_capture_originals,
             render_targets: Vec::with_capacity(target_capacity),
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
@@ -13620,6 +14333,19 @@ impl FrameScratch {
             }),
             song_lua_direct_proxies: SongLuaDirectProxies::with_capacity(
                 song_lua_direct_proxy_capacity,
+            ),
+            song_lua_screen_projection_ranges: Vec::with_capacity(
+                song_lua_visuals.overlays.len()
+                    + song_lua_visuals
+                        .background_visual_layers
+                        .iter()
+                        .map(|layer| layer.overlays.len())
+                        .sum::<usize>()
+                    + song_lua_visuals
+                        .foreground_visual_layers
+                        .iter()
+                        .map(|layer| layer.overlays.len())
+                        .sum::<usize>(),
             ),
             notefield_actor_scratch,
             notefield_flat_draw_scratch,
@@ -13679,6 +14405,7 @@ pub struct SongMedia {
     next_song_lua_sound_event_ix: usize,
     active_song_lua_video_paths: Vec<PathBuf>,
     static_song_lua_video_path_count: usize,
+    movies: movie::Movies,
     // Authored primary foreground start in the gameplay music clock, resolved
     // once at screen entry. Actor animation must exclude the screen lead-in.
     foreground_start_second: f32,
@@ -13710,6 +14437,7 @@ impl SongMedia {
             next_song_lua_sound_event_ix: 0,
             active_song_lua_video_paths,
             static_song_lua_video_path_count,
+            movies: movie::Movies::new(visuals),
             foreground_start_second,
             foreground_media_initialized: false,
             next_foreground_change_ix: 0,
@@ -13787,11 +14515,39 @@ impl SongMedia {
     pub fn video_paths(&self) -> &[PathBuf] {
         &self.active_song_lua_video_paths
     }
+
+    /// Visit movie clocks from actor updates, including paused/invisible movies.
+    pub fn for_each_video_position<
+        P: deadsync_gameplay::GameplayProfileData,
+        S: NoteskinSlot + Clone,
+    >(
+        &mut self,
+        gameplay: &GameplayCoreState<P, S>,
+        mut visit: impl FnMut(&Path, f32, bool),
+    ) {
+        self.movies.sample(gameplay, &mut visit);
+        if let Some(path) = self.current_foreground_path.as_deref()
+            && crate::is_song_lua_video_path(path)
+            && let Some(change) = self
+                .next_foreground_change_ix
+                .checked_sub(1)
+                .and_then(|index| gameplay.song().foreground_changes.get(index))
+        {
+            let start = gameplay.music_time_for_beat(change.start_beat);
+            visit(
+                path,
+                (gameplay.current_music_time_display() - start).max(0.0),
+                true,
+            );
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
 /// Game/session viewing options, including editor overrides; not theme policy.
 pub struct FrameOptions {
+    /// Monotonic host draw time, independent of song rate, pauses and layer start.
+    pub uptime_seconds: f64,
     pub play_style: deadsync_gameplay::GameplayInputPlayStyle,
     pub player_side: deadsync_gameplay::GameplayInputPlayerSide,
     pub notefield: NotefieldViewOverride,
@@ -13829,16 +14585,38 @@ pub struct FieldFrame {
     pub placement: FieldPlacement,
     pub judgment_visible: bool,
     pub combo_visible: bool,
+    pub judgment_transform: Option<deadsync_notefield::HudActorTransform>,
+    pub combo_transform: Option<deadsync_notefield::HudActorTransform>,
     pub capture: ProxyCaptureRequests,
     pub wrapper: Matrix4,
     pub wrapper_visible: bool,
+    /// A Lua-moved Player's own position, which centers the field perspective.
+    pub player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
 }
 
 fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) -> (Matrix4, bool) {
-    let frames = &actor.note_field_frames;
+    let (matrix, _, visible) = song_lua_wrapper_chain(&actor.note_field_frames, clock);
+    (matrix, visible)
+}
+
+/// Sample a baked wrapper chain: its native screen-space matrix (outermost
+/// first), the diffuse Actor::Draw hands inward, and whether every wrapper
+/// draws (an invisible or transparent wrapper aborts the wrapped draw).
+fn song_lua_wrapper_chain(
+    frames: &[crate::SongLuaNoteFieldFrame],
+    clock: [f32; 2],
+) -> (Matrix4, [f32; 4], bool) {
+    song_lua_render_chain(frames, clock, false)
+}
+
+fn song_lua_render_chain(
+    frames: &[crate::SongLuaNoteFieldFrame],
+    clock: [f32; 2],
+    captured_child: bool,
+) -> (Matrix4, [f32; 4], bool) {
     let next = frames.partition_point(|frame| frame.second <= clock[0]);
     let Some(from) = next.checked_sub(1).map(|index| &frames[index]) else {
-        return (Matrix4::IDENTITY, true);
+        return (Matrix4::IDENTITY, [1.0; 4], true);
     };
     let to = frames.get(next).unwrap_or(from);
     let t = if to.second > from.second {
@@ -13847,6 +14625,7 @@ fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) 
         0.0
     };
     let mut matrix = Matrix4::IDENTITY;
+    let mut tint = [1.0; 4];
     let mut visible = true;
     for (index, &initial) in from.wrappers.iter().enumerate() {
         let mut state = initial;
@@ -13856,10 +14635,14 @@ fn song_lua_field_wrapper(actor: &crate::SongLuaCapturedActor, clock: [f32; 2]) 
         {
             crate::overlay_state_lerp(&mut state, &delta, t);
         }
-        visible &= state.draw_visible() && state.diffuse[3] > 0.0;
-        matrix *= song_lua_draw_matrix(state, clock).0;
+        visible &= !state.hibernating
+            && (state.visible || (captured_child && index + 1 == from.wrappers.len()))
+            && state.diffuse[3] > 0.0;
+        let (model, diffuse) = song_lua_draw_matrix(state, clock);
+        matrix *= model;
+        tint = std::array::from_fn(|channel| tint[channel] * diffuse[channel]);
     }
-    (matrix, visible)
+    (matrix, tint, visible)
 }
 
 const fn hidden_gameplay_hud_layers(
@@ -13906,8 +14689,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             draw_field,
         );
     }
+    frame_scratch.refresh_live_wrappers(state.song_lua_visuals());
     let FrameScratch {
         song_lua_enabled: _,
+        dynamic_scene: _,
         render_targets,
         song_lua_overlay_order,
         song_lua_background_visual_layer_orders,
@@ -13945,6 +14730,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         song_lua_capture_visit_scratch,
         song_lua_proxy_actor_scratch,
         song_lua_direct_proxies,
+        song_lua_screen_projection_ranges,
+        screen_capture_originals,
         notefield_actor_scratch,
         notefield_flat_draw_scratch,
         notefield_hud_actor_scratch,
@@ -13957,6 +14744,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     } = frame_scratch;
     render_targets.clear();
     song_lua_direct_proxies.clear();
+    song_lua_screen_projection_ranges.clear();
+    screen_capture_originals.actors.clear();
+    screen_capture_originals.ranges.clear();
     for player in 0..MAX_PLAYERS {
         notefield_underlay_actors[player].clear();
         notefield_underlay_draws[player].clear();
@@ -14118,17 +14908,25 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             ),
         );
     }
-    let screen_projection = song_lua_visuals
+    let screen_state = song_lua_visuals
         .screen_overlay_index
         .and_then(|index| song_lua_overlay_state_scratch.get(index))
         .filter(|_| show_song_visuals)
-        .map_or(Matrix4::IDENTITY, |screen| {
-            song_lua_screen_projection(
-                *screen,
-                [song_lua_space_width, song_lua_space_height],
-                [song_lua_now, state.current_beat()],
-            )
-        });
+        .copied();
+    let screen_projection = screen_state.map_or(Matrix4::IDENTITY, |screen| {
+        song_lua_screen_projection(
+            screen,
+            [song_lua_space_width, song_lua_space_height],
+            [song_lua_now, state.current_beat()],
+        )
+    });
+    let screen_world = screen_state.map_or(Matrix4::IDENTITY, |screen| {
+        deadsync_notefield::song_lua_screen_matrix_to_world(
+            song_lua_draw_matrix(screen, [song_lua_now, state.current_beat()]).0,
+            screen_width(),
+            screen_height(),
+        )
+    });
     let mut manual_requests = SongLuaScreenProxyRequests::default();
     if show_song_visuals {
         // Release the bank about to be reused before refilling its source
@@ -14209,11 +15007,19 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     });
     let direct_judgment_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_judgments[player] != 0
+            && song_lua_visuals.player_actors[player]
+                .judgment
+                .render_frames
+                .is_empty()
             && !proxy_analysis.captured.players[player].judgment
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
     let direct_combo_candidates: [bool; MAX_PLAYERS] = std::array::from_fn(|player| {
         proxy_analysis.root_combos[player] != 0
+            && song_lua_visuals.player_actors[player]
+                .combo
+                .render_frames
+                .is_empty()
             && !proxy_analysis.captured.players[player].combo
             && (!proxy_requests.players[player].player || direct_player_candidates[player])
     });
@@ -14234,7 +15040,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         .screen_overlay_index
         .and_then(|index| song_lua_overlay_state_scratch.get(index))
         .copied()
-        .filter(|screen| show_song_visuals && screen.fov.is_some());
+        .filter(|_| show_song_visuals);
     let underlay_start = actors.len();
     if show_song_visuals
         && (proxy_requests.background
@@ -14271,6 +15077,22 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer.song_foreground_events.as_slice(),
             &mut song_lua_background_song_foreground_message_state_cache[layer_idx],
         );
+        // Background layers have an independent compiled tree, while the live
+        // SongBackground pose is retained on ScreenGameplay. Its transform must
+        // precede each layer, including compensation for a moved screen.
+        let mut background_parent = screen_layers[2];
+        if background_source.is_some() {
+            // ActorProxy can draw the hidden target; final capture retention
+            // below still uses SongBackground's actual visibility.
+            background_parent.visible = true;
+            background_parent.hibernating = false;
+        }
+        let song_foreground_state = song_lua_layer_parent_state::<S>(
+            background_parent,
+            song_foreground_state,
+            [layer.screen_width, layer.screen_height],
+            [song_lua_now, state.current_beat()],
+        );
         push_song_lua_layer_actors(
             actors,
             render_targets,
@@ -14281,6 +15103,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer_states,
             song_foreground_state,
             screen_camera,
+            song_lua_screen_projection_ranges,
+            background_source.is_some().then_some(&mut *screen_capture_originals),
             &SongLuaScreenProxySources::default(),
             None,
             None,
@@ -14289,7 +15113,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer.screen_height.max(1.0),
             song_lua_now,
             state.current_beat(),
-            state.total_elapsed_in_screen(),
+            SongLuaDrawTime {
+                animation_elapsed: state.total_elapsed_in_screen(),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -14298,12 +15125,14 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             SONG_LUA_BACKGROUND_DEPTH,
         );
     }
-    song_lua_capture_new_actors(
+    song_lua_capture_screen_actors(
         &mut background_source,
         actors,
         underlay_start,
         song_lua_proxy_actor_scratch.as_mut(),
         screen_layers[2].draw_visible(),
+        song_lua_screen_projection_ranges,
+        screen_capture_originals,
     );
     native::push_background_cover(actors, state, view);
 
@@ -14355,6 +15184,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
     let mut manual_player_sources: [Option<SongLuaManualPlayerSource>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
     let mut player_hud_parts = [deadsync_notefield::NotefieldHudParts::default(); MAX_PLAYERS];
+    let mut player_field_screen_projections = [screen_projection; MAX_PLAYERS];
+    let mut captured_player_field_ranges = [None; MAX_PLAYERS];
     let mut build_player_bundle =
         |player_idx: usize, placement: FieldPlacement, requests: SongLuaPlayerProxyRequests| {
             let field_scratch = &mut notefield_actor_scratch[player_idx];
@@ -14363,30 +15194,64 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             let hud_flat_draw_scratch = &mut notefield_hud_flat_draw_scratch[player_idx];
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let song_lua_now = state.current_music_time_display();
+            let song_lua_clock = [song_lua_now, state.current_beat_display()];
             let (field_wrapper, field_wrapper_visible) = if show_song_visuals {
-                song_lua_field_wrapper(player_actor, [song_lua_now, state.current_beat_display()])
+                song_lua_field_wrapper(player_actor, song_lua_clock)
             } else {
                 (Matrix4::IDENTITY, true)
             };
-            let (judgment_visible, combo_visible) = if show_song_visuals {
-                let judgment_visible = song_lua_child_visible(
-                    song_lua_now,
-                    &player_actor.judgment,
-                    &song_lua_visuals.player_judgment_events[player_idx],
-                    &mut song_lua_player_judgment_message_state_cache[player_idx],
-                    requests.judgment,
-                );
-                let combo_visible = song_lua_child_visible(
-                    song_lua_now,
-                    &player_actor.combo,
-                    &song_lua_visuals.player_combo_events[player_idx],
-                    &mut song_lua_player_combo_message_state_cache[player_idx],
-                    requests.combo,
-                );
-                (judgment_visible, combo_visible)
+            // Player::PushPlayerMatrix centers the field perspective on the
+            // Player's own GetX/GetY, so both are needed before the field draws.
+            let lua_player_state = show_song_visuals.then(|| {
+                song_lua_player_render_state(
+                    state,
+                    player_idx,
+                    &mut song_lua_player_message_state_cache[player_idx],
+                )
+            });
+            let player_transform = if apply_attacks {
+                state.song_lua_player_transform(player_idx)
             } else {
-                (true, true)
+                deadsync_gameplay::SongLuaPlayerTransform::default()
             };
+            let (player_wrappers, player_wrapper_tint, player_wrappers_visible) =
+                if show_song_visuals {
+                    song_lua_wrapper_chain(&player_actor.player_wrapper_frames, song_lua_clock)
+                } else {
+                    (Matrix4::IDENTITY, [1.0; 4], true)
+                };
+            let player_position = deadsync_notefield::SongLuaPlayerPosition {
+                x: player_transform.x.or_else(|| {
+                    lua_player_state
+                        .filter(|_| !notefield_view.force_center_1player)
+                        .map(|player_state| player_state.x)
+                }),
+                y: player_transform.y.unwrap_or_else(|| {
+                    lua_player_state.map_or_else(screen_center_y, |player_state| player_state.y)
+                }),
+            };
+            let ((judgment_transform, judgment_visible), (combo_transform, combo_visible)) =
+                if show_song_visuals {
+                    let judgment = song_lua_child_render(
+                        song_lua_now,
+                        song_lua_clock,
+                        &player_actor.judgment,
+                        &song_lua_visuals.player_judgment_events[player_idx],
+                        &mut song_lua_player_judgment_message_state_cache[player_idx],
+                        requests.judgment,
+                    );
+                    let combo = song_lua_child_render(
+                        song_lua_now,
+                        song_lua_clock,
+                        &player_actor.combo,
+                        &song_lua_visuals.player_combo_events[player_idx],
+                        &mut song_lua_player_combo_message_state_cache[player_idx],
+                        requests.combo,
+                    );
+                    (judgment, combo)
+                } else {
+                    ((None, true), (None, true))
+                };
             let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_camera,
@@ -14402,10 +15267,13 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 FieldFrame {
                     wrapper: field_wrapper,
                     wrapper_visible: field_wrapper_visible,
+                    player_position: Some(player_position),
                     player: player_idx,
                     placement,
                     judgment_visible,
                     combo_visible,
+                    judgment_transform,
+                    combo_transform,
                     capture: ProxyCaptureRequests {
                         player: requests.player && !direct_player_candidates[player_idx],
                         // Whole-player captures consume the same field source, so
@@ -14444,24 +15312,13 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 underlay_draws: 0,
                 ..hud_parts
             };
-            let player_state = if show_song_visuals {
-                song_lua_player_render_state(
-                    state,
-                    player_idx,
-                    &mut song_lua_player_message_state_cache[player_idx],
-                )
-            } else {
-                SongLuaOverlayState {
-                    x: layout_center_x,
-                    y: screen_center_y(),
-                    ..SongLuaOverlayState::default()
-                }
-            };
-            let player_transform = if apply_attacks {
-                state.song_lua_player_transform(player_idx)
-            } else {
-                deadsync_gameplay::SongLuaPlayerTransform::default()
-            };
+            let mut player_state = lua_player_state.unwrap_or(SongLuaOverlayState {
+                x: layout_center_x,
+                y: screen_center_y(),
+                ..SongLuaOverlayState::default()
+            });
+            // Actor::Draw aborts inside an invisible or transparent wrapper.
+            player_state.visible &= player_wrappers_visible;
             let song_lua_active =
                 show_song_visuals && !state.song().foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
@@ -14481,12 +15338,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 notefield_view,
             );
             let target_y = player_transform.y.unwrap_or(player_state.y);
-            let z_shift = song_lua_player_layer_z(
-                song_lua_active,
-                player_actor,
-                player_state,
-                player_transform.z,
-            );
+            let z_shift = song_lua_player_layer_z(song_lua_active);
             let player_blend = match player_state.blend {
                 SongLuaOverlayBlendMode::NoEffect => Some(BlendMode::NoEffect),
                 SongLuaOverlayBlendMode::Alpha => None,
@@ -14496,7 +15348,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             };
             let capture_transform = SongLuaCaptureTransform {
                 z_shift,
-                tint: player_state.diffuse,
+                // Wrappers pass their diffuse inward as the Player's internal diffuse.
+                tint: std::array::from_fn(|channel| {
+                    player_state.diffuse[channel] * player_wrapper_tint[channel]
+                }),
                 blend: player_blend,
                 playfield_center_x: layout_center_x,
                 target_x,
@@ -14509,8 +15364,18 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 zoom_x,
                 zoom_y,
                 zoom_z,
+                target_z: player_state.z + player_transform.z,
+                wrappers: player_wrappers,
+                field_camera_parts: notefield_camera_cache[player_idx].camera_parts(),
             };
-            let direct_x_fold = song_lua_player_x_fold(capture_transform);
+            // Player replaces the camera for NoteField while ScreenGameplay's
+            // world transform remains on the stack. Use the pure menu camera;
+            // the child model can contain a singular authored zoom.
+            player_field_screen_projections[player_idx] = capture_transform
+                .field_camera_parts
+                .map_or(screen_projection, |(camera, _)| {
+                    song_lua_camera_world_projection(camera, screen_world)
+                });
             let proxy_field_camera = field_camera;
             if manual_requests.players[player_idx].player {
                 let scratch = song_lua_proxy_actor_scratch
@@ -14525,10 +15390,16 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     &mut scratch.banks[scratch.active_bank].players[player_idx],
                 ));
             }
-            let assembly = player_actor_assembly_cache[player_idx].resolve(
+            let mut assembly = player_actor_assembly_cache[player_idx].resolve(
                 requests.player && !direct_player_candidates[player_idx],
                 player_state.draw_visible() && !covering_proxy_requests.players[player_idx].player,
                 capture_transform,
+            );
+            let assembly_field_camera = prepare_player_field_camera(
+                &mut assembly,
+                field_camera,
+                capture_transform.field_camera_parts,
+                field_scratch,
             );
             let field_camera = match assembly {
                 PlayerActorAssembly::DirectTransform {
@@ -14538,7 +15409,7 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 } => Some(player_field_camera_cache[player_idx].resolve(
                     field_camera_generation,
                     player_actor_assembly_cache[player_idx].generation(),
-                    field_camera,
+                    assembly_field_camera,
                     root_camera,
                     field_camera_suffix,
                 )),
@@ -14556,11 +15427,11 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 .then(|| song_lua_player_camera_suffix(capture_transform))
                 .flatten();
             let direct_hud_camera = direct_camera_suffix.map(song_lua_player_root_camera);
-            let direct_field_camera = match (proxy_field_camera, direct_camera_suffix) {
-                (Some(camera), Some(suffix)) => Some(camera * suffix),
-                (None, Some(suffix)) => Some(song_lua_player_root_camera(suffix)),
-                (camera, None) => camera,
-            };
+            let direct_field_camera = song_lua_field_camera_with_player(
+                proxy_field_camera,
+                capture_transform.field_camera_parts,
+                direct_camera_suffix,
+            );
             let captured_player_source = if requests.player && !direct_player {
                 let scratch = song_lua_proxy_actor_scratch
                     .as_mut()
@@ -14589,6 +15460,29 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             } else {
                 None
             };
+            if matches!(assembly, PlayerActorAssembly::Captured)
+                && screen_world != Matrix4::IDENTITY
+                && let Some(source) = &captured_player_source
+            {
+                let camera = if song_lua_player_transform_is_direct_identity(capture_transform) {
+                    proxy_field_camera
+                } else {
+                    song_lua_field_camera_with_player(
+                        proxy_field_camera,
+                        capture_transform.field_camera_parts,
+                        song_lua_player_camera_suffix(capture_transform),
+                    )
+                };
+                // Keep the source local for ActorProxy consumers. Only the
+                // ordinary Player draw separates its closed field camera scope
+                // from the Combo/Judgment spans that retain the screen camera.
+                captured_player_field_ranges[player_idx] = camera.and_then(|camera| {
+                    song_lua_captured_camera_range(
+                        song_lua_captured_segment_actors(&source[0]),
+                        camera,
+                    )
+                });
+            }
             let player_source = captured_player_source.map(PreparedProxySource::new);
             let direct_player_source = direct_player
                 .then(|| {
@@ -14604,7 +15498,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: hud_parts.combo_draws,
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_hud_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
                                 base: root_base,
@@ -14617,11 +15510,16 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: flat_draw_scratch.len(),
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_field_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
-                                base: proxy_field_camera.unwrap_or(root_base),
-                                suffix,
+                                base: capture_transform.field_camera_parts.map_or_else(
+                                    || proxy_field_camera.unwrap_or(root_base),
+                                    |(camera, _)| camera,
+                                ),
+                                suffix: capture_transform.field_camera_parts.map_or(
+                                    suffix,
+                                    |(_, model)| suffix * model,
+                                ),
                             }),
                         },
                         SongLuaDirectProxySource {
@@ -14630,7 +15528,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                             draw_end: hud_flat_draw_scratch.len(),
                             target,
                             tint: capture_transform.tint,
-                            x_fold: direct_x_fold,
                             camera: direct_hud_camera,
                             player_camera: Some(SongLuaDirectPlayerCamera {
                                 base: root_base,
@@ -14656,7 +15553,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_field_camera,
                     player_camera: None,
                 });
@@ -14682,6 +15578,9 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                         zoom_x: 1.0,
                         zoom_y: 1.0,
                         zoom_z: 1.0,
+                        target_z: 0.0,
+                        wrappers: Matrix4::IDENTITY,
+                        field_camera_parts: None,
                     };
                     prepare_proxy_source(source, ProxyCapturePart::Field, local, scratch)
                 })
@@ -14733,7 +15632,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_hud_camera,
                     player_camera: None,
                 });
@@ -14770,7 +15668,6 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                     draw_end: range.end,
                     target: [capture_transform.target_x, capture_transform.target_y],
                     tint: capture_transform.tint,
-                    x_fold: direct_x_fold,
                     camera: direct_hud_camera,
                     player_camera: None,
                 });
@@ -15044,6 +15941,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
                 player: 1,
                 assembly: p2_actor_assembly,
                 field_camera: p2_field_camera,
+                field_screen_projection: player_field_screen_projections[1],
+                captured_field_range: captured_player_field_ranges[1],
                 hud_parts: player_hud_parts[1],
                 manual_hud_draw: show_song_visuals
                     && song_lua_visuals.player_actors[1].manual_hud_draw,
@@ -15062,6 +15961,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             player: 0,
             assembly: p1_actor_assembly,
             field_camera: p1_field_camera,
+            field_screen_projection: player_field_screen_projections[0],
+            captured_field_range: captured_player_field_ranges[0],
             hud_parts: player_hud_parts[0],
             manual_hud_draw: show_song_visuals && song_lua_visuals.player_actors[0].manual_hud_draw,
         });
@@ -15174,6 +16075,8 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_overlay_state_scratch,
             song_foreground_state,
             screen_camera,
+            song_lua_screen_projection_ranges,
+            None,
             &proxy_sources,
             Some(&mut *song_lua_direct_proxies),
             song_lua_proxy_actor_scratch.as_mut(),
@@ -15182,11 +16085,14 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             song_lua_space_height,
             state.current_music_time_display(),
             state.current_beat(),
-            foreground_elapsed(
-                song_lua_now,
-                media.foreground_start_second,
-                state.music_rate(),
-            ),
+            SongLuaDrawTime {
+                animation_elapsed: foreground_elapsed(
+                    song_lua_now,
+                    media.foreground_start_second,
+                    state.music_rate(),
+                ),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -15224,11 +16130,17 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
         else {
             continue;
         };
-        let song_foreground_state = song_lua_song_foreground_state_from(
+        let layer_parent_state = song_lua_song_foreground_state_from(
             song_lua_now,
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
             &mut song_lua_foreground_song_foreground_message_state_cache[layer_idx],
+        );
+        let layer_parent_state = song_lua_layer_parent_state::<S>(
+            song_foreground_state,
+            layer_parent_state,
+            [layer.screen_width, layer.screen_height],
+            [song_lua_now, state.current_beat()],
         );
         push_song_lua_layer_actors(
             actors,
@@ -15238,8 +16150,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             &mut topology_index.topology,
             local_states,
             layer_states,
-            song_foreground_state,
+            layer_parent_state,
             screen_camera,
+            song_lua_screen_projection_ranges,
+            None,
             &proxy_sources,
             Some(&mut *song_lua_direct_proxies),
             song_lua_proxy_actor_scratch.as_mut(),
@@ -15248,7 +16162,10 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             layer.screen_height.max(1.0),
             song_lua_now,
             state.current_beat(),
-            foreground_elapsed(song_lua_now, layer.start_second, state.music_rate()),
+            SongLuaDrawTime {
+                animation_elapsed: foreground_elapsed(song_lua_now, layer.start_second, state.music_rate()),
+                uptime_seconds: view.uptime_seconds,
+            },
             song_lua_order_scratch,
             song_lua_capture_state_scratch,
             song_lua_capture_order_scratch,
@@ -15257,19 +16174,18 @@ pub fn compose_frame<P: deadsync_gameplay::GameplayProfileData, S: NoteskinSlot 
             SONG_LUA_FOREGROUND_DEPTH,
         );
     }
-    if !hide_overlay_hud {
-        // These are separate top-screen actors in ITGmania. Append them only
-        // after every ScreenGameplay/song-local layer so ActorProxy/AFT effects
-        // cannot capture or post-process them.
-        let system_start = actors.len();
+    let screen_actor_end = actors.len();
+    if !hide_gameplay_hud {
+        // ScreenManager draws ScreenSystemLayer and ScreenSyncOverlay after
+        // ScreenGameplay. Its Overlay child cannot hide or tint these separate
+        // screens. Keep them outside song captures and the gameplay camera,
+        // while retaining the explicit application/Practice HUD override.
         draw_layer(ScreenLayer::System, actors, layout);
-        for actor in &mut actors[system_start..] {
-            song_lua_style_capture_actor_in_place(actor, screen_layers[1].diffuse, None, 0);
-        }
     }
     let direct_proxy_len = song_lua_direct_proxies.len();
     GameplayActorSegments {
         insert: segment_insert,
+        screen_actor_end,
         players: segment_players,
         direct_proxy_len,
         underlay_visible: !hide_underlay_hud && retain_underlay_original,
@@ -15431,6 +16347,10 @@ pub mod actor_capture_test_support {
 #[cfg(feature = "test-support")]
 #[path = "playback/actor_conformance.rs"]
 pub mod actor_conformance;
+
+#[cfg(test)]
+#[path = "playback/screen_projection_tests.rs"]
+mod screen_projection_tests;
 
 fn player_scratch<T>(active_players: usize, capacity: usize) -> [Vec<T>; MAX_PLAYERS] {
     std::array::from_fn(|player| {

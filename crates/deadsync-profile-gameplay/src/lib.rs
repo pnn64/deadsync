@@ -437,28 +437,8 @@ fn song_lua_compile_player_screen_x(
     let p2 = if num_players == 1 {
         deadsync_gameplay::gameplay_is_single_p2_side(play_style, player_side)
     } else { player_index == 1 };
-    // _fallback GameplayMargins uses a fake width of 272 to recover the
-    // legacy Simply Love X metrics. GameplayHelpers::GetNotefieldMargins
-    // truncates the outer and combined center margins via SafeFArg<int>,
-    // before ScreenGameplay positions the actual Player actor.
-    let half_screen = viewport.width() * 0.5;
-    let spacing = viewport.width().clamp(640.0, 854.0) * 0.25;
-    let p1_center = viewport.center_x() - spacing;
-    let p2_center = viewport.center_x() + spacing - half_screen;
-    let mut p1_left = p1_center - 136.0;
-    let mut p1_right = half_screen - p1_center - 136.0;
-    let mut p2_left = p2_center - 136.0;
-    let mut p2_right = half_screen - p2_center - 136.0;
-    if num_players == 1 {
-        if p2 { p1_left = p2_right; p1_right = p2_left; }
-        else { p2_left = p1_right; p2_right = p1_left; }
-    }
-    let center_margin = (p1_right + p2_left).trunc() * 0.5;
-    let (edge, left, right) = if p2 {
-        (half_screen, center_margin, p2_right.trunc())
-    } else { (0.0, p1_left.trunc(), center_margin) };
     let offset_sign = if p2 { 1.0 } else { -1.0 };
-    edge + left + (half_screen - left - right) * 0.5
+    deadsync_gameplay::gameplay_side_field_center_x(viewport.width(), viewport.center_x(), p2)
         + offset_sign * (profile.note_field_offset_x as f32).clamp(0.0, 50.0)
 }
 
@@ -498,9 +478,18 @@ pub fn song_lua_compile_context(
     context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
     context.song_banner_path.clone_from(&song.banner_path);
     context.player_step_indices = std::array::from_fn(|player| {
-        song.charts.iter().position(|chart| chart.chart_type == charts[player].chart_type
-            && chart.difficulty == charts[player].difficulty
-            && chart.description == charts[player].description)
+        let selected = &charts[player];
+        // Edit charts can share both difficulty and description. Gameplay owns
+        // cloned charts, so retain their authored identity and note hash when
+        // recovering the catalog index for GetCurrentSteps and reloads.
+        song.charts.iter().position(|chart| chart.chart_type == selected.chart_type
+            && chart.difficulty == selected.difficulty
+            && chart.description == selected.description
+            && chart.chart_name == selected.chart_name
+            && chart.meter == selected.meter
+            && chart.step_artist == selected.step_artist
+            && chart.music_file == selected.music_file
+            && chart.short_hash == selected.short_hash)
     });
     context.song_display_bpms = song.display_bpm_pair_or(
         charts.first().map(std::convert::AsRef::as_ref),

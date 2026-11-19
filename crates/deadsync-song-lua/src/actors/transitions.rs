@@ -168,6 +168,90 @@ pub(super) fn start(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error
     Ok(())
 }
 
+pub(super) fn start_with_message(call: &mut HostCall<'_>, actor: TableId, message: &str) -> Result<(), Error> {
+    if state(call, actor)? != Some(0) { return Ok(()); }
+    start(call, actor)?;
+    if state(call, actor)? == Some(1) {
+        let message = call.try_intern(message.as_bytes())?;
+        set(call, actor, "__songlua_transition_message", message)?;
+    }
+    Ok(())
+}
+
+pub(super) fn bind_screen_completion(
+    call: &mut HostCall<'_>,
+    screen: TableId,
+    catalog: TableId,
+    requests: Arc<Mutex<crate::managers::screen::Requests>>,
+) -> Result<(), Error> {
+    let function = call.new_host_function_with_data(
+        complete_screen_transition,
+        &[call.captures()[0], call.captures()[1], Value::Table(screen), Value::Table(catalog)],
+        requests.clone(),
+    )?;
+    set(call, table(call, call.captures()[1])?, "gameplay_transition_complete", function)?;
+    let class = global_table(call, "GameState")?;
+    if get_static(call, class, b"GetGameplayLeadIn")? == Value::Nil {
+        let getter = call.new_host_function_with_data(|call| {
+            let state = call.function_data::<Arc<Mutex<crate::managers::screen::Requests>>>().unwrap();
+            let lead_in = state.lock().unwrap().gameplay_lead_in;
+            call.push(Value::Boolean(lead_in))
+        }, &[], requests)?;
+        set(call, class, "GetGameplayLeadIn", getter)?;
+    }
+    Ok(())
+}
+
+/// Transition sends its completion synchronously before updating its child.
+/// Use the actual retained transition owners, including authored tween writes.
+pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    set(call, actor, "__songlua_transition_state", Value::Number(2.))?;
+    let callback = get_static(call, table(call, call.captures()[1])?, b"gameplay_transition_complete")?;
+    if callback != Value::Nil {
+        call.call(callback, &[Value::Table(actor)])?;
+    }
+    Ok(())
+}
+
+fn complete_screen_transition(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let requests = call.function_data::<Arc<Mutex<crate::managers::screen::Requests>>>().unwrap().clone();
+    let screen = table(call, call.captures()[2])?;
+    let actor = table(call, arg(call, 0))?;
+    let role = get_static(call, actor, b"__songlua_transition_role")?;
+    let role = if role == Value::Nil {
+        get_static(call, actor, b"__songlua_screen_actor_role")?
+    } else { role };
+    let role = if role == Value::Nil { String::new() } else { assets::text(call, role)? };
+    if role == "Out" || role == "Failed" {
+        let message = get_static(call, actor, b"__songlua_transition_message")?;
+        if message != Value::Nil && assets::text(call, message)? == "SM_DoNextScreen" {
+            // Native StageFinished copies current statistics synchronously
+            // during Transition::Update, before this frame's gameplay timer.
+            // Initial screen construction precedes late statistics installation;
+            // resolve its current private owner rather than retaining that seed.
+            let catalog = table(call, call.captures()[3])?;
+            let commit = get_static(call, catalog, b"statistics_commit")?;
+            call.call(commit, &[])?;
+        }
+        return Ok(());
+    }
+    let is_in = role == "In";
+    let is_ready = role == "Ready";
+    let target = if is_in { "Ready" } else if is_ready { "Go" } else { return Ok(()); };
+    native_children::with_children(call, screen, |call, candidate| {
+        let role = get_static(call, candidate, b"__songlua_screen_actor_role")?;
+        if role != Value::Nil && assets::text(call, role)? == target {
+            start(call, candidate)?;
+        }
+        Ok(())
+    })?;
+    if is_ready {
+        requests.lock().unwrap().gameplay_lead_in = false;
+        messages::dispatch(call, b"GameplayLeadInChanged", None, false)?;
+    }
+    Ok(())
+}
+
 #[cfg(feature = "test-support")]
 fn start_callback(call: &mut HostCall<'_>) -> Result<(), Error> {
     start(call, table(call, arg(call, 0))?)
@@ -246,6 +330,10 @@ fn commands(
 
 pub(super) fn create(call: &mut HostCall<'_>, scene: u64, name: &str) -> Result<TableId, Error> {
     let actor = dummy(call, scene, "ActorFrame", name, None)?;
+    let role = call.try_intern(name.as_bytes())?;
+    // Named transitions already have a dedicated pass in the live traversal;
+    // screen_actor_role identifies the separate unnamed transition owners.
+    set(call, actor, "__songlua_transition_role", role)?;
     set(call, actor, "__songlua_transition_state", Value::Number(0.))?;
     if name.eq_ignore_ascii_case("In") {
         create_in(call, scene, actor)?;
@@ -299,11 +387,14 @@ fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), 
     }
     if reload {
         let name = call.intern_static(b"Hide")?;
-        return invoke(call, visuals, "playcommand", &[name]);
+        invoke(call, visuals, "playcommand", &[name])?;
+    } else {
+        invoke(call, visuals, "sleep", &[Value::Number(2.)])?;
+        let name = call.intern_static(b"Hide")?;
+        invoke(call, visuals, "queuecommand", &[name])?;
     }
-    invoke(call, visuals, "sleep", &[Value::Number(2.)])?;
-    let name = call.intern_static(b"Hide")?;
-    invoke(call, visuals, "queuecommand", &[name])?;
+    // Simply Love hides the reloaded intro's parent, but still creates and
+    // advances its children. Their tweens retain the native transition delay.
     let factory = native_children::helper_function(call, b"transition_in_commands")?;
     let handlers = call.call(factory, &[])?[0];
     call.with_roots(&[handlers], |call| {
@@ -362,6 +453,10 @@ fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), 
                         gameplay_bitmaps::load(&asset).map_err(|e| call.error(e.as_bytes()))?;
                     let path = call.try_intern(path.as_bytes())?;
                     sprites::set_texture(call, sprite, path, false)?;
+                    // The generated Sprite existed before its bitmap was
+                    // bound. Populate the same native animation states as a
+                    // loaded Sprite, including multi-frame theme textures.
+                    sprite_animation::load(call, sprite, false)?;
                     invoke(call, sprite, "diffuse", &[color])?;
                     invoke(
                         call,
@@ -407,10 +502,15 @@ fn create_in(call: &mut HostCall<'_>, scene: u64, actor: TableId) -> Result<(), 
     let stage = assets::text(call, stage)?;
     let label = text(call, scene, "", &stage)?;
     native_children::adopt(call, label, child)?;
-    invoke(call, label, "accelerate", &[Value::Number(0.5)])?;
-    invoke(call, label, "diffusealpha", &[Value::Number(1.)])?;
-    invoke(call, label, "sleep", &[Value::Number(0.66)])?;
-    invoke(call, label, "accelerate", &[Value::Number(0.33)])?;
+    if reload {
+        // The native label's Init alpha stays zero when On skips its animation.
+        invoke(call, label, "diffusealpha", &[Value::Number(0.)])?;
+    } else {
+        invoke(call, label, "accelerate", &[Value::Number(0.5)])?;
+        invoke(call, label, "diffusealpha", &[Value::Number(1.)])?;
+        invoke(call, label, "sleep", &[Value::Number(0.66)])?;
+        invoke(call, label, "accelerate", &[Value::Number(0.33)])?;
+    }
     append(call, child, label)
 }
 

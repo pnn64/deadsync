@@ -568,7 +568,7 @@ fn commands_propagate_in_sorted_order_and_preserve_parameter_identity() {
         assert(table.concat(log,',')=='first,leaf')
         local frame=root:GetChild('frame');frame:propagate(true)
         log={};frame:playcommand('Probe',params)
-        assert(table.concat(log,',')=='leaf')
+        assert(table.concat(log,',')=='leaf,leaf')
     "#,
     );
     assert_clean(&mut r);
@@ -756,7 +756,9 @@ fn production_command_fields_reentry_parameters_and_failure_recovery() {
 
 #[test]
 fn production_command_walk_order_handlers_and_callback_errors() {
-    compare_scene(
+    let mut r = runtime();
+    instantiate(
+        &mut r,
         r#"
         log={};params={}
         local function own(self,p) assert(p==params);log[#log+1]=self:GetName()end
@@ -765,25 +767,140 @@ fn production_command_walk_order_handlers_and_callback_errors() {
             Def.ActorFrame{Name='empty',ProbeCommand=own},
             Def.Quad{Name='first',InitCommand=function(self)self:draworder(-1)end,ProbeCommand=own}}
         "#,
+    );
+    execute(
+        &mut r,
         r#"
-        root:playcommand('Probe',params);log[#log+1]='/'
-        root:playcommandonchildren('Probe',params);log[#log+1]='/'
-        root:playcommandonleaves('Probe',params);log[#log+1]='/'
-        root:propagatecommand('Probe',params);log[#log+1]='/'
-        root:propagate(0):playcommand('Probe',params);log[#log+1]='/'
-        root:propagate(false):playcommand('Probe',params);log[#log+1]='/'
-        local branch=root:GetChild('branch');branch:propagate(true):playcommand('Probe',params);log[#log+1]='/'
+        local function check(expected)
+            assert(table.concat(log,',')==expected,table.concat(log,','));log={}
+        end
+        root:playcommand('Probe',params);check('root,first,branch,leaf,empty')
+        root:playcommandonchildren('Probe',params);check('first,branch,empty')
+        root:playcommandonleaves('Probe',params);check('first,leaf,empty')
+        root:propagatecommand('Probe',params);check('first,branch,leaf,empty')
+        root:propagate(0):playcommand('Probe',params);check('root,first,branch,leaf,empty')
+        root:propagate(false):playcommand('Probe',params);check('root,first,branch,leaf,empty')
+        local branch=root:GetChild('branch');branch:propagate(true):playcommand('Probe',params);check('leaf,leaf')
         root:RunCommandsOnChildren(function(self,p)assert(p==params);log[#log+1]=self:GetName()end,params)
-        log[#log+1]='/'
+        check('first,leaf,empty')
         root:runcommandsonleaves(function(self,...)assert(select('#',...)==0);log[#log+1]=self:GetName()end,params)
-        log[#log+1]='/'
+        check('first,leaf,empty')
         assert(root:RunCommandsOnChildren(false)==root and root:runcommandsonleaves(false)==root)
         assert(not pcall(root.RunCommandsRecursively,root,function()error('should not run')end))
         assert(not pcall(root.RunCommandsOnChildren,root,function(self)log[#log+1]='failed:'..self:GetName();error('stop')end))
         assert(not pcall(root.runcommandsonleaves,root,function(self)log[#log+1]='leaf-failed:'..self:GetName();error('stop')end))
-        return table.concat(log,'|')
+        check('failed:first,leaf-failed:first')
         "#,
     );
+    assert_clean(&mut r);
+}
+
+#[test]
+fn propagated_commands_forward_the_selected_closure_before_named_child_handlers() {
+    // ITGmania ActorFrame.cpp: RunCommands forwards the selected parent closure
+    // through propagating frames; HandleMessage then visits each child's own
+    // named handler. The receivers, parameters and ordering are all observable.
+    let mut r = runtime();
+    instantiate(
+        &mut r,
+        r#"
+        log={};params={}
+        local function record(label,self,p)
+            assert(p==params);log[#log+1]=label..':'..self:GetName()
+        end
+        return Def.ActorFrame{Name='root',ProbeCommand=function(self,p)
+                record('root',self,p)
+                root.ProbeCommand=nil
+                collectgarbage('collect')
+            end,
+            Def.ActorFrame{Name='branch',ProbeCommand=function(self,p)record('branch',self,p)end,
+                Def.Quad{Name='one',ProbeCommand=function(self,p)record('own',self,p)end},
+                Def.Quad{Name='two',ProbeCommand=function(self,p)record('own',self,p)end}},
+            Def.Quad{Name='direct',ProbeCommand=function(self,p)record('own',self,p)end}}
+        "#,
+    );
+    execute(
+        &mut r,
+        r#"
+        root:GetChild('branch'):propagate(true)
+        root:propagate(true):playcommand('Probe',params)
+        assert(table.concat(log,',')=='root:one,root:two,root:direct,branch:one,branch:two,own:one,own:two,own:direct',table.concat(log,','))
+        "#,
+    );
+    assert_clean(&mut r);
+}
+
+#[test]
+fn propagated_and_queued_commands_keep_the_receiving_actors_queue() {
+    let mut r = runtime();
+    let scene = instantiate(
+        &mut r,
+        r#"
+        log={}
+        return Def.ActorFrame{Name='root',
+            StartCommand=function(self)
+                log[#log+1]='parent:'..self:GetName()
+                self:sleep(0.25):queuecommand('Finish')
+            end,
+            FinishCommand=function()error('parent queue must stay empty')end,
+            Def.ActorFrame{Name='branch',
+                StartCommand=function(self)log[#log+1]='start:'..self:GetName()end,
+                FinishCommand=function(self)log[#log+1]='finish:'..self:GetName()end,
+                Def.Quad{Name='leaf',
+                    StartCommand=function(self)log[#log+1]='start:'..self:GetName()end,
+                    FinishCommand=function(self)log[#log+1]='finish:'..self:GetName()end}}}
+        "#,
+    );
+    assert!(r.start_actor_scene(scene).unwrap());
+    execute(
+        &mut r,
+        r#"
+        root:propagate(true):queuecommand('Start')
+        assert(#log==0)
+        "#,
+    );
+    assert!(r.advance_actor_scene(scene, 0.01).unwrap());
+    execute(
+        &mut r,
+        "assert(table.concat(log,',')=='parent:branch,start:branch,start:leaf',table.concat(log,','))",
+    );
+    assert!(r.advance_actor_scene(scene, 0.5).unwrap());
+    execute(
+        &mut r,
+        "assert(table.concat(log,',')=='parent:branch,start:branch,start:leaf,finish:branch,finish:leaf',table.concat(log,','))",
+    );
+    assert_clean(&mut r);
+}
+
+#[test]
+fn propagate_accepts_native_booleans_and_integer_flags() {
+    let mut r = runtime();
+    instantiate(
+        &mut r,
+        r#"
+        log={}
+        return Def.ActorFrame{Name='root',ProbeCommand=function(self)log[#log+1]='parent:'..self:GetName()end,
+            Def.Quad{Name='leaf',ProbeCommand=function(self)log[#log+1]='child:'..self:GetName()end}}
+        "#,
+    );
+    execute(
+        &mut r,
+        r#"
+        for _,flag in ipairs{false,0,0.5,-0.5} do
+            log={};assert(root:propagate(flag)==root);root:playcommand('Probe')
+            assert(table.concat(log,',')=='parent:root,child:leaf')
+        end
+        for _,flag in ipairs{true,1,-1} do
+            log={};assert(root:propagate(flag)==root);root:playcommand('Probe')
+            assert(table.concat(log,',')=='parent:leaf,child:leaf')
+        end
+        assert(not pcall(root.propagate,root))
+        for _,flag in ipairs{'0','1',{},function()end} do
+            assert(not pcall(root.propagate,root,flag))
+        end
+        "#,
+    );
+    assert_clean(&mut r);
 }
 
 #[test]

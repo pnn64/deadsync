@@ -96,7 +96,7 @@ fn model_sampler_changes_are_compared() {
             }
         })
         .expect("fixture contains a Model draw");
-    run.sampler = Some(deadlib_render_core::MeshSampler {
+    run.sampler = Some(deadlib_render_core::MeshSampler::Override {
         filter: deadlib_render_core::SamplerFilter::Nearest,
         wrap: deadlib_render_core::SamplerWrap::Clamp,
     });

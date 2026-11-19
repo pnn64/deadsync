@@ -553,6 +553,7 @@ fn compose_hold_sprite<S, F>(
     // directed coordinates used by ITGmania's hold strips via explicit flips.
     let [u0, v0, u1, v1] = pass.uv;
     let mut sprite = FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: pass.center,
         world_z: pass.world_z,
         size: pass.size,
@@ -2077,6 +2078,7 @@ pub(crate) const fn hold_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
         environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
@@ -2107,6 +2109,7 @@ pub(crate) const fn hold_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
         environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
@@ -2138,6 +2141,7 @@ const fn hold_reusable_strip_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
         environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,
@@ -2168,6 +2172,7 @@ const fn hold_reusable_strip_glow_draw(
     z: i16,
 ) -> FlatDraw {
     FlatDraw::TexturedMesh(FlatTexturedMesh {
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
         environment: None,
         offset: [0.0, 0.0],
         world_z: 0.0,

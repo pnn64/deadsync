@@ -4,7 +4,7 @@ Run with python -X utf8 scripts/catalog_committed_songs.py (requires zstandard).
 Only the first tar member, manifest.json, is decoded; song assets stay packed.
 """
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import subprocess
 import tarfile
 
@@ -20,6 +20,9 @@ def main():
     tracked = subprocess.check_output(
         ["git", "ls-files", "--", "*.tar.zst"],
         cwd=store, text=True, encoding="utf-8").splitlines()
+    # Git's wildcard also finds nested diagnostic bundles. Song archives are
+    # opened directly below store; split archives are declared separately.
+    tracked = [name for name in tracked if PurePosixPath(name).parent == PurePosixPath(".")]
     tracked_files = set(subprocess.check_output(
         ["git", "ls-files", "--"], cwd=store, text=True, encoding="utf-8").splitlines())
     split_archives = load_archives(store)

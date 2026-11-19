@@ -55,6 +55,11 @@ by file ordinal. This verifies unchanged native pixels independently of the
 rounding differences between reference implementations. Snapshots taken before
 the float IDCT (commit e9d898a5e) differ by at most one sample level.
 
+To time an x86-64 CPU without AVX2 on an AVX2 machine, build with
+`python crates/deadlib-image/jpeg/bench/no_avx2.py` and run the printed
+directory's `jpeg-decode-bench.exe` with the same arguments. It compiles native
+dispatch out and patches a throwaway zune-core copy so `use_avx2()` is false.
+
 Build allocation measurements separately:
 
 ```powershell

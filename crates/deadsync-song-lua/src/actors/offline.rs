@@ -200,6 +200,7 @@ fn restore_pose(actor: &mut Actor, previous: &TemplateState) {
     actor.state.render = previous.state.render;
     actor.base_transform = previous.base_transform;
     actor.pose_exported = previous.pose_exported;
+    actor.authored_transform = previous.authored_transform;
     actor.state.rotation = previous.state.rotation;
     actor.effects = previous.effects;
     actor.preparation_getters = previous.preparation_getters;

@@ -536,6 +536,7 @@ fn append_column_quad(
     z: i16,
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: [x, height.mul_add(0.5, y)],
         world_z: 0.0,
         size: [width, height],

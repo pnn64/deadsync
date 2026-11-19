@@ -3,6 +3,55 @@ impl<Profile, OverlayActor, CapturedActor, StateDelta>
 where
     Profile: GameplayProfileData,
 {
+    /// The meter identity belongs to P1 for routine's shared life bar. This
+    /// boundary does not itself change the meter or publish Player history.
+    pub fn notify_life_changed(&mut self, player: usize) {
+        let owner = if self.setup.session.play_style.is_routine() { 0 } else { player };
+        if let Some(mut callback) = self.life_changed_callback.take() {
+            callback(self, owner);
+            self.life_changed_callback = Some(callback);
+        }
+    }
+
+    fn apply_player_life_event(
+        &mut self,
+        player: usize,
+        seconds: f32,
+        delta: f32,
+        event: CourseLifeEvent,
+    ) {
+        // The retained Lua scene installs the synchronous Player boundary and
+        // owns failure commitment after its actor update. Ordinary gameplay
+        // has no such boundary, so it retains its permanent failure policy.
+        if self.life_changed_callback.is_none() {
+            apply_course_life_event(&mut self.players_runtime.players[player], seconds, delta, event);
+            self.share_routine_life(player);
+            return;
+        }
+        let owner = if self.setup.session.play_style.is_routine() { 0 } else { player };
+        let failed = self.players_runtime.players[owner].stage_failed;
+        let broadcast = matches!(self.players_runtime.players[player].course_life, CourseLifeState::Bar)
+            && !failed;
+        let record = apply_course_life_event_before_record(
+            &mut self.players_runtime.players[player], seconds, delta, event, failed);
+        self.share_routine_life(player);
+        if broadcast { self.notify_life_changed(player); }
+        if matches!(self.players_runtime.players[player].course_life, CourseLifeState::Bar) {
+            let runtime = &mut self.players_runtime.players[player];
+            if !runtime.stage_failed && runtime.life > 0.0 {
+                runtime.is_failing = false;
+                runtime.fail_time = None;
+            }
+            self.share_routine_life(player);
+        }
+        // A listener may have called SetLife. Player::ChangeLifeRecord reads
+        // the actual meter after the synchronous broadcast has returned.
+        if record {
+            let runtime = &mut self.players_runtime.players[player];
+            runtime.stage_life_record.record(runtime.life_record_source.value(runtime.life));
+        }
+    }
+
     /// Player::SetLife writes the meter directly, even after stage failure.
     /// Failure policy is evaluated by the normal screen update afterwards.
     pub fn set_player_life_from_script(&mut self, player: usize, life: f32) {
@@ -10,7 +59,9 @@ where
         let seconds = self.current_music_time_seconds();
         let runtime = &mut self.players_runtime.players[player];
         let old = runtime.life;
+        runtime.stage_life_record.record(runtime.life_record_source.value(old));
         runtime.life = life.clamp(0.0, 1.0);
+        runtime.stage_life_record.record(runtime.life_record_source.value(runtime.life));
         deadsync_rules::life::record_life_change(
             &mut runtime.life_history, seconds,
             runtime.life_record_source.value(old), runtime.life_record_source.value(runtime.life));
@@ -35,9 +86,13 @@ where
     pub fn record_player_life_from_script(&mut self, player: usize, life: f32) {
         if player >= self.setup.num_players.min(MAX_PLAYERS) { return; }
         let seconds = self.current_music_time_seconds();
+        let gameplay_seconds = self.boundary.gameplay_seconds;
         let runtime = &mut self.players_runtime.players[player];
         let before = runtime.life_history.last().map_or(runtime.life, |&(_, life)| life);
         deadsync_rules::life::record_life_change(&mut runtime.life_history, seconds, before, life);
+        // SM_NotesEnded records failed life against gameplay time, unlike
+        // Player::ChangeLifeRecord's accumulated steps-time axis.
+        runtime.stage_life_record.record_at(gameplay_seconds, life);
         self.display.density_graph.life_dirty[player] = true;
     }
 
@@ -122,10 +177,9 @@ where
             let mini_percent = effective_mini_percent_for_player(self, player);
             let mini = self.profiles_runtime.profiles[player]
                 .effective_mini_value_with_visual_mask(visual_mask, mini_percent);
-            let mut field_zoom = mini.mul_add(-0.5, 1.0);
-            if field_zoom.abs() < 0.01 {
-                field_zoom = 0.01;
-            }
+            // Player applies raw Mini scale. ArrowEffects clamps only the
+            // divisor used to position the reverse receptor row.
+            let field_zoom = mini.mul_add(-0.5, 1.0);
 
             let perspective = effective_perspective_effects_for_player(self, player);
             let draw_scale = self.profiles_runtime.profiles[player]
@@ -431,8 +485,8 @@ where
 
                 let side_effect_plan = mine_hit_side_effect_plan(scoring_blocked);
                 if side_effect_plan.apply_life_change {
-                    apply_course_life_event(
-                        &mut self.players_runtime.players[player],
+                    self.apply_player_life_event(
+                        player,
                         current_music_time,
                         side_effect_plan.life_delta,
                         CourseLifeEvent::Mine,
@@ -623,6 +677,10 @@ where
         let player_update =
             apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked {
+            let failed = self.players_runtime.players[player].stage_failed;
+            self.players_runtime.players[player].stage_score.hold(update.result, failed);
+        }
         if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
             routine.hold(note_type, update.result);
         }
@@ -638,8 +696,8 @@ where
         }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
-            apply_course_life_event(
-                &mut self.players_runtime.players[player],
+            self.apply_player_life_event(
+                player,
                 current_music_time,
                 player_update.life_delta,
                 CourseLifeEvent::HoldLetGo,
@@ -673,7 +731,12 @@ where
         let player = self.player_for_col(column);
         let scoring_blocked = self.autoplay_blocks_scoring();
         let note_type = self.chart_runtime.notes[note_index].note_type;
-        let player_dead = self.player_score_is_blocked(player);
+        let score_before_life = self.life_changed_callback.is_some();
+        let player_dead = if score_before_life {
+            self.players_runtime.players[player].stage_failed
+        } else {
+            self.player_score_is_blocked(player)
+        };
         let Some(update) = apply_hold_success_update(
             self.chart_runtime.notes[note_index].hold.as_mut(),
             &mut self.hold_runtime.hold_decay_active,
@@ -694,13 +757,27 @@ where
             scoring_blocked,
         );
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
+        if !scoring_blocked {
+            let failed = self.players_runtime.players[player].stage_failed;
+            self.players_runtime.players[player].stage_score.hold(update.result, failed);
+        }
         if !scoring_blocked && let Some(routine) = self.players_runtime.routine.as_mut() {
             routine.hold(note_type, update.result);
         }
+        // Native HandleHoldScore publishes actual dance points before Player
+        // changes life. A synchronous LifeChanged listener must see this Held
+        // score even though its life history still describes the prior meter.
+        if score_before_life && hold_resolution_updates_grade_totals(
+            update.result,
+            player_update.stats_update,
+            self.players_runtime.players[player].stage_failed,
+        ) {
+            update_itg_grade_totals(&mut self.players_runtime.players[player]);
+        }
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
-            apply_course_life_event(
-                &mut self.players_runtime.players[player],
+            self.apply_player_life_event(
+                player,
                 current_music_time,
                 player_update.life_delta,
                 CourseLifeEvent::HoldHeld,
@@ -710,7 +787,7 @@ where
         if player_update.capture_failed_ex_score_inputs {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
         }
-        if hold_resolution_updates_grade_totals(
+        if !score_before_life && hold_resolution_updates_grade_totals(
             update.result,
             player_update.stats_update,
             self.player_score_is_blocked(player),
@@ -1140,13 +1217,17 @@ where
         );
         write_player_combo_state(player_runtime, combo_state);
         update_itg_grade_totals(player_runtime);
+        // Native checkpoint handling updates ComboList before ChangeLife;
+        // PlayerStageStats:MaxCombo reads that list during the notification.
+        player_runtime.recorded_max_combo =
+            player_runtime.recorded_max_combo.max(player_runtime.combo);
         let life_delta = if checkpoint_hit {
             deadsync_rules::life::LIFE_HELD
         } else {
             deadsync_rules::life::LIFE_LET_GO
         };
-        apply_course_life_event(
-            player_runtime,
+        self.apply_player_life_event(
+            player,
             song_time_ns_to_seconds(self.hold_runtime.pump_events[row_start].time_ns),
             life_delta,
             if checkpoint_hit {
@@ -1155,9 +1236,8 @@ where
                 CourseLifeEvent::CheckpointMiss
             },
         );
+        let player_runtime = &mut self.players_runtime.players[player];
         apply_combo_update(player_runtime, combo_update, combo_milestones_enabled);
-        player_runtime.recorded_max_combo =
-            player_runtime.recorded_max_combo.max(player_runtime.combo);
         self.share_routine_life(player);
         if !checkpoint_hit {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
@@ -1883,7 +1963,15 @@ where
             );
             let combo_milestones_enabled =
                 self.profiles_runtime.profiles[player].combo_milestones_enabled();
-            let player_dead = self.player_score_is_blocked(player);
+            // ScoreKeeperNormal::HandleTapNoteScoreInternal checks committed
+            // stage failure after JudgmentMessage. A Lua SetLife(0) in that
+            // callback must not suppress this row's dance points before the
+            // retained scene reaches its post-actor failure boundary.
+            let player_dead = if self.life_changed_callback.is_some() {
+                self.players_runtime.players[player].stage_failed
+            } else {
+                self.player_score_is_blocked(player)
+            };
             let p = &mut self.players_runtime.players[player];
             let carried_holds_down = carried_holds_down_at_row(
                 &self.chart_runtime.notes,
@@ -1903,9 +1991,14 @@ where
                 miss_combo_multiplier,
             );
             set_row_finalization_player_state(p, row_state);
+            // Native integer scoring tests committed stage failure, which is
+            // later than reaching zero life during this judgment callback.
+            p.stage_score.tap(final_judgment.grade, p.stage_failed);
             if update.update_grade_totals {
                 update_itg_grade_totals(p);
             }
+            // Player updates its best combo before ChangeLife broadcasts.
+            p.recorded_max_combo = p.recorded_max_combo.max(p.combo);
             if let Some(routine) = self.players_runtime.routine.as_mut() {
                 routine.tap_row(
                     &final_judgment,
@@ -1916,15 +2009,15 @@ where
                 );
             }
             if plan.apply_life_change {
-                apply_course_life_event(
-                    p,
+                self.apply_player_life_event(
+                    player,
                     current_music_time,
                     plan.life_delta,
                     CourseLifeEvent::Tap(final_judgment.grade),
                 );
             }
+            let p = &mut self.players_runtime.players[player];
             apply_combo_update(p, update.combo_update, combo_milestones_enabled);
-            p.recorded_max_combo = p.recorded_max_combo.max(p.combo);
             self.share_routine_life(player);
         }
         if plan.show_final_visual {
@@ -2163,8 +2256,10 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn run_pre_notes_phase(
         &mut self,
+        previous_music_time_ns: SongTimeNs,
         music_time_ns: SongTimeNs,
         display_music_time_ns: SongTimeNs,
         visual_scroll_music_time_ns: SongTimeNs,
@@ -2217,7 +2312,11 @@ where
                     .note_disabled(assist_sfx_generation);
             }
         }
-        refresh_active_attack_masks(self, delta_time);
+        // GameState updates timed attacks before ScreenGameplay samples this
+        // frame's audio position. Lua windows still read the new visible time.
+        refresh_active_attack_masks_at_time(
+            self, delta_time, Some(song_time_ns_to_seconds(previous_music_time_ns)),
+        );
         for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
             let expand_period = self
                 .effective_accel_effects_for_player_with_mask(
@@ -2614,8 +2713,8 @@ where
                         self.register_provisional_early_result(note_index, judgment);
                         let current_music_time = self.current_music_time_seconds();
                         if plan.apply_life_change {
-                            apply_course_life_event(
-                                &mut self.players_runtime.players[player],
+                            self.apply_player_life_event(
+                                player,
                                 current_music_time,
                                 plan.life_delta,
                                 CourseLifeEvent::Tap(judgment.grade),
@@ -2819,8 +2918,8 @@ where
                     self.register_provisional_early_result(note_index, judgment);
                     let current_music_time = self.current_music_time_seconds();
                     if plan.apply_life_change {
-                        apply_course_life_event(
-                            &mut self.players_runtime.players[player],
+                        self.apply_player_life_event(
+                            player,
                             current_music_time,
                             plan.life_delta,
                             CourseLifeEvent::Tap(judgment.grade),

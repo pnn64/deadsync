@@ -1450,20 +1450,20 @@ impl Vm {
         );
         let base = self.registers.len();
         self.reserve_registers(base + registers)?;
-        self.resize_registers(base + registers);
-        self.registers
-            .copy_within(call + 1..call + 1 + count.min(params), base);
+        self.registers.resize(base + registers, Value::Nil);
+        let fixed = call + 1..call + 1 + count.min(params);
+        self.registers.copy_within(fixed.clone(), base);
         // lua_pcall keeps a stack-slot reference, including when that slot is
         // passed as a parameter. Follow moved fixed arguments; vararg entry
         // clears their original slots as Lua 5.1 adjust_varargs does.
-        let fixed = call + 1..call + 1 + count.min(params);
-        if vararg {
-            self.discard_native_error_function_slots(fixed);
-        } else {
-            self.relocate_native_error_functions(fixed, base);
-            self.discard_native_error_function_slots(
-                call + 1 + count.min(params)..call + 1 + count,
-            );
+        let vararg_start = fixed.end;
+        if self.native_protected {
+            if vararg {
+                self.discard_native_error_function_slots(fixed);
+            } else {
+                self.relocate_native_error_functions(fixed, base);
+                self.discard_native_error_function_slots(vararg_start..call + 1 + count);
+            }
         }
         if self
             .frames
@@ -1473,11 +1473,14 @@ impl Vm {
             // Native API operands remain in the visible C window. Their
             // private metamethod argument copies stop owning roots after
             // entering Lua; vararg extras remain in the callee's vararg area.
-            let copied = if vararg { count.min(params) } else { count };
-            self.registers[call + 1..call + 1 + copied].fill(Value::Nil);
+            let end = if vararg {
+                vararg_start
+            } else {
+                call + 1 + count
+            };
+            self.registers[call + 1..end].fill(Value::Nil);
         }
         let vararg_count = count.saturating_sub(params);
-        let vararg_start = call + 1 + count.min(params);
         if compat_arg {
             let t = self.try_new_table()?;
             for i in 0..vararg_count {
@@ -1522,18 +1525,23 @@ impl Vm {
         let base = frame.stack_start + extras;
         let end = base + registers;
         let scratch = self.registers.len().max(end);
+        // Keep the same register capacity and collector accounting as frame setup.
         self.reserve_registers(scratch + count)?;
         self.close_upvalues(frame.base);
-        self.resize_registers(scratch + count);
-        self.registers
-            .copy_within(call + 1..call + 1 + count, scratch);
-        self.registers[frame.stack_start..end].fill(Value::Nil);
-        self.registers
-            .copy_within(scratch..scratch + count.min(params), base);
-        self.registers.copy_within(
-            scratch + count.min(params)..scratch + count,
-            frame.stack_start,
-        );
+        let arguments = call + 1..call + 1 + count;
+        if self.hooks.popped.is_empty() {
+            self.registers.resize(scratch, Value::Nil);
+        } else {
+            // A suspended host hook can observe the old scratch slots when popped.
+            self.registers.resize(scratch + count, Value::Nil);
+            self.registers.copy_within(arguments.clone(), scratch);
+        }
+        let argument_end = frame.stack_start + count;
+        self.registers.copy_within(arguments, frame.stack_start);
+        if extras != 0 {
+            self.registers[frame.stack_start..argument_end].rotate_right(extras);
+        }
+        self.registers[argument_end..end].fill(Value::Nil);
         self.truncate_registers(end);
         if compat_arg {
             let t = self.try_new_table()?;
@@ -2348,7 +2356,6 @@ impl Vm {
                         } else {
                             usize::from(i.b)
                         };
-                        self.frames[frame_index].pc = pc as u32;
                         if i.op == Op::CallIter
                             && (usize::from(frame.barriers)
                                 + usize::from(self.threads[slot_index(self.thread.0)].depth)

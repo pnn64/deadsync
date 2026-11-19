@@ -26,10 +26,10 @@ vec4 sample_texture(vec2 uv) {
 
 float edge_fade_factor(vec2 q, vec4 e) {
     float f = 1.0;
-    if (e.x > 0.0) f *= clamp(q.x / e.x, 0.0, 1.0);
-    if (e.y > 0.0) f *= clamp((1.0 - q.x) / e.y, 0.0, 1.0);
-    if (e.z > 0.0) f *= clamp(q.y / e.z, 0.0, 1.0);
-    if (e.w > 0.0) f *= clamp((1.0 - q.y) / e.w, 0.0, 1.0);
+    if (e.x > 0.0) f = min(f, clamp(q.x / e.x, 0.0, 1.0));
+    if (e.y > 0.0) f = min(f, clamp((1.0 - q.x) / e.y, 0.0, 1.0));
+    if (e.z > 0.0) f = min(f, clamp(q.y / e.z, 0.0, 1.0));
+    if (e.w > 0.0) f = min(f, clamp((1.0 - q.y) / e.w, 0.0, 1.0));
     return f;
 }
 

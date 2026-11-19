@@ -571,6 +571,7 @@ pub const fn song_lua_overlay_delta_mask(
     field!(size);
     field!(stretch_rect);
     field!(sound_play);
+    field!(movie_position_seconds);
 
     let _ = bit;
     mask
@@ -808,12 +809,21 @@ pub fn build_song_lua_overlay_update_tracks<OverlayActor>(
             .samples
             .iter()
             .filter_map(|sample| {
-                let second = deadsync_gameplay::song_lua_time_to_second(
-                    song_lua_runtime_time_unit(compiled.overlay_update_unit),
-                    sample.time,
-                    timing_player,
-                    global_offset_seconds,
-                );
+                let second = if compiled.overlay_update_unit == crate::SongLuaTimeUnit::Second {
+                    // Captured seconds are raw music timestamps, already baked
+                    // with the compiler's calibration. Reapplying that offset
+                    // delays immediate setters past their own native frame.
+                    sample.time
+                        - (global_offset_seconds * timing_player.global_offset_rate()
+                            - compiled.overlay_capture_calibration_seconds)
+                } else {
+                    deadsync_gameplay::song_lua_time_to_second(
+                        song_lua_runtime_time_unit(compiled.overlay_update_unit),
+                        sample.time,
+                        timing_player,
+                        global_offset_seconds,
+                    )
+                };
                 second
                     .is_finite()
                     .then(|| crate::SongLuaOverlayRuntimeUpdateSample {

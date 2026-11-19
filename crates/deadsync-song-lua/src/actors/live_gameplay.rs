@@ -32,6 +32,12 @@ pub(crate) enum Event {
         player: usize,
         column: usize,
     },
+    LifeChanged {
+        player: usize,
+    },
+    PlayerFailed {
+        player: usize,
+    },
 }
 impl Actors {
     pub(crate) fn gameplay_fields(&self, vm: &mut Vm) -> Result<Value, Error> {
@@ -361,6 +367,26 @@ fn deliver(call: &mut HostCall<'_>) -> Result<(), Error> {
                 text(call, params, "TapNoteScore", "TapNoteScore_AvoidMine")?;
                 set(call, params, "FirstTrack", Value::Number(*column as f64))?;
                 (*player, "Judgment")
+            }
+            Event::LifeChanged { player } => {
+                let globals = helper(call, 5)?;
+                let key = call.intern_static(b"__songlua_top_screen")?;
+                let screen = call.table_get(globals, key)?;
+                let children = native_children::named_children(call, table(call, screen)?)?;
+                call.with_roots(&[children], |call| {
+                    let key = call.try_intern(format!("PlayerP{}", player + 1).as_bytes())?;
+                    let actor = call.table_get(children, key)?;
+                    let key = call.intern_static(b"__songlua_life_meter")?;
+                    let meter = call.raw_table_get(table(call, actor)?, key)?;
+                    table(call, meter)?;
+                    set(call, params, "LifeMeter", meter)
+                })?;
+                text(call, params, "Player", crate::player_number_name(*player))?;
+                (*player, "LifeChanged")
+            }
+            Event::PlayerFailed { player } => {
+                text(call, params, "PlayerNumber", crate::player_number_name(*player))?;
+                (*player, "PlayerFailed")
             }
         };
         messages::dispatch(call, message.as_bytes(), Some(Value::Table(params)), false)?;

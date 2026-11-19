@@ -354,7 +354,7 @@ pub fn song_lua_context(
 }
 
 /// Prepare baked or runtime song playback on the load worker, retaining authored
-/// Lua when input callbacks require runtime execution even in baked mode.
+/// Lua when input callbacks or player statistics require runtime execution even in baked mode.
 pub fn prepare_song_lua(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],

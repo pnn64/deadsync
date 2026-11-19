@@ -252,6 +252,7 @@ where
             None
         };
         self.run_pre_notes_phase(
+            previous_music_time_ns,
             music_time_ns,
             display_music_time_ns,
             visual_scroll_music_time_ns,
@@ -271,6 +272,12 @@ where
             self.finalize_update_trace(delta_time, music_time_sec, frame_trace_started, phase_timings);
             return GameplayAction::None;
         }
+
+        // Player::UpdateHoldNotes runs before CrossedRows, and GameLoop
+        // dispatches physical input after updating the screen. A newly judged
+        // head becomes visually active on the next unpaused update, even though
+        // its score and hold life are already live in this update.
+        self.hold_runtime.snapshot_active_holds_for_render();
 
         let autoplay_started = if trace_enabled {
             Some(Instant::now())
@@ -342,6 +349,38 @@ where
             phase_timings,
         );
         GameplayAction::None
+    }
+
+    /// Adopt the owning screen's timer, constructed before theme/song loading.
+    pub fn set_stage_clock_origin(&mut self, origin: Instant) {
+        self.boundary.stage_clock_last_read = origin;
+    }
+
+    /// Called once in ScreenGameplay's dancing branch, after actors and failure
+    /// resolution. A supplied delta is an independent timer read for replay;
+    /// normal gameplay samples its own monotonic timer at this same boundary.
+    /// Skipped intro/paused/outro frames do not reset the timer.
+    pub fn advance_stage_clock(
+        &mut self,
+        raw_delta_seconds: Option<f32>,
+        music_rate: f32,
+        steps_time_active: bool,
+    ) -> f32 {
+        let now = Instant::now();
+        let delta = raw_delta_seconds.unwrap_or_else(||
+            now.duration_since(self.boundary.stage_clock_last_read).as_secs_f64() as f32);
+        self.boundary.stage_clock_last_read = now;
+        assert!(delta.is_finite() && delta >= 0.0, "stage timer delta must be finite and nonnegative");
+        assert!(music_rate.is_finite(), "stage music rate must be finite");
+        self.boundary.gameplay_seconds += delta;
+        if steps_time_active { self.boundary.steps_seconds += delta; }
+        for player in self.players_runtime.players.iter_mut().take(self.setup.num_players) {
+            if !player.stage_failed {
+                player.alive_seconds += delta * music_rate;
+            }
+            player.stage_life_record.steps_seconds = self.boundary.steps_seconds;
+        }
+        delta
     }
 
     pub fn set_gameplay_paused(&mut self, paused: bool) {
@@ -974,6 +1013,18 @@ where
             self.clock.end_timing.audio_end_time_ns(),
             self.clock.end_timing.song_last_second_ns(),
         );
+        // ScreenGameplay::GetMusicEndTiming starts from Song::GetLastSecond,
+        // not the selected Steps. A later Edit must not extend normal play:
+        // Song::ReCalculateStepStatsAndLastSecond excludes it when other
+        // charts exist. Keep the selected bounds for judging and practice.
+        let music_end_time_ns = if self.clock.end_timing.uses_song_last_second_for_music_end()
+            && self.source.song.precise_note_last_second_seconds.is_some()
+        {
+            let last = song_time_ns_to_seconds(self.clock.end_timing.song_last_second_ns());
+            let window = song_time_ns_to_seconds(max_step_distance_ns(
+                &TimingProfile::default_itg_with_fa_plus(), self.music_rate()));
+            song_time_ns_from_seconds(last + window)
+        } else { music_end_time_ns };
         let music_end_time_ns = self.clock.end_timing.apply_music_fade_timing(
             music_end_time_ns, self.source.song.music_length_seconds);
         self.clock.end_timing.set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
@@ -1177,16 +1228,35 @@ where
         );
     }
 
+    /// Override only the next option-approach refresh with captured native input.
+    /// ITGmania ModsGroup samples an independent RageTimer for each player.
+    /// Screen, audio, actor, and judgment clocks retain their normal deltas.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn set_player_option_clock_deltas(&mut self, deltas: [f32; MAX_PLAYERS]) {
+        assert!(
+            deltas.iter().all(|delta| delta.is_finite() && *delta >= 0.0),
+            "native player option clock deltas must be finite and nonnegative",
+        );
+        self.mods.replay_player_option_clock_deltas = Some(deltas);
+    }
+
     pub fn refresh_player_attacks(&mut self, player: usize, now: f32, delta_time: f32) {
+        self.refresh_player_attacks_at_times(player, now, now, delta_time);
+    }
+
+    pub fn refresh_player_attacks_at_times(
+        &mut self, player: usize, now: f32, native_attack_second: f32, delta_time: f32,
+    ) {
         if player >= self.setup.num_players || player >= MAX_PLAYERS {
             return;
         }
 
         let profile = &self.profiles_runtime.profiles[player];
         let player_transform = self.mods.song_lua_player_transforms[player];
-        if let Some(transform) = self.mods.attacks.refresh_player(
+        if let Some(transform) = self.mods.attacks.refresh_player_at_times(
             player,
             now,
+            native_attack_second,
             delta_time,
             base_appearance_effects(profile),
             || AttackBaseEffects {
@@ -1194,6 +1264,7 @@ where
                 attack_flags: AttackFlags::from_mode(profile.attack_mode()),
                 visual: base_visual_effects(profile),
                 scroll: profile.scroll_effects(),
+                perspective: profile.perspective_effects(),
                 mini_percent: profile.mini_percent(),
             },
             player_transform,
@@ -1423,6 +1494,17 @@ where
             .active_holds
             .get(col)
             .and_then(Option::as_ref)
+    }
+
+    /// The live hold whose head had been judged before this frame's input.
+    #[inline(always)]
+    pub fn active_hold_for_render(&self, col: usize) -> Option<&ActiveHold> {
+        self.active_hold(col).filter(|hold| {
+            // Native Pump does not require stepping on the hold head, so its
+            // hold render flags can become active within the same update.
+            self.setup.session.play_style.is_pump()
+                || self.hold_runtime.render_hold_notes[col] == Some(hold.note_index)
+        })
     }
 
     #[inline(always)]
@@ -2151,12 +2233,19 @@ where
     }
 
     #[inline(always)]
-    pub const fn disable_score_for_practice(&mut self) {
+    pub fn disable_score_for_practice(&mut self) {
         self.progress.stage.disable_score();
         self.progress.replay.disable_replay_mode();
+        if self.clock.end_timing.use_selected_chart_music_end() {
+            self.recompute_end_times();
+        }
     }
 
     fn reset_practice_attacks(&mut self) {
+        #[cfg(any(test, feature = "test-support"))]
+        {
+            self.mods.replay_player_option_clock_deltas = None;
+        }
         let base_appearance = std::array::from_fn(|player| {
             if player < self.setup.num_players {
                 base_appearance_effects(&self.profiles_runtime.profiles[player])

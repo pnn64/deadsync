@@ -385,7 +385,7 @@ fn compare_frame(
             expected_texture.as_ref().is_ok_and(|expected| actual_texture == expected.as_deref())
                 && run.additive_texture == 0,
             || format!("Model {actor} at {clock:.6}s pass {pass} binds {actual_texture:?}, native binds {expected_texture:?}"));
-        let expected_sampler = MeshSampler {
+        let expected_sampler = MeshSampler::Override {
             filter: if draw.texture_filtering { SamplerFilter::Linear }
                 else { SamplerFilter::Nearest },
             wrap: if draw.texture_wrapping { SamplerWrap::Repeat }

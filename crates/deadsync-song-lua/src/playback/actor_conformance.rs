@@ -55,13 +55,10 @@ pub fn transform_state(state: SongLuaOverlayState, clock: [f32; 2]) -> SongLuaOv
 }
 
 #[must_use]
-pub fn vibration_magnitude(state: SongLuaOverlayState) -> [f32; 3] {
-    song_lua_overlay_vibrate_magnitude(state)
-}
-
-#[must_use]
 pub fn vibration_sample(mut position: [f32; 3], magnitude: [f32; 3], jitter: [f32; 3]) -> [f32; 3] {
-    song_lua_apply_vibration(&mut position, magnitude, jitter);
+    for axis in 0..3 {
+        position[axis] += magnitude[axis] * jitter[axis];
+    }
     position
 }
 
@@ -238,6 +235,20 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
     screen: [f32; 2],
     clock: [f32; 2],
 ) -> Vec<SongLuaOverlayState> {
+    compose_layer_overlay_states(overlays, local_states, screen, clock, [SongLuaOverlayState::default(); 2])
+}
+
+/// Include the retained SongBackground/SongForeground parent and the layer's
+/// own captured parent. AFT contents keep the capture's texture-space boundary,
+/// as in the ordinary production layer builder.
+#[must_use]
+pub fn compose_layer_overlay_states<S: NoteskinSlot + Clone>(
+    overlays: &[SongLuaOverlayActor<S>],
+    local_states: &[SongLuaOverlayState],
+    screen: [f32; 2],
+    clock: [f32; 2],
+    parents: [SongLuaOverlayState; 2],
+) -> Vec<SongLuaOverlayState> {
     let mut out = Vec::with_capacity(overlays.len());
     song_lua_overlay_states_from_local_all_into(
         overlays,
@@ -279,11 +290,19 @@ pub fn compose_overlay_states<S: NoteskinSlot + Clone>(
             }
         }
     }
+    let parent = song_lua_layer_parent_state::<S>(parents[0], parents[1], screen, clock);
+    if parent != SongLuaOverlayState::default() {
+        for (index, state) in out.iter_mut().enumerate() {
+            if topology.aft_ancestors[index].get().is_none() {
+                *state = song_lua_layer_parent_state::<S>(parent, *state, screen, clock);
+            }
+        }
+    }
     out
 }
 
 /// Headless production overlay builder used by whole-song archives. Texture
-/// dimensions come from the normal registry populated during Lua compilation;
+/// dimensions come from the source image/movie or normal compilation registry;
 /// one transparent pixel buffer per compiled key is enough because actor
 /// composition consumes metadata and handles, not sampled pixels.
 pub struct WholeSongComposer {
@@ -294,6 +313,19 @@ pub struct WholeSongComposer {
 }
 
 impl WholeSongComposer {
+    fn refresh_layout<S: NoteskinSlot + Clone>(&mut self, overlays: &[SongLuaOverlayActor<S>]) {
+        if self.mesh_scratch.len() == overlays.len() {
+            return;
+        }
+        self.topology.refresh_wrappers(overlays);
+        // A newly owned wrapper may gain or change its camera on later updates.
+        self.topology.dynamic_camera_scope = true;
+        self.manual.refresh_owners(overlays);
+        self.mesh_scratch.extend(song_lua_projected_mesh_scratch_for(
+            &overlays[self.mesh_scratch.len()..],
+        ));
+    }
+
     /// Read the actual resource identity bound by production composition.
     #[must_use]
     pub fn texture_key(&self, handle: deadlib_render_core::TextureHandle) -> &str {
@@ -395,6 +427,7 @@ impl WholeSongComposer {
         overlays: &[SongLuaOverlayActor<S>],
         frames: &[SongLuaDrawFrame],
     ) {
+        self.refresh_layout(overlays);
         self.manual = SongLuaManualScratch::with_frames(overlays, Arc::from(frames));
     }
 
@@ -438,6 +471,7 @@ impl WholeSongComposer {
         &mut self, overlays: &[SongLuaOverlayActor<S>], local: &[SongLuaOverlayState],
         screen: [f32; 2], seconds: f32, beat: f32,
     ) -> Vec<deadlib_render_core::RenderFrame> {
+        self.refresh_layout(overlays);
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(screen[0], screen[1]));
         let states = compose_overlay_states(overlays, local, screen, [seconds, beat]);
         let mut order = song_lua_overlay_order_cache_from(overlays, &[]);
@@ -446,8 +480,8 @@ impl WholeSongComposer {
         let mut actors = Vec::new();
         let mut targets = Vec::new();
         push_song_lua_layer_actors(&mut actors, &mut targets, overlays, &mut order,
-            &self.topology, local, &states, SongLuaOverlayState::default(), None,
-            &SongLuaScreenProxySources::default(), None, None, &self.assets,
+            &self.topology, local, &states, SongLuaOverlayState::default(), None, &mut Vec::new(),
+            None, &SongLuaScreenProxySources::default(), None, None, &self.assets,
             screen[0], screen[1], seconds, beat, seconds, &mut Vec::new(),
             &mut Vec::new(), &mut Vec::new(), &mut aft, &mut self.mesh_scratch,
             SONG_LUA_FOREGROUND_DEPTH);
@@ -464,6 +498,7 @@ impl WholeSongComposer {
         &mut self, overlays: &[SongLuaOverlayActor<S>], states: &[SongLuaOverlayState],
         screen: [f32; 2], seconds: f32, beat: f32, index: usize, simple: bool,
     ) -> Vec<(usize, deadlib_render_core::RenderFrame, [[[f32; 4]; 4]; 2])> {
+        self.refresh_layout(overlays);
         self.manual.begin_frame();
         let mut actors = Vec::new();
         let mut targets = Vec::new();
@@ -555,10 +590,19 @@ impl WholeSongComposer {
         beat: f32,
         screen_state: Option<SongLuaOverlayState>,
     ) -> deadlib_render_core::RenderFrame {
+        self.refresh_layout(overlays);
+        // A retained Sprite can bind its first image, or replace it, after the
+        // composer was warmed. Resolve that published resource before drawing.
+        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlays[index].kind {
+            queue_texture(&mut self.assets, texture_key);
+        }
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));
         let mut actors = Vec::new();
+        let camera_state =
+            song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index)
+                .or(screen_state.filter(|state| state.fov.is_some()));
         if matches!(overlays[index].kind, SongLuaOverlayKind::AftSprite { .. }) {
             if let Some(target) = self.topology.aft_sprite_targets[index].get()
                 && let Some(size) = song_lua_aft_size(&overlays[target], states[target])
@@ -577,42 +621,20 @@ impl WholeSongComposer {
             {
                 actors.extend(built);
             }
-        } else if append_song_lua_multi_actor_overlay(
-            &mut actors,
-            &overlays[index],
-            states[index],
-            song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index)
-                .or(screen_state.filter(|state| state.fov.is_some())),
-            &self.assets,
-            0,
-            screen[0],
-            screen[1],
-            seconds,
-            beat,
-            seconds,
-            self.mesh_scratch.get_mut(index),
-        )
-        .is_none()
-            && let Some(built) = build_song_lua_overlay_actor_with_scratch(
-                &overlays[index],
-                states[index],
-                song_lua_overlay_camera_state(overlays, states, overlays[index].parent_index)
-                    .or(screen_state.filter(|state| state.fov.is_some())),
-                &self.assets,
-                0,
-                screen[0],
-                screen[1],
-                seconds,
-                beat,
-                seconds,
-                self.topology.texture_handle(index),
-                self.mesh_scratch.get_mut(index),
-            )
-        {
-            actors.extend(built);
+        } else {
+            append_song_lua_overlay_output(
+                &mut actors, &overlays[index], states[index],
+                SongLuaDrawCamera::with_screen(camera_state, screen_state, [seconds, beat]),
+                &self.assets, 0, screen, [seconds, beat], seconds,
+                self.topology.texture_handle(index), self.mesh_scratch.get_mut(index),
+            );
         }
         let projection = screen_state.map_or(Matrix4::IDENTITY, |state| {
-            song_lua_screen_projection(state, screen, [seconds, beat])
+            if matches!(overlays[index].kind, SongLuaOverlayKind::AftSprite { .. }) {
+                song_lua_screen_projection(state, screen, [seconds, beat])
+            } else {
+                Matrix4::IDENTITY
+            }
         });
         deadlib_present::compose::build_passes(
             std::iter::once(ActorSegment::new(&actors).with_projection(&projection)),
@@ -688,16 +710,29 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
         return;
     }
     // A live executable replay has not run the GPU preloader. Read the
-    // independent source image's logical size before reserving its handle;
+    // independent source image/movie's logical size before reserving its handle;
     // a 1px placeholder would overwrite the registry and shrink live sprites.
     let source_key = key.strip_suffix("#itg-model").unwrap_or(key);
-    let source_dims = image::image_dimensions(source_key).ok();
+    let source_dims = image::image_dimensions(source_key).ok().or_else(|| {
+        let path = Path::new(source_key);
+        crate::is_song_lua_video_path(path)
+            .then(|| deadlib_video::dimensions(path).ok())
+            .flatten()
+    });
     let dims = source_dims.map(|(w,h)| deadlib_assets::TexMeta { w,h })
         .or_else(|| deadlib_assets::texture_dims(key));
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
 }
+
+#[cfg(test)]
+#[path = "movie_metadata_tests.rs"]
+mod movie_metadata_tests;
+
+#[cfg(test)]
+#[path = "layer_parent_tests.rs"]
+mod layer_parent_tests;
 
 /// Wrap an already compiled primary fixture without selecting additional layers.
 pub fn prepared_primary<S: NoteskinSlot + Clone>(

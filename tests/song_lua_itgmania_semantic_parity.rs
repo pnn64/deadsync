@@ -718,6 +718,7 @@ fn copy_baked_layer<T: Clone>(source: &deadsync_song_lua::CompiledSongLua<T>) ->
     copy.screen_overlay_index = source.screen_overlay_index;
     copy.overlay_eases = source.overlay_eases.clone();
     copy.overlay_update_unit = source.overlay_update_unit;
+    copy.overlay_capture_calibration_seconds = source.overlay_capture_calibration_seconds;
     copy.overlay_updates = source.overlay_updates.clone();
     copy.overlay_writes = source.overlay_writes.clone();
     copy.boolean_writes = source.boolean_writes.clone();
@@ -4552,7 +4553,14 @@ fn compiled_overlay_states_at(
     beat: f32,
     seconds: f32,
 ) -> Vec<SongLuaOverlayState> {
-    let local = compiled_local_states_at(compiled, context, beat, seconds);
+    let mut local = compiled_local_states_at(compiled, context, beat, seconds);
+    // These older projected tracks describe the nominal pose and separately
+    // audit active vibration magnitudes. Suppress random translation before
+    // hierarchy composition; full executable draw checks supply recorded raw
+    // random inputs through their independent live-state path instead.
+    for state in &mut local {
+        if state.vibrate { state.vibrate_input = Some([0.0; 3]); }
+    }
     // Production composition consumes raw music time, independently of the
     // elapsed timestamp used to select replay commands and native samples.
     let clock = [overlay_update_time(context, SongLuaTimeUnit::Second, beat, seconds), beat];
@@ -4573,12 +4581,13 @@ fn compiled_overlay_states_at(
         &message_seconds,
         &foreground.message_commands,
     );
-    let layer = deadsync_song_lua::playback::replay_song_lua_message_state(
+    let mut layer = deadsync_song_lua::playback::replay_song_lua_message_state(
         seconds,
         foreground.initial_state,
         &foreground.message_commands,
         Some(&events),
     );
+    if layer.vibrate { layer.vibrate_input = Some([0.0; 3]); }
     if layer != SongLuaOverlayState::default() {
         for state in &mut states {
             *state = deadsync_song_lua::playback::song_lua_overlay_compose_state::<
@@ -6148,7 +6157,6 @@ fn compare_projected_geometry(
             // Projected native vertices describe the nominal pose. Random
             // vibration is checked separately by compare_projected_vibration_coverage.
             state.vibrate = false;
-            state.inherited_vibrate = [0.0; 3];
             state = deadsync_song_lua::playback::actor_conformance::transform_state(
                 state,
                 [music_seconds, beat],
@@ -6280,7 +6288,6 @@ fn compare_projected_geometry(
                 .map(|screen| {
                     let mut screen = *screen;
                     screen.vibrate = false;
-                    screen.inherited_vibrate = [0.0; 3];
                     deadsync_song_lua::playback::actor_conformance::screen_matrix(
                         screen, [music_seconds, beat],
                     )
@@ -10642,12 +10649,13 @@ fn effect_switch_native_draws() {
                 actor["name"]
             );
             selectors += 3;
-            if actor["draws"].as_array().unwrap().is_empty()
-                || states[index].vibrate
-                || states[index]
-                    .inherited_vibrate
-                    .iter()
-                    .any(|value| *value != 0.0)
+            let vibrating = std::iter::successors(Some(index), |&index| layer.overlays[index].parent_index)
+                .any(|index| {
+                    let mut state = compiled_command_state_at(&context, layer, index, beat, seconds);
+                    apply_runtime_updates(&context, layer, index, beat, seconds, &mut state);
+                    state.vibrate
+                });
+            if actor["draws"].as_array().unwrap().is_empty() || vibrating
             {
                 continue;
             }
@@ -11876,7 +11884,6 @@ fn compare_image_draws(
             // Its active magnitudes are audited separately; compose the same
             // nominal pose through the production image builder here.
             states[index].vibrate = false;
-            states[index].inherited_vibrate = [0.0; 3];
             let frame = composers[layer].render_overlay(
                 &compiled[layer].overlays,
                 &states,

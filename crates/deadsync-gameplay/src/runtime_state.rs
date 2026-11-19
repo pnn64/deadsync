@@ -306,6 +306,9 @@ pub struct GameplayChartRuntimeState {
 #[derive(Clone, Debug, Default)]
 pub struct GameplayHoldRuntimeState {
     active_holds: [Option<ActiveHold>; MAX_COLS],
+    /// Note identities present before this frame's autoplay and input edges.
+    /// Native Player updates hold render flags before either can hit a head.
+    render_hold_notes: [Option<usize>; MAX_COLS],
     active_hold_mask: LaneMask,
     /// Game-thread-only, song-lifetime exact index of live roll slots.
     ///
@@ -346,6 +349,7 @@ impl GameplayHoldRuntimeState {
     ) -> Self {
         Self {
             active_holds: std::array::from_fn(|_| None),
+            render_hold_notes: [None; MAX_COLS],
             active_hold_mask: 0,
             active_roll_mask: 0,
             decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
@@ -365,6 +369,7 @@ impl GameplayHoldRuntimeState {
     #[inline(always)]
     pub fn reset_live_state(&mut self) {
         self.active_holds.fill(None);
+        self.render_hold_notes.fill(None);
         self.active_hold_mask = 0;
         self.active_roll_mask = 0;
         self.decaying_hold_indices.clear();
@@ -382,6 +387,7 @@ impl GameplayHoldRuntimeState {
     #[inline(always)]
     pub fn clear_for_test(&mut self) {
         self.active_holds.fill(None);
+        self.render_hold_notes.fill(None);
         self.active_hold_mask = 0;
         self.active_roll_mask = 0;
         self.decaying_hold_indices.clear();
@@ -423,6 +429,13 @@ impl GameplayHoldRuntimeState {
     }
 
     #[inline(always)]
+    fn snapshot_active_holds_for_render(&mut self) {
+        self.render_hold_notes = std::array::from_fn(|col| {
+            self.active_holds[col].as_ref().map(|hold| hold.note_index)
+        });
+    }
+
+    #[inline(always)]
     pub fn set_active_hold(&mut self, col: usize, active: Option<ActiveHold>) {
         let Some(slot) = self.active_holds.get_mut(col) else {
             return;
@@ -431,6 +444,9 @@ impl GameplayHoldRuntimeState {
         let active_roll = active
             .as_ref()
             .is_some_and(|active| matches!(active.note_type, NoteType::Roll) && !active.let_go);
+        // Explicitly restoring a live slot also restores its presentation.
+        // Newly judged heads use start_active_hold_column instead.
+        self.render_hold_notes[col] = active.as_ref().map(|hold| hold.note_index);
         *slot = active;
         set_feedback_bit(&mut self.active_hold_mask, col, present);
         set_feedback_bit(&mut self.active_roll_mask, col, active_roll);
@@ -451,6 +467,7 @@ impl GameplayHoldRuntimeState {
     #[inline(always)]
     pub fn clear_active_holds(&mut self) {
         self.active_holds.fill(None);
+        self.render_hold_notes.fill(None);
         self.active_hold_mask = 0;
         self.active_roll_mask = 0;
     }
@@ -1088,6 +1105,13 @@ pub type GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActo
         usize, usize,
     ) + Send>;
 
+/// LifeMeterBar publishes the changed meter before Player records its history.
+pub type GameplayLifeChangedCallback<Profile, OverlayActor, CapturedActor, StateDelta> =
+    Box<dyn FnMut(
+        &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+        usize,
+    ) + Send>;
+
 pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
@@ -1115,6 +1139,8 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
         Option<GameplayHoldJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
     pub avoided_mine_judgment_callback:
         Option<GameplayAvoidedMineJudgmentCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
+    pub life_changed_callback:
+        Option<GameplayLifeChangedCallback<Profile, OverlayActor, CapturedActor, StateDelta>>,
 }
 
 pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(

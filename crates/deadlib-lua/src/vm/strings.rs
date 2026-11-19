@@ -1,6 +1,6 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work};
+use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -343,11 +343,11 @@ impl Vm {
                     }
                     self.reserve_registers(base + results)?;
                     self.resize_registers(self.registers.len().max(base + results));
-                    for (i, &byte) in self.strings.bytes[slot_index(source.0)][range]
-                        .iter()
-                        .enumerate()
+                    let bytes = &self.strings.bytes[slot_index(source.0)][range];
+                    for (register, &byte) in
+                        self.registers[base..base + results].iter_mut().zip(bytes)
                     {
-                        self.registers[base + i] = Value::Number(f64::from(byte));
+                        *register = Value::Number(f64::from(byte));
                     }
                     return Ok(results);
                 }
@@ -365,23 +365,27 @@ impl Vm {
                 bytes
                     .try_reserve_exact(size)
                     .map_err(|_| self.memory_failure())?;
-                bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
-                while bytes.len() < size {
-                    let used = bytes.len();
-                    let copied = used.min(size - used);
-                    bytes.resize(used + copied, 0);
-                    bytes.copy_within(..copied, used);
+                let text = &self.strings.bytes[slot_index(source.0)];
+                if let [byte] = text.as_ref() {
+                    bytes.resize(size, *byte);
+                } else {
+                    bytes.extend_from_slice(text);
+                    while bytes.len() < size {
+                        let used = bytes.len();
+                        let copied = used.min(size - used);
+                        bytes.resize(used + copied, 0);
+                        bytes.copy_within(..copied, used);
+                    }
                 }
                 self.try_finish_buffer(bytes)?
             }
             STR_REVERSE | STR_LOWER | STR_UPPER => {
                 let mut bytes = self.try_take_buffer(len)?;
-                let text = &self.strings.bytes[slot_index(source.0)];
+                bytes.extend_from_slice(&self.strings.bytes[slot_index(source.0)]);
                 if id == STR_REVERSE {
-                    bytes.extend_from_slice(text);
                     bytes.reverse();
                 } else {
-                    crate::locale::map_case(text, id == STR_UPPER, &mut bytes);
+                    crate::locale::map_case(&mut bytes, id == STR_UPPER);
                 }
                 self.try_finish_buffer(bytes)?
             }
@@ -391,16 +395,35 @@ impl Vm {
                     .saturating_sub(1)
                     .clamp(0, len as i64) as usize;
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
-                let c_pattern = &raw[..raw.iter().position(|&b| b == 0).unwrap_or(raw.len())];
                 let plain = id == STR_FIND
                     && (self.argument(base, count, 3).is_truthy()
-                        || !c_pattern.iter().any(|b| b"^$*+?.([%-".contains(b)));
+                        || raw
+                            .iter()
+                            .copied()
+                            .find(|&byte| {
+                                matches!(
+                                    byte,
+                                    0 | b'^'
+                                        | b'$'
+                                        | b'*'
+                                        | b'+'
+                                        | b'?'
+                                        | b'.'
+                                        | b'('
+                                        | b'['
+                                        | b'%'
+                                        | b'-'
+                                )
+                            })
+                            .is_none_or(|byte| byte == 0));
                 if plain {
                     let text = &self.strings.bytes[slot_index(source.0)];
                     let found = if raw.is_empty() {
                         Some(start)
                     } else if raw.len() > len - start {
                         None
+                    } else if let [byte] = raw {
+                        find_byte(&text[start..], *byte).map(|offset| start + offset)
                     } else {
                         // For long searches, use whichever end of the needle
                         // occurs less often in a small sample of the haystack.
@@ -419,10 +442,9 @@ impl Vm {
                             }
                         }
                         let mut cursor = start + anchor;
+                        let candidates = &text[..len - raw.len() + anchor + 1];
                         loop {
-                            let Some(offset) =
-                                text[cursor..].iter().position(|&byte| byte == raw[anchor])
-                            else {
+                            let Some(offset) = find_byte(&candidates[cursor..], raw[anchor]) else {
                                 break None;
                             };
                             cursor += offset;
@@ -779,40 +801,40 @@ impl Vm {
         let state = &self.substitutions[index];
         let found = state.matched.expect("substitution has a match");
         let source = state.source;
-        while pos < self.strings.bytes[slot_index(text.0)].len() {
-            let c = self.strings.bytes[slot_index(text.0)][pos];
-            if c != b'%' {
+        let slot = slot_index(text.0);
+        while let Some(&c) = self.strings.bytes[slot].get(pos) {
+            let complete = if c != b'%' {
+                let rest = &self.strings.bytes[slot][pos..];
+                if rest.len() >= 16 {
+                    let output = &mut self.substitutions[index].output;
+                    // Leave flushes and their resumptions to substitution_byte.
+                    let available = &rest[..rest.len().min(io::LINE_BUFFER - output.len())];
+                    if let [_, tail @ ..] = available {
+                        let len = find_byte(tail, b'%').map_or(available.len(), |at| at + 1);
+                        output.extend_from_slice(&available[..len]);
+                        pos += len;
+                        continue;
+                    }
+                }
                 pos += 1;
-                if !self.substitution_byte(index, c)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
-                continue;
-            }
-            pos += 1;
-            let c = self.strings.bytes[slot_index(text.0)]
-                .get(pos)
-                .copied()
-                .unwrap_or(0);
-            pos += 1;
-            if c == b'0' {
-                if !self.substitution_string(index, source, found.start..found.end)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
-            } else if crate::locale::is_digit(c) {
-                let capture = found.capture(usize::from(c - b'1'))?;
-                let value = self.capture_value(source, capture)?;
-                self.substitution_push(index, value)?;
-                if !self.substitution_value(index)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
-                }
+                self.substitution_byte(index, c)?
             } else {
-                if !self.substitution_byte(index, c)? {
-                    self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
-                    return Ok(false);
+                let c = self.strings.bytes[slot].get(pos + 1).copied().unwrap_or(0);
+                pos += 2;
+                if c == b'0' {
+                    self.substitution_string(index, source, found.start..found.end)?
+                } else if crate::locale::is_digit(c) {
+                    let capture = found.capture(usize::from(c - b'1'))?;
+                    let value = self.capture_value(source, capture)?;
+                    self.substitution_push(index, value)?;
+                    self.substitution_value(index)?
+                } else {
+                    self.substitution_byte(index, c)?
                 }
+            };
+            if !complete {
+                self.substitution_queue(index, queued, SubAction::Replacement(text, pos))?;
+                return Ok(false);
             }
         }
         Ok(true)
@@ -1084,10 +1106,7 @@ impl Vm {
         let mut at = cursor;
         let result = loop {
             if let Some(byte) = first {
-                at += text[at..limit]
-                    .iter()
-                    .position(|&b| b == byte)
-                    .unwrap_or(limit - at);
+                at += find_byte(&text[at..limit], byte).unwrap_or(limit - at);
             }
             if at == limit && (at < text.len() || first.is_some()) {
                 break Ok(None);
@@ -1127,20 +1146,36 @@ impl Vm {
         scratch: &mut crate::format::Scratch,
     ) -> Result<usize, Error> {
         let id = self.string_argument(base, count, 0)?;
-        let mut output =
-            crate::format::buffer(scratch, self.strings.bytes[slot_index(id.0)].len())?;
+        let slot = slot_index(id.0);
+        let mut output = crate::format::buffer(scratch, self.strings.bytes[slot].len())?;
         let mut pos = 0;
         let mut arg = 0;
-        while pos < self.strings.bytes[slot_index(id.0)].len() {
-            let bytes = &self.strings.bytes[slot_index(id.0)];
-            let c = bytes[pos];
-            pos += 1;
-            if c != b'%' {
-                scratch.reserve(&mut output, 1)?;
-                output.push(c);
+        while pos < self.strings.bytes[slot].len() {
+            let bytes = &self.strings.bytes[slot];
+            if bytes[pos] != b'%' {
+                // Fill the current buffer before requesting its next growth.
+                let room = (output.capacity() - output.len()).max(1);
+                let literal = &bytes[pos..pos + room.min(bytes.len() - pos)];
+                let len = find_byte(&literal[1..], b'%').map_or(literal.len(), |at| at + 1);
+                scratch.reserve(&mut output, len)?;
+                output.extend_from_slice(&literal[..len]);
+                pos += len;
                 continue;
             }
+            pos += 1;
             if bytes.get(pos) == Some(&b'%') {
+                let tail = &bytes[pos + 1..];
+                if tail.starts_with(b"%%") {
+                    // Stop before a growth so the allocator sees the same prefix.
+                    let room = output.capacity() - output.len();
+                    if room > 1 {
+                        let limit = (tail.len() / 2).min(room - 1) * 2;
+                        let extra = byte_run(&tail[..limit], b'%') / 2;
+                        output.resize(output.len() + 1 + extra, b'%');
+                        pos += 1 + 2 * extra;
+                        continue;
+                    }
+                }
                 scratch.reserve(&mut output, 1)?;
                 output.push(b'%');
                 pos += 1;

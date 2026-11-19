@@ -35,7 +35,7 @@ pub use combo_feedback::{ComboMilestoneAssets, ComboMilestoneSprite};
 pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
-    PreparedNotefield, PreparedNotefieldNotes, prepare_notefield,
+    PreparedNotefield, PreparedNotefieldNotes, SongLuaPlayerPosition, prepare_notefield,
 };
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
@@ -49,8 +49,9 @@ pub use field_frame::{
 };
 pub use frame_feedback::{HoldEmitterState, NotefieldFeedbackFrameView, NotefieldLaneFeedback};
 pub use frame_hud::{
-    ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
-    NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
+    ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, HudActorTransform, JudgmentHudFrame,
+    MiniHudFrame, NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame,
+    compose_notefield_hud,
 };
 pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
@@ -78,7 +79,8 @@ pub use placement::{
 };
 pub use song_lua::{
     SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
-    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
+    song_lua_screen_matrix_to_world,
 };
 pub use timing_labels::{TimingLabelStyle, TimingSegmentLabel};
 pub use transforms::{
@@ -159,7 +161,9 @@ pub(crate) use placement::{
     combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets, player_metric_y,
 };
 #[cfg(test)]
-use placement::{default_column_x, hud_layout_ys, hud_y, notefield_camera, zmod_layout_ys};
+use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
+#[cfg(test)]
+use placement::notefield_camera;
 pub(crate) use receptors::{
     ReceptorDrawRequest, ReceptorPress, compose_receptor_draws, hold_indicator_column_x,
     receptor_row_center,
@@ -170,7 +174,7 @@ pub(crate) use transforms::{
     appearance_note_alpha_glow_cached, beat_factor, compute_active_note_geometry,
     compute_tornado_lane_caches, fill_gameplay_lane_effects, fill_move_col_extras,
     fill_static_note_x_offsets, gameplay_visual_effect_params, lane_note_transform_cache,
-    note_appearance_cache, note_depth_frame_cache, note_world_z_cached, note_x_offset,
+    note_appearance_cache, note_depth_frame_cache, note_x_offset,
     note_x_offset_cached, smoothstep01, tiny_spacing_scale, visual_arrow_effect_zoom_cached,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
     visual_hold_head_rotation_z_cached, visual_note_rotation_z_cached,
@@ -184,7 +188,7 @@ use transforms::{
     visual_pulse_inner_zoom, visual_pulse_zoom_for_y, visual_tiny_zoom,
 };
 #[cfg(test)]
-pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds};
+pub(crate) use transforms::{compute_invert_distances, compute_tornado_bounds, note_world_z_cached};
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, FlatDraw, FlatSprite, SizeSpec, SpriteSource, TextAlign};
@@ -638,6 +642,7 @@ mod tests {
                 size,
                 source,
                 tint,
+                vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::Float,
                 glow,
                 uv_rect,
                 flip_x,
@@ -1447,21 +1452,31 @@ mod tests {
             VisualEffectParams {
                 tiny: 0.25,
                 confusion_offset: 0.5,
+                confusion_x_offset: 0.25,
+                confusion_y_offset: -0.5,
                 bumpy: 0.75,
                 ..VisualEffectParams::default()
             },
             1,
             &[9.0, -0.5],
             &[9.0, f32::NAN],
+            &[9.0, 1.0],
+            &[9.0, -0.25],
             &[9.0, 0.25],
         );
         assert!((params.tiny + 0.25).abs() <= 1e-6);
         assert!((params.confusion_offset - 0.5).abs() <= 1e-6);
+        assert!((params.confusion_x_offset - 1.25).abs() <= 1e-6);
+        assert!((params.confusion_y_offset + 0.75).abs() <= 1e-6);
         assert!((params.bumpy - 1.0).abs() <= 1e-6);
 
-        let params = visual_effect_params_for_col(params, 2, &[0.0], &[0.0, 0.0, 0.25], &[0.0]);
+        let params = visual_effect_params_for_col(
+            params, 2, &[0.0], &[0.0, 0.0, 0.25], &[0.0], &[0.0, 0.0, f32::INFINITY], &[0.0],
+        );
         assert!((params.tiny + 0.25).abs() <= 1e-6);
         assert!((params.confusion_offset - 0.75).abs() <= 1e-6);
+        assert!((params.confusion_x_offset - 1.25).abs() <= 1e-6);
+        assert!((params.confusion_y_offset + 0.75).abs() <= 1e-6);
         assert!((params.bumpy - 1.0).abs() <= 1e-6);
     }
 
@@ -2611,6 +2626,7 @@ mod tests {
                     super::fill_gameplay_lane_effects(
                         &visual,
                         0.37,
+                        1.0,
                         num_cols,
                         &mut [super::VisualEffectParams::default(); 8],
                         &mut [0.0; 8],
@@ -2795,6 +2811,7 @@ mod tests {
         fill_gameplay_lane_effects(
             &visual,
             1.25,
+            1.0,
             4,
             &mut params,
             &mut lane_offsets,
@@ -2838,6 +2855,30 @@ mod tests {
                 move_y_offsets[local_col].to_bits(),
                 move_col_extra(&visual.move_y_cols, local_col).to_bits(),
             );
+        }
+    }
+
+    #[test]
+    fn gameplay_lane_cache_scales_move_y_with_native_mini_zoom() {
+        let mut visual = VisualEffects::default();
+        visual.move_y_cols[..4].copy_from_slice(&[-0.25, 0.5, -2.0, 0.0]);
+        for mini in [-0.1, 0.0, 1.0, 2.0, 3.0] {
+            let field_zoom = 1.0 - mini * 0.5;
+            let mut offsets = [0.0; 4];
+            let mut tipsy = [0.0; 4];
+            let mut moves = [0.0; 4];
+            fill_gameplay_lane_effects(
+                &visual, 0.0, field_zoom, 4,
+                &mut [VisualEffectParams::default(); 4],
+                &mut offsets, &mut tipsy, &mut moves,
+            );
+            // ArrowEffects::GetMoveY supplies local pixels; NoteField's parent
+            // transform scales them even for zero or negative Mini zoom.
+            for (column, local) in [-16.0, 32.0, -128.0, 0.0].into_iter().enumerate() {
+                assert_eq!(moves[column], local * field_zoom);
+                assert_eq!(offsets[column], local * field_zoom);
+                assert_eq!(tipsy[column], 0.0);
+            }
         }
     }
 
@@ -3189,6 +3230,7 @@ mod tests {
         super::fill_gameplay_lane_effects(
             &visual,
             2.25,
+            1.0,
             4,
             &mut [super::VisualEffectParams::default(); 4],
             &mut lane_offsets,

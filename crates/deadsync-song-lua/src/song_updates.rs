@@ -14,6 +14,7 @@ use actors::{
     chronological::{Answer, Query},
     perframes::Access,
 };
+use deadsync_rules::scroll::ScrollSpeedSetting;
 use std::collections::{BTreeMap, HashMap};
 type MotionSample = (Option<[f32; 2]>, Option<[f32; 3]>);
 
@@ -276,7 +277,27 @@ impl SongRuntime {
         else {
             unreachable!()
         };
-        if (!active && !self.actors.models_active(&mut self.vm)) || end <= start {
+        // HUD transforms can be authored once with no recurring Lua callback.
+        // Their tweens still advance, and the native Player writes the enclosed
+        // Judgment/Combo pose every frame, so retain that complete draw chain.
+        let mut hud_transforms = false;
+        for (row, &value) in tracked.actors.iter().zip(tracked_values) {
+            if matches!(
+                row.target,
+                Tracked::PlayerJudgment(_) | Tracked::PlayerCombo(_)
+            ) {
+                let Answer::Hud(states) = self
+                    .actors
+                    .chronological_read(&mut self.vm, value, Query::Hud([0.0, start]))
+                    .map_err(|e| e.to_string())?
+                else {
+                    unreachable!()
+                };
+                hud_transforms |= !states.is_empty();
+            }
+        }
+        if (!active && !hud_transforms && !self.actors.models_active(&mut self.vm)) || end <= start
+        {
             let static_output = self.compile_song_static_update_output(context, splines)?;
             return Ok(SongUpdateOutput {
                 eases: static_output.eases,
@@ -334,19 +355,24 @@ impl SongRuntime {
                     baseline.push(state);
                 }
             }
-            let mut layers = Vec::new();
+            let mut render_states = Vec::new();
             for (i, (row, &value)) in tracked.actors.iter().zip(tracked_values).enumerate() {
-                if matches!(
-                    row.target,
-                    Tracked::SongForeground | Tracked::ScreenLayer(_)
-                ) {
-                    layers.push((i, values.len()));
-                    values.push(&mut self.vm, value)?;
-                    baseline.push(
-                        access
-                            .state(&mut self.vm, value)
-                            .map_err(|e| e.to_string())?,
-                    );
+                match row.target {
+                    Tracked::Player(player) => {
+                        if let Some(index) = player_indices[player] {
+                            render_states.push((i, index));
+                        }
+                    }
+                    Tracked::SongForeground | Tracked::ScreenLayer(_) => {
+                        render_states.push((i, values.len()));
+                        values.push(&mut self.vm, value)?;
+                        baseline.push(
+                            access
+                                .state(&mut self.vm, value)
+                                .map_err(|e| e.to_string())?,
+                        );
+                    }
+                    _ => {}
                 }
             }
             self.actors
@@ -384,6 +410,8 @@ impl SongRuntime {
             let baseline_columns = self.read_song_note_column_transform_samples()?;
             let frames = crate::perframe::update_function_replay_beats(context, start, end);
             let actor_frames = crate::perframe::reference_actor_frames(context);
+            let screen_actor_frames = crate::perframe::reference_screen_actor_frames(context)?;
+            let option_clock_deltas = crate::perframe::reference_option_clock_deltas(context)?;
             let sample_count = frames.len();
             let mut sample_beats = buffer(start, sample_count);
             let rate = f64::from(song_music_rate(context));
@@ -398,6 +426,11 @@ impl SongRuntime {
                 sample_count,
             );
             let mut player_samples = buffer(baseline_players, sample_count);
+            let mut player_step_samples = buffer([0_u128; LUA_PLAYERS], sample_count);
+            let mut current_speed_samples = buffer(
+                self.current_speedmods().map_err(|e| e.to_string())?,
+                sample_count,
+            );
             let mut mod_samples = buffer(baseline_mods.clone(), sample_count);
             let mut mod_speed_samples = buffer(
                 options
@@ -427,6 +460,19 @@ impl SongRuntime {
             let mut current = replay_states.clone();
             if !self.set_song_replay_frames(screen, &frames, actor_frames.as_deref()) {
                 return Err("song replay timeline was rejected".into());
+            }
+            if let Some(screen_actor_frames) = &screen_actor_frames
+                && !self
+                    .actors
+                    .set_compiler_screen_actor_frames(
+                        &mut self.vm,
+                        screen,
+                        root,
+                        screen_actor_frames,
+                    )
+                    .map_err(|e| e.to_string())?
+            {
+                return Err("screen actor replay timeline was rejected".into());
             }
             let start_seconds = f64::from(song_elapsed_seconds_at(start, context));
             let start_time = frame_time(start, start_seconds);
@@ -532,6 +578,7 @@ impl SongRuntime {
                     seconds,
                     next_beat - beat,
                     delta,
+                    option_clock_deltas.map(|deltas| deltas[frame]),
                 )?;
                 self.actors
                     .sample_model_materials(&mut self.vm, seconds as f32);
@@ -562,6 +609,9 @@ impl SongRuntime {
                 }
                 self.restore_update_messages(&access, &values, &replay_states, started)?;
                 let next_masks = self.update_masks(&players)?;
+                let mut player_steps =
+                    self.actors
+                        .song_player_step_targets(&self.vm, screen, &player_indices);
                 self.capture_rooted_song_overlay_frame(
                     screen,
                     &mut capture,
@@ -590,6 +640,13 @@ impl SongRuntime {
                     seconds,
                 )?;
                 for (i, t, v) in capture.scratch.retargeted_states.drain(..) {
+                    for player in 0..LUA_PLAYERS {
+                        if player_indices[player] == Some(i) {
+                            // A fallback setter that changed a pending tween's
+                            // destination did not jump its current pose.
+                            player_steps[player] &= !(1_u128 << t as usize);
+                        }
+                    }
                     set_overlay_state_update_value(&mut replay_states[i], t, &v);
                     push_captured_overlay_value(
                         &mut capture.tracks,
@@ -711,6 +768,8 @@ impl SongRuntime {
                 sample_beats.push(next_beat);
                 sample_seconds.push((seconds * rate) as f32);
                 player_samples.push(next_players);
+                player_step_samples.push(player_steps);
+                current_speed_samples.push(self.current_speedmods().map_err(|e| e.to_string())?);
                 mod_samples.push(
                     options
                         .sample(&mut self.vm, false)
@@ -731,13 +790,35 @@ impl SongRuntime {
                     &mut field_bytes,
                 )?;
                 prior_field = music;
-                let mut layer_message = None;
-                for &(tracked_index, i) in &layers {
-                    let prior = current[i];
+                let mut render_message = None;
+                for &(tracked_index, i) in &render_states {
+                    let next = replay_states[i];
+                    let prior = if matches!(tracked.actors[tracked_index].target, Tracked::Player(_)) {
+                        // Player motion is already sampled into modifier eases.
+                        // Capture the remaining actor state without applying that
+                        // motion a second time during baked playback.
+                        State {
+                            x: next.x,
+                            y: next.y,
+                            z: next.z,
+                            rot_x_deg: next.rot_x_deg,
+                            rot_y_deg: next.rot_y_deg,
+                            rot_z_deg: next.rot_z_deg,
+                            zoom: next.zoom,
+                            zoom_x: next.zoom_x,
+                            zoom_y: next.zoom_y,
+                            zoom_z: next.zoom_z,
+                            skew_x: next.skew_x,
+                            skew_y: next.skew_y,
+                            ..current[i]
+                        }
+                    } else {
+                        current[i]
+                    };
                     if let Some((_, delta)) =
-                        crate::overlay_delta_pair_from_states(prior, prior, replay_states[i])
+                        crate::overlay_delta_pair_from_states(prior, prior, next)
                     {
-                        let message = layer_message
+                        let message = render_message
                             .get_or_insert_with(|| format!("__songlua_layer_frame_{frame}"));
                         tracked.actors[tracked_index].actor.message_commands.push(
                             crate::SongLuaOverlayMessageCommand {
@@ -757,7 +838,7 @@ impl SongRuntime {
                         );
                     }
                 }
-                if let Some(message) = layer_message {
+                if let Some(message) = render_message {
                     broadcasts.push((next_beat, message, true));
                 }
                 std::mem::swap(&mut current, &mut replay_states);
@@ -782,6 +863,8 @@ impl SongRuntime {
                 &sample_beats,
                 &sample_seconds,
                 &player_samples,
+                &player_step_samples,
+                &current_speed_samples,
                 &mod_samples,
                 &mod_speed_samples,
                 &column_samples,
@@ -993,39 +1076,46 @@ impl SongRuntime {
         bytes: &mut usize,
     ) -> Result<(), String> {
         for (row, &value) in tracked.actors.iter_mut().zip(values) {
+            if matches!(
+                row.target,
+                Tracked::PlayerJudgment(_) | Tracked::PlayerCombo(_)
+            ) {
+                let Answer::Hud(states) = self
+                    .actors
+                    .chronological_read(&mut self.vm, value, Query::Hud(clock))
+                    .map_err(|e| e.to_string())?
+                else {
+                    unreachable!()
+                };
+                append_wrapper_frame(
+                    &mut row.actor.player_wrapper_frames,
+                    states,
+                    prior,
+                    clock,
+                    bytes,
+                )?;
+                continue;
+            }
             if !matches!(row.target, Tracked::Player(_)) {
                 continue;
             }
-            let Answer::Field(states) = self
+            let Answer::Field(field_states, player_states) = self
                 .actors
                 .chronological_read(&mut self.vm, value, Query::Field(clock))
                 .map_err(|e| e.to_string())?
             else {
                 unreachable!()
             };
-            let Some(states) = states else { continue };
-            let frames = &mut row.actor.note_field_frames;
-            if (states.is_empty() && frames.is_empty())
-                || frames.last().is_some_and(|f| f.wrappers.as_ref() == states)
-            {
-                continue;
+            if let Some(states) = field_states {
+                append_wrapper_frame(&mut row.actor.note_field_frames, states, prior, clock, bytes)?;
             }
-            let additional = states.len() * std::mem::size_of::<State>()
-                + 2 * std::mem::size_of::<crate::SongLuaNoteFieldFrame>();
-            *bytes = bytes.saturating_add(additional);
-            if *bytes > 256 * 1024 * 1024 {
-                return Err("NoteField wrapper capture exceeds 256 MiB".into());
-            }
-            if let Some(previous) = frames.last().filter(|f| f.second < prior) {
-                frames.push(crate::SongLuaNoteFieldFrame {
-                    second: prior,
-                    wrappers: previous.wrappers.clone(),
-                });
-            }
-            frames.push(crate::SongLuaNoteFieldFrame {
-                second: clock[0],
-                wrappers: states.into(),
-            });
+            append_wrapper_frame(
+                &mut row.actor.player_wrapper_frames,
+                player_states,
+                prior,
+                clock,
+                bytes,
+            )?;
         }
         Ok(())
     }
@@ -1141,6 +1231,7 @@ impl SongRuntime {
                 .as_ref()
                 .map_or(0., |t| t.get_time_for_beat_exact(0.)))
     }
+    #[allow(clippy::too_many_arguments)]
     fn call_song_update_frame(
         &mut self,
         scene: (ActorScene, Value),
@@ -1149,6 +1240,7 @@ impl SongRuntime {
         seconds: f64,
         delta_beats: f32,
         delta: f64,
+        option_deltas: Option<[f32; LUA_PLAYERS + 1]>,
     ) -> Result<(), String> {
         let (screen, root) = scene;
         let prior = self.values().map_err(|e| e.to_string())?;
@@ -1208,11 +1300,11 @@ impl SongRuntime {
                     )
                     .map_err(|e| e.to_string())?;
             self.vm.call(function, &[]).map_err(|e| e.to_string())?;
-            self.advance_options(seconds, None)
+            self.advance_options(seconds, option_deltas)
                 .map_err(|e| e.to_string())?;
             let result = self
                 .actors
-                .advance_compiler_replay(&mut self.vm, screen, root, frame, delta)
+                .advance_compiler_replay(&mut self.vm, screen, root, frame, delta, self.catalog)
                 .and_then(|_| {
                     self.actors
                         .compiler_read(&mut self.vm, root, actors::compiler::Query::Draw)
@@ -1230,6 +1322,59 @@ impl SongRuntime {
     }
 }
 
+fn speedmod_parts(speed: ScrollSpeedSetting) -> (&'static str, f32) {
+    match speed {
+        ScrollSpeedSetting::XMod(value) => ("xmod", value),
+        ScrollSpeedSetting::CMod(value) => ("cmod", value),
+        ScrollSpeedSetting::MMod(value) => ("mmod", value),
+    }
+}
+
+/// Native ScrollSpeed, ScrollBPM, TimeSpacing and MaxScrollBPM approach
+/// independently. Capture their already-resolved Current mode instead of
+/// asking gameplay's single speed setting to approach a Song target mode.
+fn push_current_speed_window(
+    out: &mut Vec<SongLuaEaseWindow>,
+    last: &mut Option<usize>,
+    player: usize,
+    [start, end]: [f32; 2],
+    unit: SongLuaTimeUnit,
+    from: ScrollSpeedSetting,
+    to: ScrollSpeedSetting,
+) {
+    let (key, from) = speedmod_parts(from);
+    let (next_key, next) = speedmod_parts(to);
+    // A mode switch takes effect at the next sample, never partway through
+    // the preceding frame (and never by blending BPM with a multiplier).
+    let to = if key == next_key { next } else { from };
+    if let Some(previous) = last.and_then(|index| out.get_mut(index))
+        && previous.start + previous.limit == start
+        && matches!(&previous.target, SongLuaEaseTarget::Mod(name) if name == key)
+        && previous.from == from
+        && previous.to == from
+        && from == to
+    {
+        previous.limit = end - previous.start;
+        return;
+    }
+    *last = Some(out.len());
+    out.push(SongLuaEaseWindow {
+        approach_speed: None,
+        unit,
+        start,
+        limit: end - start,
+        span_mode: SongLuaSpanMode::Len,
+        from,
+        to,
+        target: SongLuaEaseTarget::Mod(key.to_owned()),
+        easing: Some("linear".to_owned()),
+        player: Some(player as u8 + 1),
+        sustain: None,
+        opt1: None,
+        opt2: None,
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn finish_samples<M: crate::perframe::ModState>(
     context: &SongLuaCompileContext,
@@ -1239,18 +1384,41 @@ fn finish_samples<M: crate::perframe::ModState>(
     sample_beats: &[f32],
     sample_seconds: &[f32],
     player_samples: &[[Player; LUA_PLAYERS]],
+    player_step_samples: &[[u128; LUA_PLAYERS]],
+    current_speed_samples: &[[ScrollSpeedSetting; LUA_PLAYERS]],
     mod_samples: &[[M; LUA_PLAYERS]],
     mod_speed_samples: &[[M; LUA_PLAYERS]],
     column_samples: &[Vec<crate::SongLuaColumnTransformSample>],
     baseline_players: &[Player; LUA_PLAYERS],
     baseline_mods: &[M; LUA_PLAYERS],
 ) -> (Vec<SongLuaEaseWindow>, Vec<SongLuaColumnOffsetWindow>) {
-    use crate::perframe::push_update_mod_targets_with_key;
-    use crate::{append_column_transform_windows_from_samples, push_perframe_player_targets};
+    use crate::append_column_transform_windows_from_samples;
+    use crate::perframe::{
+        push_perframe_player_targets_with_previous, push_update_mod_targets_with_key,
+    };
     let mut eases = Vec::new();
     let mut column_transforms = Vec::new();
     let mut last_mod_windows = BTreeMap::new();
     let mut last_mod_lookup_key = (0, String::new());
+    let mut last_speed_windows = [None; LUA_PLAYERS];
+    // Visual-only callbacks and movies must not pin an otherwise untouched
+    // profile speed. Replace target windows only where Current actually moves
+    // or differs from a requested target, including a frozen approach of zero.
+    let sampled_speed_players = std::array::from_fn(|player| {
+        current_speed_samples
+            .iter()
+            .zip(mod_samples)
+            .any(|(speeds, mods)| {
+                let current = speeds[player];
+                let (key, value) = speedmod_parts(current);
+                current != current_speed_samples[0][player]
+                    || ["xmod", "cmod", "mmod"].into_iter().any(|target| {
+                        mods[player]
+                            .get(target)
+                            .is_some_and(|amount| key != target || *amount != value)
+                    })
+            })
+    });
     for index in 0..sample_beats.len() {
         let seg_start = sample_beats[index];
         let seg_end = sample_beats.get(index + 1).copied().unwrap_or(end);
@@ -1260,13 +1428,19 @@ fn finish_samples<M: crate::perframe::ModState>(
         let to_mods = mod_samples.get(index + 1).unwrap_or(from_mods);
         let (mod_start, mod_end, mod_unit) = if let Some(timing) = &context.song_timing {
             let origin = timing.get_time_for_beat_exact(0.0);
-            let start = sample_seconds[index] + origin;
+            // Captured clocks already include global calibration. Second
+            // windows apply it at the gameplay boundary, so encode these
+            // sampled Player, option and column windows in authored seconds
+            // first. Absolute wrapper and overlay tracks keep their raw clock.
+            let calibration = context.global_offset_seconds * timing.global_offset_rate();
+            let authored_second = |second| (second + origin) + calibration;
+            let start = authored_second(sample_seconds[index]);
             (
                 start,
                 sample_seconds
                     .get(index + 1)
                     .copied()
-                    .map_or_else(|| start.next_up(), |second| second + origin),
+                    .map_or_else(|| start.next_up(), authored_second),
                 SongLuaTimeUnit::Second,
             )
         } else if use_mod_clock {
@@ -1285,9 +1459,12 @@ fn finish_samples<M: crate::perframe::ModState>(
                 SongLuaTimeUnit::Beat,
             )
         };
-        // Dropping a speed mode ends its coalescing run. Selecting the same
-        // value again later must start a new window after the intervening mode.
+        // Players that retain Song target windows also retain their original
+        // mode removal/reentry boundaries in the coalescing cache.
         for (player, mods) in from_mods.iter().enumerate() {
+            if sampled_speed_players[player] {
+                continue;
+            }
             for key in ["xmod", "cmod", "mmod"] {
                 if mods.get(key).is_none() {
                     last_mod_lookup_key.0 = player;
@@ -1311,7 +1488,27 @@ fn finish_samples<M: crate::perframe::ModState>(
             // Keep the update clock: narrowing to a beat and converting back
             // can move a step target past its own frame's timestamp.
             mod_unit,
+            sampled_speed_players,
         );
+        let speeds = current_speed_samples[index];
+        let next_speeds = current_speed_samples
+            .get(index + 1)
+            .copied()
+            .unwrap_or(speeds);
+        for player in 0..LUA_PLAYERS {
+            if !sampled_speed_players[player] {
+                continue;
+            }
+            push_current_speed_window(
+                &mut eases,
+                &mut last_speed_windows[player],
+                player,
+                [mod_start, mod_end],
+                mod_unit,
+                speeds[player],
+                next_speeds[player],
+            );
+        }
         let (frame_start, frame_end, frame_unit) = if origin.is_some() {
             (mod_start, mod_end, SongLuaTimeUnit::Second)
         } else {
@@ -1336,16 +1533,46 @@ fn finish_samples<M: crate::perframe::ModState>(
             .copied()
             .unwrap_or(from_players);
         let first_player_window = eases.len();
-        push_perframe_player_targets(
+        push_perframe_player_targets_with_previous(
             &mut eases,
             frame_start,
             frame_end,
             &from_players,
             &to_players,
             baseline_players,
+            index
+                .checked_sub(1)
+                .map(|previous| &player_samples[previous]),
         );
         for window in &mut eases[first_player_window..] {
             window.unit = frame_unit;
+            let Some(steps) = player_step_samples.get(index + 1) else {
+                continue;
+            };
+            let target = match window.target {
+                SongLuaEaseTarget::PlayerX => Target::X,
+                SongLuaEaseTarget::PlayerY => Target::Y,
+                SongLuaEaseTarget::PlayerZ => Target::Z,
+                SongLuaEaseTarget::PlayerRotationX => Target::RotationX,
+                SongLuaEaseTarget::PlayerRotationY => Target::RotationY,
+                SongLuaEaseTarget::PlayerRotationZ => Target::RotationZ,
+                SongLuaEaseTarget::PlayerZoomX => Target::ZoomX,
+                SongLuaEaseTarget::PlayerZoomY => Target::ZoomY,
+                SongLuaEaseTarget::PlayerZoomZ => Target::ZoomZ,
+                SongLuaEaseTarget::PlayerSkewX => Target::SkewX,
+                SongLuaEaseTarget::PlayerSkewY => Target::SkewY,
+                _ => continue,
+            };
+            let mut mask = 1_u128 << target as usize;
+            if matches!(target, Target::ZoomX | Target::ZoomY | Target::ZoomZ) {
+                mask |= 1_u128 << Target::Zoom as usize;
+            }
+            let player = usize::from(window.player.expect("player transform window") - 1);
+            if steps[player] & mask != 0 {
+                // Do not interpolate towards a setter that has not run yet.
+                // The following window starts at its actual captured value.
+                window.to = window.from;
+            }
         }
         let from_columns = &column_samples[index];
         let to_columns = column_samples.get(index + 1).unwrap_or(from_columns);
@@ -1366,4 +1593,37 @@ fn finish_samples<M: crate::perframe::ModState>(
         );
     }
     (eases, column_transforms)
+}
+
+/// Record a wrapper pose only when it changes. A hold sample at `prior` keeps
+/// the previous pose until the change, so playback interpolation stays exact.
+fn append_wrapper_frame(
+    frames: &mut Vec<crate::SongLuaNoteFieldFrame>,
+    states: Vec<State>,
+    prior: f32,
+    clock: [f32; 2],
+    bytes: &mut usize,
+) -> Result<(), String> {
+    if (states.is_empty() && frames.is_empty())
+        || frames.last().is_some_and(|f| f.wrappers.as_ref() == states)
+    {
+        return Ok(());
+    }
+    let additional = states.len() * std::mem::size_of::<State>()
+        + 2 * std::mem::size_of::<crate::SongLuaNoteFieldFrame>();
+    *bytes = bytes.saturating_add(additional);
+    if *bytes > 256 * 1024 * 1024 {
+        return Err("Wrapper capture exceeds 256 MiB".into());
+    }
+    if let Some(previous) = frames.last().filter(|f| f.second < prior) {
+        frames.push(crate::SongLuaNoteFieldFrame {
+            second: prior,
+            wrappers: previous.wrappers.clone(),
+        });
+    }
+    frames.push(crate::SongLuaNoteFieldFrame {
+        second: clock[0],
+        wrappers: states.into(),
+    });
+    Ok(())
 }

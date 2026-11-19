@@ -168,6 +168,17 @@ pub struct NotefieldSongLuaView<'a> {
     /// Local native Actor wrapper matrix, outside the NoteField's own tilt.
     pub wrapper: glam::Mat4,
     pub wrapper_visible: bool,
+    /// A Lua-moved Player's own position. Player::PushPlayerMatrix centers
+    /// the field's perspective there rather than at the layout.
+    pub player_position: Option<SongLuaPlayerPosition>,
+}
+
+/// A Player's own `GetX`/`GetY` in screen space. `x` is `None` when the
+/// layout overrides the Player's X (a forced centered field).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongLuaPlayerPosition {
+    pub x: Option<f32>,
+    pub y: f32,
 }
 
 /// Profile-derived behavior and resolved asset availability in canonical terms.
@@ -242,6 +253,9 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub edit_measure_text_slot_base: u8,
     /// Global game clock, kept in native double precision until selection.
     pub arrow_effect_time_s: f64,
+    /// Optional raw game-clock input to native ArrowEffects::UpdateTipsy.
+    /// Its cache is sampled before drawing, independently of other effects.
+    pub arrow_tipsy_time_s: Option<f64>,
     /// Global music seconds, before player-specific visual delay/split timing.
     pub music_time_s: f32,
 }
@@ -256,6 +270,8 @@ pub struct PreparedNotefieldNotes<'a, S> {
     pub beat_factor: f32,
     pub(crate) beat_y_factor: f32,
     pub col_offsets: [f32; MAX_COLS],
+    pub(crate) unzoomed_col_offsets: [f32; MAX_COLS],
+    /// ArrowEffects evaluates horizontal motion before NoteField's Mini scale.
     pub invert_distances: [f32; MAX_COLS],
     pub tornado_bounds: [TornadoBounds; MAX_COLS],
     pub(crate) tornado_z_bounds: [TornadoBounds; MAX_COLS],
@@ -381,6 +397,7 @@ pub struct PreparedNotefield<'a, S> {
     pub field_zoom: f32,
     pub scroll_speed: ScrollSpeedSetting,
     pub arrow_effect_time_s: f32,
+    pub tipsy_time_s: f32,
     pub current_time_s: f32,
     pub current_beat: f32,
     pub is_in_delay: bool,
@@ -687,6 +704,14 @@ pub fn prepare_notefield<'a, S>(
         request.visual.current_display_beat,
         request.music_time_s,
     );
+    let tipsy_time_s = request.arrow_tipsy_time_s.map_or(arrow_effect_time_s, |time| {
+        mod_timer_time(
+            request.visual.visual,
+            time,
+            request.visual.current_display_beat,
+            request.music_time_s,
+        )
+    });
     let notes = prepare_notes(
         request,
         frame_plan,
@@ -695,6 +720,7 @@ pub fn prepare_notefield<'a, S>(
         effect_height,
         draw_range,
         arrow_effect_time_s,
+        tipsy_time_s,
     )?;
     Some(PreparedNotefield {
         frame_plan,
@@ -703,6 +729,7 @@ pub fn prepare_notefield<'a, S>(
         scroll_speed,
         current_time_s,
         arrow_effect_time_s,
+        tipsy_time_s,
         current_beat: request.chart.visible_beat,
         is_in_delay: request.chart.is_in_delay,
         mini,
@@ -784,6 +811,7 @@ fn prepare_field<S>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn prepare_notes<'a, S>(
     request: &'a NotefieldComposeRequest<'a, S>,
     frame_plan: NotefieldFramePlan,
@@ -792,38 +820,40 @@ fn prepare_notes<'a, S>(
     effect_height: f32,
     draw_range: NoteDrawRange,
     arrow_effect_time_s: f32,
+    tipsy_time_s: f32,
 ) -> Option<Option<PreparedNotefieldNotes<'a, S>>> {
     let Some(base) = request.noteskin.base else {
         return Some(None);
     };
     let timing = request.chart.timing?;
     let num_cols = frame_plan.num_cols;
-    let mut col_offsets = [0.0; MAX_COLS];
+    let mut unzoomed_col_offsets = [0.0; MAX_COLS];
     fill_lane_col_offsets(
-        &mut col_offsets,
+        &mut unzoomed_col_offsets,
         Some(base.column_xs.as_slice()),
         num_cols,
         request.visual.spacing_multiplier,
-        field_zoom,
+        1.0,
     );
+    let col_offsets = unzoomed_col_offsets.map(|offset| offset * field_zoom);
     let mut invert_distances = [0.0; MAX_COLS];
     let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
     compute_active_note_geometry(
         &request.visual.visual,
-        &col_offsets[..num_cols],
+        &unzoomed_col_offsets[..num_cols],
         &mut invert_distances[..num_cols],
         &mut tornado_bounds[..num_cols],
     );
     let mut tornado_z_bounds = [TornadoBounds::default(); MAX_COLS];
     if request.visual.visual.tornado_z != 0.0 {
         crate::transforms::compute_tornado_z_bounds(
-            &col_offsets[..num_cols],
+            &unzoomed_col_offsets[..num_cols],
             &mut tornado_z_bounds[..num_cols],
         );
     }
     let mut tornado_lane_caches = [TornadoLaneCache::default(); MAX_COLS];
     compute_tornado_lane_caches(
-        &col_offsets[..num_cols],
+        &unzoomed_col_offsets[..num_cols],
         &tornado_bounds[..num_cols],
         request.visual.visual.tornado,
         &mut tornado_lane_caches[..num_cols],
@@ -885,6 +915,7 @@ fn prepare_notes<'a, S>(
         screen_height: request.geometry.screen_height,
         note_count_stats: request.chart.note_count_stats,
         arrow_effect_time_s,
+        tipsy_time_s: Some(tipsy_time_s),
         lane_tipsy: request.visual.visual.tipsy,
         lane_tipsy_offset: request.visual.visual.tipsy_offset,
         lane_tipsy_speed: request.visual.visual.tipsy_speed,
@@ -909,6 +940,7 @@ fn prepare_notes<'a, S>(
             request.visual.visual.beat_y_mult,
         ),
         col_offsets,
+        unzoomed_col_offsets,
         invert_distances,
         tornado_bounds,
         tornado_z_bounds,

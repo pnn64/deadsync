@@ -341,6 +341,48 @@ pub(crate) fn reference_actor_frames(_context: &SongLuaCompileContext) -> Option
     None
 }
 
+pub(crate) fn reference_screen_actor_frames(
+    _context: &SongLuaCompileContext,
+) -> Result<Option<Vec<[f32; 2]>>, String> {
+    #[cfg(feature = "test-support")]
+    if !_context.compile_screen_actor_deltas.is_empty() {
+        if _context.compile_screen_actor_deltas.len() != _context.compile_clock_inputs.len() {
+            return Err("screen actor deltas must align with compiler clock inputs".into());
+        }
+        let mut frames = reference_actor_frames(_context)
+            .ok_or("screen actor deltas require compiler clock inputs")?;
+        for (frame, &delta) in frames.iter_mut().zip(&_context.compile_screen_actor_deltas) {
+            if !delta.is_finite() || delta < 0.0 {
+                return Err("screen actor deltas must be finite and nonnegative".into());
+            }
+            frame[0] = delta;
+        }
+        return Ok(Some(frames));
+    }
+    Ok(None)
+}
+
+pub(crate) fn reference_option_clock_deltas(
+    _context: &SongLuaCompileContext,
+) -> Result<Option<&[[f32; LUA_PLAYERS + 1]]>, String> {
+    #[cfg(feature = "test-support")]
+    if !_context.compile_option_clock_deltas.is_empty() {
+        if _context.compile_option_clock_deltas.len() != _context.compile_clock_inputs.len() {
+            return Err("option clock deltas must align with compiler clock inputs".into());
+        }
+        if _context
+            .compile_option_clock_deltas
+            .iter()
+            .flatten()
+            .any(|delta| !delta.is_finite() || *delta < 0.0)
+        {
+            return Err("option clock deltas must be finite and nonnegative".into());
+        }
+        return Ok(Some(&_context.compile_option_clock_deltas));
+    }
+    Ok(None)
+}
+
 #[must_use]
 pub fn update_function_samples(start: f32, end: f32) -> Vec<SongLuaPerframeSample> {
     let step = update_function_sample_step(end - start);
@@ -460,6 +502,23 @@ pub fn push_perframe_player_target(
     target: SongLuaEaseTarget,
     player: usize,
 ) {
+    push_perframe_player_target_with_previous(
+        out, start, end, from, to, baseline, neutral, target, player, None,
+    );
+}
+
+fn push_perframe_player_target_with_previous(
+    out: &mut Vec<SongLuaEaseWindow>,
+    start: f32,
+    end: f32,
+    from: Option<f32>,
+    to: Option<f32>,
+    baseline: Option<f32>,
+    neutral: f32,
+    target: SongLuaEaseTarget,
+    player: usize,
+    previous: Option<f32>,
+) {
     if end <= start {
         return;
     }
@@ -469,7 +528,14 @@ pub fn push_perframe_player_target(
     if !from.is_finite() || !to.is_finite() {
         return;
     }
-    if (from - baseline).abs() <= f32::EPSILON && (to - baseline).abs() <= f32::EPSILON {
+    // An immediate setter holds the preceding window at its old value. Keep
+    // the first baseline sample after a change so that old value cannot sustain
+    // through the reset; later unchanged baseline samples still need no window.
+    if (from - baseline).abs() <= f32::EPSILON
+        && (to - baseline).abs() <= f32::EPSILON
+        && !previous
+            .is_some_and(|value| value.is_finite() && (value - baseline).abs() > f32::EPSILON)
+    {
         return;
     }
     out.push(SongLuaEaseWindow {
@@ -497,8 +563,31 @@ pub fn push_perframe_player_targets(
     to_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
     baseline_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
 ) {
+    push_perframe_player_targets_with_previous(
+        out,
+        start,
+        end,
+        from_players,
+        to_players,
+        baseline_players,
+        None,
+    );
+}
+
+pub(crate) fn push_perframe_player_targets_with_previous(
+    out: &mut Vec<SongLuaEaseWindow>,
+    start: f32,
+    end: f32,
+    from_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
+    to_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
+    baseline_players: &[SongLuaPerframePlayerState; LUA_PLAYERS],
+    previous_players: Option<&[SongLuaPerframePlayerState; LUA_PLAYERS]>,
+) {
     for player in 0..LUA_PLAYERS {
-        push_perframe_player_target(
+        let previous = previous_players
+            .map(|players| players[player])
+            .unwrap_or_default();
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -508,8 +597,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerX,
             player,
+            previous.x,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -519,8 +609,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerY,
             player,
+            previous.y,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -530,8 +621,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerZ,
             player,
+            relative_player_target(previous.z, baseline_players[player].z),
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -541,8 +633,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerRotationX,
             player,
+            previous.rotation_x,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -552,8 +645,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerRotationZ,
             player,
+            previous.rotation_z,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -563,8 +657,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerRotationY,
             player,
+            previous.rotation_y,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -574,8 +669,9 @@ pub fn push_perframe_player_targets(
             1.0,
             SongLuaEaseTarget::PlayerZoomX,
             player,
+            previous.zoom_x,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -585,8 +681,9 @@ pub fn push_perframe_player_targets(
             1.0,
             SongLuaEaseTarget::PlayerZoomY,
             player,
+            previous.zoom_y,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -596,8 +693,9 @@ pub fn push_perframe_player_targets(
             1.0,
             SongLuaEaseTarget::PlayerZoomZ,
             player,
+            previous.zoom_z,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -607,8 +705,9 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerSkewX,
             player,
+            previous.skew_x,
         );
-        push_perframe_player_target(
+        push_perframe_player_target_with_previous(
             out,
             start,
             end,
@@ -618,6 +717,7 @@ pub fn push_perframe_player_targets(
             0.0,
             SongLuaEaseTarget::PlayerSkewY,
             player,
+            previous.skew_y,
         );
     }
 }
@@ -653,6 +753,7 @@ pub fn push_update_mod_targets(
         last_windows,
         &mut (0, String::new()),
         SongLuaTimeUnit::Beat,
+        [false; LUA_PLAYERS],
     );
 }
 
@@ -668,12 +769,16 @@ pub(crate) fn push_update_mod_targets_with_key<S: ModState>(
     last_windows: &mut BTreeMap<(usize, String), usize>,
     lookup_key: &mut (usize, String),
     unit: SongLuaTimeUnit,
+    sampled_speed_players: [bool; LUA_PLAYERS],
 ) {
     if from_players.iter().all(ModState::is_empty) {
         return;
     }
     for player in 0..LUA_PLAYERS {
         for (key, &from) in from_players[player].entries() {
+            if sampled_speed_players[player] && matches!(key, "xmod" | "cmod" | "mmod") {
+                continue;
+            }
             // Classify without allocating the name of a coalesced speed target.
             let Some(mut target) = runtime_player_option_ease_target(key, "") else {
                 continue;

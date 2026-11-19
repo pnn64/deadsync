@@ -41,6 +41,42 @@ fn scene() -> (SongRuntime, ActorScene, deadlib_lua::TableId) {
 }
 
 #[test]
+fn player_helper_uses_current_human_roster_and_returns_the_receiver() {
+    let mut context = SongLuaCompileContext::new(".", "native Actor:player helper");
+    context.players[0].enabled = true;
+    context.players[1].enabled = false;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let value = execute(&mut runtime, "return Def.ActorFrame{Def.Quad{},Def.Actor{}}")[0];
+    let scene = runtime.instantiate_actor(value).unwrap();
+    let root = runtime.actor_scene_root(scene).unwrap();
+    runtime.vm_mut().set_global(b"root", root).unwrap();
+    execute(&mut runtime, r#"
+        local sprite, actor = root[1], root[2]
+        assert(sprite:player(PLAYER_1) == sprite and sprite:GetVisible())
+        assert(sprite:player(PLAYER_2) == sprite and not sprite:GetVisible())
+        assert(Actor.player(actor, PLAYER_2) == actor and not actor:GetVisible())
+        GAMESTATE:JoinPlayer(PLAYER_2)
+        assert(sprite:player(PLAYER_2) == sprite and sprite:GetVisible())
+        assert(actor:player(PLAYER_2) == actor and actor:GetVisible())
+
+        -- The fallback calls the authored method dynamically and still returns
+        -- self when that visible implementation has a different return value.
+        local argument
+        actor.visible = function(self, value)
+            assert(self == actor)
+            argument = value
+            return sprite
+        end
+        assert(actor:player(PLAYER_1) == actor and argument == true)
+        GAMESTATE.IsHumanPlayer = function(self, player)
+            assert(self == GAMESTATE and player == PLAYER_2)
+            return false
+        end
+        assert(actor:player(PLAYER_2) == actor and argument == false)
+    "#);
+}
+
+#[test]
 fn metatable_callbacks_keep_their_native_capture_counts() {
     let (mut runtime, _scene, _) = scene();
     assert_eq!(

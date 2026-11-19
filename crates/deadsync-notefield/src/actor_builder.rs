@@ -127,6 +127,8 @@ pub struct CapturedActorScratch {
     pub(crate) note_field: SharedActorFrameScratch,
     pub(crate) combo: SharedActorFrameScratch,
     pub(crate) judgment: SharedActorFrameScratch,
+    pub(crate) combo_transform: SharedActorFrameScratch,
+    pub(crate) judgment_transform: SharedActorFrameScratch,
 }
 
 impl CapturedActorScratch {
@@ -136,6 +138,8 @@ impl CapturedActorScratch {
             note_field: SharedActorFrameScratch::with_capacity(field_capacity),
             combo: SharedActorFrameScratch::with_capacity(hud_capacity),
             judgment: SharedActorFrameScratch::with_capacity(hud_capacity),
+            combo_transform: SharedActorFrameScratch::with_capacity(hud_capacity),
+            judgment_transform: SharedActorFrameScratch::with_capacity(hud_capacity),
         }
     }
 }

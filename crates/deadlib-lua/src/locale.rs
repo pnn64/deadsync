@@ -205,57 +205,87 @@ pub(crate) fn is_digit(byte: u8) -> bool {
 pub(crate) fn is_space(byte: u8) -> bool {
     matches!(byte, b'\t'..=b'\r' | b' ') || (byte >= 128 && mask(byte) & 8 != 0)
 }
-pub(crate) fn class(byte: u8, class: u8) -> bool {
-    if byte >= 128 {
-        let bits = mask(byte);
-        let hit = match class.to_ascii_lowercase() {
-            b'a' => bits & 0x103 != 0,
-            b'c' => bits & 32 != 0,
-            b'd' => bits & 4 != 0,
-            b'l' => bits & 2 != 0,
-            b'p' => bits & 16 != 0,
-            b's' => bits & 8 != 0,
-            b'u' => bits & 1 != 0,
-            b'w' => bits & 0x107 != 0,
-            b'x' => bits & 128 != 0,
-            b'z' => false,
-            _ => return byte == class,
-        };
-        return hit != class.is_ascii_uppercase();
-    }
-    let hit = match class.to_ascii_lowercase() {
-        b'a' => byte.is_ascii_alphabetic(),
-        b'c' => byte.is_ascii_control(),
-        b'd' => byte.is_ascii_digit(),
-        b'l' => byte.is_ascii_lowercase(),
-        b'p' => byte.is_ascii_punctuation(),
-        b's' => is_space(byte),
-        b'u' => byte.is_ascii_uppercase(),
-        b'w' => byte.is_ascii_alphanumeric(),
-        b'x' => byte.is_ascii_hexdigit(),
-        b'z' => byte == 0,
-        _ => return byte == class,
-    };
-    hit != class.is_ascii_uppercase()
+pub(crate) fn is_control(byte: u8) -> bool {
+    byte.is_ascii_control() || (byte >= 128 && mask(byte) & 32 != 0)
 }
-pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut crate::memory::Buffer<u8>) {
+
+const fn ascii_class_bits(class: u8) -> [u64; 2] {
+    let mut bits = [0; 2];
+    let mut byte = 0u8;
+    while byte < 128 {
+        let hit = match class {
+            b'a' => byte.is_ascii_alphabetic(),
+            b'c' => byte.is_ascii_control(),
+            b'd' => byte.is_ascii_digit(),
+            b'l' => byte.is_ascii_lowercase(),
+            b'p' => byte.is_ascii_punctuation(),
+            b's' => matches!(byte, b'\t'..=b'\r' | b' '),
+            b'u' => byte.is_ascii_uppercase(),
+            b'w' => byte.is_ascii_alphanumeric(),
+            b'x' => byte.is_ascii_hexdigit(),
+            b'z' => byte == 0,
+            _ => unreachable!(),
+        };
+        if hit {
+            bits[(byte / 64) as usize] |= 1u64 << (byte % 64);
+        }
+        byte += 1;
+    }
+    bits
+}
+
+pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
+    let ([lo, hi], flags) = match code.to_ascii_lowercase() {
+        b'a' => (const { ascii_class_bits(b'a') }, 0x103),
+        b'c' => (const { ascii_class_bits(b'c') }, 32),
+        b'd' => (const { ascii_class_bits(b'd') }, 4),
+        b'l' => (const { ascii_class_bits(b'l') }, 2),
+        b'p' => (const { ascii_class_bits(b'p') }, 16),
+        b's' => (const { ascii_class_bits(b's') }, 8),
+        b'u' => (const { ascii_class_bits(b'u') }, 1),
+        b'w' => (const { ascii_class_bits(b'w') }, 0x107),
+        b'x' => (const { ascii_class_bits(b'x') }, 128),
+        b'z' => (const { ascii_class_bits(b'z') }, 0),
+        _ => {
+            set[usize::from(code / 64)] |= 1u64 << (code % 64);
+            return;
+        }
+    };
+    let mut bits = [lo, hi, 0, 0];
+    if flags != 0 {
+        let ctype = CTYPE
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !ctype.is_c {
+            for (word, values) in bits[2..]
+                .iter_mut()
+                .zip(ctype.values[128..].as_chunks::<64>().0)
+            {
+                for (bit, &value) in values.iter().enumerate() {
+                    *word |= u64::from(value & (flags << 16) != 0) << bit;
+                }
+            }
+        }
+    }
+    let complement = 0u64.wrapping_sub(u64::from(code.is_ascii_uppercase()));
+    for (word, members) in set.iter_mut().zip(bits) {
+        *word |= members ^ complement;
+    }
+}
+pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
     let ctype = CTYPE
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if ctype.is_c {
-        for byte in source.iter().map(|b| {
-            if upper {
-                b.to_ascii_uppercase()
-            } else {
-                b.to_ascii_lowercase()
-            }
-        }) {
-            output.push(byte);
+        if upper {
+            bytes.make_ascii_uppercase();
+        } else {
+            bytes.make_ascii_lowercase();
         }
     } else {
         let shift = if upper { 8 } else { 0 };
-        for &byte in source {
-            output.push((ctype.values[usize::from(byte)] >> shift) as u8);
+        for byte in bytes {
+            *byte = (ctype.values[usize::from(*byte)] >> shift) as u8;
         }
     }
 }
@@ -327,9 +357,11 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
         Some(b'+') => (false, &bytes[1..]),
         _ => (false, bytes),
     };
-    if unsigned.starts_with(b"0x") || unsigned.starts_with(b"0X") {
-        let hex = &unsigned[2..];
+    if let [b'0', b'x' | b'X', hex @ ..] = unsigned {
         return crate::numeric::hex_number(hex.iter().copied(), negative);
+    }
+    if let Some(integer) = crate::lexer::short_decimal_integer(unsigned) {
+        return Some(if negative { -integer } else { integer });
     }
     // UCRT's runtime converter truncates its decimal significand after 768
     // digits and clamps the textual exponent before adjusting for the radix
@@ -337,5 +369,5 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     if cfg!(all(windows, target_env = "msvc")) && bytes.len() > 768 {
         return crate::numeric::localized_number(bytes, b".");
     }
-    crate::lexer::parse_number(bytes)
+    std::str::from_utf8(bytes).ok()?.parse().ok()
 }

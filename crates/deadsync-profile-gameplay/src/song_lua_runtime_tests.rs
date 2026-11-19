@@ -71,6 +71,62 @@ fn deadsync_root() -> PathBuf {
 }
 
 #[test]
+fn selected_edit_charts_preserve_identity_with_shared_descriptions() {
+    let dir = std::env::temp_dir().join(format!(
+        "deadsync-selected-edit-charts-{}", std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("control.ssc");
+    let mut source = String::from("#VERSION:0.83;#TITLE:Selected edits;#BPMS:0=120;\n");
+    for (name, meter, notes) in [
+        ("SH8 No Mods", 8, "1000\n0100\n0010\n0001"),
+        ("SH11 No Mods", 11, "1000\n0100\n0010\n0001"),
+        ("SH11 No Mods", 11, "1000\n0100\n0010\n0011"),
+    ] {
+        source.push_str(&format!(
+            "#NOTEDATA:;#STEPSTYPE:dance-single;#CHARTNAME:{name};\n\
+             #DESCRIPTION:No Tech;#DIFFICULTY:Edit;#METER:{meter};\n\
+             #CREDIT:Shared author;#NOTES:\n{notes}\n;\n"
+        ));
+    }
+    std::fs::write(&path, source).unwrap();
+    let song = deadsync_simfile::song::parse_song_meta_file(
+        &path,
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        0.0,
+        |_| 8.0,
+    ).expect("three separately authored Edit charts");
+    assert_eq!(song.charts.len(), 3);
+    assert_eq!(song.charts[0].short_hash, song.charts[1].short_hash,
+        "identical notes still retain distinct authored chart identities");
+    assert_ne!(song.charts[1].short_hash, song.charts[2].short_hash,
+        "identical metadata does not identify distinct note payloads");
+    let charts = [Arc::new(song.charts[1].clone()), Arc::new(song.charts[2].clone())];
+    let profiles = std::array::from_fn(|_| deadsync_profile::Profile::default());
+    let scroll = profiles.each_ref().map(|profile| profile.scroll_speed);
+    let context = super::song_lua_compile_context(
+        &song,
+        &charts,
+        2,
+        &profiles,
+        &scroll,
+        1.0,
+        0.0,
+        deadsync_gameplay::GameplayViewport::design(),
+        &deadsync_gameplay::GameplaySession {
+            play_style: deadsync_gameplay::GameplayInputPlayStyle::Versus,
+            ..Default::default()
+        },
+        false,
+    );
+    assert_eq!(context.player_step_indices, [Some(1), Some(2)]);
+    for index in context.player_step_indices.into_iter().flatten() {
+        assert_eq!(context.song_steps[index].meter, 11);
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn song_lua_player_positions_apply_native_integer_margins() {
     use deadsync_gameplay::{
         GameplayInputPlayStyle as Style, GameplayInputPlayerSide as Side, GameplayViewport,

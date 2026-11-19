@@ -1,7 +1,7 @@
 use super::support::{actor, assert_array_ulp, f32_array, f32_at, fixture, samples};
 use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_song_lua::playback::actor_conformance::{
-    effect_sample, vibration_magnitude, vibration_sample,
+    effect_sample, vibration_sample,
 };
 use deadsync_song_lua::{SongLuaOverlayState, parse_overlay_effect_mode};
 
@@ -251,17 +251,6 @@ fn glow_shift_fades_with_native_actor_alpha() {
         }
     }
     assert_eq!(checked, 40);
-}
-
-#[test]
-fn vibration_magnitude_includes_actor_and_inherited_frame_values() {
-    let state = SongLuaOverlayState {
-        vibrate: true,
-        effect_magnitude: [7.0, 11.0, 3.0],
-        inherited_vibrate: [2.0, 4.0, 6.0],
-        ..SongLuaOverlayState::default()
-    };
-    assert_eq!(vibration_magnitude(state), [9.0, 15.0, 9.0]);
 }
 
 #[test]

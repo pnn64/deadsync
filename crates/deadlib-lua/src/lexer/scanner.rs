@@ -2,6 +2,7 @@
 use super::{Kind, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::memory::text::Text;
+use crate::pattern::scan_boundary;
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -41,65 +42,29 @@ enum State {
     Emit,
 }
 
-/// A word of at most eight bytes as a zero-padded integer. Words contain no
-/// NUL byte, so the padding cannot make two different words equal.
-const fn word(text: &[u8]) -> u64 {
-    let mut bytes = [0; 8];
-    let mut index = 0;
-    while index < text.len() {
-        bytes[index] = text[index];
-        index += 1;
-    }
-    u64::from_le_bytes(bytes)
-}
-
 fn keyword(text: &[u8]) -> Kind {
-    const AND: u64 = word(b"and");
-    const BREAK: u64 = word(b"break");
-    const DO: u64 = word(b"do");
-    const ELSE: u64 = word(b"else");
-    const ELSEIF: u64 = word(b"elseif");
-    const END: u64 = word(b"end");
-    const FALSE: u64 = word(b"false");
-    const FOR: u64 = word(b"for");
-    const FUNCTION: u64 = word(b"function");
-    const IF: u64 = word(b"if");
-    const IN: u64 = word(b"in");
-    const LOCAL: u64 = word(b"local");
-    const NIL: u64 = word(b"nil");
-    const NOT: u64 = word(b"not");
-    const OR: u64 = word(b"or");
-    const REPEAT: u64 = word(b"repeat");
-    const RETURN: u64 = word(b"return");
-    const THEN: u64 = word(b"then");
-    const TRUE: u64 = word(b"true");
-    const UNTIL: u64 = word(b"until");
-    const WHILE: u64 = word(b"while");
-    if text.len() > 8 {
-        return Kind::Name;
-    }
-    match word(text) {
-        AND => Kind::And,
-        BREAK => Kind::Break,
-        DO => Kind::Do,
-        ELSE => Kind::Else,
-        ELSEIF => Kind::ElseIf,
-        END => Kind::End,
-        FALSE => Kind::False,
-        FOR => Kind::For,
-        FUNCTION => Kind::Function,
-        IF => Kind::If,
-        IN => Kind::In,
-        LOCAL => Kind::Local,
-        NIL => Kind::Nil,
-        NOT => Kind::Not,
-        OR => Kind::Or,
-        REPEAT => Kind::Repeat,
-        RETURN => Kind::Return,
-        THEN => Kind::Then,
-        TRUE => Kind::True,
-        UNTIL => Kind::Until,
-        WHILE => Kind::While,
+    match text {
+        b"and" => Kind::And,
+        b"break" => Kind::Break,
+        b"do" => Kind::Do,
+        b"else" => Kind::Else,
+        b"elseif" => Kind::ElseIf,
+        b"end" => Kind::End,
+        b"false" => Kind::False,
+        b"for" => Kind::For,
+        b"function" => Kind::Function,
+        b"if" => Kind::If,
+        b"in" => Kind::In,
+        b"local" => Kind::Local,
+        b"nil" => Kind::Nil,
+        b"not" => Kind::Not,
+        b"or" => Kind::Or,
+        b"repeat" => Kind::Repeat,
+        b"return" => Kind::Return,
+        b"then" => Kind::Then,
+        b"true" => Kind::True,
+        b"until" => Kind::Until,
+        b"while" => Kind::While,
         _ => Kind::Name,
     }
 }
@@ -114,38 +79,18 @@ fn empty(line: u32) -> Token {
     }
 }
 
-fn long_boundary(bytes: &[u8], equals: usize) -> usize {
-    const ONE: u64 = 0x0101_0101_0101_0101;
-    const HIGH: u64 = 0x8080_8080_8080_8080;
-    let opening = u64::from_ne_bytes([if equals == 0 { b'[' } else { b']' }; 8]);
-    let (chunks, tail) = bytes.as_chunks::<8>();
-    for (index, chunk) in chunks.iter().enumerate() {
-        let word = u64::from_ne_bytes(*chunk);
-        let a = word ^ opening;
-        let b = word ^ u64::from_ne_bytes([b']'; 8]);
-        let c = word ^ u64::from_ne_bytes([b'\n'; 8]);
-        let d = word ^ u64::from_ne_bytes([b'\r'; 8]);
-        // A zero byte in any XOR marks a possible delimiter. Subtraction can
-        // also flag a neighboring lane, so locate the first byte in that chunk.
-        if ((a.wrapping_sub(ONE) & !a)
-            | (b.wrapping_sub(ONE) & !b)
-            | (c.wrapping_sub(ONE) & !c)
-            | (d.wrapping_sub(ONE) & !d))
-            & HIGH
-            != 0
-        {
-            return index * 8
-                + chunk
-                    .iter()
-                    .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
-                    .expect("delimiter in marked chunk");
-        }
-    }
-    bytes.len() - tail.len()
-        + tail
-            .iter()
-            .position(|&b| matches!(b, b']' | b'\n' | b'\r') || (equals == 0 && b == b'['))
-            .unwrap_or(tail.len())
+fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
+    let (prefix, rest) = bytes.split_at(bytes.len().min(8));
+    prefix
+        .iter()
+        .position(|&byte| boundary(byte))
+        .unwrap_or_else(|| prefix.len() + scan_boundary(rest, boundary))
+}
+
+fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
+    scan_token_boundary(bytes, |byte| {
+        (byte == quote) | (byte == b'\\') | (byte == b'\n') | (byte == b'\r')
+    })
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -334,12 +279,8 @@ impl Scanner {
         let next = input.get(start + 1).copied();
         let (kind, end) = match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
-                let end = start
-                    + 1
-                    + input[start + 1..]
-                        .iter()
-                        .position(|&b| !word(b))
-                        .unwrap_or(input.len() - start - 1);
+                let tail = &input[start + 1..];
+                let end = start + 1 + scan_token_boundary(tail, |byte| !word(byte));
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -378,13 +319,10 @@ impl Scanner {
             }
             b'\'' | b'"' => {
                 let rest = &input[start + 1..];
-                let Some(len) = rest
-                    .iter()
-                    .position(|&b| b == c || matches!(b, b'\\' | b'\n' | b'\r'))
-                    .filter(|&len| rest[len] == c)
-                else {
+                let len = quoted_boundary(rest, c);
+                if rest.get(len) != Some(&c) {
                     return Ok(false);
-                };
+                }
                 text = Text::new(&rest[..len])?;
                 (Kind::String, start + len + 2)
             }
@@ -622,12 +560,8 @@ impl Scanner {
                     }
                 }
                 State::LineComment => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|&c| !matches!(c, b'\n' | b'\r'))
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos +=
+                        scan_boundary(&input[self.pos..], |byte| (byte == b'\n') | (byte == b'\r'));
                     if self.pos < input.len() || closed {
                         self.state = State::Skip;
                     }
@@ -763,7 +697,10 @@ impl Scanner {
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
-                        let count = long_boundary(rest, equals);
+                        let opening = if equals == 0 { b'[' } else { b']' };
+                        let count = scan_boundary(rest, |byte| {
+                            (byte == b']') | (byte == b'\n') | (byte == b'\r') | (byte == opening)
+                        });
                         if !comment {
                             self.text.try_extend_from_slice(&rest[..count])?;
                         }
@@ -817,10 +754,7 @@ impl Scanner {
                     }
                     Some(_) => {
                         let rest = &input[self.pos..];
-                        let count = rest
-                            .iter()
-                            .position(|&b| b == quote || matches!(b, b'\\' | b'\n' | b'\r'))
-                            .unwrap_or(rest.len());
+                        let count = quoted_boundary(rest, quote);
                         self.text.try_extend_from_slice(&rest[..count])?;
                         self.pos += count;
                     }
@@ -925,6 +859,7 @@ mod tests {
     #[test]
     fn chunk_boundaries_preserve_tokens_and_failures() {
         let corpus: &[&[u8]] = &[
+            b"local Identifier_With_0123456789_And_Enough_Bytes_For_Multiple_Blocks_Name = 42",
             b"and break do else elseif end false for function if in local nil not or repeat return then true until while",
             b"-- comment\r\nlocal a,b=0xff,1.25e-3;return a..'x',a~=b,a<=b,a>=b,...",
             b"'a\\000\\25\\255z\\q\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'' \"x\\\r\ny\"",
@@ -951,6 +886,25 @@ mod tests {
     }
 
     #[test]
+    fn line_comments_stop_at_the_first_newline_across_blocks() {
+        for len in [31, 32, 33, 63, 64, 65] {
+            for newline in [b"\n".as_slice(), b"\r", b"\r\n", b"\n\r"] {
+                let mut source = b"--".to_vec();
+                source.extend((0..len).map(|i| if i % 2 == 0 { 0 } else { 255 }));
+                source.extend_from_slice(newline);
+                source.extend_from_slice(b"return");
+                let expected = vec![
+                    (Kind::Return, 2, 2, Vec::new(), 0),
+                    (Kind::Eof, 2, 2, Vec::new(), 0),
+                ];
+                assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
+                let ends = (0..=source.len()).collect::<Vec<_>>();
+                assert_eq!(tokens(&source, &ends), Ok(expected));
+            }
+        }
+    }
+
+    #[test]
     fn quoted_literals_preserve_bytes_and_inline_storage_boundary() {
         for (source, decoded, heap_bytes) in [
             (b"''".as_slice(), b"".as_slice(), 0),
@@ -970,6 +924,33 @@ mod tests {
             assert_eq!(slow.kind, token.kind, "{source:?}");
             assert_eq!(slow.text.as_ref(), token.text.as_ref(), "{source:?}");
             assert_eq!((slow.line, slow.end_line), (token.line, token.end_line));
+        }
+    }
+
+    #[test]
+    fn quoted_literals_stop_at_escapes_and_closing_quotes_across_blocks() {
+        for quote in [b'\'', b'"'] {
+            for len in [7, 8, 39, 40, 41, 72] {
+                let mut decoded = vec![b'a'; len];
+                decoded[0] = if quote == b'"' { b'\'' } else { b'"' };
+                decoded[1] = 0;
+                for escape in [false, true] {
+                    let mut source = vec![quote];
+                    source.extend_from_slice(&decoded);
+                    let mut expected = decoded.clone();
+                    if escape {
+                        source.extend_from_slice(b"\\n");
+                        expected.push(b'\n');
+                    }
+                    source.push(quote);
+                    let expected = vec![
+                        (Kind::String, 1, 1, expected, 0),
+                        (Kind::Eof, 1, 1, Vec::new(), 0),
+                    ];
+                    assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
+                    assert_eq!(tokens(&source, &[len / 2, source.len()]), Ok(expected));
+                }
+            }
         }
     }
 

@@ -457,6 +457,15 @@ fn captured_music_clock_keeps_compiled_track_anchors() {
             .remove(0);
         assert!(compiled.live_scene.is_none());
         assert_eq!(compiled.overlay_update_unit, SongLuaTimeUnit::Second);
+        assert_eq!(
+            compiled.overlay_capture_calibration_seconds.to_bits(),
+            (context.global_offset_seconds * timing.global_offset_rate()).to_bits(),
+        );
+        let runtime_tracks = deadsync_song_lua::gameplay::build_song_lua_overlay_update_tracks(
+            &compiled,
+            timing,
+            context.global_offset_seconds,
+        );
         let index = compiled
             .overlays
             .iter()
@@ -477,6 +486,15 @@ fn captured_music_clock_keeps_compiled_track_anchors() {
                 raw.to_bits(),
                 "track anchor at rate {rate}"
             );
+            let runtime_sample = runtime_tracks
+                .iter()
+                .find(|track| track.overlay_index == index && track.target == Target::X)
+                .unwrap()
+                .samples
+                .iter()
+                .find(|sample| sample.second.to_bits() == raw.to_bits())
+                .expect("calibrated playback retains the native capture frame exactly");
+            assert_eq!(runtime_sample.value, Update::F32(raw));
             assert_eq!(
                 sample.value,
                 Update::F32(raw),
@@ -500,6 +518,287 @@ fn captured_music_clock_keeps_compiled_track_anchors() {
                 "effect phase at rate {rate}"
             );
         }
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn captured_music_clock_keeps_player_mod_and_column_windows_aligned() {
+    use deadsync_gameplay::{SongLuaColumnTransformTarget, SongLuaEaseMaskTarget};
+    use deadsync_song_lua::{
+        SongLuaEaseTarget, SongLuaEaseWindow, SongLuaSpanMode, SongLuaTimeUnit,
+        gameplay::{
+            build_song_lua_column_offset_windows_for_player, build_song_lua_ease_windows_for_player,
+        },
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("sampled-windows.lua");
+    std::fs::write(
+        &entry,
+        r#"return Def.ActorFrame{InitCommand=function(self)
+            local player=SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+            local options=GAMESTATE:GetPlayerState(PLAYER_1):GetPlayerOptions('ModsLevel_Song')
+            local handler=player:GetChild('NoteField'):GetColumnActors()[1]:GetRotHandler()
+            handler:SetSplineMode('NoteColumnSplineMode_Offset')
+            local spline=handler:GetSpline()
+            spline:SetSize(1)
+            self:SetUpdateFunction(function(self)
+                local seconds=GAMESTATE:GetSongPosition():GetMusicSeconds()
+                player:x(seconds*10)
+                options:Drunk(seconds)
+                spline:SetPoint(1,{0,0,seconds*9})
+            end)
+        end}"#,
+    )
+    .unwrap();
+
+    // Irregular input frames make a shifted or frame-rounded window observable.
+    // Non-unit rates also exercise calibration expressed in music seconds.
+    let raw_times = [0.2_f32, 0.3, 0.475, 0.9, 1.2];
+    for (global, rate) in [(-0.008, 1.0), (-0.008, 1.7), (0.017, 0.5)] {
+        let mut context = precision_context(-0.042, -0.009, global, rate);
+        context.song_dir = dir.path().to_path_buf();
+        context.global_offset_seconds = global;
+        context
+            .song_timing
+            .as_mut()
+            .unwrap()
+            .set_global_offset_seconds_with_rate(global, rate);
+        let timing = context.song_timing.as_ref().unwrap();
+        let origin = timing.get_time_for_beat_exact(0.0);
+        context
+            .compile_clock_inputs
+            .push([f64::from(origin), 0.0, 0.0]);
+        let mut previous = origin;
+        for &raw in &raw_times {
+            context.compile_clock_inputs.push([
+                f64::from(raw),
+                f64::from(timing.get_song_position_with_rate(raw, rate).beat),
+                f64::from((raw - previous) / rate),
+            ]);
+            previous = raw;
+        }
+        let mut compiled =
+            deadsync_assets::song_lua::compile_song_lua_layers(&[&entry], 0, &context)
+                .unwrap()
+                .remove(0);
+        assert!(compiled.live_scene.is_none());
+
+        // An authored Second window is still offset at the gameplay boundary;
+        // only already-timed compiler samples need normalization before then.
+        compiled.eases.push(SongLuaEaseWindow {
+            approach_speed: None,
+            unit: SongLuaTimeUnit::Second,
+            start: 3.0,
+            limit: 0.5,
+            span_mode: SongLuaSpanMode::Len,
+            from: 12.0,
+            to: 24.0,
+            target: SongLuaEaseTarget::PlayerY,
+            easing: None,
+            player: Some(1),
+            sustain: None,
+            opt1: None,
+            opt2: None,
+        });
+        let (eases, unsupported) =
+            build_song_lua_ease_windows_for_player(&compiled, timing, 0, global, &[]);
+        assert_eq!(unsupported, 0);
+        let columns = build_song_lua_column_offset_windows_for_player(&compiled, timing, 0, global);
+        let assert_time = |actual: f32, expected: f32, label: &str| {
+            assert!(
+                (actual - expected).abs() < 0.000001,
+                "{label}: actual={actual:?}, expected={expected:?}, global={global}, rate={rate}"
+            );
+        };
+        for pair in raw_times.windows(2) {
+            let [raw, next] = [pair[0], pair[1]];
+            for (target, scale) in [
+                (SongLuaEaseMaskTarget::PlayerX, 10.0),
+                (SongLuaEaseMaskTarget::VisualDrunk, 1.0),
+            ] {
+                let window = eases
+                    .iter()
+                    .find(|window| {
+                        window.target == target && (window.from - raw * scale).abs() < 0.00001
+                    })
+                    .unwrap_or_else(|| panic!("missing {target:?} sample at {raw}, rate={rate}"));
+                assert_time(window.start_second, raw, "sampled ease start");
+                assert_time(window.end_second, next, "sampled ease end");
+            }
+            let column = columns
+                .iter()
+                .find(|window| {
+                    window.column == 0
+                        && window.target == SongLuaColumnTransformTarget::RotationZ
+                        && (window.from_y - raw * 9.0).abs() < 0.00001
+                })
+                .unwrap_or_else(|| panic!("missing column rotation at {raw}, rate={rate}"));
+            assert_time(column.start_second, raw, "sampled column start");
+            assert_time(column.end_second, next, "sampled column end");
+        }
+        let authored = eases
+            .iter()
+            .find(|window| window.target == SongLuaEaseMaskTarget::PlayerY)
+            .expect("authored seconds ease");
+        assert_time(authored.start_second, 3.0 - global * rate, "authored start");
+        assert_time(authored.end_second, 3.5 - global * rate, "authored end");
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn independent_screen_clock_advances_player_and_wrapper_queues() {
+    use deadsync_gameplay::SongLuaEaseMaskTarget;
+    use deadsync_song_lua::{
+        SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update,
+        gameplay::build_song_lua_ease_windows_for_player,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("independent-clocks.lua");
+    for startup in [true, false] {
+        std::fs::write(
+            &entry,
+            r#"return Def.ActorFrame{
+                OnCommand=function(self)
+                    local player=SCREENMAN:GetTopScreen():GetChild('PlayerP1')
+                    local actors={player,player:AddWrapperState(),
+                        player:GetChild('NoteField'):AddWrapperState(),self:GetChild('Probe')}
+                    for _,actor in ipairs(actors) do
+                        actor:x(0):addcommand('Continue',function(a)
+                            a:linear(0.375):x(100)
+                        end)
+                    end
+                    local started=false
+                    local function start()
+                        started=true
+                        for _,actor in ipairs(actors) do
+                            actor:linear(0.125):x(25):queuecommand('Continue')
+                        end
+                    end
+                    if STARTUP then start() end
+                    self:SetUpdateFunction(function()
+                        if not started and GAMESTATE:GetSongPosition():GetMusicSeconds()>=0.0625 then
+                            start()
+                        end
+                    end)
+                end,
+                Def.Quad{Name='Probe'},
+            }"#
+            .replace("STARTUP", if startup { "true" } else { "false" }),
+        )
+        .unwrap();
+        for split in [false, true] {
+            let mut context = precision_context(0.0, 0.0, 0.0, 1.0);
+            context.song_dir = dir.path().to_path_buf();
+            context.music_length_seconds = 0.5;
+            let timing = context.song_timing.as_ref().unwrap();
+            context.compile_clock_inputs = (0..=32)
+                .map(|frame| {
+                    let music = frame as f32 / 64.0;
+                    [
+                        f64::from(music),
+                        f64::from(timing.get_song_position(music).beat),
+                        if frame == 0 { 0.0 } else { 1.0 / 64.0 },
+                    ]
+                })
+                .collect();
+            if split {
+                context.compile_screen_actor_deltas = (0..=32)
+                    .map(|frame| if frame == 0 { 0.0 } else { 1.0 / 32.0 })
+                    .collect();
+            }
+            let compiled =
+                deadsync_assets::song_lua::compile_song_lua_layers(&[&entry], 0, &context)
+                    .unwrap()
+                    .remove(0);
+            assert!(compiled.live_scene.is_none());
+            // Both startup and callback-created queues have had 0.1875 music
+            // seconds to run. Screen actors have twice as much tween time only
+            // when the independent input is present. The queued Continue
+            // callback must also dispatch on its target actor's clock, including
+            // the default-clock case beyond the first segment's destination.
+            let raw = if startup { 0.1875 } else { 0.25 };
+            let expected_screen_x = if split { 75.0 } else { 37.5 };
+            let (windows, _) =
+                build_song_lua_ease_windows_for_player(&compiled, timing, 0, 0.0, &[]);
+            let player = windows
+                .iter()
+                .find(|window| {
+                    window.target == SongLuaEaseMaskTarget::PlayerX
+                        && (window.start_second - raw).abs() < 0.000001
+                })
+                .expect("sampled Player tween");
+            assert!(
+                (player.from - expected_screen_x).abs() < 0.0001,
+                "Player: startup={startup}, split={split}, actual={:?}",
+                player.from
+            );
+            for (name, frames) in [
+                (
+                    "Player wrapper",
+                    &compiled.player_actors[0].player_wrapper_frames,
+                ),
+                (
+                    "NoteField wrapper",
+                    &compiled.player_actors[0].note_field_frames,
+                ),
+            ] {
+                let frame = frames
+                    .iter()
+                    .rev()
+                    .find(|frame| frame.second <= raw)
+                    .unwrap();
+                assert_eq!(frame.wrappers.len(), 1, "{name}");
+                assert!(
+                    (frame.wrappers[0].x - expected_screen_x).abs() < 0.0001,
+                    "{name}: startup={startup}, split={split}, actual={:?}",
+                    frame.wrappers[0].x
+                );
+            }
+            let probe = compiled
+                .overlays
+                .iter()
+                .position(|a| a.name.as_deref() == Some("Probe"))
+                .unwrap();
+            let sample = compiled
+                .overlay_updates
+                .iter()
+                .filter(|track| track.overlay_index == probe && track.target == Target::X)
+                .flat_map(|track| &track.samples)
+                .filter(|sample| sample.time <= raw)
+                .max_by(|a, b| a.time.total_cmp(&b.time))
+                .expect("sampled foreground tween");
+            let Update::F32(x) = sample.value else {
+                panic!("foreground X sample")
+            };
+            assert!(
+                (x - 37.5).abs() < 0.0001,
+                "foreground: startup={startup}, split={split}, x={x}"
+            );
+        }
+    }
+}
+
+#[cfg(feature = "test-support")]
+#[test]
+fn independent_screen_clock_rejects_invalid_inputs() {
+    let dir = tempfile::tempdir().unwrap();
+    let entry = dir.path().join("invalid-screen-clock.lua");
+    std::fs::write(&entry, "return Def.Quad{}").unwrap();
+    for (deltas, message) in [
+        (vec![0.0], "screen actor deltas must align"),
+        (vec![0.0, f32::NAN], "screen actor deltas must be finite"),
+        (vec![0.0, -0.1], "screen actor deltas must be finite"),
+    ] {
+        let mut context = precision_context(0.0, 0.0, 0.0, 1.0);
+        context.song_dir = dir.path().to_path_buf();
+        context.compile_clock_inputs = vec![[0.0, 0.0, 0.0], [0.1, 0.3, 0.1]];
+        context.compile_screen_actor_deltas = deltas;
+        let error =
+            deadsync_assets::song_lua::compile_song_lua_layers(&[&entry], 0, &context).unwrap_err();
+        assert!(error.contains(message), "{error}");
     }
 }
 

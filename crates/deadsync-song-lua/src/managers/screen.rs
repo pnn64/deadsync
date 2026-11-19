@@ -15,6 +15,8 @@ type Shared = Arc<Mutex<Requests>>;
 pub(crate) struct Requests {
     pub gameplay_paused: bool,
     pub gameplay_pauses: Vec<bool>,
+    pub gameplay_lead_in: bool,
+    pub gameplay_clock_origin: Option<std::time::Instant>,
     pub gameplay_outro: bool,
     pub next: Option<String>,
     pub actor_names: Option<super::super::actors::ActorNames>,
@@ -55,6 +57,7 @@ impl SongRuntime {
             let mut state = self.screen.state.lock().unwrap();
             state.gameplay_paused = false;
             state.gameplay_pauses.clear();
+            state.gameplay_lead_in = true;
             state.gameplay_outro = false;
         }
         let globals = self.vm.rooted(self.screen.globals)?;

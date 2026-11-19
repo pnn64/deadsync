@@ -241,6 +241,7 @@ impl App {
         mut gs: gameplay::State,
         finish: PracticeInitFinish,
     ) -> Vec<Command> {
+        self.gameplay_live_textures.reset();
         let mut commands = Vec::new();
         let payload_ms = finish.payload_ms;
         crate::gameplay_runtime::sync_initial_scores(&mut gs);

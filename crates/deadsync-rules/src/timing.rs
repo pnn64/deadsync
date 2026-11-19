@@ -934,8 +934,25 @@ impl TimingData {
     #[inline(always)]
     #[must_use]
     pub fn cutoff_row_for_note_row(&self, cutoff_note_row: i32) -> usize {
-        self.row_to_beat
-            .partition_point(|beat| beat_to_note_row(*beat) < cutoff_note_row)
+        // In this range f32 represents the halfway point exactly. At a tie,
+        // an odd cutoff rounds down to the preceding (even) row.
+        if !(-8_388_607..=8_388_608).contains(&cutoff_note_row) {
+            return self
+                .row_to_beat
+                .partition_point(|&beat| beat_to_note_row(beat) < cutoff_note_row);
+        }
+        let halfway = cutoff_note_row as f32 - 0.5;
+        let limit = if cutoff_note_row & 1 == 0 {
+            halfway
+        } else {
+            halfway.next_up()
+        };
+        // NaN converts to row zero, so it sorts below a positive cutoff.
+        self.row_to_beat.partition_point(|&beat| {
+            (beat * ROWS_PER_BEAT as f32)
+                .partial_cmp(&limit)
+                .map_or(cutoff_note_row > 0, Ordering::is_lt)
+        })
     }
 
     #[must_use]
@@ -3603,6 +3620,42 @@ mod tests {
                 (!rows.is_empty()).then_some(0)
             );
             assert_eq!(timing.get_beat_for_row(0), rows.first().copied());
+        }
+    }
+
+    #[test]
+    fn cutoff_lookup_preserves_even_ties_nan_and_saturation() {
+        let cutoffs = [
+            i32::MIN,
+            -8_388_609,
+            -8_388_608,
+            -8_388_607,
+            -2,
+            -1,
+            0,
+            1,
+            2,
+            23,
+            24,
+            8_388_607,
+            8_388_608,
+            8_388_609,
+            i32::MAX,
+        ];
+        let mut beats = vec![f32::NEG_INFINITY, -0.0, f32::NAN, f32::INFINITY];
+        for cutoff in cutoffs {
+            let tie = ((f64::from(cutoff) - 0.5) / f64::from(ROWS_PER_BEAT)) as f32;
+            beats.extend([tie.next_down(), tie, tie.next_up()]);
+        }
+        beats.sort_by_key(|&beat| beat_to_note_row(beat));
+        let timing = TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &beats);
+        for cutoff in cutoffs {
+            let expected = beats.partition_point(|&beat| beat_to_note_row(beat) < cutoff);
+            assert_eq!(
+                timing.cutoff_row_for_note_row(cutoff),
+                expected,
+                "row {cutoff}"
+            );
         }
     }
 

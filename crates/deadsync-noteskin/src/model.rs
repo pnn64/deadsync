@@ -362,6 +362,8 @@ fn itg_animated_texture_key_str(key: &[u8]) -> &str {
 
 #[derive(Debug, Clone)]
 pub struct ItgResolvedModelLayer {
+    /// Identity of one parsed Model actor, shared by its material meshes only.
+    pub actor: Arc<()>,
     pub mesh: Arc<ModelMesh>,
     pub texture: ItgResolvedModelTexture,
     pub additive: Option<ItgResolvedModelTexture>,
@@ -404,6 +406,7 @@ pub struct ItgModelAutoRot {
 
 #[derive(Debug, Clone)]
 pub struct ItgModelSlotPlan {
+    pub actor: Option<Arc<()>>,
     pub sphere_mapped: bool,
     pub additive: Option<ItgResolvedModelTexture>,
     pub animation_length: f32,
@@ -440,6 +443,7 @@ impl ItgModelSlotPlan {
             (true, tex.uv_velocity)
         };
         Self {
+            actor: Some(layer.actor),
             sphere_mapped: layer.texture.sphere_mapped,
             additive: layer.additive,
             animation_length: layer.animation_length,
@@ -471,6 +475,7 @@ impl ItgModelSlotPlan {
     ) -> Self {
         let tex = texture.tex;
         Self {
+            actor: None,
             sphere_mapped: texture.sphere_mapped,
             additive: None,
             animation_length: tex.uv_cycle_seconds.unwrap_or(1.0),
@@ -958,6 +963,9 @@ pub fn itg_parse_milkshape_model_layers(
             return None;
         }
     }
+    // A separate declaration loading the same resource is still a separate
+    // Actor::Draw boundary; never derive this identity from the resource path.
+    let actor = Arc::new(());
     let mut layers = Vec::with_capacity(meshes.len());
     for mesh in meshes {
         let texture_with_flags = if mesh.material_index >= 0 {
@@ -999,6 +1007,7 @@ pub fn itg_parse_milkshape_model_layers(
                     .clone()
             });
         layers.push(ItgResolvedModelLayer {
+            actor: Arc::clone(&actor),
             animation_length,
             additive,
             mesh: Arc::new(ModelMesh {
@@ -1151,6 +1160,56 @@ mod tests {
     }
 
     #[test]
+    fn model_draw_identity_is_per_parsed_actor() {
+        let root = temp_model_root("actor-identity");
+        let path = root.join("model.txt");
+        fs::write(
+            &path,
+            include_str!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/itgmania-song-lua-micro/model-merged-meshes/model-merged-meshes.txt"
+            )),
+        )
+        .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "fixture".into(),
+            overrides: vec![],
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let load = || {
+            itg_parse_milkshape_model_layers(&data, &path, &path)
+                .unwrap()
+                .into_iter()
+                .map(|layer| {
+                    ItgModelSlotPlan::from_layer(
+                        layer,
+                        ModelDrawState::default(),
+                        Arc::from([]),
+                        ModelEffectState::default(),
+                        None,
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let first = load();
+        let second = load();
+        assert_eq!(first.len(), 2);
+        assert_eq!(second.len(), 2);
+        let first_actor = first[0].actor.as_ref().unwrap();
+        let second_actor = second[0].actor.as_ref().unwrap();
+        assert!(Arc::ptr_eq(first_actor, first[1].actor.as_ref().unwrap()));
+        assert!(Arc::ptr_eq(second_actor, second[1].actor.as_ref().unwrap()));
+        assert!(
+            !Arc::ptr_eq(first_actor, second_actor),
+            "separate Model actors loading the same resource keep separate pass boundaries"
+        );
+        assert!(Arc::ptr_eq(first_actor, first[1].clone().actor.as_ref().unwrap()));
+        fs::remove_file(path).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn mesh_sections_accept_optional_comment_headers() {
         let root = temp_model_root("mesh-optional-header");
         let path = root.join("model.txt");
@@ -1238,6 +1297,7 @@ mod tests {
     #[test]
     fn model_slot_plan_from_layer_honors_nomove_flags() {
         let layer = ItgResolvedModelLayer {
+            actor: Arc::new(()),
             animation_length: 1.0,
             additive: None,
             mesh: test_mesh(),

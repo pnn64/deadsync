@@ -15,6 +15,10 @@ function Actor:hidden(bHide)
     lua.ReportScriptError("hidden is deprecated, use visible instead. (used on " .. self:GetName() .. ")")
     self:visible(not bHide)
 end
+function Actor:player(p)
+    self:visible(GAMESTATE:IsHumanPlayer(p))
+    return self
+end
 function Actor:LyricCommand(side)
 	self:settext( Var "LyricText" )
 	self:draworder(102)

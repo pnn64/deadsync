@@ -69,6 +69,42 @@ fn target_passes_keep_order_and_reuse_capacity() {
 }
 
 #[test]
+fn cropped_rotated_sprite_keeps_the_native_uncropped_pivot() {
+    let metrics = Metrics::centered(854.0, 480.0);
+    let mut actor = sprite_actor(10.0, false);
+    if let actors::Actor::Sprite { offset, size, source, mask_dest, cropright, .. } = &mut actor {
+        *offset = [377.0, 240.0];
+        *size = [SizeSpec::Px(854.0), SizeSpec::Px(480.0)];
+        *source = actors::SpriteSource::static_texture("fixture");
+        *mask_dest = false;
+        *cropright = 0.5;
+    }
+    let frame = build_screen_with_texture_context(
+        &[actor], [0.0; 4], &metrics, &font::FontMap::default(), 0.0, &Textures,
+    );
+    assert_eq!(frame.sprite_instances.len(), 1);
+    let sprite = &frame.sprite_instances[0];
+    // Native 663525d, 666 chart 2, retained draw def-0013 at frame 1301.
+    // These clip vertices rotate the cropped local rectangle around the full
+    // sprite origin; rotating about the cropped center shifts every vertex.
+    let expected = [
+        [-1.199_504_6, 0.675_858_7],
+        [-1.004_302_9, -1.293_756_7],
+        [-0.019_495_19, -0.984_807_85],
+        [-0.214_696_88, 0.984_807_7],
+    ];
+    for (point, expected) in [[-0.5, 0.5], [-0.5, -0.5], [0.5, -0.5], [0.5, 0.5]].into_iter().zip(expected) {
+        let world = sprite_world_xy(sprite.center, sprite.size, sprite.rot_sin_cos, [0.0; 2], point);
+        let clip = [world[0] / 427.0, world[1] / 240.0];
+        for axis in 0..2 {
+            assert!((clip[axis] - expected[axis]).abs() < 2.0e-6, "{point:?}: {clip:?} != {expected:?}");
+        }
+    }
+    assert_eq!(sprite.uv_scale, [0.5, 1.0]);
+    assert_eq!(sprite.uv_offset, [0.0, 0.0]);
+}
+
+#[test]
 fn sprite_fade_handles_crop_cancellation_and_flips() {
     let metrics = Metrics {
         left: 0.0,

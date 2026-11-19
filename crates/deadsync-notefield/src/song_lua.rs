@@ -1,4 +1,3 @@
-use deadlib_present::actors::Actor;
 use deadsync_noteskin::ModelDrawState;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 
@@ -26,12 +25,35 @@ pub struct SongLuaPlayerTransformRequest {
     pub target_x: f32,
     pub target_y: f32,
     pub rotation_x_deg: f32,
+    pub rotation_y_deg: f32,
     pub rotation_z_deg: f32,
     pub skew_x: f32,
     pub skew_y: f32,
     pub zoom_x: f32,
     pub zoom_y: f32,
     pub zoom_z: f32,
+    /// Player Z, toward the camera. Native BeginDraw translates by it.
+    pub target_z: f32,
+    /// The Player's wrapper states (`AddWrapperState`), outermost first, as one
+    /// native screen-space matrix (Y down, origin at the top-left).
+    pub wrappers: Matrix4,
+}
+
+/// Map a native screen-space matrix (Y down, origin at the top-left) into the
+/// Y-up world space centered on the screen used by Player transforms.
+#[must_use]
+pub fn song_lua_screen_matrix_to_world(
+    matrix: Matrix4,
+    screen_width: f32,
+    screen_height: f32,
+) -> Matrix4 {
+    let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
+    let half = Vector3::new(0.5 * screen_width, 0.5 * screen_height, 0.0);
+    Matrix4::from_translation(Vector3::new(-half.x, half.y, 0.0))
+        * flip
+        * matrix
+        * flip
+        * Matrix4::from_translation(Vector3::new(half.x, -half.y, 0.0))
 }
 
 #[must_use]
@@ -54,57 +76,6 @@ pub const fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
     ])
 }
 
-#[inline(always)]
-fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
-    (x - pivot_x).mul_add(cos_y, pivot_x)
-}
-
-#[must_use]
-pub fn song_lua_player_y_fold_actor(mut actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
-    if !pivot_x.is_finite() || !rotation_y_deg.is_finite() || rotation_y_deg.abs() <= f32::EPSILON {
-        return actor;
-    }
-    // One cosine for the owned tree; mutate its existing storage so large Actor
-    // payloads do not travel through a by-value recursive call at every node.
-    song_lua_player_y_fold_actor_in_place(&mut actor, pivot_x, rotation_y_deg.to_radians().cos());
-    actor
-}
-
-fn song_lua_player_y_fold_actor_in_place(actor: &mut Actor, pivot_x: f32, cos_y: f32) {
-    match actor {
-        Actor::Sprite { offset, .. }
-        | Actor::Mesh { offset, .. }
-        | Actor::ReusableMesh { offset, .. }
-        | Actor::TexturedMesh { offset, .. }
-        | Actor::ReusableTexturedMesh { offset, .. }
-        | Actor::SharedFrame { offset, .. }
-        | Actor::RetainedFrame { offset, .. } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-        }
-        Actor::Text { offset, scale, .. } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            scale[0] *= cos_y;
-        }
-        Actor::Frame {
-            offset, children, ..
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            for child in children {
-                song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y);
-            }
-        }
-        Actor::Camera { children, .. } => {
-            for child in children {
-                song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y);
-            }
-        }
-        Actor::Shadow { child, .. } => song_lua_player_y_fold_actor_in_place(child, pivot_x, cos_y),
-        // Shared subtrees keep their established wrapper boundary.
-        Actor::SharedTransform { .. } | Actor::SharedCamera { .. }
-        | Actor::CameraPush { .. } | Actor::CameraPop => {}
-    }
-}
-
 #[must_use]
 pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) -> Option<Matrix4> {
     let SongLuaPlayerTransformRequest {
@@ -115,13 +86,19 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         target_x,
         target_y,
         rotation_x_deg,
+        rotation_y_deg,
         rotation_z_deg,
         skew_x,
         skew_y,
         zoom_x,
         zoom_y,
         zoom_z,
+        target_z,
+        wrappers,
     } = request;
+    if !target_z.is_finite() || !wrappers.is_finite() {
+        return None;
+    }
     if !screen_width.is_finite()
         || !screen_height.is_finite()
         || !screen_center_y.is_finite()
@@ -129,6 +106,7 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         || !target_x.is_finite()
         || !target_y.is_finite()
         || !rotation_x_deg.is_finite()
+        || !rotation_y_deg.is_finite()
         || !rotation_z_deg.is_finite()
         || !skew_x.is_finite()
         || !skew_y.is_finite()
@@ -142,6 +120,11 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         0.0
     } else {
         rotation_x_deg
+    };
+    let rotation_y_deg = if rotation_y_deg.abs() <= f32::EPSILON {
+        0.0
+    } else {
+        rotation_y_deg
     };
     let rotation_z_deg = if rotation_z_deg.abs() <= f32::EPSILON {
         0.0
@@ -176,6 +159,7 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
     let translate_x = target_x - playfield_center_x;
     let translate_y = screen_center_y - target_y;
     if rotation_x_deg.abs() <= f32::EPSILON
+        && rotation_y_deg.abs() <= f32::EPSILON
         && rotation_z_deg.abs() <= f32::EPSILON
         && skew_x.abs() <= f32::EPSILON
         && skew_y.abs() <= f32::EPSILON
@@ -184,22 +168,33 @@ pub fn song_lua_player_transform_matrix(request: SongLuaPlayerTransformRequest) 
         && (zoom_z - 1.0).abs() <= f32::EPSILON
         && translate_x.abs() <= f32::EPSILON
         && translate_y.abs() <= f32::EPSILON
+        && target_z.abs() <= f32::EPSILON
+        && wrappers == Matrix4::IDENTITY
     {
         return None;
     }
 
     let pivot_x = 0.5f32.mul_add(-screen_width, playfield_center_x);
     let pivot_y = 0.5f32.mul_add(screen_height, -screen_center_y);
-    // ITGmania actor transforms are authored in screen coordinates (Y down).
-    // This matrix is applied in DeadSync world space (Y up), so Z rotation and
-    // actor skews flip sign across the Y axis.
+    // RageMatrixRotationXYZ is Rx(-X) * Ry(-Y) * Rz(+Z) for column vectors
+    // in native screen coordinates. Conjugating by the Y flip into DeadSync
+    // world space gives Rx(+X) * Ry(-Y) * Rz(-Z), preserving rotation depth.
+    let rotation_y_deg = -rotation_y_deg;
     let rotation_z_deg = -rotation_z_deg;
     let skew_x = -skew_x;
     let skew_y = -skew_y;
+    // Actor::Draw begins the highest-index wrapper first, outside the Player.
+    let wrappers = if wrappers == Matrix4::IDENTITY {
+        Matrix4::IDENTITY
+    } else {
+        song_lua_screen_matrix_to_world(wrappers, screen_width, screen_height)
+    };
     Some(
-        Matrix4::from_translation(Vector3::new(translate_x, translate_y, 0.0))
+        wrappers
+            * Matrix4::from_translation(Vector3::new(translate_x, translate_y, target_z))
             * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
             * Matrix4::from_rotation_x(rotation_x_deg.to_radians())
+            * Matrix4::from_rotation_y(rotation_y_deg.to_radians())
             * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
             * song_lua_player_skew_x_matrix(skew_x)
             * song_lua_player_skew_y_matrix(skew_y)
@@ -213,13 +208,8 @@ mod tests {
     use super::{
         SongLuaPlayerTransformRequest, song_lua_player_skew_x_matrix,
         song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
-        song_lua_player_y_fold_actor,
     };
-    use deadlib_present::actors::{Actor, SizeSpec, TextContent};
-    use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
-    use deadlib_render_core::{BlendMode, MeshVertex, TexturedMeshVertex};
     use glam::{Mat4 as Matrix4, Vec3 as Vector3};
-    use std::sync::Arc;
 
     const SCREEN_WIDTH: f32 = 854.0;
     const SCREEN_HEIGHT: f32 = 480.0;
@@ -235,50 +225,21 @@ mod tests {
             target_x: PLAYFIELD_CENTER_X,
             target_y: SCREEN_CENTER_Y,
             rotation_x_deg: 0.0,
+            rotation_y_deg: 0.0,
             rotation_z_deg: 0.0,
             skew_x: 0.0,
             skew_y: 0.0,
             zoom_x: 1.0,
             zoom_y: 1.0,
             zoom_z: 1.0,
+            target_z: 0.0,
+            wrappers: Matrix4::IDENTITY,
         }
     }
 
     fn transform_point(matrix: Matrix4, local: [f32; 2]) -> [f32; 2] {
         let point = matrix.transform_point3(Vector3::new(local[0], local[1], 0.0));
         [point.x, point.y]
-    }
-
-    fn sprite(x: f32) -> Actor {
-        let mut actor = SpriteBuilder::solid();
-        actor.xy(x, 12.0);
-        actor.zoomx(5.0);
-        actor.zoomy(7.0);
-        actor.z(11);
-        actor.build(0)
-    }
-
-    fn text(x: f32) -> Actor {
-        let mut actor = TextBuilder::new();
-        actor.xy(x, 15.0);
-        actor.zoomx(2.0);
-        actor.zoomy(3.0);
-        actor.settext(TextContent::Static("fold"));
-        actor.z(12);
-        actor.build(0)
-    }
-
-    fn actor_x(actor: &Actor) -> f32 {
-        match actor {
-            Actor::Sprite { offset, .. }
-            | Actor::Text { offset, .. }
-            | Actor::Mesh { offset, .. }
-            | Actor::TexturedMesh { offset, .. }
-            | Actor::ReusableTexturedMesh { offset, .. }
-            | Actor::Frame { offset, .. }
-            | Actor::SharedFrame { offset, .. } => offset[0],
-            other => panic!("actor has no direct x offset: {other:?}"),
-        }
     }
 
     #[test]
@@ -289,6 +250,9 @@ mod tests {
         assert!(song_lua_player_transform_matrix(invalid).is_none());
         invalid = request();
         invalid.zoom_z = f32::INFINITY;
+        assert!(song_lua_player_transform_matrix(invalid).is_none());
+        invalid = request();
+        invalid.rotation_y_deg = f32::NAN;
         assert!(song_lua_player_transform_matrix(invalid).is_none());
     }
 
@@ -301,6 +265,60 @@ mod tests {
         let point = transform_point(matrix, [10.0, 0.0]);
         assert!(point[0].abs() <= 0.000_1);
         assert!((point[1] + 10.0).abs() <= 0.000_1);
+    }
+
+    #[test]
+    fn player_rotation_y_preserves_depth_and_uses_field_pivot() {
+        let mut request = request();
+        request.playfield_center_x = 300.0;
+        request.target_x = 325.0;
+        request.target_y = 220.0;
+        request.target_z = 40.0;
+        request.rotation_y_deg = 90.0;
+        let matrix = song_lua_player_transform_matrix(request)
+            .expect("Y rotation must produce a full Player matrix");
+        let pivot = Vector3::new(300.0 - SCREEN_WIDTH / 2.0, 0.0, 0.0);
+        let destination = pivot + Vector3::new(25.0, 20.0, 40.0);
+        // RageMatrixRotationY(+90) sends native +X toward the camera (+Z)
+        // and native +Z toward -X. A cosine-only fold loses both depth terms.
+        for (point, expected) in [
+            (pivot, destination),
+            (pivot + Vector3::X * 32.0, destination + Vector3::Z * 32.0),
+            (pivot + Vector3::Z * 32.0, destination - Vector3::X * 32.0),
+        ] {
+            let actual = matrix.transform_point3(point);
+            assert!(
+                (actual - expected).abs().max_element() < 0.000_1,
+                "point {point}: {actual} vs {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn player_xyz_rotation_matches_native_three_dimensional_basis() {
+        let mut request = request();
+        request.rotation_x_deg = 30.0;
+        request.rotation_y_deg = 60.0;
+        request.rotation_z_deg = 90.0;
+        let matrix = song_lua_player_transform_matrix(request).unwrap();
+        // Closed-form columns of ITGmania RageMatrixRotationXYZ(30, 60, 90),
+        // conjugated by the screen/world Y flip. Using 32-unit basis vectors
+        // catches the missing Y-axis depth and combined XYZ rotation order.
+        let root_three = 3.0_f32.sqrt();
+        for (axis, expected) in [
+            (Vector3::X, Vector3::new(0.0, -16.0 * root_three, -16.0)),
+            (Vector3::Y, Vector3::new(16.0, -8.0 * root_three, 24.0)),
+            (
+                Vector3::Z,
+                Vector3::new(-16.0 * root_three, -8.0, 8.0 * root_three),
+            ),
+        ] {
+            let actual = matrix.transform_vector3(axis * 32.0);
+            assert!(
+                (actual - expected).abs().max_element() < 0.000_1,
+                "axis {axis}: {actual} vs {expected}"
+            );
+        }
     }
 
     #[test]
@@ -339,7 +357,24 @@ mod tests {
     }
 
     #[test]
-    fn player_transform_combined_order_matches_legacy_matrix() {
+    fn player_transform_translates_z_and_applies_wrappers_outside() {
+        let mut request = request();
+        request.target_z = 40.0;
+        let matrix = song_lua_player_transform_matrix(request).expect("Z alone moves the Player");
+        let origin = matrix.transform_point3(Vector3::ZERO);
+        assert!((origin - Vector3::new(0.0, 0.0, 40.0)).length() <= 0.000_1, "{origin}");
+
+        // A native wrapper (Y down, top-left origin) zooms Z outside the
+        // Player's own translation, then moves right and down the screen.
+        request.wrappers = Matrix4::from_translation(Vector3::new(100.0, 30.0, 0.0))
+            * Matrix4::from_scale(Vector3::new(1.0, 1.0, 2.0));
+        let matrix = song_lua_player_transform_matrix(request).expect("wrapped Player");
+        let origin = matrix.transform_point3(Vector3::ZERO);
+        assert!((origin - Vector3::new(100.0, -30.0, 80.0)).length() <= 0.000_1, "{origin}");
+    }
+
+    #[test]
+    fn player_transform_combined_order_matches_native_xyz() {
         let request = SongLuaPlayerTransformRequest {
             screen_width: 1000.0,
             screen_height: 600.0,
@@ -348,18 +383,22 @@ mod tests {
             target_x: 325.0,
             target_y: 220.0,
             rotation_x_deg: 30.0,
+            rotation_y_deg: 20.0,
             rotation_z_deg: 40.0,
             skew_x: 0.2,
             skew_y: -0.3,
             zoom_x: 1.2,
             zoom_y: 0.8,
             zoom_z: 1.5,
+            target_z: 0.0,
+            wrappers: Matrix4::IDENTITY,
         };
         let actual = song_lua_player_transform_matrix(request)
             .expect("combined transform should produce a player matrix");
         let expected = Matrix4::from_translation(Vector3::new(25.0, 40.0, 0.0))
             * Matrix4::from_translation(Vector3::new(-200.0, 40.0, 0.0))
             * Matrix4::from_rotation_x(30.0_f32.to_radians())
+            * Matrix4::from_rotation_y(-20.0_f32.to_radians())
             * Matrix4::from_rotation_z(-40.0_f32.to_radians())
             * song_lua_player_skew_x_matrix(-0.2)
             * song_lua_player_skew_y_matrix(0.3)
@@ -375,263 +414,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn player_y_fold_preserves_sprite_fields_and_folds_x() {
-        let actor = song_lua_player_y_fold_actor(sprite(120.0), 100.0, 60.0);
-        let Actor::Sprite {
-            offset, scale, z, ..
-        } = actor
-        else {
-            panic!("fold should preserve the sprite variant");
-        };
-        assert!((offset[0] - 110.0).abs() <= 0.000_1);
-        assert_eq!(offset[1], 12.0);
-        assert_eq!(scale, [5.0, 7.0]);
-        assert_eq!(z, 11);
-    }
-
-    #[test]
-    fn player_y_fold_scales_text_x_only() {
-        let actor = song_lua_player_y_fold_actor(text(120.0), 100.0, 60.0);
-        let Actor::Text {
-            offset,
-            scale,
-            content,
-            z,
-            ..
-        } = actor
-        else {
-            panic!("fold should preserve the text variant");
-        };
-        assert!((offset[0] - 110.0).abs() <= 0.000_1);
-        assert!((scale[0] - 1.0).abs() <= 0.000_1);
-        assert_eq!(scale[1], 3.0);
-        assert_eq!(content.as_str(), "fold");
-        assert_eq!(z, 12);
-    }
-
-    #[test]
-    fn player_y_fold_preserves_mesh_and_textured_mesh_payloads() {
-        let mesh_vertices: Arc<[MeshVertex]> = Arc::from([MeshVertex {
-            pos: [1.0, 2.0],
-            color: [0.1, 0.2, 0.3, 0.4],
-        }]);
-        let mesh = Actor::Mesh {
-            align: [0.25, 0.75],
-            offset: [140.0, 17.0],
-            size: [SizeSpec::Px(31.0), SizeSpec::Fill],
-            tint: [0.9, 0.8, 0.7, 0.6],
-            vertices: Arc::clone(&mesh_vertices),
-            visible: false,
-            blend: BlendMode::Add,
-            z: -7,
-        };
-        let Actor::Mesh {
-            align,
-            offset,
-            size,
-            tint,
-            vertices,
-            visible,
-            blend,
-            z,
-        } = song_lua_player_y_fold_actor(mesh, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the mesh variant");
-        };
-        assert_eq!(align, [0.25, 0.75]);
-        assert!((offset[0] - 120.0).abs() <= 0.000_1);
-        assert_eq!(offset[1], 17.0);
-        assert!(matches!(size[0], SizeSpec::Px(31.0)));
-        assert!(matches!(size[1], SizeSpec::Fill));
-        assert_eq!(tint, [0.9, 0.8, 0.7, 0.6]);
-        assert!(Arc::ptr_eq(&vertices, &mesh_vertices));
-        assert!(!visible);
-        assert_eq!(blend, BlendMode::Add);
-        assert_eq!(z, -7);
-
-        let local_transform = Matrix4::from_translation(Vector3::new(3.0, 5.0, 7.0))
-            * Matrix4::from_scale(Vector3::new(2.0, 4.0, 6.0));
-        let texture: Arc<str> = Arc::from("fold-texture");
-        let textured_vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex {
-            normal: [0.0; 4],
-            pos: [8.0, 9.0, 10.0],
-            uv: [0.2, 0.6],
-            color: [0.9, 0.8, 0.7, 0.6],
-            tex_matrix_scale: [1.25, 0.75],
-        }]);
-        let textured_mesh = Actor::TexturedMesh {
-            environment: None,
-            align: [0.1, 0.9],
-            offset: [140.0, 23.0],
-            world_z: 3.5,
-            size: [SizeSpec::Fill, SizeSpec::Px(47.0)],
-            local_transform,
-            texture: Arc::clone(&texture).into(),
-            tint: [0.11, 0.22, 0.33, 0.44],
-            glow: [0.55, 0.66, 0.77, 0.88],
-            vertices: Arc::clone(&textured_vertices),
-            geom_cache_key: 73,
-            uv_scale: [1.5, 2.5],
-            uv_offset: [0.15, 0.25],
-            uv_tex_shift: [0.35, 0.45],
-            depth_test: true,
-            depth_write: true,
-            depth_test_on_fail: false,
-            clear_depth: false,
-            clear_depth_after: false,
-            cull_mode: deadlib_render_core::CullMode::Back,
-            visible: false,
-            blend: BlendMode::Multiply,
-            z: -12,
-        };
-        let Actor::TexturedMesh {
-            environment: None,
-            align,
-            offset,
-            world_z,
-            size,
-            local_transform: folded_transform,
-            texture: deadlib_present::actors::MeshTexture::Key(folded_texture),
-            tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            depth_write,
-            depth_test_on_fail,
-            cull_mode,
-            visible,
-            blend,
-            z,
-            clear_depth: false,
-            clear_depth_after: false,
-        } = song_lua_player_y_fold_actor(textured_mesh, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the textured-mesh variant");
-        };
-        assert_eq!(align, [0.1, 0.9]);
-        assert!((offset[0] - 120.0).abs() <= 0.000_1);
-        assert_eq!(offset[1], 23.0);
-        assert_eq!(world_z, 3.5);
-        assert!(matches!(size[0], SizeSpec::Fill));
-        assert!(matches!(size[1], SizeSpec::Px(47.0)));
-        assert_eq!(folded_transform, local_transform);
-        assert!(Arc::ptr_eq(&folded_texture, &texture));
-        assert_eq!(tint, [0.11, 0.22, 0.33, 0.44]);
-        assert_eq!(glow, [0.55, 0.66, 0.77, 0.88]);
-        assert!(Arc::ptr_eq(&vertices, &textured_vertices));
-        assert_eq!(geom_cache_key, 73);
-        assert_eq!(uv_scale, [1.5, 2.5]);
-        assert_eq!(uv_offset, [0.15, 0.25]);
-        assert_eq!(uv_tex_shift, [0.35, 0.45]);
-        assert!(depth_test);
-        assert!(depth_write);
-        assert!(!depth_test_on_fail);
-        assert_eq!(cull_mode, deadlib_render_core::CullMode::Back);
-        assert!(!visible);
-        assert_eq!(blend, BlendMode::Multiply);
-        assert_eq!(z, -12);
-    }
-
-    #[test]
-    fn player_y_fold_recurses_owned_children_but_not_shared_children() {
-        let owned = Actor::Frame {
-            align: [0.5; 2],
-            offset: [120.0, 0.0],
-            size: [SizeSpec::Px(0.0); 2],
-            children: vec![sprite(140.0)],
-            background: None,
-            z: 0,
-        };
-        let Actor::Frame {
-            offset, children, ..
-        } = song_lua_player_y_fold_actor(owned, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the frame variant");
-        };
-        assert!((offset[0] - 110.0).abs() <= 0.000_1);
-        assert!((actor_x(&children[0]) - 120.0).abs() <= 0.000_1);
-
-        let shared_children: Arc<[Actor]> = Arc::from(vec![sprite(140.0)]);
-        let shared = Actor::SharedFrame {
-            align: [0.5; 2],
-            offset: [120.0, 0.0],
-            size: [SizeSpec::Px(0.0); 2],
-            children: Arc::clone(&shared_children),
-            background: None,
-            z: 0,
-            tint: [1.0; 4],
-            blend: None,
-        };
-        let Actor::SharedFrame {
-            offset, children, ..
-        } = song_lua_player_y_fold_actor(shared, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the shared-frame variant");
-        };
-        assert!((offset[0] - 110.0).abs() <= 0.000_1);
-        assert!(Arc::ptr_eq(&children, &shared_children));
-        assert_eq!(actor_x(&children[0]), 140.0);
-    }
-
-    #[test]
-    fn player_y_fold_recurses_camera_and_shadow_but_keeps_camera_scope_markers() {
-        let camera = Actor::Camera {
-            view_proj: Matrix4::IDENTITY,
-            children: vec![Actor::Shadow {
-                len: [1.0, -1.0],
-                color: [0.0, 0.0, 0.0, 0.5],
-                child: Box::new(sprite(140.0)),
-            }],
-        };
-        let Actor::Camera {
-            view_proj,
-            children,
-        } = song_lua_player_y_fold_actor(camera, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the camera variant");
-        };
-        assert_eq!(view_proj, Matrix4::IDENTITY);
-        let Actor::Shadow { child, .. } = &children[0] else {
-            panic!("fold should preserve the shadow wrapper");
-        };
-        assert!((actor_x(child) - 120.0).abs() <= 0.000_1);
-
-        let push = Actor::CameraPush {
-            view_proj: Matrix4::from_scale(Vector3::splat(2.0)),
-        };
-        let Actor::CameraPush { view_proj } = song_lua_player_y_fold_actor(push, 100.0, 60.0)
-        else {
-            panic!("fold should preserve the camera-push variant");
-        };
-        assert_eq!(view_proj, Matrix4::from_scale(Vector3::splat(2.0)));
-        assert!(matches!(
-            song_lua_player_y_fold_actor(Actor::CameraPop, 100.0, 60.0),
-            Actor::CameraPop
-        ));
-    }
-
-    #[test]
-    fn player_y_fold_ignores_zero_and_nonfinite_inputs() {
-        assert_eq!(
-            actor_x(&song_lua_player_y_fold_actor(sprite(120.0), 100.0, 0.0)),
-            120.0
-        );
-        assert_eq!(
-            actor_x(&song_lua_player_y_fold_actor(sprite(120.0), f32::NAN, 60.0)),
-            120.0
-        );
-        assert_eq!(
-            actor_x(&song_lua_player_y_fold_actor(
-                sprite(120.0),
-                100.0,
-                f32::INFINITY,
-            )),
-            120.0
-        );
-    }
 }

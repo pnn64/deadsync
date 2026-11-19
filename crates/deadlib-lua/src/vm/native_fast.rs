@@ -30,33 +30,6 @@ impl Vm {
             self.registers[call] = table.get(self.registers[call + 2]);
             return Some(1);
         }
-        if count != 0
-            && let Value::Number(x) = self.registers[call + 1]
-            && let Some(result) = Self::math_unary(id, x)
-        {
-            self.registers[call] = Value::Number(result);
-            return Some(1);
-        }
-        if matches!(id, 43 | 44)
-            && count != 0
-            && let Some(args) = self.registers.get(call + 1..call + 1 + count)
-            && let Value::Number(mut best) = args[0]
-        {
-            for &value in &args[1..] {
-                let Value::Number(number) = value else {
-                    return None;
-                };
-                if if id == 43 {
-                    number < best
-                } else {
-                    number > best
-                } {
-                    best = number;
-                }
-            }
-            self.registers[call] = Value::Number(best);
-            return Some(1);
-        }
         // Additional arguments, number-to-string coercion, and errors use
         // ordinary dispatch. An empty string.byte result has zero values.
         if count == 1
@@ -99,5 +72,32 @@ impl Vm {
             };
         }
         None
+    }
+
+    pub(super) fn try_fast_math(&mut self, id: u64, call: usize, count: usize) -> Option<usize> {
+        if count == 0 || !self.sort_fast_context() {
+            return None;
+        }
+        let Value::Number(mut result) = self.registers[call + 1] else {
+            return None;
+        };
+        if matches!(id, 43 | 44) {
+            for &value in self.registers.get(call + 2..call + 1 + count)? {
+                let Value::Number(number) = value else {
+                    return None;
+                };
+                if if id == 43 {
+                    number < result
+                } else {
+                    number > result
+                } {
+                    result = number;
+                }
+            }
+        } else {
+            result = Self::math_unary(id, result)?;
+        }
+        self.registers[call] = Value::Number(result);
+        Some(1)
     }
 }

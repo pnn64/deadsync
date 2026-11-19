@@ -143,11 +143,8 @@ impl Spec {
         if self.literal_len != 0 {
             return self.literal(false, memory);
         }
-        let len = bytes
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(bytes.len())
-            .min(self.precision.unwrap_or(usize::MAX));
+        let limit = bytes.len().min(self.precision.unwrap_or(usize::MAX));
+        let len = bytes[..limit].iter().position(|&b| b == 0).unwrap_or(limit);
         self.pad(copy(memory, &bytes[..len])?, 0, false, memory)
     }
     pub fn character(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
@@ -324,25 +321,37 @@ fn fail(message: &'static str) -> Error {
 }
 
 pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) -> Result<(), Error> {
-    let size = bytes.iter().try_fold(2usize, |size, byte| {
-        size.checked_add(match byte {
-            0 => 4,
-            b'"' | b'\\' | b'\n' | b'\r' => 2,
-            _ => 1,
+    let unescaped = bytes.len().checked_add(2).ok_or_else(Error::memory)?;
+    // A 4 KiB block adds at most 12 KiB, which fits in the narrow sum.
+    let size = bytes
+        .chunks(4096)
+        .try_fold(unescaped, |size, block| {
+            let extra: u16 = block
+                .iter()
+                .map(|&byte| match byte {
+                    0 => 3,
+                    b'"' | b'\\' | b'\n' | b'\r' => 1,
+                    _ => 0,
+                })
+                .sum();
+            size.checked_add(usize::from(extra))
         })
-        .ok_or_else(Error::memory)
-    })?;
+        .ok_or_else(Error::memory)?;
     memory.reserve(out, size)?;
     out.push(b'"');
-    for &c in bytes {
-        match c {
-            b'"' | b'\\' | b'\n' => {
-                out.push(b'\\');
-                out.push(c);
+    if size == unescaped {
+        out.extend_from_slice(bytes);
+    } else {
+        for &c in bytes {
+            match c {
+                b'"' | b'\\' | b'\n' => {
+                    out.push(b'\\');
+                    out.push(c);
+                }
+                b'\r' => out.extend_from_slice(b"\\r"),
+                0 => out.extend_from_slice(b"\\000"),
+                _ => out.push(c),
             }
-            b'\r' => out.extend_from_slice(b"\\r"),
-            0 => out.extend_from_slice(b"\\000"),
-            _ => out.push(c),
         }
     }
     out.push(b'"');

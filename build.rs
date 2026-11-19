@@ -32,10 +32,14 @@ fn configure_windows_stack() {
     // frame, especially in debug builds. Windows binaries default to a 1 MiB
     // stack reserve, which is smaller than the reserve we effectively get on
     // Unix and can overflow while entering gameplay through a window callback.
-    match target_env.as_str() {
-        "msvc" => println!("cargo:rustc-link-arg-bins=/STACK:{STACK_RESERVE_BYTES}"),
-        "gnu" => println!("cargo:rustc-link-arg-bins=-Wl,--stack,{STACK_RESERVE_BYTES}"),
-        _ => println!("cargo:rustc-link-arg-bins=/STACK:{STACK_RESERVE_BYTES}"),
+    // The custom full-song replay tests construct the same gameplay state on
+    // their main thread, so they need the same reserve as the game binary.
+    let argument = match target_env.as_str() {
+        "gnu" => format!("-Wl,--stack,{STACK_RESERVE_BYTES}"),
+        _ => format!("/STACK:{STACK_RESERVE_BYTES}"),
+    };
+    for target in ["bins", "tests"] {
+        println!("cargo:rustc-link-arg-{target}={argument}");
     }
 }
 

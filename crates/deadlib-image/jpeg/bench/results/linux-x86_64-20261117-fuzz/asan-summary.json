@@ -1,0 +1,55 @@
+{
+  "scope": "Feedback from native image crates only. Harnesses/reference crates retain ASan but no SanitizerCoverage. Native-crate std/alloc monomorphizations can contribute feedback. This is not source-only coverage or conformance proof.",
+  "campaigns": [
+    {
+      "dispatch": "avx2",
+      "rustflags": "-Csave-temps",
+      "cpu_avx2": true,
+      "runs": 200000,
+      "fuzz_seconds": 2317,
+      "peak_rss_mib": 489,
+      "initial": {
+        "cov": 3479,
+        "features": 10722,
+        "corpus": 371
+      },
+      "final": {
+        "cov": 4151,
+        "features": 14880,
+        "corpus": 1436
+      },
+      "crashes": 0,
+      "binary_sha256": "c2b97819181fc623bfdda4f302ed95c1af57ecb7e1264045f1f338dba27d9955",
+      "seed_sha256": "9a3419f5144e634f7c7023c299212c494981a606a1741d040c0aba62a1461a2e",
+      "isolation_verified": true,
+      "final_source_hashes_verified": true,
+      "sources_match_repository_now": true,
+      "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)"
+    },
+    {
+      "dispatch": "portable",
+      "rustflags": "-Csave-temps --cfg deadlib_image_jpeg_portable",
+      "cpu_avx2": true,
+      "runs": 200000,
+      "fuzz_seconds": 2613,
+      "peak_rss_mib": 484,
+      "initial": {
+        "cov": 3917,
+        "features": 11792,
+        "corpus": 371
+      },
+      "final": {
+        "cov": 4680,
+        "features": 18540,
+        "corpus": 1445
+      },
+      "crashes": 0,
+      "binary_sha256": "b99d44f0ad12b6734adf62c0b1e099a9b9fb3865ee02ca5efa75e4d7cd92f503",
+      "seed_sha256": "9a3419f5144e634f7c7023c299212c494981a606a1741d040c0aba62a1461a2e",
+      "isolation_verified": true,
+      "final_source_hashes_verified": true,
+      "sources_match_repository_now": true,
+      "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)"
+    }
+  ]
+}

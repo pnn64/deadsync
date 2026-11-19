@@ -319,21 +319,43 @@ pub(super) fn font(
     call: &mut HostCall<'_>,
     actor: TableId,
 ) -> Result<Option<(&'static str, PathBuf)>, Error> {
-    let mut font = None;
-    if let Some(name) = assets::field(call, actor, b"Font")? {
+    // BitmapText::LoadFromNode resolves Font and legacy File paths before
+    // looking up the first present attribute as a theme font name. In
+    // particular, an existing File path takes precedence over a Font alias.
+    let mut theme_name = None;
+    for key in [b"Font".as_slice(), b"File"] {
+        let name = if key == b"File" {
+            // XNodeLuaValue uses lua_tolstring: non-string scalar attributes
+            // become empty strings; tables are children, not attributes.
+            // Keep lookup errors visible rather than treating them as absence.
+            let key = call.intern_static(b"File")?;
+            let value = call.table_get(Value::Table(actor), key)?;
+            match value {
+                Value::Nil | Value::Table(_) => None,
+                Value::String(_) | Value::Number(_) => Some(assets::text(call, value)?),
+                _ => Some(String::new()),
+            }
+        } else {
+            assets::field(call, actor, key)?
+        };
+        let Some(name) = name else {
+            continue;
+        };
         let resolved = match assets::resolve(call, actor, &name) {
             Err(e) if e.kind() == ErrorKind::Runtime => None,
             result => result?,
         };
-        font = if let Some(path) = resolved {
-            Some((crate::bitmap_font::song_lua_font_name(&path), path))
-        } else if crate::bitmap_font::song_lua_uses_builtin_theme_font(&name) {
-            Some(("miso", PathBuf::from("assets/fonts/miso/_miso light.ini")))
-        } else {
-            None
-        };
+        if let Some(path) = resolved {
+            return Ok(Some((crate::bitmap_font::song_lua_font_name(&path), path)));
+        }
+        if theme_name.is_none() {
+            theme_name = Some(name);
+        }
     }
-    Ok(font)
+    Ok(theme_name.and_then(|name| {
+        crate::bitmap_font::song_lua_builtin_theme_font(&name)
+            .map(|(name, path)| (name, PathBuf::from(path)))
+    }))
 }
 pub(super) fn read(call: &mut HostCall<'_>, actor: TableId) -> Result<BitmapText, Error> {
     let font = font(call, actor)?;

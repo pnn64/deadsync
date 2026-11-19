@@ -55,6 +55,9 @@ struct DrawItem {
     blend: BlendMode,
     camera: u8,
     kind: DrawKind,
+    vertex_color_encoding: actors::VertexColorEncoding,
+    // Sprite shadow tint semantics survive conversion to mesh geometry.
+    sprite_shadow: bool,
 }
 
 impl DrawItem {
@@ -73,6 +76,8 @@ impl DrawItem {
             blend: BlendMode::Alpha,
             camera: 0,
             kind: DrawKind::Sprite,
+            vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: true,
         }
     }
 }
@@ -110,6 +115,7 @@ struct FrameBuilder {
     items: Vec<DrawItem>,
     meshes: Vec<Option<MeshPayload>>,
     textured_meshes: Vec<Option<TexturedMeshPayload>>,
+    has_encoded_vertex_colors: bool,
 }
 
 impl FrameBuilder {
@@ -122,6 +128,7 @@ impl FrameBuilder {
         self.items.clear();
         self.meshes.clear();
         self.textured_meshes.clear();
+        self.has_encoded_vertex_colors = false;
     }
 
     fn reserve(&mut self, additional: usize) {
@@ -129,6 +136,7 @@ impl FrameBuilder {
     }
 
     fn append_retained(&mut self, cached: &Self, sprite_start: u32, order_counter: &mut u32) {
+        self.has_encoded_vertex_colors |= cached.has_encoded_vertex_colors;
         let mesh_start = saturating_u32(self.meshes.len());
         let textured_mesh_start = saturating_u32(self.textured_meshes.len());
         self.meshes.extend(cached.meshes.iter().cloned());
@@ -156,6 +164,16 @@ impl FrameBuilder {
         self.items.swap(left, right);
     }
 
+    fn encode_vertex_colors(&mut self, start: usize, encoding: actors::VertexColorEncoding) {
+        if encoding == actors::VertexColorEncoding::Float {
+            return;
+        }
+        self.has_encoded_vertex_colors = true;
+        for item in &mut self.items[start..] {
+            item.vertex_color_encoding = encoding;
+        }
+    }
+
     #[inline(always)]
     fn push_sprite(
         &mut self,
@@ -174,6 +192,8 @@ impl FrameBuilder {
             blend,
             camera,
             kind: DrawKind::Sprite,
+            vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: true,
         });
     }
 
@@ -197,6 +217,8 @@ impl FrameBuilder {
             blend,
             camera,
             kind: DrawKind::Mesh,
+            vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: false,
         });
     }
 
@@ -220,6 +242,8 @@ impl FrameBuilder {
             blend,
             camera,
             kind: DrawKind::TexturedMesh,
+            vertex_color_encoding: actors::VertexColorEncoding::Float,
+            sprite_shadow: false,
         });
     }
 
@@ -372,6 +396,8 @@ impl FrameBuilder {
             camera,
             kind,
             payload_index,
+            vertex_color_encoding: old.vertex_color_encoding,
+            sprite_shadow: old.sprite_shadow,
         };
     }
 
@@ -1352,6 +1378,11 @@ where
         sequence.base_camera = base_camera;
     }
 
+    pack_draw_vertex_colors(
+        &mut builder,
+        &mut sprite_instances,
+        &mut scratch.recycled_text_mesh_vertices,
+    );
     let sort_fallback = !builder
         .items
         .windows(2)
@@ -5315,6 +5346,8 @@ fn capture_retained_frame(
             }
         };
         item.order = 0;
+        cached_builder.has_encoded_vertex_colors |=
+            item.vertex_color_encoding != actors::VertexColorEncoding::Float;
         cached_builder.items.push(item);
     }
     Some(CachedRetainedFrame {
@@ -5657,23 +5690,41 @@ fn push_shadow_objects_for_range(
                     .expect("draw item references live textured-mesh payload");
                 let mut instance = source.instance;
                 let mut shadow_tint = color;
-                shadow_tint[0] *= instance.tint[0];
-                shadow_tint[1] *= instance.tint[1];
-                shadow_tint[2] *= instance.tint[2];
+                let native_sprite =
+                    item.vertex_color_encoding == actors::VertexColorEncoding::RageVColor;
+                if !native_sprite && !item.sprite_shadow {
+                    shadow_tint[0] *= instance.tint[0];
+                    shadow_tint[1] *= instance.tint[1];
+                    shadow_tint[2] *= instance.tint[2];
+                }
                 shadow_tint[3] *= instance.tint[3];
                 instance.tint = shadow_tint;
                 instance.set_transform(t_world * instance.transform());
-                let vertices = match &source.vertices {
-                    renderer::TexturedMeshVertices::Shared(vertices) => {
-                        renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
+                let vertices = if native_sprite {
+                    let mut vertices = take_recycled_text_mesh_vertices(recycled_vertices);
+                    vertices.extend_from_slice(&source.vertices);
+                    // Sprite::DrawTexture uses the first corner's diffuse alpha
+                    // for all four shadow corners, separately for each fade quad.
+                    for quad in vertices.chunks_mut(6) {
+                        let alpha = quad[0].color[3];
+                        for vertex in quad {
+                            vertex.color = [1.0, 1.0, 1.0, alpha];
+                        }
                     }
-                    renderer::TexturedMeshVertices::Reusable(vertices) => {
-                        renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
-                    }
-                    renderer::TexturedMeshVertices::Transient(vertices) => {
-                        let mut copy = take_recycled_text_mesh_vertices(recycled_vertices);
-                        copy.extend_from_slice(vertices);
-                        renderer::TexturedMeshVertices::Transient(copy)
+                    renderer::TexturedMeshVertices::Transient(vertices)
+                } else {
+                    match &source.vertices {
+                        renderer::TexturedMeshVertices::Shared(vertices) => {
+                            renderer::TexturedMeshVertices::Shared(Arc::clone(vertices))
+                        }
+                        renderer::TexturedMeshVertices::Reusable(vertices) => {
+                            renderer::TexturedMeshVertices::Reusable(Arc::clone(vertices))
+                        }
+                        renderer::TexturedMeshVertices::Transient(vertices) => {
+                            let mut copy = take_recycled_text_mesh_vertices(recycled_vertices);
+                            copy.extend_from_slice(vertices);
+                            renderer::TexturedMeshVertices::Transient(copy)
+                        }
                     }
                 };
                 out.push_textured_mesh(
@@ -5685,17 +5736,23 @@ fn push_shadow_objects_for_range(
                     TexturedMeshPayload {
                         instance,
                         vertices,
-                        geom_cache_key: source.geom_cache_key,
+                        geom_cache_key: if native_sprite {
+                            renderer::INVALID_TMESH_CACHE_KEY
+                        } else {
+                            source.geom_cache_key
+                        },
                         depth_test: source.depth_test,
                         depth_write: source.depth_write,
                         depth_test_on_fail: source.depth_test_on_fail,
                         clear_depth: source.clear_depth,
                         clear_depth_after: source.clear_depth_after,
-                        sampler: None,
+                        sampler: source.sampler,
                     },
                 );
             }
         }
+        out.items.last_mut().expect("shadow emitted a draw").sprite_shadow = item.sprite_shadow;
+        out.encode_vertex_colors(out.len() - 1, item.vertex_color_encoding);
     }
 }
 
@@ -5756,6 +5813,77 @@ impl ComposeStyle {
 #[inline(always)]
 fn mul_rgba(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     [a[0] * b[0], a[1] * b[1], a[2] * b[2], a[3] * b[3]]
+}
+
+fn rage_vertex_color(color: [f32; 4]) -> [f32; 4] {
+    // RageTypes.h::FTOC truncates 256 bins, then clamps to an unsigned byte.
+    // Keep this at draw submission: actor/tween colors remain floating point.
+    color.map(|channel| f32::from((channel * 256.0) as u8) / 255.0)
+}
+
+fn pack_draw_vertex_colors(
+    builder: &mut FrameBuilder,
+    sprites: &mut [renderer::SpriteInstanceRaw],
+    recycled_vertices: &mut Vec<Vec<renderer::TexturedMeshVertex>>,
+) {
+    if !std::mem::take(&mut builder.has_encoded_vertex_colors) {
+        return;
+    }
+    // Every parent/proxy tint and generated shadow is now present. Visibility
+    // decisions used the original float alpha, even when its packed byte is 0.
+    for item in &mut builder.items {
+        if std::mem::take(&mut item.vertex_color_encoding)
+            != actors::VertexColorEncoding::RageVColor
+        {
+            continue;
+        }
+        match item.kind {
+            DrawKind::Sprite => {
+                let sprite = &mut sprites[item.payload_index as usize];
+                sprite.tint = rage_vertex_color(sprite.tint);
+            }
+            DrawKind::TexturedMesh => {
+                let mesh = builder.textured_meshes[item.payload_index as usize]
+                    .as_mut()
+                    .expect("draw item references live textured-mesh payload");
+                // Binary corner colors commute with packing. Ordinary sprite
+                // quads, glow, and full-length fades retain their shared geometry.
+                let glow = mesh.instance.texture_mask > 0.5;
+                if mesh.vertices.iter().all(|vertex| {
+                    vertex
+                        .color
+                        .iter()
+                        .all(|&channel| channel == 1.0 || (!glow && channel == 0.0))
+                }) {
+                    mesh.instance.tint = rage_vertex_color(mesh.instance.tint);
+                    continue;
+                }
+                let source = std::mem::replace(
+                    &mut mesh.vertices,
+                    renderer::TexturedMeshVertices::Transient(Vec::new()),
+                );
+                let mut vertices = match source {
+                    renderer::TexturedMeshVertices::Transient(vertices) => vertices,
+                    source => {
+                        let mut vertices = take_recycled_text_mesh_vertices(recycled_vertices);
+                        vertices.extend_from_slice(&source);
+                        vertices
+                    }
+                };
+                for vertex in &mut vertices {
+                    vertex.color = rage_vertex_color(if glow {
+                        mesh.instance.tint
+                    } else {
+                        mul_rgba(vertex.color, mesh.instance.tint)
+                    });
+                }
+                mesh.vertices = renderer::TexturedMeshVertices::Transient(vertices);
+                mesh.instance.tint = [1.0; 4];
+                mesh.geom_cache_key = renderer::INVALID_TMESH_CACHE_KEY;
+            }
+            DrawKind::Mesh => unreachable!("vertex encoding belongs to sprite and textured draws"),
+        }
+    }
 }
 
 #[inline(always)]
@@ -6038,6 +6166,7 @@ fn build_flat_sprite<T: TextureContext + ?Sized>(
                 item.order = *order_counter;
                 *order_counter = order_counter.saturating_add(1);
             }
+            out.encode_vertex_colors(before, sprite.vertex_color_encoding);
         },
     );
 }
@@ -6178,6 +6307,7 @@ fn build_flat_draws<T: TextureContext + ?Sized>(
                             texture: &mesh.texture,
                             tint: tints.apply(mesh.tint),
                             glow: tints.apply(mesh.glow),
+                            vertex_color_encoding: mesh.vertex_color_encoding,
                             vertices,
                             geom_cache_key: mesh.geom_cache_key,
                             uv_scale: mesh.uv_scale,
@@ -6560,6 +6690,7 @@ struct TexturedMeshActorView<'a> {
     texture: &'a actors::MeshTexture,
     tint: [f32; 4],
     glow: [f32; 4],
+    vertex_color_encoding: actors::VertexColorEncoding,
     vertices: TexturedMeshActorVertices<'a>,
     geom_cache_key: renderer::TMeshCacheKey,
     uv_scale: [f32; 2],
@@ -6710,6 +6841,17 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         | actors::Actor::ReusableTexturedMesh { environment, .. } => environment.as_ref(),
         _ => None,
     };
+    let vertex_color_encoding = match actor {
+        actors::Actor::TexturedMesh {
+            vertex_color_encoding,
+            ..
+        }
+        | actors::Actor::ReusableTexturedMesh {
+            vertex_color_encoding,
+            ..
+        } => *vertex_color_encoding,
+        _ => actors::VertexColorEncoding::Float,
+    };
     Some(TexturedMeshActorView {
         environment,
         align,
@@ -6720,6 +6862,7 @@ fn textured_mesh_actor_view(actor: &actors::Actor) -> Option<TexturedMeshActorVi
         texture,
         tint,
         glow,
+        vertex_color_encoding,
         vertices,
         geom_cache_key,
         uv_scale,
@@ -6828,6 +6971,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
     let layer = base_z.saturating_add(mesh.z);
     let base_order = *order_counter;
     *order_counter = base_order.saturating_add(1);
+    let start = out.len();
     // A glow-only mesh has no diffuse pass, just like a glow-only Sprite.
     if mesh.tint[3] > 0.0 {
         out.push_textured_mesh(
@@ -6894,6 +7038,7 @@ fn build_textured_mesh_actor<T: TextureContext + ?Sized>(
             },
         );
     }
+    out.encode_vertex_colors(start, mesh.vertex_color_encoding);
 }
 
 #[inline(always)]
@@ -6976,6 +7121,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             shadow_len,
             shadow_color,
             effect,
+            vertex_color_encoding,
         } => {
             if !*visible {
                 return;
@@ -7125,6 +7271,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             o
                         };
                     }
+                    out.encode_vertex_colors(before, *vertex_color_encoding);
                     if !glow_pass && has_shadow(*shadow_len) {
                         push_shadow_objects_for_range(
                             out,
@@ -7133,7 +7280,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             before,
                             end,
                             *shadow_len,
-                            mul_rgba(*shadow_color, style.tint),
+                            if *vertex_color_encoding == actors::VertexColorEncoding::RageVColor {
+                                *shadow_color
+                            } else {
+                                mul_rgba(*shadow_color, style.tint)
+                            },
                         );
                     }
                 },
@@ -7244,6 +7395,9 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             );
             let end = out.len();
             if has_shadow(*len) {
+                let native_sprite = out.items[start..end].iter().all(|item| {
+                    item.vertex_color_encoding == actors::VertexColorEncoding::RageVColor
+                });
                 push_shadow_objects_for_range(
                     out,
                     sprite_instances,
@@ -7251,7 +7405,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                     start,
                     end,
                     *len,
-                    mul_rgba(*color, style.tint),
+                    if native_sprite {
+                        *color
+                    } else {
+                        mul_rgba(*color, style.tint)
+                    },
                 );
             }
         }
@@ -7340,15 +7498,38 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             }
         }
 
-        actors::Actor::SharedCamera { view_proj, children } => {
+        actors::Actor::SharedCamera {
+            view_proj,
+            children,
+        } => {
             cameras.push(*view_proj);
             let id = cameras.len().saturating_sub(1).try_into().unwrap_or(0u8);
             build_actor_list(
                 children,
-                SmRect { x: 0.0, y: 0.0, w: m.right - m.left, h: m.top - m.bottom },
-                m, fonts, scratch, base_z, id, style, None, cameras, masks,
-                order_counter, out, sprite_instances, text_cache, texture_cache,
-                texture_ctx, actor_textures, total_elapsed, None,
+                SmRect {
+                    x: 0.0,
+                    y: 0.0,
+                    w: m.right - m.left,
+                    h: m.top - m.bottom,
+                },
+                m,
+                fonts,
+                scratch,
+                base_z,
+                id,
+                style,
+                None,
+                cameras,
+                masks,
+                order_counter,
+                out,
+                sprite_instances,
+                text_cache,
+                texture_cache,
+                texture_ctx,
+                actor_textures,
+                total_elapsed,
+                None,
             );
         }
 
@@ -8164,43 +8345,53 @@ fn calculate_uvs<T: TextureContext + ?Sized>(
     (uv_scale, uv_offset)
 }
 
-#[inline(always)]
-fn fold_sprite_xy_rot(
-    mut flip_x: bool,
-    mut flip_y: bool,
-    mut size_x: f32,
-    mut size_y: f32,
-    rot_x_deg: f32,
-    rot_y_deg: f32,
-) -> (bool, bool, f32, f32) {
-    // Sprite instances only preserve 2D rotation in the fast path. Fold SM's
-    // X/Y rotations into foreshortening plus texture flips so Y=180 mirrors
-    // horizontally instead of becoming an accidental in-plane 180-degree turn.
-    if rot_x_deg == 0.0 && rot_y_deg == 0.0 {
-        return (flip_x, flip_y, size_x, size_y);
-    }
+fn sprite_rotation_matrix(rot_x_deg: f32, rot_y_deg: f32, rot_z_deg: f32) -> Matrix4 {
+    // RageMatrixRotationXYZ, conjugated into this presenter's Y-up geometry.
+    // Sprite X/Y retain native angles; callers already convert Z to world space.
+    // Keep the native coefficients instead of accumulating three matrix products.
+    let [x, y, z] = [-rot_x_deg, rot_y_deg, rot_z_deg]
+        .map(|degrees| degrees * (std::f32::consts::PI / 180.0));
+    let (sx, cx) = (x.sin(), x.cos());
+    let (sy, cy) = (y.sin(), y.cos());
+    let (sz, cz) = (z.sin(), z.cos());
+    Matrix4::from_cols_array(&[
+        cz * cy, cz * sy * sx + sz * cx, cz * sy * cx + sz * -sx, 0.0,
+        -sz * cy, -sz * sy * sx + cz * cx, -sz * sy * cx + cz * -sx, 0.0,
+        -sy, cy * sx, cy * cx, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+    ])
+}
 
-    let cos_y = if rot_y_deg == 0.0 {
-        1.0
-    } else {
-        rot_y_deg.to_radians().cos()
-    };
-    size_x *= cos_y.abs();
-    if cos_y.is_sign_negative() {
-        flip_x = !flip_x;
+fn sprite_edge_fade(
+    crop: [f32; 4],
+    visible_size: [f32; 2],
+    fade: [f32; 4],
+    flips: [bool; 2],
+) -> [f32; 4] {
+    // Crop and flips cannot make a zero fade nonzero.
+    if fade.iter().all(|&value| value <= 0.0) {
+        return [0.0; 4];
     }
-
-    let cos_x = if rot_x_deg == 0.0 {
-        1.0
-    } else {
-        rot_x_deg.to_radians().cos()
-    };
-    size_y *= cos_x.abs();
-    if cos_x.is_sign_negative() {
-        flip_y = !flip_y;
+    // Sprite::DrawPrimitives specifies fades before crop. Negative crop can
+    // cancel a fade; opposing fades shrink together to fit the visible area.
+    let mut result = std::array::from_fn::<_, 4, _>(|index| {
+        (fade[index].clamp(0.0, 1.0) + crop[index].min(0.0)).max(0.0)
+    });
+    for axis in 0..2 {
+        let first = axis * 2;
+        let sum = result[first] + result[first + 1];
+        if sum > 0.0 && visible_size[axis] < sum {
+            let scale = visible_size[axis] / sum;
+            result[first] *= scale;
+            result[first + 1] *= scale;
+        }
+        result[first] = (result[first] / visible_size[axis]).clamp(0.0, 1.0);
+        result[first + 1] = (result[first + 1] / visible_size[axis]).clamp(0.0, 1.0);
+        if flips[axis] {
+            result.swap(first, first + 1);
+        }
     }
-
-    (flip_x, flip_y, size_x, size_y)
+    result
 }
 
 // The first tint is diffuse; the optional second tint is glow. Finish each
@@ -8296,8 +8487,6 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         )
     };
 
-    let (flip_x, flip_y, size_x, size_y) =
-        fold_sprite_xy_rot(flip_x, flip_y, size_x, size_y, rot_x_deg, rot_y_deg);
     let texture_handle = match texture_handle {
         Some(handle) => handle,
         None => {
@@ -8306,7 +8495,14 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         }
     };
 
-    if skew[0].abs() > f32::EPSILON || skew[1].abs() > f32::EPSILON {
+    let edge_fade = sprite_edge_fade(
+        [cropleft, cropright, croptop, cropbottom],
+        [sx_crop, sy_crop],
+        [fadeleft, faderight, fadetop, fadebottom],
+        [flip_x, flip_y],
+    );
+    let has_xy_rotation = rot_x_deg != 0.0 || rot_y_deg != 0.0;
+    if has_xy_rotation || skew[0].abs() > f32::EPSILON || skew[1].abs() > f32::EPSILON {
         let offset_sin = local_offset_rot_sin_cos[0];
         let offset_cos = local_offset_rot_sin_cos[1];
         let offset_world = Vector2::new(
@@ -8320,11 +8516,16 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
         let skew_y = Matrix4::from_cols_array(&[
             1.0, skew[1], 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
         ]);
+        let rotation = if has_xy_rotation {
+            sprite_rotation_matrix(rot_x_deg, rot_y_deg, rot_z_deg)
+        } else {
+            Matrix4::from_rotation_z(rot_z_deg.to_radians())
+        };
         let transform = Matrix4::from_translation(Vector3::new(
             base_center.x + offset_world.x,
             base_center.y + offset_world.y,
             world_z,
-        )) * Matrix4::from_rotation_z(rot_z_deg.to_radians())
+        )) * rotation
             * skew_x
             * skew_y
             * Matrix4::from_translation(Vector3::new(crop_offset.x, crop_offset.y, 0.0))
@@ -8337,6 +8538,7 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
             [0.0, 0.0],
             false,
         );
+        let vertices = sprite_mesh_vertices(edge_fade);
         for (pass, &tint) in tints.iter().enumerate() {
             if tint[3] <= 0.0 {
                 continue;
@@ -8353,27 +8555,19 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
                 camera,
                 TexturedMeshPayload {
                     instance,
-                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(
-                        skewed_sprite_vertices(),
-                    )),
+                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&vertices)),
                     geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
                     depth_test: false,
                     depth_write: false,
                     depth_test_on_fail: false,
                     clear_depth: false,
                     clear_depth_after: false,
-                    // Mesh draws otherwise select repeat addressing. A target
-                    // sprite must retain the target's clamp/nearest sampling.
-                    sampler: renderer::is_render_target_texture(texture_handle).then_some(renderer::MeshSampler {
-                        filter: if renderer::render_target_uses_nearest(texture_handle) {
-                            renderer::SamplerFilter::Nearest
-                        } else {
-                            renderer::SamplerFilter::Linear
-                        },
-                        wrap: renderer::SamplerWrap::Clamp,
-                    }),
+                    // Changing geometry must not change a Sprite's texture
+                    // filtering, addressing, or render-target nearest tag.
+                    sampler: Some(renderer::MeshSampler::Texture),
                 },
             );
+            out.items.last_mut().expect("sprite emitted a mesh").sprite_shadow = true;
             finish_pass(out, sprite_instances, before, before_sprite, pass != 0);
         }
         return;
@@ -8384,51 +8578,17 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
     } else {
         rot_z_deg.to_radians().sin_cos()
     };
-
-    // Crop and flips cannot make a zero fade nonzero.
-    let edge_fade = if fadeleft <= 0.0 && faderight <= 0.0 && fadetop <= 0.0 && fadebottom <= 0.0 {
-        [0.0; 4]
+    // Sprite::DrawTexture crops local vertices before Actor's rotation. Keep
+    // that original pivot when the cropped quad uses the fast sprite path.
+    let (center_x, center_y) = if rot_z_deg == 0.0 {
+        (center_x, center_y)
     } else {
-        let fl = fadeleft.clamp(0.0, 1.0);
-        let fr = faderight.clamp(0.0, 1.0);
-        let ft = fadetop.clamp(0.0, 1.0);
-        let fb = fadebottom.clamp(0.0, 1.0);
-
-        // StepMania parity (Sprite::DrawPrimitives edge-fade behavior):
-        // - Fade distances are specified in the *pre-crop* [0..1] space.
-        // - Visible (post-crop) fraction is `(1 - crop_a - crop_b)`.
-        // - Negative crop values can "cancel" fade (used by Simply Love transitions).
-        let mut fl_size = (fl + cropleft.min(0.0)).max(0.0);
-        let mut fr_size = (fr + cropright.min(0.0)).max(0.0);
-        let mut ft_size = (ft + croptop.min(0.0)).max(0.0);
-        let mut fb_size = (fb + cropbottom.min(0.0)).max(0.0);
-
-        let sum_x = fl_size + fr_size;
-        if sum_x > 0.0 && sx_crop < sum_x {
-            let s = sx_crop / sum_x;
-            fl_size *= s;
-            fr_size *= s;
-        }
-
-        let sum_y = ft_size + fb_size;
-        if sum_y > 0.0 && sy_crop < sum_y {
-            let s = sy_crop / sum_y;
-            ft_size *= s;
-            fb_size *= s;
-        }
-
-        let mut fl_eff = (fl_size / sx_crop).clamp(0.0, 1.0);
-        let mut fr_eff = (fr_size / sx_crop).clamp(0.0, 1.0);
-        let mut ft_eff = (ft_size / sy_crop).clamp(0.0, 1.0);
-        let mut fb_eff = (fb_size / sy_crop).clamp(0.0, 1.0);
-
-        if flip_x {
-            std::mem::swap(&mut fl_eff, &mut fr_eff);
-        }
-        if flip_y {
-            std::mem::swap(&mut ft_eff, &mut fb_eff);
-        }
-        [fl_eff, fr_eff, ft_eff, fb_eff]
+        let crop_x = center_x - base_center.x;
+        let crop_y = center_y - base_center.y;
+        (
+            cos_z.mul_add(crop_x, -sin_z * crop_y) + base_center.x,
+            sin_z.mul_add(crop_x, cos_z * crop_y) + base_center.y,
+        )
     };
 
     let mut instance = renderer::SpriteInstanceRaw {
@@ -8457,7 +8617,55 @@ fn push_sprite_passes<T: TextureContext + ?Sized>(
     }
 }
 
-fn skewed_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
+fn sprite_mesh_vertices(edge_fade: [f32; 4]) -> Arc<[renderer::TexturedMeshVertex]> {
+    if !edge_fade.iter().any(|&value| value > 0.0) {
+        return Arc::clone(unit_sprite_vertices());
+    }
+    let axis_breaks = |left: f32, right: f32| {
+        let mut values = [0.0, 1.0, 1.0, 1.0];
+        if left > 0.0 { values[2] = left; }
+        if right > 0.0 { values[3] = 1.0 - right; }
+        values.sort_unstable_by(f32::total_cmp);
+        values
+    };
+    let xs = axis_breaks(edge_fade[0], edge_fade[1]);
+    let ys = axis_breaks(edge_fade[2], edge_fade[3]);
+    let vertex = |u: f32, v: f32| {
+        let mut alpha: f32 = 1.0;
+        for (distance, fade) in [u, 1.0 - u, v, 1.0 - v].into_iter().zip(edge_fade) {
+            if fade > 0.0 { alpha = alpha.min((distance / fade).clamp(0.0, 1.0)); }
+        }
+        renderer::TexturedMeshVertex {
+            pos: [u - 0.5, 0.5 - v, 0.0],
+            uv: [u, v],
+            color: [1.0, 1.0, 1.0, alpha],
+            ..renderer::TexturedMeshVertex::default()
+        }
+    };
+    // The sprite shader takes the minimum of four linear edge ramps. At most
+    // nine cells reproduce that surface; each corner cell's diagonal follows
+    // the meeting of its two ramps. Diffuse/glow share this bounded geometry.
+    let mut vertices = [renderer::TexturedMeshVertex::default(); 54];
+    let mut count = 0;
+    for y in ys.windows(2).filter(|pair| pair[0] < pair[1]) {
+        for x in xs.windows(2).filter(|pair| pair[0] < pair[1]) {
+            let [a, b, c, d] = [
+                vertex(x[0], y[0]), vertex(x[1], y[0]),
+                vertex(x[1], y[1]), vertex(x[0], y[1]),
+            ];
+            let cell = if a.color[3] + c.color[3] >= b.color[3] + d.color[3] {
+                [a, b, c, a, c, d]
+            } else {
+                [a, b, d, b, c, d]
+            };
+            vertices[count..count + 6].copy_from_slice(&cell);
+            count += 6;
+        }
+    }
+    Arc::from(&vertices[..count])
+}
+
+fn unit_sprite_vertices() -> &'static Arc<[renderer::TexturedMeshVertex]> {
     static VERTICES: OnceLock<Arc<[renderer::TexturedMeshVertex]>> = OnceLock::new();
     VERTICES.get_or_init(|| {
         let white = [1.0; 4];
@@ -9388,6 +9596,7 @@ fn clipped_sprite_object_to_world_rect(
 #[derive(Clone, Copy)]
 struct ClipVertex {
     pos: [f32; 2],
+    world_z: f32,
     uv: [f32; 2],
     color: [f32; 4],
 }
@@ -9507,6 +9716,7 @@ fn lerp_clip(a: ClipVertex, b: ClipVertex, t: f32) -> ClipVertex {
             (b.pos[0] - a.pos[0]).mul_add(t, a.pos[0]),
             (b.pos[1] - a.pos[1]).mul_add(t, a.pos[1]),
         ],
+        world_z: (b.world_z - a.world_z).mul_add(t, a.world_z),
         uv: [
             (b.uv[0] - a.uv[0]).mul_add(t, a.uv[0]),
             (b.uv[1] - a.uv[1]).mul_add(t, a.uv[1]),
@@ -9729,7 +9939,13 @@ fn clip_textured_mesh_to_world_rect_inner<const FMA: bool>(
             clip,
             texture_mask,
             recycled_vertices,
-            |pos| affine_world_xy_3d(&transform, pos),
+            |pos| {
+                let xy = affine_world_xy_3d(&transform, pos);
+                let z = transform.z_axis.z.mul_add(
+                    pos[2], transform.y_axis.z.mul_add(pos[1], transform.x_axis.z * pos[0]),
+                ) + transform.w_axis.z;
+                [xy[0], xy[1], z]
+            },
         )
     } else {
         clip_textured_mesh_to_world_rect_with::<FMA>(
@@ -9741,7 +9957,11 @@ fn clip_textured_mesh_to_world_rect_inner<const FMA: bool>(
             clip,
             texture_mask,
             recycled_vertices,
-            |pos| world_xy_3d(&transform, pos),
+            |pos| {
+                let clip = transform * Vector4::new(pos[0], pos[1], pos[2], 1.0);
+                let inv_w = if clip.w.abs() > f32::EPSILON { clip.w.recip() } else { 1.0 };
+                [clip.x * inv_w, clip.y * inv_w, clip.z * inv_w]
+            },
         )
     }
 }
@@ -9757,7 +9977,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
     clip: WorldRect,
     texture_mask: bool,
     mut recycled_vertices: Option<&mut Vec<Vec<renderer::TexturedMeshVertex>>>,
-    mut world_xy: impl FnMut([f32; 3]) -> [f32; 2],
+    mut world_xyz: impl FnMut([f32; 3]) -> [f32; 3],
 ) -> Option<ClippedSpriteObject> {
     if vertices.len() < 3 {
         return None;
@@ -9765,9 +9985,9 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
 
     let mut out: Option<Vec<renderer::TexturedMeshVertex>> = None;
     for tri in vertices.as_chunks::<3>().0 {
-        let p0 = world_xy(tri[0].pos);
-        let p1 = world_xy(tri[1].pos);
-        let p2 = world_xy(tri[2].pos);
+        let p0 = world_xyz(tri[0].pos);
+        let p1 = world_xyz(tri[1].pos);
+        let p2 = world_xyz(tri[2].pos);
         let left = p0[0].min(p1[0]).min(p2[0]);
         let right = p0[0].max(p1[0]).max(p2[0]);
         let bottom = p0[1].min(p1[1]).min(p2[1]);
@@ -9789,7 +10009,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
                 ]
                 .map(|(pos, uv, color)| renderer::TexturedMeshVertex {
                     normal: [0.0; 4],
-                    pos: [pos[0], pos[1], 0.0],
+                    pos,
                     uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color,
@@ -9800,17 +10020,20 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
 
         let poly = [
             ClipVertex {
-                pos: p0,
+                pos: [p0[0], p0[1]],
+                world_z: p0[2],
                 uv: uv0,
                 color: tri[0].color,
             },
             ClipVertex {
-                pos: p1,
+                pos: [p1[0], p1[1]],
+                world_z: p1[2],
                 uv: uv1,
                 color: tri[1].color,
             },
             ClipVertex {
-                pos: p2,
+                pos: [p2[0], p2[1]],
+                world_z: p2[2],
                 uv: uv2,
                 color: tri[2].color,
             },
@@ -9831,7 +10054,7 @@ fn clip_textured_mesh_to_world_rect_with<const FMA: bool>(
             out.extend([base, clipped[i], clipped[i + 1]].map(|vertex| {
                 renderer::TexturedMeshVertex {
                     normal: [0.0; 4],
-                    pos: [vertex.pos[0], vertex.pos[1], 0.0],
+                    pos: [vertex.pos[0], vertex.pos[1], vertex.world_z],
                     uv: vertex.uv,
                     tex_matrix_scale: [1.0, 1.0],
                     color: vertex.color,
@@ -9975,21 +10198,25 @@ fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
                 offset_world,
                 [-0.5_f32, -0.5_f32],
             ),
+            world_z: center[2],
             uv: [uv_offset[0], uv_offset[1] + uv_scale[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [0.5_f32, -0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1] + uv_scale[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [0.5_f32, 0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0] + uv_scale[0], uv_offset[1]],
             color: [1.0; 4],
         },
         ClipVertex {
             pos: sprite_world_xy(center, size, rot_sin_cos, offset_world, [-0.5_f32, 0.5_f32]),
+            world_z: center[2],
             uv: [uv_offset[0], uv_offset[1]],
             color: [1.0; 4],
         },
@@ -10015,7 +10242,7 @@ fn clip_rotated_sprite_to_world_rect_inner<const FMA: bool>(
         for v in [base, clipped[i], clipped[i + 1]] {
             out.push(renderer::TexturedMeshVertex {
                 normal: [0.0; 4],
-                pos: [v.pos[0], v.pos[1], 0.0],
+                pos: [v.pos[0], v.pos[1], v.world_z],
                 uv: v.uv,
                 tex_matrix_scale: [1.0, 1.0],
                 color: v.color,
@@ -10053,6 +10280,10 @@ mod tests {
         include!("compose_sprite_passes.rs");
     }
 
+    mod native_vertex_colors {
+        include!("compose_native_vertex_colors.rs");
+    }
+
     use super::{
         ActorSegment, ActorXFold, ByteIndex, CachedGlyph, CachedTextLayout, CachedTextMeshBatch,
         CachedTextMeshVariants, CachedTextPage, ComposeScratch, DrawItem, EditableDraw,
@@ -10064,7 +10295,7 @@ mod tests {
         build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources,
         build_transient_text_mesh_builders, clip_object_to_world_masks,
         clip_sprite_object_to_world_rect, clipped_sprite_object_to_world_rect, finish_frame,
-        fold_sprite_xy_rot, font_chain_key, gather_finalized_sprites, mul_rgba,
+        font_chain_key, gather_finalized_sprites, mul_rgba,
         prewarm_cached_prepared_inline_text_slot, prewarm_frame_inline_text_slot,
         prewarm_prepared_inline_text_slot, prewarm_u32_text_slot, push_shadow_objects_for_range,
         resolve_sprite_size_like_sm, sort_composed_draw_items, sort_draw_items, str_ptr,
@@ -10458,6 +10689,7 @@ mod tests {
 
     fn test_sprite(source: SpriteSource) -> Actor {
         Actor::Sprite {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [4.0, 8.0],
             world_z: 0.0,
@@ -11124,6 +11356,7 @@ mod tests {
             },
         ]);
         let sprite = FlatSprite {
+            vertex_color_encoding: Default::default(),
             center: [32.0, 48.0],
             world_z: 7.0,
             size: [64.0, 64.0],
@@ -11141,6 +11374,7 @@ mod tests {
             z: 8,
         };
         let mesh = FlatTexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: Some(environment.clone()),
             offset: [16.0, 20.0],
             world_z: 9.0,
@@ -11163,6 +11397,7 @@ mod tests {
             z: 9,
         };
         let actor_sprite = Actor::Sprite {
+            vertex_color_encoding: Default::default(),
             align: [0.5, 0.5],
             offset: sprite.center,
             world_z: sprite.world_z,
@@ -11203,6 +11438,7 @@ mod tests {
             effect: EffectState::default(),
         };
         let actor_mesh = Actor::TexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: Some(environment.clone()),
             align: [0.0, 0.0],
             offset: mesh.offset,
@@ -11272,13 +11508,24 @@ mod tests {
             );
         assert_test_frames_equal(&expected, &actual);
 
-        // Both diffuse and glow passes retain culling through flat draws.
-        assert_eq!(actual.tmesh_instances.len(), 4);
+        // Both Model passes retain culling/environment state through flat draws.
+        // The tilted Sprite also emits diffuse/glow meshes, with no Model state.
+        assert!(actual.sprite_instances.is_empty());
+        assert_eq!(actual.tmesh_instances.len(), 6);
+        let model_texture = TestDrawTextureContext.texture_handle("flat-model.png");
+        let model_instances: Vec<_> = actual.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) if run.texture_handle == model_texture => Some(run),
+            _ => None,
+        }).flat_map(|run| {
+            let start = run.instance_start as usize;
+            &actual.tmesh_instances[start..start + run.instance_count as usize]
+        }).collect();
+        assert_eq!(model_instances.len(), 4);
         let expected_eye = eye
             * Matrix4::from_translation(Vector3::new(16.0, 80.0, 9.0))
             * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0))
             * environment.transform;
-        for instance in &actual.tmesh_instances {
+        for instance in &model_instances {
             if instance.texture_mask > 0.5 {
                 assert_eq!(instance.sphere_rows, [[0.0; 4]; 3]);
                 assert_eq!(instance.additive_texture, 0);
@@ -11294,7 +11541,22 @@ mod tests {
                 assert_ne!(instance.additive_texture, 0);
             }
         }
-        assert!(actual.tmesh_instances.iter().all(|i| i.cull_mode == 1.0));
+        assert!(model_instances.iter().all(|i| i.cull_mode == 1.0));
+        let sprite_texture = TestDrawTextureContext.texture_handle("flat-note.png");
+        let mut sprite_instances = 0;
+        for run in actual.ops.iter().filter_map(|op| match op {
+            DrawOp::TexturedMesh(run) if run.texture_handle == sprite_texture => Some(run),
+            _ => None,
+        }) {
+            let start = run.instance_start as usize;
+            for instance in &actual.tmesh_instances[start..start + run.instance_count as usize] {
+                assert_eq!(instance.cull_mode, 0.0);
+                assert_eq!(instance.sphere_rows, [[0.0; 4]; 3]);
+                assert_eq!(instance.additive_texture, 0);
+                sprite_instances += 1;
+            }
+        }
+        assert_eq!(sprite_instances, 2);
         let root_camera = Matrix4::from_scale(Vector3::new(0.8, 0.9, 1.0));
         let camera_suffix = Matrix4::from_rotation_z(0.2);
         let tint = [0.7, 0.8, 0.9, 0.6];
@@ -12166,6 +12428,7 @@ mod tests {
                     items: builder.items.clone(),
                     meshes: builder.meshes.clone(),
                     textured_meshes: builder.textured_meshes.clone(),
+                    has_encoded_vertex_colors: builder.has_encoded_vertex_colors,
                 },
                 sprites.clone(),
             );
@@ -13085,26 +13348,6 @@ mod tests {
         assert_px_size(plain, [256.0, 128.0]);
         assert_px_size(repeated, [256.0, 128.0]);
         assert_px_size(zoomed, [5120.0, 2560.0]);
-    }
-
-    #[test]
-    fn sprite_rotationy_180_folds_to_horizontal_flip() {
-        let (flip_x, flip_y, size_x, size_y) =
-            fold_sprite_xy_rot(false, false, 22.0, 10.0, 0.0, 180.0);
-        assert!(flip_x);
-        assert!(!flip_y);
-        assert!((size_x - 22.0).abs() < 0.0001);
-        assert!((size_y - 10.0).abs() < 0.0001);
-    }
-
-    #[test]
-    fn sprite_rotationx_180_folds_to_vertical_flip() {
-        let (flip_x, flip_y, size_x, size_y) =
-            fold_sprite_xy_rot(false, false, 22.0, 10.0, 180.0, 0.0);
-        assert!(!flip_x);
-        assert!(flip_y);
-        assert!((size_x - 22.0).abs() < 0.0001);
-        assert!((size_y - 10.0).abs() < 0.0001);
     }
 
     #[test]
@@ -14315,6 +14558,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = Actor::TexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: None,
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
@@ -14365,6 +14609,7 @@ mod tests {
             bottom: 0.0,
         };
         let sprite = Actor::Sprite {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [12.0, 18.0],
             world_z: 0.0,
@@ -14519,6 +14764,7 @@ mod tests {
         };
         for alpha in [0.0, 1.0] {
             let mesh = Actor::TexturedMesh {
+                vertex_color_encoding: Default::default(),
                 environment: None,
                 align: [0.0; 2],
                 offset: [0.0; 2],
@@ -14578,15 +14824,15 @@ mod tests {
     #[test]
     fn mesh_batches_preserve_sampler_changes() {
         use deadlib_render_core::{MeshSampler, SamplerFilter, SamplerWrap};
-        let nearest = Some(MeshSampler {
+        let nearest = Some(MeshSampler::Override {
             filter: SamplerFilter::Nearest,
             wrap: SamplerWrap::Repeat,
         });
-        let linear = Some(MeshSampler {
+        let linear = Some(MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Repeat,
         });
-        let clamp = Some(MeshSampler {
+        let clamp = Some(MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Clamp,
         });
@@ -14784,6 +15030,7 @@ mod tests {
         };
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let actor = Actor::ReusableTexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: None,
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
@@ -14836,6 +15083,7 @@ mod tests {
         };
         let vertices = Arc::new(vec![TexturedMeshVertex::default(); 6]);
         let draws = [FlatDraw::TexturedMesh(FlatTexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: None,
             offset: [0.0, 0.0],
             world_z: 0.0,
@@ -14907,6 +15155,7 @@ mod tests {
             z: 0,
         }];
         let draws = [FlatDraw::Sprite(FlatSprite {
+            vertex_color_encoding: Default::default(),
             center: [12.0, 24.0],
             world_z: 0.0,
             size: [16.0, 32.0],
@@ -14987,6 +15236,7 @@ mod tests {
             blend: Some(BlendMode::Add),
         }];
         let draws = [FlatDraw::Sprite(FlatSprite {
+            vertex_color_encoding: Default::default(),
             center: [12.0, 24.0],
             world_z: 0.0,
             size: [16.0, 32.0],
@@ -15084,6 +15334,7 @@ mod tests {
             blend: Some(BlendMode::Add),
         }];
         let draws = [FlatDraw::Sprite(FlatSprite {
+            vertex_color_encoding: Default::default(),
             center: [12.0, 24.0],
             world_z: 0.0,
             size: [16.0, 32.0],
@@ -15193,6 +15444,7 @@ mod tests {
         }];
         let draw = |center, z| {
             FlatDraw::Sprite(FlatSprite {
+                vertex_color_encoding: Default::default(),
                 center,
                 world_z: 0.0,
                 size: [16.0, 32.0],
@@ -15260,6 +15512,7 @@ mod tests {
         let specs = [(0.0, 200), (1.0, 95), (2.0, 196), (3.0, 195), (4.0, 196)];
         let draws = specs.map(|(x, z)| {
             FlatDraw::Sprite(FlatSprite {
+                vertex_color_encoding: Default::default(),
                 center: [x + 8.0, 24.0],
                 world_z: 0.0,
                 size: [16.0, 32.0],
@@ -15360,6 +15613,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = FlatTexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: None,
             offset: [0.0; 2],
             world_z: 0.0,
@@ -15471,6 +15725,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = Actor::TexturedMesh {
+            vertex_color_encoding: Default::default(),
             environment: None,
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
@@ -15525,6 +15780,7 @@ mod tests {
             bottom: 0.0,
         };
         let sprite = Actor::Sprite {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             world_z: 0.0,

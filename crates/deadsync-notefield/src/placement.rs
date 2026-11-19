@@ -179,6 +179,7 @@ struct NotefieldCameraKey {
     skew: u32,
     reverse: bool,
     wrapper: [u32; 16],
+    vanish: Option<[u32; 2]>,
 }
 
 impl NotefieldCameraKey {
@@ -191,6 +192,7 @@ impl NotefieldCameraKey {
         skew: f32,
         reverse: bool,
         wrapper: Matrix4,
+        vanish: Option<[f32; 2]>,
     ) -> Self {
         Self {
             screen_w: screen_w.to_bits(),
@@ -201,6 +203,7 @@ impl NotefieldCameraKey {
             skew: skew.to_bits(),
             reverse,
             wrapper: wrapper.to_cols_array().map(f32::to_bits),
+            vanish: vanish.map(|center| center.map(f32::to_bits)),
         }
     }
 }
@@ -225,13 +228,22 @@ pub struct NotefieldCameraCache {
     key: Option<NotefieldCameraKey>,
     camera: Option<Matrix4>,
     view: Option<Matrix4>,
+    camera_parts: Option<(Matrix4, Matrix4)>,
     stats: NotefieldCameraCacheStats,
     wrapper: Matrix4,
+    vanish: Option<[f32; 2]>,
 }
 
 impl NotefieldCameraCache {
     pub fn set_wrapper(&mut self, wrapper: Matrix4) {
         self.wrapper = wrapper;
+    }
+
+    /// Player::PushPlayerMatrix centers the menu perspective on the Player's
+    /// own X and receptor midline. A Lua-moved Player supplies that center
+    /// here; `None` keeps the field's layout position.
+    pub fn set_vanish_center(&mut self, center: Option<[f32; 2]>) {
+        self.vanish = center;
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -254,12 +266,13 @@ impl NotefieldCameraCache {
             skew,
             reverse,
             self.wrapper,
+            self.vanish,
         );
         if self.key == Some(key) {
             self.stats.hits = self.stats.hits.saturating_add(1);
             return self.camera;
         }
-        let camera = notefield_camera(
+        let camera = notefield_camera_parts_at(
             screen_w,
             screen_h,
             playfield_center_x,
@@ -268,16 +281,26 @@ impl NotefieldCameraCache {
             skew,
             reverse,
             self.wrapper,
+            self.vanish,
         );
         self.key = Some(key);
-        self.camera = camera.map(|(projection, _)| projection);
-        self.view = camera.map(|(_, view)| view);
+        self.camera = camera.map(|(projection, view, model)| projection * (view * model));
+        self.view = camera.map(|(_, view, model)| view * model);
+        self.camera_parts = camera.map(|(projection, view, model)| (projection * view, model));
         self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
         self.camera
     }
 
     pub(crate) fn eye_camera(&self) -> Option<(Matrix4, Matrix4)> {
         self.camera.zip(self.view)
+    }
+
+    /// Keep the menu camera separate from NoteField's local wrapper and tilt.
+    /// Player's actor transform belongs between them, including when a child
+    /// wrapper has zero zoom and its model matrix cannot be inverted.
+    #[must_use]
+    pub const fn camera_parts(&self) -> Option<(Matrix4, Matrix4)> {
+        self.camera_parts
     }
 
     /// Player::Draw installs a fresh menu camera using that draw's GetX/GetY.
@@ -292,7 +315,8 @@ impl NotefieldCameraCache {
         let vanish_x = sm_scale(f32::from_bits(key.skew), 0.1, 1.0, position[0], 0.5 * width);
         let (projection, view) = menu_camera(width, height, vanish_x, position[1] + center_offset)?;
         let reverse = if key.reverse { -1.0 } else { 1.0 };
-        let tilt = f32::from_bits(key.tilt).clamp(-1.0, 1.0);
+        // PlayerNoteFieldPositioner extrapolates signed Tilt beyond +/-100%.
+        let tilt = f32::from_bits(key.tilt);
         let zoom = 0.1f32.mul_add(-tilt.abs(), 1.0);
         let y_offset = if tilt > 0.0 {
             -45.0 * tilt
@@ -332,6 +356,8 @@ impl NotefieldCameraCache {
     }
 }
 
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn notefield_camera(
     screen_w: f32,
     screen_h: f32,
@@ -342,13 +368,72 @@ pub(crate) fn notefield_camera(
     reverse: bool,
     wrapper: Matrix4,
 ) -> Option<(Matrix4, Matrix4)> {
+    notefield_camera_at(
+        screen_w,
+        screen_h,
+        playfield_center_x,
+        center_y,
+        tilt,
+        skew,
+        reverse,
+        wrapper,
+        None,
+    )
+}
+
+/// `vanish_center` replaces the layout X and receptor midline that
+/// Player::PushPlayerMatrix passes to LoadMenuPerspective. The field geometry
+/// keeps its layout pivot; a moved Player's transform is applied separately.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn notefield_camera_at(
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    center_y: f32,
+    tilt: f32,
+    skew: f32,
+    reverse: bool,
+    wrapper: Matrix4,
+    vanish_center: Option<[f32; 2]>,
+) -> Option<(Matrix4, Matrix4)> {
+    let (projection, view, model) = notefield_camera_parts_at(
+        screen_w,
+        screen_h,
+        playfield_center_x,
+        center_y,
+        tilt,
+        skew,
+        reverse,
+        wrapper,
+        vanish_center,
+    )?;
+    let eye = view * model;
+    Some((projection * eye, eye))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn notefield_camera_parts_at(
+    screen_w: f32,
+    screen_h: f32,
+    playfield_center_x: f32,
+    center_y: f32,
+    tilt: f32,
+    skew: f32,
+    reverse: bool,
+    wrapper: Matrix4,
+    vanish_center: Option<[f32; 2]>,
+) -> Option<(Matrix4, Matrix4, Matrix4)> {
     let half_w = 0.5 * screen_w;
     let half_h = 0.5 * screen_h;
-    let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
-    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, center_y)?;
+    let [vanish_center_x, vanish_y] = vanish_center
+        .filter(|center| center.iter().all(|value| value.is_finite()))
+        .unwrap_or([playfield_center_x, center_y]);
+    let vanish_x = sm_scale(skew, 0.1, 1.0, vanish_center_x, half_w);
+    let (proj, view) = menu_camera(screen_w, screen_h, vanish_x, vanish_y)?;
 
     let reverse_mult = if reverse { -1.0 } else { 1.0 };
-    let tilt = tilt.clamp(-1.0, 1.0);
+    // Native SCALE does not clamp: 200% Tilt rotates the field by 60 degrees.
     let tilt_deg = (-30.0 * tilt) * reverse_mult;
     let tilt_abs = tilt.abs();
     let tilt_scale = 0.1f32.mul_add(-tilt_abs, 1.0);
@@ -370,15 +455,14 @@ pub(crate) fn notefield_camera(
     let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
         * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
         * Matrix4::from_rotation_x(tilt_deg.to_radians())
-        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
+        * Matrix4::from_scale(Vector3::splat(tilt_scale))
         * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
 
     let flip = Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0));
     let wrapper = Matrix4::from_translation(Vector3::new(pivot_x, 0.0, 0.0))
         * flip * wrapper * flip
         * Matrix4::from_translation(Vector3::new(-pivot_x, 0.0, 0.0));
-    let eye = view * world_to_screen * wrapper * field;
-    Some((proj * eye, eye))
+    Some((proj, view * world_to_screen, wrapper * field))
 }
 
 fn menu_camera(
@@ -587,10 +671,6 @@ fn field_receptor_y(
 
 pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let style = request.hud_style;
-    let clamped_width = request.screen_width.clamp(
-        crate::style::LAYOUT_WIDTH_MIN,
-        crate::style::LAYOUT_WIDTH_MAX,
-    );
     let side_sign = match request.placement {
         FieldPlacement::P1 => -1.0,
         FieldPlacement::P2 => 1.0,
@@ -603,8 +683,11 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        (side_sign * clamped_width)
-            .mul_add(crate::style::SIDE_CENTER_X_RATIO, request.screen_center_x)
+        deadsync_gameplay::gameplay_side_field_center_x(
+            request.screen_width,
+            request.screen_center_x,
+            request.placement == FieldPlacement::P2,
+        )
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
@@ -648,20 +731,29 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
             1.0
         }
     });
+    // ArrowGetReverseShiftAndScale divides by +0.01 near zero, while Player
+    // still applies the raw signed Mini zoom. Only the reverse/centered shift
+    // uses this ratio; authored column offsets keep their ordinary Mini scale.
+    let reverse_shift_scale = if f64::from(request.field_zoom.abs()) < 0.01 {
+        Some(request.field_zoom / 0.01)
+    } else {
+        None
+    };
     let column_receptor_ys = from_fn(|i| {
         if i >= request.num_cols {
             return receptor_y_normal;
         }
-        request.song_lua_column_y_offsets[i].mul_add(
-            request.field_zoom,
-            field_receptor_y(
-                column_reverse_percent[i],
-                centered_percent,
-                receptor_y_normal,
-                receptor_y_reverse,
-                receptor_y_centered,
-            ),
-        )
+        let receptor_y = field_receptor_y(
+            column_reverse_percent[i],
+            centered_percent,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        );
+        let receptor_y = reverse_shift_scale.map_or(receptor_y, |scale| {
+            (receptor_y - receptor_y_centered).mul_add(scale, receptor_y_centered)
+        });
+        request.song_lua_column_y_offsets[i].mul_add(request.field_zoom, receptor_y)
     });
 
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
@@ -751,7 +843,7 @@ mod tests {
     use super::{
         FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
         LayoutMiniIndicatorPosition, NotefieldCameraCache, ZmodLayoutParams, field_layout,
-        notefield_camera,
+        notefield_camera, notefield_camera_at,
     };
     use deadsync_core::input::MAX_COLS;
     use deadsync_theme::{
@@ -777,6 +869,32 @@ mod tests {
         assert_eq!(matrix_bits(second), matrix_bits(expected));
         assert_eq!(cache.stats().rebuilds, 1);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_cache_tracks_player_vanish_center() {
+        let mut cache = NotefieldCameraCache::default();
+        let layout = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false).unwrap();
+        cache.set_vanish_center(Some([332.0, 655.0]));
+        let moved = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false).unwrap();
+        let expected = notefield_camera_at(
+            854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false, glam::Mat4::IDENTITY, Some([332.0, 655.0]),
+        )
+        .map(|(projection, _)| projection);
+        assert_eq!(matrix_bits(Some(moved)), matrix_bits(expected));
+        assert_eq!(cache.stats().rebuilds, 2);
+        // The screen plane is unchanged; depth now recedes toward the Player.
+        let project = |camera: glam::Mat4, point: glam::Vec3| {
+            let clip = camera * point.extend(1.0);
+            glam::Vec2::new(clip.x, clip.y) / clip.w
+        };
+        let flat = glam::Vec3::new(-150.0, 60.0, 0.0);
+        assert!((project(layout, flat) - project(moved, flat)).length() <= 0.000_1);
+        let deep = glam::Vec3::new(-150.0, 60.0, 120.0);
+        assert!((project(layout, deep) - project(moved, deep)).length() > 0.01);
+        cache.set_vanish_center(None);
+        let restored = cache.resolve(854.0, 480.0, 213.5, 240.0, 0.0, 0.0, false);
+        assert_eq!(matrix_bits(restored), matrix_bits(Some(layout)));
     }
 
     #[test]
@@ -845,6 +963,58 @@ mod tests {
         );
         assert_eq!(cache.stats().rebuilds, 2);
         assert_eq!(cache.stats().hits, 1);
+    }
+
+    #[test]
+    fn field_camera_preserves_signed_tilt_beyond_one() {
+        // ITGmania Player::PlayerNoteFieldPositioner: +/-200% Tilt uses
+        // +/-60 degrees, 0.8 zoom, and Y offsets of -90 / -40 pixels.
+        // The cached field model expresses those native points in Y-up space.
+        for (tilt, y_offset, z_probe) in [(2.0, -90.0, 69.282_03), (-2.0, -40.0, -69.282_03)] {
+            for reverse in [false, true] {
+                let sign = if reverse { -1.0 } else { 1.0 };
+                let mut cache = NotefieldCameraCache::default();
+                cache.resolve(854.0, 480.0, 427.0, 240.0, tilt, 0.0, reverse).unwrap();
+                let (_, field) = cache.camera_parts().unwrap();
+                for (point, expected) in [
+                    ([0.0, 0.0, 0.0], [0.0, -y_offset * sign, 0.0]),
+                    ([100.0, 0.0, 0.0], [80.0, -y_offset * sign, 0.0]),
+                    ([0.0, 100.0, 0.0], [0.0, -y_offset * sign + 40.0, -z_probe * sign]),
+                    ([0.0, 0.0, 100.0], [0.0, (-y_offset + z_probe) * sign, 40.0]),
+                ] {
+                    let actual = field.transform_point3(glam::Vec3::from_array(point)).to_array();
+                    for (actual, expected) in actual.into_iter().zip(expected) {
+                        assert_near(actual, expected);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn draw_camera_preserves_native_tilt_depth_beyond_one() {
+        // The Player capture uses native Y-down coordinates and uniform zoom,
+        // including Z. Check the complete local basis for both tilt signs and
+        // Reverse, independently of projection and Lua wrapper transforms.
+        for (tilt, y_offset, z_probe) in [(2.0, -90.0, 69.282_03), (-2.0, -40.0, -69.282_03)] {
+            for reverse in [false, true] {
+                let sign = if reverse { -1.0 } else { 1.0 };
+                let mut cache = NotefieldCameraCache::default();
+                cache.resolve(854.0, 480.0, 427.0, 240.0, tilt, 0.0, reverse).unwrap();
+                let (_, field) = cache.draw_camera([427.0, 240.0]).unwrap();
+                for (point, expected) in [
+                    ([0.0, 0.0, 0.0], [0.0, y_offset * sign, 0.0]),
+                    ([100.0, 0.0, 0.0], [80.0, y_offset * sign, 0.0]),
+                    ([0.0, 100.0, 0.0], [0.0, y_offset * sign + 40.0, z_probe * sign]),
+                    ([0.0, 0.0, 100.0], [0.0, (y_offset - z_probe) * sign, 40.0]),
+                ] {
+                    let actual = field.transform_point3(glam::Vec3::from_array(point)).to_array();
+                    for (actual, expected) in actual.into_iter().zip(expected) {
+                        assert_near(actual, expected);
+                    }
+                }
+            }
+        }
     }
 
     fn style() -> NotefieldHudStyle {
@@ -1139,15 +1309,15 @@ mod tests {
         p1_request.num_players = 2;
         p1_request.notefield_offset_x = 20.0;
         let p1 = field_layout(p1_request);
-        assert_near(p1.playfield_center_x, 193.5);
-        assert_near(p1.layout_center_x, 193.5);
+        assert_near(p1.playfield_center_x, 193.25);
+        assert_near(p1.layout_center_x, 193.25);
         assert_near(p1.notefield_offset_x, -20.0);
 
         let mut p2_request = p1_request;
         p2_request.placement = FieldPlacement::P2;
         let p2 = field_layout(p2_request);
-        assert_near(p2.playfield_center_x, 660.5);
-        assert_near(p2.layout_center_x, 660.5);
+        assert_near(p2.playfield_center_x, 660.75);
+        assert_near(p2.layout_center_x, 660.75);
         assert_near(p2.notefield_offset_x, 20.0);
     }
 
@@ -1163,8 +1333,8 @@ mod tests {
         let mut non_single_request = single_request;
         non_single_request.single_style = false;
         let non_single = field_layout(non_single_request);
-        assert_near(non_single.playfield_center_x, 193.5);
-        assert_near(non_single.layout_center_x, 193.5);
+        assert_near(non_single.playfield_center_x, 193.25);
+        assert_near(non_single.layout_center_x, 193.25);
 
         let mut double_request = single_request;
         double_request.single_style = false;
@@ -1174,6 +1344,14 @@ mod tests {
         let double = field_layout(double_request);
         assert_near(double.playfield_center_x, 447.0);
         assert_near(double.layout_center_x, 427.0);
+
+        let mut shared_request = single_request;
+        shared_request.num_players = 2;
+        shared_request.center_one_player = false;
+        shared_request.shared_sides = true;
+        let shared = field_layout(shared_request);
+        assert_near(shared.playfield_center_x, 407.0);
+        assert_near(shared.layout_center_x, 427.0);
     }
 
     #[test]
@@ -1187,7 +1365,40 @@ mod tests {
         wide_request.screen_width = 1000.0;
         wide_request.screen_center_x = 500.0;
         wide_request.placement = FieldPlacement::P2;
-        assert_near(field_layout(wide_request).playfield_center_x, 713.5);
+        assert_near(field_layout(wide_request).playfield_center_x, 713.75);
+    }
+
+    #[test]
+    fn side_centers_match_native_integer_margin_conversion() {
+        // At 854px the theme returns margins 77.5 / 155 / 77.5. Native
+        // SafeFArg makes those 77 / 155 / 77 before splitting the middle,
+        // yielding Player centers 213.25 and 640.75. Integer outer margins at
+        // 640px and 852px retain the exact quarter-screen centers.
+        for (width, centers) in [
+            (500.0, [90.0, 410.0]),
+            (640.0, [160.0, 480.0]),
+            (642.0, [160.25, 481.75]),
+            (800.0, [200.0, 600.0]),
+            (852.0, [213.0, 639.0]),
+            (854.0, [213.25, 640.75]),
+            (1000.0, [286.25, 713.75]),
+        ] {
+            for num_players in [1, 2] {
+                for (side, placement) in [FieldPlacement::P1, FieldPlacement::P2]
+                    .into_iter()
+                    .enumerate()
+                {
+                    let mut request = request();
+                    request.num_players = num_players;
+                    request.screen_width = width;
+                    request.screen_center_x = width * 0.5;
+                    request.placement = placement;
+                    let layout = field_layout(request);
+                    assert_near(layout.playfield_center_x, centers[side]);
+                    assert_near(layout.layout_center_x, centers[side]);
+                }
+            }
+        }
     }
 
     #[test]
@@ -1257,6 +1468,47 @@ mod tests {
     }
 
     #[test]
+    fn near_zero_mini_preserves_native_reverse_shift_and_column_offsets() {
+        // Native uses q as the NoteField scale but +0.01 as the reverse
+        // divisor when abs(q) < 0.01. The C++ comparison promotes the float
+        // zoom to double: the nearest f32 to 0.01 is still inside that guard.
+        for (zoom, reverse_ratio) in [
+            (0.0, 0.0),
+            (0.005, 0.5),
+            (-0.005, -0.5),
+            (0.01, 1.0),
+            (-0.01, -1.0),
+            (0.010000001, 1.0),
+            (-0.010000001, 1.0),
+            (1.0, 1.0),
+        ] {
+            for centered in [0.0, 0.4, 1.0, 1.4] {
+                let mut request = request();
+                request.field_zoom = zoom;
+                request.centered_scroll = centered;
+                request.notefield_offset_y = 10.0;
+                request.column_reverse_percent[..4].copy_from_slice(&[0.0, 0.25, 1.0, -0.1]);
+                request.song_lua_column_y_offsets[..4].copy_from_slice(&[8.0, -16.0, 32.0, 0.0]);
+                let layout = field_layout(request);
+                for col in 0..4 {
+                    // Theme reverse span is 270, centered at Y=260. Keep
+                    // authored column translation outside the divisor guard.
+                    let reverse = request.column_reverse_percent[col];
+                    let expected = 260.0
+                        + 135.0 * (2.0 * reverse - 1.0) * (1.0 - centered) * reverse_ratio
+                        + request.song_lua_column_y_offsets[col] * zoom;
+                    assert_near(layout.column_receptor_ys[col], expected);
+                }
+                let baseline = field_layout(FieldLayoutRequest {
+                    field_zoom: 1.0,
+                    ..request
+                });
+                assert_eq!(layout.hud_layout, baseline.hud_layout);
+            }
+        }
+    }
+
+    #[test]
     fn applies_song_lua_column_y_offsets_after_field_zoom() {
         let mut request = request();
         request.num_cols = 2;
@@ -1285,9 +1537,9 @@ mod tests {
         };
         let layout = field_layout(request);
 
-        assert_near(layout.judgment_x, 225.5);
-        assert_near(layout.combo_x, 205.5);
-        assert_near(layout.error_bar_x, 217.5);
+        assert_near(layout.judgment_x, 225.25);
+        assert_near(layout.combo_x, 205.25);
+        assert_near(layout.error_bar_x, 217.25);
         assert_near(layout.hud_layout.judgment_y, 217.0);
         assert_near(layout.hud_layout.zmod_layout.combo_y, 261.0);
         assert_near(layout.hud_layout.error_bar_y, 221.0);

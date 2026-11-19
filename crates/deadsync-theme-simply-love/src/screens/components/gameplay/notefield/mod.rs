@@ -611,6 +611,7 @@ pub(crate) fn compose_frame(
     notefield_plan: &GameplayNotefieldPlan,
     player_idx: usize,
     arrow_effect_time_s: f64,
+    arrow_tipsy_time_s: Option<f64>,
     noteskin_assets: &GameplayNoteskinAssets,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
@@ -628,11 +629,14 @@ pub(crate) fn compose_frame(
     center_1player_notefield: bool,
     song_lua_judgment_visible: bool,
     song_lua_combo_visible: bool,
+    song_lua_judgment_transform: Option<deadsync_notefield::HudActorTransform>,
+    song_lua_combo_transform: Option<deadsync_notefield::HudActorTransform>,
     show_song_visuals: bool,
     apply_attacks: bool,
     capture_requests: ProxyCaptureRequests,
     field_wrapper: glam::Mat4,
     field_wrapper_visible: bool,
+    player_position: Option<deadsync_notefield::SongLuaPlayerPosition>,
     warn_cmod_for_itl_chart: bool,
     display_mods_text: &std::sync::Arc<str>,
     timing_labels: &[deadsync_notefield::TimingSegmentLabel],
@@ -722,8 +726,7 @@ pub(crate) fn compose_frame(
         let runtime_profile = &state.profiles()[player_idx];
         let mini =
             effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        let zoom = mini.mul_add(-0.5, 1.0);
-        if zoom.abs() < 0.01 { 0.01 } else { zoom }
+        mini.mul_add(-0.5, 1.0)
     };
     // Canonical composition applies current DrawSize, Tilt, Mini, and the
     // Centered/Boomerang extension to these unscaled theme metrics.
@@ -852,6 +855,7 @@ pub(crate) fn compose_frame(
         song_lua: NotefieldSongLuaView {
             wrapper: field_wrapper,
             wrapper_visible: field_wrapper_visible,
+            player_position,
             column_splines: if show_song_visuals {
                 &state.song_lua_visuals().column_splines[player_idx]
             } else {
@@ -873,6 +877,7 @@ pub(crate) fn compose_frame(
         edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
             + player_idx as u8 * deadsync_notefield::EDIT_MEASURE_TEXT_SLOTS_PER_PLAYER,
         arrow_effect_time_s,
+        arrow_tipsy_time_s,
         music_time_s: state.current_music_time_seconds(),
     };
     let Some(prepared) = prepare_notefield(&request) else {
@@ -931,7 +936,7 @@ pub(crate) fn compose_frame(
             }
             let col = col_start + local_col;
             let showing = state
-                .active_hold(col)
+                .active_hold_for_render(col)
                 .filter(|active| {
                     request
                         .chart
@@ -956,7 +961,7 @@ pub(crate) fn compose_frame(
             });
             hold_emitters[local_col].update(elapsed_screen, showing, emitter);
             NotefieldLaneFeedback {
-                active_hold: state.active_hold(col),
+                active_hold: state.active_hold_for_render(col),
                 hold_emitter: hold_emitters[local_col],
                 receptor_bop_zoom: if options.hide_targets {
                     0.0
@@ -1040,6 +1045,7 @@ pub(crate) fn compose_frame(
             combo_color,
             font: notefield_plan.combo_font,
             number_text_slot: super::FRAME_TEXT_COMBO_BASE + player_idx as u8,
+            transform: song_lua_combo_transform,
         }
     });
 
@@ -1127,7 +1133,11 @@ pub(crate) fn compose_frame(
         && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
         && let Some(sprite) = judgment_sprite
     {
-        Some(TapJudgmentHudFrame { render, sprite })
+        Some(TapJudgmentHudFrame {
+            render,
+            sprite,
+            transform: song_lua_judgment_transform,
+        })
     } else {
         None
     };

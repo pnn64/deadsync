@@ -211,17 +211,24 @@ impl SongLiveFrames {
         runtime: &mut SongRuntime,
         player: usize,
         life: f32,
+        seconds: f32,
     ) -> Result<(), Error> {
         let owners = self.owners(runtime)?;
-        if let Some(p) = runtime.statistics.lock().unwrap().players.as_mut() {
-            p[player].life_record_latest = Some(life);
-        }
+        let latest = {
+            let mut state = runtime.statistics.lock().unwrap();
+            state.life_records[player].record_at(seconds, life);
+            let latest = state.life_records[player].samples.last().map_or(0.0, |&(_, life)| life);
+            if let Some(p) = state.players.as_mut() {
+                p[player].life_record_latest = Some(latest);
+            }
+            latest
+        };
         runtime.vm.with_native_stack(|s| {
             let base = s.top();
             s.push(owners)?;
             s.raw_get_integer(s.top_offset(), (player + 2) as i32)?;
             let stats = s.top();
-            write(s, stats, "__songlua_life", number(life), true)?;
+            write(s, stats, "__songlua_life", number(latest), true)?;
             s.set_top(base)
         })?;
         runtime
@@ -497,6 +504,28 @@ impl SongLiveFrames {
         Ok(beat)
     }
 
+    pub(super) fn current_music_rate(&self, runtime: &mut SongRuntime) -> Result<f32, Error> {
+        let owners = self.owners(runtime)?;
+        runtime.vm.with_native_stack(|stack| {
+            let base = stack.top();
+            stack.push(owners)?;
+            index(stack, stack.top(), 4)?;
+            read(stack, stack.top(), "__songlua_music_rate", true)?;
+            let rate = stack.number(-1)? as f32;
+            stack.set_top(base)?;
+            Ok(rate)
+        })
+    }
+
+    pub(super) fn stage_clock_state(&self, runtime: &mut SongRuntime, beat: f32, song_bounds: [f32; 2]) -> Result<(f32, bool), Error> {
+        let rate = self.current_music_rate(runtime)?;
+        let seconds = self.context.song_note_bounds.unwrap_or(song_bounds);
+        let bounds = seconds.map(|seconds| self.context.song_timing.as_ref().map_or_else(
+            || seconds * self.context.song_display_bpms[1] / 60.0,
+            |timing| timing.get_song_position_with_rate(seconds, rate).beat));
+        Ok((rate, beat >= bounds[0] && beat < bounds[1]))
+    }
+
     /// ScreenGameplay's post-actor health phase. Publish each new status before
     /// notifying its listeners, so nested writes affect the following player.
     /// The scene coordinator owns the existing report-once error policy.
@@ -708,22 +737,14 @@ fn runtime_table(stack: &mut NativeStack<'_, '_>, globals: usize) -> Result<(), 
     require_table(stack, stack.top())
 }
 fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> Result<(), Error> {
-    let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
     runtime.vm.with_native_stack(|stack| {
         let base = stack.top();
         stack.push(owners)?;
         let batch = stack.top();
         index(stack, batch, 1)?;
         let stage = stack.top();
-        if !paused {
-            write(
-                stack,
-                stage,
-                "__songlua_gameplay_seconds",
-                Value::Number(frame.screen_seconds),
-                true,
-            )?;
-        }
+        write(stack, stage, "__songlua_gameplay_seconds", Value::Number(frame.gameplay_seconds), true)?;
+        write(stack, stage, "__songlua_steps_seconds", Value::Number(frame.steps_seconds), true)?;
         stack.set_top(stack.top() - 1)?;
         let routine = frame.routine.unwrap_or_default();
         for (i, player) in frame
@@ -734,12 +755,16 @@ fn feed(runtime: &mut SongRuntime, owners: Value, frame: &SongLuaLiveFrame) -> R
         {
             index(stack, batch, if i == LUA_PLAYERS { 7 } else { i + 2 })?;
             let stats = stack.top();
+            for (key, value) in [("__songlua_score", player.score), ("__songlua_cur_max_score", player.current_max_score)] {
+                if let Some(value) = value { write(stack, stats, key, Value::Number(f64::from(value)), true)?; }
+            }
             for (key, value) in [
                 (
                     "__songlua_possible_dance_points",
                     player.possible_points as f64,
                 ),
                 ("__songlua_actual_dance_points", player.actual_points as f64),
+                ("__songlua_alive_seconds", f64::from(player.alive_seconds)),
                 ("__songlua_max_combo", player.recorded_max_combo as f64),
                 (
                     "__songlua_current_possible_dance_points",

@@ -207,7 +207,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
 
     let receptor = notes.receptor;
     let tap_explosion = notes.tap_explosion;
-    let col_offsets = notes.col_offsets;
+    let col_offsets = notes.unzoomed_col_offsets;
     let invert_distances = notes.invert_distances;
     let tornado_bounds = notes.tornado_bounds;
     let beat_factor = notes.beat_factor;
@@ -255,13 +255,18 @@ pub(crate) fn compose_notefield_feedback<S, F>(
         }
         let lane = frame.lanes[local_col];
         let mut effect = gameplay_visual_effect_params(&visual, local_col);
-        effect.col_x = notes.col_offsets[local_col];
+        effect.col_x = notes.unzoomed_col_offsets[local_col];
         effect.tornado_z_bounds = notes.tornado_z_bounds[local_col];
         let transform_cache = crate::lane_note_transform_cache(current_beat, effect);
         lane_rotations_x[local_col] = transform_cache.confusion_rotation_x_deg;
         lane_rotations_y[local_col] = transform_cache.confusion_rotation_y_deg;
-        lane_depths[local_col] = move_col_extra(&visual.move_z_cols, local_col)
-            + crate::note_world_z_cached(0.0, notes.note_depth_frame_cache, transform_cache);
+        lane_depths[local_col] = crate::transforms::note_world_z_with_field_zoom(
+            0.0,
+            field_zoom,
+            move_col_extra(&visual.move_z_cols, local_col),
+            notes.note_depth_frame_cache,
+            transform_cache,
+        );
         let spline = prepared.column_position_splines[local_col];
         let spline_z = prepared.column_spline_receptors[local_col][2] * field_zoom;
         lane_depths[local_col] = if spline.enabled && spline.absolute {
@@ -288,7 +293,7 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             + prepared.column_rotations_deg[local_col];
         lane_rotations[local_col] = confusion_rotation_deg;
         let mut center = receptor_row_center(
-            field.playfield_center_x,
+            0.0,
             local_col,
             receptor_y,
             beat_factor,
@@ -347,7 +352,9 @@ pub(crate) fn compose_notefield_feedback<S, F>(
             notes.tiny_spacing_scale,
             lane_tipsy_offsets[local_col],
         );
-        center[0] += prepared.column_x_offsets[local_col];
+        center[0] = field.playfield_center_x
+            + center[0] * field_zoom
+            + prepared.column_x_offsets[local_col];
         center[1] += crate::transforms::beat_wave_offset(
             0.0,
             notes.beat_y_factor,
@@ -678,7 +685,8 @@ mod tests {
         let mut tipsy = [0.0; MAX_COLS];
         crate::fill_gameplay_lane_effects(
             &request.visual.visual,
-            prepared.arrow_effect_time_s,
+            prepared.tipsy_time_s,
+            prepared.field_zoom,
             prepared.frame_plan.num_cols,
             &mut [crate::VisualEffectParams::default(); MAX_COLS],
             &mut [0.0; MAX_COLS],
@@ -1183,6 +1191,7 @@ mod tests {
             song_lua: NotefieldSongLuaView {
                 wrapper: glam::Mat4::IDENTITY,
                 wrapper_visible: true,
+                player_position: None,
                 note_hides,
                 column_offsets: &[],
                 column_splines: &[],
@@ -1191,6 +1200,7 @@ mod tests {
             capture_requests: ProxyCaptureRequests::default(),
             edit_measure_text_slot_base: 0,
             arrow_effect_time_s: 0.1,
+            arrow_tipsy_time_s: None,
             music_time_s: 0.1,
         }
     }
@@ -1235,6 +1245,7 @@ mod tests {
                     combo_color: [1.0; 4],
                     font: Some("combo"),
                     number_text_slot: 0,
+                    transform: None,
                 }),
                 error_bar: None,
                 counter: None,
@@ -1247,6 +1258,7 @@ mod tests {
                 judgment: Some(JudgmentHudFrame {
                     tap: Some(TapJudgmentHudFrame {
                         render: &render,
+                        transform: None,
                         sprite: TapJudgmentSprite {
                             source: SpriteSource::Texture("judgment".into()),
                             frame_size: [100.0, 40.0],
@@ -1290,6 +1302,162 @@ mod tests {
                 );
                 assert_eq!(result.combo_draw_range, Some(0..1));
                 assert_eq!(result.judgment_draw_range, Some(1..2));
+            }
+        }
+    }
+
+    #[test]
+    fn hud_child_transform_positions_tap_without_moving_hold_results() {
+        use crate::{
+            CapturedActorScratch, HudActorTransform, IndicatorSprite, JudgmentHudFrame,
+            NotefieldHudFrameView, TapJudgmentHudFrame, TapJudgmentSprite, compose_notefield_hud,
+        };
+        use deadlib_present::compose::{ActorSegment, ComposeScratch, TextLayoutCache};
+        use deadsync_gameplay::{HoldJudgmentRenderInfo, JudgmentRenderInfo};
+        use deadsync_rules::{
+            judgment::{Judgment, TimingWindow},
+            note::HoldResult,
+        };
+        use glam::{Mat4, Vec3, Vec4};
+
+        struct Textures;
+        impl deadlib_present::texture::TextureContext for Textures {
+            fn texture_registry_generation(&self) -> u64 {
+                1
+            }
+            fn texture_dims(&self, _: &str) -> Option<deadlib_present::texture::TextureMeta> {
+                Some(deadlib_present::texture::TextureMeta { w: 80, h: 40 })
+            }
+            fn sprite_sheet_dims(&self, _: &str) -> (u32, u32) {
+                (1, 1)
+            }
+            fn texture_handle(&self, name: &str) -> u64 {
+                if name == "tap" { 1 } else { 2 }
+            }
+        }
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let render = JudgmentRenderInfo {
+            judgment: Judgment {
+                time_error_ms: -12.0,
+                time_error_music_ns: -12_000_000,
+                grade: JudgeGrade::Great,
+                window: Some(TimingWindow::W3),
+                miss_because_held: false,
+            },
+            started_at_screen_s: 0.0,
+        };
+        let holds = [Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 0.0,
+        })];
+        // Native Actor::Draw order: wrapper translation/rotation/scale, then
+        // Player's Judgment position and zoom. The theme sprite is a child.
+        let native = HudActorTransform {
+            matrix: Mat4::from_translation(Vec3::new(80.0, 40.0, 0.0))
+                * Mat4::from_rotation_z(std::f32::consts::FRAC_PI_2)
+                * Mat4::from_scale(Vec3::new(2.0, 3.0, 1.0))
+                * Mat4::from_translation(Vec3::new(0.0, -30.0, 0.0))
+                * Mat4::from_scale(Vec3::new(0.5, 0.25, 1.0)),
+            tint: [0.2, 0.4, 0.6, 0.8],
+        };
+        let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+        let mut hold_reference = None;
+        for (transformed, captured) in [(false, false), (true, false), (true, true)] {
+            let mut req = request(&ns, &timing, &[], &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            req.visual.mini_percent = 100.0;
+            req.options.judgment_animation = crate::TapJudgmentAnimation::Still;
+            req.capture_requests.judgment = captured;
+            let prepared = prepare_notefield(&req).unwrap();
+            let hud = NotefieldHudFrameView {
+                combo: None,
+                error_bar: None,
+                counter: None,
+                mini: None,
+                judgment: Some(JudgmentHudFrame {
+                    tap: Some(TapJudgmentHudFrame {
+                        render: &render,
+                        sprite: TapJudgmentSprite {
+                            source: SpriteSource::Texture("tap".into()),
+                            frame_size: [80.0, 40.0],
+                            frame_cols: 1,
+                            frame_rows: 7,
+                        },
+                        transform: transformed.then_some(native),
+                    }),
+                    held_misses: &[],
+                    held_miss_sprite: None,
+                    hold_judgments: &holds,
+                    hold_sprite: Some(IndicatorSprite {
+                        source: SpriteSource::Texture("hold".into()),
+                        frame_size: [80.0, 40.0],
+                        frame_cols: 1,
+                        frame_rows: 2,
+                        scale: 1.0,
+                    }),
+                }),
+            };
+            let mut actors = Vec::new();
+            let mut draws = Vec::new();
+            let result = compose_notefield_hud(
+                &mut actors,
+                &mut draws,
+                &req,
+                &prepared,
+                &hud,
+                &mut CapturedActorScratch::with_capacities(16, 8),
+            );
+            assert_eq!(result.judgment_actors.is_some(), captured);
+            let frame = deadlib_present::compose::build_screen_segments_cached_with_scratch_and_texture_context_and_actor_resources(
+                &[ActorSegment::new(&actors).with_flat_draws(&draws, None)], [0.0; 4], &metrics,
+                &deadlib_present::font::FontMap::default(), 0.1,
+                &mut TextLayoutCache::default(), &mut ComposeScratch::default(),
+                &Textures, &deadlib_present::actors::ActorResourceArena::new(0),
+            );
+            assert_eq!(frame.sprite_instances.len(), 2, "tap and independent hold");
+            for op in &frame.ops {
+                let deadlib_render_core::DrawOp::Sprite(run) = op else {
+                    continue;
+                };
+                let sprite = &frame.sprite_instances[run.instance_start as usize];
+                let camera = frame.cameras[run.camera as usize];
+                if run.texture_handle == 2 {
+                    let geometry = (sprite.center, sprite.size, sprite.tint, camera);
+                    if let Some(expected) = hold_reference {
+                        assert_eq!(
+                            geometry, expected,
+                            "tap transform must not change hold geometry or Mini"
+                        );
+                    } else {
+                        hold_reference = Some(geometry);
+                    }
+                } else if transformed {
+                    assert_eq!(sprite.tint, native.tint);
+                    for (local, expected_local) in [
+                        ([0.0, 0.0], [170.0, 40.0]),
+                        ([-30.0, 15.0], [181.25, 10.0]),
+                        ([30.0, -15.0], [158.75, 70.0]),
+                    ] {
+                        let clip = camera
+                            * Vec4::new(
+                                sprite.center[0] + local[0],
+                                sprite.center[1] + local[1],
+                                sprite.center[2],
+                                1.0,
+                            );
+                        let expected = [
+                            (prepared.field.playfield_center_x + expected_local[0] - 320.0) / 320.0,
+                            -expected_local[1] / 240.0,
+                        ];
+                        for axis in 0..2 {
+                            assert!(
+                                (clip[axis] / clip.w - expected[axis]).abs() < 0.000002,
+                                "captured={captured}, corner={local:?}: {clip:?} != {expected:?}"
+                            );
+                        }
+                    }
+                }
             }
         }
     }
@@ -3771,7 +3939,9 @@ mod tests {
                         request.geometry.column_dirs.fill(direction);
                         request.geometry.field_zoom = zoom;
                         request.visual.visual.move_z_cols[0] = move_z;
-                        let lane_depth = 64.0 * move_z;
+                        // Native SetPRZForActor adds ArrowEffects and spline Z
+                        // before Player's uniform NoteField Mini scale.
+                        let lane_depth = 64.0 * move_z * zoom;
                         let before = render(&request);
                         request.song_lua.column_offsets = &windows;
                         let after = render(&request);
@@ -3789,7 +3959,6 @@ mod tests {
                                 .expect("composed sprite")
                         };
                         for key in ["note", "target0"] {
-                            // ArrowEffects depth is raw; the prepared spline supplies its own scaled Z.
                             assert_eq!(sprite(&before, key)[2], lane_depth);
                         }
                         // Native t=(2-1)/8 gives (-6,81,.025); receptor t=0
@@ -4138,8 +4307,8 @@ mod tests {
                                 &source,
                             );
                             let endpoints = [
-                                prepared.field.column_receptor_ys[0] + dir * low * zoom + 32.0,
-                                prepared.field.column_receptor_ys[0] + dir * high * zoom + 32.0,
+                                prepared.field.column_receptor_ys[0] + (dir * low + 32.0) * zoom,
+                                prepared.field.column_receptor_ys[0] + (dir * high + 32.0) * zoom,
                             ];
                             let bounds = [
                                 endpoints[0].min(endpoints[1]),
@@ -4630,6 +4799,94 @@ mod tests {
                 assert!(opacity.is_empty(), "{mode:?}: {opacity:?}");
             }
         }
+    }
+
+    #[test]
+    fn native_tipsy_clock_is_independent_in_composed_fields() {
+        use crate::{
+            CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
+            compose_notefield_field,
+        };
+        let mut ns = noteskin();
+        ns.notes = (0..2 * deadsync_noteskin::NUM_QUANTIZATIONS)
+            .map(|_| TestSlot::new("clock-note"))
+            .collect();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let mut tap = note(0);
+        tap.note_type = NoteType::Tap;
+        tap.beat = 3.0;
+        let notes = [tap];
+        let lanes = [
+            vec![deadsync_gameplay::ChartNoteIndex::try_from_usize(0).unwrap()],
+            vec![],
+        ];
+        let render = |game, tipsy| {
+            let mut request = request(&ns, &timing, &notes, &hides, FieldPlacement::P1, 0, 1, 2, 2);
+            request.chart.lane_note_row_indices = &lanes;
+            request.chart.note_itg_rows = &[144];
+            request.arrow_effect_time_s = game;
+            request.arrow_tipsy_time_s = tipsy;
+            request.visual.visual.tipsy = 1.0;
+            request.visual.visual.drunk = 1.0;
+            let prepared = prepare_notefield(&request).expect("field");
+            let lane_offset = prepared.notes.as_ref().unwrap().travel.lane_offset(0);
+            let frame = NotefieldFieldFrameView {
+                feedback: spline_feedback(&[]),
+                completed_rows: Default::default(),
+            };
+            let mut draws = Vec::new();
+            compose_notefield_field(
+                &mut Vec::new(),
+                &mut draws,
+                &mut Vec::new(),
+                &mut ModelMeshCache::default(),
+                &mut HoldMeshScratch::with_columns(2),
+                &mut CapturedActorScratch::with_capacities(16, 0),
+                &mut NotefieldCameraCache::default(),
+                &request,
+                &prepared,
+                &frame,
+                &source,
+            );
+            let mut arrow = None;
+            let mut receptor = None;
+            for draw in draws {
+                if let FlatDraw::Sprite(sprite) = draw {
+                    match sprite.source.texture_key() {
+                        Some("clock-note") => arrow = Some(sprite.center),
+                        Some("target0") => receptor = Some(sprite.center),
+                        _ => {}
+                    }
+                }
+            }
+            (arrow.expect("tap"), receptor.expect("receptor"), lane_offset)
+        };
+        let baseline = render(0.0, None);
+        let cache_time = f64::from(std::f32::consts::PI / 1.2);
+        let cached = render(0.0, Some(cache_time));
+        // Native column-zero Tipsy moves from +25.6 to -25.6 at these times.
+        // The travel/culling path and both visible actors must use that cache.
+        for (before, after) in [
+            (baseline.0[1], cached.0[1]),
+            (baseline.1[1], cached.1[1]),
+            (baseline.2, cached.2),
+        ] {
+            assert!((after - before + 51.2).abs() < 0.0001);
+        }
+        assert_eq!(baseline.0[0], cached.0[0], "Tipsy does not retime note Drunk");
+        assert_eq!(
+            baseline.1[0], cached.1[0],
+            "Tipsy does not retime receptor Drunk"
+        );
+        // A half-cycle gives both actors a decisive Drunk change, avoiding
+        // accidentally near-symmetric note phases around the cosine minimum.
+        let later_draw = render(std::f64::consts::PI, Some(cache_time));
+        assert_eq!(cached.0[1], later_draw.0[1]);
+        assert_eq!(cached.1[1], later_draw.1[1]);
+        assert!((cached.0[0] - later_draw.0[0]).abs() > 1.0);
+        assert!((cached.1[0] - later_draw.1[0]).abs() > 1.0);
+        assert_eq!(render(1.0, None), render(1.0, Some(1.0)), "normal fallback");
     }
 
     #[test]
@@ -6206,7 +6463,12 @@ mod tests {
                         if let FlatDraw::Sprite(sprite) = draw {
                             let key = sprite.source.texture_key();
                             if key == Some(if col == 0 { "note0" } else { "note1" }) {
-                                arrow = Some(sprite.size);
+                                // Native world_zoom is signed. Sprite storage
+                                // uses positive size plus per-axis UV inversion.
+                                arrow = Some([
+                                    if sprite.flip_x { -sprite.size[0] } else { sprite.size[0] },
+                                    if sprite.flip_y { -sprite.size[1] } else { sprite.size[1] },
+                                ]);
                             } else if key == Some(if col == 0 { "target0" } else { "target1" }) {
                                 receptor = Some(sprite.center);
                             }
@@ -6355,8 +6617,15 @@ mod tests {
                     request.geometry.draw_distance_after_targets = 1536.0;
                     request.visual.visual.confusion_x = value("strength_x");
                     request.visual.visual.confusion_y = value("strength_y");
-                    request.visual.visual.confusion_x_offset = value("offset_x");
-                    request.visual.visual.confusion_y_offset = value("offset_y");
+                    if col == 0 {
+                        request.visual.visual.confusion_x_offset = value("offset_x");
+                        request.visual.visual.confusion_y_offset = value("offset_y");
+                    } else {
+                        // Native ArrowEffects adds lane offsets on the same
+                        // axes as global offsets, including hold heads/bodies.
+                        request.visual.visual.confusion_x_offset_cols[col] = value("offset_x");
+                        request.visual.visual.confusion_y_offset_cols[col] = value("offset_y");
+                    }
                     request.visual.visual.roll = value("roll");
                     request.visual.visual.twirl = value("twirl");
                     let prepared = prepare_notefield(&request).expect("prepared Beat field");
@@ -6634,7 +6903,7 @@ mod tests {
         }
     }
     #[test]
-    fn bounce_tornado_reach_composed_notes() {
+    fn mini_x_effects_reach_composed_notes_and_receptors() {
         use crate::{
             CapturedActorScratch, HoldMeshScratch, NotefieldCameraCache, NotefieldFieldFrameView,
             compose_notefield_field,
@@ -6673,7 +6942,14 @@ mod tests {
                         .expect("positive fixture beat");
             }
             let rows = [96, 144];
-            for direction in [-1.0, 1.0] {
+            for (direction, field_zoom, drunk) in [
+                (-1.0, 1.0, 0.0),
+                (1.0, 1.0, 0.0),
+                (-1.0, 0.75, 1.5),
+                (1.0, 0.75, 1.5),
+                (-1.0, -0.5, -1.5),
+                (1.0, -0.5, -1.5),
+            ] {
                 for vector in native["vectors"].as_array().expect("native vectors") {
                     let value = |name: &str| vector[name].as_f64().expect("native float") as f32;
                     if value("columns") != 2.0 || value("column") != 0.0 || value("travel") != 0.0 {
@@ -6684,12 +6960,15 @@ mod tests {
                     request.chart.lane_note_row_indices = &lanes;
                     request.chart.note_itg_rows = &rows;
                     request.geometry.column_dirs.fill(direction);
+                    request.geometry.field_zoom = field_zoom;
+                    request.arrow_effect_time_s = 0.37;
                     request.visual.visual.bounce = value("bounce");
                     request.visual.visual.bounce_offset = value("bounce_offset");
                     request.visual.visual.bounce_period = value("bounce_period");
                     request.visual.visual.tornado = value("tornado");
                     request.visual.visual.tornado_offset = value("tornado_offset");
                     request.visual.visual.tornado_period = value("tornado_period");
+                    request.visual.visual.drunk = drunk;
                     request.visual.visual.tiny = 1.0;
                     request.visual.visual.move_x_cols = [0.5; MAX_COLS];
                     request.visual.visual.move_y_cols = [0.5; MAX_COLS];
@@ -6743,17 +7022,23 @@ mod tests {
                             })
                             .expect("independent note/receptor sample");
                         let native_x = sample["x"].as_f64().expect("native X") as f32;
-                        let expected_x = prepared.field.playfield_center_x + native_x * 0.5 + 32.0;
+                        // Native evaluates Drunk with pre-Mini travel, then
+                        // scales the whole Tiny/MoveX result with NoteField.
+                        let native_drunk = drunk
+                            * ((0.37 + col as f32 * 0.2 + travel * 10.0 / 480.0).cos() * 32.0);
+                        let expected_x = prepared.field.playfield_center_x
+                            + ((native_x + native_drunk) * 0.5 + 32.0) * field_zoom;
                         assert!(
-                            (sprite.center[0] - expected_x).abs() < 0.00005,
-                            "{kind:?}, direction={direction}, {sample}, actual={:?}",
+                            (sprite.center[0] - expected_x).abs() < 0.0001,
+                            "{kind:?}, Mini={field_zoom}, direction={direction}, {sample}, actual={:?}",
                             sprite.center
                         );
-                        if index < 2 {
-                            let expected_y =
-                                prepared.field.column_receptor_ys[col] + 32.0 + direction * travel;
-                            assert!((sprite.center[1] - expected_y).abs() < 0.00005);
-                        }
+                        let expected_y = prepared.field.column_receptor_ys[col]
+                            + (32.0 + direction * travel) * field_zoom;
+                        assert!(
+                            (sprite.center[1] - expected_y).abs() < 0.00005,
+                            "{kind:?}, Mini={field_zoom}, direction={direction}, index={index}",
+                        );
                         checked[index] = true;
                     }
                     assert_eq!(checked, [true; 4], "notes and receptors must render");

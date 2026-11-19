@@ -49,6 +49,9 @@ pub(super) struct Dispatch {
 pub(super) struct Capture {
     touched: Vec<usize>,
     pub(super) frames: HashMap<usize, SongReplayImmediateUpdates>,
+    // Actual setters are discontinuities; published tween/effect poses are
+    // samples of continuous motion. Retain that distinction until frame drain.
+    step_targets: HashMap<usize, u128>,
     pending: HashMap<usize, Vec<(Target, UpdateValue)>>,
     pub(super) prior_positions: HashMap<usize, [f32; 3]>,
 }
@@ -127,6 +130,7 @@ impl Capture {
     }
 
     fn drain(&mut self, include_empty: bool) -> Vec<SongReplayImmediateUpdates> {
+        self.step_targets.clear();
         self.touched
             .drain(..)
             .map(|index| self.frames.remove(&index).unwrap())
@@ -142,6 +146,27 @@ impl Capture {
 }
 
 impl Actors {
+    pub(crate) fn song_player_step_targets(
+        &self,
+        vm: &Vm,
+        screen: ActorScene,
+        indices: &[Option<usize>; crate::LUA_PLAYERS],
+    ) -> [u128; crate::LUA_PLAYERS] {
+        let store = vm.store_ref();
+        let capture = store
+            .scenes
+            .get(&screen.id)
+            .and_then(|scene| scene.song_session.as_ref())
+            .and_then(|session| session.messages.as_ref());
+        std::array::from_fn(|player| {
+            indices[player]
+                .and_then(|index| {
+                    capture.and_then(|capture| capture.immediate.step_targets.get(&index).copied())
+                })
+                .unwrap_or(0)
+        })
+    }
+
     pub(crate) fn set_song_pending_overlay_updates(
         &self,
         vm: &mut Vm,
@@ -331,6 +356,47 @@ pub(super) fn context(store: &Store, id: TableId) -> Option<(u64, usize)> {
         .messages
         .as_ref()?;
     Some((owner, *capture.indices.get(&id)?))
+}
+
+pub(super) fn record_pose_step(
+    store: &mut Store,
+    id: TableId,
+    delta: &crate::SongLuaOverlayStateDelta,
+) {
+    let Some((owner, index)) = context(store, id) else {
+        return;
+    };
+    let actor = &store.actors[&id];
+    // Ordinary queues identify a live back tween. Sampled actors retain their
+    // physical entries after completion; their scheduled/retargeted updates
+    // decide whether a setter changes a pending tween instead. Otherwise the
+    // setter changes the current pose on this frame, never before.
+    if (!song_pose::mode(store, id) && !actor.queue.is_empty())
+        || actor
+            .capture
+            .as_ref()
+            .is_some_and(|capture| capture.scheduled())
+    {
+        return;
+    }
+    let targets = crate::tween_pose::TARGETS
+        .into_iter()
+        .filter(|target| delta.has_update_target(*target))
+        .fold(0_u128, |mask, target| mask | (1_u128 << target as usize));
+    if targets == 0 {
+        return;
+    }
+    let capture = store
+        .scenes
+        .get_mut(&owner)
+        .unwrap()
+        .song_session
+        .as_mut()
+        .unwrap()
+        .messages
+        .as_mut()
+        .unwrap();
+    *capture.immediate.step_targets.entry(index).or_default() |= targets;
 }
 
 pub(super) fn record(call: &mut HostCall<'_>, id: TableId, target: Target, value: UpdateValue) {

@@ -43,11 +43,33 @@ uses fewer cycles than zune-jpeg, image and jpeg-decoder in every corpus group
 in both runs, and fewer allocation calls and bytes overall. These are corpus
 averages; three individual files remain within noise of zune-jpeg.
 
+**Without AVX2.** [`no_avx2.py`](no_avx2.py) builds the same benchmark as it
+runs on an x86-64 CPU without AVX2: native with `--cfg
+deadlib_image_jpeg_portable` (no dispatch), and zune-core patched in a
+throwaway copy so `use_avx2()` returns false, which is all zune-jpeg checks
+on x86 (image follows, as its backend). jpeg-decoder keeps SSSE3, present on
+pre-AVX2 CPUs. Sampling profiles of both decoders showed no AVX2 frames.
+
+| Corpus, no AVX2 | Images | Native / zune-jpeg | Native / image | Native / jpeg-decoder |
+| --- | ---: | ---: | ---: | ---: |
+| all | 31 | 0.822 | 0.708 | 0.522 |
+| assets | 5 | 0.941 | 0.938 | 0.873 |
+| sequential fixtures | 13 | 0.788 | 0.587 | 0.420 |
+| progressive fixtures | 13 | 0.814 | 0.767 | 0.532 |
+
+Run ratios against zune-jpeg were 0.821 and 0.823. Native is faster in both
+runs on all 31 files against image and jpeg-decoder and on 26 against
+zune-jpeg; the exceptions are 31x25 sequential fixtures (multi-scan 1.215x,
+4:4:0 1.108x, CMYK 1.030x, 4:1:0 1.025x, 4:1:1 1.011x). Pixel diagnostics
+equal the AVX2 run on all 93 file/reference pairs.
+([data](results/windows-x86_64-20261117-no-avx2/))
+
 | Progress on this corpus (native / zune-jpeg) | Geomean |
 | --- | ---: |
 | start of this iteration | 1.467 |
 | SSE2-only, unsafe forbidden ([data](results/windows-x86_64-20261117/)) | 0.908 |
 | runtime AVX2 dispatch (this report) | 0.755 |
+| both decoders without AVX2 | 0.822 |
 
 How it gets there:
 
@@ -84,9 +106,29 @@ Validation: 176 tests pass, including official ITU T.83 streams, C-oracle
 coefficient and sample fixtures, truncation/mutation acceptance against the
 strict decoder, sparse and dispatched IDCT equivalence tests (200,000 and
 100,000 blocks), and the exhaustive color test through both dispatch modes.
-Strict Clippy passes for the crate and the benchmark workspace. Sanitizer
-fuzzing, CPUs without AVX2 (beyond the forced-portable tests) and other
-architectures were not run in this iteration.
+Strict Clippy passes for the crate and the benchmark workspace. The full
+suite also passes with `--cfg deadlib_image_jpeg_portable`, and 47 tests pass
+on i686. Physical CPUs without AVX2 and non-x86 architectures were not timed.
+
+**Sanitizer fuzzing.** Two AddressSanitizer campaigns (Linux x86-64 under WSL,
+nightly 1.101, cargo-fuzz with debug assertions) ran the
+[`decode` target](../fuzz/README.md): the bounded pixel decoder must equal the
+portable coefficient/plane/image pipeline in acceptance and pixels. Coverage
+feedback came only from the native image crates, which the object audit
+confirmed; both campaigns started from the same 591 fixture and asset seeds.
+
+| Campaign | Executions | Seconds | Edges (start, end) | Corpus (start, end) | Failures |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| AVX2 dispatch | 200,000 | 2,317 | 3,479, 4,151 | 371, 1,436 | 0 |
+| `--cfg deadlib_image_jpeg_portable` | 200,000 | 2,613 | 3,917, 4,680 | 371, 1,445 | 0 |
+
+No ASan report, panic, overflow or oracle mismatch occurred, and every
+recorded source hash matches the committed files. This is evidence, not a
+proof: feedback includes native-crate standard-library monomorphizations, and
+the oracle cannot detect errors shared by both pipelines (the C-oracle and
+T.83 tests cover those).
+([summary](results/linux-x86_64-20261117-fuzz/asan-summary.json), manifests
+and logs alongside.)
 
 Raw data: [timing run 1](results/windows-x86_64-20261117-avx2/timing-run1.tsv),
 [timing run 2](results/windows-x86_64-20261117-avx2/timing-run2.tsv),

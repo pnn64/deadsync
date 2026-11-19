@@ -42,6 +42,7 @@ impl RoutineStageStats {
             miss_combo_multiplier,
         );
         set_row_finalization_player_state(&mut self.stats, row);
+        self.stats.stage_score.tap(judgment.grade, self.stats.stage_failed);
         if update.update_grade_totals {
             self.refresh_points();
         }
@@ -61,6 +62,7 @@ impl RoutineStageStats {
         let mut stats = hold_result_stats_state(&self.stats);
         apply_hold_result_stats_update(&mut stats, update);
         set_hold_result_stats_state(&mut self.stats, stats);
+        self.stats.stage_score.hold(result, self.stats.stage_failed);
         if update.update_grade_totals {
             self.refresh_points();
         }

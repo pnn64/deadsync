@@ -1771,6 +1771,7 @@ version = "0.1.0"
 dependencies = [
  "deadsync-core",
  "log",
+ "memchr",
 ]
 
 [[package]]

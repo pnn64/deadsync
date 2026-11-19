@@ -437,6 +437,17 @@ pub(super) fn wrapper_initials(
     let retained = retain_table(call, root)?;
     let mut states = HashMap::new();
     collect_wrappers(call, root, retained, &mut states)?;
+    // Player trees are updated alongside song layers, but are not children of
+    // the authored root. Wrappers created by Init/On must retain their startup
+    // queues before the first pose read promotes them into chronological replay.
+    let globals = table(call, helper(call, 5)?)?;
+    for key in ["__songlua_top_screen_player_1", "__songlua_top_screen_player_2"] {
+        let player = get_static(call, globals, key.as_bytes())?;
+        if player != Value::Nil {
+            let player = table(call, player)?;
+            collect_wrappers(call, player, retained, &mut states)?;
+        }
+    }
     Ok(states)
 }
 fn collect_wrappers(

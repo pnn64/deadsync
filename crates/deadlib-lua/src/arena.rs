@@ -161,11 +161,14 @@ impl<T> Arena<T> {
         self.values.get(slot)?.as_ref()
     }
     pub fn remove(&mut self, key: u64) -> Option<T> {
-        if !self.contains(key) {
+        let slot = index(key);
+        if self.generations.get(slot).copied() != Some((key >> 32) as u32) {
             return None;
         }
-        let slot = index(key);
-        let value = self.values[slot].take();
+        self.remove_at(slot)
+    }
+    fn remove_at(&mut self, slot: usize) -> Option<T> {
+        let value = self.values[slot].take()?;
         self.live -= 1;
         // Retire a slot at generation exhaustion rather than alias an old handle.
         if let Some(next) = self.generations[slot].checked_add(1) {
@@ -173,7 +176,7 @@ impl<T> Arena<T> {
             self.free.push(slot as u32);
         }
         self.marks[slot / 64] &= !(1u64 << (slot % 64));
-        value
+        Some(value)
     }
     pub fn get_mut(&mut self, key: u64) -> Option<&mut T> {
         let slot = index(key);
@@ -208,15 +211,35 @@ impl<T> Arena<T> {
         }
     }
     pub fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
+        self.sweep_with(cursor, budget, |_, _| {})
+    }
+    pub fn sweep_with(
+        &mut self,
+        cursor: &mut usize,
+        budget: usize,
+        mut before_remove: impl FnMut(&Self, usize),
+    ) -> u64 {
         let end = cursor.saturating_sub(budget);
         let mut reclaimed = 0;
-        for i in (end..*cursor).rev() {
-            if let Some(key) = self.key(i)
-                && !self.marked(key)
-            {
-                self.remove(key);
-                reclaimed += 1;
+        let mut upper = *cursor;
+        while upper > end {
+            let last = upper - 1;
+            let word_start = last & !63;
+            let lower = end.max(word_start);
+            let range = (u64::MAX << (lower - word_start)) & (u64::MAX >> (63 - last % 64));
+            let mut unmarked = !self.marks[last / 64] & range;
+            // Keep descending slot order so slot reuse stays the same.
+            while unmarked != 0 {
+                let bit = 63 - unmarked.leading_zeros();
+                unmarked ^= 1u64 << bit;
+                let slot = word_start + bit as usize;
+                if self.values[slot].is_some() {
+                    before_remove(self, slot);
+                    self.remove_at(slot);
+                    reclaimed += 1;
+                }
             }
+            upper = lower;
         }
         *cursor = end;
         reclaimed

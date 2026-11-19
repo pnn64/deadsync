@@ -211,6 +211,7 @@ fn append_sprite(
     z: i16,
 ) {
     draws.push(FlatDraw::Sprite(FlatSprite {
+        vertex_color_encoding: Default::default(),
         center: xy,
         world_z: 0.0,
         size: [

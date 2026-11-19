@@ -1,6 +1,6 @@
 //! Lua 5.1 byte patterns with compact instructions and explicit backtracking.
 use crate::memory::{Buffer, Memory};
-use crate::{Error, locale::class};
+use crate::{Error, locale::add_class_bits};
 
 mod cache;
 pub(crate) use cache::Cache;
@@ -161,6 +161,121 @@ fn set_has(set: &[u64; 4], byte: u8) -> bool {
     set[usize::from(byte) / 64] & (1u64 << (byte % 64)) != 0
 }
 
+pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    for (index, chunk) in chunks.iter().enumerate() {
+        // A non-short-circuiting reduction lets LLVM compare a block in parallel.
+        if chunk.iter().fold(false, |hit, &byte| hit | boundary(byte)) {
+            return index * 32
+                + chunk
+                    .iter()
+                    .position(|&byte| boundary(byte))
+                    .expect("delimiter in marked chunk");
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(|&byte| boundary(byte))
+            .unwrap_or(tail.len())
+}
+
+#[inline(never)]
+fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+    if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
+        return Some(0);
+    }
+    let mut words = set
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|&(_, bits)| bits != 0);
+    let (index, bits) = words.next()?;
+    if words.next().is_some() {
+        return None;
+    }
+    let offset = bits.trailing_zeros();
+    let normalized = bits >> offset;
+    if normalized & normalized.wrapping_add(1) != 0 {
+        return None;
+    }
+    let first = (index * 64) as u8 + offset as u8;
+    let width = normalized.ilog2() as u8;
+    Some(if width == 0 {
+        byte_run(bytes, first)
+    } else {
+        scan_boundary(bytes, |byte| byte.wrapping_sub(first) > width)
+    })
+}
+
+pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
+    if bytes.len() < 16 {
+        return bytes.iter().position(|&candidate| candidate == byte);
+    }
+    if bytes[0] == byte {
+        return Some(0);
+    }
+    if bytes.len() >= 32 {
+        return find_byte_in_blocks(bytes, byte);
+    }
+    let needle = u64::from_le_bytes([byte; 8]);
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let xor = u64::from_le_bytes(word) ^ needle;
+        let hits = xor.wrapping_sub(0x0101_0101_0101_0101) & !xor & 0x8080_8080_8080_8080;
+        if hits != 0 {
+            // Borrows can flag a later lane. The least significant hit is exact.
+            return Some(index * 8 + (hits.trailing_zeros() / 8) as usize);
+        }
+    }
+    tail.iter()
+        .position(|&candidate| candidate == byte)
+        .map(|index| words.len() * 8 + index)
+}
+
+#[inline(never)]
+fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
+    let (blocks, tail) = bytes.as_chunks::<32>();
+    for (index, block) in blocks.iter().enumerate() {
+        // Reduce the whole block so LLVM can compare its bytes in parallel.
+        if block
+            .iter()
+            .fold(false, |hit, &candidate| hit | (candidate == byte))
+        {
+            return block
+                .iter()
+                .position(|&candidate| candidate == byte)
+                .map(|offset| index * 32 + offset);
+        }
+    }
+    tail.iter()
+        .position(|&candidate| candidate == byte)
+        .map(|offset| bytes.len() - tail.len() + offset)
+}
+
+pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
+    let (blocks, tail) = bytes.as_chunks::<32>();
+    let block = [byte; 32];
+    let (prefix, rest) = match blocks.iter().position(|bytes| *bytes != block) {
+        Some(index) => (index * 32, blocks[index].as_slice()),
+        None => (bytes.len() - tail.len(), tail),
+    };
+    let expected = u64::from_le_bytes([byte; 8]);
+    let (words, tail) = rest.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let different = u64::from_le_bytes(word) ^ expected;
+        if different != 0 {
+            return prefix + index * 8 + (different.trailing_zeros() / 8) as usize;
+        }
+    }
+    prefix
+        + words.len() * 8
+        + tail
+            .iter()
+            .position(|&candidate| candidate != byte)
+            .unwrap_or(tail.len())
+}
+
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
 fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
     let mut first = start + 1;
@@ -180,24 +295,35 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
         }
     }
     let mut set = [0u64; 4];
-    for byte in 0..=255u8 {
-        let mut p = first;
-        let mut hit = false;
-        while p < end {
-            if pattern[p] == b'%' && p + 1 < end {
-                hit |= class(byte, pattern[p + 1]);
-                p += 2;
-            } else if p + 2 < end && pattern[p + 1] == b'-' {
-                hit |= byte >= pattern[p] && byte <= pattern[p + 2];
-                p += 3;
-            } else {
-                hit |= byte == pattern[p];
-                p += 1;
+    let mut members = &pattern[first..end];
+    while let [start, rest @ ..] = members {
+        if let [b'%', code, rest @ ..] = members {
+            add_class_bits(&mut set, *code);
+            members = rest;
+            continue;
+        }
+        if let [b'-', last, rest @ ..] = rest {
+            members = rest;
+            if start <= last {
+                let first_word = usize::from(*start / 64);
+                let last_word = usize::from(*last / 64);
+                let head = u64::MAX << (*start % 64);
+                let tail = u64::MAX >> (63 - *last % 64);
+                if first_word == last_word {
+                    set[first_word] |= head & tail;
+                } else {
+                    set[first_word] |= head;
+                    set[first_word + 1..last_word].fill(u64::MAX);
+                    set[last_word] |= tail;
+                }
             }
+        } else {
+            members = rest;
+            set[usize::from(*start / 64)] |= 1u64 << (*start % 64);
         }
-        if hit != negate {
-            set[usize::from(byte) / 64] |= 1u64 << (byte % 64);
-        }
+    }
+    if negate {
+        set = set.map(|word| !word);
     }
     Some((end + 1, set))
 }
@@ -205,10 +331,7 @@ fn bracket(pattern: &[u8], start: usize) -> Option<(usize, [u64; 4])> {
 impl Pattern {
     pub fn compile(pattern: &[u8], anchor: bool, memory: Memory) -> Result<Self, Error> {
         // Lua 5.1's pattern interpreter treats a zero byte as the pattern terminator.
-        let pattern = &pattern[..pattern
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(pattern.len())];
+        let pattern = &pattern[..find_byte(pattern, 0).unwrap_or(pattern.len())];
         let anchored = anchor && pattern.first() == Some(&b'^');
         let mut p = usize::from(anchored);
         let mut code = Buffer::new_in(memory.clone());
@@ -311,12 +434,8 @@ impl Pattern {
                         Some(c) => {
                             kind = Kind::Set;
                             arg = sets.len() as u32;
-                            let mut set = [0u64; 4];
-                            for b in 0..=255u8 {
-                                if class(b, c) {
-                                    set[usize::from(b) / 64] |= 1u64 << (b % 64);
-                                }
-                            }
+                            let mut set = [0; 4];
+                            add_class_bits(&mut set, c);
                             sets.try_reserve(1).map_err(|_| Error::memory())?;
                             sets.push(set);
                             quantifiable = true;
@@ -385,7 +504,7 @@ impl Pattern {
         let mut pos = start;
         while pos <= source.len() {
             if let Some(byte) = first {
-                match source[pos..].iter().position(|&b| b == byte) {
+                match find_byte(&source[pos..], byte) {
                     Some(offset) => pos += offset,
                     None => return Ok(None),
                 }
@@ -426,17 +545,17 @@ impl Pattern {
             let mut matched = true;
             match i.kind {
                 Kind::Byte | Kind::Any | Kind::Set => {
-                    let one = source.get(pos).is_some_and(|&b| self.atom(pc, b));
+                    let one = || source.get(pos).is_some_and(|&b| self.atom(pc, b));
                     match i.repeat {
                         Repeat::One => {
-                            if one {
+                            if one() {
                                 pos += 1;
                             } else {
                                 matched = false;
                             }
                         }
                         Repeat::Minimal => {
-                            if one {
+                            if one() {
                                 work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos: pos + 1,
@@ -447,7 +566,7 @@ impl Pattern {
                             }
                         }
                         Repeat::Optional => {
-                            if one {
+                            if one() {
                                 work.push_choice(Choice {
                                     pc: pc + 1,
                                     pos,
@@ -459,20 +578,37 @@ impl Pattern {
                             }
                         }
                         Repeat::Star | Repeat::Plus => {
-                            let min = pos + usize::from(i.repeat == Repeat::Plus);
-                            if i.repeat == Repeat::Plus && !one {
+                            let rest = source.get(pos..).unwrap_or_default();
+                            let run = match i.kind {
+                                Kind::Any => rest.len(),
+                                Kind::Byte => byte_run(rest, i.arg as u8),
+                                Kind::Set => {
+                                    let set = &self.sets[i.arg as usize];
+                                    if rest.len() >= 64
+                                        && let Some(run) = contiguous_set_run(rest, set)
+                                    {
+                                        run
+                                    } else {
+                                        rest.iter()
+                                            .position(|&byte| !set_has(set, byte))
+                                            .unwrap_or(rest.len())
+                                    }
+                                }
+                                _ => unreachable!("repeated pattern atom"),
+                            };
+                            let min = usize::from(i.repeat == Repeat::Plus);
+                            if run < min {
                                 matched = false;
                             } else {
-                                while source.get(pos).is_some_and(|&b| self.atom(pc, b)) {
-                                    pos += 1;
-                                }
-                                if pos > min {
+                                let start = pos;
+                                pos += run;
+                                if run > min {
                                     work.push_choice(Choice {
                                         pc: pc + 1,
                                         pos: pos - 1,
                                         undo: work.undo_len,
                                         count: work.count,
-                                        alternative: Alternative::Shorter(min),
+                                        alternative: Alternative::Shorter(start + min),
                                     })?;
                                 }
                             }
@@ -593,6 +729,58 @@ impl Pattern {
                 continue 'match_loop;
             }
             return Ok(None);
+        }
+    }
+}
+
+#[cfg(test)]
+mod byte_search_tests {
+    use super::{byte_run, contiguous_set_run, find_byte, set_has};
+
+    #[test]
+    fn contiguous_set_runs_match_bitmap_membership_across_blocks() {
+        for (first, last) in [(0, 0), (0, 63), (22, 38), (91, 97), (128, 191), (250, 255)] {
+            let mut set = [0u64; 4];
+            for byte in first..=last {
+                set[usize::from(byte / 64)] |= 1 << (byte % 64);
+            }
+            let mut bytes = [first; 73];
+            for index in [0, 1, 31, 32, 33, 63, 64, 72] {
+                for byte in 0..=u8::MAX {
+                    bytes[index] = byte;
+                    let end = bytes
+                        .iter()
+                        .position(|&byte| !set_has(&set, byte))
+                        .unwrap_or(bytes.len());
+                    assert_eq!(contiguous_set_run(&bytes, &set), Some(end));
+                }
+                bytes[index] = first;
+            }
+        }
+        assert_eq!(contiguous_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
+        assert_eq!(contiguous_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+    }
+
+    #[test]
+    fn byte_scans_preserve_word_block_and_tail_boundaries() {
+        for needle in 0..=u8::MAX {
+            // A lane differing by one can inherit a borrow from a match.
+            let fill = needle ^ 1;
+            let mut bytes = [fill; 76];
+            for start in 0..8 {
+                for len in 0..=68 {
+                    let text = &bytes[start..start + len];
+                    assert_eq!(find_byte(text, needle), None);
+                    assert_eq!(byte_run(text, fill), len);
+                    for index in 0..len {
+                        bytes[start + index] = needle;
+                        let text = &bytes[start..start + len];
+                        assert_eq!(find_byte(text, needle), Some(index));
+                        assert_eq!(byte_run(text, fill), index);
+                        bytes[start + index] = fill;
+                    }
+                }
+            }
         }
     }
 }

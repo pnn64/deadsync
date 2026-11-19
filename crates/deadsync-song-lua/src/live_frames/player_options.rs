@@ -3,6 +3,7 @@
 use super::*;
 use deadlib_lua::TableId;
 use deadsync_gameplay::{AppearanceEffects, SongLuaPlayerOptions};
+use deadsync_rules::scroll::ScrollSpeedSetting;
 
 /// What a player's last snapshot read and produced. A later snapshot of the
 /// same tables at the same versions, from the same profile appearance,
@@ -18,6 +19,30 @@ struct Snapshot {
 pub(crate) struct OptionSnapshots([Option<Snapshot>; LUA_PLAYERS]);
 
 impl SongRuntime {
+    /// Effective speeds after ModsGroup has approached all four native fields.
+    /// The compiler's Song aliases contain targets, which can select a different
+    /// mode from Current while MaxScrollBPM is still approaching zero.
+    pub(crate) fn current_speedmods(&mut self) -> Result<[ScrollSpeedSetting; LUA_PLAYERS], Error> {
+        let catalog = self.vm.rooted(self.catalog)?;
+        self.vm.with_native_stack(|stack| {
+            let base = stack.top();
+            stack.push(catalog)?;
+            read(stack, stack.top(), "player_options", true)?;
+            let players = stack.top();
+            let mut speeds = [ScrollSpeedSetting::XMod(1.0); LUA_PLAYERS];
+            for (player, speed) in speeds.iter_mut().enumerate() {
+                index(stack, players, player + 1)?;
+                index(stack, stack.top(), 4)?;
+                let current = stack.top();
+                require_table(stack, current)?;
+                *speed = current_speedmod(stack, current)?;
+                stack.set_top(players)?;
+            }
+            stack.set_top(base)?;
+            Ok(speeds)
+        })
+    }
+
     /// Bring each player's snapshot up to date with Current, reading it again
     /// only where it may have changed. [`Self::gameplay_options`] lends the
     /// result.
@@ -182,25 +207,40 @@ fn walk(
         }
     }
     stack.set_top(current)?;
+    let (key, value) = match current_speedmod(stack, current)? {
+        ScrollSpeedSetting::XMod(value) => ("xmod", value),
+        ScrollSpeedSetting::CMod(value) => ("cmod", value),
+        ScrollSpeedSetting::MMod(value) => ("mmod", value),
+    };
+    options.set_current(key, value);
+    Ok(options)
+}
+
+fn current_speedmod(
+    stack: &mut NativeStack<'_, '_>,
+    current: usize,
+) -> Result<ScrollSpeedSetting, Error> {
     // Speed fields coexist on the owner. Native mode selection uses
     // Current's approached spacing and maximum BPM, not their presence.
     let spacing = current_number(stack, current, "__songlua_time_spacing", 0.0)?;
     let max = current_number(stack, current, "__songlua_speedmod_mmod", 0.0)?;
-    let (key, value) = if spacing != 0.0 {
-        (
-            "cmod",
-            current_number(stack, current, "__songlua_speedmod_cmod", 200.0)?,
-        )
+    Ok(if spacing != 0.0 {
+        ScrollSpeedSetting::CMod(current_number(
+            stack,
+            current,
+            "__songlua_speedmod_cmod",
+            200.0,
+        )?)
     } else if max != 0.0 {
-        ("mmod", max)
+        ScrollSpeedSetting::MMod(max)
     } else {
-        (
-            "xmod",
-            current_number(stack, current, "__songlua_speedmod_xmod", 1.0)?,
-        )
-    };
-    options.set_current(key, value);
-    Ok(options)
+        ScrollSpeedSetting::XMod(current_number(
+            stack,
+            current,
+            "__songlua_speedmod_xmod",
+            1.0,
+        )?)
+    })
 }
 
 fn current_number(

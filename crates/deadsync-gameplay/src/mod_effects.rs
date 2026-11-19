@@ -60,23 +60,23 @@ pub fn approach_attack_value(
     delta_time: f32,
     unit_scale: f32,
 ) {
-    let Some(target) = target.filter(|value| value.is_finite()) else {
-        *current = None;
-        return;
-    };
-    let Some(speed) = speed.filter(|value| value.is_finite()) else {
-        *current = Some(target);
-        return;
-    };
-    let step = delta_time.max(0.0) * speed.max(0.0) * unit_scale;
-    if step <= f32::EPSILON {
-        // PlayerOptions::Approach preserves Current at zero elapsed time.
-        *current = Some(current.filter(|value| value.is_finite()).unwrap_or(base));
+    let target = target.filter(|value| value.is_finite());
+    let speed = speed.filter(|value| value.is_finite());
+    if target.is_some() && speed.is_none() {
+        // Direct Lua snapshots already contain Current, not an approach target.
+        *current = target;
         return;
     }
+    // PlayerState rebuilds Song options when an attack expires. Current keeps
+    // approaching the Stage value at its default speed instead of disappearing.
+    let step = delta_time.max(0.0) * speed.unwrap_or(1.0).max(0.0) * unit_scale;
     let mut value = current.filter(|value| value.is_finite()).unwrap_or(base);
-    approach_f32(&mut value, target, step);
-    *current = Some(value);
+    approach_f32(&mut value, target.unwrap_or(base), step);
+    *current = if target.is_none() && value == base {
+        None
+    } else {
+        Some(value)
+    };
 }
 
 #[inline(always)]
@@ -258,6 +258,8 @@ pub struct VisualOverrides {
     pub confusion_offset: Option<f32>,
     pub confusion_x_offset: Option<f32>,
     pub confusion_offset_cols: [Option<f32>; MAX_COLS],
+    pub confusion_x_offset_cols: [Option<f32>; MAX_COLS],
+    pub confusion_y_offset_cols: [Option<f32>; MAX_COLS],
     pub flip: Option<f32>,
     pub invert: Option<f32>,
     pub tornado: Option<f32>,
@@ -382,6 +384,8 @@ impl Default for VisualOverrides {
             confusion_offset: None,
             confusion_x_offset: None,
             confusion_offset_cols: [None; MAX_COLS],
+            confusion_x_offset_cols: [None; MAX_COLS],
+            confusion_y_offset_cols: [None; MAX_COLS],
             flip: None,
             invert: None,
             tornado: None,
@@ -508,6 +512,8 @@ impl VisualOverrides {
             || self.confusion_offset.is_some()
             || self.confusion_x_offset.is_some()
             || self.confusion_offset_cols.iter().any(Option::is_some)
+            || self.confusion_x_offset_cols.iter().any(Option::is_some)
+            || self.confusion_y_offset_cols.iter().any(Option::is_some)
             || self.flip.is_some()
             || self.invert.is_some()
             || self.tornado.is_some()
@@ -610,6 +616,28 @@ impl VisibilityOverrides {
             || self.cover.is_some()
             || self.dark_cols.iter().any(Option::is_some)
     }
+}
+
+fn approach_visibility_overrides(
+    current: &mut VisibilityOverrides,
+    target: VisibilityOverrides,
+    speed: VisibilityOverrides,
+    delta_time: f32,
+) {
+    for (value, target, speed) in [
+        (&mut current.dark, target.dark, speed.dark),
+        (&mut current.blind, target.blind, speed.blind),
+        (&mut current.cover, target.cover, speed.cover),
+    ] {
+        approach_attack_value(value, target, 0.0, speed, delta_time, 1.0);
+    }
+    approach_attack_cols(
+        &mut current.dark_cols,
+        target.dark_cols,
+        [0.0; MAX_COLS],
+        speed.dark_cols,
+        delta_time,
+    );
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -744,6 +772,8 @@ pub struct VisualEffects {
     pub confusion_offset: f32,
     pub confusion_x_offset: f32,
     pub confusion_offset_cols: [f32; MAX_COLS],
+    pub confusion_x_offset_cols: [f32; MAX_COLS],
+    pub confusion_y_offset_cols: [f32; MAX_COLS],
     pub big: f32,
     pub flip: f32,
     pub invert: f32,
@@ -876,6 +906,8 @@ impl VisualEffects {
             confusion_offset: 0.0,
             confusion_x_offset: 0.0,
             confusion_offset_cols: [0.0; MAX_COLS],
+            confusion_x_offset_cols: [0.0; MAX_COLS],
+            confusion_y_offset_cols: [0.0; MAX_COLS],
             big: f32::from((mask & VISUAL_MASK_BIT_BIG) != 0),
             flip: f32::from((mask & VISUAL_MASK_BIT_FLIP) != 0),
             invert: f32::from((mask & VISUAL_MASK_BIT_INVERT) != 0),
@@ -1092,6 +1124,16 @@ pub fn approach_visual_overrides_to_base(
     approach_optional_visual_cols(
         &mut visual.confusion_offset_cols,
         base.confusion_offset_cols,
+        step,
+    );
+    approach_optional_visual_cols(
+        &mut visual.confusion_x_offset_cols,
+        base.confusion_x_offset_cols,
+        step,
+    );
+    approach_optional_visual_cols(
+        &mut visual.confusion_y_offset_cols,
+        base.confusion_y_offset_cols,
         step,
     );
     approach_optional_visual(&mut visual.flip, base.flip, step);
@@ -1684,6 +1726,20 @@ pub fn approach_visual_overrides_to_target(
         target.confusion_offset_cols,
         base.confusion_offset_cols,
         speed.confusion_offset_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.confusion_x_offset_cols,
+        target.confusion_x_offset_cols,
+        base.confusion_x_offset_cols,
+        speed.confusion_x_offset_cols,
+        delta_time,
+    );
+    approach_attack_cols(
+        &mut current.confusion_y_offset_cols,
+        target.confusion_y_offset_cols,
+        base.confusion_y_offset_cols,
+        speed.confusion_y_offset_cols,
         delta_time,
     );
     approach_attack_value(

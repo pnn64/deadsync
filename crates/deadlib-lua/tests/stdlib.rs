@@ -90,13 +90,14 @@ fn byte_string_primitives_and_methods() {
 #[test]
 fn repeated_binary_strings_copy_complete_source_at_all_boundaries() {
     let source = br#"
-        local piece=string.char(0,255,65,66,0,67,68)
-        for _,count in ipairs({0,1,2,3,7,19,20001}) do
-            local result=string.rep(piece,count)
-            assert(#result==count*#piece)
-            for i=1,count do
-                local at=(i-1)*#piece+1
-                assert(string.sub(result,at,at+#piece-1)==piece)
+        for _,piece in ipairs({string.char(0), string.char(255), string.char(0,255,65,66,0,67,68)}) do
+            for _,count in ipairs({0,1,2,3,7,19,20001}) do
+                local result=string.rep(piece,count)
+                assert(#result==count*#piece)
+                for i=1,count do
+                    local at=(i-1)*#piece+1
+                    assert(string.sub(result,at,at+#piece-1)==piece)
+                end
             end
         end
         return 42
@@ -338,6 +339,12 @@ assert(string.find(s,'aaaaZ',1200,true)==nil)
 s=string.rep('abccddff',200)..'Za'
 a,b=string.find(s,'Za',1,true)
 assert(a==1601 and b==1602)
+local prefix=string.rep('p',73)
+a,b=string.find('x'..prefix..'\0+',prefix..'\0+')
+assert(a==2 and b==76)
+a,b=string.find('x'..prefix..'Z',prefix..'.\0[')
+assert(a==2 and b==75)
+assert(string.find('abc','b\0(')==nil)
 return 42
 "#;
     let mut vm = Vm::new();
@@ -379,6 +386,29 @@ fn replacements_preserve_values_callbacks_and_error_unwinding() {
     ] {
         compare(source.as_bytes());
     }
+}
+
+#[test]
+fn replacement_literals_preserve_escapes_at_output_buffer_boundaries() {
+    let program = compile(
+        br#"
+        local binary = string.rep('\000\255', 20)
+        for _, n in ipairs{31, 32, 33, 511, 512, 513, 8191, 8192, 8193} do
+            local prefix = string.rep('a', n)
+            local out, count = string.gsub('xyz', '(.)', prefix .. '%1%%' .. binary .. '%0%')
+            local expected = prefix .. 'x%' .. binary .. 'x\000'
+                          .. prefix .. 'y%' .. binary .. 'y\000'
+                          .. prefix .. 'z%' .. binary .. 'z\000'
+            assert(out == expected and count == 3)
+        end
+        return true
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
 }
 
 #[test]

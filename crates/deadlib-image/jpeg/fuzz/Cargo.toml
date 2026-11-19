@@ -1,0 +1,23 @@
+[package]
+name = "deadlib-image-jpeg-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+deadlib-image-jpeg = { path = ".." }
+deadlib-image = { path = "../.." }
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false

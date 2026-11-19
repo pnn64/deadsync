@@ -576,6 +576,9 @@ fn zero_node(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         if owned && let Some(stream) = song_meters::stream(call, actor)? {
             zero_node(call, stream)?;
         }
+        if owned {
+            sprite_animation::advance(call, actor, 0.0)?;
+        }
         let key = if truthy(get_static(call, actor, b"__songlua_update_pending")?) {
             b"__songlua_update_previous".as_slice()
         } else {

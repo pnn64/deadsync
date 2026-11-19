@@ -905,6 +905,7 @@ macro_rules! overlay_value_fields {
         $visit!(sprite_loop);
         $visit!(sprite_playback_rate);
         $visit!(sprite_state_delay);
+        $visit!(movie_position_seconds);
         $visit!(max_w_pre_zoom);
         $visit!(max_h_pre_zoom);
         $visit!(max_dimension_uses_zoom);

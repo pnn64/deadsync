@@ -72,6 +72,33 @@ mod tests {
     }
 
     #[test]
+    fn standalone_immediate_continue_life_does_not_recover_after_failure() {
+        for course_event in [false, true] {
+            let mut player = init_player_runtime();
+            player.fail_type = GameplayFailType::ImmediateContinue;
+            player.life = 0.01;
+            if course_event {
+                apply_course_life_event(&mut player, 1.0, -0.05,
+                    CourseLifeEvent::Tap(JudgeGrade::Miss));
+            } else {
+                assert!(apply_player_runtime_life_delta(&mut player, 1.0, -0.05).failed_now);
+            }
+            assert!(player.is_failing);
+            assert_eq!(player.fail_time, Some(1.0));
+            player.combo_after_miss = 1;
+            if course_event {
+                apply_course_life_event(&mut player, 2.0, 0.008,
+                    CourseLifeEvent::Tap(JudgeGrade::Fantastic));
+            } else {
+                assert!(apply_player_runtime_life_delta(&mut player, 2.0, 0.008).was_dead);
+            }
+            assert_eq!(player.life, 0.0);
+            assert!(player.is_failing);
+            assert_eq!(player.fail_time, Some(1.0));
+        }
+    }
+
+    #[test]
     fn joined_fail_modes() {
         let mut players = std::array::from_fn(|_| init_player_runtime());
         players[0].life = 0.0;
@@ -1512,6 +1539,35 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_side_field_centers_match_native_margins_and_translated_origins() {
+        // SafeFArg truncates toward zero, including the negative outer margins
+        // below 640px; it truncates the combined middle before splitting it.
+        for (width, expected) in [
+            (500.0, [90.0, 410.0]),
+            (501.0, [90.75, 410.25]),
+            (640.0, [160.0, 480.0]),
+            (642.0, [160.25, 481.75]),
+            (852.0, [213.0, 639.0]),
+            (854.0, [213.25, 640.75]),
+            (1280.0, [426.25, 853.75]),
+        ] {
+            for origin in [0.0, 23.75, -250.125] {
+                for (player, x) in expected.into_iter().enumerate() {
+                    assert_eq!(
+                        gameplay_side_field_center_x(width, width * 0.5 + origin, player == 1),
+                        x + origin,
+                    );
+                }
+            }
+            let defaults = build_song_lua_player_actor_defaults_like(
+                2, GameplayViewport::new(width, 480.0), SongLuaCompilePlayStyle::Versus,
+                false, [0.0; MAX_PLAYERS], false,
+            );
+            assert_eq!(defaults.map(|player| player.x), expected);
+        }
+    }
+
+    #[test]
     fn song_lua_compile_player_screen_x_places_two_players() {
         let viewport = GameplayViewport::design();
 
@@ -1525,7 +1581,7 @@ mod tests {
                 20.0,
                 false,
             ),
-            193.5,
+            193.25,
         );
         assert_near(
             song_lua_compile_player_screen_x(
@@ -1537,7 +1593,7 @@ mod tests {
                 20.0,
                 false,
             ),
-            660.5,
+            660.75,
         );
     }
 
@@ -1600,7 +1656,7 @@ mod tests {
                 10.0,
                 false,
             ),
-            203.5,
+            203.25,
         );
         assert_near(
             song_lua_compile_player_screen_x(
@@ -1612,7 +1668,7 @@ mod tests {
                 999.0,
                 false,
             ),
-            690.5,
+            690.75,
         );
     }
 
@@ -1663,16 +1719,30 @@ mod tests {
     }
 
     #[test]
-    fn attack_value_approaches_or_snaps_to_target() {
+    fn attack_value_approaches_targets_and_base_but_copies_direct_snapshots() {
         let mut current = Some(10.0);
         approach_attack_value(&mut current, Some(50.0), 0.0, Some(2.0), 0.5, 10.0);
         assert_near(current.unwrap(), 20.0);
 
-        approach_attack_value(&mut current, Some(50.0), 0.0, None, 1.0, 10.0);
+        approach_attack_value(&mut current, Some(50.0), 0.0, None, 0.0, 10.0);
         assert_near(current.unwrap(), 50.0);
 
         approach_attack_value(&mut current, None, 0.0, Some(1.0), 1.0, 10.0);
+        assert_eq!(current, Some(40.0));
+        approach_attack_value(&mut current, None, 0.0, None, 4.0, 10.0);
         assert_eq!(current, None);
+
+        current = Some(-0.5);
+        approach_attack_value(&mut current, None, 0.25, None, 0.25, 1.0);
+        assert_eq!(current, Some(-0.25), "expiry approaches the profile value");
+        approach_attack_value(&mut current, None, 0.25, None, 0.0, 1.0);
+        assert_eq!(current, Some(-0.25), "zero elapsed time preserves Current");
+        approach_attack_value(&mut current, None, 0.25, None, 0.5, 1.0);
+        assert_eq!(current, None);
+
+        current = Some(1.0e-8);
+        approach_attack_value(&mut current, None, 0.0, None, 1.0e-8, 1.0);
+        assert_eq!(current, None, "tiny native approach steps must settle");
     }
 
     #[test]
@@ -2057,7 +2127,7 @@ mod tests {
         approach_visual_overrides_to_target(&mut current, target, speed, base, 0.25);
 
         assert_near(current.drunk.unwrap(), 0.75);
-        assert_eq!(current.flip, None);
+        assert_eq!(current.flip, Some(0.75), "expired scalar approaches base");
         assert_near(current.bumpy_cols[2].unwrap(), -1.0);
     }
 
@@ -2373,7 +2443,7 @@ mod tests {
         let reset = state
             .refresh_player(0, 0.2, 1.0 / 120.0, base_appearance, build_base, first)
             .expect("externally changed state must be canonicalized");
-        assert_eq!(state.visual[0], VisualOverrides::default());
+        assert_near(state.visual[0].drunk.unwrap(), 0.5 - 1.0 / 120.0);
         assert_eq!(reset, default_transform);
         assert_eq!(base_builds.get(), 2);
 
@@ -2384,13 +2454,20 @@ mod tests {
         assert_eq!(
             state.refresh_player(
                 0,
-                0.3,
-                1.0 / 120.0,
+                1.2,
+                1.0,
                 base_appearance,
                 build_base,
                 changed_transform
             ),
             Some(default_transform),
+        );
+        assert_eq!(base_builds.get(), 3);
+        assert_eq!(state.visual[0], VisualOverrides::default());
+        assert_eq!(
+            state.refresh_player(0, 1.3, 0.1, base_appearance, build_base, default_transform),
+            None,
+            "the idle shortcut resumes after the return transition settles"
         );
         assert_eq!(base_builds.get(), 3);
         assert_eq!(
@@ -2517,11 +2594,13 @@ mod tests {
                 base_accel: AccelEffects::default(),
                 base_attack_flags: AttackFlags::default(),
                 now: 1.0,
+                native_attack_second: 1.0,
                 delta_time: 0.5,
                 attacks_cleared_for_outro: false,
                 base_appearance: AppearanceEffects::default(),
                 base_visual: VisualEffects::default(),
                 base_scroll: ScrollEffects::default(),
+                base_perspective: PerspectiveEffects::default(),
                 base_mini_percent: 10.0,
                 attack_windows: &attack_windows,
                 song_lua_ease_windows: &lua_windows,
@@ -2533,6 +2612,7 @@ mod tests {
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
                 active_attack_scroll: ScrollOverrides::default(),
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: None,
                 outro_attack_visual: VisualOverrides::default(),
             },
@@ -2542,7 +2622,7 @@ mod tests {
         assert_near(output.attack_target_appearance.stealth, 1.0);
         assert_near(output.active_attack_appearance.stealth, 0.5);
         assert_eq!(output.active_attack_visual.drunk, Some(0.5));
-        assert_eq!(output.active_attack_visibility.dark, Some(1.0));
+        assert_eq!(output.active_attack_visibility.dark, Some(0.5));
         assert_eq!(output.active_attack_scroll.reverse, Some(0.3));
         assert_eq!(output.active_attack_mini_percent, Some(25.0));
         assert!(matches!(
@@ -2574,11 +2654,13 @@ mod tests {
                 base_accel: AccelEffects::default(),
                 base_attack_flags: AttackFlags::default(),
                 now: 1.0,
+                native_attack_second: 1.0,
                 delta_time: 1.0,
                 attacks_cleared_for_outro: true,
                 base_appearance: AppearanceEffects::default(),
                 base_visual: VisualEffects::default(),
                 base_scroll: ScrollEffects::default(),
+                base_perspective: PerspectiveEffects::default(),
                 base_mini_percent: 0.0,
                 attack_windows: &[],
                 song_lua_ease_windows: &lua_windows,
@@ -2593,6 +2675,7 @@ mod tests {
                     reverse: Some(1.0),
                     ..ScrollOverrides::default()
                 },
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: Some(50.0),
                 outro_attack_visual: outro_visual,
             },
@@ -2635,6 +2718,7 @@ mod tests {
                 active_attack_visual: VisualOverrides::default(),
                 active_attack_visibility: VisibilityOverrides::default(),
                 active_attack_scroll: ScrollOverrides::default(),
+                active_attack_perspective: PerspectiveOverrides::default(),
                 active_attack_mini_percent: None,
                 outro_attack_visual: VisualOverrides::default(),
             },
@@ -2660,6 +2744,10 @@ mod tests {
                     split: Some(0.5),
                     ..ScrollOverrides::default()
                 },
+                active_attack_perspective: PerspectiveOverrides {
+                    tilt: Some(-1.0),
+                    skew: Some(0.75),
+                },
                 active_attack_mini_percent: Some(65.0),
                 outro_attack_visual: active_visual,
             },
@@ -2671,6 +2759,7 @@ mod tests {
                     base_accel: AccelEffects::default(),
                     base_attack_flags: AttackFlags::default(),
                     now: 42.0,
+                    native_attack_second: 42.0,
                     delta_time,
                     attacks_cleared_for_outro: false,
                     base_appearance,
@@ -2684,6 +2773,7 @@ mod tests {
                         centered: 0.3,
                         ..ScrollEffects::default()
                     },
+                    base_perspective: PerspectiveEffects { tilt: 0.25, skew: -0.5 },
                     base_mini_percent: 20.0,
                     attack_windows: &[],
                     song_lua_ease_windows: &[],
@@ -3248,7 +3338,7 @@ mod tests {
     }
 
     #[test]
-    fn active_attack_targets_use_half_open_time_windows() {
+    fn native_attack_targets_use_strict_start_and_end_times() {
         let windows = build_attack_mask_windows(&[ChartAttackWindow {
             start_second: 1.0,
             len_seconds: 1.0,
@@ -3256,9 +3346,91 @@ mod tests {
         }]);
 
         assert!(!collect_active_attack_targets(&windows, 0.99).clear_all);
-        assert!(collect_active_attack_targets(&windows, 1.0).clear_all);
+        assert!(!collect_active_attack_targets(&windows, 1.0).clear_all);
+        assert!(collect_active_attack_targets(&windows, 1.0_f32.next_up()).clear_all);
         assert!(collect_active_attack_targets(&windows, 1.99).clear_all);
         assert!(!collect_active_attack_targets(&windows, 2.0).clear_all);
+    }
+
+    #[test]
+    fn native_attack_phase_keeps_lua_windows_on_the_current_visible_clock() {
+        let masks = vec![
+            attack_mask_window(1.0, 2.0, parse_attack_mods("*1000 100 movex1")),
+            build_song_lua_constant_attack_mask_window(1.0, 3.0, "*1000 50 movey1")
+                .unwrap(),
+        ];
+        let ease = song_lua_ease_mask_window(
+            SongLuaEaseMaskTarget::PlayerRotationZ, 1.0, 3.0, 3.0, 0.0, 90.0,
+        );
+        let mut runtime = GameplayAttackRuntimeState::new(
+            [masks, Vec::new()], [vec![ease], Vec::new()],
+        );
+        let mut transform = SongLuaPlayerTransform::default();
+        for (now, native_second, expected_x, expected_rotation) in [
+            (1.0, 1.0, None, 0.0),
+            (1.25, 1.0_f32.next_up(), Some(1.0), 11.25),
+            (1.5, 1.25, Some(1.0), 22.5),
+            (2.0, 1.75, Some(1.0), 45.0),
+            (2.25, 2.0, Some(0.75), 56.25),
+        ] {
+            transform = runtime.refresh_player_at_times(
+                0, now, native_second, 0.25, AppearanceEffects::default(),
+                AttackBaseEffects::default, transform,
+            ).unwrap();
+            assert_eq!(runtime.visual[0].move_x_cols[0], expected_x, "native clock {native_second}");
+            assert_eq!(runtime.visual[0].move_y_cols[0], Some(0.5), "Lua starts inclusively");
+            assert_near(transform.rotation_z, expected_rotation);
+        }
+
+        // A seek evaluates its destination immediately on both clocks and
+        // settles Current; it must not reuse either pre-seek activation cursor.
+        for (now, expected_x) in [(1.5, Some(1.0)), (3.5, None), (1.0, None)] {
+            runtime.reset_window_times();
+            transform = runtime.refresh_player(
+                0, now, f32::MAX, AppearanceEffects::default(),
+                AttackBaseEffects::default, transform,
+            ).unwrap();
+            assert_eq!(runtime.visual[0].move_x_cols[0], expected_x);
+            assert_eq!(runtime.visual[0].move_y_cols[0], Some(0.5));
+        }
+    }
+
+    #[test]
+    fn mixed_attack_clock_indices_keep_source_precedence_and_reuse_the_merge() {
+        let masks = vec![
+            attack_mask_window(1.0, 3.0, parse_attack_mods("*1000 100 movex1")),
+            build_song_lua_constant_attack_mask_window(1.0, 4.0, "*1000 25 movex1")
+                .unwrap(),
+            attack_mask_window(1.0, 3.0, parse_attack_mods("*1000 50 movex1")),
+        ];
+        let mut runtime = GameplayAttackRuntimeState::new(
+            [masks, Vec::new()], [Vec::new(), Vec::new()],
+        );
+        let _ = runtime.refresh_player_at_times(
+            0, 1.5, 1.25, 0.25, AppearanceEffects::default(),
+            AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime.active_window_indices(0).0, &[0, 1, 2]);
+        assert_eq!(runtime.visual[0].move_x_cols[0], Some(0.5));
+        let stats = runtime.window_index_stats(0).unwrap();
+        let merged_ptr = runtime.window_indices[0].merged_masks.as_ptr();
+        let merged_capacity = runtime.window_indices[0].merged_masks.capacity();
+        let _ = runtime.refresh_player_at_times(
+            0, 2.0, 1.75, 0.25, AppearanceEffects::default(),
+            AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime.window_index_stats(0).unwrap(), stats);
+        assert_eq!(runtime.window_indices[0].merged_masks.as_ptr(), merged_ptr);
+        assert_eq!(runtime.window_indices[0].merged_masks.capacity(), merged_capacity);
+        assert_eq!(runtime.visual[0].move_x_cols[0], Some(0.5));
+
+        let _ = runtime.refresh_player_at_times(
+            0, 3.25, 3.0, 0.25, AppearanceEffects::default(),
+            AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+        );
+        assert_eq!(runtime.active_window_indices(0).0, &[1]);
+        assert_eq!(runtime.visual[0].move_x_cols[0], Some(0.25));
+        assert_eq!(runtime.window_indices[0].merged_masks.as_ptr(), merged_ptr);
     }
 
     #[test]
@@ -3453,6 +3625,33 @@ mod tests {
             approach_appearance_effects(&mut current, AppearanceEffects::default(), speed, 0.0);
             assert!(!current.stealth_type, "return to base is immediate");
         }
+    }
+
+    #[test]
+    fn attack_mod_levels_read_bare_numbers_like_from_one_mod_string() {
+        // "Looping the Rooms" stealths a lane at 90% so its fakes glow gray.
+        let mods = parse_attack_mods("*1000 90 Stealth4, 90 *500 stealth1, *1000 No Stealth2");
+        assert_eq!(mods.appearance.stealth_cols[3], Some(0.9));
+        assert_eq!(mods.appearance_speed.stealth_cols[3], Some(1000.0));
+        assert_eq!(mods.appearance.stealth_cols[0], Some(0.9));
+        assert_eq!(mods.appearance_speed.stealth_cols[0], Some(500.0));
+        assert_eq!(mods.appearance.stealth_cols[1], Some(0.0));
+        // Each word may set the level; the last one wins.
+        assert_eq!(parse_attack_mods("no 50% stealth").appearance.stealth, Some(0.5));
+        assert_eq!(parse_attack_mods("50 no stealth").appearance.stealth, Some(0.0));
+        assert_eq!(parse_attack_mods("-25 hidden").appearance.hidden, Some(-0.25));
+        // StringToFloat reads the leading number, and "ms" levels are seconds.
+        assert_eq!(parse_attack_mods("30+0% stealth").appearance.stealth, Some(0.3));
+        assert_eq!(parse_attack_mods("250ms stealth").appearance.stealth, Some(0.25));
+        // "90*" is rejected rather than read as an approach speed.
+        assert!(!parse_attack_mods("90* stealth").appearance.any());
+        // A trailing multibyte character must not split the "ms" check.
+        assert_eq!(parse_attack_mods("9€ stealth").appearance.stealth, Some(0.09));
+        // Only the last word names the mod; the level words stay out of it.
+        assert_eq!(
+            parse_attack_mods("*2 1.5x").scroll_speed,
+            Some(ScrollSpeedSetting::XMod(1.5))
+        );
     }
 
     #[test]
@@ -4362,15 +4561,190 @@ mod tests {
         assert_eq!(mods.visibility.dark_cols[3], Some(1.5));
         assert_eq!(mods.visibility.dark_cols[9], Some(0.0));
         assert_eq!(mods.visibility.dark_cols[1], None);
-        assert_eq!(mods.dark_col_speed[0], Some(2.0));
-        assert_eq!(mods.dark_col_speed[3], Some(1.0));
-        assert_eq!(mods.dark_col_speed[9], Some(3.0));
+        assert_eq!(mods.visibility_speed.dark_cols[0], Some(2.0));
+        assert_eq!(mods.visibility_speed.dark_cols[3], Some(1.0));
+        assert_eq!(mods.visibility_speed.dark_cols[9], Some(3.0));
         assert!(!parse_song_lua_runtime_mods("dark0,dark11").has_runtime_mask_effect());
         let mods = parse_attack_mods("dark1,clearall,*2 75% dark4");
         assert_eq!(mods.visibility.dark_cols[0], None);
         assert_eq!(mods.visibility.dark_cols[3], Some(0.75));
         assert!(mods.has_runtime_mask_effect());
         assert!(build_course_modifier_mask_window("dark4").is_some());
+    }
+
+    #[test]
+    fn perspective_lua_targets_approach_hallway_reset_and_freeze_per_player() {
+        // PlayerOptions.cpp::Approach applies delta * target speed separately
+        // to Tilt and Skew. Hallway writes Tilt=-level, Skew=0. The 20/4 pulse
+        // is the finite approach used at beat 303.9 of Dyscontrolled Galaxy.
+        let windows = std::array::from_fn(|player| {
+            let sign = if player == 0 { 1.0 } else { -1.0 };
+            let mut windows = Vec::new();
+            for (start, end, amount, speed) in [
+                (0.0, 0.3, 200.0 * sign, 20.0),
+                (0.3, 0.6, 0.0, 4.0),
+                (0.6, 1.0, 0.0, 0.0),
+                (1.0, 2.0, 0.0, 10000.0),
+            ] {
+                let first = windows.len();
+                assert!(append_song_lua_ease_targets(
+                    &mut windows, start, end, end, "Hallway", amount, amount, None, None, None,
+                ));
+                for window in &mut windows[first..] {
+                    window.approach_speed = Some(speed);
+                }
+            }
+            windows
+        });
+        let mut runtime = GameplayAttackRuntimeState::new([Vec::new(), Vec::new()], windows);
+        for (now, delta, magnitude) in [
+            (0.0, 0.0, 0.0),
+            (0.1, 0.1, 2.0),
+            (0.3, 0.2, 2.0),
+            (0.4, 0.1, 1.6),
+            (0.6, 0.2, 0.8),
+            (0.8, 0.2, 0.8),
+            (1.0, 0.2, 0.8),
+            (1.1, 0.1, 0.0),
+        ] {
+            for player in 0..2 {
+                let _ = runtime.refresh_player(
+                    player, now, delta, AppearanceEffects::default(),
+                    AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+                );
+                let sign = if player == 0 { -1.0 } else { 1.0 };
+                let perspective = runtime.perspective[player];
+                assert_near(perspective.tilt.unwrap(), sign * magnitude);
+                assert_eq!(perspective.skew, Some(0.0), "player {player} at {now}");
+            }
+        }
+    }
+
+    #[test]
+    fn perspective_attack_aliases_keep_independent_speeds_and_profile_values() {
+        let base = PerspectiveEffects { tilt: 0.4, skew: -0.25 };
+        for (mods, expected) in [
+            ("*0 200 Hallway", [0.4, -0.25]),
+            ("*2 150 Space,*0.5 -50 Tilt", [0.275, 0.25]),
+            ("*2 150 Incoming,*0 no Skew", [-0.1, -0.25]),
+        ] {
+            let parsed = parse_song_lua_runtime_mods(mods);
+            let mut runtime = GameplayAttackRuntimeState::new(
+                [vec![attack_mask_window(0.0, 1.0, parsed)], Vec::new()],
+                [Vec::new(), Vec::new()],
+            );
+            let _ = runtime.refresh_player(
+                0, 0.25, 0.25, AppearanceEffects::default(),
+                || AttackBaseEffects { perspective: base, ..Default::default() },
+                SongLuaPlayerTransform::default(),
+            );
+            assert_near(runtime.perspective[0].tilt.unwrap(), expected[0]);
+            assert_near(runtime.perspective[0].skew.unwrap(), expected[1]);
+            assert!(!runtime.perspective[1].any(), "P1 perspective stays local");
+            let _ = runtime.refresh_player(
+                0, 2.0, 1.0, AppearanceEffects::default(),
+                || AttackBaseEffects { perspective: base, ..Default::default() },
+                SongLuaPlayerTransform::default(),
+            );
+            assert!(!runtime.perspective[0].any(), "expired {mods} returns to the profile");
+        }
+    }
+
+    #[test]
+    fn perspective_lua_direct_samples_do_not_approach_twice() {
+        for target in [SongLuaEaseMaskTarget::PerspectiveTilt, SongLuaEaseMaskTarget::PerspectiveSkew] {
+            for (speed, expected) in [(Some(0.25), 0.05), (None, 0.5)] {
+                let mut window = song_lua_ease_mask_window(target, 0.0, 2.0, 3.0, 0.0, 1.0);
+                window.approach_speed = speed;
+                let mut runtime = GameplayAttackRuntimeState::new(
+                    [Vec::new(), Vec::new()], [vec![window], Vec::new()],
+                );
+                let _ = runtime.refresh_player(
+                    0, 1.0, 0.2, AppearanceEffects::default(),
+                    AttackBaseEffects::default, SongLuaPlayerTransform::default(),
+                );
+                let actual = match target {
+                    SongLuaEaseMaskTarget::PerspectiveTilt => runtime.perspective[0].tilt,
+                    SongLuaEaseMaskTarget::PerspectiveSkew => runtime.perspective[0].skew,
+                    _ => unreachable!(),
+                };
+                assert_near(actual.unwrap(), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn global_visibility_attacks_approach_signed_levels_and_fade_after_expiry() {
+        let constants = vec![attack_mask_window(
+            0.0,
+            1.0,
+            parse_attack_mods("*2 150 dark,*0.5 -50 blind,*4 200 cover,*3 75 dark2"),
+        )];
+        let mut runtime =
+            GameplayAttackRuntimeState::new([constants, Vec::new()], [Vec::new(), Vec::new()]);
+        for (now, delta, expected) in [
+            (0.25, 0.25, [0.5, -0.125, 1.0, 0.75]),
+            (0.5, 0.25, [1.0, -0.25, 2.0, 0.75]),
+            (1.0, 0.0, [1.0, -0.25, 2.0, 0.75]),
+            (1.25, 0.25, [0.75, 0.0, 1.75, 0.5]),
+            (3.0, 1.75, [0.0; 4]),
+        ] {
+            let _ = runtime.refresh_player(
+                0,
+                now,
+                delta,
+                AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            let visibility = effective_attack_visibility_effects(runtime.visibility[0]);
+            for (actual, expected) in [
+                visibility.dark,
+                visibility.blind,
+                visibility.cover,
+                visibility.dark_cols[1],
+            ]
+            .into_iter()
+            .zip(expected)
+            {
+                assert_near(actual, expected);
+            }
+            assert!(!runtime.visibility[1].any(), "P1 visibility stays local");
+        }
+        assert!(!runtime.visibility[0].any(), "expired visibility settles");
+    }
+
+    #[test]
+    fn visibility_lua_approach_windows_preserve_evaluated_ease_values() {
+        for target in [
+            SongLuaEaseMaskTarget::VisibilityDark,
+            SongLuaEaseMaskTarget::VisibilityBlind,
+            SongLuaEaseMaskTarget::VisibilityCover,
+        ] {
+            for (speed, expected) in [(Some(0.25), 0.05), (None, 0.5)] {
+                let mut window = song_lua_ease_mask_window(target, 0.0, 2.0, 3.0, 0.0, 1.0);
+                window.approach_speed = speed;
+                let mut runtime = GameplayAttackRuntimeState::new(
+                    [Vec::new(), Vec::new()],
+                    [vec![window], Vec::new()],
+                );
+                let _ = runtime.refresh_player(
+                    0,
+                    1.0,
+                    0.2,
+                    AppearanceEffects::default(),
+                    AttackBaseEffects::default,
+                    SongLuaPlayerTransform::default(),
+                );
+                let actual = match target {
+                    SongLuaEaseMaskTarget::VisibilityDark => runtime.visibility[0].dark,
+                    SongLuaEaseMaskTarget::VisibilityBlind => runtime.visibility[0].blind,
+                    SongLuaEaseMaskTarget::VisibilityCover => runtime.visibility[0].cover,
+                    _ => unreachable!(),
+                };
+                assert_near(actual.unwrap(), expected);
+            }
+        }
     }
 
     #[test]
@@ -4421,7 +4795,19 @@ mod tests {
             AttackBaseEffects::default,
             SongLuaPlayerTransform::default(),
         );
-        assert!(!runtime.visibility[0].any(), "expired columns must reset");
+        assert_eq!(runtime.visibility[0].dark_cols[0], Some(0.5));
+        assert_eq!(runtime.visibility[0].dark_cols[1], None);
+        assert_eq!(runtime.visibility[0].dark_cols[3], Some(0.75));
+        assert_eq!(runtime.visibility[0].dark_cols[9], Some(1.0));
+        let _ = runtime.refresh_player(
+            0,
+            3.5,
+            1.0,
+            AppearanceEffects::default(),
+            AttackBaseEffects::default,
+            SongLuaPlayerTransform::default(),
+        );
+        assert!(!runtime.visibility[0].any(), "expired columns settle at base");
     }
 
     #[test]
@@ -4443,6 +4829,65 @@ mod tests {
         assert_eq!(merge_attack_visual_effects(base, current).move_z_cols[3], -0.5);
         approach_visual_overrides_to_base(&mut current, base, 10.0);
         assert!(current.move_z_cols.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn column_confusion_xy_attacks_approach_and_merge_independently() {
+        // The ending of Looping the Rooms uses a one-radian X tilt per lane.
+        // PlayerOptions stores these separately from each global Confusion axis.
+        let mods = parse_attack_mods(
+            "*10 200 Movex2, *20 1000 Movey2, *10 100 Confusionxoffset2, \
+             *2 -50 Confusionyoffset4, *4 25 Confusionxoffset10",
+        );
+        assert_eq!(mods.visual.confusion_x_offset_cols[1], Some(1.0));
+        assert_eq!(mods.visual_speed.confusion_x_offset_cols[1], Some(10.0));
+        assert_eq!(mods.visual.confusion_y_offset_cols[3], Some(-0.5));
+        assert_eq!(mods.visual_speed.confusion_y_offset_cols[3], Some(2.0));
+        assert_eq!(mods.visual.confusion_x_offset_cols[9], Some(0.25));
+        assert!(mods.has_runtime_mask_effect());
+        assert!(!parse_attack_mods("confusionxoffset0,confusionyoffset11").has_runtime_mask_effect());
+
+        let mut runtime = GameplayAttackRuntimeState::new(
+            [vec![attack_mask_window(0.0, 1.0, mods)], Vec::new()],
+            [Vec::new(), Vec::new()],
+        );
+        for (now, delta, expected_x, expected_y, expected_last) in [
+            (0.025, 0.025, 0.25, -0.05, 0.1),
+            (0.05, 0.025, 0.5, -0.1, 0.2),
+            (0.1, 0.05, 1.0, -0.2, 0.25),
+        ] {
+            let _ = runtime.refresh_player(
+                0,
+                now,
+                delta,
+                AppearanceEffects::default(),
+                AttackBaseEffects::default,
+                SongLuaPlayerTransform::default(),
+            );
+            assert_near(runtime.visual[0].confusion_x_offset_cols[1].unwrap(), expected_x);
+            assert_near(runtime.visual[0].confusion_y_offset_cols[3].unwrap(), expected_y);
+            assert_near(runtime.visual[0].confusion_x_offset_cols[9].unwrap(), expected_last);
+            assert_eq!(runtime.visual[0].confusion_x_offset_cols[0], None);
+            assert_eq!(runtime.visual[0].confusion_y_offset_cols[1], None);
+            assert_eq!(runtime.visual[0].confusion_x_offset, None);
+            assert_eq!(runtime.visual[0].confusion_y_offset, None);
+            assert!(!runtime.visual[1].any(), "lane attacks belong to their player");
+        }
+
+        let mut base = VisualEffects {
+            confusion_x_offset: 0.125,
+            confusion_y_offset: -0.25,
+            ..VisualEffects::default()
+        };
+        base.confusion_x_offset_cols[0] = 0.75;
+        let merged = merge_attack_visual_effects(base, runtime.visual[0]);
+        assert_eq!(merged.confusion_x_offset, 0.125);
+        assert_eq!(merged.confusion_y_offset, -0.25);
+        assert_eq!(merged.confusion_x_offset_cols[0], 0.75);
+        assert_eq!(merged.confusion_x_offset_cols[1], 1.0);
+        assert_near(merged.confusion_y_offset_cols[3], -0.2);
+        approach_visual_overrides_to_base(&mut runtime.visual[0], base, 10.0);
+        assert!(!runtime.visual[0].any());
     }
 
     #[test]
@@ -8022,7 +8467,7 @@ mod tests {
         approach_scroll_overrides_to_target(&mut current, target, speed, base, 0.25);
 
         assert_near(current.reverse.unwrap(), 0.5);
-        assert_eq!(current.split, None);
+        assert_eq!(current.split, Some(0.75), "expired scroll approaches base");
         assert_near(current.alternate.unwrap(), 0.5);
         assert_near(current.cross.unwrap(), 0.25);
     }
@@ -8252,6 +8697,19 @@ mod tests {
         );
         assert_near(windows[0].from, std::f32::consts::FRAC_PI_2);
         assert_near(windows[0].to, std::f32::consts::PI);
+
+        for (name, target) in [
+            ("confusionxoffset2", SongLuaEaseMaskTarget::VisualConfusionXOffsetColumn(1)),
+            ("confusionyoffset4", SongLuaEaseMaskTarget::VisualConfusionYOffsetColumn(3)),
+        ] {
+            windows.clear();
+            assert!(append_song_lua_ease_targets(
+                &mut windows, 0.0, 1.0, 1.0, name, -50.0, 100.0, None, None, None,
+            ));
+            assert_eq!(windows[0].target, target);
+            assert_near(windows[0].from, -0.5);
+            assert_near(windows[0].to, 1.0);
+        }
     }
 
     #[test]

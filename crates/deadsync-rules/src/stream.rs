@@ -579,7 +579,7 @@ pub fn zmod_stream_totals_full_measures(
 fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
     const ROWS_PER_MEASURE_HINT: usize = 16;
     let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * ROWS_PER_MEASURE_HINT) + 1);
-    for_each_measure_density::<LANES>(data, None, |density| {
+    for_each_measure_density::<LANES, false>(data, None, |density| {
         densities.push(density);
         true
     });
@@ -589,7 +589,7 @@ fn measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<usize> {
 fn stream_measure_densities_impl<const LANES: usize>(data: &[u8]) -> Vec<u8> {
     const ROWS_PER_MEASURE_HINT: usize = 16;
     let mut densities = Vec::with_capacity(data.len() / ((LANES + 1) * ROWS_PER_MEASURE_HINT) + 1);
-    for_each_measure_density::<LANES>(data, Some(32), |density| {
+    for_each_measure_density::<LANES, false>(data, Some(32), |density| {
         densities.push(density as u8);
         true
     });
@@ -603,7 +603,9 @@ fn stream_run_progress_impl<const LANES: usize>(
 ) -> Option<(usize, usize)> {
     let mut progress = StreamProgress::new(threshold, current_measure);
     // Run membership only needs to know whether each measure meets the threshold.
-    for_each_measure_density::<LANES>(data, Some(threshold), |density| progress.record(density));
+    for_each_measure_density::<LANES, true>(data, Some(threshold), |density| {
+        progress.record(density)
+    });
     progress.finish()
 }
 
@@ -659,7 +661,7 @@ impl StreamProgress {
     }
 }
 
-fn for_each_measure_density<const LANES: usize>(
+fn for_each_measure_density<const LANES: usize, const SKIP_CAPPED_ROWS: bool>(
     mut data: &[u8],
     cap: Option<usize>,
     mut visit: impl FnMut(usize) -> bool,
@@ -668,6 +670,12 @@ fn for_each_measure_density<const LANES: usize>(
     // prevents that reduction level. The reduced density is this direct count.
     let mut measure_steps = 0usize;
     while !data.is_empty() {
+        if SKIP_CAPPED_ROWS && cap == Some(measure_steps) {
+            data = next_measure_delimiter(data);
+            if data.is_empty() {
+                break;
+            }
+        }
         if data[0].is_ascii_whitespace() {
             data = skip_ws(data);
             continue;
@@ -679,7 +687,7 @@ fn for_each_measure_density<const LANES: usize>(
             && data[LANES - 1] != b'\r'
             && !matches!(data[0], b'/' | b',' | b';')
         {
-            if cap.is_none_or(|limit| measure_steps < limit) {
+            if SKIP_CAPPED_ROWS || cap.is_none_or(|limit| measure_steps < limit) {
                 measure_steps += usize::from(density_row_has_step::<LANES>(data));
             }
             data = &data[LANES + 1 + usize::from(data[LANES] == b'\r')..];
@@ -704,13 +712,32 @@ fn for_each_measure_density<const LANES: usize>(
                 visit(measure_steps);
                 return;
             }
-            _ if line.len() >= LANES && cap.is_none_or(|limit| measure_steps < limit) => {
+            _ if line.len() >= LANES
+                && (SKIP_CAPPED_ROWS || cap.is_none_or(|limit| measure_steps < limit)) =>
+            {
                 measure_steps += usize::from(density_row_has_step::<LANES>(line));
             }
             _ => {}
         }
     }
     visit(measure_steps);
+}
+
+fn next_measure_delimiter(mut data: &[u8]) -> &[u8] {
+    while let Some(delimiter) = memchr::memchr2(b',', b';', data) {
+        let prefix = &data[..delimiter];
+        let line_start = memchr::memrchr(b'\n', prefix).map_or(0, |newline| newline + 1);
+        if prefix[line_start..].trim_ascii_start().is_empty() {
+            return &data[delimiter..];
+        }
+        // A marker inside a comment or row cannot end the measure.
+        let rest = &data[delimiter + 1..];
+        let Some(newline) = memchr::memchr(b'\n', rest) else {
+            break;
+        };
+        data = &rest[newline + 1..];
+    }
+    &[]
 }
 
 #[inline]

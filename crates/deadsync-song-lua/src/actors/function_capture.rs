@@ -9,6 +9,7 @@ pub(super) struct Saved {
     state: ActorSnapshot,
     base_transform: crate::base_transform::BaseTransform,
     pose_exported: bool,
+    authored_transform: bool,
     current: TweenPose,
     queue: VecDeque<TweenStep>,
     replay: Option<song_replay::State>,
@@ -28,6 +29,7 @@ impl Saved {
             state: a.state.clone(),
             base_transform: a.base_transform,
             pose_exported: a.pose_exported,
+            authored_transform: a.authored_transform,
             current: a.current,
             queue: a.queue.clone(),
             replay: a.replay.clone(),
@@ -56,6 +58,7 @@ impl Saved {
         a.state = self.state;
         a.base_transform = self.base_transform;
         a.pose_exported = self.pose_exported;
+        a.authored_transform = self.authored_transform;
         a.state.children = children;
         a.state.parent = parent;
         a.current = self.current;

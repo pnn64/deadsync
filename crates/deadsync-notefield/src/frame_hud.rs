@@ -22,13 +22,22 @@ use crate::judgment_feedback::{
     TapJudgmentSprite, compose_judgment_feedback,
 };
 use crate::mini_indicator::ZmodMeasureCounterText;
-use deadlib_present::actors::{Actor, FlatDraw, InlineText, TextContent};
+use deadlib_present::actors::{Actor, FlatDraw, InlineText, SharedActorFrameScratch, TextContent};
 use deadsync_gameplay::{
     ActiveComboMilestone, ErrorBarText, ErrorBarTick, HeldMissRenderInfo, HoldJudgmentRenderInfo,
     JudgmentRenderInfo, OffsetIndicatorText,
 };
 use deadsync_rules::stream::StreamSegment;
+use glam::{Mat4, Vec3};
 use std::ops::Range;
+
+/// The resolved native Judgment/Combo root and its outer wrapper states.
+/// Coordinates are local to the Player, before its own transform is applied.
+#[derive(Clone, Copy, Debug)]
+pub struct HudActorTransform {
+    pub matrix: Mat4,
+    pub tint: [f32; 4],
+}
 
 /// Prepared combo values and renderer-neutral assets for one HUD frame.
 pub struct ComboHudFrame<'a> {
@@ -40,6 +49,7 @@ pub struct ComboHudFrame<'a> {
     pub combo_color: [f32; 4],
     pub font: Option<&'static str>,
     pub number_text_slot: u8,
+    pub transform: Option<HudActorTransform>,
 }
 
 /// Borrowed gameplay error-bar state plus prepared theme text adapters.
@@ -99,6 +109,7 @@ pub struct MiniHudFrame {
 pub struct TapJudgmentHudFrame<'a> {
     pub render: &'a JudgmentRenderInfo,
     pub sprite: TapJudgmentSprite,
+    pub transform: Option<HudActorTransform>,
 }
 
 impl TapJudgmentHudFrame<'_> {
@@ -184,6 +195,23 @@ pub fn compose_notefield_hud<S>(
             || (!request.capture_requests.combo && !request.capture_requests.player),
         "direct Combo capture requires a retained HUD draw range"
     );
+    // Release last frame's capture wrapper before refilling its transform
+    // children; otherwise the retained outer capture keeps that scratch shared.
+    if frame
+        .combo
+        .as_ref()
+        .is_some_and(|combo| combo.transform.is_some())
+    {
+        capture_scratch.combo.clear();
+    }
+    if frame
+        .judgment
+        .as_ref()
+        .and_then(|judgment| judgment.tap.as_ref())
+        .is_some_and(|tap| tap.transform.is_some())
+    {
+        capture_scratch.judgment.clear();
+    }
     if let Some(error_bar) = frame.error_bar.as_ref() {
         compose_error(draws, request, prepared, error_bar);
     }
@@ -250,6 +278,17 @@ pub fn compose_notefield_hud<S>(
     let combo_draw_start = draws.len();
     if let Some(combo) = frame.combo.as_ref() {
         compose_combo(actors, draws, request, prepared, combo, combo_draw_start);
+        if let Some(transform) = combo.transform {
+            actors.extend(draws.drain(combo_draw_start..).map(actor_from_flat_draw));
+            transform_hud_actors(
+                actors,
+                combo_capture_start,
+                request,
+                prepared,
+                transform,
+                &mut capture_scratch.combo_transform,
+            );
+        }
     }
     let combo_actors = request
         .capture_requests
@@ -268,7 +307,20 @@ pub fn compose_notefield_hud<S>(
     let judgment_capture_start = actors.len();
     let judgment_draw_start = draws.len();
     if let Some(judgment) = frame.judgment.as_ref() {
-        compose_judgment(draws, request, prepared, judgment);
+        let tap_draws = compose_judgment(draws, request, prepared, judgment);
+        if let Some(transform) = judgment.tap.as_ref().and_then(|tap| tap.transform) {
+            // Hold results are separate Player children. Only the tap Judgment
+            // belongs inside this root and its AddWrapperState chain.
+            actors.extend(draws.drain(tap_draws).map(actor_from_flat_draw));
+            transform_hud_actors(
+                actors,
+                judgment_capture_start,
+                request,
+                prepared,
+                transform,
+                &mut capture_scratch.judgment_transform,
+            );
+        }
     }
     if request.capture_requests.judgment || request.capture_requests.player {
         actors.extend(draws.drain(judgment_draw_start..).map(actor_from_flat_draw));
@@ -304,6 +356,47 @@ pub fn compose_notefield_hud<S>(
     }
 }
 
+fn transform_hud_actors<S>(
+    actors: &mut Vec<Actor>,
+    start: usize,
+    request: &NotefieldComposeRequest<'_, S>,
+    prepared: &PreparedNotefield<'_, S>,
+    transform: HudActorTransform,
+    scratch: &mut SharedActorFrameScratch,
+) {
+    let Some(children) = scratch.capture_range(actors, start) else {
+        return;
+    };
+    let geometry = request.geometry;
+    let origin = Vec3::new(
+        prepared.field.playfield_center_x,
+        geometry.screen_center_y,
+        0.0,
+    );
+    let matrix =
+        Mat4::from_translation(origin) * transform.matrix * Mat4::from_translation(-origin);
+    actors.push(Actor::SharedTransform {
+        transform: crate::song_lua_screen_matrix_to_world(
+            matrix,
+            geometry.screen_width,
+            geometry.screen_height,
+        ),
+        source_view_proj: glam::camera::rh::proj::opengl::orthographic(
+            -0.5 * geometry.screen_width,
+            0.5 * geometry.screen_width,
+            -0.5 * geometry.screen_height,
+            0.5 * geometry.screen_height,
+            -1.0,
+            1.0,
+        ),
+        children,
+        isolate_order: false,
+        z: 0,
+        tint: transform.tint,
+        blend: None,
+    });
+}
+
 fn compose_combo<S>(
     actors: &mut Vec<Actor>,
     draws: &mut Vec<FlatDraw>,
@@ -335,6 +428,7 @@ fn compose_combo<S>(
         [1.0; 4]
     };
     let field = prepared.field;
+    let native = frame.transform.is_some();
     let feedback = ComboFeedbackRequest {
         style: request.hud_style.combo_feedback,
         show,
@@ -342,12 +436,23 @@ fn compose_combo<S>(
         milestones: frame.milestones,
         combo: frame.combo,
         miss_combo: frame.miss_combo,
-        number_xy: [field.combo_x, field.hud_layout.zmod_layout.combo_y],
+        number_xy: if native {
+            [
+                field.playfield_center_x + request.options.combo_offset[0],
+                request.geometry.screen_center_y + request.options.combo_offset[1],
+            ]
+        } else {
+            [field.combo_x, field.hud_layout.zmod_layout.combo_y]
+        },
         milestone_xy: [
             field.playfield_center_x,
-            field.hud_layout.zmod_layout.combo_y,
+            if native {
+                request.geometry.screen_center_y
+            } else {
+                field.hud_layout.zmod_layout.combo_y
+            },
         ],
-        mini: prepared.mini,
+        mini: if native { 0.0 } else { prepared.mini },
         player_color,
         combo_color,
         font: frame.font,
@@ -437,7 +542,7 @@ fn compose_judgment<S>(
     request: &NotefieldComposeRequest<'_, S>,
     prepared: &PreparedNotefield<'_, S>,
     frame: &JudgmentHudFrame<'_>,
-) {
+) -> Range<usize> {
     let options = request.options;
     let (tap, tap_sprite) = if prepared.blind_active {
         (None, None)
@@ -474,6 +579,10 @@ fn compose_judgment<S>(
         (None, None)
     };
     let field = prepared.field;
+    let native = frame
+        .tap
+        .as_ref()
+        .is_some_and(|tap| tap.transform.is_some());
     let noteskin_column_xs = prepared
         .notes
         .as_ref()
@@ -487,7 +596,14 @@ fn compose_judgment<S>(
             elapsed_screen: request.visual.elapsed_screen_s,
             tap,
             tap_sprite,
-            tap_xy: [field.judgment_x, field.hud_layout.judgment_y],
+            tap_xy: if native {
+                [
+                    field.playfield_center_x + options.judgment_offset[0],
+                    request.geometry.screen_center_y + options.judgment_offset[1],
+                ]
+            } else {
+                [field.judgment_x, field.hud_layout.judgment_y]
+            },
             judgment_back: options.judgment_back,
             judgment_zoom: judgment_actor_zoom(
                 prepared.mini,
@@ -495,6 +611,7 @@ fn compose_judgment<S>(
                 request.visual.perspective.tilt,
                 request.visual.perspective.skew,
             ),
+            tap_zoom: native.then_some(1.0),
             held_misses: frame.held_misses,
             held_miss_sprite: frame.held_miss_sprite.as_ref(),
             hold_judgments: frame.hold_judgments,
@@ -505,10 +622,11 @@ fn compose_judgment<S>(
             visual: request.visual.visual,
             noteskin_column_xs,
             prepared_geometry: prepared.notes.as_ref().map(|notes| HoldIndicatorGeometry {
-                col_offsets: &notes.col_offsets[..prepared.frame_plan.num_cols],
+                col_offsets: &notes.unzoomed_col_offsets[..prepared.frame_plan.num_cols],
                 invert: &notes.invert_distances[..prepared.frame_plan.num_cols],
                 tornado: &notes.tornado_bounds[..prepared.frame_plan.num_cols],
                 beat_factor: notes.beat_factor,
+                field_zoom: prepared.field_zoom,
             }),
             num_cols: prepared.frame_plan.num_cols,
             spacing_multiplier: request.visual.spacing_multiplier,
@@ -519,7 +637,7 @@ fn compose_judgment<S>(
             field_center_y: field.notefield_offset_y,
             column_reverse_percent: &field.column_reverse_percent[..prepared.frame_plan.num_cols],
         },
-    );
+    )
 }
 
 #[cfg(test)]

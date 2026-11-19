@@ -98,7 +98,7 @@ impl Capture {
         self.steps.len()
     }
 
-    fn scheduled(&self) -> bool {
+    pub(super) fn scheduled(&self) -> bool {
         self.cursor.max(0.) > f32::EPSILON
             || self
                 .current
@@ -306,8 +306,10 @@ pub(super) fn write(call: &mut HostCall<'_>, id: TableId, delta: Delta, immediat
     let scope = guard.capture_scope;
     let fallback = song_pose::mode(&guard, id);
     if let Some(actor) = guard.actors.get_mut(&id) {
+        retain_authored_transform(actor, &delta);
         record(actor, &delta, immediate, scope, fallback);
     }
+    song_immediate::record_pose_step(guard, id, &delta);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
     if !song_pose::record(call, id, &delta) {
@@ -328,9 +330,6 @@ pub(super) fn retain_render_update(
 ) {
     use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Update};
     let guard = &mut *store;
-    if !guard.preparing || guard.replay_frame.is_some() {
-        return;
-    }
     let mut delta = Delta::default();
     match (target, value) {
         (Target::Visible, Update::Bool(value)) => delta.visible = Some(*value),
@@ -376,11 +375,61 @@ pub(super) fn retain_render_update(
         (Target::TextureFiltering, Update::Bool(value)) => delta.texture_filtering = Some(*value),
         _ => return,
     }
+    let retain_command = guard.preparing && guard.replay_frame.is_none();
     let scope = guard.capture_scope;
     let fallback = song_pose::mode(&guard, id);
     if let Some(actor) = guard.actors.get_mut(&id) {
-        record(actor, &delta, immediate, scope, fallback);
+        retain_authored_transform(actor, &delta);
+        if retain_command {
+            record(actor, &delta, immediate, scope, fallback);
+        }
     }
+}
+
+fn retain_authored_transform(actor: &mut Actor, delta: &Delta) {
+    use crate::SongLuaOverlayUpdateTarget as Target;
+    if actor.authored_transform {
+        return;
+    }
+    // A native Player also writes its HUD roots every frame. Only Lua setter
+    // calls opt those roots into the captured transform path, including writes
+    // equal to their defaults; otherwise the theme owns profile-aware placement.
+    actor.authored_transform |= [
+        Target::X,
+        Target::Y,
+        Target::Z,
+        Target::Zoom,
+        Target::ZoomX,
+        Target::ZoomY,
+        Target::ZoomZ,
+        Target::RotationX,
+        Target::RotationY,
+        Target::RotationZ,
+        Target::Quaternion,
+        Target::SkewX,
+        Target::SkewY,
+        Target::BaseZoom,
+        Target::BaseZoomX,
+        Target::BaseZoomY,
+        Target::BaseZoomZ,
+        Target::BaseRotation,
+        Target::Diffuse,
+        Target::BaseAlpha,
+        Target::Vibrate,
+        Target::Rainbow,
+        Target::EffectMode,
+        Target::EffectPeriod,
+        Target::EffectTiming,
+        Target::EffectMagnitude,
+        Target::EffectColor1,
+        Target::EffectColor2,
+        Target::EffectOffset,
+        Target::EffectClock,
+        Target::EffectNoOffset,
+        Target::EffectTimer,
+    ]
+    .into_iter()
+    .any(|target| delta.has_update_target(target));
 }
 
 fn record(actor: &mut Actor, delta: &Delta, immediate: bool, scope: Option<f32>, fallback: bool) {
@@ -611,9 +660,6 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
     ) {
         actor.pose_exported = true;
     }
-    if actor.capture.is_none() && actor.replay.is_none() {
-        return;
-    }
     let pose = actor.destination();
     let state = &actor.state;
     let render = &state.render;
@@ -729,7 +775,12 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
         "fov" => delta.fov = render.fov,
         _ => return,
     }
+    retain_authored_transform(actor, &delta);
+    if actor.capture.is_none() && actor.replay.is_none() {
+        return;
+    }
     record(actor, &delta, immediate, scope, fallback);
+    song_immediate::record_pose_step(guard, id, &delta);
     #[cfg(feature = "test-support")]
     song_messages::pose_write(call, id, &delta);
     if !song_pose::record(call, id, &delta) {
@@ -743,13 +794,15 @@ pub(super) fn property(call: &mut HostCall<'_>, id: TableId, name: &str) {
 // advancement. Captured commands outside the update instead drain synchronously.
 pub(super) fn enter_replay_queue(store: &mut Store, actor: TableId) {
     let guard = &mut *store;
-    // Full-timeline preparation retains its fallback capture and command queue.
-    // Streamed preparation continues to use the ordinary queue below.
-    if guard.replay_clock.is_some() {
+    // Full-timeline preparation retains capture for sampled actors. An omitted
+    // control actor has no sampled pose to publish back to its getters, so its
+    // frame-created tweens must use the ordinary native queue instead.
+    if guard.replay_clock.is_some() && song_immediate::context(guard, actor).is_some() {
         return;
     }
     if guard.replay_frame.is_some() && guard.replay_advancing {
-        let actor = guard.actors.get_mut(&actor).unwrap();
+        let id = actor;
+        let actor = guard.actors.get_mut(&id).unwrap();
         if actor
             .capture
             .as_ref()
@@ -762,6 +815,9 @@ pub(super) fn enter_replay_queue(store: &mut Store, actor: TableId) {
             // The first update-created queue starts its own clock; those old
             // durations must not postpone commands queued by this callback.
             actor.queue.clear();
+            if let Some(clock) = &mut guard.replay_clock {
+                clock.promote(id);
+            }
         }
     }
 }

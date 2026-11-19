@@ -232,41 +232,28 @@ enum Phase {
 }
 
 impl Strings {
-    fn remove(&mut self, key: u64) {
-        let index = slot_index(key);
-        let mask = self.buckets.len() - 1;
-        let mut hole = Self::hash(&self.bytes[index]) & mask;
-        while self.buckets[hole] != index as u32 + 1 {
-            debug_assert_ne!(self.buckets[hole], 0);
-            hole = (hole + 1) & mask;
-        }
-        let mut cursor = (hole + 1) & mask;
-        while self.buckets[cursor] != 0 {
-            // Backshift the cluster before freeing/reusing its arena slot.
-            let entry = self.buckets[cursor];
-            let home = Self::hash(&self.bytes[entry as usize - 1]) & mask;
-            if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
-                self.buckets[hole] = entry;
-                hole = cursor;
-            }
-            cursor = (cursor + 1) & mask;
-        }
-        self.buckets[hole] = 0;
-        self.bytes.remove(key);
-    }
     fn sweep_some(&mut self, cursor: &mut usize, budget: usize) -> u64 {
-        let end = cursor.saturating_sub(budget);
-        let mut reclaimed = 0;
-        for index in (end..*cursor).rev() {
-            if let Some(key) = self.bytes.key(index)
-                && !self.bytes.marked(key)
-            {
-                self.remove(key);
-                reclaimed += 1;
+        let buckets = &mut self.buckets;
+        self.bytes.sweep_with(cursor, budget, |bytes, index| {
+            let mask = buckets.len() - 1;
+            let mut hole = Self::hash(&bytes[index]) & mask;
+            while buckets[hole] != index as u32 + 1 {
+                debug_assert_ne!(buckets[hole], 0);
+                hole = (hole + 1) & mask;
             }
-        }
-        *cursor = end;
-        reclaimed
+            let mut cursor = (hole + 1) & mask;
+            while buckets[cursor] != 0 {
+                // Backshift the cluster before freeing/reusing its arena slot.
+                let entry = buckets[cursor];
+                let home = Self::hash(&bytes[entry as usize - 1]) & mask;
+                if (cursor.wrapping_sub(home) & mask) >= (hole.wrapping_sub(home) & mask) {
+                    buckets[hole] = entry;
+                    hole = cursor;
+                }
+                cursor = (cursor + 1) & mask;
+            }
+            buckets[hole] = 0;
+        })
     }
     fn rebuild(&mut self) {
         if self.buckets.is_empty() {

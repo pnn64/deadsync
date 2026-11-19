@@ -698,7 +698,7 @@ impl Table {
         if self.native51 && !self.entries.is_empty() {
             // luaH_getn searches past the array part when its last slot is live.
             let mut upper = hi + 1;
-            while self.get(Value::Number(upper as f64)) != Value::Nil {
+            while self.get_key(Key::Number((upper as f64).to_bits())) != Value::Nil {
                 hi = upper;
                 if upper > i32::MAX as usize / 2 {
                     let mut index = 1;
@@ -711,7 +711,7 @@ impl Table {
             }
             while upper - hi > 1 {
                 let middle = (hi + upper) / 2;
-                if self.get(Value::Number(middle as f64)) == Value::Nil {
+                if self.get_key(Key::Number((middle as f64).to_bits())) == Value::Nil {
                     upper = middle;
                 } else {
                     hi = middle;

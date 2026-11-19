@@ -8,3 +8,9 @@ tests/fixtures/**/*.planes -text
 tests/fixtures/**/*.JPG -text
 tests/fixtures/**/*.SRC -text
 tests/fixtures/**/*.DCT -text
+# Fuzz scripts run under Linux; benchmark data keeps raw bytes.
+*.rs text eol=lf
+*.py text eol=lf
+*.tsv text eol=lf
+*.json text eol=lf
+bench/results/**/*.log text eol=lf -whitespace

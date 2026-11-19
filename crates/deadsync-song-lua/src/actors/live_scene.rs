@@ -4,7 +4,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) enum Phase {
     States(Arc<Mutex<[Vec<crate::SongLuaOverlayState>; 2]>>),
-    Off,
+    Off { failed: bool },
     ClearHistory,
     EndSounds,
     Health(Error),
@@ -15,6 +15,47 @@ struct Run {
     phase: Phase,
 }
 impl Actors {
+    pub(crate) fn live_wrapper_epoch(&self, vm: &Vm) -> u64 {
+        vm.store_ref().wrapper_epoch
+    }
+
+    /// Discover wrappers through owned actor identities. The caller retains
+    /// appended values before invoking Lua, and only calls this after wrapper
+    /// attachment changes; ordinary frames do not scan the scene again. Scene
+    /// allocation is independent: AddWrapperState uses its owner's scene.
+    pub(crate) fn unbound_live_wrappers(
+        &self,
+        vm: &Vm,
+        actors: &[Value],
+    ) -> Vec<(usize, Value)> {
+        let store = vm.store_ref();
+        let mut values = actors.to_vec();
+        let mut known = values.iter().filter_map(|value| match value {
+            Value::Table(id) => Some(*id),
+            _ => None,
+        }).collect::<HashSet<_>>();
+        let mut appended = Vec::new();
+        let mut owner = 0;
+        while owner < values.len() {
+            if let Value::Table(id) = values[owner]
+                && let Some(actor) = store.actors.get(&id)
+                // Actor::Draw calls PreDraw/BeginDraw directly on its wrapper
+                // list; it does not recurse through a wrapper's own Draw.
+                && actor.state.class != "WrapperState"
+            {
+                for &wrapper in &actor.wrappers {
+                    if known.insert(wrapper) {
+                        let value = Value::Table(wrapper);
+                        values.push(value);
+                        appended.push((owner, value));
+                    }
+                }
+            }
+            owner += 1;
+        }
+        appended
+    }
+
     pub(crate) fn suppress_load_sound_retirement(&self, vm: &mut Vm, scene: ActorScene) {
         if let Some(scene) = vm.store().scenes.get_mut(&scene.id) {
             scene.sounds_retired = true;
@@ -153,17 +194,29 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
             let screen = top(call)?;
             diagnostics::report(call, screen, diagnostics::Callback::Health, error)?;
         }
-        Phase::Off => {
+        Phase::Off { failed } => {
             let screen = top(call)?;
             fn visit(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
                 native_children::run_command_with_drain(call, actor, b"Off", None, true)?;
                 native_children::with_children(call, actor, |call, c| visit(call, c))
             }
             native_children::with_children(call, screen, |call, c| visit(call, c))?;
-            let out = native_children::named_child(call, screen, b"Out")?;
-            if out != Value::Nil {
-                let out = table(call, out)?;
-                call.with_roots(&[Value::Table(out)], |call| transitions::start(call, out))?;
+            let mut transition = None;
+            if failed {
+                native_children::with_children(call, screen, |call, child| {
+                    let role = get_static(call, child, b"__songlua_screen_actor_role")?;
+                    if role != Value::Nil && assets::text(call, role)? == "Failed" {
+                        transition = Some(child);
+                    }
+                    Ok(())
+                })?;
+            } else {
+                let out = native_children::named_child(call, screen, b"Out")?;
+                if out != Value::Nil { transition = Some(table(call, out)?); }
+            }
+            if let Some(transition) = transition {
+                call.with_roots(&[Value::Table(transition)], |call|
+                    transitions::start_with_message(call, transition, "SM_DoNextScreen"))?;
             }
         }
         Phase::EndSounds => {

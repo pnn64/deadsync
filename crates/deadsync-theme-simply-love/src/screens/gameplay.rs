@@ -791,6 +791,8 @@ pub struct State {
     song_lua_out: Option<SongLuaOut>,
     song_lua_ended: bool,
     song_lua_draw_reload_pending: bool,
+    #[cfg(feature = "test-support")]
+    pub(crate) arrow_tipsy_clock_inputs: [Option<f64>; MAX_PLAYERS],
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     /// Game-thread, song-lifetime identity for the fixed two HUD slots. Built
     /// during gameplay setup, read immutably thereafter, and dropped with the
@@ -983,6 +985,7 @@ impl GameplayPresentationSkeleton {
 impl State {
     /// Transfer authored callbacks from the loading worker to the gameplay screen.
     pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
+        scene.initialize_gameplay_clock(&mut self.gameplay);
         scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
         scene.prepare_gameplay_player_options(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
@@ -996,6 +999,8 @@ impl State {
         scene.install_hold_judgment_callback(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
         scene.install_avoided_mine_judgment_callback(&mut self.gameplay)
+            .map_err(|error| error.to_string())?;
+        scene.install_life_changed_callback(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
         if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
         self.song_lua_output = scene.take_startup_output();
@@ -1025,6 +1030,7 @@ impl State {
         self.gameplay.tap_row_judgment_callback = None;
         self.gameplay.hold_judgment_callback = None;
         self.gameplay.avoided_mine_judgment_callback = None;
+        self.gameplay.life_changed_callback = None;
         self.gameplay.chart_runtime.mine_scan.pending_avoided_mine_judgments.clear();
         Ok(())
     }
@@ -1043,9 +1049,23 @@ impl State {
         &self.song_lua_output.draw_frames
     }
 
+    /// Replay raw native cache clocks; actor/effect outputs remain locally computed.
+    #[cfg(feature = "test-support")]
+    pub fn set_notefield_tipsy_clock_inputs(&mut self, tipsy: [Option<f64>; MAX_PLAYERS]) {
+        assert!(
+            tipsy
+                .iter()
+                .flatten()
+                .all(|time| time.is_finite() && *time >= 0.0),
+            "native ArrowEffects clocks must be finite and nonnegative"
+        );
+        self.arrow_tipsy_clock_inputs = tipsy;
+    }
+
     fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
         let Some(scene) = &mut self.song_lua else { return Ok(()); };
         scene.apply_pending_player_writes(&mut self.gameplay);
+        scene.runtime_mut().publish_gameplay_life_records(&self.gameplay);
         let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
         frame.uptime_seconds = uptime_seconds;
         let outro_before_actors = frame.gameplay_outro;
@@ -1053,11 +1073,17 @@ impl State {
         scene.apply_output_player_writes(&output, &mut self.gameplay);
         scene.prepare_gameplay_player_options(&mut self.gameplay)
             .map_err(|error| error.to_string())?;
+        let gameplay_clock_active = scene.gameplay_clock_active();
+        scene.finish_gameplay_audio(&mut self.gameplay);
+        scene.finish_gameplay_failures(&mut self.gameplay, gameplay_clock_active)
+            .map_err(|error| error.to_string())?;
         // Native ScreenGameplay checks failure after updating its actor tree.
         // Lua can drain life during this update, after the core's earlier check.
         if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
             scene.note_gameplay_outro_after_actors();
         }
+        scene.finish_gameplay_clock(&mut self.gameplay, gameplay_clock_active)
+            .map_err(|error| error.to_string())?;
         let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
         if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
             && self.song_lua_out.is_none()
@@ -1324,6 +1350,8 @@ impl State {
             song_lua_out: None,
             song_lua_ended: false,
             song_lua_draw_reload_pending: false,
+            #[cfg(feature = "test-support")]
+            arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
             hud_snapshot,
             noteskin_assets,
@@ -5714,6 +5742,16 @@ pub fn draw_field(
         state.notefield_plan(player_idx),
         player_idx,
         arrow_effect_time_s,
+        {
+            #[cfg(feature = "test-support")]
+            {
+                state.arrow_tipsy_clock_inputs[player_idx]
+            }
+            #[cfg(not(feature = "test-support"))]
+            {
+                None
+            }
+        },
         &state.noteskin_assets,
         &visual_policy.assets.effects,
         state.actor_resources(),
@@ -5731,11 +5769,14 @@ pub fn draw_field(
         center_1player_notefield,
         judgment_visible,
         combo_visible,
+        request.judgment_transform,
+        request.combo_transform,
         view.show_song_visuals,
         view.apply_attacks,
         request.capture,
         request.wrapper,
         request.wrapper_visible,
+        request.player_position,
         state.itl_cmod_warning[player_idx],
         state.display_mods_text(player_idx),
         &state.practice_timing_labels[player_idx],

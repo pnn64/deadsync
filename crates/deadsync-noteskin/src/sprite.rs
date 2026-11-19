@@ -134,6 +134,15 @@ pub trait NoteskinSlot: Sized {
 
     fn texture_key_shared(&self) -> Arc<str>;
     fn model(&self) -> Option<&ModelMesh>;
+    /// Shared draw boundary for the meshes of one native Model actor. Separate
+    /// actors using the same resource must return different identities.
+    fn model_actor_id(&self) -> Option<usize> {
+        None
+    }
+    /// Sprite cutouts use mesh geometry without native Model depth-buffer state.
+    fn model_is_sprite_mesh(&self) -> bool {
+        false
+    }
     /// Immutable per-state image bindings, populated on the asset worker.
     fn model_texture_keys(&self) -> &[Arc<str>] {
         &[]

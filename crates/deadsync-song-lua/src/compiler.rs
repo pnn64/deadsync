@@ -105,6 +105,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
     timer.push_stage("startup_commands");
     context.report_bake_progress(0.10);
     runtime.require_input_offline_compatible()?;
+    runtime.require_statistics_offline_compatible()?;
     runtime
         .discover_song_startup_commands(screen, &activation)
         .map_err(|e| e.to_string())?;
@@ -117,20 +118,51 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .actors
         .screen_startup_states(&mut runtime.vm, screen)
         .map_err(|e| e.to_string())?;
-    crate::lua_util::bake_startup_tweens(
-        activation
-            .tweens
-            .values_mut()
-            .chain(screen_startup.values_mut())
-            .chain(activation.updates.values_mut()),
-        crate::perframe::update_function_replay_beats(
-            &selected,
-            0.,
-            crate::perframe::update_function_end_beat(&selected),
-        )
-        .into_iter(),
-        crate::perframe::reference_actor_frames(&selected).as_deref(),
+    let startup_frames = crate::perframe::update_function_replay_beats(
+        &selected,
+        0.,
+        crate::perframe::update_function_end_beat(&selected),
     );
+    let actor_frames = crate::perframe::reference_actor_frames(&selected);
+    let screen_actor_frames = crate::perframe::reference_screen_actor_frames(&selected)?;
+    if let Some(screen_actor_frames) = &screen_actor_frames {
+        let screen_actors = runtime
+            .actors
+            .compiler_screen_actors(&mut runtime.vm, root)
+            .map_err(|e| e.to_string())?;
+        // Startup commands can target either tree, regardless of which Lua
+        // layer authored them. Classify their target actors, not the script.
+        for states in [
+            &mut activation.tweens,
+            &mut screen_startup,
+            &mut activation.updates,
+        ] {
+            crate::lua_util::bake_startup_tweens(
+                states
+                    .iter_mut()
+                    .filter_map(|(actor, state)| screen_actors.contains(actor).then_some(state)),
+                startup_frames.iter().copied(),
+                Some(screen_actor_frames),
+            );
+            crate::lua_util::bake_startup_tweens(
+                states
+                    .iter_mut()
+                    .filter_map(|(actor, state)| (!screen_actors.contains(actor)).then_some(state)),
+                startup_frames.iter().copied(),
+                actor_frames.as_deref(),
+            );
+        }
+    } else {
+        crate::lua_util::bake_startup_tweens(
+            activation
+                .tweens
+                .values_mut()
+                .chain(screen_startup.values_mut())
+                .chain(activation.updates.values_mut()),
+            startup_frames.into_iter(),
+            actor_frames.as_deref(),
+        );
+    }
     timer.push_stage("update_functions");
     context.report_bake_progress(0.20);
     // Keep draw-time writes separate from startup queue discovery. A property
@@ -199,6 +231,9 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         entry_path: paths[primary].clone(),
         screen_width: selected.screen_width,
         screen_height: selected.screen_height,
+        overlay_capture_calibration_seconds: selected.song_timing.as_ref().map_or(0.0, |timing| {
+            selected.global_offset_seconds * timing.global_offset_rate()
+        }),
         ..Default::default()
     };
     #[cfg(feature = "test-support")]
@@ -542,6 +577,7 @@ pub fn compile_prepared_song_lua_layers<S, V>(
         .collect();
     crate::push_song_lua_overlay_sound_paths(&out.overlays, &mut seen, &mut out.sound_paths);
     runtime.require_input_offline_compatible()?;
+    runtime.require_statistics_offline_compatible()?;
     runtime
         .release_song_static_tables(&mut tables)
         .map_err(|e| e.to_string())?;
@@ -967,6 +1003,7 @@ fn finalize_tracked<S, V>(
                 out.player_actors[player].judgment = crate::SongLuaCapturedChildActor {
                     initial_state: row.actor.initial_state,
                     message_commands: row.actor.message_commands,
+                    render_frames: row.actor.player_wrapper_frames,
                     textures: take_events(events, n),
                 };
             }
@@ -974,6 +1011,7 @@ fn finalize_tracked<S, V>(
                 out.player_actors[player].combo = crate::SongLuaCapturedChildActor {
                     initial_state: row.actor.initial_state,
                     message_commands: row.actor.message_commands,
+                    render_frames: row.actor.player_wrapper_frames,
                     ..Default::default()
                 }
             }

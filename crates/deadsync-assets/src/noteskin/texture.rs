@@ -198,6 +198,8 @@ pub struct SpriteSlot {
     /// The transition worker replaces the initial -8 with the song's threshold.
     pub beat_receptor_start: Option<f32>,
     pub note_color_translate: bool,
+    /// Shared only by material layers belonging to one parsed Model actor.
+    pub model_actor: Option<Arc<()>>,
     pub model: Option<Arc<ModelMesh>>,
     /// Only an unresolved model may use a generated mine-core approximation.
     pub model_fallback: bool,
@@ -234,6 +236,7 @@ impl Clone for SpriteSlot {
             uv_cycle_seconds: self.uv_cycle_seconds,
             beat_receptor_start: self.beat_receptor_start,
             note_color_translate: self.note_color_translate,
+            model_actor: self.model_actor.clone(),
             model: self.model.clone(),
             model_fallback: self.model_fallback,
             model_draw: self.model_draw,
@@ -566,6 +569,14 @@ impl NoteskinSlot for SpriteSlot {
         self.model.as_deref()
     }
 
+    fn model_actor_id(&self) -> Option<usize> {
+        self.model_actor.as_ref().map(|actor| Arc::as_ptr(actor) as usize)
+    }
+
+    fn model_is_sprite_mesh(&self) -> bool {
+        self.sprite_mesh
+    }
+
     fn model_seconds_from_phase(&self, phase: f32) -> f32 {
         phase * self.model_animation_length
     }
@@ -765,6 +776,7 @@ pub fn test_model_slot() -> SpriteSlot {
         uv_cycle_seconds: None,
         beat_receptor_start: None,
         note_color_translate: false,
+        model_actor: None,
         model: Some(Arc::new(ModelMesh {
             material: None,
             vertices: Arc::from([ModelVertex {
@@ -914,6 +926,7 @@ pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
         }
     }
     slot.model_fallback = plan.model.is_none();
+    slot.model_actor = plan.actor;
     slot.model = plan.model;
     slot.model_draw = plan.model_draw;
     slot.model_timeline = plan.model_timeline;
@@ -1121,6 +1134,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         uv_cycle_seconds: None,
         beat_receptor_start: None,
         note_color_translate: plan.note_color_translate,
+        model_actor: None,
         model: None,
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::clone(&EMPTY_MODEL_TIMELINE),

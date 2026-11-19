@@ -229,6 +229,7 @@ pub(crate) fn split_compiled_song_lua<NoteskinSlot, ModelVertex>(
             screen_width: compiled.screen_width,
             screen_height: compiled.screen_height,
             overlay_update_unit: compiled.overlay_update_unit,
+            overlay_capture_calibration_seconds: compiled.overlay_capture_calibration_seconds,
             messages: if layer + 1 == entry_paths.len() {
                 std::mem::take(&mut compiled.messages)
             } else {

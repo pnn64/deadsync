@@ -497,8 +497,8 @@ pub fn prepare_song_lua<S: Clone + std::fmt::Debug>(
     })
 }
 
-/// Prefer compiled playback, retrying input-dependent sources as one live
-/// session. The first runtime update waits for the gameplay clock handoff.
+/// Prefer compiled playback, retrying sources that depend on input or player
+/// statistics as one live session. Its first update waits for the gameplay clock handoff.
 /// Other compiler errors retain the ordinary preparation behavior.
 pub fn prepare_song_lua_with_runtime_fallback<S: Clone + std::fmt::Debug>(
     song: &SongData,
@@ -693,8 +693,9 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
     if !tracks.is_empty() || !compiled.draw_frames.is_empty() {
         let mut draw_frames = compiled.draw_frames.clone();
         for frame in &mut draw_frames {
-            // Match the chart-second clock used by rendered update tracks.
-            frame.second -= global_offset_seconds * timing_player.global_offset_rate();
+            // Draw calls share the raw music clock of overlay captures.
+            frame.second -= global_offset_seconds * timing_player.global_offset_rate()
+                - compiled.overlay_capture_calibration_seconds;
         }
         overlays.push(SongLuaOverlayActor {
             kind: SongLuaOverlayKind::UpdateTracks {
@@ -945,6 +946,7 @@ fn song_lua_shared_screen<S: Clone>(compiled: &CompiledSongLua<S>) -> CompiledSo
         overlays: vec![actor],
         screen_overlay_index: Some(0),
         overlay_update_unit: compiled.overlay_update_unit,
+        overlay_capture_calibration_seconds: compiled.overlay_capture_calibration_seconds,
         ..Default::default()
     };
     screen.overlay_eases = compiled

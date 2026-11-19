@@ -1,9 +1,6 @@
 // Canonical DeadSync field metrics, independent of HUD/theme styling.
 // Player options, noteskins, view modes, and chart modifiers are applied by the
 // composers on top of these established defaults; themes cannot replace them.
-pub(crate) const LAYOUT_WIDTH_MIN: f32 = 640.0;
-pub(crate) const LAYOUT_WIDTH_MAX: f32 = 854.0;
-pub(crate) const SIDE_CENTER_X_RATIO: f32 = 0.25;
 pub(crate) const RECEPTOR_NORMAL_Y: f32 = -125.0;
 pub(crate) const RECEPTOR_REVERSE_Y: f32 = 145.0;
 pub(crate) const RECEPTOR_Z: i16 = 100;

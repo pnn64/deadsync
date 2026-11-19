@@ -247,9 +247,9 @@ pub fn compute_end_times_ns(
     song_last_second_ns: SongTimeNs,
 ) -> (SongTimeNs, SongTimeNs) {
     let mut last_judgable_time_ns = 0;
-    // Like ITGmania's GetMusicEndTiming, apply the late-resolution window after
-    // the whole-song end (which includes its authored hint). Audio EOF and
-    // note transforms must not shorten this minimum.
+    // Retain the selected chart tail for practice and callers without a resolved
+    // Song bound. ScreenGameplay applies its catalog boundary separately; an
+    // authored hint still extends this selected-chart fallback.
     let mut last_relevant_time_ns = song_last_second_ns.max(0);
     for (i, note) in notes.iter().enumerate() {
         let start_time_ns = note_time_cache_ns[i];
@@ -281,6 +281,7 @@ pub struct GameplayEndTimingState {
     audio_end_time_ns: SongTimeNs,
     song_last_second_ns: SongTimeNs,
     music_fade_timing_ns: Option<[SongTimeNs; 2]>,
+    use_song_last_second_for_music_end: bool,
 }
 
 impl GameplayEndTimingState {
@@ -297,6 +298,7 @@ impl GameplayEndTimingState {
             audio_end_time_ns,
             song_last_second_ns: 0,
             music_fade_timing_ns: None,
+            use_song_last_second_for_music_end: false,
         }
     }
 
@@ -332,6 +334,20 @@ impl GameplayEndTimingState {
 
     pub const fn set_music_fade_timing_ns(&mut self, fade: SongTimeNs, transition: SongTimeNs) {
         self.music_fade_timing_ns = Some([fade, transition]);
+        self.use_song_last_second_for_music_end = true;
+    }
+
+    #[must_use]
+    pub const fn uses_song_last_second_for_music_end(&self) -> bool {
+        self.use_song_last_second_for_music_end
+    }
+
+    /// Practice must be able to play the selected Edit past the song's normal
+    /// ScreenGameplay boundary. Keep that choice through rate/offset rebuilds.
+    pub const fn use_selected_chart_music_end(&mut self) -> bool {
+        let changed = self.use_song_last_second_for_music_end;
+        self.use_song_last_second_for_music_end = false;
+        changed
     }
 
     /// ScreenGameplay::GetMusicEndTiming aligns the music fade with the

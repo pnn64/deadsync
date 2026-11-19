@@ -1,4 +1,4 @@
-//! Gameplay owns the installed closures; all five share the live scene's VM.
+//! Gameplay owns the installed closures, sharing the live scene's VM.
 use super::super::live_runtime::Retained;
 use super::*;
 use actors::live_gameplay::Event;
@@ -16,6 +16,7 @@ impl Callbacks {
         runtime: &mut SongRuntime,
         game: &GameplayRuntimeState<P, O, C, D>,
     ) -> Result<SongLuaLiveFrame, Error> {
+        runtime.publish_gameplay_life_records(game);
         let frame = SongLuaLiveFrame::from_gameplay(game, 0.);
         let owners = runtime.vm.rooted(self.statistics.root)?;
         runtime.feed_gameplay_callback(owners, &frame, self.timing.as_ref())?;
@@ -54,6 +55,7 @@ impl SongLiveScene {
         game: &GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
+        runtime.publish_gameplay_life_records(game);
         let owners = self.frames.owners(&mut runtime)?;
         runtime.feed_gameplay_callback(owners, &SongLuaLiveFrame::from_gameplay(game, 0.), self.context.song_timing.as_ref())
     }
@@ -140,6 +142,21 @@ impl SongLiveScene {
                     player,
                     column: column - player * game.cols_per_player(),
                 },
+            )
+        }));
+        Ok(())
+    }
+    pub fn install_life_changed_callback<P: GameplayProfileData, O, C, D>(
+        &self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+    ) -> Result<(), Error> {
+        let c = self.callbacks()?;
+        game.life_changed_callback = Some(Box::new(move |game, player| {
+            c.dispatch(
+                game,
+                "__songlua_life_changed_error_reported",
+                "LifeChangedMessage",
+                |_| Event::LifeChanged { player },
             )
         }));
         Ok(())
@@ -249,13 +266,82 @@ impl SongLiveScene {
         crate::live::apply_player_writes(output.player_writes.iter().copied(), game);
         for &paused in &output.gameplay_pauses { game.set_gameplay_paused(paused); }
     }
+    /// ScreenGameplay commits failure after all actors and health callbacks.
+    /// A dead meter during a Player callback is not yet a failed stage, and a
+    /// synchronous SetLife can still rescue it before this boundary.
+    pub fn finish_gameplay_failures<P: GameplayProfileData, O, C, D>(
+        &self,
+        game: &mut GameplayRuntimeState<P, O, C, D>,
+        dancing: bool,
+    ) -> Result<(), Error> {
+        let count = game.setup.num_players.min(LUA_PLAYERS);
+        for player in game.players_runtime.players.iter_mut().take(count) {
+            if !player.stage_failed && player.life > 0.0
+                && matches!(player.course_life, deadsync_gameplay::CourseLifeState::Bar)
+            {
+                player.is_failing = false;
+                player.fail_time = None;
+            }
+        }
+        if !dancing { return Ok(()); }
+        let shared = game.setup.session.play_style.is_routine();
+        let shared_failing = shared && count > 0 && game.players_runtime.players[0].life <= 0.0;
+        let seconds = game.current_music_time_seconds();
+        for player in 0..count {
+            let meter = &game.players_runtime.players[player];
+            if meter.stage_failed || !meter.fail_type.fails_during_play()
+                || !(if shared { shared_failing } else { meter.life <= 0.0 })
+            {
+                continue;
+            }
+            {
+                let meter = &mut game.players_runtime.players[player];
+                meter.stage_failed = true;
+                meter.is_failing = true;
+                meter.fail_time.get_or_insert(seconds);
+                if !shared { meter.life = 0.0; }
+            }
+            game.capture_failed_ex_score_inputs(player, game.player_blue_window_ms(player));
+            game.display.density_graph.life_dirty[player] = true;
+            // Shared-sides premarks both PlayerStageStats before the ordinary
+            // loop, which consequently skips SetLife and both notifications.
+            if !shared {
+                game.notify_life_changed(player);
+                let callbacks = self.callbacks()?;
+                callbacks.dispatch(game, "__songlua_player_failed_error_reported",
+                    "PlayerFailedMessage", |_| Event::PlayerFailed { player });
+                self.prepare_gameplay_player_options(game)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn prepare_gameplay_player_options<P: GameplayProfileData, O, C, D>(
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
         let mut runtime = self.runtime.access();
+        runtime.publish_gameplay_life_records(game);
         let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
         for paused in pauses { game.set_gameplay_paused(paused); }
+        let current_rate = self.frames.current_music_rate(&mut runtime)?;
+        {
+            let mut rate = self.song_rate.lock().unwrap();
+            let core_rate = game.music_rate();
+            if rate.core != Some(core_rate) {
+                // Practice and other application controls can change the core
+                // directly. An unchanged Lua option must not undo that write.
+                rate.audio = Some(core_rate);
+                rate.pending_audio = None;
+            }
+            if rate.lua != Some(current_rate) {
+                rate.lua = Some(current_rate);
+                if game.set_music_rate(current_rate) {
+                    rate.pending_audio = Some(game.music_rate());
+                }
+            }
+            rate.core = Some(game.music_rate());
+        }
         runtime.refresh_gameplay_options(std::array::from_fn(|player| {
             deadsync_gameplay::base_appearance_effects(&game.profiles_runtime.profiles[player])
         }))?;

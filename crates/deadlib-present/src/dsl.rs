@@ -1391,6 +1391,7 @@ impl SpriteBuilder {
 
         Actor::Sprite {
             align: [self.hx, self.vy],
+            vertex_color_encoding: Default::default(),
             offset: [self.x, self.y],
             world_z: 0.0,
             size: [SizeSpec::Px(self.w), SizeSpec::Px(self.h)],

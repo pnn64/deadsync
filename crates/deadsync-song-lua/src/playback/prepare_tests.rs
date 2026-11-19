@@ -107,3 +107,188 @@ fn lua_submission_rejects_a_failed_shared_session_even_if_layers_recover() {
     assert_eq!(data.background_layers.len(), 1);
     assert!(!data.compile_succeeded());
 }
+
+#[test]
+fn lua_submission_statistics_selectors_and_chart_totals_stay_baked() {
+    let (dir, song, context) = fixture();
+    std::fs::write(
+        dir.path().join("foreground.lua"),
+        r#"
+local stage = STATSMAN:GetCurStageStats()
+local stats = stage:GetPlayerStageStats(PLAYER_1)
+local total = stats:GetPossibleDancePoints()
+return Def.ActorFrame{
+    OnCommand=function(self)
+        assert(stage == STATSMAN:GetCurStageStats())
+        assert(stats == stage:GetPlayerStageStats(PLAYER_1))
+        assert(stats:GetPossibleDancePoints() == total)
+        self:sleep(0.25)
+    end
+}
+"#,
+    )
+    .unwrap();
+    let mut prepared = prepare(&song, &context);
+    assert!(prepared.compile_succeeded());
+    assert!(prepared.primary.is_some());
+    assert!(prepared.take_live_scene().unwrap().is_none());
+}
+
+#[test]
+fn lua_submission_mutable_statistics_require_and_retain_runtime() {
+    for (case, commands) in [
+        (
+            "startup percentage",
+            r#"InitCommand=function(self)
+                local stats = STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1)
+                assert(stats:GetPercentDancePoints() == 0)
+            end"#,
+        ),
+        (
+            "delayed life read inside pcall",
+            r#"OnCommand=function(self) self:sleep(0.25) end,
+            Def.Actor{
+                OnCommand=function(self)
+                    self:sleep(0.125):queuecommand('Sample')
+                end,
+                SampleCommand=function(self)
+                    local ok, life = pcall(function()
+                        return STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetCurrentLife()
+                    end)
+                    assert(ok and life >= 0)
+                end,
+            }"#,
+        ),
+    ] {
+        let (dir, song, context) = fixture();
+        let entry = dir.path().join("foreground.lua");
+        std::fs::write(&entry, format!("return Def.ActorFrame{{{commands}}}"))
+            .unwrap();
+        let error = deadsync_assets::song_lua::compile_song_lua(&entry, &context)
+            .expect_err(case);
+        assert_eq!(error, crate::runtime_fallback::STATISTICS_REQUIRED, "{case}");
+        let mut prepared = prepare(&song, &context);
+        assert!(prepared.compile_succeeded(), "{case}");
+        assert!(prepared.take_live_scene().unwrap().is_some(), "{case}");
+        assert!(!context.live, "the requested mode stays unchanged");
+    }
+}
+
+#[test]
+fn lua_submission_statistics_dependency_preserves_authored_load_errors() {
+    let (dir, song, context) = fixture();
+    let entry = dir.path().join("foreground.lua");
+    std::fs::write(
+        &entry,
+        r#"
+STATSMAN:GetCurStageStats():GetPlayerStageStats(PLAYER_1):GetCurrentLife()
+error('broken after statistics read')
+"#,
+    )
+    .unwrap();
+    let mut attempts = 0;
+    let error = crate::runtime_fallback::compile(&context, |context| {
+        attempts += 1;
+        deadsync_assets::song_lua::compile_song_lua(&entry, context)
+    })
+    .expect_err("an authored load failure must remain a failure");
+    assert!(error.contains("broken after statistics read"), "{error}");
+    assert_eq!(attempts, 1, "only a completed dependency rejection retries");
+    assert!(!prepare(&song, &context).compile_succeeded());
+}
+
+#[test]
+fn captured_screen_and_draw_clocks_rebase_only_the_calibration_difference() {
+    use crate::{
+        SongLuaOverlayUpdateSample, SongLuaOverlayUpdateTarget as Target,
+        SongLuaOverlayUpdateTrack, SongLuaOverlayUpdateValue as Value, SongLuaTimeUnit,
+    };
+    let timing = deadsync_rules::timing::TimingData::from_segments(
+        0.042,
+        -0.008,
+        &deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 161.0)],
+            ..Default::default()
+        },
+        &[],
+    );
+    let raw = 38.080_566_f32;
+    let compiled: CompiledSongLua<deadsync_assets::noteskin::SpriteSlot> = CompiledSongLua {
+        screen_width: 854.0,
+        screen_height: 480.0,
+        screen_overlay_index: Some(0),
+        overlays: vec![SongLuaOverlayActor {
+            kind: SongLuaOverlayKind::ActorFrame,
+            name: Some("ScreenGameplay".into()),
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
+            message_commands: Vec::new(),
+        }],
+        overlay_update_unit: SongLuaTimeUnit::Second,
+        overlay_capture_calibration_seconds: -0.008 * timing.global_offset_rate(),
+        overlay_updates: vec![SongLuaOverlayUpdateTrack {
+            overlay_index: 0,
+            target: Target::X,
+            samples: vec![
+                SongLuaOverlayUpdateSample {
+                    time: raw - 0.016,
+                    value: Value::F32(0.0),
+                },
+                SongLuaOverlayUpdateSample {
+                    time: raw,
+                    value: Value::F32(427.0),
+                },
+            ],
+        }],
+        draw_frames: vec![SongLuaDrawFrame {
+            second: raw,
+            immediate: true,
+            owners: vec![0],
+            owner_ends: vec![0],
+            ops: Vec::new(),
+        }],
+        ..Default::default()
+    };
+    for runtime_offset in [-0.008, 0.242] {
+        let expected = if runtime_offset < 0.0 {
+            raw
+        } else {
+            raw - 0.25 * timing.global_offset_rate()
+        };
+        for shared in [false, true] {
+            let screen;
+            let source = if shared {
+                screen = song_lua_shared_screen(&compiled);
+                &screen
+            } else {
+                &compiled
+            };
+            let overlays = song_lua_runtime_overlays(source, &timing, runtime_offset);
+            let SongLuaOverlayKind::UpdateTracks {
+                tracks,
+                draw_frames,
+            } = &overlays.last().unwrap().kind
+            else {
+                panic!("retained capture tracks");
+            };
+            assert_eq!(tracks[0].samples[1].second.to_bits(), expected.to_bits());
+            if !shared {
+                assert_eq!(draw_frames[0].second.to_bits(), expected.to_bits());
+            }
+            let mut current = SongLuaOverlayState::default();
+            let mut cursors = vec![0; tracks.len()];
+            apply_song_lua_overlay_runtime_updates_for(
+                expected,
+                tracks,
+                0..tracks.len(),
+                &mut cursors,
+                None,
+                &mut current,
+            );
+            assert_eq!(
+                current.x, 427.0,
+                "the screen jump is complete on its capture frame"
+            );
+        }
+    }
+}

@@ -113,6 +113,7 @@ pub(super) fn finish(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Erro
     Ok(())
 }
 fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverlayState, Error> {
+    let actor_id = actor;
     // The native preparation reader resolves an uninitialized Sprite's
     // Texture/AFT getter before reading later scalar fields. Keep this read
     // at draw time; snapshotting raw semantic state must not invoke it early.
@@ -145,6 +146,16 @@ fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverla
     state.draw_order = actor.state.draw_order;
     state.hibernating = actor.hibernate > 0.0;
     state.spin_baked = live && actor.effects.spin_baked;
+    if state.vibrate {
+        state.vibrate_zoom = Some(actor.destination().zoom_x);
+    }
+    if live {
+        effects::render_live_time(call, actor_id, &mut state)?;
+        if let Some(actor) = call.store().actors.get(&actor_id) {
+            sprite_animation::render(actor, &mut state);
+        }
+        initial_state::normalize_live_scale(&mut state);
+    }
     Ok(state)
 }
 fn scoped_context(

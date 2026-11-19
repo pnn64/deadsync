@@ -335,6 +335,7 @@ impl TextureContext for Textures {
 
 fn sprite_actor(angle: f32, mask_source: bool) -> actors::Actor {
     actors::Actor::Sprite {
+        vertex_color_encoding: Default::default(),
         align: [0.5; 2],
         offset: [50.0; 2],
         world_z: 0.0,

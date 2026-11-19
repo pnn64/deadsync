@@ -10,5 +10,13 @@ mod paths;
 mod semantics;
 
 fn main() -> std::process::ExitCode {
-    semantics::whole_song_archives::run_cli(std::env::args().skip(1).collect())
+    // Production preparation nests gameplay init and Lua composition. Match
+    // live_song_lua's worker stack on Windows as well as Linux.
+    std::thread::Builder::new()
+        .name("full-song-lua-replay".into())
+        .stack_size(8 * 1024 * 1024)
+        .spawn(|| semantics::whole_song_archives::run_cli(std::env::args().skip(1).collect()))
+        .expect("spawn archive replay worker")
+        .join()
+        .expect("archive replay worker panicked")
 }

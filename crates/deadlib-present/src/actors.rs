@@ -339,6 +339,15 @@ impl IntoTextureKey for &str {
     }
 }
 
+/// Encoding applied to final vertex colors after inherited actor tint.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VertexColorEncoding {
+    #[default]
+    Float,
+    /// Native `RageVColor` conversion through clamped eight-bit RGBA channels.
+    RageVColor,
+}
+
 #[derive(Clone, Debug)]
 pub enum Actor {
     /// Unified Sprite
@@ -349,6 +358,7 @@ pub enum Actor {
         size: [SizeSpec; 2],
         source: SpriteSource,
         tint: [f32; 4],
+        vertex_color_encoding: VertexColorEncoding,
         glow: [f32; 4],
         z: i16,
         cell: Option<(u32, u32)>,
@@ -453,6 +463,7 @@ pub enum Actor {
         local_transform: Matrix4,
         texture: MeshTexture,
         tint: [f32; 4],
+        vertex_color_encoding: VertexColorEncoding,
         glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
         geom_cache_key: TMeshCacheKey,
@@ -483,6 +494,7 @@ pub enum Actor {
         local_transform: Matrix4,
         texture: MeshTexture,
         tint: [f32; 4],
+        vertex_color_encoding: VertexColorEncoding,
         glow: [f32; 4],
         vertices: Arc<Vec<TexturedMeshVertex>>,
         geom_cache_key: TMeshCacheKey,
@@ -615,6 +627,7 @@ pub struct FlatSprite {
     pub size: [f32; 2],
     pub source: SpriteSource,
     pub tint: [f32; 4],
+    pub vertex_color_encoding: VertexColorEncoding,
     pub glow: [f32; 4],
     pub uv_rect: [f32; 4],
     pub flip_x: bool,
@@ -653,6 +666,7 @@ pub struct FlatTexturedMesh {
     pub local_transform: Matrix4,
     pub texture: MeshTexture,
     pub tint: [f32; 4],
+    pub vertex_color_encoding: VertexColorEncoding,
     pub glow: [f32; 4],
     pub vertices: FlatMeshVertices,
     pub geom_cache_key: TMeshCacheKey,

@@ -39,6 +39,95 @@ fn execute(runtime: &mut SongRuntime, source: &str) -> Vec<Value> {
 }
 
 #[test]
+fn played_stages_keep_native_order_and_independent_statistics_after_current_changes() {
+    let mut context = context();
+    context.live = true;
+    let mut runtime = SongRuntime::new(&context).unwrap();
+    let player_scene = test_support::gameplay_player_base(&mut runtime, &context, 0).unwrap();
+    let player_actor = runtime.actor_scene_root(player_scene).unwrap();
+    runtime.vm_mut().set_global(b"meter", player_actor).unwrap();
+    execute(&mut runtime, r#"
+        manager=STATSMAN;current=manager:GetCurStageStats()
+        p=current:GetPlayerStageStats(0);q=current:GetPlayerStageStats(1)
+        assert(manager:GetStagesPlayed()==0)
+        for _,ago in ipairs({-2,0,1,2,1.75,'1'})do assert(manager:GetPlayedStageStats(ago)==nil)end
+        assert(select('#',manager:GetPlayedStageStats(1))==0)
+        assert(not pcall(manager.GetPlayedStageStats,manager))
+        for _,ago in ipairs({false,true,'bad',{},function()end})do
+            assert(not pcall(manager.GetPlayedStageStats,manager,ago))
+        end
+        steps=p:GetPlayedSteps();first_step=steps[1]
+        meter:SetLife(.25)
+        assert(p:GetLifeRecord(0,2)[1]==.25)
+    "#);
+    runtime.take_player_writes();
+    let mut first = frame();
+    first.gameplay_seconds = 8.0;
+    first.steps_seconds = 6.0;
+    first.players[0].alive_seconds = 7.5;
+    first.players[0].score = Some(1234);
+    first.players[0].current_max_score = Some(5678);
+    first.players[0].life = 0.25;
+    first.players[0].life_record_latest = Some(0.25);
+    first.players[0].failed = false;
+    first.players[0].recorded_max_combo = 20;
+    runtime.feed_stage_statistics(&first).unwrap();
+    runtime.publish_live_players(first.players);
+    runtime.commit_stage_statistics().unwrap();
+    execute(&mut runtime, r#"
+        saved=manager:GetPlayedStageStats(1);saved_p=saved:GetPlayerStageStats(0)
+        assert(saved~=current and saved_p~=p and saved:GetPlayerStageStats(1)~=q)
+        assert(saved==manager:GetPlayedStageStats('1.9') and manager:GetStagesPlayed()==1)
+        assert(select('#',manager:GetPlayedStageStats(1))==1 and select('#',manager:GetPlayedStageStats(2))==0)
+        assert(saved:GetGameplaySeconds()==8 and saved:GetStepsSeconds()==6)
+        assert(saved_p:GetScore()==1234 and saved_p:GetCurMaxScore()==5678 and saved_p:GetAliveSeconds()==7.5)
+        assert(saved_p:GetPossibleDancePoints()==400 and saved_p:GetCurrentPossibleDancePoints()==246)
+        assert(saved_p:GetActualDancePoints()==123 and saved_p:GetCurrentLife()==.25 and not saved_p:GetFailed())
+        assert(saved_p:GetCurrentCombo()==17 and saved_p:MaxCombo()==20 and saved_p:GetTapNoteScores('W1')==27)
+        assert(saved_p:GetLifeRecord(0,2)[1]==.25 and saved_p:GetLifeRecord(0,2)[2]==.25)
+        saved_steps=saved_p:GetPlayedSteps();assert(saved_steps~=steps and saved_steps[1]==first_step)
+        assert(saved_p:GetPossibleSteps()~=p:GetPossibleSteps() and saved_p:GetHighScore()~=p:GetHighScore())
+        p:SetScore(999);p:SetCurMaxScore(1000);p:FailPlayer();meter:SetLife(.75)
+        assert(saved_p:GetScore()==1234 and saved_p:GetCurMaxScore()==5678 and not saved_p:GetFailed())
+        assert(saved_p:GetLifeRecord(0,2)[1]==.25 and p:GetLifeRecord(0,2)[1]==.75)
+        steps[1]=nil;p.__songlua_tap_scores.W1=123
+        assert(saved_steps[1]==first_step and saved_p:GetTapNoteScores('W1')==27)
+    "#);
+    assert!(!runtime.take_player_writes().is_empty(), "current setters still write through");
+    let mut second = first;
+    second.gameplay_seconds = 9.0;
+    second.steps_seconds = 6.5;
+    second.players[0].score = Some(9999);
+    second.players[0].alive_seconds = 8.0;
+    runtime.feed_stage_statistics(&second).unwrap();
+    runtime.commit_stage_statistics().unwrap();
+    execute(&mut runtime, r#"
+        newest=manager:GetPlayedStageStats(1)
+        assert(newest~=saved and manager:GetPlayedStageStats(2)==saved and manager:GetPlayedStageStats(3)==nil)
+        assert(manager:GetStagesPlayed()==2 and newest:GetGameplaySeconds()==9 and saved:GetGameplaySeconds()==8)
+        assert(newest:GetPlayerStageStats(0):GetScore()==9999 and saved_p:GetScore()==1234)
+        saved_p:SetScore(42);saved_p:SetCurMaxScore(43);saved_p:FailPlayer()
+        assert(saved_p:GetScore()==42 and saved_p:GetCurMaxScore()==43 and saved_p:GetFailed())
+        assert(p:GetScore()==9999 and not p:GetFailed() and newest:GetPlayerStageStats(0):GetScore()==9999)
+        GAMESTATE:SetCurrentSteps(0,GAMESTATE:GetCurrentSong():GetAllSteps()[3])
+    "#);
+    assert!(runtime.take_player_writes().is_empty(), "played-stage setters must not target live players");
+    context.players[0].enabled = false;
+    context.player_step_indices[0] = Some(2);
+    runtime.reset_stage_statistics(&context).unwrap();
+    execute(&mut runtime, r#"
+        assert(current:GetGameplaySeconds()==0 and current:GetStepsSeconds()==0 and p:GetScore()==0)
+        assert(p:GetLifeRecord(0,2)[1]==0 and p:GetPlayedSteps()[1]~=first_step)
+        collectgarbage('collect');collectgarbage('collect')
+        assert(manager:GetStagesPlayed()==2 and manager:GetPlayedStageStats(2)==saved)
+        assert(saved:GetGameplaySeconds()==8 and saved:GetStepsSeconds()==6)
+        assert(saved_p:GetAliveSeconds()==7.5 and saved_p:GetScore()==42 and saved_p:GetFailed())
+        assert(saved_p:GetLifeRecord(0,2)[1]==.25 and saved_steps[1]==first_step)
+        assert(newest:GetPlayerStageStats(0):GetLifeRecord(0,2)[1]==.75)
+    "#);
+}
+
+#[test]
 fn routine_statistics_have_independent_identity_feed_reset_and_failure() {
     let mut context = context();
     context.style_name = "routine".into();
@@ -207,7 +296,7 @@ fn complete_manager_stage_and_player_surfaces_defaults_and_identities() {
     let mut pair = Pair::new(&context());
     pair.compare(r#"
         assert(s==STATSMAN:GetAccumPlayedStageStats() and s==STATSMAN:GetFinalEvalStageStats())
-        assert(s==STATSMAN:GetPlayedStageStats(1) and STATSMAN:GetPlayedStageStats(0)==nil)
+        assert(STATSMAN:GetPlayedStageStats(1)==nil and STATSMAN:GetPlayedStageStats(0)==nil)
         assert(p~=q and p~=m and q~=m and m==s:GetMultiPlayerStageStats('anything'))
         assert(p:GetPlayedSteps()==p:GetPlayedSteps() and p:GetPlayedSteps()~=p:GetPossibleSteps())
         assert(p:GetPlayedSteps()[1]==GAMESTATE:GetCurrentSteps(0))
@@ -230,8 +319,9 @@ fn complete_manager_stage_and_player_surfaces_defaults_and_identities() {
     {
         pair.compare(&format!(
             r#"
+            local played_ok,played=pcall(STATSMAN.GetPlayedStageStats,STATSMAN,{selector})
             return s:GetPlayerStageStats({selector})==p,s.GetPlayerStageStats({selector})==q,
-                STATSMAN:GetPlayedStageStats({selector})==s
+                played_ok,played_ok and played==nil
         "#
         ));
     }
@@ -246,7 +336,7 @@ fn complete_manager_stage_and_player_surfaces_defaults_and_identities() {
         assert(p:GetComboList()~=p:GetComboList() and next(p:GetComboList())==nil)
         assert(p:GetRadarActual()~=p:GetRadarActual())
         return table.concat(out,','),p:GetRadarActual():GetValue('x'),p:GetRadarPossible():GetValue('x'),p:GetRadarValues():GetValue('x'),
-            #p:GetLifeRecord(),#p:GetLifeRecord(10,0),#p:GetLifeRecord(10,-2),#p:GetLifeRecord(10,'3'),p:GetLifeRecord()[1]
+            #p:GetLifeRecord(0),#p:GetLifeRecord(10,0),#p:GetLifeRecord(10,-2),#p:GetLifeRecord(10,'3'),p:GetLifeRecord(0)[1]
     "#);
 }
 
@@ -370,6 +460,7 @@ fn reset_preserves_selected_objects_and_array_identity_across_collecting_callbac
 fn frame() -> SongLuaLiveFrame {
     SongLuaLiveFrame {
         screen_seconds: 23.75,
+        gameplay_seconds: 23.75,
         players: [
             SongLuaLivePlayer {
                 possible_points: 400,

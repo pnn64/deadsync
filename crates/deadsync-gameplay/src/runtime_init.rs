@@ -1074,6 +1074,7 @@ where
             // Player::ChangeLifeRecord still reads GameState's initial tug life.
             player.life_record_source = LifeRecordSource::Combined(0.5);
             player.life_history.clear();
+            player.stage_life_record.clear();
         }
         let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
         let possible = target.score_type.possible_points(
@@ -1100,6 +1101,10 @@ where
             &charts[p].difficulty,
             in_course_stage,
         );
+        player.stage_score = StageScore::for_song(
+            row_count + holds_total[p] as usize + rolls_total[p] as usize,
+            song.music_length_seconds,
+        );
         player
     });
     let assist_clap_rows =
@@ -1121,6 +1126,13 @@ where
         }
     });
     let tick_mode = session.tick_mode;
+    let routine = play_style.is_routine().then(|| {
+        let mut routine = RoutineStageStats::default();
+        // ScreenGameplay initializes the shared secondary keeper once using
+        // the first Player's transformed note data, then sends it both parts.
+        routine.stats.stage_score = players[0].stage_score;
+        routine
+    });
 
     let mut state = GameplayRuntimeState {
         note_field_tap_callback: None,
@@ -1128,6 +1140,7 @@ where
         tap_row_judgment_callback: None,
         hold_judgment_callback: None,
         avoided_mine_judgment_callback: None,
+        life_changed_callback: None,
         source: GameplaySourceRuntimeState {
             song,
             charts,
@@ -1143,7 +1156,10 @@ where
             config,
             include_post_fail_passes,
         },
-        boundary: GameplayBoundaryRuntimeState::new(8, 2),
+        boundary: GameplayBoundaryRuntimeState {
+            stage_clock_last_read: init_started,
+            ..GameplayBoundaryRuntimeState::new(8, 2)
+        },
         timing_runtime: GameplayTimingRuntimeState {
             timing,
             timing_players,
@@ -1219,7 +1235,7 @@ where
         ),
         players_runtime: GameplayPlayersRuntimeState {
             players,
-            routine: play_style.is_routine().then(RoutineStageStats::default),
+            routine,
             column_judgments_active: [true; MAX_PLAYERS],
         },
         display: GameplayDisplayRuntimeState {
@@ -1307,6 +1323,8 @@ where
             song_lua_player_transforms: song_lua_player_transforms_default(),
             song_lua_fail_types: [None; MAX_PLAYERS],
             song_lua_player_options: [None; MAX_PLAYERS],
+            #[cfg(any(test, feature = "test-support"))]
+            replay_player_option_clock_deltas: None,
             attacks: {
                 let mut attacks =
                     GameplayAttackRuntimeState::new(attack_mask_windows, song_lua_ease_windows);

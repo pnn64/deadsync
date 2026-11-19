@@ -14,6 +14,7 @@ struct Queue {
 }
 #[derive(Clone, Copy)]
 pub(super) struct Phase {
+    pub actor: TableId,
     pub order: usize,
     pub delta: f64,
 }
@@ -31,6 +32,8 @@ pub(super) struct Publication {
 pub(super) struct State {
     times: Vec<f64>,
     actor_frames: Option<Vec<[f32; 2]>>,
+    screen_actor_frames: Option<Vec<[f32; 2]>>,
+    pub screen_actors: Arc<FxHashSet<TableId>>,
     pub frame: usize,
     epoch: usize,
     native: FxHashSet<TableId>,
@@ -61,6 +64,8 @@ impl State {
                 })
                 .collect(),
             actor_frames: actor_frames.map(<[_]>::to_vec),
+            screen_actor_frames: None,
+            screen_actors: Arc::default(),
             frame: 0,
             epoch: 0,
             native,
@@ -78,8 +83,16 @@ impl State {
                 + frame.saturating_sub(self.times.len()).saturating_add(1) as f64 / 60.
         })
     }
-    fn delta(&self, frame: usize) -> f64 {
-        if let Some(delta) = self.actor_frames.as_ref().and_then(|f| f.get(frame)) {
+    fn actor_frame(&self, id: TableId, frame: usize) -> Option<&[f32; 2]> {
+        let frames = if self.screen_actor_frames.is_some() && self.screen_actors.contains(&id) {
+            &self.screen_actor_frames
+        } else {
+            &self.actor_frames
+        };
+        frames.as_ref().and_then(|frames| frames.get(frame))
+    }
+    fn delta(&self, id: TableId, frame: usize) -> f64 {
+        if let Some(delta) = self.actor_frame(id, frame) {
             return f64::from(delta[0]);
         }
         if frame == 0 {
@@ -88,10 +101,8 @@ impl State {
             f64::from(self.time(frame) as f32 - self.time(frame - 1) as f32)
         }
     }
-    fn global_remainder(&self, frame: usize, remaining: f64) -> f64 {
-        self.actor_frames
-            .as_ref()
-            .and_then(|f| f.get(frame))
+    fn global_remainder(&self, id: TableId, frame: usize, remaining: f64) -> f64 {
+        self.actor_frame(id, frame)
             .map_or(remaining, |[delta, span]| {
                 if *delta > 0. {
                     remaining * f64::from(*span) / f64::from(*delta)
@@ -100,14 +111,41 @@ impl State {
                 }
             })
     }
+    pub fn root_delta(&self, id: TableId) -> Option<(f64, f32)> {
+        self.screen_actor_frames.as_ref()?;
+        let delta = self.delta(id, self.frame);
+        let span = self
+            .actor_frame(id, self.frame)
+            .map_or(delta as f32, |f| f[1]);
+        Some((delta, span))
+    }
+    fn target_phase_delta(&self, id: TableId, phase: Phase) -> f64 {
+        if self.screen_actor_frames.is_some()
+            && self.screen_actors.contains(&id) != self.screen_actors.contains(&phase.actor)
+        {
+            self.delta(id, self.frame)
+        } else {
+            phase.delta
+        }
+    }
+    fn frame_advance(&self, id: TableId, frame: usize, remaining: f64) -> f64 {
+        if self.screen_actor_frames.is_some() {
+            // Queue time belongs to the target actor, while captured property
+            // anchors remain on the shared music timeline.
+            self.global_remainder(id, frame, remaining)
+        } else {
+            remaining
+        }
+    }
     fn order(&self, id: TableId) -> usize {
         self.orders.get(&id).copied().unwrap_or(0)
     }
     pub fn later(&self, id: TableId) -> bool {
         self.phase.is_some_and(|phase| self.order(id) > phase.order)
     }
-    pub fn enter(&mut self, order: usize, delta: f32) {
+    pub fn enter(&mut self, actor: TableId, order: usize, delta: f32) {
         self.phase = Some(Phase {
+            actor,
             order,
             delta: f64::from(delta),
         });
@@ -154,7 +192,10 @@ impl State {
             || {
                 self.phase
                     .filter(|phase| self.order(id) > phase.order)
-                    .map_or(0., |phase| phase.delta as f32)
+                    .map_or(0., |phase| {
+                        self.frame_advance(id, self.frame, self.target_phase_delta(id, phase))
+                            as f32
+                    })
             },
             |d| (self.time(self.frame) - self.time(d.frame)) as f32,
         )
@@ -164,13 +205,15 @@ impl State {
         // independently of the queued callback's dispatch timestamp.
         self.phase
             .filter(|phase| self.order(id) > phase.order)
-            .map_or(0., |phase| phase.delta as f32)
+            .map_or(0., |phase| {
+                self.frame_advance(id, self.frame, self.target_phase_delta(id, phase)) as f32
+            })
     }
     pub fn prime(&mut self, id: TableId) {
         if let Some(mut clock) = self.clocks.remove(&id) {
             if clock.dispatch.is_none() {
                 while let Some(step) = clock.steps.pop_front() {
-                    advance(self, &mut clock, step.unwrap_or(0.), None);
+                    advance(self, id, &mut clock, step.unwrap_or(0.), None);
                     if clock.blocked {
                         break;
                     }
@@ -223,13 +266,20 @@ impl State {
                     if d.actor == id {
                         d.remaining
                     } else if self.order(id) > self.order(d.actor) {
-                        self.delta(d.frame)
+                        self.delta(id, d.frame)
                     } else {
                         0.
                     },
                 )
             })
-            .unwrap_or((self.frame, if later { phase.delta } else { 0. }));
+            .unwrap_or((
+                self.frame,
+                if later {
+                    self.target_phase_delta(id, phase)
+                } else {
+                    0.
+                },
+            ));
         let mut clock = self.clocks.remove(&id).unwrap_or(Queue {
             epoch: self.epoch,
             frame,
@@ -239,7 +289,7 @@ impl State {
         let changed = clock.epoch != self.epoch;
         if changed && clock.dispatch.is_none() {
             while let Some(step) = clock.steps.pop_front() {
-                advance(self, &mut clock, step.unwrap_or(0.), None);
+                advance(self, id, &mut clock, step.unwrap_or(0.), None);
             }
             clock.epoch = self.epoch;
         }
@@ -250,8 +300,10 @@ impl State {
             clock.remaining = remaining;
         }
         let delay = changed.then(|| {
-            (self.time(clock.frame) - clock.remaining - (self.time(frame) - remaining)).max(0.)
-                as f32
+            (self.time(clock.frame)
+                - self.frame_advance(id, clock.frame, clock.remaining)
+                - (self.time(frame) - self.frame_advance(id, frame, remaining)))
+            .max(0.) as f32
         });
         clock.steps.push_back(duration);
         clock.progress = None;
@@ -300,6 +352,7 @@ impl State {
             for (index, duration) in clock.steps.iter().enumerate() {
                 advance(
                     self,
+                    id,
                     &mut sample,
                     duration.unwrap_or(0.),
                     (index + 1 == clock.steps.len()).then_some(&mut samples),
@@ -339,15 +392,18 @@ impl State {
             let advance = if scope.actor == id {
                 scope.remaining
             } else if self.order(id) > self.order(scope.actor) {
-                self.delta(scope.frame)
+                self.delta(id, scope.frame)
             } else {
                 0.
             };
-            (self.time(self.frame) - self.time(scope.frame) + advance) as f32
+            (self.time(self.frame) - self.time(scope.frame)
+                + self.frame_advance(id, scope.frame, advance)) as f32
         } else {
             self.phase
                 .filter(|p| self.order(id) > p.order)
-                .map_or(0., |p| p.delta as f32)
+                .map_or(0., |p| {
+                    self.frame_advance(id, self.frame, self.target_phase_delta(id, p)) as f32
+                })
         };
         Publication {
             // Frame capture clears its command timing while the semantic
@@ -362,6 +418,7 @@ impl State {
 
 fn advance(
     frames: &State,
+    actor: TableId,
     clock: &mut Queue,
     duration: f64,
     mut samples: Option<&mut Vec<[f32; 2]>>,
@@ -380,7 +437,7 @@ fn advance(
                 return;
             };
             clock.frame = frame;
-            clock.remaining = frames.delta(clock.frame);
+            clock.remaining = frames.delta(actor, clock.frame);
         }
         if duration as f32 == 0.0 {
             clock.zero_frame = Some(clock.frame);
@@ -396,7 +453,7 @@ fn advance(
                 - if left == 0.0 {
                     0.0
                 } else {
-                    frames.global_remainder(clock.frame, clock.remaining)
+                    frames.global_remainder(actor, clock.frame, clock.remaining)
                 };
             let mut start = start as f32;
             if left > 0.0 && clock.frame > 0 {
@@ -404,7 +461,8 @@ fn advance(
                 // A tiny remainder can put the next tween strictly after the
                 // prior update while both timestamps round to the same float.
                 // Preserve queue order: it cannot draw on that earlier frame.
-                if frames.time(clock.frame) - frames.global_remainder(clock.frame, clock.remaining)
+                if frames.time(clock.frame)
+                    - frames.global_remainder(actor, clock.frame, clock.remaining)
                     > f64::from(prior)
                     && start <= prior
                 {
@@ -439,6 +497,26 @@ fn advance(
 }
 
 impl Actors {
+    pub(crate) fn set_compiler_screen_actor_frames(
+        &self,
+        vm: &mut Vm,
+        screen: ActorScene,
+        root: Value,
+        frames: &[[f32; 2]],
+    ) -> Result<bool, Error> {
+        let screen_actors = self.compiler_screen_actors(vm, root)?;
+        let store = vm.store();
+        if store.replay_frame.map(|f| f.0) != Some(screen.id) {
+            return Ok(false);
+        }
+        let Some(clock) = &mut store.replay_clock else {
+            return Ok(false);
+        };
+        clock.screen_actor_frames = Some(frames.to_vec());
+        clock.screen_actors = screen_actors;
+        Ok(true)
+    }
+
     pub(crate) fn discard_song_replay_clock(&self, vm: &mut Vm) {
         vm.store().replay_clock = None;
     }

@@ -5,8 +5,8 @@ use std::{path::Path, sync::Arc};
 
 type Kind = song::SongLuaOverlayKind<(), (), TextAttribute>;
 type Actor = song::SongLuaOverlayActor<Kind>;
-type Visuals = deadsync_gameplay::SongLuaRuntimeVisuals<
-    Actor,
+type Visuals<A = Actor> = deadsync_gameplay::SongLuaRuntimeVisuals<
+    A,
     song::SongLuaCapturedActor,
     song::gameplay::SongLuaRuntimeOverlayStateDelta,
 >;
@@ -35,7 +35,7 @@ return Def.ActorFrame {
 }
 "#;
 
-fn visuals(out: song::CompiledSongLua<Actor>) -> Visuals {
+fn visuals<A>(out: song::CompiledSongLua<A>) -> Visuals<A> {
     Visuals {
         overlays: out.overlays,
         screen_overlay_index: out.screen_overlay_index,
@@ -77,8 +77,13 @@ impl Drop for Pair {
 impl Pair {
     fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
-        reference_test::register_path(dir.path());
         let path = dir.path().join("default.lua");
+        // Exact files precede their directory so its prefix cannot consume
+        // their portable snapshot tokens.
+        reference_test::register_path(&path);
+        reference_test::register_path(&dir.path().join("art.png"));
+        reference_test::register_path(&dir.path().join("second.png"));
+        reference_test::register_path(dir.path());
         std::fs::write(&path, SOURCE).unwrap();
         for name in ["art.png", "second.png"] {
             image::RgbaImage::new(2, 2)
@@ -137,7 +142,7 @@ impl Pair {
         );
     }
     fn publish(&mut self, success: bool) {
-        let r = self.rust.as_ref().unwrap().write_visuals(&mut self.r);
+        let r = self.rust.as_mut().unwrap().write_visuals(&mut self.r);
 
         assert_eq!(r.is_ok(), success, "rust: {r:?}");
         self.compare("publication including partial failure");
@@ -546,6 +551,331 @@ fn single_use_publication_callbacks_reject_recursive_and_saved_lua_calls() {
     "#);
     p.publish(true);
     p.script("setmetatable(TXT,ORIGINAL_TXT_META);TXT.Text='guarded';SAVED_PUBLICATION=nil;ORIGINAL_TXT_META=nil;ORIGINAL_GETINFO=nil;collectgarbage('collect')");
+}
+
+#[test]
+fn late_wrapper_visuals_keep_owned_slots_and_publish_all_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = ["background.lua", "foreground.lua", "main.lua"]
+        .map(|name| dir.path().join(name));
+    std::fs::write(&paths[0], r#"
+        return Def.ActorFrame {Name='Background',
+            Def.Quad {Name='Whoosh', InitCommand=function(self) WHOOSH=self end,
+                OnCommand=function(self)
+                    self:setsize(128,128):rotationz(90):rotationx(45)
+                    self:AddWrapperState():y(-100):zoom(4):zoomz(1)
+                    self:AddWrapperState():x(6)
+                end}}
+    "#).unwrap();
+    for (path, name) in paths[1..].iter().zip(["Foreground", "Main"]) {
+        std::fs::write(path, format!(r#"
+            return Def.ActorFrame {{Name='{name}',
+                Def.Quad {{Name='{name}Leaf', OnCommand=function(self)
+                    self:AddWrapperState():x(7)
+                end}}}}
+        "#)).unwrap();
+    }
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "late wrapper publication");
+    context.live = true;
+    context.defer_initial_live_update = true;
+    context.music_length_seconds = 10.;
+    context.background_layer_count = 1;
+    context.foreground_names = vec!["foreground.lua".into(), "main.lua".into()];
+    context.layer_start_beats = vec![0., 0., 0.];
+    context.players[0].step_statistics_enabled = false;
+    context.players[1].enabled = false;
+    let refs = paths.iter().map(|path| path.as_path()).collect::<Vec<_>>();
+    let mut outputs = song::compile_song_lua_layers(
+        &refs, 2, &context, Default::default(), slots, layer, |_, _| None,
+    ).unwrap();
+    let mut scene = outputs.iter_mut().find_map(|output| output.live_scene.take()).unwrap();
+    let bindings = outputs.iter().enumerate().flat_map(|(layer, output)| {
+        output.live_actor_indices().iter().enumerate().map(move |(local, &global)|
+            (global, match layer {
+                0 => Target::Background(0, local),
+                1 => Target::Foreground(0, local),
+                _ => Target::Root(local),
+            }))
+    }).collect();
+    scene.bind_targets(bindings).unwrap();
+    let main = outputs.pop().unwrap();
+    let foreground = outputs.pop().unwrap();
+    let background = outputs.pop().unwrap();
+    let make_layer = |output: song::CompiledSongLua<Actor>| {
+        deadsync_gameplay::SongLuaVisualLayerRuntime {
+            start_second: 0., screen_width: output.screen_width, screen_height: output.screen_height,
+            overlays: output.overlays, overlay_eases: Vec::new(), overlay_ease_ranges: Vec::new(),
+            overlay_events: Vec::new(), song_foreground: output.song_foreground,
+            song_foreground_events: Vec::new(),
+        }
+    };
+    let mut visual = visuals(main);
+    visual.background_visual_layers.push(make_layer(background));
+    visual.foreground_visual_layers.push(make_layer(foreground));
+    let before = [visual.overlays.len(), visual.background_visual_layers[0].overlays.len(),
+        visual.foreground_visual_layers[0].overlays.len()];
+    let whoosh = visual.background_visual_layers[0].overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("Whoosh")).unwrap();
+    let original_parent = visual.background_visual_layers[0].overlays[whoosh].parent_index;
+    let screen = visual.screen_overlay_index;
+    scene.write_visuals(&mut visual).unwrap();
+    assert!(!visual.overlays.iter().any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    assert!(!visual.foreground_visual_layers[0].overlays.iter()
+        .any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    assert!(!visual.background_visual_layers[0].overlays.iter()
+        .any(|actor| matches!(actor.kind, Kind::WrapperState)));
+    let update = |scene: &mut song::SongLiveScene, seconds, delta| {
+        let output = scene.update(song::SongLuaLiveFrame {
+            music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.,
+            delta_seconds: delta, ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+    };
+    update(&mut scene, 0.1, 0.1);
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(visual.screen_overlay_index, screen);
+    assert_eq!(visual.overlays.len(), before[0] + 1);
+    assert_eq!(visual.foreground_visual_layers[0].overlays.len(), before[2] + 1);
+    let background = &visual.background_visual_layers[0].overlays;
+    assert_eq!(background.len(), before[1] + 2);
+    assert_eq!(background[whoosh].name.as_deref(), Some("Whoosh"));
+    let inner = background[whoosh].parent_index.unwrap();
+    let outer = background[inner].parent_index.unwrap();
+    assert_eq!((inner, outer), (before[1], before[1] + 1));
+    assert_eq!(background[outer].parent_index, original_parent);
+    let pose = background[inner].initial_state;
+    assert_eq!((pose.y, pose.zoom_x, pose.zoom_y, pose.zoom_z), (-100., 4., 4., 1.));
+    assert_eq!(song::overlay_state_axis_scale(pose), [4., 4.]);
+    assert_eq!(song::overlay_state_z_scale(pose), 1.);
+    assert_eq!(background[outer].initial_state.x, 6.);
+    assert_eq!(song::overlay_state_axis_scale(background[whoosh].initial_state), [1., 1.]);
+    let paths = scene.visual_bindings().unwrap();
+    let owner_path = paths.iter().find_map(|(path, target)| match target {
+        Target::Background(0, index) if *index == whoosh => Some(path.clone()),
+        _ => None,
+    }).unwrap();
+    for (index, ordinal) in [(inner, 1), (outer, 2)] {
+        assert!(paths.iter().any(|(path, target)| path == &format!("{owner_path}/WrapperState{ordinal}")
+            && matches!(target, Target::Background(0, local) if *local == index)));
+    }
+    let count = scene.visual_draw_bindings().len();
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(scene.visual_draw_bindings().len(), count, "publication is idempotent");
+    {
+        let mut runtime = scene.runtime_mut();
+        let program = compile_named(br#"
+            WHOOSH:GetWrapperState(1):linear(.5):y(-80)
+            WHOOSH:GetWrapperState(1):AddWrapperState():x(999)
+            collectgarbage('collect')
+        "#, b"@/late-wrapper-update.lua").unwrap();
+        runtime.vm_mut().execute(&program).unwrap();
+    }
+    update(&mut scene, 0.35, 0.25);
+    scene.write_visuals(&mut visual).unwrap();
+    assert_eq!(visual.background_visual_layers[0].overlays[inner].initial_state.y, -90.);
+    assert_eq!(scene.visual_draw_bindings().len(), count,
+        "Actor::Draw does not recurse through a wrapper's own wrapper list");
+    {
+        let mut runtime = scene.runtime_mut();
+        let program = compile_named(br#"WHOOSH:AddWrapperState():z(12)"#,
+            b"@/late-wrapper-second-attachment.lua").unwrap();
+        runtime.vm_mut().execute(&program).unwrap();
+    }
+    update(&mut scene, 0.5, 0.15);
+    scene.write_visuals(&mut visual).unwrap();
+    let background = &visual.background_visual_layers[0].overlays;
+    let newest = before[1] + 2;
+    assert_eq!(background.len(), newest + 1);
+    assert_eq!(background[outer].parent_index, Some(newest));
+    assert_eq!(background[newest].parent_index, original_parent);
+    assert_eq!(background[newest].initial_state.z, 12.);
+    assert_eq!(scene.visual_draw_bindings().len(), count + 1,
+        "a later wrapper in the same scene triggers another publication");
+    assert!(scene.visual_bindings().unwrap().iter().any(|(path, target)|
+        path == &format!("{owner_path}/WrapperState3")
+            && matches!(target, Target::Background(0, local) if *local == newest)));
+    scene.end().unwrap();
+}
+
+#[test]
+fn scheduled_foreground_on_load_publishes_initially_textureless_sprite() {
+    use deadsync_assets::song_lua::SongLuaOverlayKind as RenderKind;
+    use song::playback::actor_conformance::WholeSongComposer;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("foreground.lua");
+    let texture = dir.path().join("header.png");
+    image::RgbaImage::new(854, 85).save(&texture).unwrap();
+    std::fs::write(&path, r#"
+        LOAD_COUNT=0
+        return Def.ActorFrame {
+            OnCommand=function(self) self:sleep(1000) end,
+            Def.Sprite {Name='Header', InitCommand=function(self) self:visible(false) end,
+                OnCommand=function(self)
+                    LOAD_COUNT=LOAD_COUNT+1
+                    self:Load('header.png'):x(427):y(42):SetWidth(854):visible(true)
+                end},
+        }
+    "#).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "scheduled sprite load");
+    context.live = true;
+    context.defer_initial_live_update = true;
+    context.layer_start_beats = vec![1.];
+    context.music_length_seconds = 10.;
+    context.players[0].step_statistics_enabled = false;
+    context.players[1].enabled = false;
+    let mut output: deadsync_assets::song_lua::CompiledSongLua = song::compile_song_lua_layers(
+        &[&path], 0, &context, Default::default(),
+        |_, _, _| Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([])),
+        |_| None, |_, _| None,
+    ).unwrap().remove(0);
+    let mut scene = output.live_scene.take().unwrap();
+    scene.bind_targets(output.live_actor_indices().iter().copied().enumerate()
+        .map(|(local, global)| (global, Target::Root(local))).collect()).unwrap();
+    let mut visual = visuals(output);
+    let index = visual.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("Header")).unwrap();
+    scene.write_visuals(&mut visual).unwrap();
+    assert!(matches!(visual.overlays[index].kind, RenderKind::Actor));
+    assert!(!visual.overlays[index].initial_state.sprite_texture);
+    let mut composer = WholeSongComposer::new(&visual.overlays);
+    for (seconds, beat, delta) in [(0., 0., 0.), (0.6, 1.2, 0.6)] {
+        let updated = scene.update(song::SongLuaLiveFrame {
+            music_seconds: seconds, screen_seconds: seconds, beat,
+            delta_seconds: delta, ..Default::default()
+        }).unwrap();
+        assert!(updated.errors.is_empty(), "{:?}", updated.errors);
+        scene.write_visuals(&mut visual).unwrap();
+        if beat < 1. {
+            assert!(matches!(visual.overlays[index].kind, RenderKind::Actor));
+        }
+    }
+    let RenderKind::Sprite { texture_path, texture_key, .. } = &visual.overlays[index].kind else {
+        panic!("OnCommand's texture did not reach the prepared visual: {:?}", visual.overlays[index]);
+    };
+    assert_eq!(texture_path, &texture);
+    assert_eq!(Path::new(texture_key.as_ref()), texture_path);
+    let state = visual.overlays[index].initial_state;
+    assert!(state.visible && state.sprite_texture);
+    assert_eq!(state.size, Some([854., 85.]));
+    assert_eq!([state.x, state.y], [427., 42.]);
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0.6, 1.2);
+    let [sprite] = frame.sprite_instances.as_slice() else {
+        panic!("expected one loaded Sprite: {:?}", frame.ops);
+    };
+    assert_eq!(sprite.size, [854., 85.]);
+    let [deadlib_render_core::DrawOp::Sprite(draw)] = frame.ops.as_slice() else {
+        panic!("expected one Sprite draw: {:?}", frame.ops);
+    };
+    assert_eq!(composer.texture_key(draw.texture_handle), texture_key.as_ref());
+    scene.write_visuals(&mut visual).unwrap();
+    {
+        let mut runtime = scene.runtime_mut();
+        let check = compile_named(b"assert(LOAD_COUNT==1)", b"@/scheduled-sprite-check.lua").unwrap();
+        runtime.vm_mut().execute(&check).unwrap();
+    }
+    scene.end().unwrap();
+}
+
+#[test]
+fn mixed_case_texture_resolves_on_linux_and_preserves_its_logical_path() {
+    use deadsync_assets::song_lua::SongLuaOverlayKind as RenderKind;
+    use song::playback::actor_conformance::WholeSongComposer;
+
+    let dir = tempfile::tempdir().unwrap();
+    let physical_dir = dir.path().join("MixedCase");
+    std::fs::create_dir(&physical_dir).unwrap();
+    let physical = physical_dir.join("Shivers 3x2.png");
+    // Cold's actual 3x2 sheet has a nonintegral default frame width.
+    image::RgbaImage::new(1750, 1050).save(&physical).unwrap();
+    let logical = dir.path().join("mixedcase/shivers 3x2.png");
+    #[cfg(target_os = "linux")]
+    assert!(!logical.exists(), "the regression requires a case-sensitive filesystem");
+    let script = dir.path().join("default.lua");
+    std::fs::write(&script, format!(r#"
+        return Def.ActorFrame {{ Def.Sprite {{
+            Name='MixedCaseTexture', Texture='mixedcase/shivers 3x2.png',
+            InitCommand=function(self)
+                local texture=self:GetTexture()
+                assert(self:GetWidth()==583 and self:GetHeight()==525)
+                assert(texture:GetSourceWidth()==1750 and texture:GetSourceHeight()==1050)
+                assert(texture:GetNumFrames()==6)
+                assert(texture:GetPath()=={:?}, texture:GetPath())
+                self:animate(false):SetStateProperties{{{{Frame=1,Delay=1}}}}
+                assert(self:GetWidth()==583 and self:GetHeight()==525)
+            end,
+            OnCommand=function(self) self:sleep(1000) end,
+        }}, Def.Sprite {{
+            Name='DeclaredFrames', Texture='mixedcase/shivers 3x2.png',
+            Frames={{{{Frame=0,Delay=1}},{{Frame=1,Delay=1}}}},
+            InitCommand=function(self)
+                DECLARED_FRAMES=self
+                assert(math.abs(self:GetWidth()-1750/3)<0.0001 and self:GetHeight()==525)
+                self:animate(false):SetStateProperties{{{{Frame=1,Delay=1}}}}
+                assert(math.abs(self:GetWidth()-1750/3)<0.0001 and self:GetHeight()==525)
+            end,
+            OnCommand=function(self) self:sleep(1000) end,
+        }} }}
+    "#, song::file_path_string(&logical))).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "case-insensitive native media");
+    context.live = true;
+    context.music_length_seconds = 10.;
+    context.players[1].enabled = false;
+    let mut compiled: deadsync_assets::song_lua::CompiledSongLua = song::compile_song_lua_layers(
+        &[&script], 0, &context, Default::default(),
+        |_, _, _| Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([])),
+        |_| None, |_, _| None,
+    ).unwrap().remove(0);
+    let mut scene = compiled.live_scene.take().unwrap();
+    scene.bind_targets(compiled.live_actor_indices().iter().copied().enumerate()
+        .map(|(local, global)| (global, Target::Root(local))).collect()).unwrap();
+    let mut visual = visuals(compiled);
+    scene.write_visuals(&mut visual).unwrap();
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let mut composer = WholeSongComposer::new(&visual.overlays);
+    for (name, expected) in [
+        ("MixedCaseTexture", [583., 525.]),
+        ("DeclaredFrames", [1750. / 3., 525.]),
+    ] {
+        let index = visual.overlays.iter()
+            .position(|actor| actor.name.as_deref() == Some(name)).unwrap();
+        let actor = &visual.overlays[index];
+        let RenderKind::Sprite { texture_path, .. } = &actor.kind else {
+            panic!("mixed-case texture did not produce a live visual: {:?}", actor.kind);
+        };
+        assert!(texture_path.is_file());
+        #[cfg(target_os = "linux")]
+        assert_eq!(texture_path, &physical);
+        let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0., 0.);
+        let [sprite] = frame.sprite_instances.as_slice() else {
+            panic!("expected one resolved Sprite draw: {:?}", frame.ops);
+        };
+        assert_eq!(sprite.size, expected, "{name}");
+    }
+    {
+        let mut runtime = scene.runtime_mut();
+        let check = compile_named(br#"
+            local a=DECLARED_FRAMES
+            a:SetTexture(a:GetTexture())
+            assert(a:GetWidth()==583 and a:GetHeight()==525)
+            a:SetStateProperties{{Frame=0,Delay=1}}
+            assert(a:GetWidth()==583 and a:GetHeight()==525)
+        "#, b"@/declared-frame-reload.lua").unwrap();
+        runtime.vm_mut().execute(&check).unwrap();
+    }
+    let outcome = scene.update(song::SongLuaLiveFrame {
+        delta_seconds: 0.,
+        ..Default::default()
+    }).unwrap();
+    assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+    scene.write_visuals(&mut visual).unwrap();
+    let index = visual.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("DeclaredFrames")).unwrap();
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0., 0.);
+    assert_eq!(frame.sprite_instances[0].size, [583., 525.]);
+    scene.end().unwrap();
 }
 
 #[allow(dead_code)]

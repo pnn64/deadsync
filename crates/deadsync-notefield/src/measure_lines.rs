@@ -1011,6 +1011,7 @@ mod tests {
             screen_height: 480.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
+            tipsy_time_s: None,
             lane_tipsy: 0.0,
             lane_tipsy_offset: 0.0,
             lane_tipsy_speed: 0.0,
@@ -1115,6 +1116,7 @@ mod tests {
                     crate::fill_gameplay_lane_effects(
                         &visual,
                         arrow_time,
+                        1.0,
                         4,
                         &mut [crate::VisualEffectParams::default(); 4],
                         &mut lane_offsets,
@@ -1289,6 +1291,7 @@ mod tests {
             screen_height: 480.0,
             note_count_stats: &[],
             arrow_effect_time_s: 0.0,
+            tipsy_time_s: None,
             lane_tipsy: 0.0,
             lane_tipsy_offset: 0.0,
             lane_tipsy_speed: 0.0,

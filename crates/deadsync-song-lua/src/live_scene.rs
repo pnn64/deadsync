@@ -18,6 +18,14 @@ type ReloadParts = (
     SongLuaLiveOutput,
 );
 
+#[derive(Default)]
+struct SongRateSync {
+    lua: Option<f32>,
+    core: Option<f32>,
+    audio: Option<f32>,
+    pending_audio: Option<f32>,
+}
+
 /// Actor bindings collected by the live compiler before transferring its VM.
 /// Values remain rooted by the active screen until the constructor retains them.
 pub struct SongLiveSceneBindings {
@@ -34,9 +42,12 @@ pub struct SongLiveScene {
     screen: ActorScene,
     retained: Root,
     frames: SongLiveFrames,
+    song_rate: Mutex<SongRateSync>,
     layers: SongLiveLayers,
     context: SongLuaCompileContext,
     actors: Vec<Value>,
+    wrapper_epoch: u64,
+    pending_wrappers: std::collections::VecDeque<(usize, usize)>,
     tracked: Vec<(SongLuaTrackedActorTarget, Value)>,
     states: Vec<SongLuaOverlayState>,
     tracked_states: Vec<SongLuaOverlayState>,
@@ -47,6 +58,7 @@ pub struct SongLiveScene {
     primary_index: usize,
     startup_output: SongLuaLiveOutput,
     last_music: f32,
+    last_beat: f32,
     prepared: bool,
     outro_started: bool,
     outro_reset: bool,
@@ -56,6 +68,10 @@ pub struct SongLiveScene {
     updated: bool,
     #[cfg(feature = "test-support")]
     option_clock_deltas: Option<[f32; LUA_PLAYERS + 1]>,
+    #[cfg(feature = "test-support")]
+    gameplay_clock_input: Option<Option<f32>>,
+    #[cfg(feature = "test-support")]
+    gameplay_clock_observation: Option<crate::live::SongLuaGameplayClockObservation>,
     #[cfg(feature = "test-support")]
     overlay_observation: Arc<Mutex<Option<crate::SongLuaOverlayStageObservation>>>,
 }
@@ -71,6 +87,7 @@ impl SongRuntime {
     /// Begin a new live load before theme or authored Init callbacks. Retained
     /// selected statistics survive until the new scene selects its own owners.
     pub fn begin_live_song_load(&mut self) {
+        self.screen.state.lock().unwrap().gameplay_clock_origin = Some(std::time::Instant::now());
         self.statistics.lock().unwrap().players = None;
         self.actors.begin_live_load(&mut self.vm);
         self.begin_screen_request_capture();
@@ -146,9 +163,12 @@ impl SongLiveScene {
             screen: b.screen,
             retained,
             frames,
+            song_rate: Mutex::new(SongRateSync::default()),
             layers,
             context: context.clone(),
             actors: b.actors,
+            wrapper_epoch: 0,
+            pending_wrappers: Default::default(),
             tracked: b.tracked,
             states: Vec::new(),
             tracked_states: Vec::new(),
@@ -159,6 +179,7 @@ impl SongLiveScene {
             primary_index: b.primary_index,
             startup_output: Default::default(),
             last_music: -9999.,
+            last_beat: 0.,
             prepared: false,
             outro_started: false,
             outro_reset: false,
@@ -168,6 +189,10 @@ impl SongLiveScene {
             updated: false,
             #[cfg(feature = "test-support")]
             option_clock_deltas: None,
+            #[cfg(feature = "test-support")]
+            gameplay_clock_input: None,
+            #[cfg(feature = "test-support")]
+            gameplay_clock_observation: None,
             #[cfg(feature = "test-support")]
             overlay_observation: Default::default(),
         };
@@ -316,7 +341,7 @@ impl SongLiveScene {
             for (i, p) in self.context.players.iter().enumerate() {
                 if p.enabled {
                     if failed[i] {
-                        self.frames.record_life(runtime, i, 0.)?;
+                        self.frames.record_life(runtime, i, 0., frame.gameplay_seconds as f32)?;
                     } else {
                         all = false;
                     }
@@ -331,6 +356,7 @@ impl SongLiveScene {
         }
         self.outro_started |= frame.gameplay_outro;
         self.last_music = frame.music_seconds as f32;
+        self.last_beat = beat as f32;
         self.read_states(runtime)?;
         let paused = runtime.screen.state.lock().unwrap().gameplay_paused;
         if !paused && let Err(e) = self.frames.finish_health_update(runtime) {
@@ -343,6 +369,84 @@ impl SongLiveScene {
         self.updated = true;
         self.take_output(runtime)
     }
+    /// Preserve the clock created before this screen's theme and song loading.
+    pub fn initialize_gameplay_clock<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self,
+        game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        if let Some(origin) = self.runtime.access().screen.state.lock().unwrap().gameplay_clock_origin {
+            game.set_stage_clock_origin(origin);
+        }
+    }
+
+    /// The actual retained In/Ready/Go transitions own the intro boundary.
+    /// Pausing and an already-entered outro suppress the native timer read.
+    pub fn gameplay_clock_active(&self) -> bool {
+        let runtime = self.runtime.access();
+        let state = runtime.screen.state.lock().unwrap();
+        // NotesEnded is queued on the last dancing update. Its timer read still
+        // runs; the next update handles LeaveGameplay after the actor tree.
+        !state.gameplay_lead_in && !state.gameplay_paused && !self.outro_reset
+    }
+
+    /// Sound speed is applied after health messages, before failure callbacks.
+    pub fn finish_gameplay_audio<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &self,
+        game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+    ) {
+        let runtime = self.runtime.access();
+        // ScreenGameplay updates the sound speed after actors, before its
+        // dancing branch. Paused updates leave the pending rate for resume.
+        if !runtime.screen.state.lock().unwrap().gameplay_paused {
+            let mut rate = self.song_rate.lock().unwrap();
+            if let Some(pending) = rate.pending_audio.take()
+                && (pending - rate.audio.unwrap_or(pending)).abs() > 0.01
+            {
+                game.push_audio_command(deadsync_gameplay::GameplayAudioCommand::SetMusicRate(pending));
+                rate.audio = Some(pending);
+            }
+        }
+    }
+
+    /// Finish the dancing branch after actors and failure resolution, before
+    /// physical input and Draw. Overlay observers in this frame see the prior
+    /// counters; subsequent input and drawing see these newly published values.
+    pub fn finish_gameplay_clock<P: deadsync_gameplay::GameplayProfileData, O, C, D>(
+        &mut self,
+        game: &mut deadsync_gameplay::GameplayRuntimeState<P, O, C, D>,
+        active: bool,
+    ) -> Result<(), Error> {
+        let owner = self.runtime.clone();
+        let mut runtime = owner.access();
+        #[cfg(feature = "test-support")]
+        let raw_delta = {
+            self.gameplay_clock_observation = None;
+            let input = self.gameplay_clock_input.take();
+            if input.is_some_and(|input| input.is_some() != active) {
+                return Err(error(&mut runtime, b"native gameplay timer call differs from owned intro/pause/outro lifecycle"));
+            }
+            input.flatten()
+        };
+        #[cfg(not(feature = "test-support"))]
+        let raw_delta = None;
+        if active {
+            let (music_rate, steps_time_active) = self.frames.stage_clock_state(&mut runtime, self.last_beat,
+                [game.source.song.first_second, game.source.song.precise_last_second()])?;
+            let delta_seconds = game.advance_stage_clock(raw_delta, music_rate, steps_time_active);
+            #[cfg(feature = "test-support")]
+            { self.gameplay_clock_observation = Some(crate::live::SongLuaGameplayClockObservation {
+                delta_seconds, music_rate, steps_time_active,
+            }); }
+            #[cfg(not(feature = "test-support"))]
+            let _ = delta_seconds;
+        }
+        runtime.publish_gameplay_life_records(game);
+        let frame = SongLuaLiveFrame::from_gameplay(game, 0.0);
+        runtime.feed_stage_statistics(&frame)?;
+        runtime.publish_live_players(frame.players);
+        Ok(())
+    }
+
     pub fn input(
         &mut self,
         event: &crate::SongLuaInputEvent<'_>,
@@ -452,6 +556,23 @@ impl SongLiveScene {
     }
     fn read_states(&mut self, runtime: &mut SongRuntime) -> Result<(), Error> {
         let batch = runtime.vm.rooted(self.retained)?;
+        let epoch = runtime.actors.live_wrapper_epoch(&runtime.vm);
+        if epoch != self.wrapper_epoch {
+            let appended = runtime.actors.unbound_live_wrappers(&runtime.vm, &self.actors);
+            if !appended.is_empty() {
+                let Value::Table(batch) = batch else { unreachable!() };
+                let Value::Table(list) = runtime.vm.raw_table_get(batch, Value::Number(2.))? else {
+                    unreachable!()
+                };
+                for (owner, actor) in appended {
+                    let global = self.actors.len();
+                    runtime.vm.raw_table_set(list, Value::Number((global + 1) as f64), actor)?;
+                    self.actors.push(actor);
+                    self.pending_wrappers.push_back((owner, global));
+                }
+            }
+            self.wrapper_epoch = epoch;
+        }
         runtime.actors.live_phase(
             &mut runtime.vm,
             self.screen,
@@ -469,7 +590,7 @@ impl SongLiveScene {
         let batch = runtime.vm.rooted(self.retained)?;
         runtime
             .actors
-            .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off)
+            .live_phase(&mut runtime.vm, self.screen, batch, Phase::Off { failed: self.outro_failed })
     }
     fn take_output(&mut self, runtime: &mut SongRuntime) -> Result<SongLuaLiveOutput, Error> {
         let gameplay_pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);

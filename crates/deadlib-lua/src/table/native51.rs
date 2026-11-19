@@ -287,6 +287,25 @@ mod tests {
     use crate::allocation_probe::probe;
 
     #[test]
+    fn native_length_searches_the_hash_and_falls_back_across_the_array() {
+        let mut table = Table::with_native51_capacity(3, 64, Memory::default()).unwrap();
+        for index in [1, 2, 3, 4, 8, 16, 24, 25] {
+            table
+                .set(Value::Number(f64::from(index)), Value::Boolean(true))
+                .unwrap();
+        }
+        assert_eq!(table.array.len(), 3);
+        assert_eq!(table.len(), 25);
+        for shift in 5..=30 {
+            table
+                .set(Value::Number(f64::from(1 << shift)), Value::Boolean(true))
+                .unwrap();
+        }
+        assert_eq!(table.array.len(), 3);
+        assert_eq!(table.len(), 4);
+    }
+
+    #[test]
     fn native_resize_failures_preserve_values_order_and_gc_cursor() {
         for nth in 0..=3 {
             let mut table = Table::with_native51_capacity(2, 8, Memory::default()).unwrap();

@@ -649,21 +649,28 @@ pub struct SamplerDesc {
     pub mipmaps: bool,
 }
 
-/// Per-draw filtering and addressing, independent of a texture's mip storage.
+/// Per-draw sampling policy, independent of a texture's mip storage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct MeshSampler {
-    pub filter: SamplerFilter,
-    pub wrap: SamplerWrap,
+pub enum MeshSampler {
+    /// Keep the texture's authored filtering/addressing, as a Sprite draw does.
+    Texture,
+    Override {
+        filter: SamplerFilter,
+        wrap: SamplerWrap,
+    },
 }
 
 impl MeshSampler {
     #[must_use]
     pub const fn apply(self, texture: SamplerDesc) -> SamplerDesc {
+        let Self::Override { filter, wrap } = self else {
+            return texture;
+        };
         SamplerDesc {
-            filter: self.filter,
-            wrap: self.wrap,
+            filter,
+            wrap,
             // ITGmania's nearest override samples the base image only.
-            mipmaps: texture.mipmaps && matches!(self.filter, SamplerFilter::Linear),
+            mipmaps: texture.mipmaps && matches!(filter, SamplerFilter::Linear),
         }
     }
 }
@@ -675,11 +682,11 @@ pub const fn texture_sampler_desc(
     repeat: bool,
     sampler: Option<MeshSampler>,
 ) -> SamplerDesc {
-    if let Some(sampler) = sampler {
+    if let Some(sampler @ MeshSampler::Override { .. }) = sampler {
         return sampler.apply(texture);
     }
     SamplerDesc {
-        wrap: if repeat {
+        wrap: if repeat && !matches!(sampler, Some(MeshSampler::Texture)) {
             SamplerWrap::Repeat
         } else {
             texture.wrap
@@ -704,22 +711,22 @@ pub const fn texture_sampler_variants(texture: SamplerDesc) -> [SamplerDesc; 6] 
             wrap: SamplerWrap::Repeat,
             ..texture
         },
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Clamp,
         }
         .apply(texture),
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Nearest,
             wrap: SamplerWrap::Clamp,
         }
         .apply(texture),
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Linear,
             wrap: SamplerWrap::Repeat,
         }
         .apply(texture),
-        MeshSampler {
+        MeshSampler::Override {
             filter: SamplerFilter::Nearest,
             wrap: SamplerWrap::Repeat,
         }
@@ -1142,7 +1149,7 @@ mod tests {
                     let variants = texture_sampler_variants(texture);
                     for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
                         for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
-                            let sampler = MeshSampler { filter, wrap };
+                            let sampler = MeshSampler::Override { filter, wrap };
                             let wanted = texture_sampler_desc(texture, 1, true, Some(sampler));
                             assert!(variants.contains(&wanted));
                             assert_eq!(wanted.filter, filter);
@@ -1151,6 +1158,30 @@ mod tests {
                         }
                     }
                     assert_eq!(texture_sampler_desc(texture, 1, false, None), texture);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sprite_mesh_sampling_inherits_texture_settings_and_target_nearest() {
+        for filter in [SamplerFilter::Linear, SamplerFilter::Nearest] {
+            for wrap in [SamplerWrap::Clamp, SamplerWrap::Repeat] {
+                for mipmaps in [false, true] {
+                    let texture = SamplerDesc { filter, wrap, mipmaps };
+                    for handle in [
+                        1,
+                        render_target_texture_handle(7),
+                        render_target_sample_handle(render_target_texture_handle(7), true),
+                    ] {
+                        let sprite = texture_sampler_desc(texture, handle, false, None);
+                        let mesh = texture_sampler_desc(texture, handle, true, Some(MeshSampler::Texture));
+                        assert_eq!(mesh, sprite, "{texture:?}, handle={handle}");
+                        assert!(texture_sampler_variants(texture).contains(&mesh));
+                    }
+                    assert_eq!(MeshSampler::Texture.apply(texture), texture);
+                    // None still selects the established model-repeat policy.
+                    assert_eq!(texture_sampler_desc(texture, 1, true, None).wrap, SamplerWrap::Repeat);
                 }
             }
         }

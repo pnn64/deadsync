@@ -3,7 +3,160 @@ use super::*;
 use crate::statistics;
 
 const OBSERVER: &[u8] = b"__songlua_overlay_stage_observer";
+const OBSERVE_GETTERS: &[u8] = b"__songlua_observe_stage_getters";
 type Output = Arc<Mutex<Option<crate::SongLuaOverlayStageObservation>>>;
+type StatisticsOutput = Arc<Mutex<Option<crate::live::SongLuaStageStatisticsObservation>>>;
+
+impl crate::SongRuntime {
+    /// Only invoke Lua getters when the native probe sampled this update.
+    /// Authored overrides may have side effects, so intervening frames retain
+    /// the cheap host snapshot without introducing additional Lua queries.
+    pub fn set_stage_getter_observation(&mut self, enabled: bool) -> Result<(), Error> {
+        let key = self.vm.try_intern(OBSERVE_GETTERS)?;
+        self.vm.raw_table_set(self.actors.helpers, key, Value::Boolean(enabled))
+    }
+
+    /// Observe the public Lua getters without advancing gameplay or publishing
+    /// replacement statistics. Lifecycle probes use this same reader as the
+    /// pre-foreground overlay probe below.
+    pub fn observe_stage_statistics(
+        &mut self,
+    ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+        self.observe_statistics(None)
+    }
+
+    pub fn observe_played_stage_statistics(
+        &mut self, ago: usize,
+    ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+        self.observe_statistics(Some(ago))
+    }
+
+    fn observe_statistics(
+        &mut self, played: Option<usize>,
+    ) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+        let output: StatisticsOutput = Default::default();
+        let globals = self.vm.get_global(b"_G")?;
+        let callback = self.vm.new_host_function_with_data(
+            |call| {
+                let (output, played) = call.function_data::<(StatisticsOutput, Option<usize>)>().unwrap().clone();
+                let globals = table(call, call.captures()[0])?;
+                *output.lock().unwrap() = Some(read_statistics(call, globals, played)?);
+                Ok(())
+            },
+            &[globals],
+            (output.clone(), played),
+        )?;
+        self.vm.call(callback, &[])?;
+        let observed = output.lock().unwrap().take().expect("stage observer ran");
+        Ok(observed)
+    }
+}
+
+fn query(
+    call: &mut HostCall<'_>,
+    owner: Value,
+    name: &[u8],
+    args: &[Value],
+) -> Result<Value, Error> {
+    let mut values = Vec::with_capacity(args.len() + 1);
+    values.push(owner);
+    values.extend_from_slice(args);
+    call.with_roots(&values, |call| {
+        let key = call.try_intern(name)?;
+        let function = call.table_get(owner, key)?;
+        Ok(call.call(function, &values)?.first().copied().unwrap_or(Value::Nil))
+    })
+}
+
+fn numeric_query(call: &mut HostCall<'_>, owner: Value, name: &[u8]) -> Result<f64, Error> {
+    let value = query(call, owner, name, &[])?;
+    sprites::number(call, value)
+}
+
+fn read_statistics(
+    call: &mut HostCall<'_>,
+    globals: TableId,
+    played: Option<usize>,
+) -> Result<crate::live::SongLuaStageStatisticsObservation, Error> {
+    let game = get_static(call, globals, b"GAMESTATE")?;
+    let manager = get_static(call, globals, b"STATSMAN")?;
+    let stage = if let Some(ago) = played {
+        query(call, manager, b"GetPlayedStageStats", &[Value::Number(ago as f64)])?
+    } else {
+        query(call, manager, b"GetCurStageStats", &[])?
+    };
+    if stage == Value::Nil { return Err(call.error(b"no committed stage statistics at the owned completion boundary")); }
+    call.with_roots(&[game, stage], |call| {
+        let gameplay_seconds = numeric_query(call, stage, b"GetGameplaySeconds")?;
+        let steps_seconds = numeric_query(call, stage, b"GetStepsSeconds")?;
+        let enabled = query(call, game, b"GetEnabledPlayers", &[])?;
+        call.with_roots(&[enabled], |call| {
+            let enabled = table(call, enabled)?;
+            let mut players = Vec::new();
+            for index in 1..=crate::LUA_PLAYERS + 1 {
+                let player = call.raw_table_get(enabled, Value::Number(index as f64))?;
+                if player == Value::Nil { break; }
+                if index > crate::LUA_PLAYERS {
+                    return Err(call.error(b"stage observer found too many enabled players"));
+                }
+                let stringify = get_static(call, globals, b"tostring")?;
+                let identity = call.call(stringify, &[player])?.first().copied().unwrap_or(Value::Nil);
+                let identity = assets::text(call, identity)?;
+                let stats = query(call, stage, b"GetPlayerStageStats", &[player])?;
+                let observed = call.with_roots(&[stats], |call| {
+                    let life = query(call, stats, b"GetLifeRecord", &[
+                        Value::Number(gameplay_seconds), Value::Number(2.0),
+                    ])?;
+                    let [life_begin, life_latest] = call.with_roots(&[life], |call| {
+                        let life = table(call, life)?;
+                        let first = call.raw_table_get(life, Value::Number(1.0))?;
+                        let last = call.raw_table_get(life, Value::Number(2.0))?;
+                        Ok([sprites::number(call, first)?, sprites::number(call, last)?])
+                    })?;
+                    let state = query(call, game, b"GetPlayerState", &[player])?;
+                    let autoplay = call.with_roots(&[state], |call| {
+                        let current = call.try_intern(b"ModsLevel_Current")?;
+                        let options = query(call, state, b"GetPlayerOptions", &[current])?;
+                        numeric_query(call, options, b"PlayerAutoPlay")
+                    })?;
+                    let points = if played.is_some() {
+                        let possible = numeric_query(call, stats, b"GetPossibleDancePoints")?;
+                        let current_possible = numeric_query(call, stats, b"GetCurrentPossibleDancePoints")?;
+                        let actual = numeric_query(call, stats, b"GetActualDancePoints")?;
+                        Some([possible, current_possible, actual])
+                    } else { None };
+                    let score = numeric_query(call, stats, b"GetScore")?;
+                    let current_max_score = numeric_query(call, stats, b"GetCurMaxScore")?;
+                    let failed = if played.is_some() {
+                        let Value::Boolean(failed) = query(call, stats, b"GetFailed", &[])? else {
+                            return Err(call.error(b"committed GetFailed did not return a boolean"));
+                        };
+                        Some(failed)
+                    } else { None };
+                    let alive_seconds = numeric_query(call, stats, b"GetAliveSeconds")?;
+                    let committed = if let Some([possible, current_possible, actual]) = points {
+                        let mut counts = [0.0; 3];
+                        for (index, name) in ["TapNoteScore_W1", "TapNoteScore_W2", "TapNoteScore_Miss"].into_iter().enumerate() {
+                            let name = call.try_intern(name.as_bytes())?;
+                            let value = query(call, stats, b"GetTapNoteScores", &[name])?;
+                            counts[index] = sprites::number(call, value)?;
+                        }
+                        Some(crate::live::SongLuaStagePlayerCounters {
+                            possible, current_possible, actual, failed: failed.unwrap(),
+                            w1: counts[0], w2: counts[1], misses: counts[2],
+                        })
+                    } else { None };
+                    Ok(crate::live::SongLuaStagePlayerObservation {
+                        player: identity, score, current_max_score, alive_seconds,
+                        life_begin, life_latest, autoplay, committed,
+                    })
+                })?;
+                players.push(observed);
+            }
+            Ok(crate::live::SongLuaStageStatisticsObservation { gameplay_seconds, steps_seconds, players })
+        })
+    })
+}
 
 #[derive(Clone)]
 struct Observer {
@@ -91,10 +244,12 @@ fn install(call: &mut HostCall<'_>) -> Result<(), Error> {
     // compared, like the native probe pointer, and does not retain a dead scene.
     let callback = call.new_host_function_with_data(
         record,
-        &[call.captures()[2], Value::Table(globals)],
+        &[call.captures()[2], Value::Table(globals), call.captures()[1]],
         data,
     )?;
     let helpers = table(call, call.captures()[1])?;
+    let capture_key = call.try_intern(OBSERVE_GETTERS)?;
+    call.raw_table_set(helpers, capture_key, Value::Boolean(false))?;
     let key = call.try_intern(OBSERVER)?;
     call.raw_table_set(helpers, key, callback)
 }
@@ -134,11 +289,18 @@ fn record(call: &mut HostCall<'_>) -> Result<(), Error> {
     let key = call.try_intern(crate::SECONDS.as_bytes())?;
     let seconds = call.table_get(Value::Table(runtime), key)?;
     let music_seconds = sprites::number(call, seconds)? as f32;
+    let helpers = table(call, call.captures()[2])?;
+    let statistics = if get_static(call, helpers, OBSERVE_GETTERS)? == Value::Boolean(true) {
+        Some(read_statistics(call, globals, None)?)
+    } else {
+        None
+    };
     *data.output.lock().unwrap() = Some(crate::SongLuaOverlayStageObservation {
         beat,
         music_seconds,
         players,
         player_step_indices,
+        statistics,
     });
     Ok(())
 }

@@ -22,8 +22,24 @@ pub(super) fn read_live(
         state.y = dest.y;
         crate::move_overlay(&mut state, current.x, current.y);
     }
+    if let Some((_, dest)) = pose && state.vibrate {
+        state.vibrate_zoom = Some(dest.zoom_x);
+    }
+    effects::render_live_time(call, actor, &mut state)?;
+    if let Some(actor) = call.store().actors.get(&actor) {
+        sprite_animation::render(actor, &mut state);
+    }
     state.spin_baked = chronological::render_spin(call, actor)?.is_some();
+    normalize_live_scale(&mut state);
     Ok(state)
+}
+
+/// Live poses contain native absolute axis scales. Neutralize the redundant
+/// scalar aliases at the render boundary so an explicit unit axis cannot fall
+/// back to an earlier uniform zoom. Owned tween state and GetZoom stay intact.
+pub(super) fn normalize_live_scale(state: &mut SongLuaOverlayState) {
+    state.zoom = 1.0;
+    state.basezoom = 1.0;
 }
 
 #[inline(always)]
@@ -364,6 +380,9 @@ fn read_fields(
     }
     if let Some(value) = flag(call, r, Field::STATE_DECODE_MOVIE, live)? {
         state.decode_movie = value;
+    }
+    if let Some(value) = number(call, r, Field::STATE_MOVIE_POSITION_SECONDS, live)? {
+        state.movie_position_seconds = value;
     }
     if let Some(value) = flag(call, r, Field::STATE_TEXTURE_FILTERING, live)? {
         state.texture_filtering = value;
