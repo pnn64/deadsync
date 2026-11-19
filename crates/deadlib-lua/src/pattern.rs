@@ -196,7 +196,7 @@ pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usiz
 }
 
 #[inline(never)]
-fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
         return Some(0);
     }
@@ -211,10 +211,18 @@ fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     }
     let offset = bits.trailing_zeros();
     let normalized = bits >> offset;
+    let first = (index * 64) as u8 + offset as u8;
     if normalized & normalized.wrapping_add(1) != 0 {
+        // Identical contiguous halves differ only in bit 5, as in [A-Za-z].
+        let half = normalized as u32;
+        if normalized >> 32 == u64::from(half) && half & half.wrapping_add(1) == 0 {
+            let width = half.ilog2() as u8;
+            return Some(scan_boundary(bytes, |byte| {
+                (byte & !0x20).wrapping_sub(first) > width
+            }));
+        }
         return None;
     }
-    let first = (index * 64) as u8 + offset as u8;
     let width = normalized.ilog2() as u8;
     Some(if width == 0 {
         byte_run(bytes, first)
@@ -664,7 +672,7 @@ impl Pattern {
                                 Kind::Set => {
                                     let set = &self.sets[i.arg as usize];
                                     if rest.len() >= 64
-                                        && let Some(run) = contiguous_set_run(rest, set)
+                                        && let Some(run) = range_set_run(rest, set)
                                     {
                                         run
                                     } else {
@@ -797,8 +805,7 @@ impl Pattern {
 #[cfg(test)]
 mod byte_search_tests {
     use super::{
-        Memory, Pattern, Work, balance_end, byte_run, contiguous_set_run, find_byte, find_pair,
-        set_has,
+        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_pair, range_set_run, set_has,
     };
 
     #[test]
@@ -866,11 +873,25 @@ mod byte_search_tests {
     }
 
     #[test]
-    fn contiguous_set_runs_match_bitmap_membership_across_blocks() {
-        for (first, last) in [(0, 0), (0, 63), (22, 38), (91, 97), (128, 191), (250, 255)] {
+    fn range_set_runs_match_bitmap_membership_across_blocks() {
+        for (first, last, paired) in [
+            (0, 0, false),
+            (0, 63, false),
+            (22, 38, false),
+            (91, 97, false),
+            (128, 191, false),
+            (250, 255, false),
+            (0, 0, true),
+            (65, 90, true),
+            (130, 159, true),
+            (194, 223, true),
+        ] {
             let mut set = [0u64; 4];
             for byte in first..=last {
                 set[usize::from(byte / 64)] |= 1 << (byte % 64);
+                if paired {
+                    set[usize::from(byte / 64)] |= 1 << ((byte ^ 0x20) % 64);
+                }
             }
             let mut bytes = [first; 73];
             for index in [0, 1, 31, 32, 33, 63, 64, 72] {
@@ -880,13 +901,13 @@ mod byte_search_tests {
                         .iter()
                         .position(|&byte| !set_has(&set, byte))
                         .unwrap_or(bytes.len());
-                    assert_eq!(contiguous_set_run(&bytes, &set), Some(end));
+                    assert_eq!(range_set_run(&bytes, &set), Some(end));
                 }
                 bytes[index] = first;
             }
         }
-        assert_eq!(contiguous_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
-        assert_eq!(contiguous_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+        assert_eq!(range_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
+        assert_eq!(range_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
     }
 
     #[test]
