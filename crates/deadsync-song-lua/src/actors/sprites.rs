@@ -244,10 +244,10 @@ pub(super) fn movie_size(
         }
     }
 }
-pub(super) fn frame_size(
+fn frame_size_inputs(
     call: &mut HostCall<'_>,
     actor: TableId,
-) -> Result<Option<[f32; 2]>, Error> {
+) -> Result<Option<([f32; 2], Option<(u32, u32)>)>, Error> {
     let path = assets::texture_path(call, actor)?;
     let dims = path
         .as_deref()
@@ -257,10 +257,50 @@ pub(super) fn frame_size(
         .or_else(|| path.as_deref().and_then(|path| image_size(path, true)));
     field(call, actor, "__songlua_state_sprite_animate")?;
     optional_uint(call, actor, "__songlua_state_sprite_state_index")?;
+    Ok(source.map(|source| (source, dims)))
+}
+pub(super) fn frame_size(
+    call: &mut HostCall<'_>,
+    actor: TableId,
+) -> Result<Option<[f32; 2]>, Error> {
+    let Some(([w, h], dims)) = frame_size_inputs(call, actor)? else {
+        return Ok(None);
+    };
     Ok(
-        crate::sprite_image_frame_size(source.map(|[w, h]| (w, h)), false, None, dims)
+        crate::sprite_image_frame_size(Some((w, h)), false, None, dims)
             .map(|(w, h)| [w, h]),
     )
+}
+fn initialize_declared_frame_size(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
+    let key = call.intern_static(b"Frames")?;
+    let frames = call.raw_table_get(actor, key)?;
+    let declared = if let Value::Table(frames) = frames {
+        call.raw_table_get(frames, Value::Number(1.0))? != Value::Nil
+    } else if frames == Value::Nil {
+        let frame = call.intern_static(b"Frame0000")?;
+        let delay = call.intern_static(b"Delay0000")?;
+        call.raw_table_get(actor, frame)? != Value::Nil
+            && call.raw_table_get(actor, delay)? != Value::Nil
+    } else {
+        false
+    };
+    if !declared {
+        return Ok(());
+    }
+    let Some(([w, h], dims)) = frame_size_inputs(call, actor)? else {
+        return Ok(());
+    };
+    let (cols, rows) = dims.unwrap_or((1, 1));
+    let declared_size = [w / cols.max(1) as f32, h / rows.max(1) as f32];
+    let default_size = crate::sprite_image_frame_size(Some((w, h)), false, None, dims)
+        .map(|(w, h)| [w, h]);
+    if Some(declared_size) != default_size {
+        // LoadFromNode replaces the default size with its declared frame's
+        // fractional rectangle. Retain that initial override through clones;
+        // later SetStateProperties changes states without resizing the sprite.
+        size(call.store(), actor, declared_size);
+    }
+    Ok(())
 }
 pub(super) fn refresh_size(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let image = frame_size(call, actor)?;
@@ -326,6 +366,9 @@ pub(super) fn initialize(
         let render = &mut store.actors.get_mut(&actor).unwrap().state.render;
         render.sprite_animate = !theme_actor;
         render.sprite_texture = bound;
+    }
+    if !template {
+        initialize_declared_frame_size(call, actor)?;
     }
     refresh_size(call, actor)?;
     sprite_animation::initialize(call, actor, template)

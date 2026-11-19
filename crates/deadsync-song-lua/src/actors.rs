@@ -320,7 +320,7 @@ struct Store {
     live_sources: Option<Vec<crate::SongLuaLiveBroadcast>>,
     trace: live_trace::State,
     theme_callbacks: rustc_hash::FxHashMap<CallbackId, bool>,
-    present_paths: rustc_hash::FxHashSet<std::path::PathBuf>,
+    present_paths: rustc_hash::FxHashMap<std::path::PathBuf, std::path::PathBuf>,
     entry_actors: Option<live_layers::EntryActors>,
     song_callback_depth: usize,
     trace_dynamic_commands: bool,

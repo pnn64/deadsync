@@ -773,6 +773,106 @@ fn scheduled_foreground_on_load_publishes_initially_textureless_sprite() {
     scene.end().unwrap();
 }
 
+#[test]
+fn mixed_case_texture_resolves_on_linux_and_preserves_its_logical_path() {
+    use deadsync_assets::song_lua::SongLuaOverlayKind as RenderKind;
+    use song::playback::actor_conformance::WholeSongComposer;
+
+    let dir = tempfile::tempdir().unwrap();
+    let physical_dir = dir.path().join("MixedCase");
+    std::fs::create_dir(&physical_dir).unwrap();
+    let physical = physical_dir.join("Shivers 3x2.png");
+    // Cold's actual 3x2 sheet has a nonintegral default frame width.
+    image::RgbaImage::new(1750, 1050).save(&physical).unwrap();
+    let logical = dir.path().join("mixedcase/shivers 3x2.png");
+    #[cfg(target_os = "linux")]
+    assert!(!logical.exists(), "the regression requires a case-sensitive filesystem");
+    let script = dir.path().join("default.lua");
+    std::fs::write(&script, format!(r#"
+        return Def.ActorFrame {{ Def.Sprite {{
+            Name='MixedCaseTexture', Texture='mixedcase/shivers 3x2.png',
+            InitCommand=function(self)
+                local texture=self:GetTexture()
+                assert(self:GetWidth()==583 and self:GetHeight()==525)
+                assert(texture:GetSourceWidth()==1750 and texture:GetSourceHeight()==1050)
+                assert(texture:GetNumFrames()==6)
+                assert(texture:GetPath()=={:?}, texture:GetPath())
+                self:animate(false):SetStateProperties{{{{Frame=1,Delay=1}}}}
+                assert(self:GetWidth()==583 and self:GetHeight()==525)
+            end,
+            OnCommand=function(self) self:sleep(1000) end,
+        }}, Def.Sprite {{
+            Name='DeclaredFrames', Texture='mixedcase/shivers 3x2.png',
+            Frames={{{{Frame=0,Delay=1}},{{Frame=1,Delay=1}}}},
+            InitCommand=function(self)
+                DECLARED_FRAMES=self
+                assert(math.abs(self:GetWidth()-1750/3)<0.0001 and self:GetHeight()==525)
+                self:animate(false):SetStateProperties{{{{Frame=1,Delay=1}}}}
+                assert(math.abs(self:GetWidth()-1750/3)<0.0001 and self:GetHeight()==525)
+            end,
+            OnCommand=function(self) self:sleep(1000) end,
+        }} }}
+    "#, song::file_path_string(&logical))).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "case-insensitive native media");
+    context.live = true;
+    context.music_length_seconds = 10.;
+    context.players[1].enabled = false;
+    let mut compiled: deadsync_assets::song_lua::CompiledSongLua = song::compile_song_lua_layers(
+        &[&script], 0, &context, Default::default(),
+        |_, _, _| Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([])),
+        |_| None, |_, _| None,
+    ).unwrap().remove(0);
+    let mut scene = compiled.live_scene.take().unwrap();
+    scene.bind_targets(compiled.live_actor_indices().iter().copied().enumerate()
+        .map(|(local, global)| (global, Target::Root(local))).collect()).unwrap();
+    let mut visual = visuals(compiled);
+    scene.write_visuals(&mut visual).unwrap();
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let mut composer = WholeSongComposer::new(&visual.overlays);
+    for (name, expected) in [
+        ("MixedCaseTexture", [583., 525.]),
+        ("DeclaredFrames", [1750. / 3., 525.]),
+    ] {
+        let index = visual.overlays.iter()
+            .position(|actor| actor.name.as_deref() == Some(name)).unwrap();
+        let actor = &visual.overlays[index];
+        let RenderKind::Sprite { texture_path, .. } = &actor.kind else {
+            panic!("mixed-case texture did not produce a live visual: {:?}", actor.kind);
+        };
+        assert!(texture_path.is_file());
+        #[cfg(target_os = "linux")]
+        assert_eq!(texture_path, &physical);
+        let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0., 0.);
+        let [sprite] = frame.sprite_instances.as_slice() else {
+            panic!("expected one resolved Sprite draw: {:?}", frame.ops);
+        };
+        assert_eq!(sprite.size, expected, "{name}");
+    }
+    {
+        let mut runtime = scene.runtime_mut();
+        let check = compile_named(br#"
+            local a=DECLARED_FRAMES
+            a:SetTexture(a:GetTexture())
+            assert(a:GetWidth()==583 and a:GetHeight()==525)
+            a:SetStateProperties{{Frame=0,Delay=1}}
+            assert(a:GetWidth()==583 and a:GetHeight()==525)
+        "#, b"@/declared-frame-reload.lua").unwrap();
+        runtime.vm_mut().execute(&check).unwrap();
+    }
+    let outcome = scene.update(song::SongLuaLiveFrame {
+        delta_seconds: 0.,
+        ..Default::default()
+    }).unwrap();
+    assert!(outcome.errors.is_empty(), "{:?}", outcome.errors);
+    scene.write_visuals(&mut visual).unwrap();
+    let index = visual.overlays.iter()
+        .position(|actor| actor.name.as_deref() == Some("DeclaredFrames")).unwrap();
+    let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+    let frame = composer.render_overlay(&visual.overlays, &states, index, [854., 480.], 0., 0.);
+    assert_eq!(frame.sprite_instances[0].size, [583., 525.]);
+    scene.end().unwrap();
+}
+
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;

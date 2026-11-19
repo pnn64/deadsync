@@ -99,12 +99,14 @@ pub(super) fn get(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> 
         } else {
             let frames = crate::sprite_frame_count(sprites::sheet(call, actor)?);
             let raw = assets::field(call, actor, b"Texture")?.unwrap_or_default();
-            let resolved = assets::texture_path(call, actor)?;
+            let resolved = assets::texture_location(call, actor)?;
             let path = resolved
-                .as_deref()
-                .map(crate::file_path_string)
+                .as_ref()
+                .map(|path| crate::file_path_string(&path.logical))
                 .unwrap_or_else(|| raw.clone());
-            let source_path = resolved.as_deref().unwrap_or_else(|| Path::new(&raw));
+            let source_path = resolved
+                .as_ref()
+                .map_or_else(|| Path::new(&raw), |path| path.physical.as_path());
             let source = if let Some(size) = sprites::image_size(source_path, true) {
                 size
             } else if crate::is_song_lua_video_path(source_path) {

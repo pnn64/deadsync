@@ -3737,8 +3737,10 @@ pub fn sprite_image_frame_size(
 ) -> Option<(f32, f32)> {
     let (mut width, mut height) = texture_size?;
     if let Some((cols, rows)) = sheet_dims {
-        width /= cols.max(1) as f32;
-        height /= rows.max(1) as f32;
+        // RageTexture's source-frame dimensions use integer division. The
+        // fractional texture-coordinate rectangle does not set the default size.
+        width = (width / cols.max(1) as f32).floor();
+        height = (height / rows.max(1) as f32).floor();
     }
     Some((width, height))
 }
