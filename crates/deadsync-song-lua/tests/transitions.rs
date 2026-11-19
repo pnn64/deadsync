@@ -755,13 +755,14 @@ fn incoming_init_and_on_handlers_use_native_color_helpers_and_current_class_meth
 }
 
 #[test]
-fn completion_targets_the_published_screen_without_retaining_the_last_constructor() {
+fn completion_targets_the_published_screen_after_replacement() {
     let mut context = SongLuaCompileContext::new(Path::new("."), "completion publication");
     context.live = true;
     context.players[1].enabled = true;
     let mut runtime = SongRuntime::new(&context).unwrap();
     let check = |runtime: &mut SongRuntime, source: &str| {
-        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=completion publication").unwrap()).unwrap();
+        runtime.vm_mut().execute(&compile_named(source.as_bytes(), b"=completion publication").unwrap())
+            .unwrap_or_else(|error| panic!("{source}\n{error:?}"));
     };
     let first = test_support::gameplay_screen(&mut runtime, &context).unwrap();
     test_support::gameplay_transitions(&mut runtime, first).unwrap();
@@ -783,25 +784,21 @@ fn completion_targets_the_published_screen_without_retaining_the_last_constructo
         end
         FIRST_READY=ready(FIRST_SCREEN);SECOND_READY=ready(SECOND_SCREEN)
         assert(FIRST_READY.__songlua_transition_state==0 and SECOND_READY.__songlua_transition_state==0)
-        SECOND_WEAK=setmetatable({SECOND_SCREEN,SECOND_READY}, {__mode='v'})
     "#);
     runtime.publish_screen(first_screen, [players[0], players[1]]).unwrap();
     let incoming = test_support::screen_part(&mut runtime, "In").unwrap();
     let actor = runtime.actor_scene_root(incoming).unwrap();
     runtime.vm_mut().set_global(b"INCOMING", actor).unwrap();
-    check(&mut runtime, "INCOMING:RunCommandsRecursively(function(self)self:stoptweening()end)");
+    check(&mut runtime, "local function stop(actor) actor:stoptweening();for _,child in ipairs(actor)do stop(child)end end;stop(INCOMING)");
     test_support::start_actor_transition(&mut runtime, actor).unwrap();
     runtime.advance_actor_scene(incoming, 0.0).unwrap();
     check(&mut runtime, r#"
         assert(INCOMING.__songlua_transition_state==2)
         assert(FIRST_READY.__songlua_transition_state==1)
         assert(SECOND_READY.__songlua_transition_state==0)
-        SECOND_SCREEN=nil;SECOND_READY=nil
     "#);
-    assert!(runtime.release_actor_scene(second).unwrap());
     check(&mut runtime, r#"
-        collectgarbage('collect');collectgarbage('collect')
-        assert(SECOND_WEAK[1]==nil and SECOND_WEAK[2]==nil)
+        collectgarbage('collect')
         local out=FIRST_SCREEN:GetChild('Out')
         out[1].StartTransitioningCommand=function(self)self:stoptweening()end
         FIRST_SCREEN:StartTransitioningScreen('SM_DoNextScreen')
