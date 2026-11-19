@@ -476,6 +476,29 @@ fn table_operations_are_raw_and_callbacks_can_stop_or_mutate() {
 }
 
 #[test]
+fn concat_array_ranges_preserve_separators_and_report_holes() {
+    let program = compile(
+        br#"
+        local t = {'a', 12, nil, 'b'; [0]='start'}
+        assert(table.concat(t, '\0', 1, 2) == 'a\0' .. '12')
+        local ok, err = pcall(table.concat, t, '/', 2, 4)
+        assert(not ok and err:find('invalid value (nil) at index 3', 1, true))
+        t[3] = ''
+        assert(table.concat(t, '|', 1, 4) == 'a|12||b')
+        assert(table.concat(t, '|', 0, 4) == 'start|a|12||b')
+        return table.concat(t, 'x', 4, 3)
+    "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        let [Value::String(empty)] = *vm.execute(&program).unwrap() else {
+            panic!("empty concatenation returns a string");
+        };
+        assert_eq!(vm.string_bytes(empty), Some(b"".as_slice()));
+    }
+}
+
+#[test]
 fn maxn_uses_only_live_numeric_keys_in_both_table_layouts() {
     let program = compile(
         br#"

@@ -148,32 +148,13 @@ impl Vm {
                 let last = self.integer_argument(base, count, 3, Some(len))? as i32 as i64;
                 let separator = separator.expect("concat has a separator");
                 let mut output = self.try_take_buffer(0)?;
-                for index in first..=last {
-                    if index != first {
-                        output
-                            .try_extend_from_slice(&self.strings.bytes[slot_index(separator.0)])?;
-                    }
-                    let v = self.raw_index(table, index);
-                    match v {
-                        Value::String(id) => {
-                            output.try_extend_from_slice(&self.strings.bytes[slot_index(id.0)])?
-                        }
-                        Value::Number(n) => {
-                            let start = output.len();
-                            output.try_extend_from_slice(native::number_text(n).as_bytes())?;
-                            crate::locale::try_localize_owned_from(&mut output, start)?;
-                        }
-                        _ => {
-                            return Err(fallible::diagnostic(
-                                ErrorKind::Runtime,
-                                0,
-                                format_args!(
-                                    "invalid value ({}) at index {index} in table for 'concat'",
-                                    v.type_name()
-                                ),
-                            ));
-                        }
-                    }
+                let separator = &self.strings.bytes[slot_index(separator.0)];
+                let storage = &self.tables[slot_index(table.0)];
+                if let Some(array) = storage.array_slice(first, last) {
+                    self.concat_values(&mut output, separator, first, array.iter().copied())?;
+                } else {
+                    let values = (first..=last).map(|index| storage.get(key(index)));
+                    self.concat_values(&mut output, separator, first, values)?;
                 }
                 self.try_finish_buffer(output)?
             }
@@ -181,6 +162,40 @@ impl Vm {
         };
         self.registers[base] = value;
         Ok(1)
+    }
+    fn concat_values(
+        &self,
+        output: &mut Buffer<u8>,
+        separator: &[u8],
+        first: i64,
+        values: impl Iterator<Item = Value>,
+    ) -> Result<(), Error> {
+        for (index, value) in (first..).zip(values) {
+            if index != first && !separator.is_empty() {
+                output.try_extend_from_slice(separator)?;
+            }
+            match value {
+                Value::String(id) => {
+                    output.try_extend_from_slice(&self.strings.bytes[slot_index(id.0)])?;
+                }
+                Value::Number(n) => {
+                    let start = output.len();
+                    output.try_extend_from_slice(native::number_text(n).as_bytes())?;
+                    crate::locale::try_localize_owned_from(output, start)?;
+                }
+                _ => {
+                    return Err(fallible::diagnostic(
+                        ErrorKind::Runtime,
+                        0,
+                        format_args!(
+                            "invalid value ({}) at index {index} in table for 'concat'",
+                            value.type_name()
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
     pub(super) fn foreach_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;

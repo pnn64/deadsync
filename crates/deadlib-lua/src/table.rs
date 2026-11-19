@@ -444,6 +444,12 @@ impl Table {
         };
         self.get_key(key)
     }
+    /// Return the inclusive range of one-based indices when it fits in the array.
+    pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
+        let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
+        let end = u32::try_from(last).ok()? as usize;
+        self.array.get(start..end)
+    }
     /// String keys are already interned; field access need not classify them
     /// as a possible array index or reconstruct a generic Lua table key.
     #[inline]
