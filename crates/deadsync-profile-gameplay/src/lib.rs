@@ -478,9 +478,18 @@ pub fn song_lua_compile_context(
     context.song_steps = song.charts.iter().map(deadsync_song_lua::SongLuaStep::from).collect();
     context.song_banner_path.clone_from(&song.banner_path);
     context.player_step_indices = std::array::from_fn(|player| {
-        song.charts.iter().position(|chart| chart.chart_type == charts[player].chart_type
-            && chart.difficulty == charts[player].difficulty
-            && chart.description == charts[player].description)
+        let selected = &charts[player];
+        // Edit charts can share both difficulty and description. Gameplay owns
+        // cloned charts, so retain their authored identity and note hash when
+        // recovering the catalog index for GetCurrentSteps and reloads.
+        song.charts.iter().position(|chart| chart.chart_type == selected.chart_type
+            && chart.difficulty == selected.difficulty
+            && chart.description == selected.description
+            && chart.chart_name == selected.chart_name
+            && chart.meter == selected.meter
+            && chart.step_artist == selected.step_artist
+            && chart.music_file == selected.music_file
+            && chart.short_hash == selected.short_hash)
     });
     context.song_display_bpms = song.display_bpm_pair_or(
         charts.first().map(std::convert::AsRef::as_ref),
