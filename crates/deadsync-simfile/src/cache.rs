@@ -26,8 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Preserve raw first-note bounds before catalog offsets and fallback zero.
-pub const SONG_CACHE_VERSION: u8 = 75;
+// Preserve nonempty short note rows and their native measure subdivisions.
+pub const SONG_CACHE_VERSION: u8 = 76;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
