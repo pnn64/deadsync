@@ -401,6 +401,27 @@ fn empty_and_zero_sized_buffers_do_not_call_the_allocator_and_overflow_is_recove
 }
 
 #[test]
+fn buffer_extend_from_within_preserves_the_prefix_across_growth() {
+    let mut buffer = Buffer::default();
+    buffer.try_reserve_exact(4).unwrap();
+    buffer.extend_from_slice(&[11u64, 22, 33, 44]);
+    buffer.extend_from_within(1..4);
+    assert_eq!(&*buffer, &[11, 22, 33, 44, 22, 33, 44]);
+    buffer.extend_from_within(2..3);
+    buffer.extend_from_within(8..8);
+    assert_eq!(&*buffer, &[11, 22, 33, 44, 22, 33, 44, 33]);
+
+    #[derive(Clone, Copy)]
+    #[repr(align(64))]
+    struct Aligned;
+    let mut zero = Buffer::default();
+    zero.extend_from_within(0..0);
+    zero.push(Aligned);
+    zero.extend_from_within(0..1);
+    assert_eq!(zero.len(), 2);
+}
+
+#[test]
 fn standard_buffers_support_extended_alignment_and_custom_domains_reject_it_safely() {
     #[derive(Clone, Copy)]
     #[repr(align(64))]

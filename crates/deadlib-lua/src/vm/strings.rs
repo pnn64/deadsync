@@ -371,10 +371,8 @@ impl Vm {
                 } else {
                     bytes.extend_from_slice(text);
                     while bytes.len() < size {
-                        let used = bytes.len();
-                        let copied = used.min(size - used);
-                        bytes.resize(used + copied, 0);
-                        bytes.copy_within(..copied, used);
+                        let len = bytes.len();
+                        bytes.extend_from_within(0..len.min(size - len));
                     }
                 }
                 self.try_finish_buffer(bytes)?
