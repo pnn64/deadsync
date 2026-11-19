@@ -853,6 +853,21 @@ pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
     Ok(output)
 }
 
+// Optional metadata can recover from malformed streams. Charge output already
+// produced even when inflation fails, so a later chunk cannot reuse that budget.
+pub(crate) fn decompress_metadata(input: &[u8], remaining: &mut usize) -> Result<Vec<u8>, Error> {
+    if input.len() < 6 {
+        return Err(Error::Truncated);
+    }
+    let mut output = Vec::new();
+    let result = decompress_bits_into::<true>(Bits::new(input), *remaining, false, &mut output);
+    *remaining -= output.len();
+    if result? != input.len() {
+        return Err(Error::Invalid("trailing zlib data"));
+    }
+    Ok(output)
+}
+
 /// Decode the first zlib stream and return the number of input bytes consumed.
 pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize), Error> {
     decompress_impl(input, limit, false)
@@ -886,10 +901,21 @@ fn decompress_impl(input: &[u8], limit: usize, sized: bool) -> Result<(Vec<u8>, 
 }
 
 fn decompress_bits<const DISPATCH: bool>(
-    mut bits: Bits<'_>,
+    bits: Bits<'_>,
     limit: usize,
     sized: bool,
 ) -> Result<(Vec<u8>, usize), Error> {
+    let mut output = Vec::new();
+    let used = decompress_bits_into::<DISPATCH>(bits, limit, sized, &mut output)?;
+    Ok((output, used))
+}
+
+fn decompress_bits_into<const DISPATCH: bool>(
+    mut bits: Bits<'_>,
+    limit: usize,
+    sized: bool,
+    output: &mut Vec<u8>,
+) -> Result<usize, Error> {
     let cmf = bits.read(8)? as u8;
     let flags = bits.read(8)? as u8;
     if cmf & 15 != 8 || cmf >> 4 > 7 || (u16::from(cmf) * 256 + u16::from(flags)) % 31 != 0 {
@@ -899,7 +925,6 @@ fn decompress_bits<const DISPATCH: bool>(
         return Err(Error::Invalid("zlib dictionary not permitted"));
     }
     let window = 1usize << ((cmf >> 4) + 8);
-    let mut output = Vec::new();
     let mut written = 0;
     if sized {
         output
@@ -928,7 +953,7 @@ fn decompress_bits<const DISPATCH: bool>(
                     .min(limit.saturating_sub(output.len()))
             };
             if !sized {
-                reserve_output(&mut output, additional, limit)?;
+                reserve_output(output, additional, limit)?;
             }
             // Drain bytes prefetched by a preceding Huffman block, then copy
             // the byte-aligned payload directly without bit-reader dispatch.
@@ -963,14 +988,14 @@ fn decompress_bits<const DISPATCH: bool>(
             if sized {
                 #[cfg(target_arch = "x86_64")]
                 if DISPATCH {
-                    x86::inflate(&mut bits, &mut output, &mut written, kind == 1, window)?;
+                    x86::inflate(&mut bits, output, &mut written, kind == 1, window)?;
                 } else {
-                    inflate_sized_codes(&mut bits, &mut output, &mut written, kind == 1, window)?;
+                    inflate_sized_codes(&mut bits, output, &mut written, kind == 1, window)?;
                 }
                 #[cfg(not(target_arch = "x86_64"))]
-                inflate_sized_codes(&mut bits, &mut output, &mut written, kind == 1, window)?;
+                inflate_sized_codes(&mut bits, output, &mut written, kind == 1, window)?;
             } else {
-                inflate_codes(&mut bits, &mut output, kind == 1, window, limit)?;
+                inflate_codes(&mut bits, output, kind == 1, window, limit)?;
             }
         } else {
             return Err(Error::Invalid("reserved block type"));
@@ -984,10 +1009,10 @@ fn decompress_bits<const DISPATCH: bool>(
     }
     bits.align();
     let checksum = bits.read(32)?.swap_bytes();
-    if checksum != adler32(&output) {
+    if checksum != adler32(output) {
         return Err(Error::Checksum);
     }
-    Ok((output, bits.consumed()))
+    Ok(bits.consumed())
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

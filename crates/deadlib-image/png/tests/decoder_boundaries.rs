@@ -199,6 +199,7 @@ fn exact_input_sample_inflation_metadata_chunk_and_frame_budgets() {
                         limits,
                         animation_policy: policy,
                         palette_policy: PalettePolicy::Strict,
+                        ..Default::default()
                     };
                     let pass = value >= minimum;
                     let result = decode_with_options(&bytes, &options);

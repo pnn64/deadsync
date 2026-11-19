@@ -2,7 +2,8 @@
 //! No native encoder, compression or checksum code constructs these inputs.
 use deadlib_image_png::{
     AncillaryChunk, ChunkPosition, ColorType, DecodeEvent, DecodeOptions, DecodeStatus, Error,
-    ImageKind, Metadata, Png, Samples, StreamDecoder, decode, decode_reader, encode, encode_writer,
+    ImageKind, Metadata, MetadataPolicy, Png, Samples, StreamDecoder, decode, decode_reader,
+    decode_with_options, encode, encode_writer,
 };
 use std::io::{self, Cursor, Read};
 
@@ -24,10 +25,14 @@ impl Read for Fragmented<'_> {
 }
 
 fn parsers(bytes: &[u8]) -> [Result<Png, Error>; 3] {
+    parsers_with_options(bytes, DecodeOptions::default())
+}
+
+fn parsers_with_options(bytes: &[u8], options: DecodeOptions) -> [Result<Png, Error>; 3] {
     [
-        decode(bytes),
-        decode_reader(Fragmented(bytes, 1), &DecodeOptions::default()),
-        decode_reader(Fragmented(bytes, 7), &DecodeOptions::default()),
+        decode_with_options(bytes, &options),
+        decode_reader(Fragmented(bytes, 1), &options),
+        decode_reader(Fragmented(bytes, 7), &options),
     ]
 }
 
@@ -120,12 +125,18 @@ fn chunk_lengths_crc_alignment_and_encoder_name_validation() {
         // CRC covers the literal name and payload, including unknown chunks.
         for index in [4, extra.len() - 1] {
             extra[index] ^= 1;
-            for result in parsers(&file(&[
-                header(2, 8),
-                extra.clone(),
-                chunk(*b"IDAT", &stored(&[0, 17, 34, 51])),
-                chunk(*b"IEND", &[]),
-            ])) {
+            for result in parsers_with_options(
+                &file(&[
+                    header(2, 8),
+                    extra.clone(),
+                    chunk(*b"IDAT", &stored(&[0, 17, 34, 51])),
+                    chunk(*b"IEND", &[]),
+                ]),
+                DecodeOptions {
+                    metadata_policy: MetadataPolicy::Strict,
+                    ..Default::default()
+                },
+            ) {
                 assert_eq!(result, Err(Error::Checksum));
             }
             extra[index] ^= 1;

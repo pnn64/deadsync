@@ -21,8 +21,24 @@ plain and Adam7 rows, compressible and noisy data, and all five filters. Kodak's
 Before timing, each input's native samples are compared to Rust png, and its
 RGBA16 rendering is compared to image. All decodes include output destruction.
 
-`native` measures the public `decode` API, including its metadata retention and
-mandatory CRC/Adler validation. `png` includes unpacking sub-byte samples and
+To check the bundled image corpus without measuring performance, run from the
+repository root:
+
+```powershell
+cargo run --release --locked --manifest-path crates/deadlib-image/png/bench/Cargo.toml --bin png-decode-bench -- --verify-only assets courses crates/deadsync-song-lua/assets
+```
+
+`--verify-only` recursively checks the supplied PNG files and directories with
+the same native-sample and RGBA16 comparisons. It also compares the complete
+native buffered and reader results, including metadata. It prints each filename
+to stderr before decoding, so a failure identifies the input, and reports the
+verified file count on success. A decode error or mismatch fails the command.
+This mode returns before CPU affinity pinning, `PNG_BENCH_MS` parsing, timing, or
+allocation counter calibration and measurement, including in an `allocations`
+build.
+
+`native` measures the public `decode` API, including its metadata recovery and
+CRC/Adler validation of image data. `png` includes unpacking sub-byte samples and
 conversion of big-endian 16-bit bytes to native `u16` storage. Its unpacker uses
 constant-depth byte groups. `png-packed` reports the underlying packed-byte PNG
 API separately. `image` measures `load_from_memory_with_format` without a further

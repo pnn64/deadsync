@@ -1,7 +1,7 @@
 use deadlib_image_png::{
     AncillaryChunk, ChunkPosition, ColorType, DecodeEvent, DecodeOptions, DecodeStatus, Image,
-    Limits, Metadata, Png, Samples, StreamDecoder, decode, decode_reader, encode, encode_writer,
-    zlib::Compression,
+    Limits, Metadata, MetadataPolicy, Png, Samples, StreamDecoder, decode, decode_reader,
+    decode_with_options, encode, encode_writer, zlib::Compression,
 };
 
 // Independently transcribed H.273 (07/2024) tables 2 and 3. 2 is unspecified.
@@ -151,14 +151,19 @@ fn reserved_codes_preserve_wire_data_and_fall_back_in_precedence() {
 
 #[test]
 fn all_png_matrix_and_full_range_flag_values() {
+    let options = DecodeOptions {
+        metadata_policy: MetadataPolicy::Strict,
+        ..Default::default()
+    };
     for byte in 0..=255 {
         for (values, supported) in [([9, 16, byte, 1], byte == 0), ([9, 16, 0, byte], byte <= 1)] {
             let bytes = fixture(values);
-            assert_eq!(decode(&bytes).is_ok(), supported, "{values:?}");
             assert_eq!(
-                decode_reader(bytes.as_slice(), &Default::default()).is_ok(),
-                supported
+                decode_with_options(&bytes, &options).is_ok(),
+                supported,
+                "{values:?}"
             );
+            assert_eq!(decode_reader(bytes.as_slice(), &options).is_ok(), supported);
             let mut png = base();
             png.ancillary = vec![chunk(values)];
             assert_eq!(encode(&png, &Default::default()).is_ok(), supported);

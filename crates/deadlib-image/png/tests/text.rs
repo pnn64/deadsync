@@ -1,7 +1,7 @@
 use deadlib_image_png::{
     AncillaryChunk, ChunkPosition, ColorType, DecodeEvent, DecodeOptions, DecodeStatus, Image,
-    Limits, Metadata, Png, Samples, StreamDecoder, decode, decode_reader, encode, encode_writer,
-    zlib::Compression,
+    Limits, Metadata, MetadataPolicy, Png, Samples, StreamDecoder, decode, decode_reader,
+    decode_with_options, encode, encode_writer, zlib::Compression,
 };
 use std::io::Write;
 
@@ -169,7 +169,16 @@ fn uncompressed_method_is_ignored_only_by_decoders() {
             assert!(out.is_empty());
         }
         if method != 0 {
-            assert!(decode(&fixture(wire(b"", b"", b"text", true, method))).is_err());
+            assert!(
+                decode_with_options(
+                    &fixture(wire(b"", b"", b"text", true, method)),
+                    &DecodeOptions {
+                        metadata_policy: MetadataPolicy::Strict,
+                        ..Default::default()
+                    }
+                )
+                .is_err()
+            );
         }
     }
 }
@@ -265,9 +274,18 @@ fn bcp47_grammar_grandfathered_private_extensions_and_duplicates() {
                     "{tag}"
                 );
                 let bytes = fixture(wire(tag.as_bytes(), b"", b"text", false, 0));
-                assert_eq!(decode(&bytes).is_ok(), accepted, "{tag}");
+                let mut options = DecodeOptions::default();
+                // Invalid grammar remains rejected under the strict policy.
+                if !accepted {
+                    options.metadata_policy = MetadataPolicy::Strict;
+                }
                 assert_eq!(
-                    decode_reader(bytes.as_slice(), &Default::default()).is_ok(),
+                    decode_with_options(&bytes, &options).is_ok(),
+                    accepted,
+                    "{tag}"
+                );
+                assert_eq!(
+                    decode_reader(bytes.as_slice(), &options).is_ok(),
                     accepted,
                     "{tag}"
                 );

@@ -202,11 +202,37 @@ fn files(path: &Path, out: &mut Vec<PathBuf>) {
 
 fn main() {
     let mut paths = Vec::new();
+    let mut verify_only = false;
     for arg in std::env::args_os().skip(1) {
-        files(Path::new(&arg), &mut paths);
+        if arg == "--verify-only" {
+            verify_only = true;
+        } else {
+            files(Path::new(&arg), &mut paths);
+        }
     }
     paths.sort();
     assert!(!paths.is_empty(), "supply PNG files or corpus directories");
+    if verify_only {
+        for path in &paths {
+            eprintln!("verifying {}", path.display());
+            let bytes =
+                std::fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+            verify(&bytes);
+            let buffered = deadlib_image_png::decode(&bytes).unwrap();
+            let streamed =
+                deadlib_image_png::decode_reader(bytes.as_slice(), &Default::default()).unwrap();
+            assert!(
+                buffered == streamed,
+                "{}: buffered and reader PNG decoding differ",
+                path.display()
+            );
+        }
+        println!(
+            "Verified {} PNG files against png samples, image RGBA16, and native reader decoding.",
+            paths.len()
+        );
+        return;
+    }
     cycles::pin();
     #[cfg(feature = "allocations")]
     {

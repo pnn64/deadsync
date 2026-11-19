@@ -2,7 +2,8 @@
 //! The 20-byte control header is separate from the PNG datastream.
 use deadlib_image_png::{
     AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Error, Image, ImageKind, Limits,
-    PalettePolicy, Row, RowSamples, Samples, StreamDecoder, decode_reader, decode_with_options,
+    MetadataPolicy, PalettePolicy, Row, RowSamples, Samples, StreamDecoder, decode_reader,
+    decode_with_options,
 };
 use std::io::{self, Read};
 
@@ -96,6 +97,11 @@ pub fn check(input: &[u8], crc: impl Fn(&[u8]) -> u32) {
             PalettePolicy::RecoverBlack
         } else {
             PalettePolicy::Strict
+        },
+        metadata_policy: if flags & 32 == 0 {
+            MetadataPolicy::Recover
+        } else {
+            MetadataPolicy::Strict
         },
     };
     let fragment = 1 + usize::from(input[17] % 32);

@@ -27,6 +27,28 @@ pub struct DecodeOptions {
     pub limits: Limits,
     pub palette_policy: PalettePolicy,
     pub animation_policy: AnimationPolicy,
+    pub metadata_policy: MetadataPolicy,
+}
+
+/// Handling of optional metadata faults, independently of image/animation data.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum MetadataPolicy {
+    /// Discard corrupt, malformed, misplaced or duplicate optional metadata.
+    /// Accept Exif after IDAT and keep the first CRC-valid ICC occurrence.
+    /// Resource limits, critical chunks, tRNS and APNG checks remain enforced.
+    #[default]
+    Recover,
+    /// Reject metadata CRC, ordering, multiplicity and parsing errors.
+    /// Unsupported ICC/Exif containers still retain their raw representation.
+    Strict,
+}
+
+impl MetadataPolicy {
+    pub(crate) fn discard_bad_crc(self, kind: &[u8; 4]) -> bool {
+        self == Self::Recover
+            && kind[0] & 32 != 0
+            && !matches!(kind, b"tRNS" | b"acTL" | b"fcTL" | b"fdAT")
+    }
 }
 
 /// Handling of animation faults when the static PNG can still be verified.
@@ -36,8 +58,9 @@ pub enum AnimationPolicy {
     #[default]
     Strict,
     /// Report an animation error, discard animation frames and decode the
-    /// static image. PNG framing, static data, metadata and resource errors
-    /// remain fatal. See `Png::animation_error` and `DecodeEvent::AnimationError`.
+    /// static image. PNG framing, static data and resource errors remain fatal;
+    /// metadata uses `MetadataPolicy`. See `Png::animation_error` and
+    /// `DecodeEvent::AnimationError`.
     RecoverDefault,
 }
 
@@ -191,7 +214,7 @@ pub(crate) fn be16(data: &[u8]) -> u16 {
     u16::from_be_bytes(data[..2].try_into().unwrap())
 }
 
-pub(crate) fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8]), Error> {
+fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8], bool), Error> {
     if input.len() < 12 {
         return Err(Error::Truncated);
     }
@@ -208,11 +231,9 @@ pub(crate) fn chunk<'a>(input: &mut &'a [u8]) -> Result<([u8; 4], &'a [u8]), Err
         return Err(Error::Invalid("chunk type"));
     }
     let data = &input[8..8 + len];
-    if crc32(&[&kind, data]) != be32(&input[8 + len..end]) {
-        return Err(Error::Checksum);
-    }
+    let checksum_valid = crc32(&[&kind, data]) == be32(&input[8 + len..end]);
     *input = &input[end..];
-    Ok((kind, data))
+    Ok((kind, data, checksum_valid))
 }
 
 pub fn decode(input: &[u8]) -> Result<Png, Error> {
@@ -234,7 +255,10 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         return Err(Error::Invalid("signature"));
     }
     input = &input[8..];
-    let (kind, data) = chunk(&mut input)?;
+    let (kind, data, checksum_valid) = chunk(&mut input)?;
+    if !checksum_valid {
+        return Err(Error::Checksum);
+    }
     if &kind != b"IHDR" {
         return Err(Error::Invalid("IHDR must be first"));
     }
@@ -257,6 +281,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
     let mut compressed_wire_len = 0;
     let mut compressed_bytes = 0;
     let mut metadata_bytes = 0usize;
+    let mut discarded_metadata_bytes = 0usize;
     let mut seen_data = false;
     let mut ended_data = false;
     let mut count = 1usize;
@@ -266,9 +291,22 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
             return Err(Error::LimitExceeded);
         }
         let chunk_start = input;
-        let (kind, data) = chunk(&mut input)?;
+        let (kind, data, checksum_valid) = chunk(&mut input)?;
         if seen_data && &kind != b"IDAT" {
             ended_data = true;
+        }
+        if !checksum_valid {
+            if !options.metadata_policy.discard_bad_crc(&kind) {
+                return Err(Error::Checksum);
+            }
+            metadata_bytes = metadata_bytes
+                .checked_add(data.len())
+                .ok_or(Error::LimitExceeded)?;
+            if metadata_bytes > limits.max_metadata_bytes {
+                return Err(Error::LimitExceeded);
+            }
+            discarded_metadata_bytes += data.len();
+            continue;
         }
         match &kind {
             b"acTL" | b"fcTL" | b"fdAT" => {
@@ -357,7 +395,13 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
             }
         }
     }
-    crate::metadata::validate_only(&ancillary, header, palette.len(), limits)?;
+    crate::metadata::retain_valid(
+        &mut ancillary,
+        header,
+        palette.len(),
+        limits.max_metadata_bytes - discarded_metadata_bytes,
+        options.metadata_policy,
+    )?;
     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
     let raw = zlib::decompress_idat(
         &compressed_start[..compressed_wire_len],

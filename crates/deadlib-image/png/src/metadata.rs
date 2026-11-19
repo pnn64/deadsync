@@ -27,7 +27,7 @@ pub(crate) fn is_known(kind: &[u8; 4]) -> bool {
             | b"iTXt"
     )
 }
-use crate::{AncillaryChunk, ChunkPosition, ColorType, Error, Limits, Png, zlib};
+use crate::{AncillaryChunk, ChunkPosition, ColorType, Error, Limits, MetadataPolicy, Png, zlib};
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -137,9 +137,7 @@ fn latin1_text(bytes: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 fn inflate(bytes: &[u8], remaining: &mut usize) -> Result<Vec<u8>, Error> {
-    let out = zlib::decompress(bytes, *remaining)?;
-    *remaining -= out.len();
-    Ok(out)
+    zlib::decompress_metadata(bytes, remaining)
 }
 
 // WHATWG UTF-8 decode consumes exactly one leading BOM and replaces malformed
@@ -467,16 +465,28 @@ pub(crate) fn validate(
     validate_impl(chunks, h, palette, limits, false)
 }
 
-pub(crate) fn validate_only(
-    chunks: &[AncillaryChunk],
+pub(crate) fn retain_valid(
+    chunks: &mut Vec<AncillaryChunk>,
     h: Header,
     palette: usize,
-    limits: Limits,
+    limit: usize,
+    policy: MetadataPolicy,
 ) -> Result<(), Error> {
-    let mut validator = Validator::new(limits.max_metadata_bytes);
-    for c in chunks {
-        validator.check_impl::<false>(c, h, palette)?;
-    }
+    let mut validator = Validator::new(limit, policy);
+    let mut result = Ok(());
+    chunks.retain(|c| {
+        if result.is_err() {
+            return false;
+        }
+        match validator.check_impl::<false>(c, h, palette) {
+            Ok(value) => value.is_some(),
+            Err(error) => {
+                result = Err(error);
+                false
+            }
+        }
+    });
+    result?;
     validator.finish()
 }
 
@@ -496,11 +506,20 @@ fn validate_impl(
     limits: Limits,
     encoding: bool,
 ) -> Result<Vec<Metadata>, Error> {
-    let mut validator = Validator::new(limits.max_metadata_bytes);
+    let mut validator = Validator::new(
+        limits.max_metadata_bytes,
+        if encoding {
+            MetadataPolicy::Strict
+        } else {
+            MetadataPolicy::Recover
+        },
+    );
     validator.encoding = encoding;
     let mut out = Vec::new();
     for c in chunks {
-        out.push(validator.check(c, h, palette)?);
+        if let Some(value) = validator.check(c, h, palette)? {
+            out.push(value);
+        }
     }
     validator.finish()?;
     Ok(out)
@@ -510,15 +529,17 @@ pub(crate) struct Validator {
     unique: u16,
     names: HashSet<Vec<u8>>,
     remaining: usize,
+    policy: MetadataPolicy,
     encoding: bool,
     srgb_compatible: bool,
 }
 impl Validator {
-    pub(crate) fn new(limit: usize) -> Self {
+    pub(crate) fn new(limit: usize, policy: MetadataPolicy) -> Self {
         Self {
             unique: 0,
             names: HashSet::new(),
             remaining: limit,
+            policy,
             encoding: false,
             srgb_compatible: true,
         }
@@ -529,12 +550,26 @@ impl Validator {
     pub(crate) fn has(&self, kind: &[u8; 4]) -> bool {
         self.unique & singleton(kind) != 0
     }
+    pub(crate) fn charge(&mut self, bytes: usize) -> Result<(), Error> {
+        self.remaining = self
+            .remaining
+            .checked_sub(bytes)
+            .ok_or(Error::LimitExceeded)?;
+        Ok(())
+    }
+    fn rejected(&self, reason: &'static str) -> Result<Option<Metadata>, Error> {
+        if self.policy == MetadataPolicy::Recover {
+            Ok(None)
+        } else {
+            Err(Error::Invalid(reason))
+        }
+    }
     pub(crate) fn check(
         &mut self,
         c: &AncillaryChunk,
         h: Header,
         palette: usize,
-    ) -> Result<Metadata, Error> {
+    ) -> Result<Option<Metadata>, Error> {
         self.check_impl::<true>(c, h, palette)
     }
     fn check_impl<const COLLECT: bool>(
@@ -542,34 +577,46 @@ impl Validator {
         c: &AncillaryChunk,
         h: Header,
         palette: usize,
-    ) -> Result<Metadata, Error> {
-        self.remaining = self
-            .remaining
-            .checked_sub(c.data.len())
-            .ok_or(Error::LimitExceeded)?;
+    ) -> Result<Option<Metadata>, Error> {
+        self.charge(c.data.len())?;
+        let recover = self.policy == MetadataPolicy::Recover;
         let early = matches!(
             &c.kind,
             b"cHRM" | b"gAMA" | b"iCCP" | b"sBIT" | b"sRGB" | b"cICP" | b"mDCV" | b"cLLI"
         );
-        let before_data =
-            early || matches!(&c.kind, b"bKGD" | b"hIST" | b"pHYs" | b"sPLT" | b"eXIf");
+        let before_data = early
+            || matches!(&c.kind, b"bKGD" | b"hIST" | b"pHYs" | b"sPLT")
+            || (!recover && &c.kind == b"eXIf");
         if (early && c.position != ChunkPosition::BeforePalette)
             || (before_data && c.position == ChunkPosition::AfterData)
         {
-            return Err(Error::Invalid("ancillary chunk ordering"));
+            return self.rejected("ancillary chunk ordering");
         }
-        if matches!(&c.kind, b"bKGD" | b"hIST")
-            && palette != 0
-            && c.position == ChunkPosition::BeforePalette
+        let needs_palette =
+            &c.kind == b"hIST" || (&c.kind == b"bKGD" && h.color == ColorType::Indexed);
+        if c.position == ChunkPosition::BeforePalette
+            && ((recover && needs_palette)
+                || (!recover && palette != 0 && matches!(&c.kind, b"bKGD" | b"hIST")))
         {
-            return Err(Error::Invalid("ancillary chunk must follow PLTE"));
+            return self.rejected("ancillary chunk must follow PLTE");
         }
         let bit = singleton(&c.kind);
         if self.unique & bit != 0 {
-            return Err(Error::Invalid("duplicate ancillary chunk"));
+            return self.rejected("duplicate ancillary chunk");
         }
+        // Rust png reserves the first CRC-valid ICC occurrence even when its
+        // payload cannot be interpreted. CRC failures never reach this point.
+        if &c.kind == b"iCCP" {
+            self.unique |= bit;
+        }
+        let value = match parse::<COLLECT>(c, h, palette, &mut self.remaining, self.encoding) {
+            Ok(value) => value,
+            Err(Error::Invalid(_) | Error::Checksum | Error::Truncated) if recover => {
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
         self.unique |= bit;
-        let value = parse::<COLLECT>(c, h, palette, &mut self.remaining, self.encoding)?;
         // PNG 11.3.2.5, Table 17: optional fallback gAMA/cHRM accompanying
         // sRGB must describe sRGB, even if a still higher color chunk exists.
         match &value {
@@ -584,15 +631,15 @@ impl Validator {
         if let Metadata::SuggestedPalette { name, .. } = &value
             && !self.names.insert(name.clone())
         {
-            return Err(Error::Invalid("duplicate suggested palette name"));
+            return self.rejected("duplicate suggested palette name");
         }
-        Ok(value)
+        Ok(Some(value))
     }
     pub(crate) fn finish(&self) -> Result<(), Error> {
         if self.encoding && self.has(b"sRGB") && !self.srgb_compatible {
             return Err(Error::Invalid("gAMA or cHRM does not match sRGB"));
         }
-        if self.has(b"mDCV") && !self.has(b"cICP") {
+        if self.policy == MetadataPolicy::Strict && self.has(b"mDCV") && !self.has(b"cICP") {
             return Err(Error::Invalid("mDCV requires cICP"));
         }
         Ok(())

@@ -1,7 +1,7 @@
 use deadlib_image_png::{
     AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Error, Image, ImageKind, Limits,
-    Png, RowSamples, Samples, StreamDecoder, decode, decode_reader, decode_with_options, encode,
-    encode_writer,
+    MetadataPolicy, Png, RowSamples, Samples, StreamDecoder, decode, decode_reader,
+    decode_with_options, encode, encode_writer,
 };
 use std::io::{self, Read};
 #[allow(dead_code)]
@@ -418,10 +418,15 @@ fn recovery_never_accepts_bad_core_png_or_bypasses_limits() {
         .data
         .clear();
     let mut cases = Vec::new();
+    let mut strict_metadata_cases = Vec::new();
     for kind in [*b"IHDR", *b"IDAT", *b"IEND", *b"tEXt"] {
         let mut c = base.clone();
         c.iter_mut().find(|c| c.kind == kind).unwrap().bad_crc = true;
-        cases.push(fixtures::file(&c));
+        if &kind == b"tEXt" {
+            strict_metadata_cases.push(fixtures::file(&c));
+        } else {
+            cases.push(fixtures::file(&c));
+        }
     }
     let mut c = base.clone();
     c.iter_mut()
@@ -444,7 +449,7 @@ fn recovery_never_accepts_bad_core_png_or_bypasses_limits() {
     cases.push(fixtures::file(&c));
     let mut c = base.clone();
     c.insert(2, Chunk::new(*b"gAMA", vec![0; 4]));
-    cases.push(fixtures::file(&c));
+    strict_metadata_cases.push(fixtures::file(&c));
     let mut c = base.clone();
     let end = c.len() - 1;
     c.insert(end, Chunk::new(*b"IDAT", Vec::new()));
@@ -455,10 +460,23 @@ fn recovery_never_accepts_bad_core_png_or_bypasses_limits() {
     let mut trailing = fixtures::file(&base);
     trailing.extend(b"tail");
     cases.push(trailing);
-    for wire in cases {
-        assert!(decode_with_options(&wire, &recovery()).is_err());
-        assert!(decode_reader(Fragments(&wire, 1), &recovery()).is_err());
-        let mut decoder = StreamDecoder::new(recovery());
+    // Animation recovery must also respect explicitly strict metadata checks.
+    for (wire, metadata_policy) in cases
+        .into_iter()
+        .map(|wire| (wire, MetadataPolicy::Recover))
+        .chain(
+            strict_metadata_cases
+                .into_iter()
+                .map(|wire| (wire, MetadataPolicy::Strict)),
+        )
+    {
+        let options = DecodeOptions {
+            metadata_policy,
+            ..recovery()
+        };
+        assert!(decode_with_options(&wire, &options).is_err());
+        assert!(decode_reader(Fragments(&wire, 1), &options).is_err());
+        let mut decoder = StreamDecoder::new(options);
         let mut offset = 0;
         loop {
             match decoder.process(&wire[offset..]) {

@@ -13,7 +13,7 @@ pub mod zlib;
 
 pub use codec::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, DecodeOptions, EncodeOptions, Filter, Limits,
-    PalettePolicy, Png, Transparency, decode, decode_with_options, encode,
+    MetadataPolicy, PalettePolicy, Png, Transparency, decode, decode_with_options, encode,
 };
 
 pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};
