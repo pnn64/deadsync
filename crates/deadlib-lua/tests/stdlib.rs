@@ -412,6 +412,30 @@ fn replacement_literals_preserve_escapes_at_output_buffer_boundaries() {
 }
 
 #[test]
+fn substitutions_skip_required_classes_across_buffer_flushes() {
+    let program = compile(
+        br#"
+        for _, length in ipairs{511,512,513,8191,8192,8193} do
+            local prefix = string.rep('\255', length)
+            local subject = prefix .. '42' .. prefix
+            local replaced, hits = string.gsub(subject, '[0-9]+', 'x')
+            assert(hits == 1 and replaced == prefix .. 'x' .. prefix)
+            local untouched, misses = string.gsub(prefix, '%d[', 'x')
+            assert(misses == 0 and untouched == prefix)
+            local ok, message = pcall(string.gsub, subject, '%d[', 'x')
+            assert(not ok and message:find("missing ']'", 1, true))
+        end
+        return true
+    "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[test]
 fn formatted_strings_and_platform_integer_width() {
     for source in [
         "return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)",

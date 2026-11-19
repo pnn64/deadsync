@@ -97,6 +97,21 @@ pub(crate) struct Pattern {
     pub anchored: bool,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum LeadingByte<'a> {
+    Literal(u8),
+    Class(&'a [u64; 4]),
+}
+
+impl LeadingByte<'_> {
+    pub(crate) fn find_in(self, bytes: &[u8]) -> Option<usize> {
+        match self {
+            Self::Literal(byte) => find_byte(bytes, byte),
+            Self::Class(set) => bytes.iter().position(|&byte| set_has(set, byte)),
+        }
+    }
+}
+
 impl Pattern {
     pub fn heap_bytes(&self) -> usize {
         self.code.capacity() * std::mem::size_of::<Instruction>()
@@ -545,18 +560,18 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
-    fn required_first(&self) -> Option<Instruction> {
-        self.code
-            .first()
-            .copied()
-            .filter(|i| matches!(i.repeat, Repeat::One | Repeat::Plus))
-    }
-    /// A byte every match must start with. Attempts elsewhere fail on the
+    /// The mandatory literal or class at the start of a match. Other bytes fail the
     /// first instruction without reaching any later instruction or error.
-    pub fn first_byte(&self) -> Option<u8> {
-        self.required_first()
-            .filter(|i| i.kind == Kind::Byte)
-            .map(|i| i.arg as u8)
+    pub(crate) fn leading_byte(&self) -> Option<LeadingByte<'_>> {
+        let first = self.code.first()?;
+        if !matches!(first.repeat, Repeat::One | Repeat::Plus) {
+            return None;
+        }
+        match first.kind {
+            Kind::Byte => Some(LeadingByte::Literal(first.arg as u8)),
+            Kind::Set => Some(LeadingByte::Class(&self.sets[first.arg as usize])),
+            _ => None,
+        }
     }
     pub fn find(
         &self,
@@ -564,29 +579,15 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        let first = self.required_first().filter(|_| !self.anchored);
+        let first = self.leading_byte().filter(|_| !self.anchored);
         let mut pos = start;
         while pos <= source.len() {
-            let offset = match first {
-                Some(Instruction {
-                    kind: Kind::Byte,
-                    arg,
-                    ..
-                }) => find_byte(&source[pos..], arg as u8),
-                Some(Instruction {
-                    kind: Kind::Set,
-                    arg,
-                    ..
-                }) => {
-                    let set = &self.sets[arg as usize];
-                    source[pos..].iter().position(|&byte| set_has(set, byte))
-                }
-                _ => Some(0),
-            };
-            let Some(offset) = offset else {
-                return Ok(None);
-            };
-            pos += offset;
+            if let Some(first) = first {
+                let Some(offset) = first.find_in(&source[pos..]) else {
+                    return Ok(None);
+                };
+                pos += offset;
+            }
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
             }

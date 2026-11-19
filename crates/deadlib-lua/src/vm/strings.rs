@@ -1107,14 +1107,14 @@ impl Vm {
         if compiled.anchored {
             return Ok(Scan::Single);
         }
-        let first = compiled.first_byte();
+        let first = compiled.leading_byte();
         let text = &self.strings.bytes[slot_index(source.0)];
         let before = self.pattern_work.heap_bytes();
         let limit = (cursor + room).min(text.len());
         let mut at = cursor;
         let result = loop {
-            if let Some(byte) = first {
-                at += find_byte(&text[at..limit], byte).unwrap_or(limit - at);
+            if let Some(first) = first {
+                at += first.find_in(&text[at..limit]).unwrap_or(limit - at);
             }
             if at == limit && (at < text.len() || first.is_some()) {
                 break Ok(None);
