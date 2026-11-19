@@ -235,53 +235,16 @@ impl Spec {
         } else if self.conversion == b'f' {
             let mut text = Text::format(format_args!("{value:.precision$}"));
             if precision == 0 && self.alternate {
-                text.push('.');
+                text.push(b'.');
             }
             text
         } else {
-            let general = matches!(self.conversion, b'g' | b'G');
-            let digits = if general {
-                precision.max(1)
-            } else {
-                precision + 1
-            };
-            let scientific = Text::format(format_args!("{value:.p$e}", p = digits - 1));
-            let (mantissa, exponent) = scientific
-                .split_once('e')
-                .expect("scientific format includes exponent");
-            let exponent: i32 = exponent.parse().expect("formatted exponent is an integer");
-            if !general || exponent < -4 || exponent >= digits as i32 {
-                let mut mantissa = if general && !self.alternate {
-                    Text::copy(mantissa.trim_end_matches('0').trim_end_matches('.'))
-                } else {
-                    Text::copy(mantissa)
-                };
-                if self.alternate && !mantissa.contains('.') {
-                    mantissa.push('.');
-                }
-                Text::format(format_args!(
-                    "{mantissa}e{}{e:02}",
-                    if exponent < 0 { '-' } else { '+' },
-                    e = exponent.unsigned_abs()
-                ))
-            } else {
-                let p = (digits as i32 - 1 - exponent).max(0) as usize;
-                let fixed = Text::format(format_args!("{value:.p$}"));
-                if !self.alternate && fixed.contains('.') {
-                    Text::copy(fixed.trim_end_matches('0').trim_end_matches('.'))
-                } else if self.alternate && !fixed.contains('.') {
-                    let mut fixed = fixed;
-                    fixed.push('.');
-                    fixed
-                } else {
-                    fixed
-                }
-            }
+            self.scientific(value, precision)
         };
         if upper {
             body.make_ascii_uppercase();
         }
-        let mut bytes = buffer(memory, body.len() + 1)?;
+        let mut bytes = buffer(memory, body.len + 1)?;
         if negative {
             bytes.push(b'-');
         } else if self.plus {
@@ -297,7 +260,98 @@ impl Spec {
         result?;
         self.pad(bytes, prefix, self.zero && value.is_finite(), memory)
     }
+
+    fn scientific(&self, value: f64, precision: usize) -> Text {
+        let general = matches!(self.conversion, b'g' | b'G');
+        let digits = if general {
+            precision.max(1)
+        } else {
+            precision + 1
+        };
+        let mut text = Text::format(format_args!("{value:.p$e}", p = digits - 1));
+        let marker = text
+            .as_bytes()
+            .iter()
+            .rposition(|&byte| byte == b'e')
+            .expect("scientific format includes exponent");
+        let (sign, exponent) = match &text.as_bytes()[marker + 1..] {
+            [sign @ (b'-' | b'+'), exponent @ ..] => (*sign, exponent),
+            exponent => (b'+', exponent),
+        };
+        if general {
+            let magnitude = exponent
+                .iter()
+                .fold(0, |n, &byte| n * 10 + i32::from(byte - b'0'));
+            let exponent = if sign == b'-' { -magnitude } else { magnitude };
+            if (-4..digits as i32).contains(&exponent) {
+                let p = (digits as i32 - 1 - exponent) as usize;
+                let mut fixed = Text::format(format_args!("{value:.p$}"));
+                if p == 0 && self.alternate {
+                    fixed.push(b'.');
+                } else if p != 0 && !self.alternate {
+                    fixed.len = trimmed_fraction(fixed.as_bytes());
+                }
+                return fixed;
+            }
+        }
+
+        // Keep the rounded mantissa and exponent digits in the original buffer.
+        let exponent_len = exponent.len();
+        let mantissa_len = if general && !self.alternate {
+            trimmed_fraction(&text.bytes[..marker])
+        } else {
+            marker
+        };
+        let point = self.alternate && digits == 1;
+        let suffix = mantissa_len + usize::from(point);
+        let leading_zero = exponent_len == 1;
+        let exponent_start = suffix + 2 + usize::from(leading_zero);
+        text.bytes
+            .copy_within(text.len - exponent_len..text.len, exponent_start);
+        if point {
+            text.bytes[mantissa_len] = b'.';
+        }
+        text.bytes[suffix..suffix + 2].copy_from_slice(&[b'e', sign]);
+        if leading_zero {
+            text.bytes[suffix + 2] = b'0';
+        }
+        text.len = exponent_start + exponent_len;
+        text
+    }
 }
+
+fn trimmed_fraction(bytes: &[u8]) -> usize {
+    let end = bytes
+        .iter()
+        .rposition(|&byte| byte != b'0')
+        .map_or(0, |i| i + 1);
+    end - usize::from(bytes[..end].last() == Some(&b'.'))
+}
+
+#[cfg(test)]
+#[test]
+fn scientific_suffix_preserves_rounded_digits_and_exponent_width() {
+    for (conversion, alternate, precision, value, expected) in [
+        (b'e', true, 0, 0.0, "0.e+00"),
+        (b'e', false, 6, 0.00125, "1.250000e-03"),
+        (b'e', false, 6, f64::from_bits(1), "4.940656e-324"),
+        (b'g', false, 6, 999999.5, "1e+06"),
+        (b'g', true, 1, 1e101, "1.e+101"),
+        (b'g', false, 5, 0.0001, "0.0001"),
+        (b'g', true, 6, 100000., "100000."),
+    ] {
+        let spec = Spec {
+            conversion,
+            alternate,
+            ..Spec::default()
+        };
+        assert_eq!(
+            spec.scientific(value, precision).as_bytes(),
+            expected.as_bytes()
+        );
+    }
+}
+
 fn integer_digits<'a, const RADIX: u64>(
     mut magnitude: u64,
     alphabet: &'static [u8; 16],
@@ -437,8 +491,12 @@ impl Text {
         value.write_fmt(args).expect("bounded numeric format");
         value
     }
-    fn push(&mut self, byte: char) {
-        self.write_char(byte).expect("bounded numeric suffix");
+    fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
+    }
+    fn push(&mut self, byte: u8) {
+        self.bytes[self.len] = byte;
+        self.len += 1;
     }
     fn make_ascii_uppercase(&mut self) {
         self.bytes[..self.len].make_ascii_uppercase();
@@ -451,17 +509,6 @@ impl std::fmt::Write for Text {
         target.copy_from_slice(text.as_bytes());
         self.len = end;
         Ok(())
-    }
-}
-impl std::ops::Deref for Text {
-    type Target = str;
-    fn deref(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.len]).expect("formatted UTF-8")
-    }
-}
-impl std::fmt::Display for Text {
-    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        output.write_str(self)
     }
 }
 
