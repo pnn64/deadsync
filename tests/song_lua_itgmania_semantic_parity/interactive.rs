@@ -897,15 +897,7 @@ impl DrawChecks {
             self.samples += consumed - 1;
             self.batched_samples += consumed - 1;
 
-            let image_uv_scale: [f32; 2] = std::array::from_fn(|axis| {
-                let (image, backing) = if axis == 0 {
-                    ("image_width", "texture_width")
-                } else {
-                    ("image_height", "texture_height")
-                };
-                let image = sample["state"][image].as_f64().unwrap_or(1.0);
-                sample["state"][backing].as_f64().unwrap_or(image) as f32 / image as f32
-            });
+            let coordinates = NativeDrawCoordinates::from_state(&sample["state"]);
             let expected_texture = sample["state"]["texture"].as_str().unwrap_or("");
             let expected_texture = expected_texture.strip_prefix("song:/").map(|p| {
                 deadsync_assets::textures::canonical_texture_key(simfile.parent().unwrap().join(p))
@@ -947,8 +939,7 @@ impl DrawChecks {
                 continue;
             }
             self.vertices += rows.len();
-            let depth_range = native_depth_range(&sample["state"]);
-            let matches = |actual: &[f32;10], row: &Value| row_matches(actual, row, image_uv_scale, expected_texture.is_none(), depth_range);
+            let matches = |actual: &[f32;10], row: &Value| coordinates.row_matches(actual, row);
             let primitive = sample["primitive"].as_str().unwrap_or("");
             let geometry_ok = native_draw_geometry_matches(primitive, &rows, &reference, matches);
             if !geometry_ok {
@@ -1149,6 +1140,38 @@ pub(crate) fn native_depth_range(state: &Value) -> [f32; 2] {
     [far - near, far + near - 1.0]
 }
 
+struct NativeDrawCoordinates {
+    image_uv_scale: [f32; 2],
+    untextured: bool,
+    depth_range: [f32; 2],
+}
+
+impl NativeDrawCoordinates {
+    fn from_state(state: &Value) -> Self {
+        let image_uv_scale = std::array::from_fn(|axis| {
+            let (image, backing) = if axis == 0 {
+                ("image_width", "texture_width")
+            } else {
+                ("image_height", "texture_height")
+            };
+            let image = state[image].as_f64().unwrap_or(1.0);
+            state[backing].as_f64().unwrap_or(image) as f32 / image as f32
+        });
+        Self {
+            image_uv_scale,
+            // The native hook adds a string whenever a Sprite/AMV has a
+            // texture resource, including generated AFTs and an empty ID.
+            // Resolving that ID to a song file is a separate resource check.
+            untextured: !state["texture"].is_string(),
+            depth_range: native_depth_range(state),
+        }
+    }
+
+    fn row_matches(&self, actual: &[f32; 10], row: &Value) -> bool {
+        row_matches(actual, row, self.image_uv_scale, self.untextured, self.depth_range)
+    }
+}
+
 pub(crate) fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2], untextured: bool, depth_range: [f32;2]) -> bool {
     actual.iter().enumerate().all(|(axis,&actual)| {
         if untextured && (4..6).contains(&axis) { return true; }
@@ -1157,6 +1180,41 @@ pub(crate) fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2
         if (4..6).contains(&axis) { expected *= image_uv_scale[axis-4]; }
         close(actual, expected)
     })
+}
+
+#[test]
+fn native_draw_coordinates_compare_uvs_for_every_bound_resource() {
+    // Native AFT dimensions use padded backing storage. The logical midpoint
+    // is (427/1024, 240/512) in the submitted native texture coordinates.
+    let row = json!([0, 0, 0, -0.5, 0.25, 0.2, 1, 0.4169921875, 0.46875, 1, 0.5, 0.25, 0.75]);
+    let actual = [-0.5, 0.25, 0.2, 1.0, 0.5, 0.5, 1.0, 0.5, 0.25, 0.75];
+    for texture in ["ActorFrameTexture 1", "theme:/Graphics/pixel.png", "native:/pixel.png", "song:/sky.png", ""] {
+        let state = json!({"texture":texture, "image_width":854, "texture_width":1024,
+            "image_height":480, "texture_height":512, "z_test":0, "z_write":false});
+        let coordinates = NativeDrawCoordinates::from_state(&state);
+        assert!(coordinates.row_matches(&actual, &row), "normalized UVs for {texture:?}");
+        for axis in [4, 5] {
+            let mut changed = actual;
+            changed[axis] += 0.03125;
+            assert!(!coordinates.row_matches(&changed, &row),
+                "bound resource {texture:?} must compare UV axis {axis}");
+        }
+    }
+}
+
+#[test]
+fn native_draw_coordinates_without_resource_ignore_only_uv_axes() {
+    // A missing texture field is how the native hook records no resource.
+    let row = json!([0, 0, 0, -0.5, 0.25, 0.2, 1, 0, 0, 1, 0.5, 0.25, 0.75]);
+    let actual = [-0.5, 0.25, 0.2, 1.0, 5.0, -3.0, 1.0, 0.5, 0.25, 0.75];
+    let coordinates = NativeDrawCoordinates::from_state(&json!({"z_test":0, "z_write":false}));
+    assert!(coordinates.row_matches(&actual, &row));
+    for axis in [0, 1, 2, 3, 6, 7, 8, 9] {
+        let mut changed = actual;
+        changed[axis] += 0.03125;
+        assert!(!coordinates.row_matches(&changed, &row),
+            "untextured draw must still compare position/color axis {axis}");
+    }
 }
 
 #[test]
