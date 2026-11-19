@@ -10863,6 +10863,8 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     && state.rot_z_deg.abs() > f32::EPSILON;
                 let native_mesh = state.quaternion != crate::actor_quaternion::IDENTITY
                     || state.z != 0.0
+                    || state.depth_test
+                    || state.depth_write
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor

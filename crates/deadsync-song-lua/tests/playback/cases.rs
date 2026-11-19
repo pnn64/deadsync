@@ -12077,6 +12077,101 @@ fn song_lua_overlay_applies_extra_blend_modes_at_runtime() {
 }
 
 #[test]
+fn lua_flat_sprites_and_quads_preserve_independent_depth_flags() {
+    use deadlib_render_core::DrawOp;
+    crate::tests::init_paths();
+    let directory = tempfile::tempdir().unwrap();
+    let image = image::RgbaImage::from_pixel(40, 30, image::Rgba([255; 4]));
+    image.save(directory.path().join("depth.png")).unwrap();
+    // Native Actor::ztest and ::zwrite are independent. Both are renderer state,
+    // including at Z=0, with no perspective camera or generic MaskSource/Dest.
+    let cases = [
+        ("default", "", false, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("test", "self:ztest(true)", true, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("write", "self:zwrite(true)", false, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("both", "self:zbuffer(true)", true, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_test", "self:zbuffer(true):ztest(false)", false, true, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_write", "self:zbuffer(true):zwrite(false)", true, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("disable_both", "self:zbuffer(true):ztest(false):zwrite(false)", false, false, false, SongLuaOverlayBlendMode::Alpha),
+        ("on_fail", "self:ztestmode('ZTestMode_WriteOnFail')", true, false, true, SongLuaOverlayBlendMode::Alpha),
+        ("mask_write", "self:blend('BlendMode_NoEffect'):zwrite(true)", false, true, false, SongLuaOverlayBlendMode::NoEffect),
+    ];
+    let mut source = String::from("return Def.ActorFrame {\n");
+    for kind in ["Sprite", "Quad"] {
+        for (label, command, ..) in cases {
+            let texture = if kind == "Sprite" { "Texture='depth.png'," } else { "" };
+            source.push_str(&format!(
+                "Def.{kind} {{ Name='{kind}_{label}', {texture} InitCommand=function(self) self:xy(320,240):zoomto(40,30); {command} end }},\n"
+            ));
+        }
+    }
+    source.push_str("}\n");
+    let entry = directory.path().join("default.lua");
+    std::fs::write(&entry, source).unwrap();
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(directory.path(), "Flat depth");
+    context.music_length_seconds = 0.1;
+    context.song_timing_bpms = vec![(0.0, 120.0)];
+    let compiled = compile_song_lua(&entry, &context).expect("real Lua depth commands compile");
+    let mut assets = AssetManager::new();
+    assets.queue_texture_upload(
+        white_texture_key().to_string(),
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([255; 4])),
+    );
+    for overlay in &compiled.overlays {
+        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlay.kind {
+            assets.queue_texture_upload(texture_key.to_string(), image.clone());
+        }
+    }
+    let metrics = deadlib_present::space::Metrics::centered(640.0, 480.0);
+    deadlib_present::space::set_current_metrics(metrics);
+    for kind in ["Sprite", "Quad"] {
+        for (label, _, test, write, on_fail, blend) in cases {
+            let name = format!("{kind}_{label}");
+            let overlay = compiled.overlays.iter()
+                .find(|actor| actor.name.as_deref() == Some(name.as_str()))
+                .expect("authored depth actor");
+            let state = overlay.initial_state;
+            assert_eq!((state.depth_test, state.depth_write, state.depth_test_on_fail),
+                (test, write, on_fail), "Lua flags: {name}");
+            assert_eq!(state.z, 0.0, "{name}");
+            assert!(!state.mask_source && !state.mask_dest, "{name}");
+            for cached in [false, true] {
+                let mut scratch = SongLuaProjectedMeshScratch::default();
+                let actors = build_song_lua_overlay_actor_with_scratch(
+                    overlay, state, None, &assets, 0, 640.0, 480.0,
+                    0.0, 0.0, 0.0, None, cached.then_some(&mut scratch),
+                ).expect("flat depth actor renders");
+                let frame = deadlib_present::compose::build_screen_with_texture_context(
+                    &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+                    assets.texture_context(),
+                );
+                assert_eq!(frame.ops.len(), 1, "{name}, cached={cached}");
+                match &frame.ops[0] {
+                    DrawOp::TexturedMesh(run) => {
+                        assert!(test || write, "ordinary flat drawing stays depth-disabled: {name}");
+                        assert_eq!((run.depth_test, run.depth_write, run.depth_test_on_fail),
+                            (test, write, on_fail), "composed flags: {name}, cached={cached}");
+                        assert_eq!(run.blend, song_lua_overlay_blend(blend), "{name}");
+                        assert_eq!(run.instance_count, 1, "{name}");
+                        let vertices = &frame.tmesh_geometries[run.geometry as usize].vertices;
+                        assert_eq!(vertices.len(), 6, "{name}");
+                        assert!(vertices.iter().all(|v| v.pos.iter().all(|p| p.is_finite())), "{name}");
+                    }
+                    DrawOp::Sprite(run) => {
+                        assert!(!test && !write, "flat path lost depth state: {name}, cached={cached}");
+                        assert_eq!(run.blend, song_lua_overlay_blend(blend), "{name}");
+                        assert_eq!(run.instance_count, 1, "{name}");
+                        let instance = &frame.sprite_instances[run.instance_start as usize];
+                        assert_eq!(instance.size, [40.0, 30.0], "{name}");
+                    }
+                    other => panic!("unexpected flat draw for {name}: {other:?}"),
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn song_lua_sprite_retains_tiny_diffuse_before_color_quantization() {
     use deadlib_render_core::DrawOp;
     let key = "song-lua-tiny-alpha.png";
