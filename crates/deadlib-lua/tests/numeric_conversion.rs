@@ -246,6 +246,12 @@ fn runtime_conversion_keeps_exact_rounding_without_allocating() {
             },
         );
     }
+    for padding in [0, 11, 27, 28, 29, 59, 60, 61, 4096] {
+        check(
+            &format!("\t-42{}\0invalid\0suffix", " ".repeat(padding)),
+            Some((-42.0f64).to_bits()),
+        );
+    }
     let mut state = 0x8abc_de01_2345_6789u64;
     for i in 0..400 {
         state = state.wrapping_mul(6364136223846793005).wrapping_add(1);

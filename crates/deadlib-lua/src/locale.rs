@@ -329,7 +329,12 @@ fn terminated(bytes: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    let nul = if bytes.len() < 32 {
+        bytes.iter().position(|&byte| byte == 0)
+    } else {
+        crate::pattern::find_byte(bytes, 0)
+    };
+    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
     let start = bytes
         .iter()
         .position(|&b| !is_space(b))
