@@ -410,13 +410,15 @@ fn parse_song_source(
             parsed_notes,
         },
     );
-    update_precise_song_bounds(&mut song, 0.0);
+    update_precise_song_bounds(&mut song);
     if let Some([first, last]) = additional_bounds {
-        song.first_second = if song.precise_note_last_second_seconds.is_some() {
-            song.first_second.min(first)
-        } else { first };
+        let first = song.precise_note_first_second_seconds.map_or(first, |value| value.min(first));
         let last = song.precise_note_last_second_seconds.map_or(last, |value| value.max(last));
+        song.precise_note_first_second_seconds = Some(first);
         song.precise_note_last_second_seconds = Some(last);
+        // Merge raw endpoints before Song's first>=last fallback. A playable
+        // singleton's finalized zero must not replace its real first note.
+        song.first_second = if first < last.max(song.last_second_hint) { first } else { 0.0 };
         song.precise_last_second_seconds = song.precise_last_second_seconds.max(last);
         song.total_length_seconds = song.total_length_seconds.max(last as i32);
     }
@@ -752,6 +754,7 @@ fn build_song_data(mut summary: SimfileSummary, input: SongBuildInput<'_>) -> Se
         first_second: 0.0,
         total_length_seconds: summary.total_length.max(last_second_hint as i32),
         precise_last_second_seconds: (summary.total_length.max(0) as f32).max(last_second_hint),
+        precise_note_first_second_seconds: None,
         precise_note_last_second_seconds: Some(summary.total_length.max(0) as f32),
         last_second_hint,
         charts,
@@ -1512,6 +1515,59 @@ mod tests {
             assert_eq!(song.first_second, 0.0);
             assert_eq!(song.precise_note_last_second_seconds, Some(8.25));
             assert_eq!(song.precise_last_second_seconds, 8.25);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parsed_song_bounds_preserve_raw_first_before_fallback() {
+        let root = test_dir("raw-first-note-bounds");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (name, notes, first, last) in [
+            ("real-zero", "1000\n,\n0100\n", Some(0.0), Some(4.0)),
+            ("singleton", "0000\n,\n1000\n", Some(4.0), Some(4.0)),
+            ("row-zero-only", "1000\n", None, None),
+            ("empty", "0000\n,\n0000\n", None, None),
+        ] {
+            let path = root.join(format!("{name}.sm"));
+            let source = format!("#TITLE:Raw first note;#BPMS:0=60;#OFFSET:0;\n\
+                #NOTES:dance-single::Challenge:1:0,0,0,0,0:\n{notes};");
+            fs::write(&path, &source).unwrap();
+            for song in [
+                parse_song_data_file(&path, &options, -0.125, |_| 20.0).unwrap(),
+                parse_song_data_file(&path, &options, 0.25, |_| 20.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "sm", &path, &options, |_| 20.0).unwrap(),
+            ] {
+                assert_eq!(song.first_second, 0.0, "{name}");
+                assert_eq!(song.precise_note_first_second_seconds, first, "{name}");
+                assert_eq!(song.precise_note_last_second_seconds, last, "{name}");
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn unplayed_chart_bounds_merge_before_the_first_second_fallback() {
+        let root = test_dir("raw-first-unplayed-merge");
+        let path = root.join("bounds.ssc");
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        for (playable_notes, first, finalized_first) in [
+            ("0000\n,\n0000\n,\n1000\n", 8.0, 8.0),
+            ("0000\n,\n0000\n", 12.0, 0.0),
+        ] {
+            let source = format!("#VERSION:0.83;#TITLE:Raw unplayed bounds;#BPMS:0=60;\n\
+                #NOTEDATA:;#STEPSTYPE:dance-single;#DIFFICULTY:Challenge;#METER:1;#NOTES:\n{playable_notes};\n\
+                #NOTEDATA:;#STEPSTYPE:dance-solo;#DIFFICULTY:Medium;#METER:1;#NOTES:\n000000\n,\n000000\n,\n000000\n,\n100000\n;");
+            fs::write(&path, &source).unwrap();
+            for song in [
+                parse_song_data_file(&path, &options, 0.125, |_| 20.0).unwrap(),
+                parse_song_bytes(source.as_bytes(), "ssc", &path, &options, |_| 20.0).unwrap(),
+            ] {
+                assert_eq!(song.charts.len(), 1);
+                assert_eq!(song.precise_note_first_second_seconds, Some(first));
+                assert_eq!(song.precise_note_last_second_seconds, Some(12.0));
+                assert_eq!(song.first_second, finalized_first);
+            }
         }
         fs::remove_dir_all(root).unwrap();
     }
