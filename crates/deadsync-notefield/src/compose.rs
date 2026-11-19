@@ -782,6 +782,7 @@ fn prepare_field<S>(
         shared_sides: request.geometry.shared_sides,
         center_one_player: request.geometry.center_one_player,
         screen_width: request.geometry.screen_width,
+        screen_height: request.geometry.screen_height,
         screen_center_x: request.geometry.screen_center_x,
         screen_center_y: request.geometry.screen_center_y,
         num_cols,

@@ -1,3 +1,4 @@
+use crate::ui_layout::UILayoutType;
 use deadlib_present::space::Metrics;
 use deadsync_profile::PlayerSide;
 use glam::Mat4;
@@ -18,7 +19,7 @@ pub struct StepStatsPaneParams {
     pub player_side: PlayerSide,
     pub num_players: usize,
     pub notefield_width: Option<f32>,
-    pub wide: bool,
+    pub layout_type: UILayoutType,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -27,7 +28,7 @@ pub struct StepStatsPaneLayout {
     pub sidepane_center_y: f32,
     pub sidepane_width: f32,
     pub note_field_is_centered: bool,
-    pub is_ultrawide: bool,
+    pub layout_type: UILayoutType,
     pub banner_data_zoom: f32,
 }
 
@@ -232,7 +233,7 @@ pub fn live_timing_placement(
 #[must_use]
 pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
     let sh = params.screen_h.max(1.0);
-    let is_ultrawide = params.screen_w / sh > 21.0 / 9.0;
+    let layout_type = params.layout_type;
     let note_field_is_centered = (params.playfield_center_x - params.screen_center_x).abs() < 1.0;
 
     let mut sidepane_width = params.screen_w * 0.5;
@@ -241,7 +242,7 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         PlayerSide::P2 => params.screen_w * 0.25,
     };
 
-    if !is_ultrawide && note_field_is_centered && params.wide {
+    if layout_type == UILayoutType::Wide && note_field_is_centered {
         let nf_width = params.notefield_width.unwrap_or(256.0).max(1.0);
         sidepane_width = ((params.screen_w - nf_width) * 0.5).max(1.0);
         sidepane_center_x = match params.player_side {
@@ -254,7 +255,7 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         };
     }
 
-    if is_ultrawide && params.num_players > 1 {
+    if layout_type == UILayoutType::UltraWide && params.num_players > 1 {
         sidepane_width = params.screen_w * 0.2;
         sidepane_center_x = match params.player_side {
             PlayerSide::P1 => sidepane_width * 0.5,
@@ -262,10 +263,12 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         };
     }
 
-    let banner_data_zoom = if note_field_is_centered && params.wide && !is_ultrawide {
+    let banner_data_zoom = if note_field_is_centered && layout_type == UILayoutType::Wide {
         let ar = params.screen_w / sh;
         let t = ((ar - 16.0 / 10.0) / (16.0 / 9.0 - 16.0 / 10.0)).clamp(0.0, 1.0);
         (0.925_f32 - 0.825).mul_add(t, 0.825)
+    } else if layout_type == UILayoutType::Squareish {
+        ((params.screen_w / sh) / (4.0 / 3.0)).clamp(0.75, 1.0)
     } else {
         1.0
     };
@@ -275,7 +278,7 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         sidepane_center_y: params.screen_center_y + 80.0,
         sidepane_width,
         note_field_is_centered,
-        is_ultrawide,
+        layout_type,
         banner_data_zoom,
     }
 }
@@ -309,19 +312,22 @@ pub fn pane_rect(layout: StepStatsPaneLayout, screen_h: f32) -> StepStatsPaneRec
 pub fn judgment_count_center_x(
     layout: StepStatsPaneLayout,
     player_side: PlayerSide,
-    wide: bool,
     num_players: usize,
 ) -> f32 {
     let side_sign = match player_side {
         PlayerSide::P1 => 1.0,
         PlayerSide::P2 => -1.0,
     };
-    let local_x = if layout.is_ultrawide && num_players > 1 {
+    let local_x = if layout.layout_type == UILayoutType::UltraWide && num_players > 1 {
         154.0 * side_sign
-    } else if layout.note_field_is_centered && wide {
+    } else if layout.note_field_is_centered && layout.layout_type != UILayoutType::Squareish {
         -156.0 * side_sign
     } else {
-        -(if wide { 204.0 } else { 152.0 }) * side_sign
+        -(if layout.layout_type == UILayoutType::Squareish {
+            152.0
+        } else {
+            204.0
+        }) * side_sign
     };
     layout.sidepane_center_x + local_x * layout.banner_data_zoom
 }
@@ -362,11 +368,12 @@ pub fn density_graph_rect(current_graph_w: f32, layout: StepStatsPaneLayout) -> 
 #[must_use]
 pub fn song_banner_placement(
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: PlayerSide,
     num_players: usize,
 ) -> StepStatsSpritePlacement {
-    let mut local_x = if layout.note_field_is_centered && wide {
+    let mut local_x = if layout.note_field_is_centered
+        && layout.layout_type != UILayoutType::Squareish
+    {
         72.0
     } else {
         70.0
@@ -374,7 +381,7 @@ pub fn song_banner_placement(
     if player_side == PlayerSide::P2 {
         local_x *= -1.0;
     }
-    if layout.is_ultrawide && num_players > 1 {
+    if layout.layout_type == UILayoutType::UltraWide && num_players > 1 {
         local_x *= -1.0;
     }
     StepStatsSpritePlacement {
@@ -388,7 +395,6 @@ pub fn song_banner_placement(
 pub fn song_info_slide(
     layout: StepStatsPaneLayout,
     player_side: PlayerSide,
-    wide: bool,
     num_players: usize,
     show_duration: bool,
     live_timing_rows: usize,
@@ -396,8 +402,8 @@ pub fn song_info_slide(
 ) -> StepStatsSongInfoSlide {
     let pane_left = layout.sidepane_center_x - layout.sidepane_width * 0.5;
     let pane_right = layout.sidepane_center_x + layout.sidepane_width * 0.5;
-    let time_anchor = judgment_count_center_x(layout, player_side, wide, num_players);
-    let timing_frame = scorebox_frame(layout, wide, player_side, num_players);
+    let time_anchor = judgment_count_center_x(layout, player_side, num_players);
+    let timing_frame = scorebox_frame(layout, player_side, num_players);
     let timing_half_width = crate::scorebox::SCOREBOX_W * timing_frame.zoom * 0.5;
     let left = pane_left.max(time_anchor.min(timing_frame.center_x - timing_half_width));
     let right = pane_right.min(time_anchor.max(timing_frame.center_x + timing_half_width));
@@ -493,7 +499,6 @@ pub fn holds_mines_rolls_frame(
 #[must_use]
 pub fn scorebox_frame(
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: PlayerSide,
     num_players: usize,
 ) -> StepStatsFramePlacement {
@@ -502,10 +507,10 @@ pub fn scorebox_frame(
         PlayerSide::P2 => -1.0,
     };
     let mut local_x = 70.0 * x_sign;
-    if layout.note_field_is_centered && wide {
+    if layout.note_field_is_centered && layout.layout_type != UILayoutType::Squareish {
         local_x = 2.0f32.mul_add(x_sign, local_x);
     }
-    if layout.is_ultrawide && num_players > 1 {
+    if layout.layout_type == UILayoutType::UltraWide && num_players > 1 {
         local_x = -local_x;
     }
     StepStatsFramePlacement {
@@ -702,7 +707,7 @@ mod tests {
             player_side: PlayerSide::P1,
             num_players: 1,
             notefield_width: Some(256.0),
-            wide: true,
+            layout_type: UILayoutType::Wide,
         }
     }
 
@@ -714,7 +719,7 @@ mod tests {
         assert_eq!(layout.sidepane_center_x, 1024.0);
         assert_eq!(layout.sidepane_center_y, 440.0);
         assert!(layout.note_field_is_centered);
-        assert!(!layout.is_ultrawide);
+        assert_eq!(layout.layout_type, UILayoutType::Wide);
         assert_eq!(layout.banner_data_zoom, 0.925);
     }
 
@@ -726,7 +731,7 @@ mod tests {
         params.screen_center_x = 320.0;
         params.screen_center_y = 240.0;
         params.playfield_center_x = 150.0;
-        params.wide = false;
+        params.layout_type = UILayoutType::Squareish;
         let layout = pane_layout(params);
 
         assert_eq!(layout.sidepane_width, 320.0);
@@ -745,9 +750,46 @@ mod tests {
             Metrics::centered(640.0, 480.0).projection()
         );
         assert_eq!(
-            judgment_count_center_x(layout, PlayerSide::P1, false, 1),
+            judgment_count_center_x(layout, PlayerSide::P1, 1),
             328.0
         );
+    }
+
+    #[test]
+    fn sidepane_judgment_counts_scale_with_narrow_viewports() {
+        for (screen_w, screen_h, p1_center, p2_center) in
+            [
+                (600.0, 480.0, 307.5, 292.5),
+                (480.0, 480.0, 246.0, 234.0),
+                (1200.0, 960.0, 757.5, 442.5),
+                (960.0, 960.0, 606.0, 354.0),
+            ]
+        {
+            for (side, field_x, expected) in [
+                (PlayerSide::P1, screen_w * 0.25, p1_center),
+                (PlayerSide::P2, screen_w * 0.75, p2_center),
+            ] {
+                let layout = pane_layout(StepStatsPaneParams {
+                    screen_w,
+                    screen_h,
+                    screen_center_x: screen_w * 0.5,
+                    screen_center_y: screen_h * 0.5,
+                    playfield_center_x: field_x,
+                    player_side: side,
+                    num_players: 1,
+                    notefield_width: Some(256.0),
+                    layout_type: UILayoutType::from_aspect_ratio(screen_w / screen_h),
+                });
+                let judgment_x = judgment_count_center_x(layout, side, 1);
+                assert!((judgment_x - expected).abs() < 0.001);
+                assert_eq!(
+                    layout.banner_data_zoom,
+                    (screen_w / screen_h / (4.0 / 3.0)).clamp(0.75, 1.0)
+                );
+                assert!(judgment_x >= layout.sidepane_center_x - layout.sidepane_width * 0.5);
+                assert!(judgment_x <= layout.sidepane_center_x + layout.sidepane_width * 0.5);
+            }
+        }
     }
 
     #[test]
@@ -761,13 +803,13 @@ mod tests {
             player_side: PlayerSide::P2,
             num_players: 2,
             notefield_width: Some(256.0),
-            wide: true,
+            layout_type: UILayoutType::UltraWide,
         });
 
         assert_eq!(layout.sidepane_width, 512.0);
         assert_eq!(layout.sidepane_center_x, 2304.0);
         assert_eq!(layout.sidepane_center_y, 620.0);
-        assert!(layout.is_ultrawide);
+        assert_eq!(layout.layout_type, UILayoutType::UltraWide);
         assert_eq!(layout.banner_data_zoom, 1.0);
     }
 
@@ -797,7 +839,7 @@ mod tests {
             sidepane_center_y: 200.0,
             sidepane_width: 80.0,
             note_field_is_centered: false,
-            is_ultrawide: false,
+            layout_type: UILayoutType::Squareish,
             banner_data_zoom: 1.0,
         };
 
@@ -818,12 +860,12 @@ mod tests {
             sidepane_center_y: 300.0,
             sidepane_width: 400.0,
             note_field_is_centered: false,
-            is_ultrawide: false,
+            layout_type: UILayoutType::Wide,
             banner_data_zoom: 2.0,
         };
 
         assert_eq!(
-            song_banner_placement(layout, true, PlayerSide::P1, 1),
+            song_banner_placement(layout, PlayerSide::P1, 1),
             StepStatsSpritePlacement {
                 x: 640.0,
                 y: -100.0,
@@ -831,7 +873,7 @@ mod tests {
             }
         );
         assert_eq!(
-            song_banner_placement(layout, true, PlayerSide::P2, 1),
+            song_banner_placement(layout, PlayerSide::P2, 1),
             StepStatsSpritePlacement {
                 x: 360.0,
                 y: -100.0,
@@ -847,10 +889,10 @@ mod tests {
             sidepane_center_y: 300.0,
             sidepane_width: 320.0,
             note_field_is_centered: false,
-            is_ultrawide: false,
+            layout_type: UILayoutType::Squareish,
             banner_data_zoom: 1.0,
         };
-        let slide = song_info_slide(layout, PlayerSide::P1, false, 1, true, 3, 355.0);
+        let slide = song_info_slide(layout, PlayerSide::P1, 1, true, 3, 355.0);
         let banner = pack_banner_placement(slide);
         let text = song_info_text_placement(slide, true, 0.75);
 
@@ -889,7 +931,7 @@ mod tests {
             sidepane_center_y: 300.0,
             sidepane_width: 400.0,
             note_field_is_centered: true,
-            is_ultrawide: true,
+            layout_type: UILayoutType::UltraWide,
             banner_data_zoom: 2.0,
         };
 
@@ -902,7 +944,7 @@ mod tests {
             }
         );
         assert_eq!(
-            scorebox_frame(layout, true, PlayerSide::P1, 2),
+            scorebox_frame(layout, PlayerSide::P1, 2),
             StepStatsFramePlacement {
                 center_x: 356.0,
                 center_y: 70.0,

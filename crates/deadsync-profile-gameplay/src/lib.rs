@@ -438,7 +438,7 @@ fn song_lua_compile_player_screen_x(
         deadsync_gameplay::gameplay_is_single_p2_side(play_style, player_side)
     } else { player_index == 1 };
     let offset_sign = if p2 { 1.0 } else { -1.0 };
-    deadsync_gameplay::gameplay_side_field_center_x(viewport.width(), viewport.center_x(), p2)
+    deadsync_gameplay::gameplay_side_field_center_x(viewport, viewport.center_x(), p2)
         + offset_sign * (profile.note_field_offset_x as f32).clamp(0.0, 50.0)
 }
 

@@ -4816,11 +4816,8 @@ pub fn frame_layers<'a>(
             });
         }
         ScreenLayer::Hud => {
-            let clamped_width = screen_width().clamp(640.0, 854.0);
-            let score_x_p1 = screen_center_x() - clamped_width / 4.3;
-            let score_x_p2 = screen_center_x() + clamped_width / 2.75;
-            let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
-            let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
+            let hud_x = gameplay_hud_x_positions(screen_width(), screen_center_x(), is_wide());
+            let hud_width = screen_width().min(854.0);
 
             let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
             let player_count = match play_style {
@@ -4833,17 +4830,17 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P1,
                         per_player_fields[0].1,
-                        diff_x_p1,
-                        score_x_p1,
-                        score_x_p2,
+                        hud_x.difficulty_p1,
+                        hud_x.score_p1,
+                        hud_x.score_p2,
                     );
                     players[1] = (
                         1,
                         profile_data::PlayerSide::P2,
                         per_player_fields[1].1,
-                        diff_x_p2,
-                        score_x_p2,
-                        score_x_p1,
+                        hud_x.difficulty_p2,
+                        hud_x.score_p2,
+                        hud_x.score_p1,
                     );
                     2
                 }
@@ -4852,9 +4849,9 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P2,
                         per_player_fields[0].1,
-                        diff_x_p2,
-                        score_x_p2,
-                        score_x_p1,
+                        hud_x.difficulty_p2,
+                        hud_x.score_p2,
+                        hud_x.score_p1,
                     );
                     1
                 }
@@ -4863,9 +4860,9 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P1,
                         per_player_fields[0].1,
-                        diff_x_p1,
-                        score_x_p1,
-                        score_x_p2,
+                        hud_x.difficulty_p1,
+                        hud_x.score_p1,
+                        hud_x.score_p2,
                     );
                     1
                 }
@@ -5154,14 +5151,14 @@ pub fn frame_layers<'a>(
                             (pos.hard_ex_x, pos.hard_ex_y)
                         } else if single_score_swapped {
                             let swapped_base = if is_p2_side {
-                                screen_center_x() - clamped_width / 4.3
+                                screen_center_x() - hud_width / 4.3
                             } else {
-                                screen_center_x() + clamped_width / 4.3
+                                screen_center_x() + hud_width / 4.3
                             };
                             (swapped_base + 115.0, score_y)
                         } else if is_p2_side {
                             // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
-                            (screen_center_x() + clamped_width / 4.3, score_y)
+                            (screen_center_x() + hud_width / 4.3, score_y)
                         } else {
                             (score_x, score_y)
                         };
@@ -5646,7 +5643,7 @@ pub fn frame_layers<'a>(
                 return;
             }
             let (value, color) = score_value_color(state, player);
-            let width = screen_width().clamp(640.0, 854.0);
+            let width = screen_width().min(854.0);
             let p2 = if play_style.is_versus() {
                 player == 1
             } else {
@@ -5788,6 +5785,34 @@ pub fn draw_field(
     )
 }
 
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct GameplayHudXPositions {
+    score_p1: f32,
+    score_p2: f32,
+    difficulty_p1: f32,
+    difficulty_p2: f32,
+}
+
+fn gameplay_hud_x_positions(
+    screen_w: f32,
+    screen_center_x: f32,
+    wide: bool,
+) -> GameplayHudXPositions {
+    let hud_width = screen_w.min(854.0);
+    let reference_width = if wide { 854.0 } else { 640.0 };
+    let difficulty_offset = (if wide { 342.5 } else { 292.5 })
+        * (hud_width / reference_width).clamp(0.0, 1.0);
+    let difficulty_half_width = (DIFFICULTY_METER_SIZE * 0.5).min(screen_w * 0.5);
+    GameplayHudXPositions {
+        score_p1: screen_center_x - hud_width / 4.3,
+        score_p2: screen_center_x + hud_width / 2.75,
+        difficulty_p1: (screen_center_x - difficulty_offset)
+            .clamp(difficulty_half_width, screen_w - difficulty_half_width),
+        difficulty_p2: (screen_center_x + difficulty_offset)
+            .clamp(difficulty_half_width, screen_w - difficulty_half_width),
+    }
+}
 
 // ─── SMX sensor display ────────────────────────────────────────────────────────
 
@@ -6256,6 +6281,37 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gameplay_hud_anchors_scale_to_narrow_viewports() {
+        let four_three = super::gameplay_hud_x_positions(640.0, 320.0, false);
+        assert_eq!(four_three.difficulty_p1, 27.5);
+        assert_eq!(four_three.difficulty_p2, 612.5);
+
+        for (preset_width, preset_height) in [
+            (640.0, 480.0),
+            (800.0, 600.0),
+            (1024.0, 768.0),
+            (1280.0, 1024.0),
+            (1280.0, 720.0),
+            (640.0, 640.0),
+            (1280.0, 800.0),
+            (1280.0, 540.0),
+            (1720.0, 720.0),
+            (540.0, 960.0),
+        ] {
+            let aspect = preset_width / preset_height;
+            let width = 480.0 * aspect;
+            let wide = aspect >= 1.6;
+            let anchors = super::gameplay_hud_x_positions(width, width * 0.5, wide);
+            assert!(anchors.score_p1 > 0.0 && anchors.score_p1 < width);
+            assert!(anchors.score_p2 > 0.0 && anchors.score_p2 < width);
+            assert!(anchors.difficulty_p1 >= super::DIFFICULTY_METER_SIZE * 0.5);
+            assert!(
+                anchors.difficulty_p2 <= width - super::DIFFICULTY_METER_SIZE * 0.5
+            );
+        }
+    }
+
     #[test]
     fn autoplay_off_failure_preserves_life_and_player_identity() {
         let mut players = std::array::from_fn::<_, 2, _>(|_| deadsync_gameplay::init_player_runtime());

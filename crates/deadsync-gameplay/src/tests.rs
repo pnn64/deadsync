@@ -1540,16 +1540,18 @@ mod tests {
 
     #[test]
     fn gameplay_side_field_centers_match_native_margins_and_translated_origins() {
-        // SafeFArg truncates toward zero, including the negative outer margins
-        // below 640px; it truncates the combined middle before splitting it.
-        for (width, expected) in [
-            (500.0, [90.0, 410.0]),
-            (501.0, [90.75, 410.25]),
-            (640.0, [160.0, 480.0]),
-            (642.0, [160.25, 481.75]),
-            (852.0, [213.0, 639.0]),
-            (854.0, [213.25, 640.75]),
-            (1280.0, [426.25, 853.75]),
+        // Below 4:3, side fields use symmetric quarter-screen placement.
+        // At and above 4:3, preserve native margin placement.
+        for (width, height, expected) in [
+            (480.0, 480.0, [120.0, 360.0]),
+            (960.0, 960.0, [240.0, 720.0]),
+            (600.0, 480.0, [150.0, 450.0]),
+            (1200.0, 960.0, [300.0, 900.0]),
+            (640.0, 480.0, [160.0, 480.0]),
+            (642.0, 480.0, [160.25, 481.75]),
+            (852.0, 480.0, [213.0, 639.0]),
+            (854.0, 480.0, [213.25, 640.75]),
+            (1280.0, 480.0, [426.25, 853.75]),
         ] {
             for origin in [0.0, 23.75, -250.125] {
                 for (player, x) in expected.into_iter().enumerate() {
@@ -1560,8 +1562,12 @@ mod tests {
                 }
             }
             let defaults = build_song_lua_player_actor_defaults_like(
-                2, GameplayViewport::new(width, 480.0), SongLuaCompilePlayStyle::Versus,
-                false, [0.0; MAX_PLAYERS], false,
+                2,
+                GameplayViewport::new(width, height),
+                SongLuaCompilePlayStyle::Versus,
+                false,
+                [0.0; MAX_PLAYERS],
+                false,
             );
             assert_eq!(defaults.map(|player| player.x), expected);
         }

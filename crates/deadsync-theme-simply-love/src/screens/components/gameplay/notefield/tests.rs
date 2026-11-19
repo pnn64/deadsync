@@ -8,12 +8,53 @@ use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{ActorResourceArena, SpriteSource};
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
+use deadsync_gameplay::{
+    ActiveHold, GameplayViewport, hold_explosion_active, hold_head_render_flags,
+};
 use deadsync_notefield::{error_bar_boundaries_s, offset_center};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 use std::sync::Arc;
+
+#[test]
+fn viewport_field_zoom_fits_fields_across_aspect_presets() {
+    for (preset_width, preset_height, expected_zoom) in [
+        (640.0, 480.0, 1.0),
+        (800.0, 600.0, 1.0),
+        (1024.0, 768.0, 1.0),
+        (1280.0, 1024.0, 0.9375),
+        (1280.0, 720.0, 1.0),
+        (640.0, 640.0, 0.75),
+        (1280.0, 800.0, 1.0),
+        (1280.0, 540.0, 1.0),
+        (1720.0, 720.0, 1.0),
+        (540.0, 960.0, 0.5),
+    ] {
+        let aspect_ratio = preset_width / preset_height;
+        let screen_height = 480.0;
+        let screen_width = screen_height * aspect_ratio;
+        let viewport = GameplayViewport::new(screen_width, screen_height);
+        let zoom = super::viewport_field_zoom_for_aspect(aspect_ratio);
+        assert_eq!(zoom, expected_zoom, "{aspect_ratio}: zoom");
+        assert!(512.0 * zoom <= screen_width, "{aspect_ratio}: double field");
+        let half_field_width = 128.0 * zoom;
+        for p2 in [false, true] {
+            let center_x =
+                deadsync_gameplay::gameplay_side_field_center_x(viewport, viewport.center_x(), p2);
+            let (left, right) = if p2 {
+                (screen_width * 0.5, screen_width)
+            } else {
+                (0.0, screen_width * 0.5)
+            };
+            assert!(center_x - half_field_width >= left, "{aspect_ratio}: left");
+            assert!(
+                center_x + half_field_width <= right,
+                "{aspect_ratio}: right"
+            );
+        }
+    }
+}
 
 #[test]
 fn song_plan_preserves_profile_derived_notefield_behavior() {

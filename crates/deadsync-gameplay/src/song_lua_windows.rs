@@ -642,18 +642,22 @@ where
     }
 }
 
-/// Native Player center for a side field in Simply Love's coordinate space.
-/// `_fallback` GameplayMargins uses a fixed 272px field width. SafeFArg converts
-/// its outer and combined center margins to integers before ScreenGameplay
-/// halves the center margin and positions each Player. Theme X metrics remain
-/// fractional; this conversion belongs only to the resulting actor placement.
+/// Player center for a side field in Simply Love's coordinate space.
+/// Below the 4:3 reference aspect, quarter-screen placement avoids the fixed
+/// native margins pushing a side field offscreen.
 #[inline]
 #[must_use]
 pub fn gameplay_side_field_center_x(
-    screen_width: f32,
+    viewport: GameplayViewport,
     screen_center_x: f32,
     p2: bool,
 ) -> f32 {
+    let screen_width = viewport.width();
+    if viewport.is_squarish() {
+        let displacement = screen_width * 0.25;
+        return screen_center_x + if p2 { displacement } else { -displacement };
+    }
+
     let half_screen = screen_width * 0.5;
     let metric_center = half_screen - screen_width.clamp(640.0, 854.0) * 0.25;
     let outer_margin = (metric_center - 136.0).trunc();
@@ -688,7 +692,7 @@ pub fn song_lua_compile_player_screen_x(
         viewport.center_x()
     } else {
         let offset_sign = if p2_side { 1.0 } else { -1.0 };
-        gameplay_side_field_center_x(viewport.width(), viewport.center_x(), p2_side)
+        gameplay_side_field_center_x(viewport, viewport.center_x(), p2_side)
             + offset_sign * note_field_offset_x.clamp(0.0, 50.0)
     }
 }
