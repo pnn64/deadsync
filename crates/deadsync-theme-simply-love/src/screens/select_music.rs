@@ -2368,6 +2368,12 @@ fn select_wheel_steps(state: &mut State, song: &SongData) {
     }
 }
 
+pub fn select_preferred_steps(state: &mut State) {
+    if let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index).cloned() {
+        select_wheel_steps(state, song.as_ref());
+    }
+}
+
 fn rebuild_displayed_entries(state: &mut State) {
     fill_displayed_entries(
         &mut state.entries,
