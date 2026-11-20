@@ -346,6 +346,9 @@ pub enum VertexColorEncoding {
     Float,
     /// Native `RageVColor` conversion through clamped eight-bit RGBA channels.
     RageVColor,
+    /// `ActorMultiVertex` packs authored colors before multiplying byte channels
+    /// by the final diffuse color; glow still uses ordinary `RageVColor`.
+    RageMultiVertex,
 }
 
 #[derive(Clone, Debug)]
@@ -434,6 +437,7 @@ pub enum Actor {
         offset: [f32; 2],
         size: [SizeSpec; 2],
         tint: [f32; 4],
+        vertex_color_encoding: VertexColorEncoding,
         vertices: Arc<[MeshVertex]>,
         visible: bool,
         blend: BlendMode,
@@ -447,6 +451,7 @@ pub enum Actor {
         offset: [f32; 2],
         size: [SizeSpec; 2],
         tint: [f32; 4],
+        vertex_color_encoding: VertexColorEncoding,
         vertices: Arc<Vec<MeshVertex>>,
         visible: bool,
         blend: BlendMode,
@@ -1825,6 +1830,7 @@ mod tests {
             color: [1.0, 1.0, 1.0, 0.8],
         }]);
         let mut actor = Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],

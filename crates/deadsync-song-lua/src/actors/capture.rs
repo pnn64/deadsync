@@ -903,7 +903,7 @@ pub(super) fn queue(call: &mut HostCall<'_>, actor: TableId, name: Vec<u8>) -> R
 pub(super) fn advance_ready(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
     let ready = {
         let guard = call.store();
-        guard.actors[&actor].registered
+        guard.actors.get(&actor).is_some_and(|actor| actor.registered)
             && guard
                 .replay_clock
                 .as_ref()
@@ -1063,13 +1063,8 @@ pub(super) fn drain_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<
                     .active_commands
                     .remove(&field);
                 let result = dispatch(call, actor, &name);
-                if previous {
-                    call.store()
-                        .actors
-                        .get_mut(&actor)
-                        .unwrap()
-                        .active_commands
-                        .insert(field);
+                if previous && let Some(instance) = call.store().actors.get_mut(&actor) {
+                    instance.active_commands.insert(field);
                 }
                 result
             }
@@ -1087,6 +1082,9 @@ pub(super) fn drain_commands(call: &mut HostCall<'_>, actor: TableId) -> Result<
             }
         }
         result?;
+        if !call.store_ref().actors.contains_key(&actor) {
+            return Ok(());
+        }
         song_pose::advance_position(call, actor)?;
         let recurring = call
             .store()

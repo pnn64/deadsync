@@ -1922,6 +1922,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                     mesh_vertices,
                     &transform,
                     payload.tint,
+                    item.vertex_color_encoding,
                     payload.vertices.as_ref(),
                 );
                 let mut object_count = 1usize;
@@ -1946,6 +1947,7 @@ fn finish_frame<const TRACK_SPRITE_RUNS: bool>(
                         mesh_vertices,
                         &payload.transform,
                         payload.tint,
+                        next.vertex_color_encoding,
                         payload.vertices.as_ref(),
                     );
                     object_count += 1;
@@ -2113,6 +2115,7 @@ fn append_mesh_vertices(
     out: &mut Vec<renderer::MeshVertex>,
     transform: &Matrix4,
     tint: [f32; 4],
+    encoding: actors::VertexColorEncoding,
     vertices: &[renderer::MeshVertex],
 ) {
     if transform.x_axis == Vector4::X
@@ -2121,6 +2124,7 @@ fn append_mesh_vertices(
         && transform.w_axis.z == 0.0
         && transform.w_axis.w == 1.0
         && tint == [1.0; 4]
+        && encoding == actors::VertexColorEncoding::Float
     {
         let translate_x = transform.w_axis.x;
         let translate_y = transform.w_axis.y;
@@ -2135,12 +2139,11 @@ fn append_mesh_vertices(
         let pos = *transform * Vector4::new(vertex.pos[0], vertex.pos[1], 0.0, 1.0);
         renderer::MeshVertex {
             pos: [pos.x, pos.y],
-            color: [
-                vertex.color[0] * tint[0],
-                vertex.color[1] * tint[1],
-                vertex.color[2] * tint[2],
-                vertex.color[3] * tint[3],
-            ],
+            color: match encoding {
+                actors::VertexColorEncoding::Float => mul_rgba(vertex.color, tint),
+                actors::VertexColorEncoding::RageVColor => rage_vertex_color(mul_rgba(vertex.color, tint)),
+                actors::VertexColorEncoding::RageMultiVertex => rage_multi_vertex_color(vertex.color, tint),
+            },
         }
     }));
 }
@@ -5821,6 +5824,16 @@ fn rage_vertex_color(color: [f32; 4]) -> [f32; 4] {
     color.map(|channel| f32::from((channel * 256.0) as u8) / 255.0)
 }
 
+fn rage_multi_vertex_color(color: [f32; 4], tint: [f32; 4]) -> [f32; 4] {
+    // ActorMultiVertex::SetVertexColor stores FTOC bytes. DrawPrimitives then
+    // multiplies those bytes by the final float diffuse and truncates again,
+    // without FTOC's 256 scale. A white channel therefore modulates 255.
+    std::array::from_fn(|axis| {
+        let byte = (color[axis] * 256.0) as u8;
+        f32::from((f32::from(byte) * tint[axis]) as u8) / 255.0
+    })
+}
+
 fn pack_draw_vertex_colors(
     builder: &mut FrameBuilder,
     sprites: &mut [renderer::SpriteInstanceRaw],
@@ -5832,9 +5845,13 @@ fn pack_draw_vertex_colors(
     // Every parent/proxy tint and generated shadow is now present. Visibility
     // decisions used the original float alpha, even when its packed byte is 0.
     for item in &mut builder.items {
-        if std::mem::take(&mut item.vertex_color_encoding)
-            != actors::VertexColorEncoding::RageVColor
-        {
+        if item.kind == DrawKind::Mesh {
+            // Colored meshes are copied to the final vertex buffer below;
+            // encode during that copy, preserving their shared source buffers.
+            continue;
+        }
+        let encoding = std::mem::take(&mut item.vertex_color_encoding);
+        if encoding == actors::VertexColorEncoding::Float {
             continue;
         }
         match item.kind {
@@ -5849,13 +5866,18 @@ fn pack_draw_vertex_colors(
                 // Binary corner colors commute with packing. Ordinary sprite
                 // quads, glow, and full-length fades retain their shared geometry.
                 let glow = mesh.instance.texture_mask > 0.5;
+                let modulate = encoding == actors::VertexColorEncoding::RageMultiVertex && !glow;
                 if mesh.vertices.iter().all(|vertex| {
                     vertex
                         .color
                         .iter()
                         .all(|&channel| channel == 1.0 || (!glow && channel == 0.0))
                 }) {
-                    mesh.instance.tint = rage_vertex_color(mesh.instance.tint);
+                    mesh.instance.tint = if modulate {
+                        rage_multi_vertex_color([1.0; 4], mesh.instance.tint)
+                    } else {
+                        rage_vertex_color(mesh.instance.tint)
+                    };
                     continue;
                 }
                 let source = std::mem::replace(
@@ -5871,17 +5893,19 @@ fn pack_draw_vertex_colors(
                     }
                 };
                 for vertex in &mut vertices {
-                    vertex.color = rage_vertex_color(if glow {
-                        mesh.instance.tint
+                    vertex.color = if glow {
+                        rage_vertex_color(mesh.instance.tint)
+                    } else if modulate {
+                        rage_multi_vertex_color(vertex.color, mesh.instance.tint)
                     } else {
-                        mul_rgba(vertex.color, mesh.instance.tint)
-                    });
+                        rage_vertex_color(mul_rgba(vertex.color, mesh.instance.tint))
+                    };
                 }
                 mesh.vertices = renderer::TexturedMeshVertices::Transient(vertices);
                 mesh.instance.tint = [1.0; 4];
                 mesh.geom_cache_key = renderer::INVALID_TMESH_CACHE_KEY;
             }
-            DrawKind::Mesh => unreachable!("vertex encoding belongs to sprite and textured draws"),
+            DrawKind::Mesh => unreachable!("colored meshes are packed while finalizing the frame"),
         }
     }
 }
@@ -7296,12 +7320,16 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             offset,
             size,
             tint,
+            vertex_color_encoding,
             vertices,
             visible,
             blend,
             z,
         } => {
-            if !*visible || vertices.is_empty() {
+            let tint = mul_rgba(style.tint, *tint);
+            if !*visible || vertices.is_empty()
+                || (*vertex_color_encoding != actors::VertexColorEncoding::Float && tint[3] <= 0.0)
+            {
                 return;
             }
 
@@ -7322,10 +7350,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 camera,
                 MeshPayload {
                     transform,
-                    tint: mul_rgba(style.tint, *tint),
+                    tint,
                     vertices: MeshVertices::Shared(Arc::clone(vertices)),
                 },
             );
+            out.encode_vertex_colors(out.len() - 1, *vertex_color_encoding);
         }
 
         actors::Actor::ReusableMesh {
@@ -7333,12 +7362,16 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             offset,
             size,
             tint,
+            vertex_color_encoding,
             vertices,
             visible,
             blend,
             z,
         } => {
-            if !*visible || vertices.is_empty() {
+            let tint = mul_rgba(style.tint, *tint);
+            if !*visible || vertices.is_empty()
+                || (*vertex_color_encoding != actors::VertexColorEncoding::Float && tint[3] <= 0.0)
+            {
                 return;
             }
 
@@ -7359,10 +7392,11 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                 camera,
                 MeshPayload {
                     transform,
-                    tint: mul_rgba(style.tint, *tint),
+                    tint,
                     vertices: MeshVertices::Reusable(Arc::clone(vertices)),
                 },
             );
+            out.encode_vertex_colors(out.len() - 1, *vertex_color_encoding);
         }
 
         actors::Actor::TexturedMesh { .. } | actors::Actor::ReusableTexturedMesh { .. } => {
@@ -10839,6 +10873,7 @@ mod tests {
     #[test]
     fn build_screen_reserves_recycled_buffers_from_len() {
         let actor = Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -10884,6 +10919,7 @@ mod tests {
             color: [0.8, 0.6, 0.4, 0.5],
         }]);
         let actors = [Actor::ReusableMesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],
@@ -11046,6 +11082,7 @@ mod tests {
             },
         ]);
         let mesh = Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11151,6 +11188,7 @@ mod tests {
             },
         ]);
         let source = [Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11161,6 +11199,7 @@ mod tests {
             z: 7,
         }];
         let materialized = [Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11626,6 +11665,7 @@ mod tests {
             },
         ]);
         let mesh = |tint, blend, z| Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [3.0, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -11738,6 +11778,7 @@ mod tests {
             },
         ]);
         let mesh = |x| Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [x, 4.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -14721,6 +14762,7 @@ mod tests {
             bottom: 0.0,
         };
         let mesh = Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(1.0), SizeSpec::Px(1.0)],

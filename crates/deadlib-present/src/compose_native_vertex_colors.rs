@@ -220,3 +220,138 @@ fn native_vertex_colors_retained_frames_pack_once_per_final_draw() {
     }
     assert_eq!(scratch.retained_frame_stats().hits, 1);
 }
+
+fn native_multi_vertex_mesh(vertices: Arc<[TexturedMeshVertex]>) -> Actor {
+    let mut actor = native_mesh(vertices);
+    let Actor::TexturedMesh { vertex_color_encoding, .. } = &mut actor else {
+        unreachable!()
+    };
+    *vertex_color_encoding = VertexColorEncoding::RageMultiVertex;
+    actor
+}
+
+#[test]
+fn native_multi_vertex_colors_pack_authored_bytes_before_parent_modulation() {
+    let vertices: Arc<[TexturedMeshVertex]> = colored_quad()
+        .iter().copied().enumerate().map(|(index, mut vertex)| {
+            vertex.color = if index % 2 == 0 {
+                [0.1234, 0.501, 0.8761, 0.1234]
+            } else {
+                [-0.125, 1.25, 0.501, 0.499]
+            };
+            vertex
+        }).collect();
+    let mut actor = native_multi_vertex_mesh(Arc::clone(&vertices));
+    let Actor::TexturedMesh { tint, .. } = &mut actor else { unreachable!() };
+    *tint = [0.8, 0.6, 0.75, 0.8];
+    let frame = render(&[tinted(vec![actor], [0.875, 0.875, 0.75, 0.875])]);
+    let (_, instance, geometry) = tmesh_draw(&frame, 0);
+    assert_eq!(instance.tint, [1.0; 4]);
+    for (index, (actual, source)) in geometry.vertices.iter().zip(vertices.iter()).enumerate() {
+        // FTOC produces [31,128,224,31] or [0,255,128,127] before
+        // multiplying by final diffuse [.7,.525,.5625,.7] and truncating.
+        assert_eq!(actual.color, rgba(if index % 2 == 0 {
+            [21, 67, 126, 21]
+        } else {
+            [0, 133, 72, 88]
+        }));
+        assert_eq!(actual.pos, source.pos);
+        assert_eq!(actual.uv, source.uv);
+        assert_eq!(actual.normal, source.normal);
+        assert_eq!(actual.tex_matrix_scale, source.tex_matrix_scale);
+    }
+    assert_eq!(geometry.cache_key, INVALID_TMESH_CACHE_KEY);
+    assert_eq!(vertices[0].color, [0.1234, 0.501, 0.8761, 0.1234]);
+    assert_eq!(vertices[1].color, [-0.125, 1.25, 0.501, 0.499]);
+}
+
+#[test]
+fn native_multi_vertex_colors_modulate_white_bytes_during_fades() {
+    let vertices: Arc<[TexturedMeshVertex]> = colored_quad().iter().copied().map(|mut vertex| {
+        vertex.color = [1.0; 4];
+        vertex
+    }).collect();
+    for (alpha, byte) in [(0.108094156, 27), (0.62678593, 159), (0.76429546, 194)] {
+        let mut actor = native_multi_vertex_mesh(Arc::clone(&vertices));
+        let Actor::TexturedMesh { tint, .. } = &mut actor else { unreachable!() };
+        *tint = [1.0, 1.0, 1.0, alpha];
+        let frame = render(&[actor]);
+        let (_, instance, geometry) = tmesh_draw(&frame, 0);
+        assert_eq!(instance.tint, rgba([255, 255, 255, byte]));
+        assert_eq!(geometry.cache_key, 42, "binary vertex colors retain shared geometry");
+        assert_eq!(&*geometry.vertices, vertices.as_ref());
+    }
+}
+
+#[test]
+fn native_multi_vertex_colors_glow_replaces_bytes_after_float_pass_selection() {
+    let vertices = colored_quad();
+    let mut actor = native_multi_vertex_mesh(Arc::clone(&vertices));
+    let Actor::TexturedMesh { tint, glow, .. } = &mut actor else { unreachable!() };
+    *tint = [1.0, 1.0, 1.0, 0.001];
+    *glow = [0.4375, 0.25, 0.125, 0.31339297];
+    let frame = render(&[actor]);
+    assert_eq!(frame.ops.len(), 2, "positive float alpha selects diffuse before byte conversion");
+    let (_, diffuse, geometry) = tmesh_draw(&frame, 0);
+    for vertex in geometry.vertices.iter() {
+        assert_eq!(vertex.color[3] * diffuse.tint[3], 0.0);
+    }
+    let (_, glow, geometry) = tmesh_draw(&frame, 1);
+    assert!(glow.texture_mask > 0.5);
+    for (actual, source) in geometry.vertices.iter().zip(vertices.iter()) {
+        assert_eq!(mul_rgba(actual.color, glow.tint), rgba([112, 64, 32, 80]));
+        assert_eq!(actual.pos, source.pos);
+        assert_eq!(actual.uv, source.uv);
+    }
+}
+
+#[test]
+fn native_multi_vertex_colors_pack_plain_meshes_at_final_submission() {
+    let vertices: Arc<[MeshVertex]> = Arc::from([
+        MeshVertex { pos: [0.0, 0.0], color: [0.1234, 0.501, 0.8761, 0.1234] },
+        MeshVertex { pos: [20.0, 0.0], color: [-0.125, 1.25, 0.501, 0.499] },
+        MeshVertex { pos: [0.0, 20.0], color: [0.1234, 0.501, 0.8761, 0.1234] },
+    ]);
+    for reusable in [false, true] {
+        let actor = if reusable {
+            Actor::ReusableMesh {
+                align: [0.0; 2], offset: [0.0; 2], size: [SizeSpec::Px(0.0); 2],
+                tint: [0.8, 0.6, 0.75, 0.8],
+                vertex_color_encoding: VertexColorEncoding::RageMultiVertex,
+                vertices: Arc::new(vertices.to_vec()), visible: true, blend: BlendMode::Alpha, z: 0,
+            }
+        } else {
+            Actor::Mesh {
+                align: [0.0; 2], offset: [0.0; 2], size: [SizeSpec::Px(0.0); 2],
+                tint: [0.8, 0.6, 0.75, 0.8],
+                vertex_color_encoding: VertexColorEncoding::RageMultiVertex,
+                vertices: Arc::clone(&vertices), visible: true, blend: BlendMode::Alpha, z: 0,
+            }
+        };
+        let mut float = actor.clone();
+        match &mut float {
+            Actor::Mesh { vertex_color_encoding, .. }
+            | Actor::ReusableMesh { vertex_color_encoding, .. } => {
+                *vertex_color_encoding = VertexColorEncoding::Float;
+            }
+            _ => unreachable!(),
+        }
+        let parent = [0.875, 0.875, 0.75, 0.875];
+        let frame = render(&[tinted(vec![actor], parent)]);
+        let unchanged = render(&[tinted(vec![float], parent)]);
+        for (index, (actual, float)) in frame.mesh_vertices.iter()
+            .zip(&unchanged.mesh_vertices).enumerate()
+        {
+            assert_eq!(actual.color, rgba(if index % 2 == 0 {
+                [21, 67, 126, 21]
+            } else {
+                [0, 133, 72, 88]
+            }));
+            assert_eq!(actual.pos, float.pos);
+            assert_eq!(float.color, mul_rgba(vertices[index].color, mul_rgba([0.8,0.6,0.75,0.8], parent)));
+        }
+        assert_eq!(frame.mesh_vertices.len(), 3);
+    }
+    assert_eq!(vertices[0].color, [0.1234, 0.501, 0.8761, 0.1234]);
+    assert_eq!(vertices[1].color, [-0.125, 1.25, 0.501, 0.499]);
+}

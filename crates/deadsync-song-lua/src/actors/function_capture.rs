@@ -48,11 +48,16 @@ impl Saved {
         self.restore_inner(store, true);
     }
     fn restore_inner(self, store: &mut Store, retain_capture: bool) {
+        // Native deletion is structural: restoring a pose cannot resurrect a
+        // destroyed wrapper or make its retained Lua handle usable again.
+        let wrappers = self.wrappers.into_iter()
+            .filter(|wrapper| store.actors.contains_key(wrapper))
+            .collect();
         let Some(a) = store.actors.get_mut(&self.actor) else {
             return;
         };
         // Child attachment and parent changes are structural native mutations;
-        // wrapper membership is explicitly part of semantic actor state.
+        // surviving wrapper membership is part of semantic actor state.
         let children = std::mem::take(&mut a.state.children);
         let parent = a.state.parent;
         a.state = self.state;
@@ -68,7 +73,7 @@ impl Saved {
         a.hibernate = self.hibernate;
         a.update_rate = self.rate;
         a.effects = self.effects;
-        a.wrappers = self.wrappers;
+        a.wrappers = wrappers;
         a.capture = self.capture;
         if !retain_capture {
             a.capture

@@ -1,9 +1,22 @@
-//! Live wrappers append parents without changing existing visual/resource slots.
-//! Refresh the affected layout only on growth, and AFT bindings only when their
+//! Live wrappers change ancestry without moving existing visual/resource slots.
+//! Refresh the affected layout when parents change, and AFT bindings when their
 //! dependencies change. Retain capture handles, banks and manual draw history.
 use super::*;
 
 impl SongLuaOverlayOrderCache {
+    fn has_live_parents<S: NoteskinSlot + Clone>(
+        &self,
+        overlays: &[SongLuaOverlayActor<S>],
+    ) -> bool {
+        self.last_draw_orders.len() == overlays.len()
+            && self.child_lists.iter().enumerate().all(|(list, children)| {
+                children.iter().all(|&index| {
+                    let parent = overlays[index].parent_index.filter(|&parent| parent < overlays.len());
+                    song_lua_overlay_child_list_index(parent) == list
+                })
+            })
+    }
+
     pub(super) fn enable_dynamic(&mut self) {
         self.dynamic_local_indices = (0..self.last_draw_orders.len()).collect();
         let mut composed = Vec::with_capacity(self.last_draw_orders.len());
@@ -152,7 +165,7 @@ impl FrameScratch {
             return;
         }
         let mut changed = false;
-        if self.song_lua_overlay_order.last_draw_orders.len() != visuals.overlays.len() {
+        if !self.song_lua_overlay_order.has_live_parents(&visuals.overlays) {
             self.song_lua_proxy_request_index
                 .refresh_wrappers(&visuals.overlays);
             refresh_layer(
@@ -169,9 +182,7 @@ impl FrameScratch {
         }
         for (index, layer) in visuals.background_visual_layers.iter().enumerate() {
             if self.song_lua_background_visual_layer_orders[index]
-                .last_draw_orders
-                .len()
-                == layer.overlays.len()
+                .has_live_parents(&layer.overlays)
             {
                 continue;
             }
@@ -191,9 +202,7 @@ impl FrameScratch {
         }
         for (index, layer) in visuals.foreground_visual_layers.iter().enumerate() {
             if self.song_lua_foreground_visual_layer_orders[index]
-                .last_draw_orders
-                .len()
-                == layer.overlays.len()
+                .has_live_parents(&layer.overlays)
             {
                 continue;
             }

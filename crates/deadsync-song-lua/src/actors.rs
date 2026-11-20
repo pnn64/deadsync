@@ -651,7 +651,6 @@ impl Actors {
         for name in [
             "GetFakeParent",
             "SetFakeParent",
-            "RemoveWrapperState",
             "SetRateScalingEnabled",
             "GetRateScalingEnabled",
             "get_tween_uses_effect_delta",
@@ -711,7 +710,7 @@ impl Actors {
         for &name in effects::METHODS {
             install_method(vm, actor, name, Op::Effect(name), &captures)?;
         }
-        for name in ["AddWrapperState", "GetWrapperState", "GetNumWrapperStates"] {
+        for name in ["AddWrapperState", "RemoveWrapperState", "GetWrapperState", "GetNumWrapperStates"] {
             install_method(vm, actor, name, Op::Wrapper(name), &captures)?;
         }
         for name in ["play", "pause"] {
@@ -1702,13 +1701,11 @@ fn run_guarded_command_function(
     drain: bool,
     observed: bool,
 ) -> Result<(), Error> {
-    let inserted = call
-        .store()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .active_commands
-        .insert(field.clone());
+    let Some(instance) = call.store().actors.get_mut(&actor) else {
+        // A prior callback can delete a wrapper retained by this frame's plan.
+        return Ok(());
+    };
+    let inserted = instance.active_commands.insert(field.clone());
     if !inserted {
         return Ok(());
     }
@@ -1743,12 +1740,9 @@ fn run_guarded_command_function(
         }
         Ok(())
     });
-    call.store()
-        .actors
-        .get_mut(&actor)
-        .unwrap()
-        .active_commands
-        .remove(&field);
+    if let Some(instance) = call.store().actors.get_mut(&actor) {
+        instance.active_commands.remove(&field);
+    }
     capture::command_end(call.store(), actor, previous_capture_start);
     result
 }

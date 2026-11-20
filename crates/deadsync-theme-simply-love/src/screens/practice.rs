@@ -2501,6 +2501,7 @@ fn append_density_graph(state: &State, actors: &mut Vec<Actor>) {
             ],
             tint: [1.0; 4],
             vertices: Arc::clone(mesh),
+            vertex_color_encoding: Default::default(),
             visible: true,
             blend: BlendMode::Alpha,
             z: PRACTICE_DENSITY_Z,

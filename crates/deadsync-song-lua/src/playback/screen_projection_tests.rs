@@ -325,6 +325,7 @@ fn mesh() -> Actor {
         offset: [0.0; 2],
         size: [SizeSpec::Fill; 2],
         tint: [1.0; 4],
+        vertex_color_encoding: Default::default(),
         vertices: Arc::from([
             MeshVertex {
                 pos: [10.0, 10.0],

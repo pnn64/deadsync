@@ -4918,6 +4918,7 @@ pub fn frame_layers<'a>(
                         size: [SizeSpec::Px(graph_w), SizeSpec::Px(graph_mesh_h)],
                         tint: [1.0; 4],
                         vertices: mesh.clone(),
+                        vertex_color_encoding: Default::default(),
                         visible: true,
                         blend: BlendMode::Alpha,
                         z: 85,

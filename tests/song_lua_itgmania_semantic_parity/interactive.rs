@@ -312,6 +312,8 @@ pub(super) struct DrawChecks {
     bindings: BTreeMap<String, SongLuaLiveTarget>,
     binding_paths: BTreeMap<String, String>,
     targets: BTreeMap<String, SongLuaLiveTarget>,
+    visual_binding_epoch: u64,
+    visual_slots: usize,
     random: Option<render_random::Replay>,
     composers: BTreeMap<i32, WholeSongComposer>,
     native_aft_resources: BTreeMap<String, NativeAftResource>,
@@ -740,12 +742,14 @@ impl DrawChecks {
             .into_iter()
             .map(|(path, pointer)| (pointer, path))
             .collect();
-        let bindings = owned.ok_or("missing Lua scene")?
-            .visual_bindings().map_err(|e| e.to_string())?;
+        let owned = owned.ok_or("missing Lua scene")?;
+        let bindings = owned.visual_bindings().map_err(|e| e.to_string())?;
         let targets: BTreeMap<_, _> = bindings.into_iter().collect();
         self.bindings.clear();
         self.binding_paths.clear();
         self.targets = targets.clone();
+        self.visual_binding_epoch = owned.visual_binding_epoch();
+        self.visual_slots = owned.visual_draw_bindings().len();
         self.composers.clear();
         self.native_aft_resources = native_aft_resources(trace, scene);
         if self.random.is_none() && trace["capabilities"]["native_render_random_inputs"] == true {
@@ -815,12 +819,15 @@ impl DrawChecks {
         mismatches: &mut Vec<Value>,
     ) -> Result<(), String> {
         if let Some(scene) = state.song_lua.as_ref()
-            && scene.visual_draw_bindings().len() != self.targets.len()
+            && (scene.visual_binding_epoch() != self.visual_binding_epoch
+                || scene.visual_draw_bindings().len() != self.visual_slots)
         {
-            // Late AddWrapperState appends independently owned visual slots.
-            // Original actor indexes remain stable; raw random source paths must
-            // resolve against the newly published wrapper identities too.
+            // Wrapper removal preserves slots but renumbers surviving paths.
+            // Refresh from the scene's processed epoch so random source paths
+            // resolve against the same topology as its published visual state.
             self.targets = scene.visual_bindings()?.into_iter().collect();
+            self.visual_binding_epoch = scene.visual_binding_epoch();
+            self.visual_slots = scene.visual_draw_bindings().len();
         }
         let mut states = BTreeMap::new();
         let mut recorded = self.recorded(state, screen, clock)?;

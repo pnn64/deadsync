@@ -50,8 +50,60 @@ fn copy_tags(call: &mut HostCall<'_>, owner: TableId, wrapper: TableId) -> Resul
     Ok(())
 }
 
+fn remove(call: &mut HostCall<'_>, owner: TableId) -> Result<(), Error> {
+    // LunaActor uses Lua 5.1's luaL_checkint: numeric strings are accepted and
+    // finite fractions truncate before the native one-based index check.
+    let number = call.number(1)?;
+    let index = (number as i64) as i32;
+    let offset = index.wrapping_sub(1);
+    let slot = usize::try_from(offset).ok().filter(|&slot| {
+        number.is_finite() && slot < call.store_ref().actors[&owner].wrappers.len()
+    });
+    let Some(slot) = slot else {
+        return Err(call.error(format!("{index} is not a valid wrapper state index.").as_bytes()));
+    };
+    action_capture::prepare(call, owner)?;
+    let wrapper = call.store().actors.get_mut(&owner).unwrap().wrappers.remove(slot);
+    let mut removed = HashSet::new();
+    let mut pending = vec![wrapper];
+    while let Some(actor) = pending.pop() {
+        if removed.insert(actor)
+            && let Some(instance) = call.store_ref().actors.get(&actor)
+        {
+            // Actor::~Actor deletes its wrappers. A plain ActorFrame wrapper
+            // does not own its ordinary children (m_bDeleteChildren is false).
+            pending.extend_from_slice(&instance.wrappers);
+        }
+    }
+    lifecycle::invalidate_plans(call)?;
+    let registry = table(call, call.captures()[0])?;
+    for &actor in &removed {
+        call.raw_table_set(registry, Value::Table(actor), Value::Nil)?;
+    }
+    let store = call.store();
+    store.actor_order.retain(|actor| !removed.contains(actor));
+    for scene in store.scenes.values_mut() {
+        scene.actors.retain(|actor| !removed.contains(actor));
+    }
+    if let Some(queued) = &mut store.startup_queues {
+        queued.retain(|actor| !removed.contains(actor));
+    }
+    store.deferred_messages.retain(|entry| !removed.contains(&entry.actor));
+    for actor in removed {
+        // Removing metadata stops the queue and invalidates bound methods on a
+        // retained Lua table; ordinary raw fields on that table remain readable.
+        store.actors.remove(&actor);
+        store.retired_subscriptions.remove(&actor);
+        #[cfg(feature = "test-support")]
+        store.message_ranks.remove(&actor);
+    }
+    store.wrapper_epoch = store.wrapper_epoch.wrapping_add(1);
+    call.push(Value::Table(owner))
+}
+
 pub(super) fn method(call: &mut HostCall<'_>, actor: TableId, name: &str) -> Result<(), Error> {
     match name {
+        "RemoveWrapperState" => remove(call, actor),
         "GetNumWrapperStates" => call.push(Value::Number(
             call.store_ref().actors[&actor].wrappers.len() as f64,
         )),

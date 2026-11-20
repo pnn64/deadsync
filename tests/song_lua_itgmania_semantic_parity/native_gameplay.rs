@@ -5869,9 +5869,19 @@ fn replay_mode(
         if draw_cursor > draw_start {
             let uncompared = draw_checks.uncompared_immediate_draws;
             let normal_uncompared = draw_checks.uncompared_normal_draws;
-            draw_checks.compare(&state, &draw_samples[draw_start..draw_cursor],
+            if let Err(error) = draw_checks.compare(&state, &draw_samples[draw_start..draw_cursor],
                 [context.screen_width, context.screen_height], [seconds as f32, number(frame,"beat")? as f32],
-                simfile, &mut mismatches)?;
+                simfile, &mut mismatches)
+            {
+                // A callback can fail during this update before its output is
+                // normally drained below. Preserve that cause when a dependent
+                // draw check aborts, together with the exact replay position.
+                errors.extend(state.take_song_lua_output().errors.into_iter().map(|error|
+                    format!("scene {scene_count}, update {}: {error}", index + 1)));
+                return Err(format!(
+                    "draw comparison failed at scene {scene_count}, update {}, seconds {seconds}, beat {}: {error}; callback errors ({} total, newest first): {:?}",
+                    index + 1, frame["beat"], errors.len(), errors.iter().rev().take(5).collect::<Vec<_>>()));
+            }
             if draw_checks.uncompared_immediate_draws > uncompared {
                 runtime_coverage.insert("owned immediate Draw submissions without matching native drawable observations".into());
             }

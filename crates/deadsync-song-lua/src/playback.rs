@@ -409,6 +409,7 @@ struct SongLuaProjectedMeshScratch {
     textured_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
     textured_glow_vertices: Option<Arc<Vec<TexturedMeshVertex>>>,
     mesh_vertices: Option<Arc<Vec<MeshVertex>>>,
+    mesh_glow_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_body_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_line_vertices: Option<Arc<Vec<MeshVertex>>>,
     graph_body_key: Option<[u32; 10]>,
@@ -460,6 +461,7 @@ impl SongLuaProjectedMeshScratch {
             textured_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             textured_glow_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             mesh_vertices: None,
+            mesh_glow_vertices: None,
             graph_body_vertices: None,
             graph_line_vertices: None,
             graph_body_key: None,
@@ -487,6 +489,7 @@ impl SongLuaProjectedMeshScratch {
             textured_vertices: None,
             textured_glow_vertices: None,
             mesh_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
+            mesh_glow_vertices: Some(Arc::new(Vec::with_capacity(capacity))),
             graph_body_vertices: None,
             graph_line_vertices: None,
             graph_body_key: None,
@@ -638,6 +641,18 @@ impl SongLuaProjectedMeshScratch {
             self.capacity,
             &mut self.replacements,
             fill,
+        )
+    }
+
+    fn update_mesh_glow(&mut self, vertices: &[MeshVertex]) -> Arc<Vec<MeshVertex>> {
+        update_song_lua_shared_vec(
+            &mut self.mesh_glow_vertices,
+            self.capacity,
+            &mut self.replacements,
+            |out| out.extend(vertices.iter().copied().map(|mut vertex| {
+                vertex.color = [1.0; 4];
+                vertex
+            })),
         )
     }
 
@@ -3749,7 +3764,7 @@ fn song_lua_manual_mesh<S: NoteskinSlot + Clone>(
             additive_texture: None,
             additive_uv: [0.0, 0.0, 1.0, 1.0],
         }),
-        vertex_color_encoding: Default::default(),
+        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageMultiVertex,
         align: [0.0; 2],
         offset: [0.0; 2],
         world_z: 0.0,
@@ -8352,7 +8367,6 @@ fn song_lua_overlay_view_proj(
 
 fn song_lua_actor_multi_vertex_mesh(
     vertices: &Arc<[SongLuaOverlayMeshVertex]>,
-    tint: [f32; 4],
     x_scale: f32,
     y_scale: f32,
     actor_scale: [f32; 2],
@@ -8364,7 +8378,6 @@ fn song_lua_actor_multi_vertex_mesh(
     append_song_lua_actor_multi_vertex_mesh(
         &mut out,
         vertices,
-        tint,
         x_scale,
         y_scale,
         actor_scale,
@@ -8379,7 +8392,6 @@ fn song_lua_actor_multi_vertex_mesh(
 fn append_song_lua_actor_multi_vertex_mesh(
     out: &mut Vec<MeshVertex>,
     vertices: &[SongLuaOverlayMeshVertex],
-    tint: [f32; 4],
     x_scale: f32,
     y_scale: f32,
     actor_scale: [f32; 2],
@@ -8399,7 +8411,7 @@ fn append_song_lua_actor_multi_vertex_mesh(
                 rotation_z_deg,
                 skew,
             ),
-            color: song_lua_capture_tint(vertex.color, tint),
+            color: vertex.color,
         });
     }
 }
@@ -9509,6 +9521,7 @@ fn song_lua_graph_display_body_actor(
     };
     Some(if let Some(scratch) = scratch {
         Actor::ReusableMesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -9522,6 +9535,7 @@ fn song_lua_graph_display_body_actor(
         let mut vertices = Vec::with_capacity((values.len().saturating_sub(1)) * 6);
         fill(&mut vertices);
         Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -9609,6 +9623,7 @@ fn song_lua_graph_display_line_actor(
     };
     Some(if let Some(scratch) = scratch {
         Actor::ReusableMesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -9622,6 +9637,7 @@ fn song_lua_graph_display_line_actor(
         let mut vertices = Vec::with_capacity((values.len().saturating_sub(1)) * 6);
         fill(&mut vertices);
         Actor::Mesh {
+            vertex_color_encoding: Default::default(),
             align: [0.0, 0.0],
             offset: [0.0, 0.0],
             size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
@@ -10906,6 +10922,13 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             .or_else(|| {
                 let rotated_anchor = (state.halign != 0.5 || state.valign != 0.5)
                     && state.rot_z_deg.abs() > f32::EPSILON;
+                // Actor::BeginDraw leaves an ancestor's scale before the
+                // child's rotation. Generic sprites fold scale into their
+                // size, which reverses this order when the axes differ.
+                let rotated_ancestor_scale = state.scale_factors.is_some_and(|[ancestor, _]| {
+                    ancestor[0] != ancestor[1]
+                        && (state.rot_z_deg % 180.0).to_radians().abs() > f32::EPSILON
+                });
                 let native_mesh = state.quaternion != crate::actor_quaternion::IDENTITY
                     || state.z != 0.0
                     || state.depth_test
@@ -10913,6 +10936,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     || state.rot_x_deg.abs() > f32::EPSILON
                     || state.rot_y_deg.abs() > f32::EPSILON
                     || rotated_anchor
+                    || rotated_ancestor_scale
                     || !state.texture_filtering
                     || state.texture_wrapping
                     || matches!(
@@ -11382,7 +11406,6 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 &mut effect_scale,
                 &mut effect_rot,
             );
-            song_lua_clamp_float_output_colors(&mut tint, &mut glow);
             let texture = if let Some(handle) = texture_handle {
                 Some(deadlib_present::actors::MeshTexture::Handle(
                     render_target_sample_handle(handle, !state.texture_filtering),
@@ -11420,7 +11443,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                         append_song_lua_actor_multi_vertex_textured_mesh(out, vertices);
                     });
                     Actor::ReusableTexturedMesh {
-                        vertex_color_encoding: Default::default(),
+                        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageMultiVertex,
                         environment: Some(deadlib_present::actors::MeshEnvironment {
                             sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
@@ -11465,7 +11488,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 } else {
                     let mesh = song_lua_actor_multi_vertex_textured_mesh(vertices);
                     Actor::TexturedMesh {
-                        vertex_color_encoding: Default::default(),
+                        vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageMultiVertex,
                         environment: Some(deadlib_present::actors::MeshEnvironment {
                             sampler: Some(deadlib_render_core::MeshSampler::Override {
                                 filter: if state.texture_filtering {
@@ -11519,7 +11542,6 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     append_song_lua_actor_multi_vertex_mesh(
                         out,
                         vertices,
-                        tint,
                         x_scale,
                         y_scale,
                         [size_scale_x, size_scale_y],
@@ -11529,13 +11551,14 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     );
                 });
                 Actor::ReusableMesh {
+                    vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageMultiVertex,
                     align: [0.0, 0.0],
                     offset: [
                         effect_offset[0].mul_add(x_scale, state.x * x_scale),
                         effect_offset[1].mul_add(y_scale, state.y * y_scale),
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                    tint: [1.0; 4],
+                    tint,
                     vertices: mesh,
                     visible: state.draw_visible(),
                     blend: overlay_blend,
@@ -11544,7 +11567,6 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             } else {
                 let mesh = song_lua_actor_multi_vertex_mesh(
                     vertices,
-                    tint,
                     x_scale,
                     y_scale,
                     [size_scale_x, size_scale_y],
@@ -11553,13 +11575,14 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                     [state.skew_x, state.skew_y],
                 );
                 Actor::Mesh {
+                    vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageMultiVertex,
                     align: [0.0, 0.0],
                     offset: [
                         effect_offset[0].mul_add(x_scale, state.x * x_scale),
                         effect_offset[1].mul_add(y_scale, state.y * y_scale),
                     ],
                     size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-                    tint: [1.0; 4],
+                    tint,
                     vertices: mesh,
                     visible: state.draw_visible(),
                     blend: overlay_blend,
@@ -12065,6 +12088,50 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
     prewarmed_static_vertices: Option<&Arc<[TexturedMeshVertex]>>,
 ) -> Option<Actor> {
     match actor {
+        Actor::Mesh { align, offset, size, visible, blend, z, vertex_color_encoding, .. }
+        | Actor::ReusableMesh { align, offset, size, visible, blend, z, vertex_color_encoding, .. } => {
+            if *vertex_color_encoding != deadlib_present::actors::VertexColorEncoding::RageMultiVertex
+                || glow[3] <= 0.0
+            {
+                return None;
+            }
+            let vertices: &[MeshVertex] = match actor {
+                Actor::Mesh { vertices, .. } => vertices,
+                Actor::ReusableMesh { vertices, .. } => vertices,
+                _ => unreachable!(),
+            };
+            // AMV glow replaces authored vertex bytes with the final glow
+            // color. It uses FTOC directly, without byte diffuse modulation.
+            Some(if let Some(scratch) = scratch {
+                Actor::ReusableMesh {
+                    vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
+                    align: *align,
+                    offset: *offset,
+                    size: *size,
+                    tint: glow,
+                    vertices: scratch.update_mesh_glow(vertices),
+                    visible: *visible,
+                    blend: *blend,
+                    z: *z,
+                }
+            } else {
+                let vertices = vertices.iter().copied().map(|mut vertex| {
+                    vertex.color = [1.0; 4];
+                    vertex
+                }).collect::<Vec<_>>();
+                Actor::Mesh {
+                    vertex_color_encoding: deadlib_present::actors::VertexColorEncoding::RageVColor,
+                    align: *align,
+                    offset: *offset,
+                    size: *size,
+                    tint: glow,
+                    vertices: vertices.into(),
+                    visible: *visible,
+                    blend: *blend,
+                    z: *z,
+                }
+            })
+        }
         Actor::Sprite {
             align,
             vertex_color_encoding,

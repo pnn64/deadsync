@@ -263,6 +263,7 @@ fn push_mesh(
                 size: [SizeSpec::Px(size), SizeSpec::Px(size)],
                 tint: [1.0; 4],
                 vertices: data.vertices,
+                vertex_color_encoding: Default::default(),
                 visible: true,
                 blend: BlendMode::Alpha,
                 z: 1,
