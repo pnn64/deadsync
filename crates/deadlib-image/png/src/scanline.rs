@@ -430,21 +430,44 @@ fn filter_chunk<const FILTER: u8>(
     }
 }
 
+#[inline(always)]
+fn score_chunk(bytes: &[u8; 32]) -> u16 {
+    // Signed-byte magnitudes are at most 128: a chunk sums to at most 4096.
+    let mut sum = 0u16;
+    for &value in bytes {
+        sum += u16::from((value as i8).unsigned_abs());
+    }
+    sum
+}
+
 fn score_bytes(bytes: &[u8]) -> u64 {
     let (chunks, tail) = bytes.as_chunks::<32>();
     let mut score = 0u64;
     for chunk in chunks {
-        // Signed-byte magnitudes are at most 128: a chunk sums to at most 4096.
-        let mut sum = 0u16;
-        for &value in chunk {
-            sum += u16::from((value as i8).unsigned_abs());
-        }
-        score += u64::from(sum);
+        score += u64::from(score_chunk(chunk));
     }
     for &value in tail {
         score += u64::from((value as i8).unsigned_abs());
     }
     score
+}
+
+pub(crate) fn score_at_most(bytes: &[u8], limit: u64) -> bool {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    let mut score = 0u64;
+    for chunk in chunks {
+        score += u64::from(score_chunk(chunk));
+        if score > limit {
+            return false;
+        }
+    }
+    for &value in tail {
+        score += u64::from((value as i8).unsigned_abs());
+        if score > limit {
+            return false;
+        }
+    }
+    true
 }
 
 fn filter_bytes<const FILTER: u8, const SCORE: bool>(
@@ -772,9 +795,9 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                 best.fill(0);
             } else if filter == Filter::Adaptive {
                 let mut score = u64::MAX;
-                for kind in 0..5 {
-                    // Up/Paeth duplicate the earlier None/Sub candidates on
-                    // the first row, so neither can win a strict-score tie.
+                for kind in 1..5 {
+                    // On the first row, Up equals None and Paeth equals Sub.
+                    // None wins ties below, and Sub precedes Paeth.
                     if row_index == 0 && matches!(kind, 2 | 4) {
                         continue;
                     }
@@ -791,6 +814,10 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                             break;
                         }
                     }
+                }
+                if score_at_most(current, score) {
+                    selected = 0;
+                    best.copy_from_slice(current);
                 }
             } else {
                 selected = filter as u8;
@@ -1026,6 +1053,9 @@ mod tests {
                             .iter()
                             .map(|&v| u64::from((v as i8).unsigned_abs()))
                             .sum();
+                        for limit in [0, score.saturating_sub(1), score, score + 1, u64::MAX] {
+                            assert_eq!(score_at_most(&expected, limit), score <= limit);
+                        }
                         let mut actual = vec![0xa5; len];
                         let predictors: &[u8] = if filter < 2 { &[] } else { &prev };
                         assert_eq!(

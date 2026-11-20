@@ -146,7 +146,7 @@ impl<'a> Rows<'a> {
             self.output[1..].fill(0);
         } else if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
-            for kind in 0..5 {
+            for kind in 1..5 {
                 if self.index == 0 && matches!(kind, 2 | 4) {
                     continue;
                 }
@@ -169,6 +169,10 @@ impl<'a> Rows<'a> {
                         break;
                     }
                 }
+            }
+            if scanline::score_at_most(row, best) {
+                selected = 0;
+                self.output[1..].copy_from_slice(row);
             }
         } else {
             if self.index == 0 {
