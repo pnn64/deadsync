@@ -1530,7 +1530,7 @@ pub fn push_step_stats(
     actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
 ) {
     if !step_stats_theme::step_stats_aspect_enabled(screen_width(), screen_height()) {
@@ -1541,7 +1541,6 @@ pub fn push_step_stats(
     if mask.is_empty() {
         return;
     }
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let player_idx = step_stats_player_idx(state, player_side);
     let profile = &state.profiles()[player_idx];
     let show_duration = mask.contains(profile_data::StepStatisticsMask::SONG_DURATION);
@@ -1633,7 +1632,7 @@ pub fn push_step_stats(
     }
 }
 
-fn step_stats_pane_layout(
+pub fn step_stats_pane_layout(
     state: &State,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,

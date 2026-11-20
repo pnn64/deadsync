@@ -6,6 +6,11 @@ pub enum StepStatsPlayStyle {
     Versus,
 }
 
+// Keep graph layout thresholds in gameplay instead of depending on the theme's UILayoutType.
+pub(crate) const MIN_DENSITY_GRAPH_ASPECT_RATIO: f32 = 1.0_f32;
+const ULTRAWIDE_GRAPH_MIN_ASPECT_RATIO: f32 = 16.0_f32 / 9.0_f32;
+pub const CENTERED_ULTRAWIDE_NOTEFIELD_GAP: f32 = 16.0_f32;
+
 #[inline(always)]
 #[must_use]
 pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
@@ -50,6 +55,7 @@ pub fn step_stats_upper_density_graph_width(play_style: StepStatsPlayStyle) -> f
     (width - 30.0_f32).max(0.0_f32)
 }
 
+// This logic and needs to be kept in sync with the theme, or refactored to rely on the theme to provide.
 #[must_use]
 pub fn step_stats_density_graph_width(
     play_style: StepStatsPlayStyle,
@@ -60,7 +66,9 @@ pub fn step_stats_density_graph_width(
     _wide: bool,
     center_1player_notefield: bool,
 ) -> f32 {
-    let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
+    let aspect_ratio = screen_w / screen_h.max(1.0_f32);
+    let is_ultrawide = aspect_ratio > ULTRAWIDE_GRAPH_MIN_ASPECT_RATIO;
+    let has_centered_graph_sidepanes = aspect_ratio >= MIN_DENSITY_GRAPH_ASPECT_RATIO;
     let note_field_is_centered = match play_style {
         StepStatsPlayStyle::Double => true,
         StepStatsPlayStyle::Single => num_players == 1 && center_1player_notefield,
@@ -68,11 +76,16 @@ pub fn step_stats_density_graph_width(
     };
 
     let mut sidepane_width = screen_w * 0.5_f32;
-    if !is_ultrawide && note_field_is_centered && screen_w >= screen_h {
+    if note_field_is_centered && has_centered_graph_sidepanes {
         let nf_width = step_stats_notefield_width(cols_per_player)
             .unwrap_or(256.0_f32)
             .max(1.0_f32);
-        sidepane_width = ((screen_w - nf_width) * 0.5_f32).max(1.0_f32);
+        let notefield_gap = if is_ultrawide {
+            CENTERED_ULTRAWIDE_NOTEFIELD_GAP
+        } else {
+            0.0_f32
+        };
+        sidepane_width = ((screen_w - nf_width - 2.0_f32 * notefield_gap) * 0.5_f32).max(1.0_f32);
     }
     if is_ultrawide && num_players > 1 {
         sidepane_width = (screen_w * 0.2_f32).max(1.0_f32);

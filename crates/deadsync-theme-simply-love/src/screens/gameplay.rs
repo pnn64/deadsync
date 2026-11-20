@@ -5652,13 +5652,20 @@ pub fn frame_layers<'a>(
                         playfield_center_x,
                     );
                 }
-                GameplayStepStatsMode::Side => gameplay_stats::push_step_stats(
-                    actors,
-                    state,
-                    asset_manager,
-                    playfield_center_x,
-                    player_side,
-                ),
+                GameplayStepStatsMode::Side => {
+                    let layout = gameplay_stats::step_stats_pane_layout(
+                        state,
+                        playfield_center_x,
+                        player_side,
+                    );
+                    gameplay_stats::push_step_stats(
+                        actors,
+                        state,
+                        asset_manager,
+                        layout,
+                        player_side,
+                    );
+                }
                 GameplayStepStatsMode::Versus => {
                     gameplay_stats::push_versus_step_stats(actors, state, asset_manager);
                 }

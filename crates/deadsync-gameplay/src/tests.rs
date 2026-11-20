@@ -1293,7 +1293,7 @@ mod tests {
             true,
             false,
         );
-        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
+        let expected = ((854.0 - 512.0 - 2.0 * CENTERED_ULTRAWIDE_NOTEFIELD_GAP) * 0.5) * 0.95;
         assert_near(width, expected);
     }
 
@@ -1321,7 +1321,7 @@ mod tests {
                 true,
                 true,
             ),
-            299.0,
+            283.0,
         );
         assert_near(
             step_stats_density_graph_width(
@@ -1346,6 +1346,18 @@ mod tests {
                 false,
             ),
             512.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                1720.0,
+                720.0,
+                true,
+                true,
+            ),
+            716.0,
         );
     }
 

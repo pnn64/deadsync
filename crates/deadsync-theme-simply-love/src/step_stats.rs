@@ -1,5 +1,6 @@
 use crate::ui_layout::UILayoutType;
 use deadlib_present::space::Metrics;
+use deadsync_gameplay::CENTERED_ULTRAWIDE_NOTEFIELD_GAP;
 use deadsync_profile::PlayerSide;
 use glam::Mat4;
 
@@ -255,6 +256,25 @@ pub fn pane_layout(params: StepStatsPaneParams) -> StepStatsPaneLayout {
         };
     }
 
+    if layout_type == UILayoutType::UltraWide && note_field_is_centered && params.num_players == 1 {
+        let nf_width = params.notefield_width.unwrap_or(256.0).max(1.0);
+        sidepane_width =
+            ((params.screen_w - nf_width - 2.0 * CENTERED_ULTRAWIDE_NOTEFIELD_GAP) * 0.5).max(1.0);
+        sidepane_center_x = match params.player_side {
+            PlayerSide::P1 => {
+                params.screen_center_x
+                    + nf_width * 0.5
+                    + CENTERED_ULTRAWIDE_NOTEFIELD_GAP
+                    + sidepane_width * 0.5
+            }
+            PlayerSide::P2 => {
+                params.screen_center_x
+                    - nf_width * 0.5
+                    - CENTERED_ULTRAWIDE_NOTEFIELD_GAP
+                    - sidepane_width * 0.5
+            }
+        };
+    }
     if layout_type == UILayoutType::UltraWide && params.num_players > 1 {
         sidepane_width = params.screen_w * 0.2;
         sidepane_center_x = match params.player_side {
@@ -357,7 +377,12 @@ pub fn density_graph_width(current_graph_w: f32, sidepane_width: f32, double: bo
 
 #[must_use]
 pub fn density_graph_rect(current_graph_w: f32, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
-    let graph_w = density_graph_width(current_graph_w, layout.sidepane_width, false);
+    let graph_w = density_graph_width(
+        current_graph_w.min(layout.sidepane_width),
+        layout.sidepane_width,
+        false,
+    )
+    .min(layout.sidepane_width);
     StepStatsGraphRect {
         x: graph_w.mul_add(-0.5, layout.sidepane_center_x),
         y: layout.sidepane_center_y + 55.0,
@@ -592,10 +617,12 @@ pub fn centered_single_split_layout(
     let panel_width = PANEL_CONTENT_WIDTH * panel_zoom;
     let left_field_edge = screen_center_x - notefield_width * 0.5;
     let right_field_edge = screen_center_x + notefield_width * 0.5;
+    let graph_w = density_graph_width(current_graph_w, sidepane_width, false).min(sidepane_width);
     let graph = StepStatsGraphRect {
-        x: right_field_edge,
+        // Squareish notefields scale down independently, so the mesh may be narrower than its pane.
+        x: screen_w - graph_w,
         y: screen_h - GRAPH_HEIGHT,
-        w: density_graph_width(current_graph_w, sidepane_width, false).min(sidepane_width),
+        w: graph_w,
     };
 
     if graph.w > sidepane_width
@@ -813,6 +840,29 @@ mod tests {
         assert_eq!(layout.sidepane_center_y, 620.0);
         assert_eq!(layout.layout_type, UILayoutType::UltraWide);
         assert_eq!(layout.banner_data_zoom, 1.0);
+    }
+
+    #[test]
+    fn centered_single_ultrawide_pane_clears_the_notefield() {
+        let mut params = base_params();
+        params.screen_w = 1720.0;
+        params.screen_h = 720.0;
+        params.screen_center_x = 860.0;
+        params.screen_center_y = 360.0;
+        params.playfield_center_x = params.screen_center_x;
+        params.layout_type = UILayoutType::UltraWide;
+
+        let layout = pane_layout(params);
+        let pane = pane_rect(layout, params.screen_h);
+        let notefield_right = params.screen_center_x + params.notefield_width.unwrap() * 0.5;
+        let graph = density_graph_rect(1000.0, layout);
+
+        assert_eq!(pane.left, notefield_right + CENTERED_ULTRAWIDE_NOTEFIELD_GAP);
+        assert_eq!(graph.x, pane.left);
+        assert!(layout.note_field_is_centered);
+        assert!((graph.w - (pane.right - pane.left)).abs() < 0.001);
+        assert!(graph.x >= notefield_right + CENTERED_ULTRAWIDE_NOTEFIELD_GAP);
+        assert_eq!(pane.right, params.screen_w);
     }
 
     #[test]
@@ -1133,6 +1183,15 @@ mod tests {
         let banner_half_width = STEP_STATS_BANNER_W * banner.zoom * 0.5;
         assert!(banner.x - banner_half_width >= layout.graph.x);
         assert!(banner.x + banner_half_width <= 480.0);
+    }
+
+    #[test]
+    fn centered_single_square_graph_aligns_with_screen_edge() {
+        let layout =
+            centered_single_split_layout(320.0, 320.0, 640.0, 640.0, 320.0, 192.0, 192.0).unwrap();
+
+        assert_eq!(layout.graph.x, 448.0);
+        assert_eq!(layout.graph.x + layout.graph.w, 640.0);
     }
 
     #[test]
