@@ -1,4 +1,4 @@
-use crate::{Error, Limits, decode::validate_text, model::*, reserve};
+use crate::{ColorType, Error, Image, Limits, Samples, decode::validate_text, model::*, reserve};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Background {
@@ -120,6 +120,16 @@ impl Compositor {
     }
     pub fn pixels(&self) -> &[u8] {
         self.pixels.as_flattened()
+    }
+    /// Move the current composited RGBA8 canvas into a shared image without copying.
+    pub fn into_image(self) -> Image {
+        Image {
+            width: self.header.width.into(),
+            height: self.header.height.into(),
+            color_type: ColorType::Rgba,
+            bit_depth: 8,
+            samples: Samples::U8(self.pixels.into_flattened()),
+        }
     }
     /// Start another playback with the configured background.
     pub fn reset(&mut self) {

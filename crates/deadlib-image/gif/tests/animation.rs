@@ -255,6 +255,69 @@ fn missing_and_external_palette() {
 }
 
 #[test]
+fn owned_canvas_reuses_pixels_and_keeps_the_current_display() {
+    let mut compositor = Compositor::new(&header()).unwrap();
+    compositor
+        .render(&frame(1, 1, 2, 2, 2, Disposal::Background))
+        .unwrap();
+    let expected = compositor.pixels().to_vec();
+    let pointer = compositor.pixels().as_ptr();
+    let (image, churn) = alloc::measure(|| compositor.into_image());
+    assert_eq!((churn.allocs, churn.reallocs), (0, 0));
+    image.validate().unwrap();
+    assert_eq!((image.width, image.height), (4, 3));
+    assert_eq!((image.color_type, image.bit_depth), (ColorType::Rgba, 8));
+    let Samples::U8(pixels) = image.samples else {
+        panic!("RGBA8 canvas must have byte samples");
+    };
+    assert_eq!(pixels.as_ptr(), pointer);
+    assert_eq!(pixels, expected);
+}
+
+#[test]
+fn global_external_and_mutated_local_palettes_survive_reset() {
+    for global in [false, true] {
+        let mut header = Header::new(2, 1);
+        if global {
+            header.global_palette = Some(vec![[11, 12, 13], [21, 22, 23]]);
+        }
+        let mut compositor = Compositor::with_options(
+            &header,
+            CompositeOptions {
+                background: Background::Transparent,
+                external_palette: Some(vec![[31, 32, 33], [41, 42, 43]]),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let expected = if global {
+            [11, 12, 13, 255, 21, 22, 23, 255]
+        } else {
+            [31, 32, 33, 255, 41, 42, 43, 255]
+        };
+        let mut frame = Frame::new(2, 1, vec![0, 1]);
+        assert_eq!(compositor.render(&frame).unwrap().rgba, expected);
+
+        frame.local_palette = Some(vec![[51, 52, 53], [61, 62, 63]]);
+        assert_eq!(
+            compositor.render(&frame).unwrap().rgba,
+            [51, 52, 53, 255, 61, 62, 63, 255]
+        );
+        frame.local_palette.as_mut().unwrap()[1] = [71, 72, 73];
+        assert_eq!(
+            compositor.render(&frame).unwrap().rgba,
+            [51, 52, 53, 255, 71, 72, 73, 255]
+        );
+
+        frame.local_palette = None;
+        assert_eq!(compositor.render(&frame).unwrap().rgba, expected);
+        compositor.reset();
+        assert_eq!(compositor.pixels(), [0; 8]);
+        assert_eq!(compositor.render(&frame).unwrap().rgba, expected);
+    }
+}
+
+#[test]
 fn deterministic_animation_against_independent_full_canvas_model() {
     let h = header();
     let mut c = Compositor::new(&h).unwrap();
