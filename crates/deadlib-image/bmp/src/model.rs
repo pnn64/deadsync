@@ -73,9 +73,14 @@ impl Bitmap {
                 if indices.len() != count {
                     return Err(Error::Invalid("incorrect index count"));
                 }
-                if indices
-                    .iter()
-                    .any(|&index| usize::from(index) >= palette.len())
+                // Public unpacked indices can exceed a 1/4-bit domain. Only a
+                // 256-entry palette makes every possible byte valid.
+                if palette.len() < 256
+                    && indices
+                        .iter()
+                        .copied()
+                        .max()
+                        .is_some_and(|index| usize::from(index) >= palette.len())
                 {
                     return Err(Error::Invalid("pixel index exceeds the palette"));
                 }

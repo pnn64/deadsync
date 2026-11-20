@@ -62,22 +62,30 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             let mut indices = Vec::new();
             reserve(&mut indices, header.pixel_count)?;
             indices.resize(header.pixel_count, 0);
+            let check_indices = palette_len < 1usize << header.info.bit_depth;
             for (encoded_y, row) in source.chunks_exact(header.row_pitch).enumerate() {
                 let y = if header.info.top_down {
                     encoded_y
                 } else {
                     height - 1 - encoded_y
                 };
-                for (x, index) in indices[y * width..(y + 1) * width].iter_mut().enumerate() {
-                    *index = match header.info.bit_depth {
-                        1 => (row[x / 8] >> (7 - x % 8)) & 1,
-                        4 => (row[x / 2] >> (4 * (1 - x % 2))) & 15,
-                        8 => row[x],
-                        _ => unreachable!("validated indexed depth"),
-                    };
-                    if usize::from(*index) >= palette_len {
-                        return Err(Error::Invalid("pixel index exceeds the palette"));
-                    }
+                let output = &mut indices[y * width..(y + 1) * width];
+                match header.info.bit_depth {
+                    1 => unpack_indices::<8>(row, output),
+                    4 => unpack_indices::<2>(row, output),
+                    8 => output.copy_from_slice(&row[..width]),
+                    _ => unreachable!("validated indexed depth"),
+                }
+                // Unpacking bounds every index to the encoded domain. A full
+                // palette needs no scan; short palettes use one byte reduction.
+                if check_indices
+                    && output
+                        .iter()
+                        .copied()
+                        .max()
+                        .is_some_and(|index| usize::from(index) >= palette_len)
+                {
+                    return Err(Error::Invalid("pixel index exceeds the palette"));
                 }
             }
             Pixels::Indexed {
@@ -144,6 +152,32 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         height: header.info.height,
         pixels,
     })
+}
+
+// A byte contains N indices, most-significant first. Expand whole groups at a
+// time, and handle the partial final byte without decoding its unused low bits.
+fn unpack_indices<const N: usize>(row: &[u8], output: &mut [u8]) {
+    let index = |byte: u8, i| (byte >> (8 - (i + 1) * (8 / N))) & (u8::MAX >> (8 - 8 / N));
+    let (groups, tail) = output.as_chunks_mut::<N>();
+    for (indices, &byte) in groups.iter_mut().zip(row) {
+        if N == 8 {
+            // Spread the eight bits into the low bit of eight bytes. Big-endian
+            // byte order then emits the original most-significant bit first.
+            let word = u64::from(byte);
+            let word = (word | (word << 28)) & 0x0000_000f_0000_000f;
+            let word = (word | (word << 14)) & 0x0003_0003_0003_0003;
+            let word = (word | (word << 7)) & 0x0101_0101_0101_0101;
+            indices.copy_from_slice(&word.to_be_bytes());
+        } else {
+            *indices = std::array::from_fn(|i| index(byte, i));
+        }
+    }
+    if !tail.is_empty() {
+        let byte = row[groups.len()];
+        for (i, output) in tail.iter_mut().enumerate() {
+            *output = index(byte, i);
+        }
+    }
 }
 
 // Fixed pixel sizes let the compiler remove stride and channel decisions from
