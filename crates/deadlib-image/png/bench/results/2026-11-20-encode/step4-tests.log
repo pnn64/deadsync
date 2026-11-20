@@ -1,0 +1,18 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 20.41s
+     Running unittests src\lib.rs (target\release\build\deadlib-image-png/242f985eac60e463\out\deadlib_image_png-242f985eac60e463.exe)
+
+running 10 tests
+test scanline::tests::unpack_preserves_short_and_extra_input_behavior ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test scanline::tests::unpack_every_byte_and_partial_group ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test scanline::x86::tests::every_average_pair_and_wrapping_residual_matches_integer_division ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test scanline::tests::unpack_rows_keep_padding_and_slice_boundaries ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+test scanline::x86::tests::every_vector_paeth_triplet_matches_the_specification ... ok
+test scanline::x86::tests::vector_rows_preserve_channel_history_tails_and_surrounding_bytes ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.20s
+

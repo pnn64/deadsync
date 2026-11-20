@@ -1,0 +1,21 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.5
+   Compiling adler2 v2.0.1
+   Compiling autocfg v1.5.1
+   Compiling cfg-if v1.0.5
+   Compiling pxfm v0.1.30
+   Compiling bitflags v2.13.2
+   Compiling bytemuck v1.25.2
+   Compiling byteorder-lite v0.1.0
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling num-traits v0.2.19
+   Compiling flate2 v1.1.11
+   Compiling png v0.18.1
+   Compiling moxcms v0.8.1
+   Compiling image v0.25.10
+   Compiling png-decode-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\png\bench)
+    Finished `release` profile [optimized] target(s) in 44.78s

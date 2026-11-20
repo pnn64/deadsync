@@ -1,0 +1,30 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+         // Seven pending bits plus four ten-bit literals need at most 47 bits.
+         let mut word = self.word;
+         let mut count = self.count;
+-        for &literal in literals {
+-            let (code, bits) = RLE_CODES[usize::from(literal)];
+-            word |= u64::from(code) << count;
+-            count += bits;
++        if let &[a, b, c, d] = literals {
++            let (a, a_bits) = RLE_CODES[usize::from(a)];
++            let (b, b_bits) = RLE_CODES[usize::from(b)];
++            let (c, c_bits) = RLE_CODES[usize::from(c)];
++            let (d, d_bits) = RLE_CODES[usize::from(d)];
++            let low = u64::from(a) | (u64::from(b) << a_bits);
++            let high = u64::from(c) | (u64::from(d) << c_bits);
++            let low_bits = a_bits + b_bits;
++            let high_bits = c_bits + d_bits;
++            word |= (low | (high << low_bits)) << count;
++            count += low_bits + high_bits;
++        } else {
++            for &literal in literals {
++                let (code, bits) = RLE_CODES[usize::from(literal)];
++                word |= u64::from(code) << count;
++                count += bits;
++            }
+         }
+         let complete = usize::from(count / 8);
+*** End Patch

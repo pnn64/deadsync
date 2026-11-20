@@ -1,0 +1,26 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 18.76s
+     Running tests\compression.rs (target\release\build\deadlib-image-png/4014c9c3df2e2b66\out\compression-4014c9c3df2e2b66.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+     Running tests\deflate_stream.rs (target\release\build\deadlib-image-png/f208627a7261af58\out\deflate_stream-f208627a7261af58.exe)
+
+running 7 tests
+test empty_output_and_input_after_finish ... ok
+test rle_checksum_spans_cover_interleaved_zero_runs ... ok
+test cross_block_history_and_separate_finish ... ok
+test rle_stored_fallback_and_block_transitions ... ok
+test rle_zero_run_boundaries_and_literal_alignment ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+

@@ -1,0 +1,50 @@
+{
+  "captured_utc": "2026-11-20T13:25:11.291693+00:00",
+  "scope": "Archive-time host facts; not a per-run environment snapshot.",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+  "relevant_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null,
+    "CARGO_BUILD_TARGET": null
+  },
+  "rustc": {
+    "command": [
+      "rustc",
+      "-Vv"
+    ],
+    "exit_code": 0,
+    "stdout": "rustc 1.100.0 (0ef1bc386 2026-11-09)\nbinary: rustc\ncommit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a\ncommit-date: 2026-11-09\nhost: x86_64-pc-windows-msvc\nrelease: 1.100.0\nLLVM version: 23.1.5\n",
+    "stderr": ""
+  },
+  "cargo": {
+    "command": [
+      "cargo",
+      "-V"
+    ],
+    "exit_code": 0,
+    "stdout": "cargo 1.100.0 (3acc79c0c 2026-11-05)\n",
+    "stderr": ""
+  },
+  "git_head": {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit_code": 0,
+    "stdout": "4a41c507d751ed9770c773840b2c15777714cd8d\n",
+    "stderr": ""
+  },
+  "hardware": {
+    "command": [
+      "powershell",
+      "-NoProfile",
+      "-Command",
+      "@{Processor = @(Get-CimInstance Win32_Processor | Select-Object Name,NumberOfLogicalProcessors); OS = Get-CimInstance Win32_OperatingSystem | Select-Object Caption,BuildNumber} | ConvertTo-Json -Depth 4"
+    ],
+    "exit_code": 0,
+    "stdout": "{\r\n    \"Processor\":  [\r\n                      {\r\n                          \"Name\":  \"Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\",\r\n                          \"NumberOfLogicalProcessors\":  44\r\n                      }\r\n                  ],\r\n    \"OS\":  {\r\n               \"Caption\":  \"Microsoft Windows 11 Pro\",\r\n               \"BuildNumber\":  \"26100\"\r\n           }\r\n}\r\n",
+    "stderr": ""
+  }
+}

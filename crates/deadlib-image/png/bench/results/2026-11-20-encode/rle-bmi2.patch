@@ -1,0 +1,104 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+-    fn rle_literals(&mut self, literals: &[u8]) {
++    #[inline(always)]
++    fn rle_literals(&mut self, literals: &[u8]) {
+@@
+     fn rle_block(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
++        #[cfg(target_arch = "x86_64")]
++        x86::rle(self, input, final_block, checksum);
++        #[cfg(not(target_arch = "x86_64"))]
++        self.rle_block_inner(input, final_block, checksum);
++    }
++
++    #[inline(always)]
++    fn rle_block_inner(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
+         debug_assert!(input.len() <= matcher::WINDOW);
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib/x86.rs
+@@
+-use super::{Bits, Error};
++use super::{Adler32, Bits, Error, Writer};
+@@
+     super::inflate_sized_codes(bits, output, written, fixed, window)
+ }
++
++#[inline(never)]
++pub(super) fn rle(
++    writer: &mut Writer,
++    input: &[u8],
++    final_block: bool,
++    checksum: &mut Adler32,
++) {
++    if std::is_x86_feature_detected!("bmi2") {
++        // SAFETY: BMI2 availability is checked above. The shared body uses
++        // safe Rust with checked slices and no unsafe memory operations.
++        unsafe { rle_bmi2(writer, input, final_block, checksum) }
++    } else {
++        writer.rle_block_inner(input, final_block, checksum);
++    }
++}
++
++#[target_feature(enable = "bmi2")]
++unsafe fn rle_bmi2(
++    writer: &mut Writer,
++    input: &[u8],
++    final_block: bool,
++    checksum: &mut Adler32,
++) {
++    writer.rle_block_inner(input, final_block, checksum);
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::zlib::matcher::WINDOW;
++
++    #[test]
++    fn rle_dispatch_matches_portable_bits_and_checksum() {
++        let mut mixed: Vec<u8> = (0..=255).collect();
++        for run in [1, 4, 5, 6, 7, 127, 128, 129, 258, 259] {
++            mixed.resize(mixed.len() + run, 0);
++            mixed.extend_from_slice(&[255, 1, 0, 2, 0, 3, 143, 144]);
++        }
++        let zeros = vec![0; if cfg!(miri) { 1024 } else { WINDOW }];
++        let noise: Vec<u8> = (0..1024).map(|n| 39 + (n * 73 % 179) as u8).collect();
++        for input in [b"".as_slice(), &mixed, &zeros, &noise] {
++            for pending in 0..8u8 {
++                for final_block in [false, true] {
++                    let make_writer = || Writer {
++                        bytes: Vec::with_capacity(WINDOW * 10 / 8 + 64),
++                        word: (1u64 << pending) - 1,
++                        count: pending,
++                    };
++                    let mut expected = make_writer();
++                    let mut actual = make_writer();
++                    let mut expected_sum = Adler32::new();
++                    let mut actual_sum = Adler32::new();
++                    expected_sum.update(b"prior block");
++                    actual_sum.update(b"prior block");
++                    expected.rle_block_inner(input, final_block, &mut expected_sum);
++                    actual.rle_block(input, final_block, &mut actual_sum);
++                    assert_eq!(
++                        (&actual.bytes, actual.word, actual.count, actual_sum.finish()),
++                        (&expected.bytes, expected.word, expected.count, expected_sum.finish()),
++                        "length={} pending={pending} final={final_block}",
++                        input.len()
++                    );
++                }
++            }
++        }
++    }
++
++    #[cfg(miri)]
++    #[test]
++    #[ignore = "requires BMI2-enabled Miri; run explicitly with --ignored --exact"]
++    fn rle_bmi2_contract_under_miri() {
++        assert!(
++            std::is_x86_feature_detected!("bmi2"),
++            "run this focused Miri test with BMI2 enabled"
++        );
++        rle_dispatch_matches_portable_bits_and_checksum();
++    }
++}
+*** End Patch

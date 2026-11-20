@@ -1,0 +1,286 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+ pub enum Compression {
+     Stored,
+     #[default]
+     Fast,
++    /// Fixed Huffman zero-run encoding without a match dictionary.
++    Rle,
+ }
+@@
+             self.stored(input, final_block);
+         }
+     }
++
++    fn rle_literals(&mut self, literals: &[u8]) {
++        debug_assert!(literals.len() <= 4);
++        // Standard fixed Huffman literal codes, computed from their canonical
++        // ranges. This lookup and grouped output are used only by Rle.
++        const CODES: [(u16, u8); 256] = {
++            let mut codes = [(0, 0); 256];
++            let mut symbol = 0;
++            while symbol < 256 {
++                let (code, bits) = if symbol < 144 {
++                    (0x30 + symbol as u16, 8)
++                } else {
++                    (0x190 + symbol as u16 - 144, 9)
++                };
++                codes[symbol] = (code.reverse_bits() >> (16 - bits), bits);
++                symbol += 1;
++            }
++            codes
++        };
++        // At most seven pending bits plus four nine-bit literals fit in u64.
++        let mut word = self.word;
++        let mut count = self.count;
++        for &literal in literals {
++            let (code, bits) = CODES[usize::from(literal)];
++            word |= u64::from(code) << count;
++            count += bits;
++        }
++        let complete = usize::from(count / 8);
++        self.bytes
++            .extend_from_slice(&word.to_le_bytes()[..complete]);
++        self.word = word >> (complete * 8);
++        self.count = count % 8;
++    }
++
++    fn rle_block(&mut self, input: &[u8], final_block: bool) {
++        debug_assert!(input.len() <= matcher::WINDOW);
++        let checkpoint = self.start_fixed(final_block);
++        let mut pos = 0;
++        while pos < input.len() {
++            if input[pos] != 0 {
++                let count = input[pos..]
++                    .iter()
++                    .position(|&byte| byte == 0)
++                    .unwrap_or(input.len() - pos);
++                for literals in input[pos..pos + count].chunks(4) {
++                    self.rle_literals(literals);
++                }
++                pos += count;
++                continue;
++            }
++            let start = pos;
++            while let Some(word) = input[pos..].first_chunk::<8>() {
++                if *word != [0; 8] {
++                    break;
++                }
++                pos += 8;
++            }
++            while pos < input.len() && input[pos] == 0 {
++                pos += 1;
++            }
++            // Seed each run with a literal, so distance one never refers to
++            // data before this block and no retained dictionary is needed.
++            self.literal(0);
++            let mut remaining = pos - start - 1;
++            while remaining >= 3 {
++                let length = remaining.min(258);
++                let code = length_code(length);
++                self.literal(257 + code);
++                self.write((length - LENGTH_BASE[code]) as u32, LENGTH_EXTRA[code]);
++                self.write(0, 5); // Fixed distance symbol zero means distance one.
++                remaining -= length;
++            }
++            if remaining != 0 {
++                self.rle_literals(&input[pos - remaining..pos]);
++            }
++        }
++        self.finish_fixed(checkpoint, input, final_block);
++    }
+ }
+ 
+ #[inline(always)]
+ fn length_code(length: usize) -> usize {
+@@
+-/// Encode a standards-compliant zlib stream with stored or fixed Huffman LZ77 blocks.
++/// Encode zlib with stored blocks or fixed Huffman blocks using LZ77 or zero runs.
+ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+@@
+             bytes.extend_from_slice(block);
+         }
++    } else if mode == Compression::Rle {
++        let mut writer = Writer {
++            bytes,
++            word: 0,
++            count: 0,
++        };
++        for start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
++            let end = input.len().min(start + matcher::WINDOW);
++            writer.rle_block(&input[start..end], end == input.len());
++        }
++        writer.align();
++        bytes = writer.bytes;
+     } else {
+         let mut w = Writer {
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs
+@@
+-/// Bounded zlib encoder with 32 KiB input blocks and cross-block LZ77 history.
++/// Bounded zlib encoder with 32 KiB input blocks. Fast retains LZ77 history;
++/// Stored and Rle need no match dictionary.
+@@
+     fn encode_block(&mut self, final_block: bool) {
+         if self.mode == Compression::Stored {
+             self.writer.stored(&self.block, final_block);
++        } else if self.mode == Compression::Rle {
++            self.writer.rle_block(&self.block, final_block);
+         } else {
+             let checkpoint = self.writer.start_fixed(final_block);
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/compression.rs
+@@
+ fn bidirectional_differential() {
+     for bytes in data() {
+-        for mode in [Compression::Stored, Compression::Fast] {
++        for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
+@@
+ fn truncation_checksums_limits_and_trailing_data() {
+-    for mode in [Compression::Stored, Compression::Fast] {
++    for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/deflate_stream.rs
+@@
+     assert!(
+         memory
+-            < if mode == Compression::Stored {
+-                80 * 1024
+-            } else {
++            < if mode == Compression::Fast {
+                 700 * 1024
++            } else {
++                80 * 1024
+             }
+     );
+@@
+         for raw in [noise, repeated] {
+-            for mode in [Compression::Stored, Compression::Fast] {
++            for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
+@@
+     raw.extend_from_within(..32768);
+     raw.extend_from_slice(&[0xff; 65536]);
+-    for mode in [Compression::Stored, Compression::Fast] {
++    for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
+@@
+ fn empty_output_and_input_after_finish() {
+-    for mode in [Compression::Stored, Compression::Fast] {
++    for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
+@@
+         assert_eq!(encoder.process(&[], &mut [], true), Err(error));
+     }
+ }
++
++#[test]
++fn rle_zero_run_boundaries_and_literal_alignment() {
++    for length in [
++        0, 1, 2, 3, 4, 7, 8, 9, 255, 256, 257, 258, 259, 260, 261, 515, 516, 517,
++        32767, 32768, 32769,
++    ] {
++        for leading in 0usize..8 {
++            let mut raw: Vec<_> = (0..leading)
++                .map(|n| if n.is_multiple_of(2) { 143 } else { 144 })
++                .collect();
++            raw.resize(leading + length, 0);
++            if leading != 0 {
++                raw.extend_from_slice(&[255, 0, 1, 143, 144, 255]);
++            }
++            let expected = zlib::compress(&raw, Compression::Rle).unwrap();
++            for (input, output) in [
++                (raw.len().max(1), raw.len() * 2 + 64),
++                (1, 1),
++                (7, 2),
++                (257, 31),
++                (32768, 4096),
++            ] {
++                // encode also checks flate2, native inflation, counters,
++                // untouched output tails, and constant bounded scratch.
++                assert_eq!(
++                    encode(&raw, Compression::Rle, input, output),
++                    expected,
++                    "run={length} leading={leading} input={input} output={output}"
++                );
++            }
++        }
++    }
++    // Every literal code, including the 8/9-bit boundary, remains in compressed
++    // blocks because the surrounding zero runs prevent a stored fallback.
++    let mut raw: Vec<u8> = (0..=255).collect();
++    raw.resize(32768 - 3, 0);
++    raw.extend((0..=255).rev());
++    raw.resize(raw.len() + 1024, 0);
++    let expected = zlib::compress(&raw, Compression::Rle).unwrap();
++    for (input, output) in [(1, 3), (32767, 1), (32768, 4096)] {
++        assert_eq!(encode(&raw, Compression::Rle, input, output), expected);
++    }
++}
++
++#[test]
++fn rle_stored_fallback_and_block_transitions() {
++    const BLOCK: usize = 32768;
++    let mut random = 0x4c3a_91e7u32;
++    let noise: Vec<_> = (0..BLOCK)
++        .map(|_| {
++            random ^= random << 13;
++            random ^= random >> 17;
++            random ^= random << 5;
++            144 + (random % 112) as u8
++        })
++        .collect();
++    let stored = zlib::compress(&noise, Compression::Rle).unwrap();
++    assert_eq!(stored.len(), noise.len() + 11);
++    assert_eq!((stored[2] >> 1) & 3, 0);
++    assert_eq!(
++        encode(&noise, Compression::Rle, 29, 7),
++        stored,
++        "nine-bit literals must fall back to one stored block"
++    );
++    for leading in 0..8 {
++        let mut zeros = vec![0; BLOCK];
++        zeros[..leading].fill(144);
++        let raw = [
++            zeros.as_slice(),
++            noise.as_slice(),
++            zeros.as_slice(),
++            noise.as_slice(),
++        ]
++        .concat();
++        let expected = zlib::compress(&raw, Compression::Rle).unwrap();
++        assert!(expected.len() < 2 * BLOCK + 1024);
++        for (input, output) in [(raw.len(), 8192), (17, 1), (32768, 31)] {
++            assert_eq!(
++                encode(&raw, Compression::Rle, input, output),
++                expected,
++                "leading={leading} input={input} output={output}"
++            );
++        }
++    }
++}
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/static_png.rs
+@@
+                     for interlaced in [false, true] {
+-                        for compression in [Compression::Stored, Compression::Fast] {
++                        for compression in [
++                            Compression::Stored,
++                            Compression::Fast,
++                            Compression::Rle,
++                        ] {
+@@
+-    assert_eq!(cases, 3240);
++    assert_eq!(cases, 4860);
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/png_write.rs
+@@
+             let png = fixture(color, depth, 13);
+             for interlaced in [false, true] {
+-                for compression in [Compression::Stored, Compression::Fast] {
++                for compression in [Compression::Stored, Compression::Fast, Compression::Rle] {
+@@
+ fn bounded_encoder_scratch_and_maximum_chunk_size() {
+-    for compression in [Compression::Stored, Compression::Fast] {
++    for compression in [Compression::Stored, Compression::Fast, Compression::Rle] {
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/apng.rs
+@@
+                     for compression in [
+                         deadlib_image_png::zlib::Compression::Stored,
+                         deadlib_image_png::zlib::Compression::Fast,
++                        deadlib_image_png::zlib::Compression::Rle,
+                     ] {
+*** End Patch

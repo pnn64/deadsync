@@ -1,0 +1,22 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+         let mut pos = 0;
+         while pos < input.len() {
++            // Emit four literals together unless a compressible zero run can
++            // start in them. Single, double and triple zeros are also literals.
++            while let Some(bytes) = input[pos..].first_chunk::<8>() {
++                let word = u64::from_le_bytes(*bytes);
++                let zeros = word.wrapping_sub(0x0101_0101_0101_0101)
++                    & !word
++                    & 0x8080_8080_8080_8080;
++                // Borrow propagation can mark adjacent 1s too; that only takes
++                // the scalar path. Every actual four-zero start is detected.
++                if zeros & (zeros >> 8) & (zeros >> 16) & (zeros >> 24) & 0x8080_8080 != 0 {
++                    break;
++                }
++                self.rle_literals(&input[pos..pos + 4]);
++                pos += 4;
++            }
+             if input[pos] != 0 {
+*** End Patch

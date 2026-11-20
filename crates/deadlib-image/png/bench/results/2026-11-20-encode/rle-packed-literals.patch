@@ -1,0 +1,30 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+ const RLE_LENGTHS: [u8; 286] = rle_lengths();
+ const RLE_CODES: [(u16, u8); 286] = rle_codes(RLE_LENGTHS);
++const RLE_LITERAL_CODES: [u32; 256] = {
++    let mut table = [0u32; 256];
++    let mut symbol = 0;
++    while symbol < table.len() {
++        let (code, bits) = RLE_CODES[symbol];
++        table[symbol] = ((code as u32) << 8) | bits as u32;
++        symbol += 1;
++    }
++    table
++};
+ 
+ struct RleHeader {
+@@
+         let mut word = self.word;
+         let mut count = self.count;
+         for &literal in literals {
+-            let (code, bits) = RLE_CODES[usize::from(literal)];
+-            word |= u64::from(code) << count;
+-            count += bits;
++            let entry = RLE_LITERAL_CODES[usize::from(literal)];
++            word |= u64::from(entry >> 8) << count;
++            count += entry as u8;
+         }
+         let complete = usize::from(count / 8);
+*** End Patch

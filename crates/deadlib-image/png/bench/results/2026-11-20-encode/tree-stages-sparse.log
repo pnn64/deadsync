@@ -1,0 +1,12 @@
+Opaque RGBA8 1600x900; filtered=5760900 zlib=43034 bytes; five median batches of at least 40 ms.
+Diagnostic stages overlap; fresh outputs include destruction. Cycles are zero outside Windows.
+stage	ns	thread_cycles
+native-buffered	13130125	28780181
+native-writer	11343450	24866606
+adaptive-filter	3327400	7291975
+deflate-fast	8675540	19019762
+deflate-rle	1360210	2981790
+native-rle-buffered	4746311	10406056
+native-rle-writer	2621625	5747223
+adler32-filtered	531388	1164762
+crc32-compressed	2746	6023

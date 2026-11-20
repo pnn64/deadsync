@@ -1,0 +1,131 @@
+Opaque RGBA8 encode core; five median batches of at least 20 ms; fresh owned PNG outputs including destruction. Verification, input preparation, and encoded FNV-1a fingerprints are outside measurement.
+Native defaults: Fast/Adaptive. image 0.25.10 default: Fast/Adaptive. png 0.18.1 controls: Fast/Adaptive and Balanced/Adaptive. Allocation builds and --verify-only emit zero timing columns.
+VERIFYING	C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png	1600x900
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png	image-default	1600x900	34231 bytes	a604e90b4c6f9ddd
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png	native-rle-buffered	1600x900	30745 bytes	f779df89c3a2424f
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png	native-rle-writer	1600x900	30745 bytes	f779df89c3a2424f
+VERIFYING	C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png	1600x900
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png	image-default	1600x900	33644 bytes	c19faa7101e35bc2
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png	native-rle-buffered	1600x900	30283 bytes	f479fdbe5eb682ca
+VERIFIED	C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png	native-rle-writer	1600x900	30283 bytes	f479fdbe5eb682ca
+VERIFYING	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png	image-default	1600x900	1629623 bytes	9cd67b59e9589135
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png	native-rle-buffered	1600x900	2081667 bytes	9e8346b044f947ee
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png	native-rle-writer	1600x900	2081667 bytes	9e8346b044f947ee
+VERIFYING	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png	image-default	1600x900	90207 bytes	21097589d17081c7
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png	native-rle-buffered	1600x900	93065 bytes	236f7d9d7c87f4f8
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png	native-rle-writer	1600x900	93065 bytes	236f7d9d7c87f4f8
+VERIFYING	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png	image-default	1600x900	127414 bytes	f0a41a4128439ce3
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png	native-rle-buffered	1600x900	136952 bytes	e5c74258329e42fd
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png	native-rle-writer	1600x900	136952 bytes	e5c74258329e42fd
+VERIFYING	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png	image-default	1600x900	88920 bytes	c8821836390fa6c2
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png	native-rle-buffered	1600x900	91530 bytes	055b79cb092df58c
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png	native-rle-writer	1600x900	91530 bytes	055b79cb092df58c
+VERIFYING	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png	image-default	1600x900	71391 bytes	d3169eac66d55b60
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png	native-rle-buffered	1600x900	76724 bytes	524e2ad3eff7d5e9
+VERIFIED	C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png	native-rle-writer	1600x900	76724 bytes	524e2ad3eff7d5e9
+VERIFYING	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png	image-default	1600x900	128232 bytes	e73e570f0dcd895f
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png	native-rle-buffered	1600x900	146024 bytes	47eb0b791eadad32
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png	native-rle-writer	1600x900	146024 bytes	47eb0b791eadad32
+VERIFYING	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png	image-default	1600x900	74778 bytes	fb6ac5ef5d4d304e
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png	native-rle-buffered	1600x900	80527 bytes	afab51557aa06294
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png	native-rle-writer	1600x900	80527 bytes	afab51557aa06294
+VERIFYING	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png	image-default	1600x900	135002 bytes	81e3cf0c3d1621a9
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png	native-rle-buffered	1600x900	148859 bytes	87bc41a868a8ea0c
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png	native-rle-writer	1600x900	148859 bytes	87bc41a868a8ea0c
+VERIFYING	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png	1600x900
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png	image-default	1600x900	211564 bytes	903de8203e7f2224
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png	native-rle-buffered	1600x900	224906 bytes	90f21f21d5c4f493
+VERIFIED	C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png	native-rle-writer	1600x900	224906 bytes	90f21f21d5c4f493
+VERIFYING	C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png	1280x720
+VERIFIED	C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png	image-default	1280x720	760852 bytes	5dc85a5dc5c26ea1
+VERIFIED	C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png	native-rle-buffered	1280x720	950773 bytes	deb8377d02e79f8c
+VERIFIED	C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png	native-rle-writer	1280x720	950773 bytes	deb8377d02e79f8c
+VERIFYING	C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png	512x512
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png	image-default	512x512	536515 bytes	7b922f5f93ee16e1
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png	native-rle-buffered	512x512	647703 bytes	91a671c160d209e7
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png	native-rle-writer	512x512	647703 bytes	91a671c160d209e7
+VERIFYING	C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png	1280x720
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png	image-default	1280x720	1172027 bytes	253ae0043445d4b5
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png	native-rle-buffered	1280x720	1397094 bytes	8b3e03396f694b26
+VERIFIED	C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png	native-rle-writer	1280x720	1397094 bytes	8b3e03396f694b26
+VERIFYING	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png	1600x900
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png	image-default	1600x900	194417 bytes	a8658be372a0ab78
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png	native-rle-buffered	1600x900	216453 bytes	769dfe7067938686
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png	native-rle-writer	1600x900	216453 bytes	769dfe7067938686
+VERIFYING	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png	1600x900
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png	image-default	1600x900	1534249 bytes	0b86cabfab531c07
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png	native-rle-buffered	1600x900	1908971 bytes	02ac407966d31fe0
+VERIFIED	C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png	native-rle-writer	1600x900	1908971 bytes	02ac407966d31fe0
+VERIFYING	generated/flat-17x13	17x13
+VERIFIED	generated/flat-17x13	image-default	17x13	173 bytes	a4fc6810fffcc180
+VERIFIED	generated/flat-17x13	native-rle-buffered	17x13	146 bytes	974f5494193c3e83
+VERIFIED	generated/flat-17x13	native-rle-writer	17x13	146 bytes	974f5494193c3e83
+VERIFYING	generated/gradient-17x13	17x13
+VERIFIED	generated/gradient-17x13	image-default	17x13	510 bytes	47ae908bda8d62ce
+VERIFIED	generated/gradient-17x13	native-rle-buffered	17x13	608 bytes	a367e95c5a9605b3
+VERIFIED	generated/gradient-17x13	native-rle-writer	17x13	608 bytes	a367e95c5a9605b3
+VERIFYING	generated/ui-17x13	17x13
+VERIFIED	generated/ui-17x13	image-default	17x13	454 bytes	d1a22b7a72497012
+VERIFIED	generated/ui-17x13	native-rle-buffered	17x13	410 bytes	52048a5b0b9fcf18
+VERIFIED	generated/ui-17x13	native-rle-writer	17x13	410 bytes	52048a5b0b9fcf18
+VERIFYING	generated/noise-17x13	17x13
+VERIFIED	generated/noise-17x13	image-default	17x13	965 bytes	bed8f92459da80dc
+VERIFIED	generated/noise-17x13	native-rle-buffered	17x13	946 bytes	e3a33342a47c8a27
+VERIFIED	generated/noise-17x13	native-rle-writer	17x13	946 bytes	e3a33342a47c8a27
+VERIFYING	generated/flat-640x360	640x360
+VERIFIED	generated/flat-640x360	image-default	640x360	5341 bytes	4a0d940487b874fe
+VERIFIED	generated/flat-640x360	native-rle-buffered	640x360	4832 bytes	af4ef388c250a417
+VERIFIED	generated/flat-640x360	native-rle-writer	640x360	4832 bytes	af4ef388c250a417
+VERIFYING	generated/gradient-640x360	640x360
+VERIFIED	generated/gradient-640x360	image-default	640x360	76029 bytes	4e37e5d4cd5574ef
+VERIFIED	generated/gradient-640x360	native-rle-buffered	640x360	72937 bytes	0796b0a4a697bc93
+VERIFIED	generated/gradient-640x360	native-rle-writer	640x360	72937 bytes	0796b0a4a697bc93
+VERIFYING	generated/ui-640x360	640x360
+VERIFIED	generated/ui-640x360	image-default	640x360	8206 bytes	64fccffc9a9259dc
+VERIFIED	generated/ui-640x360	native-rle-buffered	640x360	7346 bytes	2a2a7ab5857b0909
+VERIFIED	generated/ui-640x360	native-rle-writer	640x360	7346 bytes	2a2a7ab5857b0909
+VERIFYING	generated/noise-640x360	640x360
+VERIFIED	generated/noise-640x360	image-default	640x360	922098 bytes	f1b9987a59dde246
+VERIFIED	generated/noise-640x360	native-rle-buffered	640x360	865717 bytes	3bf7eaa856e7b631
+VERIFIED	generated/noise-640x360	native-rle-writer	640x360	865717 bytes	3bf7eaa856e7b631
+VERIFYING	generated/flat-1920x1080	1920x1080
+VERIFIED	generated/flat-1920x1080	image-default	1920x1080	42781 bytes	c66d32e6882ff642
+VERIFIED	generated/flat-1920x1080	native-rle-buffered	1920x1080	38284 bytes	7dbe25152b03997d
+VERIFIED	generated/flat-1920x1080	native-rle-writer	1920x1080	38284 bytes	7dbe25152b03997d
+VERIFYING	generated/gradient-1920x1080	1920x1080
+VERIFIED	generated/gradient-1920x1080	image-default	1920x1080	119367 bytes	ea07e7cc2060fc4c
+VERIFIED	generated/gradient-1920x1080	native-rle-buffered	1920x1080	110674 bytes	c2af52a7a878a648
+VERIFIED	generated/gradient-1920x1080	native-rle-writer	1920x1080	110674 bytes	c2af52a7a878a648
+VERIFYING	generated/ui-1920x1080	1920x1080
+VERIFIED	generated/ui-1920x1080	image-default	1920x1080	46094 bytes	cb385d283709bc54
+VERIFIED	generated/ui-1920x1080	native-rle-buffered	1920x1080	41193 bytes	323895599d20f78d
+VERIFIED	generated/ui-1920x1080	native-rle-writer	1920x1080	41193 bytes	323895599d20f78d
+VERIFYING	generated/noise-1920x1080	1920x1080
+VERIFIED	generated/noise-1920x1080	image-default	1920x1080	8296178 bytes	e4e2571ba5b79f00
+VERIFIED	generated/noise-1920x1080	native-rle-buffered	1920x1080	7781789 bytes	c7d80466a423554c
+VERIFIED	generated/noise-1920x1080	native-rle-writer	1920x1080	7781789 bytes	c7d80466a423554c
+VERIFYING	generated/flat-3840x2160	3840x2160
+VERIFIED	generated/flat-3840x2160	image-default	3840x2160	166441 bytes	2620507a1094b15f
+VERIFIED	generated/flat-3840x2160	native-rle-buffered	3840x2160	148339 bytes	781d06b97056889f
+VERIFIED	generated/flat-3840x2160	native-rle-writer	3840x2160	148339 bytes	781d06b97056889f
+VERIFYING	generated/gradient-3840x2160	3840x2160
+VERIFIED	generated/gradient-3840x2160	image-default	3840x2160	237586 bytes	3596e0b1499235af
+VERIFIED	generated/gradient-3840x2160	native-rle-buffered	3840x2160	219117 bytes	f82db65974066d8b
+VERIFIED	generated/gradient-3840x2160	native-rle-writer	3840x2160	219117 bytes	f82db65974066d8b
+VERIFYING	generated/ui-3840x2160	3840x2160
+VERIFIED	generated/ui-3840x2160	image-default	3840x2160	169769 bytes	37a5d63e4906e40c
+VERIFIED	generated/ui-3840x2160	native-rle-buffered	3840x2160	151261 bytes	aac9bfeea7c26d7b
+VERIFIED	generated/ui-3840x2160	native-rle-writer	3840x2160	151261 bytes	aac9bfeea7c26d7b
+VERIFYING	generated/noise-3840x2160	3840x2160
+VERIFIED	generated/noise-3840x2160	image-default	3840x2160	33182358 bytes	5bcb039ae3d88ad0
+VERIFIED	generated/noise-3840x2160	native-rle-buffered	3840x2160	31104671 bytes	264fbc6c005ee0c3
+VERIFIED	generated/noise-3840x2160	native-rle-writer	3840x2160	31104671 bytes	264fbc6c005ee0c3
+Completed 32 inputs, 3 modes per input; no decoder or encoder failures excluded.

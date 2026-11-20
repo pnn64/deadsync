@@ -1,0 +1,63 @@
+{
+  "created_utc": "2026-11-20T13:13:30.290402+00:00",
+  "test_summaries": 44,
+  "tests": {
+    "passed": 179,
+    "failed": 0,
+    "ignored": 21
+  },
+  "checks": [
+    {
+      "log": "final-tests.log",
+      "command": "cargo test --release -p deadlib-image-png",
+      "child_exit_code": 0,
+      "observed_terminal_session": 79827,
+      "sha256": "e658f264b91f1fcb953924c42815bab5e20493161f1a040217b5d1e6ecdfe26a"
+    },
+    {
+      "log": "final-clippy.log",
+      "command": "cargo clippy -p deadlib-image-png --all-targets -- -D warnings",
+      "child_exit_code": 0,
+      "observed_terminal_session": 79827,
+      "sha256": "08abd83e88f9965dc79f3b25e9dafdd56ac30b9981adeaed7636e8ccef1201ee"
+    },
+    {
+      "log": "final-bench-clippy.log",
+      "command": "cargo clippy --manifest-path crates/deadlib-image/png/bench/Cargo.toml --bin encode --bin encode_stages -- -D warnings",
+      "child_exit_code": 0,
+      "observed_terminal_session": 79827,
+      "sha256": "9c0170b93b69de38339e761ed7e66c074e9034eb3b9eec6c699485d2b651445d"
+    },
+    {
+      "log": "final-bench-alloc-clippy.log",
+      "command": "cargo clippy --manifest-path crates/deadlib-image/png/bench/Cargo.toml --bin encode --features allocations -- -D warnings",
+      "child_exit_code": 0,
+      "observed_terminal_session": 79827,
+      "sha256": "81ba6c3ded1a693e44aa213d74b0599bcee7ec888c15b9d0d57283a24d7f3770"
+    },
+    {
+      "log": "final-fmt.log",
+      "command": "cargo fmt --package deadlib-image-png --check",
+      "child_exit_code": 0,
+      "observed_terminal_session": 19756,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "log": "final-bench-fmt.log",
+      "command": "cargo fmt --manifest-path crates/deadlib-image/png/bench/Cargo.toml --check",
+      "child_exit_code": 0,
+      "observed_terminal_session": 19756,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "log": "final-dependencies.log",
+      "command": "cargo tree -p deadlib-image-png --edges normal",
+      "child_exit_code": 0,
+      "observed_terminal_session": 19756,
+      "sha256": "87b63600e4ce20870d44147bf0f5c94f04800bce2c5a296e90e519390edd73d8"
+    }
+  ],
+  "exit_code_evidence": "Child exits observed in capture.py terminal results. Session 79827 completed with exit 0. Session 19756 printed exit=0 for both format checks and the dependency check, then failed only while printing the captured Unicode dependency tree through cp1252. Those checks were not rerun. Remaining build/measurement work resumed with PYTHONIOENCODING=utf-8.",
+  "ignored": "The 21 optional external-oracle tests were not run; regular Rust png and flate2 comparisons were run.",
+  "scope": "No new unsafe production code. Final source correctness validation includes the six-byte-prefix scanner and its added 14-17-byte boundary cases."
+}

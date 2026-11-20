@@ -1,0 +1,176 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/checksum.rs
+@@
+-    fn update_bulk(&mut self, input: &[u8]) {
++    #[inline]
++    pub(crate) fn update_zeros(&mut self, len: usize) {
++        // a and b are normalized. Even their largest possible product plus b
++        // is 65520*65520+65520 = 4292935920, which fits in u32.
++        self.b = (self.b + self.a * (len % 65521) as u32) % 65521;
++    }
++    fn update_bulk(&mut self, input: &[u8]) {
+@@
+-    #[test]
+-    fn adler_fragmentation_and_tail_lengths_match_scalar_oracle() {
++    #[test]
++    fn adler_zero_advancement_matches_modular_addition() {
++        // Binary repeated addition avoids both the implementation's product
++        // and its reduction of len before multiplying.
++        fn oracle(a: u32, b: u32, mut len: usize) -> (u32, u32) {
++            let mut delta = u64::from(a);
++            let mut sum = u64::from(b);
++            while len != 0 {
++                if len & 1 != 0 {
++                    sum = (sum + delta) % 65521;
++                }
++                delta = (delta + delta) % 65521;
++                len >>= 1;
++            }
++            (a, sum as u32)
++        }
++        let mut lengths = vec![
++            0, 1, 2, 3, 31, 32, 127, 128, 129, 5551, 5552, 5553, 65520, 65521, 65522,
++            usize::MAX / 2, usize::MAX - 1, usize::MAX,
++        ];
++        for factor in [2usize, 65521] {
++            if let Some(after) = 65521usize.checked_mul(factor).and_then(|n| n.checked_add(1)) {
++                lengths.extend([after - 2, after - 1, after]);
++            }
++        }
++        for a in [0, 1, 65520] {
++            for b in [0, 1, 65520] {
++                for &len in &lengths {
++                    let expected = oracle(a, b, len);
++                    let mut actual = Adler32 { a, b };
++                    actual.update_zeros(len);
++                    assert_eq!(
++                        (actual.a, actual.b), expected,
++                        "a={a} b={b} len={len}"
++                    );
++                    let split = len / 2;
++                    let mut fragmented = Adler32 { a, b };
++                    fragmented.update_zeros(split);
++                    fragmented.update_zeros(len - split);
++                    assert_eq!(
++                        (fragmented.a, fragmented.b), expected,
++                        "fragmented a={a} b={b} len={len}"
++                    );
++                }
++            }
++        }
++    }
++
++    #[test]
++    fn adler_zero_advancement_interleaves_with_nonzero_spans() {
++        let prefix: Vec<u8> = (0usize..137).map(|n| (n * 137 + 71) as u8).collect();
++        let suffix: Vec<u8> = (0usize..257).map(|n| (n * 59 + 193) as u8).collect();
++        for len in [0, 1, 127, 128, 129, 5552, 65520, 65521, 65522] {
++            for initial in [(1, 0), (65520, 65520)] {
++                let (mut a, mut b) = (u64::from(initial.0), u64::from(initial.1));
++                for byte in prefix.iter().copied()
++                    .chain(core::iter::repeat(0).take(len))
++                    .chain(suffix.iter().copied())
++                {
++                    a = (a + u64::from(byte)) % 65521;
++                    b = (b + a) % 65521;
++                }
++                let mut actual = Adler32 { a: initial.0, b: initial.1 };
++                actual.update(&prefix);
++                actual.update_zeros(len);
++                actual.update(&suffix);
++                assert_eq!(
++                    (actual.a, actual.b), (a as u32, b as u32),
++                    "initial={initial:?} len={len}"
++                );
++            }
++        }
++    }
++
++    #[test]
++    fn adler_fragmentation_and_tail_lengths_match_scalar_oracle() {
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+-use crate::{Error, checksum::adler32, reserve};
++use crate::{
++    Error,
++    checksum::{Adler32, adler32},
++    reserve,
++};
+@@
+-    fn rle_block(&mut self, input: &[u8], final_block: bool) {
++    fn rle_block(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
+         debug_assert!(input.len() <= matcher::WINDOW);
+         let checkpoint = self.start_rle(final_block);
++        let mut checksum_start = 0;
+         let mut pos = 0;
+@@
+             while pos < input.len() && input[pos] == 0 {
+                 pos += 1;
+             }
++            if pos - start >= 128 {
++                checksum.update(&input[checksum_start..start]);
++                checksum.update_zeros(pos - start);
++                checksum_start = pos;
++            }
+             // Seed each run with a literal, so distance one never refers to
+@@
+-        self.write(RLE_CODES[256].0 as u32, RLE_CODES[256].1);
++        // Short runs stay in these spans so bulk checksum code handles noise.
++        checksum.update(&input[checksum_start..]);
++        self.write(RLE_CODES[256].0 as u32, RLE_CODES[256].1);
+@@
+         let mut writer = Writer {
+             bytes,
+             word: 0,
+             count: 0,
+         };
++        let mut checksum = Adler32::new();
+         for start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
+             let end = input.len().min(start + matcher::WINDOW);
+-            writer.rle_block(&input[start..end], end == input.len());
++            writer.rle_block(&input[start..end], end == input.len(), &mut checksum);
+         }
+         writer.align();
+-        bytes = writer.bytes;
++        writer.bytes.extend_from_slice(&checksum.finish().to_be_bytes());
++        return Ok(writer.bytes);
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs
+@@
+             self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
+             self.block.extend_from_slice(&input[consumed..consumed + n]);
+-            self.checksum.update(&input[consumed..consumed + n]);
++            if self.mode != Compression::Rle {
++                self.checksum.update(&input[consumed..consumed + n]);
++            }
+@@
+         } else if self.mode == Compression::Rle {
+-            self.writer.rle_block(&self.block, final_block);
++            self.writer
++                .rle_block(&self.block, final_block, &mut self.checksum);
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/deflate_stream.rs
+@@
+-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 255, 256, 257, 258, 259, 260, 261, 515, 516, 517, 32767,
++        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 127, 128, 129, 255, 256, 257, 258, 259, 260, 261, 515, 516, 517, 32767,
+@@
+-#[test]
+-fn rle_stored_fallback_and_block_transitions() {
++#[test]
++fn rle_checksum_spans_cover_interleaved_zero_runs() {
++    let mut raw = vec![7; 13];
++    for length in [127, 128, 129, 255, 5553] {
++        raw.resize(raw.len() + length, 0);
++        raw.extend_from_slice(&[255, 0, 1, 2, 0, 0, 3]);
++    }
++    raw.extend_from_slice(&[41; 40]);
++    let expected = zlib::compress(&raw, Compression::Rle).unwrap();
++    for (input, output) in [(raw.len(), raw.len() + 64), (1, 1), (257, 31)] {
++        assert_eq!(
++            encode(&raw, Compression::Rle, input, output), expected,
++            "input={input} output={output}"
++        );
++    }
++}
++
++#[test]
++fn rle_stored_fallback_and_block_transitions() {
+*** End Patch

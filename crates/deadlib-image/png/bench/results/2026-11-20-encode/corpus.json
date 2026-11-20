@@ -1,0 +1,69 @@
+{
+  "sizes": "17x13,640x360,1920x1080,3840x2160",
+  "files": [
+    {
+      "path": "save/screenshots/initials-mega-verified.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "save/screenshots/initials-wendy-verified.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "tests/fixtures/interactive_song_lua/windows-before.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "tests/fixtures/interactive_song_lua/windows-after.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+      "group": "screenshots"
+    },
+    {
+      "path": "target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+      "group": "artwork"
+    },
+    {
+      "path": "target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+      "group": "artwork"
+    },
+    {
+      "path": "target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+      "group": "artwork"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.33s
+     Running unittests src\lib.rs (target\debug\build\deadlib-image-png/d42430ffc51e6d6e\out\deadlib_image_png-d42430ffc51e6d6e.exe)
+
+running 27 tests
+test checksum::tests::known_checksums ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test scanline::tests::unpack_preserves_short_and_extra_input_behavior ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::tests::maximum_match_token_after_four_wide_literals_preserves_boundaries ... ok
+test scanline::tests::unpack_every_byte_and_partial_group ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test scanline::x86::tests::every_average_pair_and_wrapping_residual_matches_integer_division ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::tests::wide_code_lookahead_preserves_prefetched_prefixes ... ok
+test zlib::tests::stored_and_mixed_blocks_preserve_output_limits_and_prefixes ... ok
+test scanline::tests::unpack_rows_keep_padding_and_slice_boundaries ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test checksum::x86::vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+test zlib::tests::word_match_copies_preserve_overlapping_history_and_every_output_tail ... ok
+test checksum::tests::crc_every_byte_value_in_word_lanes_and_fragmented_tails ... ok
+test scanline::x86::tests::every_vector_paeth_triplet_matches_the_specification ... ok
+test scanline::x86::tests::vector_rows_preserve_channel_history_tails_and_surrounding_bytes ... ok
+test zlib::tests::idat_boundaries_and_empty_chunks_preserve_huffman_payloads ... ok
+test checksum::x86::polynomial_folding_matches_scalar_for_offsets_lengths_and_initial_states has been running for over 60 seconds
+test zlib::tests::sized_inflation_matches_independent_huffman_fixtures has been running for over 60 seconds
+test checksum::x86::polynomial_folding_matches_scalar_for_offsets_lengths_and_initial_states ... ok
+test zlib::tests::sized_inflation_matches_independent_huffman_fixtures ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 194.89s
+
+     Running tests\ancillary_order.rs (target\debug\build\deadlib-image-png/1f4a71d3a48cd04c\out\ancillary_order-1f4a71d3a48cd04c.exe)
+
+running 5 tests
+test c_libpng_checks_all_valid_single_placements_and_both_hdr_orders ... ignored, requires DEADLIB_LIBPNG_ORACLE
+test direct_events_retain_order_and_make_ordering_errors_terminal ... ok
+test every_idat_split_keeps_known_ancillary_chunks_outside_the_consecutive_run ... ok
+test distinct_suggested_palette_names_and_all_ancillary_permutations_remain_legal ... ok
+test every_standard_ancillary_slot_and_all_ordered_pairs_match_table_seven ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 14.71s
+
+     Running tests\animation_fields.rs (target\debug\build\deadlib-image-png/1db347821e9a7a75\out\animation_fields-1db347821e9a7a75.exe)
+
+running 3 tests
+test rust_png_control_fields_and_all_delay_words ... ignored, explicit Rust png APNG field differential audit; see tests/oracle/README.md

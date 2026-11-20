@@ -1,0 +1,54 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 25.58s
+     Running tests\apng.rs (target\release\build\deadlib-image-png/c89b09721a4d7cd4\out\apng-c89b09721a4d7cd4.exe)
+
+running 4 tests
+test malformed_animation_controls_and_aggregate_limits ... ok
+test decode_independent_reference_apng ... ok
+test independent_twenty_frame_fixture ... ok
+test all_formats_apng_default_roles_and_interlace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests\compression.rs (target\release\build\deadlib-image-png/4014c9c3df2e2b66\out\compression-4014c9c3df2e2b66.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+     Running tests\deflate_stream.rs (target\release\build\deadlib-image-png/f208627a7261af58\out\deflate_stream-f208627a7261af58.exe)
+
+running 6 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test rle_stored_fallback_and_block_transitions ... ok
+test rle_zero_run_boundaries_and_literal_alignment ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+     Running tests\png_write.rs (target\release\build\deadlib-image-png/ce5f89a23e99beda\out\png_write-ce5f89a23e99beda.exe)
+
+running 4 tests
+test write_failures_and_input_validation ... ok
+test sixteen_bit_gradient_compression_regression ... ok
+test bounded_encoder_scratch_and_maximum_chunk_size ... ok
+test all_formats_fragmented_writes_and_chunks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\static_png.rs (target\release\build\deadlib-image-png/816365625225044c\out\static_png-816365625225044c.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+

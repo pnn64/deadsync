@@ -1,0 +1,4787 @@
+{
+  "ratio_direction": "right/left; lower is better",
+  "selected_modes": null,
+  "baseline": {
+    "all": {
+      "files": 32,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 63219828,
+          "thread_cycles": 947848208,
+          "ns": 432495514,
+          "encoded_bytes": 50097416,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 146.17452887615386
+        },
+        "native-rle-buffered": {
+          "total_pixels": 63219828,
+          "thread_cycles": 991626257,
+          "ns": 452465322,
+          "encoded_bytes": 48836599,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 139.72303495117356
+        },
+        "native-rle-writer": {
+          "total_pixels": 63219828,
+          "thread_cycles": 758256229,
+          "ns": 345957393,
+          "encoded_bytes": 48836599,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 182.7387686436867
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.293635574092303,
+            "left_total": 947848208,
+            "right_total": 991626257,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 4731344,
+                "right": 8897125,
+                "ratio": 1.8804646206236537
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 4095670,
+                "right": 9690793,
+                "ratio": 2.3661068884944343
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50341885,
+                "right": 70716755,
+                "ratio": 1.4047299778305877
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 11855524,
+                "right": 15270541,
+                "ratio": 1.2880528098125397
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 11314786,
+                "right": 14337904,
+                "ratio": 1.26718295865251
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 9370499,
+                "right": 13073584,
+                "ratio": 1.3951854645094142
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 6514822,
+                "right": 10638199,
+                "ratio": 1.632922434411869
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 12000504,
+                "right": 15478993,
+                "ratio": 1.2898619091331498
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 8254919,
+                "right": 12101419,
+                "ratio": 1.4659645963818664
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 11672461,
+                "right": 14794519,
+                "ratio": 1.2674721294849476
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 13915477,
+                "right": 17374449,
+                "ratio": 1.2485701352529992
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 26018926,
+                "right": 33294171,
+                "ratio": 1.2796135782084164
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9044003,
+                "right": 10201838,
+                "ratio": 1.128022403353913
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31782091,
+                "right": 36469238,
+                "ratio": 1.1474776156169209
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 12164580,
+                "right": 16054522,
+                "ratio": 1.3197761040660672
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 46236576,
+                "right": 55260444,
+                "ratio": 1.1951673065064334
+              },
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 4634983,
+                "right": 10475198,
+                "ratio": 2.260029432686161
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 22615963,
+                "right": 49478374,
+                "ratio": 2.1877633068288977
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 554522,
+                "right": 601611,
+                "ratio": 1.0849181817853935
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 9052838,
+                "right": 15620936,
+                "ratio": 1.725529165550074
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 30463966,
+                "right": 57822886,
+                "ratio": 1.8980747943324254
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2589807,
+                "right": 3517514,
+                "ratio": 1.358214724108785
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 6086104,
+                "right": 13274097,
+                "ratio": 2.1810499787713127
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 24596182,
+                "right": 52052888,
+                "ratio": 2.1162995134773355
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.2936919181746398,
+            "left_total": 432495514,
+            "right_total": 452465322,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 2159610,
+                "right": 4061960,
+                "ratio": 1.880876639763661
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 1870672,
+                "right": 4425880,
+                "ratio": 2.3659305319158035
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 22986100,
+                "right": 32291800,
+                "ratio": 1.4048403165391259
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 5416075,
+                "right": 6973300,
+                "ratio": 1.2875190982399616
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 5167250,
+                "right": 6547025,
+                "ratio": 1.2670230780395761
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 4278200,
+                "right": 5971875,
+                "ratio": 1.3958849516151652
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 2973614,
+                "right": 4859820,
+                "ratio": 1.6343143393863495
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 5481175,
+                "right": 7069066,
+                "ratio": 1.2896990152658874
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 3765050,
+                "right": 5519275,
+                "ratio": 1.4659234273117223
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 5326925,
+                "right": 6747000,
+                "ratio": 1.2665843802944476
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 6347475,
+                "right": 7923233,
+                "ratio": 1.2482495795572255
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 11867012,
+                "right": 15188837,
+                "ratio": 1.2799209270202137
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4125025,
+                "right": 4655025,
+                "ratio": 1.1284840697935163
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14504437,
+                "right": 16634112,
+                "ratio": 1.1468292081933273
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 5547600,
+                "right": 7325766,
+                "ratio": 1.3205288773523687
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 21115300,
+                "right": 25208500,
+                "ratio": 1.1938499571400834
+              },
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 2113570,
+                "right": 4778760,
+                "ratio": 2.2609896998916525
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 10313800,
+                "right": 22572200,
+                "ratio": 2.1885435048187865
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 252983,
+                "right": 274486,
+                "ratio": 1.0849978061766996
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 4128220,
+                "right": 7126000,
+                "ratio": 1.7261676945511626
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 13896600,
+                "right": 26372900,
+                "ratio": 1.8977951441359757
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1181270,
+                "right": 1604418,
+                "ratio": 1.3582144640937297
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 2775437,
+                "right": 6056350,
+                "ratio": 2.182124832954234
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 11216400,
+                "right": 23738200,
+                "ratio": 2.116383153239899
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9688184682199138,
+            "left_total": 50097416,
+            "right_total": 48836599,
+            "wins": 19,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.103870978964808,
+            "left_total": 947848208,
+            "right_total": 758256229,
+            "wins": 22,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50341885,
+                "right": 61741180,
+                "ratio": 1.226437587706539
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 26018926,
+                "right": 30906340,
+                "ratio": 1.1878407279378096
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9044003,
+                "right": 9646229,
+                "ratio": 1.0665884343470475
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31782091,
+                "right": 33866243,
+                "ratio": 1.0655763020752789
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 46236576,
+                "right": 50534167,
+                "ratio": 1.0929478644785462
+              },
+              {
+                "file": "generated/flat-17x13",
+                "left": 5791,
+                "right": 38463,
+                "ratio": 6.641858055603523
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 12638,
+                "right": 46573,
+                "ratio": 3.6851558790947934
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2589807,
+                "right": 3404527,
+                "ratio": 1.31458714877209
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 17412,
+                "right": 43383,
+                "ratio": 2.491557546519642
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 10982,
+                "right": 43728,
+                "ratio": 3.9817883809870698
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.103795538553166,
+            "left_total": 432495514,
+            "right_total": 345957393,
+            "wins": 22,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 22986100,
+                "right": 28190400,
+                "ratio": 1.2264107438843475
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 11867012,
+                "right": 14098325,
+                "ratio": 1.188026522598949
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4125025,
+                "right": 4399187,
+                "ratio": 1.0664631123447736
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14504437,
+                "right": 15451837,
+                "ratio": 1.0653179437436973
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 21115300,
+                "right": 23057600,
+                "ratio": 1.0919854323642098
+              },
+              {
+                "file": "generated/flat-17x13",
+                "left": 2641,
+                "right": 17544,
+                "ratio": 6.642938280954184
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 5764,
+                "right": 21240,
+                "ratio": 3.6849410131852878
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1181270,
+                "right": 1552243,
+                "ratio": 1.314045899751962
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 7939,
+                "right": 19783,
+                "ratio": 2.4918755510769617
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 5006,
+                "right": 19939,
+                "ratio": 3.9830203755493407
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9688184682199138,
+            "left_total": 50097416,
+            "right_total": 48836599,
+            "wins": 19,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        }
+      }
+    },
+    "screenshots": {
+      "files": 13,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 18720000,
+          "thread_cycles": 202469047,
+          "ns": 92435046,
+          "encoded_bytes": 4353672,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 202.5205894309827
+        },
+        "native-rle-buffered": {
+          "total_pixels": 18720000,
+          "thread_cycles": 273689247,
+          "ns": 124924500,
+          "encoded_bytes": 4811722,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 149.85050970786355
+        },
+        "native-rle-writer": {
+          "total_pixels": 18720000,
+          "thread_cycles": 205374364,
+          "ns": 93730554,
+          "encoded_bytes": 4811722,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 199.72142701727762
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.4352885581484416,
+            "left_total": 202469047,
+            "right_total": 273689247,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 4731344,
+                "right": 8897125,
+                "ratio": 1.8804646206236537
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 4095670,
+                "right": 9690793,
+                "ratio": 2.3661068884944343
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50341885,
+                "right": 70716755,
+                "ratio": 1.4047299778305877
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 11855524,
+                "right": 15270541,
+                "ratio": 1.2880528098125397
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 11314786,
+                "right": 14337904,
+                "ratio": 1.26718295865251
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 9370499,
+                "right": 13073584,
+                "ratio": 1.3951854645094142
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 6514822,
+                "right": 10638199,
+                "ratio": 1.632922434411869
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 12000504,
+                "right": 15478993,
+                "ratio": 1.2898619091331498
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 8254919,
+                "right": 12101419,
+                "ratio": 1.4659645963818664
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 11672461,
+                "right": 14794519,
+                "ratio": 1.2674721294849476
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 13915477,
+                "right": 17374449,
+                "ratio": 1.2485701352529992
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 12164580,
+                "right": 16054522,
+                "ratio": 1.3197761040660672
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 46236576,
+                "right": 55260444,
+                "ratio": 1.1951673065064334
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.4352213565490992,
+            "left_total": 92435046,
+            "right_total": 124924500,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 2159610,
+                "right": 4061960,
+                "ratio": 1.880876639763661
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 1870672,
+                "right": 4425880,
+                "ratio": 2.3659305319158035
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 22986100,
+                "right": 32291800,
+                "ratio": 1.4048403165391259
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 5416075,
+                "right": 6973300,
+                "ratio": 1.2875190982399616
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 5167250,
+                "right": 6547025,
+                "ratio": 1.2670230780395761
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 4278200,
+                "right": 5971875,
+                "ratio": 1.3958849516151652
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 2973614,
+                "right": 4859820,
+                "ratio": 1.6343143393863495
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 5481175,
+                "right": 7069066,
+                "ratio": 1.2896990152658874
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 3765050,
+                "right": 5519275,
+                "ratio": 1.4659234273117223
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 5326925,
+                "right": 6747000,
+                "ratio": 1.2665843802944476
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 6347475,
+                "right": 7923233,
+                "ratio": 1.2482495795572255
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 5547600,
+                "right": 7325766,
+                "ratio": 1.3205288773523687
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 21115300,
+                "right": 25208500,
+                "ratio": 1.1938499571400834
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.0143209974606333,
+            "left_total": 4353672,
+            "right_total": 4811722,
+            "wins": 5,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 0.9185580435951572,
+            "left_total": 202469047,
+            "right_total": 205374364,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50341885,
+                "right": 61741180,
+                "ratio": 1.226437587706539
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 46236576,
+                "right": 50534167,
+                "ratio": 1.0929478644785462
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 0.918355580910283,
+            "left_total": 92435046,
+            "right_total": 93730554,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 22986100,
+                "right": 28190400,
+                "ratio": 1.2264107438843475
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 21115300,
+                "right": 23057600,
+                "ratio": 1.0919854323642098
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.0143209974606333,
+            "left_total": 4353672,
+            "right_total": 4811722,
+            "wins": 5,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              }
+            ]
+          }
+        }
+      }
+    },
+    "artwork": {
+      "files": 3,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 2105344,
+          "thread_cycles": 66845020,
+          "ns": 30496474,
+          "encoded_bytes": 2469394,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 69.03565310533932
+        },
+        "native-rle-buffered": {
+          "total_pixels": 2105344,
+          "thread_cycles": 79965247,
+          "ns": 36477974,
+          "encoded_bytes": 2718254,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 57.7154860629047
+        },
+        "native-rle-writer": {
+          "total_pixels": 2105344,
+          "thread_cycles": 74418812,
+          "ns": 33949349,
+          "encoded_bytes": 2718254,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 62.014267195521185
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.183169399991223,
+            "left_total": 66845020,
+            "right_total": 79965247,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 26018926,
+                "right": 33294171,
+                "ratio": 1.2796135782084164
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9044003,
+                "right": 10201838,
+                "ratio": 1.128022403353913
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31782091,
+                "right": 36469238,
+                "ratio": 1.1474776156169209
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.1832025746171602,
+            "left_total": 30496474,
+            "right_total": 36477974,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 11867012,
+                "right": 15188837,
+                "ratio": 1.2799209270202137
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4125025,
+                "right": 4655025,
+                "ratio": 1.1284840697935163
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14504437,
+                "right": 16634112,
+                "ratio": 1.1468292081933273
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.1062928743561913,
+            "left_total": 2469394,
+            "right_total": 2718254,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.105214426461422,
+            "left_total": 66845020,
+            "right_total": 74418812,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 26018926,
+                "right": 30906340,
+                "ratio": 1.1878407279378096
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9044003,
+                "right": 9646229,
+                "ratio": 1.0665884343470475
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31782091,
+                "right": 33866243,
+                "ratio": 1.0655763020752789
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.105139424909059,
+            "left_total": 30496474,
+            "right_total": 33949349,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 11867012,
+                "right": 14098325,
+                "ratio": 1.188026522598949
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4125025,
+                "right": 4399187,
+                "ratio": 1.0664631123447736
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14504437,
+                "right": 15451837,
+                "ratio": 1.0653179437436973
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.1062928743561913,
+            "left_total": 2469394,
+            "right_total": 2718254,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              }
+            ]
+          }
+        }
+      }
+    },
+    "generated": {
+      "files": 16,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 42394484,
+          "thread_cycles": 678534141,
+          "ns": 309563994,
+          "encoded_bytes": 43274350,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 136.9490148133959
+        },
+        "native-rle-buffered": {
+          "total_pixels": 42394484,
+          "thread_cycles": 637971763,
+          "ns": 291062848,
+          "encoded_bytes": 41306623,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 145.65405475589932
+        },
+        "native-rle-writer": {
+          "total_pixels": 42394484,
+          "thread_cycles": 478463053,
+          "ns": 218277490,
+          "encoded_bytes": 41306623,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 194.22288574053147
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.208967098906727,
+            "left_total": 678534141,
+            "right_total": 637971763,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 4634983,
+                "right": 10475198,
+                "ratio": 2.260029432686161
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 22615963,
+                "right": 49478374,
+                "ratio": 2.1877633068288977
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 554522,
+                "right": 601611,
+                "ratio": 1.0849181817853935
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 9052838,
+                "right": 15620936,
+                "ratio": 1.725529165550074
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 30463966,
+                "right": 57822886,
+                "ratio": 1.8980747943324254
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2589807,
+                "right": 3517514,
+                "ratio": 1.358214724108785
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 6086104,
+                "right": 13274097,
+                "ratio": 2.1810499787713127
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 24596182,
+                "right": 52052888,
+                "ratio": 2.1162995134773355
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.2091120548930299,
+            "left_total": 309563994,
+            "right_total": 291062848,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 2113570,
+                "right": 4778760,
+                "ratio": 2.2609896998916525
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 10313800,
+                "right": 22572200,
+                "ratio": 2.1885435048187865
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 252983,
+                "right": 274486,
+                "ratio": 1.0849978061766996
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 4128220,
+                "right": 7126000,
+                "ratio": 1.7261676945511626
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 13896600,
+                "right": 26372900,
+                "ratio": 1.8977951441359757
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1181270,
+                "right": 1604418,
+                "ratio": 1.3582144640937297
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 2775437,
+                "right": 6056350,
+                "ratio": 2.182124832954234
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 11216400,
+                "right": 23738200,
+                "ratio": 2.116383153239899
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9104196987923889,
+            "left_total": 43274350,
+            "right_total": 41306623,
+            "wins": 14,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.281345618450885,
+            "left_total": 678534141,
+            "right_total": 478463053,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-17x13",
+                "left": 5791,
+                "right": 38463,
+                "ratio": 6.641858055603523
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 12638,
+                "right": 46573,
+                "ratio": 3.6851558790947934
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2589807,
+                "right": 3404527,
+                "ratio": 1.31458714877209
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 17412,
+                "right": 43383,
+                "ratio": 2.491557546519642
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 10982,
+                "right": 43728,
+                "ratio": 3.9817883809870698
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.2814162766186268,
+            "left_total": 309563994,
+            "right_total": 218277490,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-17x13",
+                "left": 2641,
+                "right": 17544,
+                "ratio": 6.642938280954184
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 5764,
+                "right": 21240,
+                "ratio": 3.6849410131852878
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1181270,
+                "right": 1552243,
+                "ratio": 1.314045899751962
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 7939,
+                "right": 19783,
+                "ratio": 2.4918755510769617
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 5006,
+                "right": 19939,
+                "ratio": 3.9830203755493407
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9104196987923889,
+            "left_total": 43274350,
+            "right_total": 41306623,
+            "wins": 14,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "output_drift": [],
+  "after": {
+    "all": {
+      "files": 32,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 63219828,
+          "thread_cycles": 966109368,
+          "ns": 440814612,
+          "encoded_bytes": 50097416,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 143.41590836376358
+        },
+        "native-rle-buffered": {
+          "total_pixels": 63219828,
+          "thread_cycles": 984622443,
+          "ns": 449204254,
+          "encoded_bytes": 48836599,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 140.7373760089102
+        },
+        "native-rle-writer": {
+          "total_pixels": 63219828,
+          "thread_cycles": 746615238,
+          "ns": 340594756,
+          "encoded_bytes": 48836599,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 185.6159758372792
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.2863331492006627,
+            "left_total": 966109368,
+            "right_total": 984622443,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 4699253,
+                "right": 8952263,
+                "ratio": 1.9050395882068916
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 4148430,
+                "right": 10025706,
+                "ratio": 2.4167470585257553
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50710865,
+                "right": 68014269,
+                "ratio": 1.3412168970101377
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 9510101,
+                "right": 13172469,
+                "ratio": 1.3851029552682985
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 11454882,
+                "right": 16583518,
+                "ratio": 1.447724908907835
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 10344332,
+                "right": 14563715,
+                "ratio": 1.4078932308050438
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 7150933,
+                "right": 11360497,
+                "ratio": 1.5886733940871771
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 11896241,
+                "right": 16441062,
+                "ratio": 1.3820384102843914
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 8701235,
+                "right": 12365148,
+                "ratio": 1.4210796513368504
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 12087756,
+                "right": 15821267,
+                "ratio": 1.3088671710448159
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 15049212,
+                "right": 20682094,
+                "ratio": 1.374297471522097
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 27279789,
+                "right": 34345302,
+                "ratio": 1.2590017466777328
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9106533,
+                "right": 9818125,
+                "ratio": 1.0781408248342153
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31806564,
+                "right": 37833459,
+                "ratio": 1.1894858872527068
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 12406963,
+                "right": 15479506,
+                "ratio": 1.2476466642158923
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 45551077,
+                "right": 56038790,
+                "ratio": 1.230240725153436
+              },
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 4804152,
+                "right": 11555083,
+                "ratio": 2.4052284357364213
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 22166757,
+                "right": 48002453,
+                "ratio": 2.165515370606535
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 559360,
+                "right": 595237,
+                "ratio": 1.0641393735697942
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 11370374,
+                "right": 18584845,
+                "ratio": 1.6344972469683055
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 29576089,
+                "right": 57338229,
+                "ratio": 1.9386683952702468
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2642121,
+                "right": 3519339,
+                "ratio": 1.3320128033500358
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 6287483,
+                "right": 12448394,
+                "ratio": 1.9798692099843451
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 24998635,
+                "right": 54848220,
+                "ratio": 2.1940485950532898
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.2864235145406868,
+            "left_total": 440814612,
+            "right_total": 449204254,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 2145600,
+                "right": 4087560,
+                "ratio": 1.905089485458613
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 1892390,
+                "right": 4573760,
+                "ratio": 2.416922515971866
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 23138200,
+                "right": 31024200,
+                "ratio": 1.340821671521553
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 4339260,
+                "right": 6010175,
+                "ratio": 1.3850691131667612
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 5224000,
+                "right": 7567533,
+                "ratio": 1.4486089203675345
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 4718400,
+                "right": 6646175,
+                "ratio": 1.4085654035266193
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 3263128,
+                "right": 5184400,
+                "ratio": 1.588782297231368
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 5425225,
+                "right": 7502066,
+                "ratio": 1.3828119571077697
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 3974683,
+                "right": 5645925,
+                "ratio": 1.4204717709563253
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 5514000,
+                "right": 7219433,
+                "ratio": 1.309291439970983
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 6862933,
+                "right": 9432533,
+                "ratio": 1.3744171770291216
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 12444312,
+                "right": 15668050,
+                "ratio": 1.259053132065477
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4153525,
+                "right": 4479475,
+                "ratio": 1.078475511764104
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14517850,
+                "right": 17261200,
+                "ratio": 1.1889639306095598
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 5660025,
+                "right": 7065166,
+                "ratio": 1.2482570306668257
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 20781600,
+                "right": 25556700,
+                "ratio": 1.2297753782191938
+              },
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 2190870,
+                "right": 5273225,
+                "ratio": 2.406909127424265
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 10111850,
+                "right": 21899400,
+                "ratio": 2.165716461379471
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 255140,
+                "right": 271646,
+                "ratio": 1.0646938935486399
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 5190400,
+                "right": 8480233,
+                "ratio": 1.6338303406288532
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 13485050,
+                "right": 26159000,
+                "ratio": 1.9398519100781977
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1205295,
+                "right": 1605412,
+                "ratio": 1.3319660332117864
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 2868228,
+                "right": 5677575,
+                "ratio": 1.9794712972608872
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 11403300,
+                "right": 25021700,
+                "ratio": 2.1942507870528707
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9688184682199138,
+            "left_total": 50097416,
+            "right_total": 48836599,
+            "wins": 19,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.1172611312938734,
+            "left_total": 966109368,
+            "right_total": 746615238,
+            "wins": 21,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50710865,
+                "right": 61373300,
+                "ratio": 1.2102593793263041
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 27279789,
+                "right": 31492790,
+                "ratio": 1.1544367150347095
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9106533,
+                "right": 9342687,
+                "ratio": 1.0259323718477713
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31806564,
+                "right": 34978752,
+                "ratio": 1.0997337530705926
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 45551077,
+                "right": 50848715,
+                "ratio": 1.116301048161825
+              },
+              {
+                "file": "generated/flat-17x13",
+                "left": 5967,
+                "right": 38809,
+                "ratio": 6.503938327467739
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 559360,
+                "right": 812734,
+                "ratio": 1.452971252860412
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 12463,
+                "right": 45534,
+                "ratio": 3.6535344620075425
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2642121,
+                "right": 3423226,
+                "ratio": 1.2956355897402125
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 18011,
+                "right": 43028,
+                "ratio": 2.3889845094664373
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 10861,
+                "right": 43811,
+                "ratio": 4.0337906270140875
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.1172188703247208,
+            "left_total": 440814612,
+            "right_total": 340594756,
+            "wins": 21,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 23138200,
+                "right": 28010300,
+                "ratio": 1.2105652125057265
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 12444312,
+                "right": 14365575,
+                "ratio": 1.1543888484956017
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4153525,
+                "right": 4261237,
+                "ratio": 1.0259326716463726
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14517850,
+                "right": 15963850,
+                "ratio": 1.0996015250192006
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 20781600,
+                "right": 23188700,
+                "ratio": 1.1158284251453208
+              },
+              {
+                "file": "generated/flat-17x13",
+                "left": 2721,
+                "right": 17702,
+                "ratio": 6.5056964351341415
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 255140,
+                "right": 370908,
+                "ratio": 1.4537430430351963
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 5682,
+                "right": 20792,
+                "ratio": 3.6592749032030976
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1205295,
+                "right": 1562031,
+                "ratio": 1.2959740146603114
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 8220,
+                "right": 19625,
+                "ratio": 2.3874695863746958
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 4953,
+                "right": 19986,
+                "ratio": 4.035130224106602
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9688184682199138,
+            "left_total": 50097416,
+            "right_total": 48836599,
+            "wins": 19,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        }
+      }
+    },
+    "screenshots": {
+      "files": 13,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 18720000,
+          "thread_cycles": 203711280,
+          "ns": 92939444,
+          "encoded_bytes": 4353672,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 201.42147611728774
+        },
+        "native-rle-buffered": {
+          "total_pixels": 18720000,
+          "thread_cycles": 279500304,
+          "ns": 127515626,
+          "encoded_bytes": 4811722,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 146.8055373856691
+        },
+        "native-rle-writer": {
+          "total_pixels": 18720000,
+          "thread_cycles": 209106340,
+          "ns": 95395257,
+          "encoded_bytes": 4811722,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 196.23617136436877
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.470384844799657,
+            "left_total": 203711280,
+            "right_total": 279500304,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 4699253,
+                "right": 8952263,
+                "ratio": 1.9050395882068916
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 4148430,
+                "right": 10025706,
+                "ratio": 2.4167470585257553
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50710865,
+                "right": 68014269,
+                "ratio": 1.3412168970101377
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 9510101,
+                "right": 13172469,
+                "ratio": 1.3851029552682985
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 11454882,
+                "right": 16583518,
+                "ratio": 1.447724908907835
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 10344332,
+                "right": 14563715,
+                "ratio": 1.4078932308050438
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 7150933,
+                "right": 11360497,
+                "ratio": 1.5886733940871771
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 11896241,
+                "right": 16441062,
+                "ratio": 1.3820384102843914
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 8701235,
+                "right": 12365148,
+                "ratio": 1.4210796513368504
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 12087756,
+                "right": 15821267,
+                "ratio": 1.3088671710448159
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 15049212,
+                "right": 20682094,
+                "ratio": 1.374297471522097
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 12406963,
+                "right": 15479506,
+                "ratio": 1.2476466642158923
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 45551077,
+                "right": 56038790,
+                "ratio": 1.230240725153436
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.4705646505816856,
+            "left_total": 92939444,
+            "right_total": 127515626,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+                "left": 2145600,
+                "right": 4087560,
+                "ratio": 1.905089485458613
+              },
+              {
+                "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+                "left": 1892390,
+                "right": 4573760,
+                "ratio": 2.416922515971866
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 23138200,
+                "right": 31024200,
+                "ratio": 1.340821671521553
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+                "left": 4339260,
+                "right": 6010175,
+                "ratio": 1.3850691131667612
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 5224000,
+                "right": 7567533,
+                "ratio": 1.4486089203675345
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+                "left": 4718400,
+                "right": 6646175,
+                "ratio": 1.4085654035266193
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 3263128,
+                "right": 5184400,
+                "ratio": 1.588782297231368
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 5425225,
+                "right": 7502066,
+                "ratio": 1.3828119571077697
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 3974683,
+                "right": 5645925,
+                "ratio": 1.4204717709563253
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 5514000,
+                "right": 7219433,
+                "ratio": 1.309291439970983
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+                "left": 6862933,
+                "right": 9432533,
+                "ratio": 1.3744171770291216
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 5660025,
+                "right": 7065166,
+                "ratio": 1.2482570306668257
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 20781600,
+                "right": 25556700,
+                "ratio": 1.2297753782191938
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.0143209974606333,
+            "left_total": 4353672,
+            "right_total": 4811722,
+            "wins": 5,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 0.9391348305185787,
+            "left_total": 203711280,
+            "right_total": 209106340,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 50710865,
+                "right": 61373300,
+                "ratio": 1.2102593793263041
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 45551077,
+                "right": 50848715,
+                "ratio": 1.116301048161825
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 0.9390157165966282,
+            "left_total": 92939444,
+            "right_total": 95395257,
+            "wins": 11,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 23138200,
+                "right": 28010300,
+                "ratio": 1.2105652125057265
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 20781600,
+                "right": 23188700,
+                "ratio": 1.1158284251453208
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.0143209974606333,
+            "left_total": 4353672,
+            "right_total": 4811722,
+            "wins": 5,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+                "left": 1629623,
+                "right": 1884075,
+                "ratio": 1.1561416352125615
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+                "left": 127414,
+                "right": 129833,
+                "ratio": 1.01898535482757
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+                "left": 71391,
+                "right": 72730,
+                "ratio": 1.018755865585298
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+                "left": 128232,
+                "right": 135958,
+                "ratio": 1.0602501715640402
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+                "left": 74778,
+                "right": 76240,
+                "ratio": 1.0195512048998367
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+                "left": 135002,
+                "right": 139585,
+                "ratio": 1.0339476452200709
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+                "left": 194417,
+                "right": 203046,
+                "ratio": 1.0443839787672888
+              },
+              {
+                "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+                "left": 1534249,
+                "right": 1721990,
+                "ratio": 1.1223667084026125
+              }
+            ]
+          }
+        }
+      }
+    },
+    "artwork": {
+      "files": 3,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 2105344,
+          "thread_cycles": 68192886,
+          "ns": 31115687,
+          "encoded_bytes": 2469394,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 67.66181958315752
+        },
+        "native-rle-buffered": {
+          "total_pixels": 2105344,
+          "thread_cycles": 81996886,
+          "ns": 37408725,
+          "encoded_bytes": 2718254,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 56.27949094763321
+        },
+        "native-rle-writer": {
+          "total_pixels": 2105344,
+          "thread_cycles": 75814229,
+          "ns": 34590662,
+          "encoded_bytes": 2718254,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 60.86451886928327
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.1731504347321655,
+            "left_total": 68192886,
+            "right_total": 81996886,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 27279789,
+                "right": 34345302,
+                "ratio": 1.2590017466777328
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9106533,
+                "right": 9818125,
+                "ratio": 1.0781408248342153
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31806564,
+                "right": 37833459,
+                "ratio": 1.1894858872527068
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.1731161362921019,
+            "left_total": 31115687,
+            "right_total": 37408725,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 12444312,
+                "right": 15668050,
+                "ratio": 1.259053132065477
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4153525,
+                "right": 4479475,
+                "ratio": 1.078475511764104
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14517850,
+                "right": 17261200,
+                "ratio": 1.1889639306095598
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.1062928743561913,
+            "left_total": 2469394,
+            "right_total": 2718254,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.0920909449921994,
+            "left_total": 68192886,
+            "right_total": 75814229,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 27279789,
+                "right": 31492790,
+                "ratio": 1.1544367150347095
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 9106533,
+                "right": 9342687,
+                "ratio": 1.0259323718477713
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 31806564,
+                "right": 34978752,
+                "ratio": 1.0997337530705926
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.0920321864733116,
+            "left_total": 31115687,
+            "right_total": 34590662,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 12444312,
+                "right": 14365575,
+                "ratio": 1.1543888484956017
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 4153525,
+                "right": 4261237,
+                "ratio": 1.0259326716463726
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 14517850,
+                "right": 15963850,
+                "ratio": 1.0996015250192006
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 1.1062928743561913,
+            "left_total": 2469394,
+            "right_total": 2718254,
+            "wins": 0,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+                "left": 760852,
+                "right": 840781,
+                "ratio": 1.1050519680568627
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+                "left": 536515,
+                "right": 605913,
+                "ratio": 1.1293495987996607
+              },
+              {
+                "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+                "left": 1172027,
+                "right": 1271560,
+                "ratio": 1.0849238114821587
+              }
+            ]
+          }
+        }
+      }
+    },
+    "generated": {
+      "files": 16,
+      "codecs": {
+        "image-default": {
+          "total_pixels": 42394484,
+          "thread_cycles": 694205202,
+          "ns": 316759481,
+          "encoded_bytes": 43274350,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 133.83809023225416
+        },
+        "native-rle-buffered": {
+          "total_pixels": 42394484,
+          "thread_cycles": 623125253,
+          "ns": 284279903,
+          "encoded_bytes": 41306623,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 149.12937408734095
+        },
+        "native-rle-writer": {
+          "total_pixels": 42394484,
+          "thread_cycles": 461694669,
+          "ns": 210608837,
+          "encoded_bytes": 41306623,
+          "alloc_calls": 0,
+          "requested_bytes": 0,
+          "aggregate_mpix_s": 201.29489628205866
+        }
+      },
+      "pairs": {
+        "native-rle-buffered/image-default": {
+          "thread_cycles": {
+            "geomean": 1.1739927138194446,
+            "left_total": 694205202,
+            "right_total": 623125253,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 4804152,
+                "right": 11555083,
+                "ratio": 2.4052284357364213
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 22166757,
+                "right": 48002453,
+                "ratio": 2.165515370606535
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 559360,
+                "right": 595237,
+                "ratio": 1.0641393735697942
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 11370374,
+                "right": 18584845,
+                "ratio": 1.6344972469683055
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 29576089,
+                "right": 57338229,
+                "ratio": 1.9386683952702468
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2642121,
+                "right": 3519339,
+                "ratio": 1.3320128033500358
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 6287483,
+                "right": 12448394,
+                "ratio": 1.9798692099843451
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 24998635,
+                "right": 54848220,
+                "ratio": 2.1940485950532898
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.174047455142822,
+            "left_total": 316759481,
+            "right_total": 284279903,
+            "wins": 8,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-1920x1080",
+                "left": 2190870,
+                "right": 5273225,
+                "ratio": 2.406909127424265
+              },
+              {
+                "file": "generated/flat-3840x2160",
+                "left": 10111850,
+                "right": 21899400,
+                "ratio": 2.165716461379471
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 255140,
+                "right": 271646,
+                "ratio": 1.0646938935486399
+              },
+              {
+                "file": "generated/gradient-1920x1080",
+                "left": 5190400,
+                "right": 8480233,
+                "ratio": 1.6338303406288532
+              },
+              {
+                "file": "generated/gradient-3840x2160",
+                "left": 13485050,
+                "right": 26159000,
+                "ratio": 1.9398519100781977
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1205295,
+                "right": 1605412,
+                "ratio": 1.3319660332117864
+              },
+              {
+                "file": "generated/ui-1920x1080",
+                "left": 2868228,
+                "right": 5677575,
+                "ratio": 1.9794712972608872
+              },
+              {
+                "file": "generated/ui-3840x2160",
+                "left": 11403300,
+                "right": 25021700,
+                "ratio": 2.1942507870528707
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9104196987923889,
+            "left_total": 43274350,
+            "right_total": 41306623,
+            "wins": 14,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        },
+        "native-rle-writer/image-default": {
+          "thread_cycles": {
+            "geomean": 1.29209485343772,
+            "left_total": 694205202,
+            "right_total": 461694669,
+            "wins": 10,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-17x13",
+                "left": 5967,
+                "right": 38809,
+                "ratio": 6.503938327467739
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 559360,
+                "right": 812734,
+                "ratio": 1.452971252860412
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 12463,
+                "right": 45534,
+                "ratio": 3.6535344620075425
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 2642121,
+                "right": 3423226,
+                "ratio": 1.2956355897402125
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 18011,
+                "right": 43028,
+                "ratio": 2.3889845094664373
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 10861,
+                "right": 43811,
+                "ratio": 4.0337906270140875
+              }
+            ]
+          },
+          "ns": {
+            "geomean": 1.2921433013312689,
+            "left_total": 316759481,
+            "right_total": 210608837,
+            "wins": 10,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "generated/flat-17x13",
+                "left": 2721,
+                "right": 17702,
+                "ratio": 6.5056964351341415
+              },
+              {
+                "file": "generated/flat-640x360",
+                "left": 255140,
+                "right": 370908,
+                "ratio": 1.4537430430351963
+              },
+              {
+                "file": "generated/gradient-17x13",
+                "left": 5682,
+                "right": 20792,
+                "ratio": 3.6592749032030976
+              },
+              {
+                "file": "generated/gradient-640x360",
+                "left": 1205295,
+                "right": 1562031,
+                "ratio": 1.2959740146603114
+              },
+              {
+                "file": "generated/noise-17x13",
+                "left": 8220,
+                "right": 19625,
+                "ratio": 2.3874695863746958
+              },
+              {
+                "file": "generated/ui-17x13",
+                "left": 4953,
+                "right": 19986,
+                "ratio": 4.035130224106602
+              }
+            ]
+          },
+          "encoded_bytes": {
+            "geomean": 0.9104196987923889,
+            "left_total": 43274350,
+            "right_total": 41306623,
+            "wins": 14,
+            "ties": 1,
+            "losses": [
+              {
+                "file": "generated/gradient-17x13",
+                "left": 510,
+                "right": 527,
+                "ratio": 1.0333333333333334
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "changes": {
+    "all": {
+      "image-default": {
+        "thread_cycles": {
+          "geomean": 1.0199480530518175,
+          "left_total": 947848208,
+          "right_total": 966109368,
+          "wins": 8,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 4095670,
+              "right": 4148430,
+              "ratio": 1.012881897223165
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+              "left": 50341885,
+              "right": 50710865,
+              "ratio": 1.0073294831927728
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 11314786,
+              "right": 11454882,
+              "ratio": 1.0123816747395842
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 9370499,
+              "right": 10344332,
+              "ratio": 1.1039254152847142
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 6514822,
+              "right": 7150933,
+              "ratio": 1.0976405802031122
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 8254919,
+              "right": 8701235,
+              "ratio": 1.0540666722471776
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 11672461,
+              "right": 12087756,
+              "ratio": 1.035579043699525
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 13915477,
+              "right": 15049212,
+              "ratio": 1.0814729527417566
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 26018926,
+              "right": 27279789,
+              "ratio": 1.048459456012904
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+              "left": 9044003,
+              "right": 9106533,
+              "ratio": 1.006913973823317
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 31782091,
+              "right": 31806564,
+              "ratio": 1.0007700248545635
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+              "left": 12164580,
+              "right": 12406963,
+              "ratio": 1.0199253077377106
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 5791,
+              "right": 5967,
+              "ratio": 1.030391987566914
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4634983,
+              "right": 4804152,
+              "ratio": 1.0364982999937649
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 554522,
+              "right": 559360,
+              "ratio": 1.008724631304078
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 9052838,
+              "right": 11370374,
+              "ratio": 1.2560010463017233
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 2589807,
+              "right": 2642121,
+              "ratio": 1.0201999608465033
+            },
+            {
+              "file": "generated/noise-17x13",
+              "left": 17412,
+              "right": 18011,
+              "ratio": 1.034401562141052
+            },
+            {
+              "file": "generated/noise-1920x1080",
+              "left": 111467150,
+              "right": 114570219,
+              "ratio": 1.0278384169685868
+            },
+            {
+              "file": "generated/noise-3840x2160",
+              "left": 455829286,
+              "right": 466239072,
+              "ratio": 1.022837027632314
+            },
+            {
+              "file": "generated/noise-640x360",
+              "left": 9569267,
+              "right": 9914266,
+              "ratio": 1.0360528136585592
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 6086104,
+              "right": 6287483,
+              "ratio": 1.0330883271137004
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 24596182,
+              "right": 24998635,
+              "ratio": 1.0163624175491952
+            },
+            {
+              "file": "generated/ui-640x360",
+              "left": 1027250,
+              "right": 1029372,
+              "ratio": 1.00206570941835
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.019848837171455,
+          "left_total": 432495514,
+          "right_total": 440814612,
+          "wins": 8,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 1870672,
+              "right": 1892390,
+              "ratio": 1.0116097316900023
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+              "left": 22986100,
+              "right": 23138200,
+              "ratio": 1.0066170424734948
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 5167250,
+              "right": 5224000,
+              "ratio": 1.010982630993275
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 4278200,
+              "right": 4718400,
+              "ratio": 1.1028937403580945
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 2973614,
+              "right": 3263128,
+              "ratio": 1.0973609890187497
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 3765050,
+              "right": 3974683,
+              "ratio": 1.0556786762459993
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 5326925,
+              "right": 5514000,
+              "ratio": 1.0351187598849243
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 6347475,
+              "right": 6862933,
+              "ratio": 1.0812067790735687
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 11867012,
+              "right": 12444312,
+              "ratio": 1.0486474607087277
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+              "left": 4125025,
+              "right": 4153525,
+              "ratio": 1.0069090490360664
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 14504437,
+              "right": 14517850,
+              "ratio": 1.000924751508797
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+              "left": 5547600,
+              "right": 5660025,
+              "ratio": 1.0202655202249622
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 2641,
+              "right": 2721,
+              "ratio": 1.0302915562287012
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 2113570,
+              "right": 2190870,
+              "ratio": 1.0365731913303085
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 252983,
+              "right": 255140,
+              "ratio": 1.0085262646106656
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 4128220,
+              "right": 5190400,
+              "ratio": 1.257297333959915
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1181270,
+              "right": 1205295,
+              "ratio": 1.020338279986794
+            },
+            {
+              "file": "generated/noise-17x13",
+              "left": 7939,
+              "right": 8220,
+              "ratio": 1.0353948860057942
+            },
+            {
+              "file": "generated/noise-1920x1080",
+              "left": 50840900,
+              "right": 52274800,
+              "ratio": 1.028203670666727
+            },
+            {
+              "file": "generated/noise-3840x2160",
+              "left": 207990500,
+              "right": 212760000,
+              "ratio": 1.0229313358062027
+            },
+            {
+              "file": "generated/noise-640x360",
+              "left": 4364437,
+              "right": 4523387,
+              "ratio": 1.03641935947294
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 2775437,
+              "right": 2868228,
+              "ratio": 1.0334329332642032
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 11216400,
+              "right": 11403300,
+              "ratio": 1.0166631004600406
+            },
+            {
+              "file": "generated/ui-640x360",
+              "left": 468527,
+              "right": 469585,
+              "ratio": 1.002258140939583
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 50097416,
+          "right_total": 50097416,
+          "wins": 0,
+          "ties": 32,
+          "losses": []
+        }
+      },
+      "native-rle-buffered": {
+        "thread_cycles": {
+          "geomean": 1.014190562920942,
+          "left_total": 991626257,
+          "right_total": 984622443,
+          "wins": 15,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 8897125,
+              "right": 8952263,
+              "ratio": 1.0061972828301278
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 9690793,
+              "right": 10025706,
+              "ratio": 1.0345599168200168
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 14337904,
+              "right": 16583518,
+              "ratio": 1.1566208003624519
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 13073584,
+              "right": 14563715,
+              "ratio": 1.113980297981028
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 10638199,
+              "right": 11360497,
+              "ratio": 1.0678966430314003
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 15478993,
+              "right": 16441062,
+              "ratio": 1.0621532033769896
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 12101419,
+              "right": 12365148,
+              "ratio": 1.0217932293725223
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 14794519,
+              "right": 15821267,
+              "ratio": 1.0694005665206148
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 17374449,
+              "right": 20682094,
+              "ratio": 1.1903740947410764
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 33294171,
+              "right": 34345302,
+              "ratio": 1.0315710218464367
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 36469238,
+              "right": 37833459,
+              "ratio": 1.0374074445975536
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 55260444,
+              "right": 56038790,
+              "ratio": 1.0140850478870564
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 4528,
+              "right": 4606,
+              "ratio": 1.017226148409894
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 10475198,
+              "right": 11555083,
+              "ratio": 1.103089698161314
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 15620936,
+              "right": 18584845,
+              "ratio": 1.1897395264918824
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 3517514,
+              "right": 3519339,
+              "ratio": 1.0005188323344272
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 52052888,
+              "right": 54848220,
+              "ratio": 1.0537017657886725
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0141189776198556,
+          "left_total": 452465322,
+          "right_total": 449204254,
+          "wins": 15,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 4061960,
+              "right": 4087560,
+              "ratio": 1.0063023761927739
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 4425880,
+              "right": 4573760,
+              "ratio": 1.0334125642810017
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 6547025,
+              "right": 7567533,
+              "ratio": 1.1558735456180478
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 5971875,
+              "right": 6646175,
+              "ratio": 1.1129126111983254
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 4859820,
+              "right": 5184400,
+              "ratio": 1.0667884818779296
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 7069066,
+              "right": 7502066,
+              "ratio": 1.0612527878506157
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 5519275,
+              "right": 5645925,
+              "ratio": 1.022946854432874
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 6747000,
+              "right": 7219433,
+              "ratio": 1.0700211946050096
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 7923233,
+              "right": 9432533,
+              "ratio": 1.1904904222809047
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 15188837,
+              "right": 15668050,
+              "ratio": 1.0315503418727845
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 16634112,
+              "right": 17261200,
+              "ratio": 1.0376989165396986
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 25208500,
+              "right": 25556700,
+              "ratio": 1.0138128012376777
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 2064,
+              "right": 2100,
+              "ratio": 1.0174418604651163
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4778760,
+              "right": 5273225,
+              "ratio": 1.1034714026232746
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 7126000,
+              "right": 8480233,
+              "ratio": 1.1900411170362055
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1604418,
+              "right": 1605412,
+              "ratio": 1.0006195392971158
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 23738200,
+              "right": 25021700,
+              "ratio": 1.054068969003547
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 48836599,
+          "right_total": 48836599,
+          "wins": 0,
+          "ties": 32,
+          "losses": []
+        }
+      },
+      "native-rle-writer": {
+        "thread_cycles": {
+          "geomean": 1.0323202052855005,
+          "left_total": 758256229,
+          "right_total": 746615238,
+          "wins": 12,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 4214419,
+              "right": 4386136,
+              "ratio": 1.0407451181289757
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 3664534,
+              "right": 4020621,
+              "ratio": 1.097171154640672
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+              "left": 8211348,
+              "right": 8372644,
+              "ratio": 1.0196430598240387
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 9635171,
+              "right": 9954763,
+              "ratio": 1.0331693127189958
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 8331854,
+              "right": 9621738,
+              "ratio": 1.1548135625036156
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 5988207,
+              "right": 6073592,
+              "ratio": 1.0142588591209356
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 10784298,
+              "right": 11044033,
+              "ratio": 1.024084553301476
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 10564754,
+              "right": 10628892,
+              "ratio": 1.0060709411690987
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 12745651,
+              "right": 14179261,
+              "ratio": 1.112478366150148
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 30906340,
+              "right": 31492790,
+              "ratio": 1.0189750711342722
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 33866243,
+              "right": 34978752,
+              "ratio": 1.0328500861462548
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 50534167,
+              "right": 50848715,
+              "ratio": 1.0062244619566005
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 38463,
+              "right": 38809,
+              "ratio": 1.0089956581649897
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4144858,
+              "right": 4204721,
+              "ratio": 1.0144427143221795
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 508025,
+              "right": 812734,
+              "ratio": 1.5997913488509423
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 9035585,
+              "right": 10548774,
+              "ratio": 1.1674699535226551
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 3404527,
+              "right": 3423226,
+              "ratio": 1.0054923929227173
+            },
+            {
+              "file": "generated/ui-17x13",
+              "left": 43728,
+              "right": 43811,
+              "ratio": 1.0018980973289426
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 5351263,
+              "right": 5835572,
+              "ratio": 1.0905036810936035
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 22022874,
+              "right": 22441899,
+              "ratio": 1.019026808217674
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0322512874623222,
+          "left_total": 345957393,
+          "right_total": 340594756,
+          "wins": 12,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 1925336,
+              "right": 2002630,
+              "ratio": 1.0401457200197783
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 1673425,
+              "right": 1834509,
+              "ratio": 1.0962600654346624
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+              "left": 3749200,
+              "right": 3819883,
+              "ratio": 1.018852821935346
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 4398040,
+              "right": 4540040,
+              "ratio": 1.0322871097125084
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 3803850,
+              "right": 4389220,
+              "ratio": 1.153888823166003
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 2733775,
+              "right": 2769750,
+              "ratio": 1.0131594589898583
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 4922060,
+              "right": 5036875,
+              "ratio": 1.0233266152789686
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 4818360,
+              "right": 4848320,
+              "ratio": 1.006217883263185
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 5812725,
+              "right": 6469750,
+              "ratio": 1.1130321837004158
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 14098325,
+              "right": 14365575,
+              "ratio": 1.0189561525925952
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 15451837,
+              "right": 15963850,
+              "ratio": 1.0331360601331738
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 23057600,
+              "right": 23188700,
+              "ratio": 1.0056857608771077
+            },
+            {
+              "file": "generated/flat-17x13",
+              "left": 17544,
+              "right": 17702,
+              "ratio": 1.0090059279525765
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 1890181,
+              "right": 1917745,
+              "ratio": 1.0145827304369264
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 231659,
+              "right": 370908,
+              "ratio": 1.601094712486888
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 4121540,
+              "right": 4813280,
+              "ratio": 1.1678353236896888
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1552243,
+              "right": 1562031,
+              "ratio": 1.0063057137316773
+            },
+            {
+              "file": "generated/ui-17x13",
+              "left": 19939,
+              "right": 19986,
+              "ratio": 1.0023571894277548
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 2441011,
+              "right": 2661387,
+              "ratio": 1.0902806255277013
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 10046450,
+              "right": 10233400,
+              "ratio": 1.0186085632238253
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 48836599,
+          "right_total": 48836599,
+          "wins": 0,
+          "ties": 32,
+          "losses": []
+        }
+      }
+    },
+    "screenshots": {
+      "image-default": {
+        "thread_cycles": {
+          "geomean": 1.0123218270180747,
+          "left_total": 202469047,
+          "right_total": 203711280,
+          "wins": 4,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 4095670,
+              "right": 4148430,
+              "ratio": 1.012881897223165
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+              "left": 50341885,
+              "right": 50710865,
+              "ratio": 1.0073294831927728
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 11314786,
+              "right": 11454882,
+              "ratio": 1.0123816747395842
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 9370499,
+              "right": 10344332,
+              "ratio": 1.1039254152847142
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 6514822,
+              "right": 7150933,
+              "ratio": 1.0976405802031122
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 8254919,
+              "right": 8701235,
+              "ratio": 1.0540666722471776
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 11672461,
+              "right": 12087756,
+              "ratio": 1.035579043699525
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 13915477,
+              "right": 15049212,
+              "ratio": 1.0814729527417566
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+              "left": 12164580,
+              "right": 12406963,
+              "ratio": 1.0199253077377106
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0117905966142071,
+          "left_total": 92435046,
+          "right_total": 92939444,
+          "wins": 4,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 1870672,
+              "right": 1892390,
+              "ratio": 1.0116097316900023
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+              "left": 22986100,
+              "right": 23138200,
+              "ratio": 1.0066170424734948
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 5167250,
+              "right": 5224000,
+              "ratio": 1.010982630993275
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 4278200,
+              "right": 4718400,
+              "ratio": 1.1028937403580945
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 2973614,
+              "right": 3263128,
+              "ratio": 1.0973609890187497
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 3765050,
+              "right": 3974683,
+              "ratio": 1.0556786762459993
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 5326925,
+              "right": 5514000,
+              "ratio": 1.0351187598849243
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 6347475,
+              "right": 6862933,
+              "ratio": 1.0812067790735687
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png",
+              "left": 5547600,
+              "right": 5660025,
+              "ratio": 1.0202655202249622
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 4353672,
+          "right_total": 4353672,
+          "wins": 0,
+          "ties": 13,
+          "losses": []
+        }
+      },
+      "native-rle-buffered": {
+        "thread_cycles": {
+          "geomean": 1.0370755511543148,
+          "left_total": 273689247,
+          "right_total": 279500304,
+          "wins": 3,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 8897125,
+              "right": 8952263,
+              "ratio": 1.0061972828301278
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 9690793,
+              "right": 10025706,
+              "ratio": 1.0345599168200168
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 14337904,
+              "right": 16583518,
+              "ratio": 1.1566208003624519
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 13073584,
+              "right": 14563715,
+              "ratio": 1.113980297981028
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 10638199,
+              "right": 11360497,
+              "ratio": 1.0678966430314003
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 15478993,
+              "right": 16441062,
+              "ratio": 1.0621532033769896
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 12101419,
+              "right": 12365148,
+              "ratio": 1.0217932293725223
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 14794519,
+              "right": 15821267,
+              "ratio": 1.0694005665206148
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 17374449,
+              "right": 20682094,
+              "ratio": 1.1903740947410764
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 55260444,
+              "right": 56038790,
+              "ratio": 1.0140850478870564
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0367066225584731,
+          "left_total": 124924500,
+          "right_total": 127515626,
+          "wins": 3,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 4061960,
+              "right": 4087560,
+              "ratio": 1.0063023761927739
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 4425880,
+              "right": 4573760,
+              "ratio": 1.0334125642810017
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 6547025,
+              "right": 7567533,
+              "ratio": 1.1558735456180478
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 5971875,
+              "right": 6646175,
+              "ratio": 1.1129126111983254
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 4859820,
+              "right": 5184400,
+              "ratio": 1.0667884818779296
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 7069066,
+              "right": 7502066,
+              "ratio": 1.0612527878506157
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+              "left": 5519275,
+              "right": 5645925,
+              "ratio": 1.022946854432874
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 6747000,
+              "right": 7219433,
+              "ratio": 1.0700211946050096
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 7923233,
+              "right": 9432533,
+              "ratio": 1.1904904222809047
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 25208500,
+              "right": 25556700,
+              "ratio": 1.0138128012376777
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 4811722,
+          "right_total": 4811722,
+          "wins": 0,
+          "ties": 13,
+          "losses": []
+        }
+      },
+      "native-rle-writer": {
+        "thread_cycles": {
+          "geomean": 1.0349990336221901,
+          "left_total": 205374364,
+          "right_total": 209106340,
+          "wins": 3,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 4214419,
+              "right": 4386136,
+              "ratio": 1.0407451181289757
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 3664534,
+              "right": 4020621,
+              "ratio": 1.097171154640672
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+              "left": 8211348,
+              "right": 8372644,
+              "ratio": 1.0196430598240387
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 9635171,
+              "right": 9954763,
+              "ratio": 1.0331693127189958
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 8331854,
+              "right": 9621738,
+              "ratio": 1.1548135625036156
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 5988207,
+              "right": 6073592,
+              "ratio": 1.0142588591209356
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 10784298,
+              "right": 11044033,
+              "ratio": 1.024084553301476
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 10564754,
+              "right": 10628892,
+              "ratio": 1.0060709411690987
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 12745651,
+              "right": 14179261,
+              "ratio": 1.112478366150148
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 50534167,
+              "right": 50848715,
+              "ratio": 1.0062244619566005
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0345527286758402,
+          "left_total": 93730554,
+          "right_total": 95395257,
+          "wins": 3,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png",
+              "left": 1925336,
+              "right": 2002630,
+              "ratio": 1.0401457200197783
+            },
+            {
+              "file": "C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png",
+              "left": 1673425,
+              "right": 1834509,
+              "ratio": 1.0962600654346624
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+              "left": 3749200,
+              "right": 3819883,
+              "ratio": 1.018852821935346
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+              "left": 4398040,
+              "right": 4540040,
+              "ratio": 1.0322871097125084
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+              "left": 3803850,
+              "right": 4389220,
+              "ratio": 1.153888823166003
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+              "left": 2733775,
+              "right": 2769750,
+              "ratio": 1.0131594589898583
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+              "left": 4922060,
+              "right": 5036875,
+              "ratio": 1.0233266152789686
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+              "left": 4818360,
+              "right": 4848320,
+              "ratio": 1.006217883263185
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+              "left": 5812725,
+              "right": 6469750,
+              "ratio": 1.1130321837004158
+            },
+            {
+              "file": "C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png",
+              "left": 23057600,
+              "right": 23188700,
+              "ratio": 1.0056857608771077
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 4811722,
+          "right_total": 4811722,
+          "wins": 0,
+          "ties": 13,
+          "losses": []
+        }
+      }
+    },
+    "artwork": {
+      "image-default": {
+        "thread_cycles": {
+          "geomean": 1.0184962459658096,
+          "left_total": 66845020,
+          "right_total": 68192886,
+          "wins": 0,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 26018926,
+              "right": 27279789,
+              "ratio": 1.048459456012904
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+              "left": 9044003,
+              "right": 9106533,
+              "ratio": 1.006913973823317
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 31782091,
+              "right": 31806564,
+              "ratio": 1.0007700248545635
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0186079484602149,
+          "left_total": 30496474,
+          "right_total": 31115687,
+          "wins": 0,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 11867012,
+              "right": 12444312,
+              "ratio": 1.0486474607087277
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+              "left": 4125025,
+              "right": 4153525,
+              "ratio": 1.0069090490360664
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 14504437,
+              "right": 14517850,
+              "ratio": 1.000924751508797
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 2469394,
+          "right_total": 2469394,
+          "wins": 0,
+          "ties": 3,
+          "losses": []
+        }
+      },
+      "native-rle-buffered": {
+        "thread_cycles": {
+          "geomean": 1.009871717217105,
+          "left_total": 79965247,
+          "right_total": 81996886,
+          "wins": 1,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 33294171,
+              "right": 34345302,
+              "ratio": 1.0315710218464367
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 36469238,
+              "right": 37833459,
+              "ratio": 1.0374074445975536
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0099246287396821,
+          "left_total": 36477974,
+          "right_total": 37408725,
+          "wins": 1,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 15188837,
+              "right": 15668050,
+              "ratio": 1.0315503418727845
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 16634112,
+              "right": 17261200,
+              "ratio": 1.0376989165396986
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 2718254,
+          "right_total": 2718254,
+          "wins": 0,
+          "ties": 3,
+          "losses": []
+        }
+      },
+      "native-rle-writer": {
+        "thread_cycles": {
+          "geomean": 1.0064024691471338,
+          "left_total": 74418812,
+          "right_total": 75814229,
+          "wins": 1,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 30906340,
+              "right": 31492790,
+              "ratio": 1.0189750711342722
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 33866243,
+              "right": 34978752,
+              "ratio": 1.0328500861462548
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0065269956391587,
+          "left_total": 33949349,
+          "right_total": 34590662,
+          "wins": 1,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+              "left": 14098325,
+              "right": 14365575,
+              "ratio": 1.0189561525925952
+            },
+            {
+              "file": "C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+              "left": 15451837,
+              "right": 15963850,
+              "ratio": 1.0331360601331738
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 2718254,
+          "right_total": 2718254,
+          "wins": 0,
+          "ties": 3,
+          "losses": []
+        }
+      }
+    },
+    "generated": {
+      "image-default": {
+        "thread_cycles": {
+          "geomean": 1.0264607554803187,
+          "left_total": 678534141,
+          "right_total": 694205202,
+          "wins": 4,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 5791,
+              "right": 5967,
+              "ratio": 1.030391987566914
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4634983,
+              "right": 4804152,
+              "ratio": 1.0364982999937649
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 554522,
+              "right": 559360,
+              "ratio": 1.008724631304078
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 9052838,
+              "right": 11370374,
+              "ratio": 1.2560010463017233
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 2589807,
+              "right": 2642121,
+              "ratio": 1.0201999608465033
+            },
+            {
+              "file": "generated/noise-17x13",
+              "left": 17412,
+              "right": 18011,
+              "ratio": 1.034401562141052
+            },
+            {
+              "file": "generated/noise-1920x1080",
+              "left": 111467150,
+              "right": 114570219,
+              "ratio": 1.0278384169685868
+            },
+            {
+              "file": "generated/noise-3840x2160",
+              "left": 455829286,
+              "right": 466239072,
+              "ratio": 1.022837027632314
+            },
+            {
+              "file": "generated/noise-640x360",
+              "left": 9569267,
+              "right": 9914266,
+              "ratio": 1.0360528136585592
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 6086104,
+              "right": 6287483,
+              "ratio": 1.0330883271137004
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 24596182,
+              "right": 24998635,
+              "ratio": 1.0163624175491952
+            },
+            {
+              "file": "generated/ui-640x360",
+              "left": 1027250,
+              "right": 1029372,
+              "ratio": 1.00206570941835
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.026677731047309,
+          "left_total": 309563994,
+          "right_total": 316759481,
+          "wins": 4,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 2641,
+              "right": 2721,
+              "ratio": 1.0302915562287012
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 2113570,
+              "right": 2190870,
+              "ratio": 1.0365731913303085
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 252983,
+              "right": 255140,
+              "ratio": 1.0085262646106656
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 4128220,
+              "right": 5190400,
+              "ratio": 1.257297333959915
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1181270,
+              "right": 1205295,
+              "ratio": 1.020338279986794
+            },
+            {
+              "file": "generated/noise-17x13",
+              "left": 7939,
+              "right": 8220,
+              "ratio": 1.0353948860057942
+            },
+            {
+              "file": "generated/noise-1920x1080",
+              "left": 50840900,
+              "right": 52274800,
+              "ratio": 1.028203670666727
+            },
+            {
+              "file": "generated/noise-3840x2160",
+              "left": 207990500,
+              "right": 212760000,
+              "ratio": 1.0229313358062027
+            },
+            {
+              "file": "generated/noise-640x360",
+              "left": 4364437,
+              "right": 4523387,
+              "ratio": 1.03641935947294
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 2775437,
+              "right": 2868228,
+              "ratio": 1.0334329332642032
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 11216400,
+              "right": 11403300,
+              "ratio": 1.0166631004600406
+            },
+            {
+              "file": "generated/ui-640x360",
+              "left": 468527,
+              "right": 469585,
+              "ratio": 1.002258140939583
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 43274350,
+          "right_total": 43274350,
+          "wins": 0,
+          "ties": 16,
+          "losses": []
+        }
+      },
+      "native-rle-buffered": {
+        "thread_cycles": {
+          "geomean": 0.9967661229534154,
+          "left_total": 637971763,
+          "right_total": 623125253,
+          "wins": 11,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 4528,
+              "right": 4606,
+              "ratio": 1.017226148409894
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 10475198,
+              "right": 11555083,
+              "ratio": 1.103089698161314
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 15620936,
+              "right": 18584845,
+              "ratio": 1.1897395264918824
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 3517514,
+              "right": 3519339,
+              "ratio": 1.0005188323344272
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 52052888,
+              "right": 54848220,
+              "ratio": 1.0537017657886725
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 0.9969037795215254,
+          "left_total": 291062848,
+          "right_total": 284279903,
+          "wins": 11,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 2064,
+              "right": 2100,
+              "ratio": 1.0174418604651163
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4778760,
+              "right": 5273225,
+              "ratio": 1.1034714026232746
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 7126000,
+              "right": 8480233,
+              "ratio": 1.1900411170362055
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1604418,
+              "right": 1605412,
+              "ratio": 1.0006195392971158
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 23738200,
+              "right": 25021700,
+              "ratio": 1.054068969003547
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 41306623,
+          "right_total": 41306623,
+          "wins": 0,
+          "ties": 16,
+          "losses": []
+        }
+      },
+      "native-rle-writer": {
+        "thread_cycles": {
+          "geomean": 1.035071756061693,
+          "left_total": 478463053,
+          "right_total": 461694669,
+          "wins": 8,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 38463,
+              "right": 38809,
+              "ratio": 1.0089956581649897
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 4144858,
+              "right": 4204721,
+              "ratio": 1.0144427143221795
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 508025,
+              "right": 812734,
+              "ratio": 1.5997913488509423
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 9035585,
+              "right": 10548774,
+              "ratio": 1.1674699535226551
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 3404527,
+              "right": 3423226,
+              "ratio": 1.0054923929227173
+            },
+            {
+              "file": "generated/ui-17x13",
+              "left": 43728,
+              "right": 43811,
+              "ratio": 1.0018980973289426
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 5351263,
+              "right": 5835572,
+              "ratio": 1.0905036810936035
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 22022874,
+              "right": 22441899,
+              "ratio": 1.019026808217674
+            }
+          ]
+        },
+        "ns": {
+          "geomean": 1.0352722819312146,
+          "left_total": 218277490,
+          "right_total": 210608837,
+          "wins": 8,
+          "ties": 0,
+          "losses": [
+            {
+              "file": "generated/flat-17x13",
+              "left": 17544,
+              "right": 17702,
+              "ratio": 1.0090059279525765
+            },
+            {
+              "file": "generated/flat-1920x1080",
+              "left": 1890181,
+              "right": 1917745,
+              "ratio": 1.0145827304369264
+            },
+            {
+              "file": "generated/flat-640x360",
+              "left": 231659,
+              "right": 370908,
+              "ratio": 1.601094712486888
+            },
+            {
+              "file": "generated/gradient-1920x1080",
+              "left": 4121540,
+              "right": 4813280,
+              "ratio": 1.1678353236896888
+            },
+            {
+              "file": "generated/gradient-640x360",
+              "left": 1552243,
+              "right": 1562031,
+              "ratio": 1.0063057137316773
+            },
+            {
+              "file": "generated/ui-17x13",
+              "left": 19939,
+              "right": 19986,
+              "ratio": 1.0023571894277548
+            },
+            {
+              "file": "generated/ui-1920x1080",
+              "left": 2441011,
+              "right": 2661387,
+              "ratio": 1.0902806255277013
+            },
+            {
+              "file": "generated/ui-3840x2160",
+              "left": 10046450,
+              "right": 10233400,
+              "ratio": 1.0186085632238253
+            }
+          ]
+        },
+        "encoded_bytes": {
+          "geomean": 1.0,
+          "left_total": 41306623,
+          "right_total": 41306623,
+          "wins": 0,
+          "ties": 16,
+          "losses": []
+        }
+      }
+    }
+  }
+}

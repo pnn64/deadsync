@@ -1,0 +1,44 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 21.65s
+     Running unittests src\lib.rs (target\release\build\deadlib-image-png/242f985eac60e463\out\deadlib_image_png-242f985eac60e463.exe)
+
+running 29 tests
+test checksum::tests::adler_zero_advancement_matches_modular_addition ... ok
+test checksum::tests::known_checksums ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test scanline::tests::unpack_preserves_short_and_extra_input_behavior ... ok
+test scanline::tests::unpack_every_byte_and_partial_group ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test checksum::tests::adler_zero_advancement_interleaves_with_nonzero_spans ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test scanline::x86::tests::every_average_pair_and_wrapping_residual_matches_integer_division ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test checksum::tests::crc_every_byte_value_in_word_lanes_and_fragmented_tails ... ok
+test zlib::tests::maximum_match_token_after_four_wide_literals_preserves_boundaries ... ok
+test scanline::tests::unpack_rows_keep_padding_and_slice_boundaries ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test zlib::tests::stored_and_mixed_blocks_preserve_output_limits_and_prefixes ... ok
+test zlib::tests::wide_code_lookahead_preserves_prefetched_prefixes ... ok
+test checksum::x86::polynomial_folding_matches_scalar_for_offsets_lengths_and_initial_states ... ok
+test checksum::x86::vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+test scanline::x86::tests::every_vector_paeth_triplet_matches_the_specification ... ok
+test zlib::tests::word_match_copies_preserve_overlapping_history_and_every_output_tail ... ok
+test scanline::x86::tests::vector_rows_preserve_channel_history_tails_and_surrounding_bytes ... ok
+test zlib::tests::idat_boundaries_and_empty_chunks_preserve_huffman_payloads ... ok
+test zlib::tests::sized_inflation_matches_independent_huffman_fixtures ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.94s
+
+     Running tests\encoder_filter_bytes.rs (target\release\build\deadlib-image-png/c807a6ab250126b2\out\encoder_filter_bytes-c807a6ab250126b2.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
