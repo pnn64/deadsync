@@ -1,0 +1,21 @@
+[package]
+name = "bmp-codec-bench"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+allocations = []
+
+[dependencies]
+deadlib-image-bmp = { path = ".." }
+image = { version = "=0.25.10", default-features = false, features = ["bmp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = 1
