@@ -1,7 +1,8 @@
-use crate::{Error, Filter, Image, reserve, scanline};
+use crate::{Error, Filter, Image, Samples, reserve, scanline};
 
 pub(super) struct Rows<'a> {
     image: &'a Image,
+    pixels: Option<&'a [u8]>,
     interlaced: bool,
     filter: Filter,
     pass: usize,
@@ -33,8 +34,13 @@ impl<'a> Rows<'a> {
             image.bit_depth,
             interlaced,
         )?;
+        let pixels = match &image.samples {
+            Samples::U8(pixels) if image.bit_depth == 8 && !interlaced => Some(pixels.as_slice()),
+            _ => None,
+        };
         Ok(Self {
             image,
+            pixels,
             interlaced,
             filter,
             pass: 0,
@@ -71,9 +77,11 @@ impl<'a> Rows<'a> {
                     self.image.bit_depth,
                 )?;
                 if self.filter != Filter::None {
-                    resize(&mut self.row, bytes)?;
-                    if self.filter != Filter::Sub && self.height > 1 {
-                        resize(&mut self.previous, bytes)?;
+                    if self.pixels.is_none() {
+                        resize(&mut self.row, bytes)?;
+                        if self.filter != Filter::Sub && self.height > 1 {
+                            resize(&mut self.previous, bytes)?;
+                        }
                     }
                     if self.filter == Filter::Adaptive {
                         resize(&mut self.candidate, bytes + 1)?;
@@ -108,19 +116,29 @@ impl<'a> Rows<'a> {
             self.index += 1;
             return Ok(Some(&self.output));
         }
-        scanline::pack_row(
-            self.image,
-            y,
-            self.x as usize,
-            self.dx as usize,
-            self.width,
-            &mut self.row,
-        );
+        let (row, previous) = if let Some(pixels) = self.pixels {
+            let stride = self.output.len() - 1;
+            let start = y * stride;
+            (
+                &pixels[start..start + stride],
+                &pixels[start.saturating_sub(stride)..start],
+            )
+        } else {
+            scanline::pack_row(
+                self.image,
+                y,
+                self.x as usize,
+                self.dx as usize,
+                self.width,
+                &mut self.row,
+            );
+            (self.row.as_slice(), self.previous.as_slice())
+        };
         let bpp = (self.image.color_type.channels() * self.image.bit_depth as usize).div_ceil(8);
         let mut selected = self.filter as u8;
-        if self.filter == Filter::Adaptive && self.index != 0 && self.row == self.previous {
+        if self.filter == Filter::Adaptive && self.index != 0 && row == previous {
             // Up is zero; None/Sub can tie it only for an all-zero row.
-            selected = if self.row.iter().all(|&byte| byte == 0) {
+            selected = if row.iter().all(|&byte| byte == 0) {
                 0
             } else {
                 2
@@ -133,11 +151,11 @@ impl<'a> Rows<'a> {
                     continue;
                 }
                 let score = if self.index == 0 {
-                    scanline::filter_first::<true>(&self.row, bpp, kind, &mut self.candidate[1..])
+                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..])
                 } else {
                     scanline::filter_into::<true>(
-                        &self.row,
-                        &self.previous,
+                        row,
+                        previous,
                         bpp,
                         kind,
                         &mut self.candidate[1..],
@@ -154,20 +172,14 @@ impl<'a> Rows<'a> {
             }
         } else {
             if self.index == 0 {
-                scanline::filter_first::<false>(&self.row, bpp, selected, &mut self.output[1..]);
+                scanline::filter_first::<false>(row, bpp, selected, &mut self.output[1..]);
             } else {
-                scanline::filter_into::<false>(
-                    &self.row,
-                    &self.previous,
-                    bpp,
-                    selected,
-                    &mut self.output[1..],
-                );
+                scanline::filter_into::<false>(row, previous, bpp, selected, &mut self.output[1..]);
             }
         }
         self.output[0] = selected;
         self.index += 1;
-        if self.filter != Filter::Sub && self.index < self.height {
+        if self.pixels.is_none() && self.filter != Filter::Sub && self.index < self.height {
             core::mem::swap(&mut self.row, &mut self.previous);
         }
         Ok(Some(&self.output))

@@ -681,6 +681,10 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
     let channels = image.color_type.channels();
     let depth = image.bit_depth;
     let bpp = (channels * depth as usize).div_ceil(8);
+    let pixels = match &image.samples {
+        Samples::U8(pixels) if depth == 8 && !interlaced => Some(pixels.as_slice()),
+        _ => None,
+    };
     let capacity = if filter == Filter::None {
         0
     } else {
@@ -692,8 +696,13 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             .unwrap_or(0);
         row_bytes(width, channels, depth)?
     };
-    let mut row = vec![0; capacity];
-    let uses_previous = !matches!(filter, Filter::None | Filter::Sub) && image.height > 1;
+    let mut row = if pixels.is_some() {
+        Vec::new()
+    } else {
+        vec![0; capacity]
+    };
+    let uses_previous =
+        pixels.is_none() && !matches!(filter, Filter::None | Filter::Sub) && image.height > 1;
     let mut previous = if uses_previous {
         vec![0; capacity]
     } else {
@@ -730,7 +739,9 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             }
             continue;
         }
-        row.resize(stride, 0);
+        if pixels.is_none() {
+            row.resize(stride, 0);
+        }
         if uses_previous {
             previous.resize(stride, 0);
         }
@@ -740,11 +751,20 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
         best.resize(stride, 0);
         for row_index in 0..h {
             let src_y = y as usize + row_index * dy as usize;
-            pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
+            let (current, prior) = if let Some(pixels) = pixels {
+                let start = src_y * stride;
+                (
+                    &pixels[start..start + stride],
+                    &pixels[start.saturating_sub(stride)..start],
+                )
+            } else {
+                pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
+                (row.as_slice(), previous.as_slice())
+            };
             let mut selected = 0;
-            if filter == Filter::Adaptive && row_index != 0 && row == previous {
+            if filter == Filter::Adaptive && row_index != 0 && current == prior {
                 // Up is zero; None/Sub can tie it only for an all-zero row.
-                selected = if row.iter().all(|&byte| byte == 0) {
+                selected = if current.iter().all(|&byte| byte == 0) {
                     0
                 } else {
                     2
@@ -759,9 +779,9 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                         continue;
                     }
                     let value = if row_index == 0 {
-                        filter_first::<true>(&row, bpp, kind, &mut candidate)
+                        filter_first::<true>(current, bpp, kind, &mut candidate)
                     } else {
-                        filter_into::<true>(&row, &previous, bpp, kind, &mut candidate)
+                        filter_into::<true>(current, prior, bpp, kind, &mut candidate)
                     };
                     if value < score {
                         score = value;
@@ -775,9 +795,9 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             } else {
                 selected = filter as u8;
                 if row_index == 0 {
-                    filter_first::<false>(&row, bpp, selected, &mut best);
+                    filter_first::<false>(current, bpp, selected, &mut best);
                 } else {
-                    filter_into::<false>(&row, &previous, bpp, selected, &mut best);
+                    filter_into::<false>(current, prior, bpp, selected, &mut best);
                 }
             }
             out.push(selected);
