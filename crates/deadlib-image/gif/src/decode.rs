@@ -688,15 +688,14 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
     }
     let mut decoder = Decoder::new(options.clone());
     let mut at = 0;
-    let mut gif = None;
+    let mut blocks = Vec::new();
     loop {
         let progress = decoder.update(&input[at..])?;
         at += progress.consumed;
         match progress.event {
-            Some(Event::Header) => gif = Some(Gif::new(decoder.header().unwrap().clone())),
+            Some(Event::Header) => {}
             Some(Event::Block(block)) => {
-                let blocks = &mut gif.as_mut().unwrap().blocks;
-                reserve(blocks, 1)?;
+                reserve(&mut blocks, 1)?;
                 blocks.push(block);
             }
             Some(Event::End) => {
@@ -704,7 +703,10 @@ pub fn decode_with_options(input: &[u8], options: &DecodeOptions) -> Result<Gif,
                     return Err(Error::Invalid("bytes after GIF trailer"));
                 }
                 decoder.finish()?;
-                return Ok(gif.unwrap());
+                return Ok(Gif {
+                    header: decoder.header.unwrap(),
+                    blocks,
+                });
             }
             None => {
                 decoder.finish()?;
