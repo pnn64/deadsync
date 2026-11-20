@@ -683,7 +683,15 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             let src_y = y as usize + row_index * dy as usize;
             pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
             let mut selected = 0;
-            if filter == Filter::Adaptive {
+            if filter == Filter::Adaptive && row_index != 0 && row == previous {
+                // Up is zero; None/Sub can tie it only for an all-zero row.
+                selected = if row.iter().all(|&byte| byte == 0) {
+                    0
+                } else {
+                    2
+                };
+                best.fill(0);
+            } else if filter == Filter::Adaptive {
                 let mut score = u64::MAX;
                 for kind in 0..5 {
                     // Up/Paeth duplicate the earlier None/Sub candidates on

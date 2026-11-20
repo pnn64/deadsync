@@ -118,7 +118,15 @@ impl<'a> Rows<'a> {
         );
         let bpp = (self.image.color_type.channels() * self.image.bit_depth as usize).div_ceil(8);
         let mut selected = self.filter as u8;
-        if self.filter == Filter::Adaptive {
+        if self.filter == Filter::Adaptive && self.index != 0 && self.row == self.previous {
+            // Up is zero; None/Sub can tie it only for an all-zero row.
+            selected = if self.row.iter().all(|&byte| byte == 0) {
+                0
+            } else {
+                2
+            };
+            self.output[1..].fill(0);
+        } else if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
             for kind in 0..5 {
                 if self.index == 0 && matches!(kind, 2 | 4) {
