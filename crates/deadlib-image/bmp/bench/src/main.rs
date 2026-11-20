@@ -122,6 +122,7 @@ mod cycles {
 enum Mode {
     Decode,
     Rgba,
+    OwnedRgba,
     Convert,
     Encode,
     ImageRgba,
@@ -132,6 +133,7 @@ impl Mode {
         match self {
             Self::Decode => "native-decode",
             Self::Rgba => "native-rgba",
+            Self::OwnedRgba => "native-owned-rgba",
             Self::Convert => "native-convert",
             Self::Encode => "native-encode",
             Self::ImageRgba => "image-rgba",
@@ -167,6 +169,14 @@ fn run(mode: Mode, case: &fixtures::Case) {
                 deadlib_image_bmp::decode(black_box(&case.bytes))
                     .unwrap()
                     .to_rgba8()
+                    .unwrap(),
+            );
+        }
+        Mode::OwnedRgba => {
+            black_box(
+                deadlib_image_bmp::decode(black_box(&case.bytes))
+                    .unwrap()
+                    .into_rgba8()
                     .unwrap(),
             );
         }
@@ -271,12 +281,12 @@ fn options() -> Options {
             "--mode" => {
                 result.mode = args
                     .next()
-                    .expect("--mode needs all/rgba/decode/convert/encode")
+                    .expect("--mode needs all/rgba/owned-rgba/decode/convert/encode")
             }
             "--verify-only" => result.verify_only = true,
             "--help" => {
                 println!(
-                    "bmp-codec-bench [--filter SUBSTRING] [--mode all|rgba|decode|convert|encode] [--verify-only] [FILE_OR_DIRECTORY ...]\nWithout paths: independent synthetic layout/size/orientation matrix. BMP_BENCH_MS=20 BMP_BENCH_SAMPLES=5 BMP_BENCH_CPU=0. The allocations feature records counts only."
+                    "bmp-codec-bench [--filter SUBSTRING] [--mode all|rgba|owned-rgba|decode|convert|encode] [--verify-only] [FILE_OR_DIRECTORY ...]\nWithout paths: independent synthetic layout/size/orientation matrix. BMP_BENCH_MS=20 BMP_BENCH_SAMPLES=5 BMP_BENCH_CPU=0. Optional BMP_BENCH_SIZES=31x33,32x32,41x25,64x64 replaces synthetic dimensions; widths and heights must be positive. The allocations feature records counts only. owned-rgba is explicit and excluded from all."
                 );
                 std::process::exit(0);
             }
@@ -285,7 +295,8 @@ fn options() -> Options {
         }
     }
     assert!(
-        ["all", "rgba", "decode", "convert", "encode"].contains(&result.mode.as_str()),
+        ["all", "rgba", "owned-rgba", "decode", "convert", "encode"]
+            .contains(&result.mode.as_str()),
         "unknown mode: {}",
         result.mode
     );
@@ -304,7 +315,13 @@ fn modes(options: &Options, case: &fixtures::Case, equivalent: bool) -> Vec<Mode
             result.push(mode);
         }
     }
-    if equivalent && (options.mode == "all" || options.mode == "rgba") {
+    // Keep the existing all/rgba workload unchanged for staged comparisons.
+    if options.mode == "owned-rgba" {
+        result.push(Mode::OwnedRgba);
+    }
+    if equivalent
+        && (options.mode == "all" || options.mode == "rgba" || options.mode == "owned-rgba")
+    {
         result.push(Mode::ImageRgba);
     }
     if matches!(case.expected.pixels, Pixels::Rgb(_) | Pixels::Rgba(_))
@@ -326,6 +343,17 @@ fn modes(options: &Options, case: &fixtures::Case, equivalent: bool) -> Vec<Mode
 
 fn measure(options: &Options, case: &fixtures::Case, case_index: usize) {
     let equivalent = verify(case);
+    if options.mode == "owned-rgba" {
+        assert!(
+            deadlib_image_bmp::decode(&case.bytes)
+                .unwrap()
+                .into_rgba8()
+                .unwrap()
+                == case.rgba,
+            "{}: owned native RGBA differs from independent expected pixels",
+            case.name
+        );
+    }
     if options.verify_only {
         return;
     }
@@ -408,6 +436,40 @@ fn files(path: &Path, output: &mut Vec<std::path::PathBuf>, explicit: bool) {
     }
 }
 
+fn sizes() -> Vec<(usize, usize)> {
+    let Some(configured) = std::env::var_os("BMP_BENCH_SIZES") else {
+        return vec![(1, 1), (17, 9), (511, 257), (1920, 1080)];
+    };
+    let configured = configured
+        .to_str()
+        .expect("BMP_BENCH_SIZES must contain comma-separated WIDTHxHEIGHT values");
+    let mut sizes = Vec::new();
+    for size in configured.split(',') {
+        let (width, height) = size
+            .trim()
+            .split_once('x')
+            .expect("BMP_BENCH_SIZES requires WIDTHxHEIGHT for every size");
+        let width = width
+            .trim()
+            .parse::<usize>()
+            .expect("BMP_BENCH_SIZES width must be a positive integer");
+        let height = height
+            .trim()
+            .parse::<usize>()
+            .expect("BMP_BENCH_SIZES height must be a positive integer");
+        assert!(
+            width > 0 && height > 0,
+            "BMP_BENCH_SIZES dimensions must be positive"
+        );
+        assert!(
+            !sizes.contains(&(width, height)),
+            "BMP_BENCH_SIZES must not repeat dimensions"
+        );
+        sizes.push((width, height));
+    }
+    sizes
+}
+
 fn main() {
     let options = options();
     if !options.verify_only {
@@ -420,8 +482,9 @@ fn main() {
     );
     let mut count = 0;
     if options.files.is_empty() {
+        let sizes = sizes();
         for &layout in fixtures::LAYOUTS {
-            for (width, height) in [(1, 1), (17, 9), (511, 257), (1920, 1080)] {
+            for &(width, height) in &sizes {
                 for top_down in [false, true] {
                     if top_down && !layout.supports_top_down() {
                         continue;

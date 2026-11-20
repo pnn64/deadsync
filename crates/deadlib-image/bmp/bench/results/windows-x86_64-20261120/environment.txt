@@ -1,0 +1,41 @@
+Date: 2026-11-20
+Repository: deadsync, branch main
+Initial HEAD: f755f2acd
+Original BMP source commit: b04e37657
+CPU: Intel Xeon E5-2696 v4 @ 2.20GHz, 22 cores / 44 logical processors
+Target: x86_64-pc-windows-msvc
+rustc: 1.100.0 (0ef1bc386 2026-11-09)
+LLVM: 23.1.5
+Release: opt-level=3, lto=true, codegen-units=1, panic=abort, debug=1
+Inherited Windows rustflags: -C target-feature=+crt-static
+Reference: image =0.25.10, default-features=false, features=[bmp]
+Allocator: System; allocation instrumentation is in a separate executable
+Measurement: QueryThreadCycleTime, Instant; warmed in-memory calls including allocation and drop
+CPU affinity: logical CPU 2
+Baseline, stage1/2/3 and final-all runs: 7 samples, >=20 ms/sample/mode, rotated mode order
+No codec compilation or test jobs were intentionally run alongside timed samples.
+
+Frozen baseline executables (SHA256):
+bmp-timing.exe A86C4CC9F44D47714A6B3852A44228D12DBAD0EF4DA4159B18DAA7DB2EE0DAC1
+bmp-allocations.exe 44D360AE20FD373A2B6290DA4481224B5A70F6B58FEB5000FB9BDCFCB921F194
+native_snapshot.exe 038229FBA46EF0BCB3A8C33EA9E414979B42B808E6E0345EBEEC5B699A7EDBE4
+Frozen native.snapshot SHA256: 076E78CAE341E782B60F72FA3F60C0FF85142759E4821069F1012063F37BF0DF
+Snapshot: 22,570 records; 42,819,895 bytes
+Frozen binaries and snapshot: D:/deadsync-bmp-perf-20261120/baseline/
+
+The native BMP crate remains dependency-free and forbids unsafe code. Platform
+FFI and allocator instrumentation exist only in this separate benchmark package.
+
+Final production source commit: d446b651c
+Focused refinements, ownership pilot, palette cutoff and final owned/corpus runs:
+9 samples, >=40 ms/sample/mode, same CPU affinity and rotated mode order.
+Palette cutoff sizes: BMP_BENCH_SIZES=31x33,32x32,41x25,64x64
+All other synthetic runs used the unchanged default four sizes.
+Final matrices: final-all=662 rows; final-owned-r1/r2=218 rows each.
+Final external corpus: 12 valid inputs (24 rows), one intentionally invalid input rejected.
+Final builds: release/locked/offline; allocation feature only in allocation executable.
+
+Final executables (SHA256):
+timing/release/bmp-codec-bench.exe 34501326E525AB7619377FBF9405FF6BD4894A465E388F5E4EBBDA1273ADE15A
+allocations/release/bmp-codec-bench.exe 5E09517A29D10CD4BF6A59D2201960F85F01E75D15F8772338003538C8D8DC06
+timing/release/native_snapshot.exe 26BC8D5F06E4851786E5119EC6D62C6E914B46A6C5E443BCD67B1246F42D1EBB

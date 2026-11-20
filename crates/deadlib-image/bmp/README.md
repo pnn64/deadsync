@@ -109,6 +109,14 @@ The crate does not depend on the application's image loader. Connecting it to
 runtime loading and removing the existing BMP fallback are separate migration
 steps.
 
+## Performance measurements
+
+The isolated [benchmark workspace](bench/README.md) compares exact output with
+`image` and measures thread cycles, throughput, and allocations without adding
+dependencies to this crate. The [recorded optimization results](bench/results/windows-x86_64-20261120/README.md)
+include per-change baselines, complete final comparisons, observed regressions,
+and behavior-preservation checks.
+
 ## Validation and references
 
 The integration tests construct independent BMP byte streams and expected pixels

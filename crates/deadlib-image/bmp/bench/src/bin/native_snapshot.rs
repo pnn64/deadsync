@@ -19,6 +19,11 @@ fn record(output: &mut Vec<u8>, bytes: &[u8], limits: Limits, records: &mut usiz
     );
     match deadlib_image_bmp::decode_with_limits(bytes, limits) {
         Ok(bitmap) => {
+            assert_eq!(bitmap.clone().into_rgba8(), bitmap.to_rgba8());
+            assert_eq!(
+                bitmap.clone().into_rgba8_with_limits(limits),
+                bitmap.to_rgba8_with_limits(limits)
+            );
             writeln!(result, "{bitmap:?}").unwrap();
             writeln!(result, "{:?}", bitmap.to_rgba8_with_limits(limits)).unwrap();
             for top_down in [false, true] {
@@ -45,6 +50,8 @@ fn record(output: &mut Vec<u8>, bytes: &[u8], limits: Limits, records: &mut usiz
 }
 
 fn record_model(output: &mut Vec<u8>, bitmap: &Bitmap, records: &mut usize) {
+    // Check the consuming API without changing any serialized baseline bytes.
+    assert_eq!(bitmap.clone().into_rgba8(), bitmap.to_rgba8());
     let mut result = format!(
         "{bitmap:?}\n{:?}\n{:?}\n",
         bitmap.validate(),
@@ -55,6 +62,10 @@ fn record_model(output: &mut Vec<u8>, bitmap: &Bitmap, records: &mut usize) {
             max_decoded_bytes,
             ..Limits::default()
         };
+        assert_eq!(
+            bitmap.clone().into_rgba8_with_limits(limits),
+            bitmap.to_rgba8_with_limits(limits)
+        );
         writeln!(
             result,
             "{max_decoded_bytes}:{:?}",
