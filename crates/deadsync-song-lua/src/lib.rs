@@ -1860,6 +1860,16 @@ pub fn theme_metric_number_for_screen(
     if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("ScreenHeight") {
         return Some(screen_height);
     }
+    if group.eq_ignore_ascii_case("ArrowEffects") {
+        // ITGmania Themes/_fallback/metrics.ini. Authored Lua uses these same
+        // constants as the native wave modifier when positioning its own notes.
+        if name.eq_ignore_ascii_case("WaveModHeight") {
+            return Some(38.0);
+        }
+        if name.eq_ignore_ascii_case("WaveModMagnitude") {
+            return Some(20.0);
+        }
+    }
     if group.eq_ignore_ascii_case("ScreenGameplay") {
         let side = if name.get(..8)?.eq_ignore_ascii_case("PlayerP1") {
             -1.0
@@ -2109,6 +2119,8 @@ pub fn theme_metric_names(group: &str) -> Vec<String> {
                 .into_iter()
                 .map(str::to_string),
         );
+    } else if group.eq_ignore_ascii_case("ArrowEffects") {
+        names.extend(["WaveModHeight", "WaveModMagnitude"].into_iter().map(str::to_string));
     } else if group.eq_ignore_ascii_case("Combo") {
         names.push("ShowComboAt".to_string());
     } else if group.eq_ignore_ascii_case("GraphDisplay") {

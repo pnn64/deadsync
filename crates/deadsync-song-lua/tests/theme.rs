@@ -57,6 +57,32 @@ impl Pair {
 }
 
 #[test]
+fn arrow_effect_wave_metrics_support_authored_note_positioning() {
+    let mut runtime = SongRuntime::new(&context()).unwrap();
+    // Native fallback metrics.ini defines magnitude 20 and height 38. Pernicious
+    // Deed captures these before its update callback first enables Wave().
+    let values = execute(&mut runtime, r#"
+        local height=THEME:GetMetric('ArrowEffects','WaveModHeight')
+        local magnitude=THEME:GetMetric('ArrowEffects','WaveModMagnitude')
+        assert(THEME:GetMetricF('arroweffects','wavemodheight')==height)
+        assert(THEME:GetMetricI('ArrowEffects','WaveModMagnitude')==magnitude)
+        assert(THEME:HasMetric('ArrowEffects','WaveModHeight'))
+        assert(THEME:GetMetricB('ArrowEffects','WaveModMagnitude'))
+        assert(THEME:GetMetric('ArrowEffects','MissingWaveMetric')==nil)
+        local names=THEME:GetMetricNamesInGroup('ArrowEffects')
+        local found={}
+        for _,name in ipairs(names) do found[name]=true end
+        assert(found.WaveModHeight and found.WaveModMagnitude)
+        local y=76
+        return height,magnitude,y+0.8*magnitude*math.sin(y/height)
+    "#);
+    assert_eq!(values[0], Value::Number(38.0));
+    assert_eq!(values[1], Value::Number(20.0));
+    let Value::Number(y) = values[2] else { panic!("wave offset is numeric") };
+    assert!((y - (76.0 + 16.0 * 2.0_f64.sin())).abs() < 1e-12);
+}
+
+#[test]
 fn theme_identity_methods_fresh_lists_and_side_effects_match_production() {
     let mut p = Pair::new(&context());
     p.compare(r#"
