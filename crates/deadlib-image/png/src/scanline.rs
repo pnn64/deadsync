@@ -409,7 +409,7 @@ pub(crate) fn filter_into<const SCORE: bool>(
     }
 }
 
-#[inline]
+#[inline(always)]
 fn filter_chunk<const FILTER: u8>(
     row: &[u8; 32],
     left: &[u8; 32],
