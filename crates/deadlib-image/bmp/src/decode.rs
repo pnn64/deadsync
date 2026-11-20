@@ -91,7 +91,6 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
             let mut samples = Vec::new();
             reserve(&mut samples, header.decoded_bytes)?;
             samples.resize(header.decoded_bytes, 0);
-            let mut any_alpha = false;
             for (encoded_y, row) in source.chunks_exact(header.row_pitch).enumerate() {
                 let y = if header.info.top_down {
                     encoded_y
@@ -101,14 +100,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                 let output = &mut samples[y * width * channels..(y + 1) * width * channels];
                 match header.format {
                     Format::Rgb24 => {
-                        for (bgr, rgb) in row[..width * 3]
-                            .as_chunks::<3>()
-                            .0
-                            .iter()
-                            .zip(output.as_chunks_mut::<3>().0)
-                        {
-                            rgb.copy_from_slice(&[bgr[2], bgr[1], bgr[0]]);
-                        }
+                        map_row::<3, 3>(row, output, |bgr| [bgr[2], bgr[1], bgr[0]]);
                     }
                     Format::Masked {
                         red,
@@ -117,24 +109,13 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                         alpha,
                         ..
                     } => {
-                        let step = usize::from(header.info.bit_depth / 8);
-                        for (packed, pixel) in row[..width * step]
-                            .chunks_exact(step)
-                            .zip(output.chunks_exact_mut(channels))
-                        {
-                            let word = if step == 2 {
-                                u32::from(u16::from_le_bytes([packed[0], packed[1]]))
-                            } else {
-                                u32::from_le_bytes([packed[0], packed[1], packed[2], packed[3]])
-                            };
-                            pixel[0] = red.sample(word);
-                            pixel[1] = green.sample(word);
-                            pixel[2] = blue.sample(word);
-                            if let Some(alpha) = alpha {
-                                pixel[3] = alpha.sample(word);
-                                any_alpha |= pixel[3] != 0;
-                            }
-                        }
+                        masked_row(
+                            row,
+                            output,
+                            header.info.bit_depth,
+                            [red, green, blue],
+                            alpha,
+                        );
                     }
                     Format::Indexed { .. } => unreachable!("truecolor format"),
                 }
@@ -145,7 +126,7 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
                     opaque_if_zero: true,
                     ..
                 }
-            ) && !any_alpha
+            ) && samples.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0)
             {
                 for pixel in samples.as_chunks_mut::<4>().0 {
                     pixel[3] = 255;
@@ -163,6 +144,96 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
         height: header.info.height,
         pixels,
     })
+}
+
+// Fixed pixel sizes let the compiler remove stride and channel decisions from
+// the loop. The output bounds iteration, so source row padding stays ignored.
+fn map_row<const INPUT: usize, const OUTPUT: usize>(
+    row: &[u8],
+    output: &mut [u8],
+    mut pixel: impl FnMut([u8; INPUT]) -> [u8; OUTPUT],
+) {
+    for (&packed, output) in row
+        .as_chunks::<INPUT>()
+        .0
+        .iter()
+        .zip(output.as_chunks_mut::<OUTPUT>().0)
+    {
+        *output = pixel(packed);
+    }
+}
+
+// RGB555 and RGB565 differ only in the green field's width. Repeat the high
+// bits instead of rounding, exactly as the general Channel sampler does.
+fn rgb16<const GREEN_BITS: u32>(packed: [u8; 2]) -> [u8; 3] {
+    let word = u16::from_le_bytes(packed);
+    let red = ((word >> (5 + GREEN_BITS)) & 31) as u8;
+    let green = ((word >> 5) & ((1 << GREEN_BITS) - 1)) as u8;
+    let blue = (word & 31) as u8;
+    [
+        (red << 3) | (red >> 2),
+        (green << (8 - GREEN_BITS)) | (green >> (2 * GREEN_BITS - 8)),
+        (blue << 3) | (blue >> 2),
+    ]
+}
+
+fn masked_row(
+    row: &[u8],
+    output: &mut [u8],
+    bit_depth: u16,
+    rgb: [Channel; 3],
+    alpha: Option<Channel>,
+) {
+    let [red, green, blue] = rgb;
+    match (bit_depth, alpha) {
+        (16, None) => match rgb.map(|channel| channel.mask) {
+            [0x7c00, 0x03e0, 0x001f] => map_row(row, output, rgb16::<5>),
+            [0xf800, 0x07e0, 0x001f] => map_row(row, output, rgb16::<6>),
+            _ => map_row::<2, 3>(row, output, |packed| {
+                let word = u32::from(u16::from_le_bytes(packed));
+                [red.sample(word), green.sample(word), blue.sample(word)]
+            }),
+        },
+        (16, Some(alpha)) => map_row::<2, 4>(row, output, |packed| {
+            let word = u32::from(u16::from_le_bytes(packed));
+            [
+                red.sample(word),
+                green.sample(word),
+                blue.sample(word),
+                alpha.sample(word),
+            ]
+        }),
+        (32, None) => match rgb.map(|channel| channel.mask) {
+            [0xff0000, 0xff00, 0xff] => {
+                map_row::<4, 3>(row, output, |bgrx| [bgrx[2], bgrx[1], bgrx[0]]);
+            }
+            [0xff, 0xff00, 0xff0000] => {
+                map_row::<4, 3>(row, output, |rgbx| [rgbx[0], rgbx[1], rgbx[2]]);
+            }
+            _ => map_row::<4, 3>(row, output, |packed| {
+                let word = u32::from_le_bytes(packed);
+                [red.sample(word), green.sample(word), blue.sample(word)]
+            }),
+        },
+        (32, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
+            [0xff0000, 0xff00, 0xff, 0xff000000] => {
+                map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]]);
+            }
+            [0xff, 0xff00, 0xff0000, 0xff000000] => {
+                output.copy_from_slice(&row[..output.len()]);
+            }
+            _ => map_row::<4, 4>(row, output, |packed| {
+                let word = u32::from_le_bytes(packed);
+                [
+                    red.sample(word),
+                    green.sample(word),
+                    blue.sample(word),
+                    alpha.sample(word),
+                ]
+            }),
+        },
+        _ => unreachable!("validated masked bit depth"),
+    }
 }
 
 struct Header {
