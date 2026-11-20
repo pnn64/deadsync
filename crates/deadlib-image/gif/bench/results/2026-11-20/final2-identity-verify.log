@@ -1,0 +1,3 @@
+13 source hashes match current files and step11; only the documented stage9 lint expectation is normalized.
+All four final executable hashes match their captured identities.
+176 corpus file sizes and SHA256 hashes match the initial inputs.

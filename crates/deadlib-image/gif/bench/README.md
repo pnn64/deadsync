@@ -4,7 +4,9 @@ This development-only workspace compares `deadlib-image-gif`, `gif 0.14.2`,
 `gif-dispose 6.0.0`, and `image 0.25.10`. It adds no production dependencies.
 The lock file pins the reference implementations and their dependencies.
 
-Retained measurements, scope, and known exceptions are in [RESULTS.md](RESULTS.md).
+Current measurements, scope, and known exceptions are in
+[RESULTS-2026-11-20.md](RESULTS-2026-11-20.md). The previous campaign remains in
+[RESULTS.md](RESULTS.md).
 
 Run from the repository root:
 
@@ -97,3 +99,47 @@ production GIF decoding remains safe Rust.
 requires all seven modes and exactly matched input sets. It reports geometric
 mean native/reference ratios, totals, and every individual loss, both overall
 and separately for repository assets, upstream fixtures, and generated images.
+
+## First-image owned RGBA comparison
+
+The supplemental `first_frame` binary stops at the first image, matching the
+asset-loader workload. It compares native incremental decoding plus transparent
+compositing and consuming canvas conversion, the current indexed `gif` asset-loader core
+(`read_into_buffer` followed by palette expansion, with color keying disabled),
+and the first owned frame from `image`'s animation iterator. All paths return the
+same full logical canvas, including transparent pixels and image offsets.
+Input reading is outside measurement; output allocation and destruction are
+included. Later frames and the GIF trailer are intentionally not decoded.
+The asset comparison excludes file/signature/buffering work and the loader's
+two `check_image_alloc` guards, so this measures its in-memory decode/expand core.
+`image-first` uses the animation iterator's first frame.
+
+`native-copy-first` retains the previous canvas-copy path as a same-binary
+control for `native-first`. Both return identical owned pixels; the consuming
+path transfers the canvas allocation through `Compositor::into_image`.
+
+```powershell
+cargo build --release --locked --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --bin first_frame --target-dir target/gif-first-bench
+$env:GIF_BENCH_MS = '80'
+target/gif-first-bench/release/first_frame.exe --compatibility assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples target/gif-generated-20261117
+cargo build --release --locked --manifest-path crates/deadlib-image/gif/bench/Cargo.toml --bin first_frame --features allocations --target-dir target/gif-first-alloc
+target/gif-first-alloc/release/first_frame.exe --compatibility assets crates/deadlib-image/gif/tests/fixtures/image-gif/samples target/gif-generated-20261117
+```
+
+Before measuring each file it compares dimensions and every RGBA byte; any
+decoder rejection or mismatch aborts with its file and mode. `--verify-only`
+performs those comparisons without measurements. Timing uses the same five-batch
+protocol and Windows CPU affinity as the animation benchmark. TSV columns report
+canvas pixels, median nanoseconds and thread cycles per decode, allocation calls,
+and requested bytes. Throughput in megapixels/second is `canvas_pixels * 1000 / ns`.
+Allocation builds zero the timing columns and include the same allocator
+calibration. Summarize matched timing and allocation tables with:
+
+```powershell
+python crates/deadlib-image/gif/bench/summarize.py first-timing.tsv first-allocations.tsv --first-frame --output first-summary.json
+```
+
+`compare.py before.tsv after.tsv --output changes.json` compares successive
+animation optimization runs, including unchanged reference modes as controls.
+Add `--first-frame` for the four first-image modes.
+It requires identical inputs and retains every individual regression.

@@ -1,0 +1,94 @@
+{
+  "stage": "final",
+  "source_hash_convention": "SHA256 after CRLF-to-LF normalization; baseline from clean initial Git HEAD",
+  "head": "31584553c0b1dcdbc0bc3abb491c2d5f5f0fe2fa",
+  "sources": [
+    {
+      "path": "crates/deadlib-image/gif/src/composite.rs",
+      "bytes": 11798,
+      "sha256": "a4e05b38c4d6d44e8c1adf85b1ac02f4ac0f47edb9b2a36ab619ea9c92b32d87"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/decode.rs",
+      "bytes": 28324,
+      "sha256": "fd9947d553a9ed2ae5e78a8467a12b3f0ca5f9d0f3c0922ae5376b21ca8dbf97"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/encode.rs",
+      "bytes": 8825,
+      "sha256": "97eb601388b28c2bcb60f93e8db1dba6230db711aa49ad3f4d3ffaf5f23e1a15"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/lib.rs",
+      "bytes": 2239,
+      "sha256": "5ad3379fd05fca443c93632b1925e9cdd22e7a974288319a8a1346d5a853d80a"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/lzw.rs",
+      "bytes": 11580,
+      "sha256": "fca52f988375cd70f046341ef419cb9847e7d0902ef8e0651ded849feefa3a9a"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/model.rs",
+      "bytes": 10026,
+      "sha256": "c9eddd595ba521c070cd1ed305adfbc295a7c80212aee7322cb111126a9aecc9"
+    },
+    {
+      "path": "crates/deadlib-image/src/lib.rs",
+      "bytes": 3148,
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "crates/deadlib-image/gif/Cargo.toml",
+      "bytes": 457,
+      "sha256": "449744d8cdf12aa616e8d5beb9b2ddbc6856e7d6ca888f6164445397295301de"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/src/main.rs",
+      "bytes": 17277,
+      "sha256": "576b404edec6b9cfcfb094d3cd1da79953b5532d48cce65a84f0ea2aa38abbee"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/Cargo.toml",
+      "bytes": 412,
+      "sha256": "fc5571a9962ce463a620ac5ede61e08f8a08be602aa7df2f44c6d59b6206db3c"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/Cargo.lock",
+      "bytes": 3195,
+      "sha256": "8f4bf8ec1b4b9928f81264e1064dd4d3f070261a5ff9dd8283eee13750a834c8"
+    },
+    {
+      "path": ".cargo/config.toml",
+      "bytes": 1411,
+      "sha256": "f42a1a734847ef24c9cd6cc5a34ac8e8a724b7f490943dc852dcb447c8513760"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/src/bin/first_frame.rs",
+      "bytes": 13775,
+      "sha256": "84c74ef8450450955b81a52c4341e0c6ad96b2694600e85538e29614d963606e"
+    }
+  ],
+  "binaries": [
+    {
+      "path": "target/gif-opt-20261120/final-alloc.exe",
+      "bytes": 402432,
+      "sha256": "cc4955e866858a72b94ce7ca0ea2304de0f53b8222b3ef33e489faccee4971ce"
+    },
+    {
+      "path": "target/gif-opt-20261120/final-first-alloc.exe",
+      "bytes": 371712,
+      "sha256": "70fb334a9aa44c901bdfbb91eb3ab5875bddc2bbf27b6e5938abe08c44a1ecb3"
+    },
+    {
+      "path": "target/gif-opt-20261120/final-first.exe",
+      "bytes": 374784,
+      "sha256": "0d91e95285abe7407a7216a3d8d2c8f8ceedc812a045cec0fb6d428f0c611c7e"
+    },
+    {
+      "path": "target/gif-opt-20261120/final.exe",
+      "bytes": 403968,
+      "sha256": "09bef08956e2572ec882fb18e5373b1d82da9779382a5cab2682b95fa2a61957"
+    }
+  ]
+}

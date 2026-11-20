@@ -1,0 +1,11 @@
+step6.exe : VERIFIED	assets/smx-pad-lights/common/common/default_25.gif	182	100464
+At line:4 char:970
++ ... MS = '100'; & target/gif-opt-20261120/step6.exe --compatibility crate ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (VERIFIED	assets....gif	182	100464:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+VERIFIED	crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon.gif	2	72
+VERIFIED	crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_icc.gif	2	72
+VERIFIED	crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif	2	72
+VERIFIED	crates/deadlib-image/gif/tests/fixtures/image-gif/samples/set_hsts.gif	1	1

@@ -1,0 +1,17 @@
+cargo :     Checking weezl v0.1.12
+At line:4 char:619
++ ... s passed.'; cargo clippy -p deadlib-image-gif --locked --all-targets  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking weezl v0.1.12:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking color_quant v1.1.0
+    Checking bytemuck v1.25.2
+    Checking imgref v1.12.3
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking weezl v0.2.1
+    Checking deadlib-image-gif v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\gif)
+    Checking rgb v0.8.53
+    Checking gif v0.14.2
+    Checking gif-dispose v6.0.0
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.25s

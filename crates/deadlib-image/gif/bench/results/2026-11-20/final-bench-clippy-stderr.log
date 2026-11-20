@@ -1,0 +1,8 @@
+cargo :     Checking gif-decode-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\gif\bench)
+At line:4 char:449
++ ... EXITCODE }; cargo clippy --manifest-path crates/deadlib-image/gif/ben ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking gi...mage\gif\bench):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s

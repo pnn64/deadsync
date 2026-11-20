@@ -1,0 +1,94 @@
+{
+  "stage": "step7",
+  "source_hash_convention": "SHA256 after CRLF-to-LF normalization; baseline from clean initial Git HEAD",
+  "head": "31584553c0b1dcdbc0bc3abb491c2d5f5f0fe2fa",
+  "sources": [
+    {
+      "path": "crates/deadlib-image/gif/src/composite.rs",
+      "bytes": 11258,
+      "sha256": "46a9f4858af670ee8a0e1a67320cd2a458bad32310337600023dbd4427d0dcc9"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/decode.rs",
+      "bytes": 28830,
+      "sha256": "e42cfb367fb66f4791c3266d1b2b2b8ed97d55978131a9c2bdae9d5728a8a285"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/encode.rs",
+      "bytes": 8825,
+      "sha256": "97eb601388b28c2bcb60f93e8db1dba6230db711aa49ad3f4d3ffaf5f23e1a15"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/lib.rs",
+      "bytes": 2239,
+      "sha256": "5ad3379fd05fca443c93632b1925e9cdd22e7a974288319a8a1346d5a853d80a"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/lzw.rs",
+      "bytes": 11580,
+      "sha256": "fca52f988375cd70f046341ef419cb9847e7d0902ef8e0651ded849feefa3a9a"
+    },
+    {
+      "path": "crates/deadlib-image/gif/src/model.rs",
+      "bytes": 10026,
+      "sha256": "c9eddd595ba521c070cd1ed305adfbc295a7c80212aee7322cb111126a9aecc9"
+    },
+    {
+      "path": "crates/deadlib-image/src/lib.rs",
+      "bytes": 3148,
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "crates/deadlib-image/gif/Cargo.toml",
+      "bytes": 457,
+      "sha256": "449744d8cdf12aa616e8d5beb9b2ddbc6856e7d6ca888f6164445397295301de"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/src/main.rs",
+      "bytes": 17277,
+      "sha256": "576b404edec6b9cfcfb094d3cd1da79953b5532d48cce65a84f0ea2aa38abbee"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/Cargo.toml",
+      "bytes": 412,
+      "sha256": "fc5571a9962ce463a620ac5ede61e08f8a08be602aa7df2f44c6d59b6206db3c"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/Cargo.lock",
+      "bytes": 3195,
+      "sha256": "8f4bf8ec1b4b9928f81264e1064dd4d3f070261a5ff9dd8283eee13750a834c8"
+    },
+    {
+      "path": ".cargo/config.toml",
+      "bytes": 1411,
+      "sha256": "f42a1a734847ef24c9cd6cc5a34ac8e8a724b7f490943dc852dcb447c8513760"
+    },
+    {
+      "path": "crates/deadlib-image/gif/bench/src/bin/first_frame.rs",
+      "bytes": 13648,
+      "sha256": "9ade883ae1da33458cba5e6978e1f42905336b452094d130ac3493870934e2cf"
+    }
+  ],
+  "binaries": [
+    {
+      "path": "target/gif-opt-20261120/step7-alloc.exe",
+      "bytes": 402432,
+      "sha256": "6167646b16c5c3ffa0d84e524a39907b3512a17e38dbb6f6c13b500eb064568c"
+    },
+    {
+      "path": "target/gif-opt-20261120/step7-first-alloc.exe",
+      "bytes": 371712,
+      "sha256": "3085d383a5fc39910a352abf63c326ec82d1b1491ff0d6bd3bf71f0ad2edef2a"
+    },
+    {
+      "path": "target/gif-opt-20261120/step7-first.exe",
+      "bytes": 374272,
+      "sha256": "41ca0c5436118427eb86a073a30718c5b1e157b934c84711096fa8047cbf11f9"
+    },
+    {
+      "path": "target/gif-opt-20261120/step7.exe",
+      "bytes": 403968,
+      "sha256": "1f1181c2b980b47da0b1e6ef28612b0aa1d62e2663b47838bfc87e1240c94fba"
+    }
+  ]
+}

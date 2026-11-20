@@ -48,6 +48,8 @@ background instead; these modes permit an invalid unused logical background
 index retained by compatibility decoding. Logical-screen composition and encoding
 still reject an invalid background index. `render` borrows the reusable RGBA8
 canvas until the next call. Transparent indices leave existing pixels untouched.
+`into_image` consumes the compositor and transfers its current RGBA8 canvas into
+the shared image representation without copying, useful when keeping one frame.
 Background disposal uses the configured background; previous disposal saves only the affected
 rectangle. Unspecified (0) and reserved (4..7) disposal retain existing pixels.
 All reserved disposal values are preserved in the indexed model.

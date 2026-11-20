@@ -1,0 +1,8 @@
+cargo :     Checking deadlib-image-gif v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\gif)
+At line:4 char:399
++ ... EXITCODE }; cargo clippy -p deadlib-image-gif --locked --all-targets  ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking de...dlib-image\gif):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.20s

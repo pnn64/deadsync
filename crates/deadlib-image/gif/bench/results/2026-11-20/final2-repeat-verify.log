@@ -1,0 +1,8 @@
+final2.exe : VERIFIED	target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	1	49601
+At line:4 char:1651
++ ... EXITCODE }; & target/gif-opt-20261120/final2.exe --compatibility targ ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (VERIFIED	target...ive.gif	1	49601:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+VERIFIED	target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	1	9417

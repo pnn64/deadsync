@@ -46,6 +46,92 @@ fn every_truncation_and_every_stream_split() {
 }
 
 #[test]
+fn metadata_subblocks_preserve_boundaries_and_exact_budgets() {
+    fn streamed<'a>(
+        parts: impl IntoIterator<Item = &'a [u8]>,
+        options: &DecodeOptions,
+    ) -> Result<Gif, Error> {
+        let mut decoder = Decoder::new(options.clone());
+        let mut blocks = Vec::new();
+        for part in parts {
+            let mut at = 0;
+            while at < part.len() {
+                let progress = decoder.update(&part[at..])?;
+                assert!(progress.consumed > 0);
+                at += progress.consumed;
+                if let Some(Event::Block(block)) = progress.event {
+                    blocks.push(block);
+                }
+            }
+        }
+        decoder.finish()?;
+        Ok(Gif {
+            header: decoder.header().unwrap().clone(),
+            blocks,
+        })
+    }
+
+    // Explicit wire payloads include bytes that also serve as block markers.
+    // No GIF encoder supplies either the stream or its expected decoded model.
+    let subblocks = vec![
+        (0u8..=254).collect::<Vec<_>>(),
+        vec![0x3b],
+        vec![0x21, 0xfe, 0, 0xff, 1, 2, 3],
+    ];
+    let mut comment = vec![0x21, 0xfe];
+    for block in &subblocks {
+        comment.push(block.len() as u8);
+        comment.extend_from_slice(block);
+    }
+    comment.push(0);
+    let bytes = insert(&tiny(), &comment);
+    let mut header = Header::new(1, 1);
+    header.color_resolution = 1;
+    header.global_palette = Some(vec![[0, 0, 0], [255, 255, 255]]);
+    let expected = Gif {
+        header,
+        blocks: vec![
+            Block::Extension(Extension::Comment(subblocks)),
+            Block::Frame(Frame::new(1, 1, vec![1])),
+        ],
+    };
+    let mut options = DecodeOptions::default();
+    options.limits.max_input_bytes = bytes.len();
+    options.limits.max_metadata_bytes = 255 + 1 + 7 + 3 * std::mem::size_of::<Vec<u8>>();
+    options.limits.max_blocks = 5; // Comment, three payload sub-blocks, image.
+    assert_eq!(decode_with_options(&bytes, &options).unwrap(), expected);
+    for split in 0..=bytes.len() {
+        assert_eq!(
+            streamed([&bytes[..split], &bytes[split..]], &options).unwrap(),
+            expected,
+            "split {split}"
+        );
+    }
+    for chunk in [1, 2, 7, 255, bytes.len()] {
+        assert_eq!(streamed(bytes.chunks(chunk), &options).unwrap(), expected);
+    }
+    for budget in 0..3 {
+        let mut limited = options.clone();
+        match budget {
+            0 => limited.limits.max_metadata_bytes -= 1,
+            1 => limited.limits.max_blocks -= 1,
+            // End the input budget inside the first 255-byte payload.
+            _ => limited.limits.max_input_bytes = 22 + 127,
+        }
+        assert_eq!(
+            decode_with_options(&bytes, &limited),
+            Err(Error::LimitExceeded)
+        );
+        for chunk in [1, 7, 255, bytes.len()] {
+            assert_eq!(
+                streamed(bytes.chunks(chunk), &limited),
+                Err(Error::LimitExceeded)
+            );
+        }
+    }
+}
+
+#[test]
 fn recycled_pixels_cannot_complete_an_underfilled_image() {
     let base = tiny();
     let mut bytes = base[..base.len() - 1].to_vec();
@@ -375,6 +461,33 @@ fn longest_dictionary_chain_and_exact_output_limits() {
     assert_eq!(out.len(), size);
     assert!(out.iter().all(|&v| v == 0));
     assert!(lzw::decode(&packed, 2, size - 1).is_err());
+}
+
+#[test]
+fn lzw_existing_and_next_phrases_preserve_output_on_overflow() {
+    // Mix existing dictionary entries, KwKwK, a width change and CLEAR.
+    let packed = pack(&[4, 0, 1, 6, 8, 6, 4, 2, 6, 5], 2);
+    let expected = [0, 1, 0, 1, 0, 1, 0, 0, 1, 2, 2, 2];
+    let phrase_ends = [0, 1, 2, 4, 7, 9, 10, 12];
+    for limit in 0..=expected.len() {
+        for chunk in [1, 2, packed.len()] {
+            let mut decoder = lzw::Decoder::new();
+            decoder.reset(2).unwrap();
+            let mut output = vec![0xfa; 17];
+            let result = packed
+                .chunks(chunk)
+                .try_for_each(|bytes| decoder.update(bytes, &mut output, 17 + limit));
+            if limit < expected.len() {
+                assert_eq!(result, Err(Error::Invalid("LZW output exceeds frame size")));
+            } else {
+                result.unwrap();
+                assert!(decoder.ended());
+            }
+            let written = *phrase_ends.iter().rfind(|&&n| n <= limit).unwrap();
+            assert_eq!(&output[..17], &[0xfa; 17]);
+            assert_eq!(&output[17..], &expected[..written]);
+        }
+    }
 }
 
 #[test]

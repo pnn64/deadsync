@@ -1,0 +1,32 @@
+all 176
+  gif-retained thread_cycles=1.0301, ns=1.0300
+  gif-rgba thread_cycles=1.0351, ns=1.0359
+  gif-stream thread_cycles=1.0194, ns=1.0192
+  image-rgba thread_cycles=1.0236, ns=1.0235
+  native-retained thread_cycles=1.0295, ns=1.0294
+  native-rgba thread_cycles=1.0285, ns=1.0289
+  native-stream thread_cycles=1.0201, ns=1.0201
+assets 35
+  gif-retained thread_cycles=1.1060, ns=1.1061
+  gif-rgba thread_cycles=1.1061, ns=1.1062
+  gif-stream thread_cycles=1.0985, ns=1.0984
+  image-rgba thread_cycles=1.0924, ns=1.0923
+  native-retained thread_cycles=1.0720, ns=1.0721
+  native-rgba thread_cycles=1.0510, ns=1.0508
+  native-stream thread_cycles=1.0616, ns=1.0615
+upstream 13
+  gif-retained thread_cycles=1.0211, ns=1.0206
+  gif-rgba thread_cycles=1.0439, ns=1.0436
+  gif-stream thread_cycles=1.0210, ns=1.0205
+  image-rgba thread_cycles=1.0195, ns=1.0190
+  native-retained thread_cycles=1.0549, ns=1.0543
+  native-rgba thread_cycles=1.0458, ns=1.0452
+  native-stream thread_cycles=1.0176, ns=1.0172
+generated 128
+  gif-retained thread_cycles=1.0112, ns=1.0110
+  gif-rgba thread_cycles=1.0156, ns=1.0167
+  gif-stream thread_cycles=0.9986, ns=0.9984
+  image-rgba thread_cycles=1.0059, ns=1.0058
+  native-retained thread_cycles=1.0157, ns=1.0156
+  native-rgba thread_cycles=1.0207, ns=1.0214
+  native-stream thread_cycles=1.0093, ns=1.0093
