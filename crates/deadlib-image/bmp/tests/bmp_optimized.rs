@@ -452,3 +452,52 @@ fn full_packed_palettes_still_validate_caller_created_unpacked_indices() {
         );
     }
 }
+
+#[test]
+fn indexed_rgba_lookup_preserves_pixels_and_errors_across_the_table_threshold() {
+    for count in [1023usize, 1024, 1025, 4097] {
+        for size in [1usize, 2, 16, 255, 256] {
+            let colors = palette(size);
+            let mut indices: Vec<u8> = (0..count).map(|i| ((i * 71) % size) as u8).collect();
+            indices[count - 1] = (size - 1) as u8;
+            let expected: Vec<u8> = indices
+                .iter()
+                .flat_map(|&index| {
+                    let [red, green, blue] = colors[usize::from(index)];
+                    [red, green, blue, 255]
+                })
+                .collect();
+            let mut bitmap = Bitmap {
+                width: count as u32,
+                height: 1,
+                pixels: Pixels::Indexed {
+                    bit_depth: if size <= 2 {
+                        1
+                    } else if size <= 16 {
+                        4
+                    } else {
+                        8
+                    },
+                    indices,
+                    palette: colors,
+                },
+            };
+            assert_eq!(bitmap.to_rgba8().unwrap(), expected);
+            assert_eq!(bitmap.clone().into_rgba8().unwrap(), expected);
+            if size < 256 {
+                let Pixels::Indexed { indices, .. } = &mut bitmap.pixels else {
+                    unreachable!("the test constructed indexed pixels");
+                };
+                indices[count - 1] = size as u8;
+                assert_eq!(
+                    bitmap.to_rgba8(),
+                    Err(Error::Invalid("pixel index exceeds the palette"))
+                );
+                assert_eq!(
+                    bitmap.into_rgba8(),
+                    Err(Error::Invalid("pixel index exceeds the palette"))
+                );
+            }
+        }
+    }
+}

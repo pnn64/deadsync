@@ -112,9 +112,21 @@ impl Bitmap {
                 indices, palette, ..
             } => {
                 output.resize(bytes, 0);
-                for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
-                    let [red, green, blue] = palette[usize::from(index)];
-                    *rgba = [red, green, blue, 255];
+                if indices.len() >= 1024 {
+                    // Amortize the table setup over enough pixels to use a
+                    // single RGBA load per index in the conversion loop.
+                    let mut colors = [[0; 4]; 256];
+                    for (&[red, green, blue], rgba) in palette.iter().zip(&mut colors) {
+                        *rgba = [red, green, blue, 255];
+                    }
+                    for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
+                        *rgba = colors[usize::from(index)];
+                    }
+                } else {
+                    for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
+                        let [red, green, blue] = palette[usize::from(index)];
+                        *rgba = [red, green, blue, 255];
+                    }
                 }
             }
             Pixels::Rgb(samples) => {
