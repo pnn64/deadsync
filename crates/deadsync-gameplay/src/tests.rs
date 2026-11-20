@@ -10891,45 +10891,6 @@ mod tests {
     }
 
     #[test]
-    fn autoplay_due_active_hold_waits_until_cutoff() {
-        let active = active_hold_for_autoplay(2_000);
-
-        assert_eq!(autoplay_due_active_hold_resolution(&active, 1_999), None);
-    }
-
-    #[test]
-    fn autoplay_due_active_hold_succeeds_when_engaged() {
-        let active = active_hold_for_autoplay(2_000);
-
-        assert_eq!(
-            autoplay_due_active_hold_resolution(&active, 2_000),
-            Some(ActiveHoldResolution::Success { note_index: 7 })
-        );
-    }
-
-    #[test]
-    fn autoplay_due_active_hold_lets_go_when_marked_or_depleted() {
-        let mut let_go = active_hold_for_autoplay(2_000);
-        let_go.let_go = true;
-        let mut depleted = active_hold_for_autoplay(3_000);
-        depleted.life = 0.0;
-
-        assert_eq!(
-            autoplay_due_active_hold_resolution(&let_go, 2_500),
-            Some(ActiveHoldResolution::LetGo {
-                note_index: 7,
-                time_ns: 2_000,
-            })
-        );
-        assert_eq!(
-            autoplay_due_active_hold_resolution(&depleted, 3_500),
-            Some(ActiveHoldResolution::LetGo {
-                note_index: 7,
-                time_ns: 3_000,
-            })
-        );
-    }
-    #[test]
     fn lane_edges_classify_press_and_release() {
         assert!(lane_press_started(true, false, true));
         assert!(!lane_press_started(true, true, true));
@@ -14487,23 +14448,39 @@ mod tests {
     }
 
     #[test]
-    fn masked_autoplay_hold_update_retains_not_yet_due_lane() {
+    fn masked_active_hold_update_retains_future_tail() {
+        let timing = test_timing(192);
+        let timing_players = [&timing; MAX_PLAYERS];
         let mut due = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
-        due.note_index = 3;
-        due.end_time_ns = 100;
+        due.note_index = 0;
+        due.end_time_ns = timing.get_time_for_beat_ns(1.0);
         let mut future = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
-        future.note_index = 7;
-        future.end_time_ns = 200;
+        future.note_index = 1;
+        future.end_time_ns = timing.get_time_for_beat_ns(2.0);
         let mut active_holds: [Option<ActiveHold>; MAX_COLS] = std::array::from_fn(|_| None);
         active_holds[2] = Some(due);
         active_holds[5] = Some(future);
+        let mut future_hold = test_hold();
+        future_hold.end_row_index = 96;
+        future_hold.end_beat = 2.0;
+        let mut notes = [
+            test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0),
+            test_note_at(NoteType::Hold, Some(future_hold), false, 0, 0.0),
+        ];
         let mut events = [None; MAX_COLS];
 
-        let update = collect_due_autoplay_active_hold_resolutions_masked(
+        let update = update_active_hold_columns_masked(
             &mut active_holds,
             (1 << 2) | (1 << 5),
+            &mut notes,
+            &[false; MAX_COLS],
             MAX_COLS,
-            100,
+            4,
+            2,
+            &timing_players,
+            timing.get_time_for_beat_ns(1.0),
+            1.0,
+            true,
             &mut events,
         );
 

@@ -1134,26 +1134,35 @@ mod runtime_regression_tests {
         timing_segments: TimingSegments,
         tail_row: usize,
     ) -> State {
+        hold_regression_state_with_notes(play_style, timing_segments, tail_row.max(96), vec![ParsedNote {
+            player: 0,
+            row_index: 48,
+            column: 0,
+            note_type: NoteType::Hold,
+            tail_row_index: Some(tail_row),
+        }])
+    }
+
+    fn hold_regression_state_with_notes(
+        play_style: GameplayInputPlayStyle,
+        timing_segments: TimingSegments,
+        last_row: usize,
+        notes: Vec<ParsedNote>,
+    ) -> State {
         let mut song = regression_song();
         song.charts[0].chart_type = if play_style.is_pump() {
             "pump-single".to_string()
         } else {
             "dance-single".to_string()
         };
-        song.charts[0].stats.total_arrows = 1;
-        song.charts[0].stats.total_steps = 1;
+        song.charts[0].stats.total_arrows = notes.len() as u32;
+        song.charts[0].stats.total_steps = notes.len() as u32;
         song.charts[0].holds_total = 1;
         song.charts[0].possible_grade_points = 10;
         let chart = Arc::new(song.charts[0].clone());
         let mut gameplay_chart =
-            regression_payload_with_segments(timing_segments, tail_row.max(96));
-        gameplay_chart.parsed_notes = vec![ParsedNote {
-            player: 0,
-            row_index: 48,
-            column: 0,
-            note_type: NoteType::Hold,
-            tail_row_index: Some(tail_row),
-        }];
+            regression_payload_with_segments(timing_segments, last_row);
+        gameplay_chart.parsed_notes = notes;
         init_gameplay_runtime(
             Arc::new(song),
             [chart.clone(), chart],
@@ -1184,6 +1193,21 @@ mod runtime_regression_tests {
             false,
             [0; MAX_PLAYERS],
         )
+    }
+
+    fn update_hold_regression_frame(state: &mut State, music_nanos: SongTimeNs, delta: f32) {
+        let snapshot = GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot {
+                music_nanos,
+                music_seconds_per_second: 0.0,
+                has_music_mapping: true,
+                valid_at: Instant::now(),
+                valid_at_host_nanos: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        state.update_gameplay_frame(delta, snapshot, "unused", || 1);
     }
 
     fn set_regression_mine(
@@ -2931,6 +2955,55 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn autoplay_short_hold_feedback_waits_for_next_player_update() {
+        // Player::UpdateHoldNotes precedes CrossedRows. If one update crosses
+        // both head and tail, only the tap head is judged in that update.
+        for play_style in [GameplayInputPlayStyle::Single, GameplayInputPlayStyle::Versus] {
+            let mut state = hold_regression_state_with_notes(
+                play_style,
+                TimingSegments { bpms: vec![(0.0, 120.0)], ..Default::default() },
+                96,
+                vec![
+                    ParsedNote { player: 0, row_index: 48, column: 0,
+                        note_type: NoteType::Hold, tail_row_index: Some(60) },
+                    ParsedNote { player: 0, row_index: 72, column: 1,
+                        note_type: NoteType::Tap, tail_row_index: None },
+                ],
+            );
+            state.progress.stage.autoplay_enabled = true;
+            state.apply_global_offset_delta(-state.global_offset_seconds());
+            state.boundary.total_elapsed_in_screen = 1.0;
+            update_hold_regression_frame(&mut state, 490_000_000, 0.01);
+            update_hold_regression_frame(&mut state, 800_000_000, 0.31);
+            for player in 0..state.setup.num_players {
+                let note_index = state.note_range_for_player(player).0;
+                let note = &state.chart_runtime.notes[note_index];
+                assert!(note.result.is_some(), "{play_style:?} P{player}: tap head judged now");
+                assert_eq!(note.hold.as_ref().unwrap().result, None,
+                    "{play_style:?} P{player}: new head was not judged during the hold pass");
+                assert!(state.display.hold_feedback.hold_judgments[note.column].is_none());
+                assert_eq!(state.players_runtime.players[player].holds_resolved_for_score, 0);
+                assert!(state.chart_runtime.notes[note_index + 1].result.is_some(),
+                    "later crossed taps cannot settle the new hold in this update");
+            }
+            let tap_feedback = state.players_runtime.players[0].last_judgment.unwrap();
+            update_hold_regression_frame(&mut state, 860_000_000, 0.06);
+            for player in 0..state.setup.num_players {
+                let note = &state.chart_runtime.notes[state.note_range_for_player(player).0];
+                assert_eq!(note.hold.as_ref().unwrap().result, Some(HoldResult::Held));
+                let feedback = state.display.hold_feedback.hold_judgments[note.column].unwrap();
+                assert_eq!(feedback.result, HoldResult::Held);
+                assert_eq!(feedback.started_at_screen_s, state.boundary.total_elapsed_in_screen);
+                assert_eq!(state.players_runtime.players[player].holds_resolved_for_score, 0,
+                    "autoplay suppresses hold points while publishing native feedback");
+            }
+            assert_eq!(state.players_runtime.players[0].last_judgment.unwrap().started_at_screen_s,
+                tap_feedback.started_at_screen_s,
+                "resolving the tail cannot judge the head again");
+        }
+    }
+
+    #[test]
     fn autoplay_roll_life_matches_native_frame_order() {
         // Player::Update: test the previous frame's life (< 0.5), Step to
         // refill, then UpdateHoldNotes subtracts this frame's real delta.
@@ -2972,21 +3045,22 @@ mod runtime_regression_tests {
                     GameplayReceptorStepBehavior::default(),
                 );
                 let start = state.chart_runtime.note_time_cache_ns[0];
-                state.set_song_position_for_test(1.0, start, 0.0, rate);
-                state.run_autoplay_or_replay_frame(start);
+                state.boundary.total_elapsed_in_screen = 1.0;
+                update_hold_regression_frame(&mut state, start, 0.0);
                 let head_result = state.chart_runtime.notes[0]
                     .result
                     .expect("autoplay must hit the actual roll head");
+                let mut previous_real_ns = 0;
                 for (real_ns, life, pulse) in samples {
                     let time = start + (real_ns as f64 * f64::from(rate)) as i64;
                     state
                         .display
                         .receptor_feedback
                         .set_bop_timer_for_test(0, 0.0);
-                    state.set_song_position_for_test(1.0, time, 0.0, rate);
-                    state.run_autoplay_or_replay_frame(time);
+                    let delta = (real_ns - previous_real_ns) as f32 / 1_000_000_000.0;
+                    update_hold_regression_frame(&mut state, time, delta);
+                    previous_real_ns = real_ns;
                     assert_eq!(state.display.receptor_feedback.bop_zoom(0) < 1.0, pulse);
-                    state.update_active_holds(&[false; MAX_COLS], time);
                     let active = state.hold_runtime.active_holds[0]
                         .as_ref()
                         .unwrap_or_else(|| {
@@ -3420,11 +3494,13 @@ mod runtime_regression_tests {
         // Only 10 ms of audio progress, but a long native frame drains 60%.
         let at = start + 10_000_000;
         let before = state.autoplay_roll_frame_notes();
+        state.run_autoplay_rolls(at);
         state.run_autoplay_or_replay_frame(at);
         state.advance_autoplay_roll_frame(&before, at, 0.6 * deadsync_rules::note::TIMING_WINDOW_SECONDS_ROLL);
         state.update_active_holds(&[false; MAX_COLS], at);
         assert!((state.hold_runtime.active_holds[0].as_ref().unwrap().life - 0.4).abs() < 0.00001);
         // Autoplay refills below half life before the next frame's drain.
+        state.run_autoplay_rolls(at);
         state.run_autoplay_or_replay_frame(at);
         assert_eq!(state.hold_runtime.active_holds[0].as_ref().unwrap().life, 1.0);
         state.advance_autoplay_roll_frame(&before, at, 0.4);
@@ -3454,6 +3530,7 @@ mod runtime_regression_tests {
         ] {
             let before = state.autoplay_roll_frame_notes();
             let at = start + offset;
+            state.run_autoplay_rolls(at);
             state.run_autoplay_or_replay_frame(at);
             state.advance_autoplay_roll_frame(&before, at, delta);
             state.update_active_holds(&[false; MAX_COLS], at);
@@ -3463,9 +3540,11 @@ mod runtime_regression_tests {
         }
         state.hold_runtime.active_holds[0].as_mut().unwrap().life = 0.4;
         state.chart_runtime.notes[0].hold.as_mut().unwrap().life = 0.4;
+        state.run_autoplay_rolls(start - 50_000_000);
         state.run_autoplay_or_replay_frame(start - 50_000_000);
         assert_eq!(state.active_hold(0).unwrap().life, 0.4,
             "the previous head judgment does not refill before its current row");
+        state.run_autoplay_rolls(start - 1_000_000);
         state.run_autoplay_or_replay_frame(start - 1_000_000);
         assert_eq!(state.active_hold(0).unwrap().life, 1.0,
             "a rounded head row can refill just before its exact timestamp");
@@ -3498,6 +3577,7 @@ mod runtime_regression_tests {
                 state.set_autoplay_cursor(player, state.note_range_for_player(player).1);
             }
             state.set_song_position_for_test(1.0, start, 0.0, 1.0);
+            state.run_autoplay_rolls(start);
             state.run_autoplay_or_replay_frame(start);
             let active = state.hold_runtime.active_holds[0]
                 .as_ref()

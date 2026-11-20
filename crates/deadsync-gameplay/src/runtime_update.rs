@@ -279,12 +279,31 @@ where
         // its score and hold life are already live in this update.
         self.hold_runtime.snapshot_active_holds_for_render();
 
+        let previous_roll_notes = self.autoplay_roll_frame_notes();
+        self.run_autoplay_rolls(music_time_ns);
+        // Native autoplay refills rolls, updates existing holds, then crosses
+        // rows. A head crossed this frame cannot resolve its tail until the
+        // next update. Physical/replay input retains its event-time integration
+        // below, and Pump retains its checkpoint-driven hold phase.
+        let holds_before_autoplay = self.live_autoplay_enabled()
+            && !self.setup.session.play_style.is_pump();
+        if holds_before_autoplay {
+            let started = trace_enabled.then(Instant::now);
+            self.advance_autoplay_roll_frame(&previous_roll_notes, music_time_ns, delta_time);
+            let inputs = lane_inputs_from_mask(
+                self.control.input_state.pressed_lane_mask(), self.setup.num_cols,
+            );
+            self.update_active_holds(&inputs, music_time_ns);
+            if let Some(started) = started {
+                phase_timings.active_holds_us = elapsed_us_since(started);
+            }
+        }
+
         let autoplay_started = if trace_enabled {
             Some(Instant::now())
         } else {
             None
         };
-        let previous_roll_notes = self.autoplay_roll_frame_notes();
         self.run_autoplay_or_replay_frame(music_time_ns);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
@@ -305,7 +324,7 @@ where
 
         self.run_post_input_gameplay_phases(
             previous_music_time_ns,
-            &previous_roll_notes,
+            holds_before_autoplay,
             music_time_ns,
             music_time_sec,
             delta_time,

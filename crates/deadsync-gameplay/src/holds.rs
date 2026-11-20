@@ -1359,45 +1359,6 @@ pub fn update_active_hold_columns_masked(
     }
 }
 
-pub fn collect_due_autoplay_active_hold_resolutions_masked(
-    active_holds: &mut [Option<ActiveHold>],
-    active_mask: LaneMask,
-    num_cols: usize,
-    cutoff_time_ns: SongTimeNs,
-    events: &mut [Option<ActiveHoldColumnResolution>],
-) -> MaskedActiveHoldUpdate {
-    let columns = num_cols.min(MAX_COLS).min(active_holds.len());
-    let mut pending = active_mask & input_lane_mask(columns);
-    let mut remaining_mask = pending;
-    let mut event_count = 0usize;
-    while pending != 0 {
-        let column = pending.trailing_zeros() as usize;
-        let bit = 1 << column;
-        pending &= pending - 1;
-        if event_count >= events.len() {
-            return MaskedActiveHoldUpdate {
-                remaining_mask,
-                event_count,
-                stopped: true,
-            };
-        }
-        let Some(resolution) = active_holds[column]
-            .as_ref()
-            .and_then(|active| autoplay_due_active_hold_resolution(active, cutoff_time_ns))
-        else {
-            continue;
-        };
-        active_holds[column] = None;
-        remaining_mask &= !bit;
-        events[event_count] = Some(ActiveHoldColumnResolution { column, resolution });
-        event_count += 1;
-    }
-    MaskedActiveHoldUpdate {
-        remaining_mask,
-        event_count,
-        stopped: false,
-    }
-}
 pub fn settle_replaced_active_hold_column(
     active_holds: &mut [Option<ActiveHold>],
     notes: &mut [Note],
@@ -1788,27 +1749,6 @@ pub fn collect_active_autoplay_roll_columns_indexed(
 #[must_use]
 pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
-}
-
-#[inline(always)]
-#[must_use]
-pub fn autoplay_due_active_hold_resolution(
-    active: &ActiveHold,
-    cutoff_time_ns: SongTimeNs,
-) -> Option<ActiveHoldResolution> {
-    if active.end_time_ns > cutoff_time_ns {
-        return None;
-    }
-    if active_hold_is_engaged(active) {
-        Some(ActiveHoldResolution::Success {
-            note_index: active.note_index,
-        })
-    } else {
-        Some(ActiveHoldResolution::LetGo {
-            note_index: active.note_index,
-            time_ns: active.end_time_ns,
-        })
-    }
 }
 
 #[inline(always)]

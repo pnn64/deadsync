@@ -862,30 +862,6 @@ where
     }
 
     #[inline(always)]
-    pub fn settle_due_autoplay_active_holds(&mut self, cutoff_time_ns: SongTimeNs) {
-        if self.setup.session.play_style.is_pump() {
-            return;
-        }
-        let active_mask = self.hold_runtime.active_hold_mask();
-        if active_mask == 0 {
-            return;
-        }
-        let mut events = [None; MAX_COLS];
-        let update = collect_due_autoplay_active_hold_resolutions_masked(
-            &mut self.hold_runtime.active_holds,
-            active_mask,
-            self.setup.num_cols,
-            cutoff_time_ns,
-            &mut events,
-        );
-        self.hold_runtime
-            .set_active_hold_mask(update.remaining_mask);
-        for event in events.iter().take(update.event_count).flatten() {
-            self.resolve_active_hold(event.column, event.resolution);
-        }
-    }
-
-    #[inline(always)]
     pub fn start_active_hold(
         &mut self,
         column: usize,
@@ -2162,9 +2138,6 @@ where
                 if !update.row_ready {
                     break;
                 }
-                // Finalize any already-ended autoplay holds before a new warped
-                // row on the same lane can replace the active hold slot.
-                self.settle_due_autoplay_active_holds(update.row_time_ns);
                 for event in events.iter().take(update.event_count).flatten() {
                     self.mark_autoplay_used();
                     match event.action {
@@ -2179,7 +2152,12 @@ where
             }
             self.set_autoplay_cursor(player, cursor);
         }
+    }
 
+    fn run_autoplay_rolls(&mut self, now_music_time_ns: SongTimeNs) {
+        if !self.live_autoplay_enabled() {
+            return;
+        }
         let mut roll_cols = [usize::MAX; MAX_COLS];
         let roll_count = collect_active_autoplay_roll_columns_indexed(
             self.hold_runtime.active_roll_mask(),
@@ -2342,7 +2320,7 @@ where
     pub fn run_post_input_gameplay_phases(
         &mut self,
         previous_music_time_ns: SongTimeNs,
-        previous_roll_notes: &[Option<usize>; MAX_COLS],
+        holds_before_autoplay: bool,
         music_time_ns: SongTimeNs,
         music_time_sec: f32,
         delta_time: f32,
@@ -2360,15 +2338,12 @@ where
             phase_timings.held_mines_us = elapsed_us_since(started);
         }
 
-        let active_holds_started = if trace_enabled {
-            Some(Instant::now())
-        } else {
-            None
-        };
-        self.advance_autoplay_roll_frame(previous_roll_notes, music_time_ns, delta_time);
-        self.update_active_holds(&current_inputs, music_time_ns);
-        if let Some(started) = active_holds_started {
-            phase_timings.active_holds_us = elapsed_us_since(started);
+        if !holds_before_autoplay {
+            let started = trace_enabled.then(Instant::now);
+            self.update_active_holds(&current_inputs, music_time_ns);
+            if let Some(started) = started {
+                phase_timings.active_holds_us = elapsed_us_since(started);
+            }
         }
         self.apply_pending_mine_hits();
 
