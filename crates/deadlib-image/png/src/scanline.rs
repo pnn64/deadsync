@@ -410,15 +410,38 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         prev
     };
     let out = &mut out[..row.len()];
+    let split = bpp.min(row.len());
     let mut score = 0u64;
-    for (n, (&value, out)) in row.iter().zip(out).enumerate() {
-        let left = if n >= bpp { row[n - bpp] } else { 0 };
+    for (n, (&value, out)) in row[..split].iter().zip(&mut out[..split]).enumerate() {
+        let predictor = match FILTER {
+            2 | 4 => prev[n],
+            3 => prev[n] / 2,
+            _ => 0,
+        };
+        *out = value.wrapping_sub(predictor);
+        if SCORE {
+            score += u64::from((*out as i8).unsigned_abs());
+        }
+    }
+    // All remaining bytes have a left neighbor. Keeping the boundary out of
+    // this loop makes its byte lanes independent for compiler vectorization.
+    let upper = if FILTER >= 2 && FILTER <= 4 {
+        &prev[split..]
+    } else {
+        &[]
+    };
+    for (n, ((&value, &left), out)) in row[split..]
+        .iter()
+        .zip(&row[..row.len() - split])
+        .zip(&mut out[split..])
+        .enumerate()
+    {
         let predictor = match FILTER {
             0 => 0,
             1 => left,
-            2 => prev[n],
-            3 => ((u16::from(left) + u16::from(prev[n])) / 2) as u8,
-            4 => paeth(left, prev[n], if n >= bpp { prev[n - bpp] } else { 0 }),
+            2 => upper[n],
+            3 => ((u16::from(left) + u16::from(upper[n])) / 2) as u8,
+            4 => paeth(left, upper[n], prev[n]),
             _ => left / 2,
         };
         *out = value.wrapping_sub(predictor);
@@ -918,6 +941,11 @@ mod tests {
                         assert_eq!(
                             filter_into::<true>(&row, predictors, bpp, filter, &mut actual),
                             score
+                        );
+                        assert_eq!(actual, expected);
+                        assert_eq!(
+                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual),
+                            0
                         );
                         assert_eq!(actual, expected);
                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
