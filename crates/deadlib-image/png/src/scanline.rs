@@ -410,14 +410,13 @@ pub(crate) fn filter_into<const SCORE: bool>(
 }
 
 #[inline]
-fn filter_chunk<const FILTER: u8, const SCORE: bool>(
+fn filter_chunk<const FILTER: u8>(
     row: &[u8; 32],
     left: &[u8; 32],
     upper: &[u8; 32],
     upper_left: &[u8; 32],
     out: &mut [u8; 32],
-) -> u32 {
-    let mut score = 0u32;
+) {
     for n in 0..32 {
         let predictor = match FILTER {
             0 => 0,
@@ -428,9 +427,22 @@ fn filter_chunk<const FILTER: u8, const SCORE: bool>(
             _ => left[n] / 2,
         };
         out[n] = row[n].wrapping_sub(predictor);
-        if SCORE {
-            score += u32::from((out[n] as i8).unsigned_abs());
+    }
+}
+
+fn score_bytes(bytes: &[u8]) -> u64 {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    let mut score = 0u64;
+    for chunk in chunks {
+        // Signed-byte magnitudes are at most 128: a chunk sums to at most 4096.
+        let mut sum = 0u16;
+        for &value in chunk {
+            sum += u16::from((value as i8).unsigned_abs());
         }
+        score += u64::from(sum);
+    }
+    for &value in tail {
+        score += u64::from((value as i8).unsigned_abs());
     }
     score
 }
@@ -448,7 +460,6 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     };
     let out = &mut out[..row.len()];
     let split = bpp.min(row.len());
-    let mut score = 0u64;
     for (n, (&value, out)) in row[..split].iter().zip(&mut out[..split]).enumerate() {
         let predictor = match FILTER {
             2 | 4 => prev[n],
@@ -456,9 +467,6 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
             _ => 0,
         };
         *out = value.wrapping_sub(predictor);
-        if SCORE {
-            score += u64::from((*out as i8).unsigned_abs());
-        }
     }
     // All remaining bytes have a left neighbor. Keeping the boundary out of
     // this loop makes its byte lanes independent for compiler vectorization.
@@ -481,10 +489,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         .zip(upper_left)
         .zip(output)
     {
-        // A chunk contributes at most 32*128, so its reduction can stay narrow.
-        score += u64::from(filter_chunk::<FILTER, SCORE>(
-            values, left, upper, upper_left, output,
-        ));
+        filter_chunk::<FILTER>(values, left, upper, upper_left, output);
     }
     for ((((&value, &left), &upper), &corner), out) in values_tail
         .iter()
@@ -502,11 +507,8 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
             _ => left / 2,
         };
         *out = value.wrapping_sub(predictor);
-        if SCORE {
-            score += u64::from((*out as i8).unsigned_abs());
-        }
     }
-    score
+    if SCORE { score_bytes(out) } else { 0 }
 }
 
 pub(crate) fn filter_first<const SCORE: bool>(
