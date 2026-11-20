@@ -314,6 +314,8 @@ pub(super) struct DrawChecks {
     targets: BTreeMap<String, SongLuaLiveTarget>,
     random: Option<render_random::Replay>,
     composers: BTreeMap<i32, WholeSongComposer>,
+    native_aft_resources: BTreeMap<String, NativeAftResource>,
+    aft_backing_uv_samples: usize,
     pub samples: usize,
     pub vertices: usize,
     pub text_samples: usize,
@@ -332,6 +334,7 @@ pub(super) struct DrawChecks {
 struct RecordedDraw {
     frame: RenderFrame,
     texture: Option<String>,
+    aft_backing: Option<AftBacking>,
     immediate: bool,
 }
 
@@ -711,8 +714,9 @@ impl DrawChecks {
                     DrawOp::Sprite(r) => Some(composer.texture_key(r.texture_handle).to_owned()),
                     _ => None,
                 });
+                let aft_backing = owned_aft_backing(&frame, &composer, &overlays);
                 recorded.draws.entry(target_slot(bindings[index].1)).or_default()
-                    .push_back(RecordedDraw { frame, texture, immediate: original.immediate });
+                    .push_back(RecordedDraw { frame, texture, aft_backing, immediate: original.immediate });
             }
         }
         recorded.normal_owned = normal_draw_subtree(&overlays, &normal_owners).into_iter()
@@ -743,6 +747,7 @@ impl DrawChecks {
         self.binding_paths.clear();
         self.targets = targets.clone();
         self.composers.clear();
+        self.native_aft_resources = native_aft_resources(trace, scene);
         if self.random.is_none() && trace["capabilities"]["native_render_random_inputs"] == true {
             self.random = Some(render_random::Replay::parse(trace)?);
         }
@@ -899,15 +904,15 @@ impl DrawChecks {
                 .composers
                 .entry(group)
                 .or_insert_with(|| WholeSongComposer::new(overlays));
-            let (frame, recorded_texture) = match recorded.draws.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
+            let (frame, recorded_texture, recorded_aft) = match recorded.draws.get_mut(&(group, index)).and_then(VecDeque::pop_front) {
                 Some(draw) => {
                     if !random_ids.is_empty() {
                         return Err("recorded Draw needs raw random scope binding".into());
                     }
-                    (draw.frame, Some(draw.texture))
+                    (draw.frame, Some(draw.texture), Some(draw.aft_backing))
                 },
                 None => (composer.render_screen_overlay(overlays, composed, index, screen, clock[0], clock[1],
-                    overlay_screen_state(overlays, index, screen_state)), None),
+                    overlay_screen_state(overlays, index, screen_state)), None, None),
             };
             let rows = submitted_rows(&frame);
             let reference = sample["vertices"]
@@ -944,7 +949,13 @@ impl DrawChecks {
             self.samples += consumed - 1;
             self.batched_samples += consumed - 1;
 
-            let coordinates = NativeDrawCoordinates::from_state(&sample["state"]);
+            let native_aft = self.native_aft_resources.get(actor);
+            let actual_aft = native_aft.and_then(|_| {
+                recorded_aft.unwrap_or_else(|| owned_aft_backing(&frame, composer, overlays))
+            });
+            let aft_backing = equal_aft_backing(&sample["state"], native_aft, actual_aft);
+            let coordinates = NativeDrawCoordinates::from_state(&sample["state"])
+                .with_equal_aft_backing(aft_backing);
             let expected_texture = sample["state"]["texture"].as_str().unwrap_or("");
             let expected_texture = expected_texture.strip_prefix("song:/").map(|p| {
                 deadsync_assets::textures::canonical_texture_key(simfile.parent().unwrap().join(p))
@@ -986,6 +997,7 @@ impl DrawChecks {
                 continue;
             }
             self.vertices += rows.len();
+            if aft_backing { self.aft_backing_uv_samples += consumed; }
             let matches = |actual: &[f32;10], row: &Value| coordinates.row_matches(actual, row);
             let primitive = sample["primitive"].as_str().unwrap_or("");
             let geometry_ok = native_draw_geometry_matches(primitive, &rows, &reference, matches);
@@ -1027,6 +1039,7 @@ impl DrawChecks {
     pub fn report(&self, inputs: usize) -> Value {
         json!({"input_events_replayed":inputs,"draw_samples_compared":self.samples,
             "submitted_vertices_compared":self.vertices,"live_text_samples_compared":self.text_samples,
+            "typed_equal_backing_aft_uv_samples_compared":self.aft_backing_uv_samples,
             "live_text_comparison":"content only; submitted glyph geometry, textures and RGBA are not compared",
             "draw_mismatches":self.failures,"equivalent_offscreen_culls":self.culled_samples,
             "batched_native_draw_samples":self.batched_samples,
@@ -1191,6 +1204,132 @@ pub(crate) fn native_depth_range(state: &Value) -> [f32; 2] {
     [far - near, far + near - 1.0]
 }
 
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct AftBacking {
+    image: [u32; 2],
+    texture: [u32; 2],
+}
+
+impl AftBacking {
+    fn native(state: &Value) -> Option<Self> {
+        let dimension = |key: &str| {
+            u32::try_from(state[key].as_u64()?).ok().filter(|&value| value > 0)
+        };
+        let image = [dimension("image_width")?, dimension("image_height")?];
+        let texture = [dimension("texture_width")?, dimension("texture_height")?];
+        image.iter().zip(texture).all(|(&image, texture)| image <= texture)
+            .then_some(Self { image, texture })
+    }
+}
+
+#[derive(Debug)]
+struct NativeAftResource {
+    texture: String,
+    backing: AftBacking,
+}
+
+// The capture has no per-draw texture-object identity. Restrict this basis
+// correction to one stable, explicitly typed AMV binding in the whole scene.
+// Rebinding, loading, unmatched calls, or missing sample anchors cannot prove
+// which resource was sampled. None of those cases is inferred from its name.
+fn native_aft_resources(trace: &Value, scene: u64) -> BTreeMap<String, NativeAftResource> {
+    let mut out = BTreeMap::new();
+    if trace["dropped_events"] != 0 { return out; }
+    let Some(events) = trace["events"].as_array() else { return out; };
+    let Some(frames) = trace["update_frames"].as_array() else { return out; };
+    let Some(samples) = trace["drawable_samples"].as_array() else { return out; };
+    let mut previous = 0;
+    for event in events {
+        let Some(sequence) = event["seq"].as_u64() else { return out; };
+        if sequence <= previous { return out; }
+        previous = sequence;
+    }
+    let mut changes: BTreeMap<&str, Vec<&Value>> = BTreeMap::new();
+    for event in events.iter().filter(|event| event["scene"].as_u64() == Some(scene)) {
+        if matches!(event["operation"].as_str(),
+            Some("ActorMultiVertex.SetTexture" | "ActorMultiVertex.LoadTexture"))
+            && let Some(actor) = event["actor"].as_str()
+        { changes.entry(actor).or_default().push(event); }
+    }
+    for (actor, changes) in changes {
+        let [event] = changes.as_slice() else { continue; };
+        if event["kind"] != "call" || event["operation"] != "ActorMultiVertex.SetTexture"
+            || event["args"].as_array().map(Vec::len) != Some(1)
+            || event["args"][0]["type"] != "RageTextureRenderTarget"
+        { continue; }
+        if !event["seconds"].as_f64().is_some_and(|time| time.is_finite()) { continue; }
+        let draws = samples.iter().filter(|sample| sample["scene"].as_u64() == Some(scene)
+            && sample["actor"].as_str() == Some(actor)).collect::<Vec<_>>();
+        let calls = events.iter().filter(|call| call["scene"].as_u64() == Some(scene)
+            && call["actor"].as_str() == Some(actor) && call["operation"] == "Actor.Draw")
+            .collect::<Vec<_>>();
+        // Event sequence orders binding versus Draw; music time may legitimately
+        // move backward. Only the explicit manual one-call/one-sample subset is
+        // proved here. Preserve repeated same-clock calls and their multiplicity.
+        if calls.len() != draws.len() { continue; }
+        let Some(first) = draws.first() else { continue; };
+        let Some(texture) = first["state"]["texture"].as_str().filter(|value| !value.is_empty())
+            else { continue; };
+        let Some(backing) = AftBacking::native(&first["state"]) else { continue; };
+        if !draws.iter().zip(calls).all(|(sample, call)| {
+            let frame = sample["update_sequence"].as_u64()
+                .and_then(|sequence| sequence.checked_sub(1))
+                .and_then(|index| frames.get(index as usize));
+            call["kind"] == "call" && call["callback"] == "SetDrawFunction"
+                && call["seq"].as_u64().unwrap() > event["seq"].as_u64().unwrap()
+                && frame.is_some_and(|frame| frame["scene"].as_u64() == Some(scene)
+                    && frame["sequence"] == sample["update_sequence"]
+                    && frame["seconds"] == call["seconds"]
+                    && frame["seconds"].as_f64().is_some_and(|time| time.is_finite()))
+                && sample["state"]["texture"].as_str() == Some(texture)
+                && AftBacking::native(&sample["state"]) == Some(backing)
+        }) { continue; }
+        out.insert(actor.to_owned(), NativeAftResource { texture: texture.to_owned(), backing });
+    }
+    out
+}
+
+fn owned_aft_backing(
+    frame: &RenderFrame, composer: &WholeSongComposer, overlays: &[SongLuaOverlayActor],
+) -> Option<AftBacking> {
+    let mut sampled = None;
+    for op in &frame.ops {
+        let handle = match op {
+            DrawOp::TexturedMesh(run) => run.texture_handle,
+            DrawOp::Sprite(run) => run.texture_handle,
+            _ => return None,
+        };
+        if !deadlib_present::render::is_render_target_texture(handle) { return None; }
+        let handle = deadlib_present::render::render_target_base_handle(handle);
+        if sampled.is_some_and(|previous| previous != handle) { return None; }
+        sampled = Some(handle);
+    }
+    let sampled = sampled?;
+    let mut allocation = None;
+    for (index, actor) in overlays.iter().enumerate() {
+        if composer.capture_handle(index) != Some(sampled) { continue; }
+        let SongLuaOverlayKind::ActorFrameTexture { capture_size: Some(size), .. } = actor.kind
+            else { return None; };
+        if allocation.is_some() || size.iter().any(|value| !value.is_finite()
+            || *value < 1.0 || *value >= u32::MAX as f32 || value.fract() != 0.0)
+        { return None; }
+        let image = size.map(|value| value as u32);
+        // The frozen allocation uses the same padded backing for both manual
+        // and automatic captures (song_lua_capture_size), not an image upload.
+        let texture = [image[0].checked_next_power_of_two()?, image[1].checked_next_power_of_two()?];
+        allocation = Some(AftBacking { image, texture });
+    }
+    allocation
+}
+
+fn equal_aft_backing(
+    state: &Value, native: Option<&NativeAftResource>, owned: Option<AftBacking>,
+) -> bool {
+    native.is_some_and(|native| state["texture"].as_str() == Some(native.texture.as_str())
+        && AftBacking::native(state) == Some(native.backing) && owned == Some(native.backing))
+}
+
 struct NativeDrawCoordinates {
     image_uv_scale: [f32; 2],
     untextured: bool,
@@ -1218,6 +1357,13 @@ impl NativeDrawCoordinates {
         }
     }
 
+    fn with_equal_aft_backing(mut self, proved: bool) -> Self {
+        // Render targets retain padded backing coordinates in both renderers.
+        // Keep every UV comparison; only remove the image-upload conversion.
+        if proved { self.image_uv_scale = [1.0; 2]; }
+        self
+    }
+
     fn row_matches(&self, actual: &[f32; 10], row: &Value) -> bool {
         row_matches(actual, row, self.image_uv_scale, self.untextured, self.depth_range)
     }
@@ -1235,8 +1381,8 @@ pub(crate) fn row_matches(actual: &[f32;10], row: &Value, image_uv_scale: [f32;2
 
 #[test]
 fn native_draw_coordinates_compare_uvs_for_every_bound_resource() {
-    // Native AFT dimensions use padded backing storage. The logical midpoint
-    // is (427/1024, 240/512) in the submitted native texture coordinates.
+    // An unresolved resource name, even one resembling an AFT name, is
+    // not type proof. Preserve ordinary image normalization without proof.
     let row = json!([0, 0, 0, -0.5, 0.25, 0.2, 1, 0.4169921875, 0.46875, 1, 0.5, 0.25, 0.75]);
     let actual = [-0.5, 0.25, 0.2, 1.0, 0.5, 0.5, 1.0, 0.5, 0.25, 0.75];
     for texture in ["ActorFrameTexture 1", "theme:/Graphics/pixel.png", "native:/pixel.png", "song:/sky.png", ""] {
@@ -1251,6 +1397,169 @@ fn native_draw_coordinates_compare_uvs_for_every_bound_resource() {
                 "bound resource {texture:?} must compare UV axis {axis}");
         }
     }
+}
+
+
+#[test]
+fn native_aft_uv_proof_requires_one_typed_binding_before_every_draw() {
+    let state = json!({"texture":"chosen resource", "image_width":854, "image_height":480,
+        "texture_width":1024, "texture_height":512});
+    let trace = json!({"dropped_events":0,
+        "events":[{"seq":1,"scene":1,"actor":"mesh","kind":"call","seconds":1,
+            "operation":"ActorMultiVertex.SetTexture", "args":[{"type":"RageTextureRenderTarget"}]},
+            {"seq":2,"scene":1,"actor":"mesh","kind":"call","seconds":2,
+                "callback":"SetDrawFunction","operation":"Actor.Draw"}],
+        "update_frames":[{"scene":1,"sequence":1,"seconds":2}],
+        "drawable_samples":[{"scene":1,"actor":"mesh","update_sequence":1,"state":state}]});
+    let proof = native_aft_resources(&trace, 1);
+    assert_eq!(proof["mesh"].texture, "chosen resource", "no texture-name convention is used");
+    assert!(native_aft_resources(&trace, 2).is_empty(), "scene identity is required");
+    for time in [0, 2, 3] {
+        let mut changed = trace.clone();
+        changed["events"][0]["seconds"] = json!(time);
+        assert!(native_aft_resources(&changed, 1).contains_key("mesh"),
+            "an earlier binding event remains active at equal or rewound music time");
+    }
+    for time in [Value::Null, json!("1")] {
+        let mut changed = trace.clone();
+        changed["events"][0]["seconds"] = time.clone();
+        assert!(native_aft_resources(&changed, 1).is_empty(), "the binding needs a finite clock");
+        let mut changed = trace.clone();
+        changed["events"][1]["seconds"] = time.clone();
+        changed["update_frames"][0]["seconds"] = time;
+        assert!(native_aft_resources(&changed, 1).is_empty(), "a matching invalid draw clock is not proof");
+    }
+    for arg in [Value::Null, json!({"type":"nil"}), json!({"type":"RageTexture"}),
+        json!({"type":"unknown"}), json!("ActorFrameTexture 1")] {
+        let mut changed = trace.clone();
+        changed["events"][0]["args"][0] = arg;
+        assert!(native_aft_resources(&changed, 1).is_empty());
+    }
+    for operation in ["ActorMultiVertex.SetTexture", "ActorMultiVertex.LoadTexture"] {
+        let mut changed = trace.clone();
+        let mut later = changed["events"][0].clone();
+        later["seq"] = json!(3);
+        later["seconds"] = json!(3);
+        later["operation"] = json!(operation);
+        changed["events"].as_array_mut().unwrap().push(later);
+        assert!(native_aft_resources(&changed, 1).is_empty(), "a changed binding stays unproved");
+    }
+    for changed_state in [json!({}), json!({"texture":null}), json!({"texture":""})] {
+        let mut changed = trace.clone(); changed["drawable_samples"][0]["state"] = changed_state;
+        assert!(native_aft_resources(&changed, 1).is_empty());
+    }
+    let mut changed = trace.clone();
+    let mut second = changed["drawable_samples"][0].clone(); second["state"]["texture"] = json!("other");
+    changed["drawable_samples"].as_array_mut().unwrap().push(second);
+    let mut matching_call = changed["events"][1].clone(); matching_call["seq"] = json!(3);
+    changed["events"].as_array_mut().unwrap().push(matching_call);
+    assert!(native_aft_resources(&changed, 1).is_empty(), "one actor cannot prove two resource IDs");
+    let mut changed = trace.clone(); changed["dropped_events"] = json!(1);
+    assert!(native_aft_resources(&changed, 1).is_empty());
+    let mut changed = trace.clone(); changed["events"][1]["seq"] = json!(1);
+    assert!(native_aft_resources(&changed, 1).is_empty(), "event order must be complete and strict");
+    for dimension in [json!(0), json!(-1), json!(480.5), json!(1025)] {
+        let mut changed = trace.clone();
+        changed["drawable_samples"][0]["state"]["image_height"] = dimension;
+        assert!(native_aft_resources(&changed, 1).is_empty(), "invalid allocation cannot prove a UV basis");
+    }
+    let mut changed = trace.clone();
+    changed["events"].as_array_mut().unwrap().swap(0, 1);
+    changed["events"][0]["seq"] = json!(1); changed["events"][1]["seq"] = json!(2);
+    assert!(native_aft_resources(&changed, 1).is_empty(), "later binding cannot bless earlier Draw despite its earlier music time");
+    let mut changed = trace.clone(); changed["events"][1]["seconds"] = json!(2.1);
+    assert!(native_aft_resources(&changed, 1).is_empty(), "the exact sample clock must match");
+    let mut changed = trace.clone(); changed["events"][1]["callback"] = json!("SetUpdateFunction");
+    assert!(native_aft_resources(&changed, 1).is_empty(), "unproved callback scope stays unchanged");
+    let mut changed = trace.clone(); changed["events"].as_array_mut().unwrap().pop();
+    assert!(native_aft_resources(&changed, 1).is_empty(), "automatic or missing calls are not inferred");
+    let mut changed = trace.clone();
+    let mut extra = changed["events"][1].clone(); extra["seq"] = json!(3);
+    changed["events"].as_array_mut().unwrap().push(extra.clone());
+    assert!(native_aft_resources(&changed, 1).is_empty(), "extra calls cannot be silently deduplicated");
+    changed["drawable_samples"].as_array_mut().unwrap().push(trace["drawable_samples"][0].clone());
+    assert!(native_aft_resources(&changed, 1).contains_key("mesh"), "same-clock multiplicity is retained exactly");
+    // Captured music seconds may regress even while event and native update
+    // sequences advance; a stable binding remains typed through that clock drift.
+    extra["seconds"] = json!(0.5); changed["events"][2] = extra;
+    changed["update_frames"].as_array_mut().unwrap().push(json!({"scene":1,"sequence":2,"seconds":0.5}));
+    changed["drawable_samples"][1]["update_sequence"] = json!(2);
+    assert!(native_aft_resources(&changed, 1).contains_key("mesh"), "clock rewind before binding time preserves event causality");
+}
+
+#[test]
+fn owned_aft_uv_proof_requires_the_composers_actual_capture_handle() {
+    use deadlib_present::render::{BlendMode, SpriteRun, render_target_sample_handle};
+    let capture = |name: &str| SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::ActorFrameTexture {
+            capture_name: name.into(), capture_size: Some([854.0, 480.0]),
+            alpha_buffer: true, depth_buffer: false, float_buffer: false,
+        },
+        name: None, parent_index: None,
+        initial_state: SongLuaOverlayState { aft_created: true, ..Default::default() },
+        message_commands: Vec::new(),
+    };
+    let overlays = vec![capture("first"), capture("second")];
+    let composer = WholeSongComposer::new(&overlays);
+    let handle = composer.capture_handle(0).unwrap();
+    let sprite = |texture_handle| DrawOp::Sprite(SpriteRun {
+        texture_handle, instance_start: 0, instance_count: 1,
+        blend: BlendMode::Alpha, camera: 0,
+    });
+    let mut frame = RenderFrame {
+        clear_color: [0.0; 4], render_targets: Vec::new(), cameras: Vec::new(),
+        sprite_instances: Vec::new(), mesh_vertices: Vec::new(),
+        tmesh_instances: Vec::new(), tmesh_geometries: Vec::new(), ops: vec![sprite(handle)],
+    };
+    let expected = Some(AftBacking { image: [854, 480], texture: [1024, 512] });
+    assert_eq!(owned_aft_backing(&frame, &composer, &overlays), expected);
+    frame.ops.push(sprite(render_target_sample_handle(handle, true)));
+    assert_eq!(owned_aft_backing(&frame, &composer, &overlays), expected,
+        "sampler flags do not change the allocated target");
+    frame.ops.push(sprite(composer.capture_handle(1).unwrap()));
+    assert_eq!(owned_aft_backing(&frame, &composer, &overlays), None,
+        "a mixed-resource submission has no single coordinate basis");
+    frame.ops = vec![sprite(1)];
+    assert_eq!(owned_aft_backing(&frame, &composer, &overlays), None,
+        "an ordinary image handle is not a render-target proof");
+    frame.ops = vec![sprite(handle)];
+    let other_composer = WholeSongComposer::new(&overlays);
+    assert_eq!(owned_aft_backing(&frame, &other_composer, &overlays), None,
+        "a recorded draw must retain its own composer allocation");
+    let mut unallocated = overlays.clone();
+    if let SongLuaOverlayKind::ActorFrameTexture { capture_size, .. } = &mut unallocated[0].kind {
+        *capture_size = None;
+    }
+    assert_eq!(owned_aft_backing(&frame, &composer, &unallocated), None);
+    frame.ops.clear();
+    assert_eq!(owned_aft_backing(&frame, &composer, &overlays), None);
+}
+
+#[test]
+fn native_aft_uvs_keep_equal_backing_coordinates_and_reject_wrong_axes() {
+    let state = json!({"texture":"chosen resource", "image_width":854, "texture_width":1024,
+        "image_height":480, "texture_height":512, "z_test":0, "z_write":false});
+    let backing = AftBacking::native(&state).unwrap();
+    let native = NativeAftResource { texture: "chosen resource".into(), backing };
+    let raw = [-0.9755428, -1.0022018, 0.0, 1.0, 0.0, 0.9375, 1.0, 0.0, 0.0, 1.0];
+    let row = json!([0,480,0,-0.9755427837371826,-1.002201795578003,0,1,0,0.9375,1,0,0,1]);
+    let proved = equal_aft_backing(&state, Some(&native), Some(backing));
+    assert!(proved);
+    let coordinates = NativeDrawCoordinates::from_state(&state).with_equal_aft_backing(proved);
+    assert!(coordinates.row_matches(&raw, &row));
+    for axis in 0..10 {
+        let mut wrong = raw; wrong[axis] += 0.03125;
+        assert!(!coordinates.row_matches(&wrong, &row), "typed AFT still compares axis {axis}");
+    }
+    for (proof, allocation) in [(None, Some(backing)), (Some(&native), None),
+        (Some(&native), Some(AftBacking { image: [800,480], ..backing })),
+        (Some(&native), Some(AftBacking { texture: [2048,512], ..backing }))] {
+        assert!(!equal_aft_backing(&state, proof, allocation));
+        assert!(!NativeDrawCoordinates::from_state(&state).row_matches(&raw, &row),
+            "unproved targets retain ordinary image normalization");
+    }
+    let mut renamed = state.clone(); renamed["texture"] = json!("another target");
+    assert!(!equal_aft_backing(&renamed, Some(&native), Some(backing)));
 }
 
 #[test]
