@@ -2,6 +2,7 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::i18n::{LookupKey, lookup_key, tr};
+use crate::screens::components::gameplay::layout::gameplay_top_row_layout;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
@@ -1709,13 +1710,17 @@ fn centered_single_split_geometry(
     if state.num_players() != 1 {
         return None;
     }
+    let screen_w = screen_width();
+    let screen_h = screen_height();
+    let notefield_width =
+        notefield_width? * gameplay_top_row_layout(screen_w, screen_h).field_scale;
     step_stats_theme::centered_single_split_layout(
         screen_center_x(),
         screen_center_y(),
-        screen_width(),
-        screen_height(),
+        screen_w,
+        screen_h,
         playfield_center_x,
-        notefield_width?,
+        notefield_width,
         state.gameplay.density_graph_view().graph_w,
     )
 }
@@ -2124,16 +2129,11 @@ fn push_split_step_stats(
 ) {
     let aspect_ratio = screen_width() / screen_height().max(1.0);
     let layout_type = UILayoutType::current();
-    if layout_type == UILayoutType::UltraWide {
+    if !centered_single_split && (layout_type != UILayoutType::Wide || state.cols_per_player() <= 4)
+    {
         return;
     }
-    if centered_single_split {
-        if layout_type != UILayoutType::Squareish || state.cols_per_player() > 4 {
-            return;
-        }
-    } else if layout_type != UILayoutType::Wide || state.cols_per_player() <= 4 {
-        return;
-    }
+
     let mask = state
         .profiles()
         .first()

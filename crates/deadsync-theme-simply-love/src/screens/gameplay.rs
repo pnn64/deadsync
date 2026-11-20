@@ -22,6 +22,7 @@ pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, He
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::screens::input as screen_input;
+use crate::ui_layout::UILayoutType;
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
@@ -607,6 +608,25 @@ enum GameplayStepStatsMode {
     Side,
     Versus,
     Double,
+}
+
+fn split_step_stats_enabled(
+    play_style: profile_data::PlayStyle,
+    layout_type: UILayoutType,
+) -> bool {
+    match play_style {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
+            matches!(layout_type, UILayoutType::Squareish | UILayoutType::Wide)
+        }
+        profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => layout_type == UILayoutType::Wide,
+        profile_data::PlayStyle::Versus
+        | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => false,
+    }
 }
 
 const fn gameplay_step_stats_mode(
@@ -5622,7 +5642,8 @@ pub fn frame_layers<'a>(
             match state.step_stats_mode {
                 GameplayStepStatsMode::Hidden => {}
                 GameplayStepStatsMode::Side
-                    if centered_single_notefield && !is_wide() =>
+                    if centered_single_notefield
+                        && split_step_stats_enabled(play_style, UILayoutType::current()) =>
                 {
                     gameplay_stats::push_centered_single_split_step_stats(
                         actors,
@@ -5641,7 +5662,9 @@ pub fn frame_layers<'a>(
                 GameplayStepStatsMode::Versus => {
                     gameplay_stats::push_versus_step_stats(actors, state, asset_manager);
                 }
-                GameplayStepStatsMode::Double => {
+                GameplayStepStatsMode::Double
+                    if split_step_stats_enabled(play_style, UILayoutType::current()) =>
+                {
                     gameplay_stats::push_double_step_stats(
                         actors,
                         state,
@@ -5649,6 +5672,7 @@ pub fn frame_layers<'a>(
                         playfield_center_x,
                     );
                 }
+                GameplayStepStatsMode::Double => {}
             }
             gameplay_stats::push_heart_rates(actors, state, playfield_center_x);
         }
@@ -6382,6 +6406,31 @@ mod tests {
         ];
         for (style, cols, p1, p2, expected) in cases {
             assert_eq!(gameplay_step_stats_mode(style, cols, p1, p2), expected);
+        }
+    }
+
+    #[test]
+    fn split_step_stats_follow_play_style_and_layout() {
+        use profile_data::PlayStyle::{
+            Couple, Double, PumpCouple, PumpDouble, PumpRoutine, PumpSingle, PumpVersus, Routine,
+            Single, Versus,
+        };
+        use UILayoutType::{Squareish, UltraWide, Wide};
+
+        for style in [Single, PumpSingle] {
+            assert!(split_step_stats_enabled(style, Squareish));
+            assert!(split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
+        }
+        for style in [Double, PumpDouble, Couple, PumpCouple] {
+            assert!(!split_step_stats_enabled(style, Squareish));
+            assert!(split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
+        }
+        for style in [Versus, PumpVersus, Routine, PumpRoutine] {
+            assert!(!split_step_stats_enabled(style, Squareish));
+            assert!(!split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
         }
     }
 

@@ -556,10 +556,12 @@ pub fn centered_single_split_layout(
     current_graph_w: f32,
 ) -> Option<CenteredSingleSplitLayout> {
     const PANEL_CONTENT_WIDTH: f32 = 200.0;
-    const MIN_PANEL_ZOOM: f32 = 0.8;
+    const MIN_PANEL_ZOOM: f32 = 0.6;
     const GRAPH_HEIGHT: f32 = 105.0;
 
-    if screen_h <= 0.0 || screen_w < screen_h || screen_w / screen_h >= 1.6 {
+    let layout = UILayoutType::from_aspect_ratio(screen_w / screen_h);
+    // Ultrawide puts the stats to the side
+    if !matches!(layout, UILayoutType::Wide | UILayoutType::Squareish) {
         return None;
     }
 
@@ -593,7 +595,7 @@ pub fn centered_single_split_layout(
     let graph = StepStatsGraphRect {
         x: right_field_edge,
         y: screen_h - GRAPH_HEIGHT,
-        w: density_graph_width(current_graph_w, sidepane_width, false),
+        w: density_graph_width(current_graph_w, sidepane_width, false).min(sidepane_width),
     };
 
     if graph.w > sidepane_width
@@ -1043,8 +1045,8 @@ mod tests {
     }
 
     #[test]
-    fn centered_single_split_fits_vga_5_4_and_6_5() {
-        for screen_w in [640.0, 600.0, 576.0] {
+    fn centered_single_split_fits_supported_aspect_ratios() {
+        for screen_w in [720.0, 640.0, 600.0, 576.0] {
             let layout = centered_single_split_layout(
                 screen_w * 0.5,
                 240.0,
@@ -1116,8 +1118,26 @@ mod tests {
     }
 
     #[test]
-    fn centered_single_split_hides_when_it_does_not_fit_or_is_wide() {
-        for (screen_w, screen_h) in [(560.0, 480.0), (768.0, 480.0), (640.0, 400.0)] {
+    fn centered_single_split_fits_square_with_zoomed_field_and_clamps_graph() {
+        let layout = centered_single_split_layout(240.0, 240.0, 480.0, 480.0, 240.0, 192.0, 300.0)
+            .expect("square centered layout fits the scaled field");
+
+        assert_eq!(layout.sidepane_width, 144.0);
+        assert_eq!(layout.panel_width, 144.0);
+        assert_eq!(layout.graph.x, 336.0);
+        assert_eq!(layout.graph.w, 144.0);
+        assert!(layout.graph.x + layout.graph.w <= 480.0);
+        assert!((layout.pane.banner_data_zoom - 0.72).abs() < 0.001);
+
+        let banner = layout.song_banner();
+        let banner_half_width = STEP_STATS_BANNER_W * banner.zoom * 0.5;
+        assert!(banner.x - banner_half_width >= layout.graph.x);
+        assert!(banner.x + banner_half_width <= 480.0);
+    }
+
+    #[test]
+    fn centered_single_split_hides_when_it_does_not_fit_or_is_ultrawide() {
+        for (screen_w, screen_h) in [(480.0, 480.0), (490.0, 480.0), (900.0, 480.0)] {
             assert!(
                 centered_single_split_layout(
                     screen_w * 0.5,
@@ -1131,6 +1151,10 @@ mod tests {
                 .is_none()
             );
         }
+
+        assert!(
+            centered_single_split_layout(320.0, 200.0, 640.0, 400.0, 320.0, 256.0, 0.0).is_some()
+        );
     }
 
     #[test]

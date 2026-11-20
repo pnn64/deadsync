@@ -18,6 +18,7 @@ struct Rect {
 fn judgment_count_anchors_stay_in_the_player_side_pane_at_4_3_and_16_9() {
     assert!(step_stats_aspect_enabled(640.0, 480.0));
     assert!(step_stats_aspect_enabled(1280.0, 720.0));
+    assert!(step_stats_aspect_enabled(480.0, 480.0));
     assert!(!step_stats_aspect_enabled(720.0, 1280.0));
 
     for (screen_w, screen_h, notefield_center_x) in
