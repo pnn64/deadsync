@@ -8,8 +8,8 @@ pub struct Limits {
     /// Maximum number of pixels in the image.
     pub max_pixels: usize,
     /// Maximum decoded pixel bytes, including three bytes per palette entry.
-    /// For RGBA conversion this bounds the new RGBA buffer instead; the caller
-    /// already owns the source bitmap. It is not a process-wide memory budget.
+    /// For RGBA conversion this bounds the RGBA buffer length instead; the
+    /// source bitmap is already owned. It is not a process-wide memory budget.
     pub max_decoded_bytes: usize,
 }
 
@@ -131,6 +131,44 @@ impl Bitmap {
             Pixels::Rgba(samples) => output.extend_from_slice(samples),
         }
         Ok(output)
+    }
+
+    /// Consume the bitmap, reusing existing RGBA storage with the default limits.
+    /// RGB and indexed pixels are expanded into a new RGBA buffer.
+    ///
+    /// # Errors
+    /// Returns an error for invalid pixels or dimensions, exceeded default
+    /// limits, or a failed allocation while expanding RGB or indexed pixels.
+    pub fn into_rgba8(self) -> Result<Vec<u8>, Error> {
+        self.into_rgba8_with_limits(Limits::default())
+    }
+
+    /// Consume the bitmap with explicit limits, reusing existing RGBA storage.
+    ///
+    /// Pixel, output, and validation rules match `to_rgba8_with_limits`. RGBA
+    /// storage is returned without copying and retains its spare capacity.
+    /// `max_input_bytes` does not apply to decoded pixels.
+    ///
+    /// # Errors
+    /// Returns an error for invalid pixels or dimensions, exceeded limits, or a
+    /// failed allocation while expanding RGB or indexed pixels.
+    pub fn into_rgba8_with_limits(self, limits: Limits) -> Result<Vec<u8>, Error> {
+        match self {
+            Self {
+                width,
+                height,
+                pixels: Pixels::Rgba(samples),
+            } => {
+                let count = pixel_count(width, height)?;
+                let bytes = count.checked_mul(4).ok_or(Error::LimitExceeded)?;
+                if count > limits.max_pixels || bytes > limits.max_decoded_bytes {
+                    return Err(Error::LimitExceeded);
+                }
+                check_samples(&samples, count, 4)?;
+                Ok(samples)
+            }
+            bitmap => bitmap.to_rgba8_with_limits(limits),
+        }
     }
 }
 

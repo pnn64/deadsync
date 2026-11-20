@@ -9,8 +9,8 @@ use deadlib_image_bmp::{decode, encode};
 
 # fn example(bytes: &[u8]) -> Result<(), deadlib_image_bmp::Error> {
 let bitmap = decode(bytes)?;
-let rgba = bitmap.to_rgba8()?;
 let encoded = encode(&bitmap)?;
+let rgba = bitmap.into_rgba8()?;
 # let _ = (rgba, encoded);
 # Ok(())
 # }
@@ -75,6 +75,12 @@ produce RGB. `Bitmap::validate` checks caller-created images before conversion
 or encoding. `to_rgba8` / `to_rgba8_with_limits` expand palettes or add opaque
 alpha as needed.
 
+When the bitmap is no longer needed, `into_rgba8` / `into_rgba8_with_limits`
+consume it and reuse an existing RGBA sample buffer without allocating or
+copying. RGB and indexed input use the same expansion as the borrowed methods.
+Both variants validate public models and apply the same pixel/output limits;
+consuming RGBA preserves the buffer's existing spare capacity.
+
 `probe` / `probe_with_limits` inspect dimensions, source depth, and orientation
 without allocating or requiring palette/pixel bytes. They require a complete
 DIB and any external masks, validate header structure, and enforce the same
@@ -84,7 +90,7 @@ pixel data is present or valid.
 Default decode limits are 256 MiB of input, 67,108,864 pixels (`64 * 1024 * 1024`),
 and 256 MiB of decoded storage. Indexed storage includes
 indices plus three bytes per retained palette entry. RGBA conversion checks the
-size of its new output buffer; the caller already owns the source bitmap.
+RGBA buffer length; the source bitmap is already owned.
 Limits are configurable. Dimension, pitch, and allocation arithmetic is checked,
 and output buffers use fallible reservation. These are per-operation output
 bounds, not a process-wide memory budget.
