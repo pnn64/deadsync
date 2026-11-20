@@ -55,7 +55,18 @@ pub(crate) fn filtered_size(
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
-    paeth_wide(i16::from(a), i16::from(b), i16::from(c))
+    let low = a.min(b);
+    let high = a.max(b);
+    let to_low = c.saturating_sub(low);
+    let to_high = high.saturating_sub(c);
+    // Inside [low, high], 2*to_low <= to_high is exactly 3*c-a-b <= low;
+    // the other inequality selects low. Saturation also covers outside values.
+    let candidate = if to_high <= to_low / 2 { low } else { c };
+    if to_low <= to_high / 2 {
+        high
+    } else {
+        candidate
+    }
 }
 
 fn paeth_wide(a: i16, b: i16, c: i16) -> u8 {
@@ -398,6 +409,32 @@ pub(crate) fn filter_into<const SCORE: bool>(
     }
 }
 
+#[inline]
+fn filter_chunk<const FILTER: u8, const SCORE: bool>(
+    row: &[u8; 32],
+    left: &[u8; 32],
+    upper: &[u8; 32],
+    upper_left: &[u8; 32],
+    out: &mut [u8; 32],
+) -> u32 {
+    let mut score = 0u32;
+    for n in 0..32 {
+        let predictor = match FILTER {
+            0 => 0,
+            1 => left[n],
+            2 => upper[n],
+            3 => ((u16::from(left[n]) + u16::from(upper[n])) / 2) as u8,
+            4 => paeth(left[n], upper[n], upper_left[n]),
+            _ => left[n] / 2,
+        };
+        out[n] = row[n].wrapping_sub(predictor);
+        if SCORE {
+            score += u32::from((out[n] as i8).unsigned_abs());
+        }
+    }
+    score
+}
+
 fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     row: &[u8],
     prev: &[u8],
@@ -425,23 +462,43 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     }
     // All remaining bytes have a left neighbor. Keeping the boundary out of
     // this loop makes its byte lanes independent for compiler vectorization.
-    let upper = if FILTER >= 2 && FILTER <= 4 {
-        &prev[split..]
+    let (upper, upper_left) = if FILTER >= 2 && FILTER <= 4 {
+        (&prev[split..], &prev[..row.len() - split])
     } else {
-        &[]
+        // These predictors are unused in this specialization. Equal-length
+        // slices avoid accessing the empty previous row of None/Sub.
+        (&row[split..], &row[..row.len() - split])
     };
-    for (n, ((&value, &left), out)) in row[split..]
+    let (values, values_tail) = row[split..].as_chunks::<32>();
+    let (left, left_tail) = row[..row.len() - split].as_chunks::<32>();
+    let (upper, upper_tail) = upper.as_chunks::<32>();
+    let (upper_left, corner_tail) = upper_left.as_chunks::<32>();
+    let (output, output_tail) = out[split..].as_chunks_mut::<32>();
+    for ((((values, left), upper), upper_left), output) in values
         .iter()
-        .zip(&row[..row.len() - split])
-        .zip(&mut out[split..])
-        .enumerate()
+        .zip(left)
+        .zip(upper)
+        .zip(upper_left)
+        .zip(output)
+    {
+        // A chunk contributes at most 32*128, so its reduction can stay narrow.
+        score += u64::from(filter_chunk::<FILTER, SCORE>(
+            values, left, upper, upper_left, output,
+        ));
+    }
+    for ((((&value, &left), &upper), &corner), out) in values_tail
+        .iter()
+        .zip(left_tail)
+        .zip(upper_tail)
+        .zip(corner_tail)
+        .zip(output_tail)
     {
         let predictor = match FILTER {
             0 => 0,
             1 => left,
-            2 => upper[n],
-            3 => ((u16::from(left) + u16::from(upper[n])) / 2) as u8,
-            4 => paeth(left, upper[n], prev[n]),
+            2 => upper,
+            3 => ((u16::from(left) + u16::from(upper)) / 2) as u8,
+            4 => paeth(left, upper, corner),
             _ => left / 2,
         };
         *out = value.wrapping_sub(predictor);
@@ -908,7 +965,10 @@ mod tests {
     #[test]
     fn independent_filter_bytes_scores_and_short_row_boundaries() {
         for bpp in [1, 2, 3, 4, 6, 8] {
-            for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127] {
+            for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127]
+                .into_iter()
+                .chain([bpp + 31, bpp + 32, bpp + 33, bpp + 63, bpp + 64, bpp + 65])
+            {
                 for pattern in 0..5 {
                     let row: Vec<u8> = (0..len)
                         .map(|n| match pattern {
@@ -951,6 +1011,7 @@ mod tests {
                             score
                         );
                         assert_eq!(actual, expected);
+                        actual.fill(0xa5);
                         assert_eq!(
                             filter_into::<false>(&row, predictors, bpp, filter, &mut actual),
                             0
@@ -965,6 +1026,7 @@ mod tests {
                                 score
                             );
                             assert_eq!(first_filtered, expected);
+                            first_filtered.fill(0xa5);
                             assert_eq!(
                                 filter_first::<false>(&row, bpp, filter, &mut first_filtered),
                                 0
