@@ -677,6 +677,9 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                         score = value;
                         selected = kind;
                         core::mem::swap(&mut candidate, &mut best);
+                        if score == 0 {
+                            break;
+                        }
                     }
                 }
             } else {

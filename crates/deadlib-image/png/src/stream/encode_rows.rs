@@ -139,6 +139,9 @@ impl<'a> Rows<'a> {
                     best = score;
                     selected = kind;
                     core::mem::swap(&mut self.candidate, &mut self.output);
+                    if best == 0 {
+                        break;
+                    }
                 }
             }
         } else {
