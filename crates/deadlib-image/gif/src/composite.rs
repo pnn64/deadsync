@@ -206,6 +206,20 @@ impl Compositor {
                 &frame.indices[row * frame.width as usize..row * frame.width as usize + r.w];
             let dest =
                 &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
+            // Short rows are cheaper to expand directly.
+            if indices.len() >= 32 {
+                let index = indices[0];
+                // Fixed-size equality lets the compiler compare whole vectors.
+                let (chunks, tail) = indices.as_chunks::<16>();
+                if chunks.iter().all(|chunk| *chunk == [index; 16])
+                    && tail.iter().all(|&value| value == index)
+                {
+                    if transparent != Some(index) {
+                        dest.fill(table[index as usize]);
+                    }
+                    continue;
+                }
+            }
             if let Some(t) = transparent {
                 for (pixel, &index) in dest.iter_mut().zip(indices) {
                     if index != t {
