@@ -106,15 +106,21 @@ impl Bitmap {
             Pixels::Indexed {
                 indices, palette, ..
             } => {
-                for &index in indices {
-                    output.extend_from_slice(&palette[usize::from(index)]);
-                    output.push(255);
+                output.resize(bytes, 0);
+                for (&index, rgba) in indices.iter().zip(output.as_chunks_mut::<4>().0) {
+                    let [red, green, blue] = palette[usize::from(index)];
+                    *rgba = [red, green, blue, 255];
                 }
             }
             Pixels::Rgb(samples) => {
-                for rgb in samples.as_chunks::<3>().0 {
-                    output.extend_from_slice(rgb);
-                    output.push(255);
+                output.resize(bytes, 0);
+                for (rgb, rgba) in samples
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .zip(output.as_chunks_mut::<4>().0)
+                {
+                    *rgba = [rgb[0], rgb[1], rgb[2], 255];
                 }
             }
             Pixels::Rgba(samples) => output.extend_from_slice(samples),
