@@ -3786,6 +3786,221 @@ return Def.ActorFrame {
     }
 
     #[test]
+    fn caught_stale_actor_calls_keep_attempted_args_and_lua_errors() {
+        use deadsync_song_lua::{
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua,
+        };
+        use std::{fs, sync::Arc};
+        super::start_call_log(250_000).expect("install observational logger");
+        let dir = std::env::temp_dir()
+            .join(format!("deadsync-stale-call-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("stale call test directory");
+        let entry = dir.join("stale-calls.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        local wrapper = self:AddWrapperState()
+        wrapper.saved = 'retained Lua field'
+        assert(wrapper:x(4) == wrapper)
+        local selected = wrapper.x
+        assert(self:RemoveWrapperState(1) == self)
+        local ok, err = pcall(selected, wrapper, 0)
+        assert(not ok and type(err) == 'string' and err:find('released', 1, true))
+        assert(wrapper.saved == 'retained Lua field')
+        assert(self:GetNumWrapperStates() == 0)
+        assert(self:x(9) == self and self:GetX() == 9)
+        self:aux(73)
+    end,
+}
+"#).expect("write stale call control");
+        let mut context = SongLuaCompileContext::new(&dir, "caught stale actor call");
+        context.live = true;
+        let compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).expect("compile stale call control");
+        assert!(compiled.live_scene.is_some());
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let calls = events.iter().filter(|event| event["operation"] == "Actor.x").collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3, "{events:?}");
+        assert_eq!(calls.iter().map(|event| event["args"].clone()).collect::<Vec<_>>(),
+            [serde_json::json!([4]), serde_json::json!([0]), serde_json::json!([9])]);
+        for event in &calls {
+            assert_eq!(event["kind"], "call");
+            assert_eq!(event["phase"], "callback");
+            assert!(event["source"].as_str().unwrap().ends_with("stale-calls.lua"));
+        }
+        assert!(calls[1]["results"].is_null(), "a failed call has no invented return values");
+        assert!(calls[1]["tween_time_left"].is_null(), "native does not query a failed binding");
+        assert_eq!(calls[0]["tween_time_left"], 0.0);
+        assert_eq!(calls[2]["tween_time_left"], 0.0);
+        assert!(events.iter().any(|event| event["operation"] == "Actor.aux"
+            && event["args"] == serde_json::json!([73])),
+            "the caught error, raw fields, removed lifetime and later call all kept their Lua semantics");
+        assert!(!events.iter().any(|event| event["kind"] == "trace-error"), "{events:?}");
+    }
+
+    #[test]
+    fn attempted_call_encoding_errors_remain_diagnostic_failures() {
+        use deadsync_song_lua::{
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua,
+        };
+        use std::{fs, sync::Arc};
+        super::start_call_log(250_000).expect("install observational logger");
+        let dir = std::env::temp_dir()
+            .join(format!("deadsync-call-encoding-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("encoding error test directory");
+        let entry = dir.join("encoding-error.lua");
+        fs::write(&entry, r#"
+return Def.ActorFrame {
+    OnCommand=function(self)
+        local wrapper = self:AddWrapperState()
+        wrapper.saved = 'retained Lua field'
+        assert(wrapper:x(4) == wrapper)
+        local selected = wrapper.x
+        assert(self:RemoveWrapperState(1) == self)
+        local function stale_x(extra)
+            -- The selected x forward observes every argument. Its retained
+            -- binding rejects the removed owner before reading either value.
+            local ok, err = pcall(selected, wrapper, 0, extra)
+            return ok, err
+        end
+        local baseline_ok, baseline_error = stale_x(0)
+        assert(not baseline_ok and type(baseline_error) == 'string')
+        assert(baseline_error:find('released', 1, true))
+        local malformed = {__songlua_actor_type='Actor', Name='cycle'}
+        malformed.__songlua_parent = malformed
+        local ok, err = stale_x(malformed)
+        assert(not ok and type(err) == 'string')
+        assert(err == baseline_error)
+        assert(not err:find('cycle in actor query ancestry', 1, true))
+        assert(wrapper.saved == 'retained Lua field')
+        assert(self:GetNumWrapperStates() == 0)
+        assert(self:aux(74) == self and self:getaux() == 74)
+    end,
+}
+"#).expect("write encoding error control");
+        let mut context = SongLuaCompileContext::new(&dir, "observer encoding failure");
+        context.live = true;
+        let compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).expect("compile encoding error control");
+        assert!(compiled.live_scene.is_some());
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.clone());
+        let calls = events.iter().filter(|event| event["operation"] == "Actor.x")
+            .collect::<Vec<_>>();
+        assert_eq!(calls.len(), 3, "{events:?}");
+        assert_eq!(calls[0]["kind"], "call");
+        assert_eq!(calls[0]["args"], serde_json::json!([4]));
+        assert_eq!(calls[0]["tween_time_left"], 0.0);
+        assert_eq!(calls[1]["kind"], "call");
+        assert_eq!(calls[1]["args"], serde_json::json!([0, 0]));
+        assert_eq!(calls[2]["kind"], "trace-error");
+        for event in &calls[1..] {
+            assert!(event["results"].is_null(), "a failed binding has no invented results");
+            assert!(event["tween_time_left"].is_null(), "a failed binding is not queried again");
+        }
+        let failed = events.iter().filter(|event| event["kind"] == "trace-error").collect::<Vec<_>>();
+        assert_eq!(failed.len(), 1, "{events:?}");
+        assert_eq!(failed[0]["operation"], "Actor.x");
+        assert!(failed[0]["error"].as_str().unwrap().contains("cycle in actor query ancestry"));
+        let failed_index = events.iter().position(|event| event["kind"] == "trace-error").unwrap();
+        let later_call = events.iter().position(|event| event["operation"] == "Actor.aux"
+            && event["kind"] == "call" && event["args"] == serde_json::json!([74]));
+        assert!(later_call.is_some_and(|index| index > failed_index),
+            "observer stack cleanup must preserve the authored pcall and later successful call");
+    }
+
+    #[test]
+    fn synchronous_setter_callbacks_keep_native_observation_order_and_restore_scope() {
+        use deadsync_song_lua::{
+            SongLuaCompileContext, SongLuaNoteskinResolver, compile_song_lua,
+        };
+        use std::{fs, sync::Arc};
+        super::start_call_log(250_000).expect("install observational logger");
+        let dir = std::env::temp_dir()
+            .join(format!("deadsync-synchronous-call-trace-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("synchronous call test directory");
+        let entry = dir.join("synchronous-calls.lua");
+        fs::write(&entry, r#"
+return Def.Actor {
+    OnCommand=function(self)
+        self.seen = 0
+        assert(GAMESTATE:SetCurrentSteps(0, nil) == GAMESTATE)
+        assert(self.seen == 2)
+        self:aux(60)
+        local ok, err = pcall(GAMESTATE.SetCurrentSteps, GAMESTATE, 'invalid-player', nil)
+        assert(not ok and type(err) == 'string')
+        self:aux(61)
+        assert(GAMESTATE:GetCurrentSteps(0) == nil)
+        self:aux(62)
+    end,
+    CurrentStepsP1ChangedMessageCommand=function(self)
+        if self.seen == nil then return end
+        local count = self.seen + 1
+        self.seen = count
+        self:aux(40 + count)
+        assert(GAMESTATE:GetCurrentSteps(0) == nil)
+        if count == 1 then
+            assert(GAMESTATE:SetCurrentSteps(0, nil) == GAMESTATE)
+        end
+        self:aux(50 + count)
+    end,
+}
+"#).expect("write synchronous setter control");
+        let mut context = SongLuaCompileContext::new(&dir, "synchronous setter callback trace");
+        context.live = true;
+        let compiled = compile_song_lua::<(), (), _>(
+            &entry, &context, SongLuaNoteskinResolver::default(),
+            |_, _, _| Ok(Arc::<[()]>::from([])), |_| None, |_, _| None,
+        ).expect("compile synchronous setter control");
+        assert!(compiled.live_scene.is_some());
+        let events = super::CALL_EVENTS.with_borrow(|capture| capture.events.iter()
+            .filter(|event| event["source"].as_str().is_some_and(|source|
+                source.ends_with("synchronous-calls.lua")))
+            .cloned().collect::<Vec<_>>());
+        let begin = events.iter().position(|event| event["operation"] == "GameState.SetCurrentSteps")
+            .expect("observed initiating setter");
+        let events = &events[begin..];
+        let order = events.iter().filter_map(|event| {
+            match event["operation"].as_str()? {
+                "GameState.SetCurrentSteps" => Some(if event["args"][0] == "invalid-player" {
+                    "set.bad".to_owned()
+                } else { "set".to_owned() }),
+                "GameState.GetCurrentSteps" => Some("get".to_owned()),
+                "Actor.aux" => Some(format!("aux{}", event["args"][0].as_i64().unwrap())),
+                operation @ ("command.begin" | "command.end")
+                    if event["command"].as_str().is_some_and(|name|
+                        name.starts_with("CurrentStepsP1Changed")) =>
+                {
+                    Some(operation.strip_prefix("command.").unwrap().to_owned())
+                }
+                _ => None,
+            }
+        }).collect::<Vec<_>>();
+        // GameState.cpp's BroadcastOnChangePtr invokes the message handlers
+        // synchronously. SongLuaTrace appends each setter before invoking it,
+        // including reentry, and merges return details into that same event.
+        assert_eq!(order, [
+            "set", "begin", "aux41", "get", "set", "begin", "aux42", "get",
+            "aux52", "end", "aux51", "end", "aux60", "set.bad", "aux61", "get", "aux62",
+        ], "{events:?}");
+        for event in events.iter().filter(|event| event["operation"] == "GameState.GetCurrentSteps") {
+            assert_eq!(event["results"], serde_json::json!([{"type":"nil"}]));
+        }
+        let failed = events.iter().find(|event| event["operation"] == "GameState.SetCurrentSteps"
+            && event["args"][0] == "invalid-player").expect("attempted invalid setter");
+        assert_eq!(failed["kind"], "call");
+        assert_eq!(failed["args"], serde_json::json!(["invalid-player", {"type":"nil"}]));
+        assert!(failed["results"].is_null());
+        for event in events.iter().filter(|event| event["operation"] == "Actor.aux") {
+            assert_eq!(event["tween_time_left"], 0.0);
+        }
+        assert!(!events.iter().any(|event| event["kind"] == "trace-error"), "{events:?}");
+    }
+
+    #[test]
     fn actor_and_query_trace_keep_lua_callers() {
         use super::start_call_log;
         use deadsync_song_lua::{

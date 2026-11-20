@@ -27,6 +27,10 @@ pub enum DrawOp {
         state: SongLuaOverlayState,
         /// Caller draw stack, outermost first; BeginRenderingTo resets it.
         parents: Arc<[SongLuaOverlayState]>,
+        /// Final colors supplied by normal ActorFrame traversal or direct wrappers.
+        /// Unlike the transform stack, explicit Draw callbacks reset this scope.
+        inherited_diffuse: [f32; 4],
+        inherited_glow: [f32; 4],
         camera: Option<SongLuaOverlayState>,
         vertices: Option<Arc<[SongLuaOverlayMeshVertex]>>,
     },
@@ -49,6 +53,43 @@ pub(crate) struct Context {
     pub(crate) owner: usize,
     pub(crate) parents: Arc<[SongLuaOverlayState]>,
     pub(crate) camera: Option<SongLuaOverlayState>,
+    pub(crate) color: Color,
+    pub(crate) inherited_color: Color,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Color {
+    pub(crate) diffuse: [f32; 4],
+    pub(crate) glow: [f32; 4],
+}
+
+impl Default for Color {
+    fn default() -> Self {
+        Self {
+            diffuse: [1.0; 4],
+            glow: [0.0; 4],
+        }
+    }
+}
+
+impl Color {
+    pub(crate) fn pre_draw(self, state: SongLuaOverlayState) -> (Self, bool) {
+        let local_diffuse = state
+            .vertex_colors
+            .map_or(state.diffuse, |colors| colors[0]);
+        let (diffuse, glow) = crate::playback::song_lua_inherit_draw_colors(
+            local_diffuse,
+            state.glow,
+            state.base_alpha,
+            self.diffuse,
+            self.glow,
+        );
+        let alpha = self.diffuse[3] * state.base_alpha;
+        let partially_opaque = state.vertex_colors.map_or(diffuse[3] > 0.0, |colors| {
+            colors.iter().any(|color| color[3] * alpha > 0.0)
+        }) || glow[3] > 0.0;
+        (Self { diffuse, glow }, partially_opaque)
+    }
 }
 
 pub(crate) enum RawOp {
@@ -94,28 +135,6 @@ pub(crate) struct Capture {
 pub(crate) const MAX_BYTES: usize = 256 * 1024 * 1024;
 pub(crate) const MAX_OPS: usize = 256;
 pub(crate) const DRAW_INSTALLED_KEY: &str = "__songlua_draw_installed";
-
-// Actor::PreDraw multiplies diffuse by its inherited diffuse and combines
-// glow with Screen blending before Actor::PartiallyOpaque tests the result.
-pub(crate) fn partially_opaque(
-    state: SongLuaOverlayState,
-    parents: &[SongLuaOverlayState],
-) -> bool {
-    let mut diffuse = 1.0;
-    let mut glow = 0.0;
-    for parent in parents {
-        diffuse *= parent
-            .vertex_colors
-            .map_or(parent.diffuse[3], |colors| colors[0][3]);
-        glow = glow + parent.glow[3] - glow * parent.glow[3];
-    }
-    let diffuse_visible = state
-        .vertex_colors
-        .map_or(state.diffuse[3] * diffuse > 0.0, |colors| {
-            colors.iter().any(|color| color[3] * diffuse > 0.0)
-        });
-    diffuse_visible || state.glow[3] + glow - state.glow[3] * glow > 0.0
-}
 
 pub(crate) fn convert(
     raw_frames: Vec<RawFrame>,
@@ -224,6 +243,8 @@ pub(crate) fn convert(
                     })?,
                     state,
                     parents: context.parents,
+                    inherited_diffuse: context.inherited_color.diffuse,
+                    inherited_glow: context.inherited_color.glow,
                     camera: context.camera,
                     vertices,
                 },

@@ -10,6 +10,12 @@ pub(super) struct State {
     pub(super) scene: Option<u64>,
     pub(super) generation: u64,
     depth: usize,
+    callback_depth: usize,
+    // Reserve attempts before entering a binding, then fill their results.
+    // Native SongLuaTrace keeps nested events in this same entry order and
+    // defers flushing until the outer binding has completed.
+    pending_calls: usize,
+    pending_events: Vec<Json>,
     // Every identity here is retained in the helpers table, like the native
     // observer's owned Table handles. Rust maps alone never trace Lua values.
     objects: HashMap<TableId, Json>,
@@ -25,6 +31,48 @@ fn emit(event: Json) {
     crate::trace_capture::emit(event);
     #[cfg(not(feature = "test-support"))]
     log::trace!(target: "deadsync_song_lua::trace", "{event}");
+}
+
+fn observing(store: &Store) -> bool {
+    store.trace.depth == 0 || store.song_callback_depth > store.trace.callback_depth
+}
+
+fn enter_binding(store: &mut Store) -> (usize, usize) {
+    let previous = (store.trace.depth, store.trace.callback_depth);
+    store.trace.depth += 1;
+    store.trace.callback_depth = store.song_callback_depth;
+    previous
+}
+
+fn leave_binding(store: &mut Store, previous: (usize, usize)) {
+    (store.trace.depth, store.trace.callback_depth) = previous;
+}
+
+fn record(trace: &mut State, event: Json) {
+    if trace.pending_calls == 0 {
+        emit(event);
+    } else {
+        trace.pending_events.push(event);
+    }
+}
+
+fn reserve(trace: &mut State, event: Json) -> usize {
+    let index = trace.pending_events.len();
+    trace.pending_events.push(event);
+    trace.pending_calls += 1;
+    index
+}
+
+fn complete(trace: &mut State, index: usize, details: Option<Json>) {
+    if let Some(Json::Object(details)) = details {
+        trace.pending_events[index].as_object_mut().unwrap().extend(details);
+    }
+    trace.pending_calls -= 1;
+    if trace.pending_calls == 0 {
+        for event in trace.pending_events.drain(..) {
+            emit(event);
+        }
+    }
 }
 
 impl Actors {
@@ -52,13 +100,13 @@ impl Actors {
                 let code =
                     compile_named(include_bytes!("live_trace.lua"), b"=DeadSync live observer")?;
                 let install = vm.execute(&code)?[0];
-                {
+                let previous = {
                     let store = vm.store();
                     store.trace.objects.clear();
-                    store.trace.depth += 1;
-                }
+                    enter_binding(store)
+                };
                 let result = vm.call(install, &[remember, hook]).map(|_| ());
-                vm.store().trace.depth -= 1;
+                leave_binding(vm.store(), previous);
                 result
             })();
             vm.unpin(pin)?;
@@ -229,7 +277,8 @@ fn command_event(call: &mut HostCall<'_>) -> Result<(), Error> {
     } else {
         info.defined.map(|v| v[0])
     };
-    emit(
+    record(
+        &mut s.store().trace,
         json!({"scene":scene,"kind":"command","operation":if data.entering{"command.begin"}else{"command.end"},
         "command":data.name,"source":source,"line":line,"beat":beat,"seconds":seconds}),
     );
@@ -251,57 +300,65 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
     let globals = helper(call, 5)?;
     let mut s = call.native_stack()?;
     let count = s.top();
+    let special = data.class == "Actor" && matches!(data.name.as_str(), "sleep" | "queuecommand");
+    let observed = observing(s.store_ref());
+    let modifier = matches!(data.class.as_str(), "PlayerOptions" | "SongOptions");
+    let kind = if ["Get", "get", "Is", "is", "Has", "has", "Can", "can", "Supports", "supports"]
+        .iter().any(|prefix| data.name.starts_with(prefix))
+        || modifier && count == 1
+    {
+        "query"
+    } else if modifier || data.class == "PlayerState" && data.name == "SetPlayerOptions" {
+        "modifier"
+    } else {
+        "call"
+    };
+    let operation = format!("{}.{}", data.class, data.name);
+    // SongLuaTrace.lua records the attempted operation and its original args
+    // before invoking the native binding. A caught lifetime/argument error is
+    // still that call, not a failure of the observer. Results and tween details
+    // exist only after a successful binding invocation.
+    let attempted = if observed && !special {
+        let event = method_event(&mut s, globals, kind, &operation, |s| {
+            let mut args = Vec::new();
+            for index in 2..=count {
+                let value = s.value(index as isize).unwrap();
+                args.push(encode(s, value, 0)?);
+            }
+            Ok(json!({"args":args}))
+        });
+        // Argument encoding can use temporary stack slots even when it fails.
+        // Restore the original arguments before executing the authored call.
+        s.set_top(count)?;
+        event.ok().flatten()
+    } else {
+        None
+    };
     s.push(original)?;
     for index in 1..=count {
         s.push(s.value(index as isize).unwrap())?;
     }
-    let special = data.class == "Actor" && matches!(data.name.as_str(), "sleep" | "queuecommand");
-    let observed = s.store_ref().trace.depth == 0;
-    if !special {
-        s.store().trace.depth += 1;
-    }
+    // Stack preparation above can fail without entering the binding. Reserve
+    // only once its protected call is guaranteed to reach the completion path.
+    let attempted = attempted.map(|event| reserve(&mut s.store().trace, event));
+    let previous = (!special).then(|| enter_binding(s.store()));
     let result = s.call(count, None);
     let result_top = s.top();
-    if !special {
-        s.store().trace.depth -= 1;
+    if let Some(previous) = previous {
+        leave_binding(s.store(), previous);
     }
     if data.class == "PlayerState" && data.name == "GetPlayerOptions" {
         let _ = option_path(&mut s, count, result.as_ref().ok().copied());
     }
-    if observed && (!special || result.is_ok()) {
-        let modifier = matches!(data.class.as_str(), "PlayerOptions" | "SongOptions");
-        let kind = if ["Get", "get", "Is", "is", "Has", "has", "Can", "can", "Supports", "supports"]
-            .iter().any(|prefix| data.name.starts_with(prefix))
-            || modifier && count == 1
-        {
-            "query"
-        } else if modifier || data.class == "PlayerState" && data.name == "SetPlayerOptions" {
-            "modifier"
-        } else {
-            "call"
-        };
-        let operation = format!("{}.{}", data.class, data.name);
-        let details = |s: &mut NativeStack<'_, '_>| -> Result<Json, Error> {
-            if special {
-                let argument = s.value(2).unwrap_or(Value::Nil);
-                let argument = match argument {
-                    Value::String(_) | Value::Number(_) => encode(s, argument, 0)?,
-                    _ => Json::Null,
-                };
-                let actor = s.value(1);
-                Ok(json!({"args":[argument],"tween_time_left":tween_left(s,left,actor)?}))
-            } else if let Ok(results) = &result {
-                let mut args = Vec::new();
-                for index in 2..=count {
-                    let value = s.value(index as isize).unwrap();
-                    args.push(encode(s, value, 0)?);
-                }
+    if let Some(index) = attempted {
+        let details = if let Ok(results) = &result {
+            Some((|| -> Result<Json, Error> {
                 let mut values = Vec::new();
                 for index in count + 1..=count + results {
                     let value = s.value(index as isize).unwrap();
-                    values.push(encode(s, value, 0)?);
+                    values.push(encode(&mut s, value, 0)?);
                 }
-                let mut detail = json!({"args":args,"results":values});
+                let mut detail = json!({"results":values});
                 if kind == "call"
                     && matches!(
                         data.class.as_str(),
@@ -309,14 +366,27 @@ fn query(call: &mut HostCall<'_>) -> Result<(), Error> {
                     )
                 {
                     let actor = s.value(1);
-                    detail["tween_time_left"] = tween_left(s, left, actor)?;
+                    detail["tween_time_left"] = tween_left(&mut s, left, actor)?;
                 }
                 Ok(detail)
-            } else {
-                Ok(json!({"kind":"trace-error","error":result.as_ref().unwrap_err().to_string()}))
-            }
+            })().unwrap_or_else(|error| json!({"kind":"trace-error","error":error.to_string()})))
+        } else {
+            None
         };
-        let _ = method(&mut s, globals, kind, &operation, details);
+        complete(&mut s.store().trace, index, details);
+    } else if observed && special && result.is_ok() {
+        let event = method_event(&mut s, globals, kind, &operation, |s| {
+            let argument = s.value(2).unwrap_or(Value::Nil);
+            let argument = match argument {
+                Value::String(_) | Value::Number(_) => encode(s, argument, 0)?,
+                _ => Json::Null,
+            };
+            let actor = s.value(1);
+            Ok(json!({"args":[argument],"tween_time_left":tween_left(s,left,actor)?}))
+        });
+        if let Ok(Some(event)) = event {
+            record(&mut s.store().trace, event);
+        }
     }
     let restored = s.set_top(result_top);
     match result {
@@ -379,22 +449,22 @@ fn tween_left(
     Ok(number(left))
 }
 
-fn method(
+fn method_event(
     s: &mut NativeStack<'_, '_>,
     globals: Value,
     kind: &str,
     operation: &str,
     details: impl FnOnce(&mut NativeStack<'_, '_>) -> Result<Json, Error>,
-) -> Result<(), Error> {
-    let (scene, depth, callback) = {
+) -> Result<Option<Json>, Error> {
+    let (scene, observed, callback) = {
         let g = s.store();
-        (g.trace.scene, g.trace.depth, g.song_callback_depth != 0)
+        (g.trace.scene, observing(g), g.song_callback_depth != 0)
     };
     let Some(scene) = scene else {
-        return Ok(());
+        return Ok(None);
     };
-    if depth != 0 {
-        return Ok(());
+    if !observed {
+        return Ok(None);
     }
     let mut caller = None;
     for level in 1..32 {
@@ -417,11 +487,11 @@ fn method(
         }
     }
     let Some((source, line)) = caller else {
-        return Ok(());
+        return Ok(None);
     };
     let [beat, seconds] = clock(s, globals)?;
     if source.starts_with("@theme:") && !callback {
-        return Ok(());
+        return Ok(None);
     }
     // Match the native observer: ineligible callers never evaluate details,
     // and diagnostic failures cannot replace the authored return values.
@@ -432,8 +502,7 @@ fn method(
     if let Json::Object(details) = details {
         event.as_object_mut().unwrap().extend(details);
     }
-    emit(event);
-    Ok(())
+    Ok(Some(event))
 }
 
 fn field(s: &mut NativeStack<'_, '_>, owner: isize, key: &[u8]) -> Result<Value, Error> {
@@ -615,6 +684,9 @@ impl Actors {
         store.trace.objects.clear();
         store.trace.hooks.clear();
         store.trace.depth = 0;
+        store.trace.callback_depth = 0;
+        store.trace.pending_calls = 0;
+        store.trace.pending_events.clear();
         for (value, label) in objects {
             let Value::Table(id) = *value else {
                 panic!("query fixture table")

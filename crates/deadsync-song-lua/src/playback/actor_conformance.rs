@@ -556,23 +556,25 @@ impl WholeSongComposer {
                 ) {
                     return None;
                 }
-                let [_, view, space] = song_lua_model_camera(
-                    *camera,
-                    screen_width() / screen[0].max(1.0),
-                    screen_height() / screen[1].max(1.0),
-                );
-                Some((
-                    *overlay,
-                    deadlib_present::compose::build_screen_with_texture_context(
-                        &self.manual.banks[self.manual.bank][op].actors,
-                        [0.0; 4],
-                        &deadlib_present::space::Metrics::centered(screen[0], screen[1]),
-                        &font::FontMap::default(),
-                        seconds,
-                        self.assets.texture_context(),
-                    ),
-                    [matrix_rows(space), matrix_rows(view)],
-                ))
+                let slot = &self.manual.banks[self.manual.bank][op];
+                let viewport = slot.viewport;
+                let camera = SongLuaDrawCamera::from(*camera).resolve_for(screen);
+                let metrics = deadlib_present::space::Metrics::centered(viewport[0], viewport[1]);
+                Some(deadlib_present::space::with_current_metrics(metrics, || {
+                    let [_, view, space] = song_lua_model_camera(camera, 1.0, 1.0);
+                    (
+                        *overlay,
+                        deadlib_present::compose::build_screen_with_texture_context(
+                            &slot.actors,
+                            [0.0; 4],
+                            &metrics,
+                            &font::FontMap::default(),
+                            seconds,
+                            self.assets.texture_context(),
+                        ),
+                        [matrix_rows(space), matrix_rows(view)],
+                    )
+                }))
             })
             .collect()
     }

@@ -3,6 +3,12 @@ use super::*;
 mod native_vertex_colors {
     include!("native_vertex_colors.rs");
 }
+mod manual_color_inheritance {
+    include!("manual_color_inheritance.rs");
+}
+mod manual_target_space {
+    include!("manual_target_space.rs");
+}
 use deadlib_render_core::BackendType;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_assets::song_lua::{
@@ -70,6 +76,8 @@ fn manual_player_frame(screen_offset: [f32; 2], ordered: bool) -> deadlib_render
                     },
                 ]),
                 camera: None,
+                inherited_diffuse: [1.0; 4],
+                inherited_glow: [0.0; 4],
                 vertices: None,
             })
             .into(),

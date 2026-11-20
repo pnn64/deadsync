@@ -318,11 +318,13 @@ fn multi_vertex_actors(
             source: SongLuaDrawSource::Overlay(0),
             state,
             parents: Arc::from([]),
+            inherited_diffuse: [1.0; 4],
+            inherited_glow: [0.0; 4],
             camera: None,
             vertices: None,
         };
         return vec![song_lua_manual_mesh(
-            overlays, &topology, &op, &vertices, assets, [640.0, 480.0], [0.0; 2], 0,
+            overlays, &topology, &op, &vertices, None.into(), assets, [640.0, 480.0], [0.0; 2], 0,
         ).expect("manual textured ActorMultiVertex")];
     }
     let mut scratch = SongLuaProjectedMeshScratch::textured(3);

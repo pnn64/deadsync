@@ -456,6 +456,57 @@ fn native_draw_batch<'a>(
     Ok((consumed, count, reference))
 }
 
+
+// ActorMultiVertex::DrawPrimitives emits at most one diffuse and one glow
+// submission in one Actor::Draw scope. Both use the same complete mesh. Unlike
+// legacy Sprite pieces, joining these requires explicit native occurrence IDs.
+fn native_amv_draw_batch<'a>(
+    samples: &'a [Value],
+    owned_vertices: usize,
+) -> Result<(usize, usize, std::borrow::Cow<'a, [Value]>), String> {
+    let single = native_draw_batch(samples, owned_vertices, false)?;
+    let Some(next) = samples.get(1) else { return Ok(single); };
+    let first = &samples[0];
+    if single.1.checked_mul(2) != Some(owned_vertices)
+        || !first["state"]["actor_draw_sequence"].as_u64().is_some_and(|id| id > 0)
+        || ["actor", "definition_id", "scene", "update_sequence", "primitive",
+            "coordinate_space", "render_random_sequences", "note_context",
+            "native_draw_sequence", "draw_ordinal"]
+            .into_iter().any(|key| next[key] != first[key])
+        || !native_sprite_piece_state_matches(first, first, next)
+        || native_draw_vertex_count(next)? != single.1
+    {
+        return Ok(single);
+    }
+    let mut reference = single.2.into_owned();
+    reference.extend_from_slice(next["vertices"].as_array().unwrap());
+    Ok((2, owned_vertices, std::borrow::Cow::Owned(reference)))
+}
+
+fn native_draw_batch_geometry_matches(
+    primitive: &str,
+    rows: &[[f32; 10]],
+    reference: &[Value],
+    pass_split: Option<(usize, usize)>,
+    matches: impl Fn(&[f32; 10], &Value) -> bool,
+) -> bool {
+    let Some((actual_split, native_split)) = pass_split else {
+        return native_draw_geometry_matches(primitive, rows, reference, matches);
+    };
+    if actual_split == 0 || actual_split >= rows.len()
+        || native_split == 0 || native_split >= reference.len()
+    {
+        return false;
+    }
+    // Keep each source topology intact. Concatenating two GL_QUAD_STRIPs would
+    // invent a quad joining the end of diffuse to the beginning of glow.
+    native_draw_geometry_matches(
+        primitive, &rows[..actual_split], &reference[..native_split], &matches,
+    ) && native_draw_geometry_matches(
+        primitive, &rows[actual_split..], &reference[native_split..], &matches,
+    )
+}
+
 #[test]
 fn native_quad_strip_counts_keep_complete_pairs_and_submission_boundaries() {
     let point = json!([0,0,0, 0,0,0,1, 0,0, 1,1,1,1]);
@@ -586,6 +637,132 @@ fn native_sprite_batches_use_actor_scope_and_ordered_geometry_submissions() {
     new_state[1]["state"]["z_bias"] = json!(0);
     assert_eq!(native_draw_batch(&new_state, 18, true).unwrap().0, 1,
         "only the proved geometry counter may differ within one actor draw");
+}
+
+
+#[test]
+fn native_amv_batches_require_one_scoped_draw_and_two_complete_passes() {
+    let sample = |scope, sequence| json!({
+        "actor":"mesh", "definition_id":"def-1", "scene":1, "update_sequence":236,
+        "primitive":"Quads", "coordinate_space":"native-projection-before-display-centering",
+        "render_random_sequences":[],
+        "state":{"actor_draw_sequence":scope, "native_draw_sequence":sequence,
+            "texture":"AmvColorWhiteTarget", "image_width":8, "image_height":8,
+            "texture_width":8, "texture_height":8, "texture_filtering":true,
+            "texture_wrapping":false, "blend":0, "render_target":0, "z_test":0,
+            "z_write":false, "z_bias":0, "cull":2},
+        "vertices":vec![json!([0,0,0, 0,0,0,1, 0,0, 1,1,1,0]);4],
+    });
+    let samples = [sample(99306,15398), sample(99306,15399), sample(99310,15401)];
+    let (used, count, reference) = native_amv_draw_batch(&samples, 12).unwrap();
+    assert_eq!((used,count,reference.len()), (2,12,8));
+    assert_eq!(native_amv_draw_batch(&samples[used..],6).unwrap().0,1);
+    assert_eq!(native_amv_draw_batch(&samples,6).unwrap().0,1,
+        "one owned pass must not consume the next native pass");
+    assert_eq!(native_amv_draw_batch(&samples,18).unwrap().0,1,
+        "AMV has at most two passes; never consume the next Actor::Draw");
+    assert_eq!(native_amv_draw_batch(&samples[..1],12).unwrap().1,6,
+        "a missing native pass must retain its vertex-count mismatch");
+    assert_eq!(native_draw_batch(&samples,12,false).unwrap().0,1,
+        "other actor kinds retain their original occurrence boundary");
+
+    for (field,value) in [
+        ("actor",json!("other")), ("definition_id",json!("def-2")),
+        ("scene",json!(2)), ("update_sequence",json!(237)),
+        ("primitive",json!("Triangles")), ("coordinate_space",json!("other")),
+        ("render_random_sequences",json!([1])), ("note_context",json!({"player":1})),
+        ("native_draw_sequence",json!(15400)), ("draw_ordinal",json!(1)),
+    ] {
+        let mut changed=samples[..2].to_vec();
+        changed[1][field]=value;
+        assert_eq!(native_amv_draw_batch(&changed,12).unwrap().0,1,"crossed {field}");
+    }
+    for (field,value) in [
+        ("actor_draw_sequence",json!(99310)), ("actor_draw_sequence",Value::Null),
+        ("native_draw_sequence",json!(15398)), ("native_draw_sequence",Value::Null),
+        ("texture",json!("other")), ("image_width",json!(16)),
+        ("texture_height",json!(16)), ("texture_filtering",json!(false)),
+        ("texture_wrapping",json!(true)), ("blend",json!(1)),
+        ("render_target",json!(3)), ("z_test",json!(1)), ("z_write",json!(true)),
+        ("z_bias",json!(1)), ("cull",json!(0)),
+    ] {
+        let mut changed=samples[..2].to_vec();
+        changed[1]["state"][field]=value;
+        assert_eq!(native_amv_draw_batch(&changed,12).unwrap().0,1,"crossed state {field}");
+    }
+    for field in ["actor_draw_sequence","native_draw_sequence"] {
+        let mut changed=samples[..2].to_vec();
+        for sample in &mut changed {
+            sample["state"].as_object_mut().unwrap().remove(field);
+        }
+        assert_eq!(native_amv_draw_batch(&changed,12).unwrap().0,1,
+            "AMV joining needs explicit positive {field}");
+        changed[0]["state"][field]=json!(0);
+        assert_eq!(native_amv_draw_batch(&changed,12).unwrap().0,1);
+    }
+    let mut added=samples[..2].to_vec();
+    added[1]["state"]["unmatched_state"]=json!(0);
+    assert_eq!(native_amv_draw_batch(&added,12).unwrap().0,1,
+        "only the geometry submission counter may differ");
+    let mut changed=samples[..2].to_vec();
+    changed[1]["vertices"]=json!(vec![json!([0]);8]);
+    assert_eq!(native_amv_draw_batch(&changed,12).unwrap().0,1,
+        "one AMV draw cannot substitute differently sized diffuse and glow meshes");
+}
+
+#[test]
+fn native_amv_pass_geometry_keeps_topology_and_every_attribute_separate() {
+    let positions=[[0.0,0.0],[0.0,1.0],[1.0,0.25],[1.0,1.5],[2.0,-0.5],[2.0,1.25]];
+    for (primitive,source_count,indices) in [
+        ("Quads",4,vec![0,1,2,0,2,3]),
+        ("QuadStrip",6,vec![0,1,3,3,2,0,2,3,5,5,4,2]),
+        ("Triangles",3,vec![0,1,2]),
+    ] {
+        let make = |sequence,glow| {
+            let vertices=positions[..source_count].iter().enumerate().map(|(i,[x,y])| {
+                let color=if glow { [112.0/255.0,64.0/255.0,32.0/255.0,80.0/255.0] }
+                    else { [31.0/255.0,128.0/255.0,224.0/255.0,0.0] };
+                let value=i as f32/10.0;
+                json!([x,y,0, x,y,value,1, value,1.0-value,
+                    color[0],color[1],color[2],color[3]])
+            }).collect::<Vec<_>>();
+            json!({"actor":"mesh","definition_id":"def-1","scene":1,"update_sequence":236,
+                "primitive":primitive,"coordinate_space":"native","render_random_sequences":[],
+                "state":{"actor_draw_sequence":99306,"native_draw_sequence":sequence},
+                "vertices":vertices})
+        };
+        let samples=[make(15398,false),make(15399,true)];
+        let actual = |sample: &Value| indices.iter().map(|&index| std::array::from_fn(|axis|
+            sample["vertices"][index][axis+3].as_f64().unwrap() as f32
+        )).collect::<Vec<[f32;10]>>();
+        let diffuse=actual(&samples[0]);
+        let glow=actual(&samples[1]);
+        let rows=[diffuse.clone(),glow.clone()].concat();
+        let (used,count,reference)=native_amv_draw_batch(&samples,rows.len()).unwrap();
+        assert_eq!((used,count),(2,rows.len()),"{primitive}");
+        let split=Some((diffuse.len(),source_count));
+        let matches=|actual: &[f32;10], row: &Value|
+            row_matches(actual,row,[1.0;2],false,[1.0,0.0]);
+        assert!(native_draw_batch_geometry_matches(primitive,&rows,&reference,split,matches),
+            "{primitive}: all diffuse and glow triangles must compare");
+        for axis in 0..10 {
+            let mut changed=rows.clone();
+            changed[diffuse.len()+1][axis]+=0.125;
+            assert!(!native_draw_batch_geometry_matches(primitive,&changed,&reference,split,matches),
+                "{primitive}: changing glow clip/UV/RGBA axis {axis} remains a mismatch");
+        }
+        assert!(!native_draw_batch_geometry_matches(
+            primitive,&[glow,diffuse].concat(),&reference,split,matches),
+            "{primitive}: pass order and independent colors are retained");
+        assert!(!native_draw_batch_geometry_matches(
+            primitive,&rows[..rows.len()-1],&reference,split,matches));
+        assert!(!native_draw_batch_geometry_matches(
+            primitive,&rows,&reference,Some((split.unwrap().0+1,source_count)),matches));
+        if primitive=="QuadStrip" {
+            assert!(!native_draw_geometry_matches(primitive,&rows,&reference,matches),
+                "joining independent strips invents a cross-pass quad");
+        }
+    }
 }
 
 fn target_slot(target: SongLuaLiveTarget) -> (i32, usize) {
@@ -935,11 +1112,19 @@ impl DrawChecks {
             }
 
             let extra_ordinary_draw = recorded_texture.is_none() && !ordinary_draws.insert((group, index));
-            let (consumed, expected_count, reference) = native_draw_batch(
-                &samples[batch_start..], rows.len(),
-                matches!(overlays[index].kind,
-                    SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad | SongLuaOverlayKind::AftSprite { .. }),
-            )?;
+            let amv_passes = matches!(overlays[index].kind, SongLuaOverlayKind::ActorMultiVertex { .. });
+            let (consumed, expected_count, reference) = if amv_passes {
+                native_amv_draw_batch(&samples[batch_start..], rows.len())?
+            } else {
+                native_draw_batch(
+                    &samples[batch_start..], rows.len(),
+                    matches!(overlays[index].kind,
+                        SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad | SongLuaOverlayKind::AftSprite { .. }),
+                )?
+            };
+            let pass_split = (amv_passes && consumed == 2).then_some((
+                expected_count / 2, sample["vertices"].as_array().unwrap().len(),
+            ));
             // Context equality above also requires equal raw-input references;
             // still validate every consumed native sample against owned ancestry.
             for piece in &samples[batch_start + 1..batch_start + consumed] {
@@ -1007,13 +1192,21 @@ impl DrawChecks {
             if aft_backing { self.aft_backing_uv_samples += consumed; }
             let matches = |actual: &[f32;10], row: &Value| coordinates.row_matches(actual, row);
             let primitive = sample["primitive"].as_str().unwrap_or("");
-            let geometry_ok = native_draw_geometry_matches(primitive, &rows, &reference, matches);
+            let geometry_ok = native_draw_batch_geometry_matches(
+                primitive, &rows, &reference, pass_split, matches,
+            );
             if !geometry_ok {
                 let example=rows.iter().enumerate().find(|(vertex, actual)| {
+                    let (vertex, reference) = match pass_split {
+                        Some((actual_split, native_split)) if *vertex >= actual_split =>
+                            (*vertex - actual_split, &reference[native_split..]),
+                        Some((_, native_split)) => (*vertex, &reference[..native_split]),
+                        None => (*vertex, reference.as_ref()),
+                    };
                     let candidates = match primitive {
                         "Quads" => &reference[vertex/6*4..vertex/6*4+4],
                         "QuadStrip" => &reference[vertex/6*2..vertex/6*2+4],
-                        _ => &reference[*vertex..*vertex+1],
+                        _ => &reference[vertex..vertex+1],
                     };
                     !candidates.iter().any(|row|matches(actual,row))
                 });

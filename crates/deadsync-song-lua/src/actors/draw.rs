@@ -1,8 +1,7 @@
 //! Custom draw traversal and render-target scopes over the Rust host API.
 use super::*;
 use crate::draw_commands::{
-    Capture, Context, DRAW_INSTALLED_KEY, MAX_BYTES, MAX_OPS, RawCall, RawFrame, RawOp,
-    partially_opaque,
+    Capture, Color, Context, DRAW_INSTALLED_KEY, MAX_BYTES, MAX_OPS, RawCall, RawFrame, RawOp,
 };
 use sprites::{field, set};
 
@@ -85,9 +84,12 @@ pub(super) fn begin(call: &mut HostCall<'_>, actor: TableId, preserve: bool) -> 
         && let Some(prior) = capture.context.take()
     {
         let owner = prior.owner;
+        let color = prior.color;
         capture.targets.push((pointer, prior));
         capture.context = Some(Context {
             owner,
+            // Native BeginRenderingTo resets matrices, not Actor internal colors.
+            color,
             ..Context::default()
         });
     }
@@ -158,6 +160,20 @@ fn state(call: &mut HostCall<'_>, actor: TableId) -> Result<crate::SongLuaOverla
     }
     Ok(state)
 }
+fn color(
+    call: &HostCall<'_>,
+    actor: TableId,
+    mut state: crate::SongLuaOverlayState,
+    inherited: Color,
+) -> (Color, bool) {
+    if let Some(actor) = call.store_ref().actors.get(&actor) {
+        // Bind the actor's current effect accumulator without reading Lua clocks
+        // or changing the raw pose retained in the draw payload.
+        effects::render_time(actor, [0.0; 2], &mut state);
+    }
+    let state = crate::playback::song_lua_pre_draw_local_colors(state, [0.0; 2]);
+    inherited.pre_draw(state)
+}
 fn scoped_context(
     call: &mut HostCall<'_>,
     actor: TableId,
@@ -197,15 +213,25 @@ fn scoped_context(
     };
     let mut parents = Vec::with_capacity(prior.parents.len() + wrappers.len() + 1);
     parents.extend_from_slice(&prior.parents);
+    // Actor::Draw starts the outermost direct wrapper with fresh internal
+    // colors, then replaces the owner's incoming tint with the inner result.
+    let mut inherited_color = if wrappers.is_empty() {
+        prior.color
+    } else {
+        Color::default()
+    };
     for wrapper in wrappers.into_iter().rev() {
-        let wrapper = state(call, wrapper)?;
-        if !wrapper.draw_visible() || (live && !partially_opaque(wrapper, &parents)) {
+        let wrapper_state = state(call, wrapper)?;
+        let (final_color, partially_opaque) = color(call, wrapper, wrapper_state, inherited_color);
+        if !wrapper_state.draw_visible() || (live && !partially_opaque) {
             return Ok(None);
         }
-        parents.push(wrapper);
+        inherited_color = final_color;
+        parents.push(wrapper_state);
     }
     let state = state(call, actor)?;
-    if !state.draw_visible() || (live && !partially_opaque(state, &parents)) {
+    let (color, partially_opaque) = color(call, actor, state, inherited_color);
+    if !state.draw_visible() || (live && !partially_opaque) {
         return Ok(None);
     }
     parents.push(state);
@@ -217,6 +243,8 @@ fn scoped_context(
         } else {
             prior.camera
         },
+        color,
+        inherited_color,
     }))
 }
 fn children_each(
@@ -261,6 +289,16 @@ fn draw(call: &mut HostCall<'_>, actor: TableId) -> Result<(), Error> {
         let result = (|| {
             let callback = function(call, actor)?;
             if callback != Value::Nil {
+                // ActorFrame::DrawPrimitives returns after a custom function;
+                // its SetInternalDiffuse/Glow child loop has not run.
+                call.store()
+                    .draw_capture
+                    .as_mut()
+                    .unwrap()
+                    .context
+                    .as_mut()
+                    .unwrap()
+                    .color = Color::default();
                 let result = call.with_roots(&[callback], |call| {
                     let sources = call.store().live_sources.is_some();
                     let observed = sources && !theme_callback(call, callback)?;
@@ -450,6 +488,13 @@ fn visit(call: &mut HostCall<'_>, actor: TableId, prior: &Context) -> Result<(),
             } else {
                 prior.camera
             },
+            color: prior
+                .color
+                .pre_draw(crate::playback::song_lua_pre_draw_local_colors(
+                    state, [0.0; 2],
+                ))
+                .0,
+            inherited_color: prior.color,
         };
         return children_each(call, actor, |call, child| visit(call, child, &context));
     }
@@ -481,10 +526,12 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
         return Ok(());
     }
     let screen = get_static(call, globals, b"__songlua_top_screen")?;
-    let screen = if screen == Value::Nil {
-        None
+    let (screen, color) = if screen == Value::Nil {
+        (None, Color::default())
     } else {
-        Some(state(call, table(call, screen)?)?)
+        let actor = table(call, screen)?;
+        let state = state(call, actor)?;
+        (Some(state), color(call, actor, state, Color::default()).0)
     };
     let parents = screen.as_ref().map_or_else(
         || Arc::from([]),
@@ -496,6 +543,7 @@ fn run(call: &mut HostCall<'_>, root: TableId) -> Result<(), Error> {
         &Context {
             parents,
             camera: screen.filter(|state| state.fov.is_some()),
+            color,
             ..Context::default()
         },
     );
