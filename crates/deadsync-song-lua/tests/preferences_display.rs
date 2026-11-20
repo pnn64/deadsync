@@ -68,6 +68,43 @@ impl Pair {
 }
 
 #[test]
+fn pad_stick_preference_uses_native_float_state_and_zero_default() {
+    let mut configured = context();
+    configured.pad_stick_seconds = 0.050123457;
+    let mut runtime = SongRuntime::new(&configured).unwrap();
+    assert_eq!(runtime.pad_stick_seconds().to_bits(), configured.pad_stick_seconds.to_bits());
+    assert_eq!(
+        execute(&mut runtime, "return PREFSMAN:GetPreference('PadStickSeconds'),PREFSMAN:GetPreference('padstickseconds'),PREFSMAN:PreferenceExists('PADSTICKSECONDS')"),
+        vec![
+            Value::Number(configured.pad_stick_seconds as f64),
+            Value::Number(configured.pad_stick_seconds as f64),
+            Value::Boolean(true),
+        ],
+    );
+
+    for (lua_value, expected) in [
+        ("'-0.012345678'", -0.012345678_f32),
+        ("0.050123457", 0.050123457),
+        ("'not a number'", 0.0),
+        ("false", 0.0),
+        ("nil", 0.0),
+        ("{}", 0.0),
+        ("1.25", 1.25),
+    ] {
+        let result = execute(&mut runtime, &format!(
+            "assert(PREFSMAN:SetPreference('PADSTICKSECONDS',{lua_value})==PREFSMAN);return PREFSMAN:GetPreference('PadStickSeconds')"
+        ));
+        assert_eq!(result, vec![Value::Number(expected as f64)], "{lua_value}");
+        assert_eq!(runtime.pad_stick_seconds().to_bits(), expected.to_bits(), "{lua_value}");
+    }
+
+    execute(&mut runtime, "assert(PREFSMAN:SetPreferenceToDefault('padstickseconds')==PREFSMAN)");
+    assert_eq!(runtime.pad_stick_seconds(), 0.0);
+    assert_eq!(execute(&mut runtime, "return PREFSMAN:GetPreference('PadStickSeconds')"), vec![Value::Number(0.0)]);
+    assert_eq!(SongRuntime::new(&configured).unwrap().pad_stick_seconds(), configured.pad_stick_seconds);
+}
+
+#[test]
 fn preference_defaults_case_and_prefixes_match_production() {
     let mut p = Pair::new(&context());
     for key in [

@@ -709,7 +709,7 @@ pub fn handle_replay_edge<Profile, OverlayActor, CapturedActor, StateDelta>(
     let Some(lane) = lane_from_column(col) else {
         return;
     };
-    state.queue_current_time_input_edge(lane, |now| GameplayInputEdge {
+    if state.queue_current_time_input_edge(lane, |now| GameplayInputEdge {
         lane,
         input_slot: INPUT_SLOT_INVALID,
         pressed: edge.pressed,
@@ -721,7 +721,9 @@ pub fn handle_replay_edge<Profile, OverlayActor, CapturedActor, StateDelta>(
         emitted_at: now,
         queued_at: now,
         event_music_time_ns: edge.event_music_time_ns,
-    });
+    }) {
+        state.record_replay_input_age(edge);
+    }
 }
 
 pub fn update_core<Profile, OverlayActor, CapturedActor, StateDelta>(

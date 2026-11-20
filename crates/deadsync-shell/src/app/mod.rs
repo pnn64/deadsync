@@ -4582,7 +4582,8 @@ impl App {
         let mut draw_us: u32 = 0;
         let mut draw_stats = renderer::DrawStats::default();
         let input_started = Instant::now();
-        if let Err(e) = self.flush_due_input_events(event_loop) {
+        self.input.begin_input_snapshot();
+        if let Err(e) = self.flush_due_input_events(event_loop, false) {
             error!("Failed to handle debounced input: {e}");
             event_loop.exit();
             return;
@@ -4592,6 +4593,17 @@ impl App {
         self.preload_gameplay();
         self.poll_gameplay_preload(event_loop);
         self.poll_pending_gameplay_init(event_loop);
+
+        if self.state.screens.gameplay_state.is_some() || self.state.screens.practice_state.is_some() {
+            let input_ages = self.input.input_age_by_action(Instant::now());
+            let pressed_actions = self.input.pressed_action_mask();
+            if let Some(state) = self.state.screens.gameplay_state.as_mut() {
+                state.set_input_snapshot(input_ages, pressed_actions);
+            }
+            if let Some(state) = self.state.screens.practice_state.as_mut() {
+                state.gameplay.set_input_snapshot(input_ages, pressed_actions);
+            }
+        }
 
         // Keep the last selection frame for ordinary loads. Baked Lua draws
         // progress instead while the background worker holds the handoff.
@@ -11322,7 +11334,7 @@ impl ApplicationHandler<UserEvent> for App {
             .shell
             .gameplay_input_trace
             .finish_batch_if_enabled(self.state.screens.current_screen);
-        match self.flush_due_input_events(event_loop) {
+        match self.flush_due_input_events(event_loop, true) {
             // Capped modes draw at the scheduler's deadline. Input is already
             // dispatched with its original timestamp and must not add an early frame.
             Ok(true) if self.redraw_interval_state(&window).interval.is_none() => {

@@ -1,5 +1,7 @@
 mod runtime_regression_tests {
     use super::*;
+    include!("pad_stick_tests.rs");
+    include!("replay_pad_stick_tests.rs");
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{
         ArrowStats, GameplayChartData, SongData, StaminaCounts, SyncPref, TechCounts,
@@ -1853,25 +1855,7 @@ mod runtime_regression_tests {
         assert!(inputs[5..].iter().all(|pressed| !pressed));
 
         let previous_time = song_time_ns_from_seconds(1.0);
-        let pressed_time = song_time_ns_from_seconds(1.25);
         let current_time = song_time_ns_from_seconds(1.5);
-        state.control.input_state.prev_inputs[0] = true;
-        state.control.input_state.lane_pressed_since_ns[3] = Some(pressed_time);
-        state.control.input_state.prev_inputs[4] = true;
-        state.control.input_state.lane_pressed_since_ns[4] = Some(previous_time);
-
-        assert_eq!(
-            state.held_mine_crossing_start_time(&inputs, 0, previous_time, current_time),
-            Some(previous_time)
-        );
-        assert_eq!(
-            state.held_mine_crossing_start_time(&inputs, 3, previous_time, current_time),
-            Some(pressed_time)
-        );
-        assert_eq!(
-            state.held_mine_crossing_start_time(&inputs, 4, previous_time, current_time),
-            None
-        );
 
         let scanned = state.scan_held_lane_activity(previous_time, current_time);
         assert_eq!(scanned, inputs);
@@ -2446,53 +2430,6 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn crossed_held_mine_hits_even_when_frame_offset_exceeds_mine_window() {
-        let mut state = regression_state();
-        set_regression_mine(&mut state, 0, 0, 48, song_time_ns_from_seconds(1.0));
-
-        assert!(state.try_hit_crossed_mines_while_held(
-            0,
-            song_time_ns_from_seconds(0.9),
-            song_time_ns_from_seconds(1.2),
-        ));
-        assert_eq!(
-            state.chart_runtime.notes[0].mine_result,
-            Some(MineResult::Hit)
-        );
-        assert_eq!(
-            state.chart_runtime.mine_scan.pending_mine_hit_indices,
-            vec![0]
-        );
-        assert_eq!(state.players_runtime.players[0].mines_hit, 0);
-        assert_eq!(state.players_runtime.players[0].mines_hit_for_score, 0);
-
-        let pending_capacity = state
-            .chart_runtime
-            .mine_scan
-            .pending_mine_hit_indices
-            .capacity();
-        state.apply_pending_mine_hits();
-
-        assert_eq!(state.players_runtime.players[0].mines_hit, 1);
-        assert_eq!(state.players_runtime.players[0].mines_hit_for_score, 1);
-        assert!(
-            state
-                .chart_runtime
-                .mine_scan
-                .pending_mine_hit_indices
-                .is_empty()
-        );
-        assert_eq!(
-            state
-                .chart_runtime
-                .mine_scan
-                .pending_mine_hit_indices
-                .capacity(),
-            pending_capacity
-        );
-    }
-
-    #[test]
     fn mine_hit_side_effects_wait_until_after_active_holds() {
         let mut state = regression_state();
         let hold_end_ns = song_time_ns_from_seconds(1.0);
@@ -2651,27 +2588,6 @@ mod runtime_regression_tests {
                 .map(|info| info.result),
             Some(HoldResult::Missed)
         );
-    }
-
-    #[test]
-    fn crossed_held_mine_new_press_excludes_rows_before_press() {
-        let mut state = regression_state();
-        set_regression_mine(&mut state, 0, 0, 48, song_time_ns_from_seconds(1.0));
-        let crossed_from_ns = crossed_mine_held_start_time(
-            true,
-            false,
-            Some(song_time_ns_from_seconds(1.1)),
-            song_time_ns_from_seconds(0.9),
-            song_time_ns_from_seconds(1.2),
-        )
-        .expect("new press should produce a crossed-row start");
-
-        assert!(!state.try_hit_crossed_mines_while_held(
-            0,
-            crossed_from_ns,
-            song_time_ns_from_seconds(1.2),
-        ));
-        assert_eq!(state.chart_runtime.notes[0].mine_result, None);
     }
 
     #[test]
@@ -3574,7 +3490,10 @@ mod runtime_regression_tests {
                 .life = life;
             state.progress.stage.autoplay_enabled = autoplay;
             for player in 0..state.setup.num_players {
-                state.set_autoplay_cursor(player, state.note_range_for_player(player).1);
+                // The head has already crossed; this fixture isolates Roll
+                // refill thresholds from the shared crossed-row head reset.
+                state.chart_runtime.mine_scan.crossed_note_cursor[player] =
+                    state.note_range_for_player(player).1;
             }
             state.set_song_position_for_test(1.0, start, 0.0, 1.0);
             state.run_autoplay_rolls(start);
@@ -3787,16 +3706,25 @@ mod runtime_regression_tests {
             .time_ns;
         let inputs = std::array::from_fn(|column| column == 0);
 
-        state.process_pump_hold_events(head_time_ns.saturating_sub(1), tail_time_ns, &inputs);
+        pad_stick_input_snapshot(&mut state, true, 1.0);
+        pad_stick_post_frame(
+            &mut state,
+            head_time_ns.saturating_sub(1_000_000),
+            head_time_ns,
+        );
+        assert_eq!(state.players_runtime.players[0].scoring_counts[0], 1);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, 5);
+        state.process_pump_hold_events(head_time_ns, tail_time_ns, &inputs);
 
         let head = state.chart_runtime.notes[0]
             .result
             .as_ref()
             .expect("pre-held Pump head is judged");
         assert_eq!(head.grade, JudgeGrade::Fantastic);
-        assert_eq!(head.time_error_music_ns, 0);
+        // CrossedRows uses native float seconds while the note cache uses ns.
+        assert!(head.time_error_music_ns.abs() <= 1_000);
         assert_eq!(state.players_runtime.players[0].checkpoints_hit, 4);
-        assert_eq!(state.players_runtime.players[0].combo, 4);
+        assert_eq!(state.players_runtime.players[0].combo, 5);
         assert_eq!(
             state.chart_runtime.notes[0]
                 .hold
@@ -3805,8 +3733,9 @@ mod runtime_regression_tests {
             Some(HoldResult::Held)
         );
         assert_eq!(state.players_runtime.players[0].holds_held_for_score, 1);
-        assert_eq!(state.players_runtime.players[0].scoring_counts[0], 0);
-        assert_eq!(state.players_runtime.players[0].earned_grade_points, 5);
+        assert_eq!(state.players_runtime.players[0].scoring_counts[0], 1);
+        // The finalized W1 head and Held tail contribute five points each.
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, 10);
         assert!(state.display.hold_feedback.hold_judgments[0].is_none());
     }
 
@@ -3975,8 +3904,17 @@ mod runtime_regression_tests {
         let held_inputs = std::array::from_fn(|column| column == 0);
         let released_inputs = [false; MAX_COLS];
 
+        let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
+        pad_stick_input_snapshot(&mut state, true, 1.0);
+        pad_stick_post_frame(
+            &mut state,
+            head_time_ns.saturating_sub(1_000_000),
+            head_time_ns,
+        );
+        assert_eq!(state.players_runtime.players[0].scoring_counts[0], 1);
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, 5);
         state.process_pump_hold_events(
-            state.hold_runtime.pump_events[0].time_ns.saturating_sub(1),
+            head_time_ns,
             checkpoints[1],
             &held_inputs,
         );
@@ -3987,7 +3925,8 @@ mod runtime_regression_tests {
         assert_eq!(state.players_runtime.players[0].combo, 0);
         assert_eq!(state.players_runtime.players[0].miss_combo, 1);
         assert_eq!(state.players_runtime.players[0].holds_let_go_for_score, 1);
-        assert_eq!(state.players_runtime.players[0].earned_grade_points, -8);
+        // The finalized W1 head contributes +5; the missed checkpoint costs 8.
+        assert_eq!(state.players_runtime.players[0].earned_grade_points, -3);
         assert_eq!(
             state.chart_runtime.notes[0]
                 .hold
@@ -3998,7 +3937,7 @@ mod runtime_regression_tests {
     }
 
     #[test]
-    fn pump_hold_head_edges_use_max_precision() {
+    fn pump_hold_head_edges_use_max_precision_and_keep_measured_offset() {
         let mut state = hold_regression_state(GameplayInputPlayStyle::PumpSingle);
         let head_time_ns = state.hold_runtime.pump_events[0].time_ns;
         let late_time_ns = head_time_ns.saturating_add(song_time_ns_from_seconds(0.02));
@@ -4010,7 +3949,7 @@ mod runtime_regression_tests {
             .as_ref()
             .expect("Pump hold head judgment");
         assert_eq!(judgment.grade, JudgeGrade::Fantastic);
-        assert_eq!(judgment.time_error_music_ns, 0);
+        assert_eq!(judgment.time_error_music_ns, late_time_ns - head_time_ns);
     }
 
     #[test]

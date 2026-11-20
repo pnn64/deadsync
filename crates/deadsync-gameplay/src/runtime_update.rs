@@ -304,7 +304,11 @@ where
         } else {
             None
         };
-        self.run_autoplay_or_replay_frame(music_time_ns);
+        // Pump checkpoints integrate before its crossed-row autoplay steps in
+        // the shared post-input pass. Replay edges retain their input phase.
+        if !self.live_autoplay_enabled() || !self.setup.session.play_style.is_pump() {
+            self.run_autoplay_or_replay_frame(music_time_ns);
+        }
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
         }
@@ -631,48 +635,6 @@ where
             rate
         );
         true
-    }
-
-    #[inline(always)]
-    pub fn try_hit_crossed_mines_while_held(
-        &mut self,
-        column: usize,
-        prev_time_ns: SongTimeNs,
-        current_time_ns: SongTimeNs,
-    ) -> bool {
-        let player = self.player_for_col(column);
-        let rate = normalized_song_rate(self.music_rate());
-        let mine_window_music_ns = self.timing_runtime.player_judgment_timing[player]
-            .profile_music_ns
-            .mine_window_ns;
-        let notes = &mut self.chart_runtime.notes;
-        let mine_note_ix = &self.chart_runtime.mine_scan.mine_note_ix[player];
-        let mine_note_time_ns = &self.chart_runtime.mine_scan.mine_note_time_ns[player];
-        let pending_mine_hit_indices = &mut self.chart_runtime.mine_scan.pending_mine_hit_indices;
-
-        mark_crossed_held_mine_candidates(
-            notes,
-            mine_note_ix,
-            mine_note_time_ns,
-            column,
-            prev_time_ns,
-            current_time_ns,
-            mine_window_music_ns,
-            rate,
-            |note_index, mark| {
-                pending_mine_hit_indices.push(ChartNoteIndex::from_validated(note_index));
-                log::debug!(
-                    "JUDGE MINE HIT MARKED: row={}, col={}, beat={:.3}, note_time={:.4}s, hit_time={:.4}s, offset_ms={:.2}, rate={:.3}",
-                    mark.row_index,
-                    mark.column,
-                    mark.beat,
-                    song_time_ns_to_seconds(mark.note_time_ns),
-                    song_time_ns_to_seconds(mark.hit_time_ns),
-                    mark.time_error_ms,
-                    rate
-                );
-            },
-        )
     }
 
     #[inline(always)]
@@ -2293,6 +2255,7 @@ where
         self.display.receptor_feedback.reset_for_practice();
         self.hold_runtime.reset_live_state();
         self.hold_runtime.reanchor_pump_events(judge_start_ns);
+        self.reset_crossed_rows(judge_start_ns);
         self.reset_live_input_state();
         self.clear_pending_input_edges();
         self.progress.replay.reset_for_restart();
@@ -3262,41 +3225,6 @@ where
             self.control.input_state.pressed_lane_mask(),
             self.setup.num_cols,
         )
-    }
-
-    pub fn held_mine_crossing_start_time(
-        &self,
-        current_inputs: &[bool; MAX_COLS],
-        col: usize,
-        previous_music_time_ns: SongTimeNs,
-        current_music_time_ns: SongTimeNs,
-    ) -> Option<SongTimeNs> {
-        if col >= self.setup.num_cols.min(MAX_COLS) {
-            return None;
-        }
-        crossed_mine_held_start_time(
-            current_inputs[col],
-            self.control.input_state.prev_inputs[col],
-            self.control.input_state.lane_pressed_since_ns[col],
-            previous_music_time_ns,
-            current_music_time_ns,
-        )
-    }
-
-    pub fn held_mine_crossing_start_times(
-        &self,
-        current_inputs: &[bool; MAX_COLS],
-        previous_music_time_ns: SongTimeNs,
-        current_music_time_ns: SongTimeNs,
-    ) -> [Option<SongTimeNs>; MAX_COLS] {
-        std::array::from_fn(|col| {
-            self.held_mine_crossing_start_time(
-                current_inputs,
-                col,
-                previous_music_time_ns,
-                current_music_time_ns,
-            )
-        })
     }
 
     #[inline(always)]

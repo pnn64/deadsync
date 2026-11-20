@@ -216,6 +216,8 @@ pub const fn gameplay_config_from_config(
         mine_hit_sound: cfg.mine_hit_sound,
         default_fail_type: gameplay_fail_type_from_config(cfg.default_fail_type),
         global_offset_seconds: cfg.global_offset_seconds,
+        pad_stick_seconds: cfg.pad_stick_seconds,
+        input_debounce_seconds: cfg.input_debounce_seconds,
         visual_delay_seconds: cfg.visual_delay_seconds,
         note_scroll_clock: gameplay_note_scroll_clock_from_config(cfg.note_scroll_clock),
         machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
@@ -639,6 +641,7 @@ pub fn song_lua_play_context(
         config.center_1player_notefield,
     );
     let (display_width, display_height) = display_size;
+    context.pad_stick_seconds = config.pad_stick_seconds;
     // These timings enter Lua before the core applies the cabinet/group offsets.
     // Match runtime_init's settings without substituting selected chart timing
     // for the global SongPosition maintained by ITGmania.

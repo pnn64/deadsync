@@ -8,13 +8,18 @@ use std::sync::MutexGuard;
 pub struct SongLiveRuntime {
     runtime: Arc<Mutex<SongRuntime>>,
     releases: Arc<Mutex<Vec<Root>>>,
+    pad_stick_seconds: Arc<AtomicU32>,
 }
 impl SongLiveRuntime {
     pub(super) fn new(runtime: SongRuntime) -> Self {
         Self {
+            pad_stick_seconds: runtime.pad_stick_seconds.clone(),
             runtime: Arc::new(Mutex::new(runtime)),
             releases: Default::default(),
         }
+    }
+    pub fn pad_stick_seconds(&self) -> f32 {
+        f32::from_bits(self.pad_stick_seconds.load(Ordering::Relaxed))
     }
     /// Enter the session between Lua calls. Host callbacks already executing in
     /// this VM use HostCall for nested Lua calls rather than reacquiring it.

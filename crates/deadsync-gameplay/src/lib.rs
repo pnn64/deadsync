@@ -157,6 +157,7 @@ include!("rows.rs");
 include!("routine.rs");
 include!("chart_transforms.rs");
 include!("mines.rs");
+include!("pad_stick.rs");
 include!("replay.rs");
 include!("error_bar.rs");
 include!("runtime_state.rs");

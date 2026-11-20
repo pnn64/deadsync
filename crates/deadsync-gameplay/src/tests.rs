@@ -18858,13 +18858,7 @@ mod tests {
     }
 
     #[test]
-    fn crossed_mine_and_lane_row_bounds_use_expected_edges() {
-        let times = [
-            song_time_ns_from_seconds(1.0),
-            song_time_ns_from_seconds(1.5),
-            song_time_ns_from_seconds(2.0),
-            song_time_ns_from_seconds(2.5),
-        ];
+    fn lane_row_bounds_use_expected_edges() {
         let note_indices = [0usize, 1, 2, 3];
         let notes = [
             test_note_at(NoteType::Tap, None, false, 48, 1.0),
@@ -18873,154 +18867,12 @@ mod tests {
             test_note_at(NoteType::Tap, None, false, 192, 4.0),
         ];
 
-        assert_eq!(crossed_mine_bounds_ns(&times, times[0], times[2]), (1, 3));
         let mut cursor = LaneNoteWindowCursor::default();
         assert_eq!(
             lane_note_window_bounds_rows_from_cursor(&note_indices, &notes, 96, 192, &mut cursor,),
             (1, 3)
         );
     }
-    #[test]
-    fn crossed_held_mine_predicate_accepts_judgable_same_column_mine() {
-        let mut note = test_note_at(NoteType::Mine, None, false, 48, 1.0);
-        note.column = 1;
-
-        assert!(crossed_held_mine_can_hit(&note, 1));
-    }
-
-    #[test]
-    fn crossed_held_mine_predicate_filters_noneligible_mines() {
-        let mut tap = test_note_at(NoteType::Tap, None, false, 48, 1.0);
-        tap.column = 1;
-        let mut fake_mine = test_note_at(NoteType::Mine, None, true, 48, 1.0);
-        fake_mine.column = 1;
-        let mut wrong_column = test_note_at(NoteType::Mine, None, false, 48, 1.0);
-        wrong_column.column = 2;
-        let mut already_scored = test_note_at(NoteType::Mine, None, false, 48, 1.0);
-        already_scored.column = 1;
-        already_scored.mine_result = Some(MineResult::Avoided);
-        let mut unjudgable = test_note_at(NoteType::Mine, None, false, 48, 1.0);
-        unjudgable.column = 1;
-        unjudgable.can_be_judged = false;
-
-        assert!(!crossed_held_mine_can_hit(&tap, 1));
-        assert!(!crossed_held_mine_can_hit(&fake_mine, 1));
-        assert!(!crossed_held_mine_can_hit(&wrong_column, 1));
-        assert!(!crossed_held_mine_can_hit(&already_scored, 1));
-        assert!(!crossed_held_mine_can_hit(&unjudgable, 1));
-    }
-
-    #[test]
-    fn crossed_held_mine_marking_marks_crossed_same_column_mines() {
-        let mine_times = [
-            song_time_ns_from_seconds(1.0),
-            song_time_ns_from_seconds(1.5),
-            song_time_ns_from_seconds(2.0),
-        ];
-        let mine_ix = [0usize, 1, 2];
-        let mut notes = vec![
-            test_note_at(NoteType::Mine, None, false, 48, 1.0),
-            test_note_at(NoteType::Mine, None, false, 72, 1.5),
-            test_note_at(NoteType::Mine, None, false, 96, 2.0),
-        ];
-        for note in &mut notes {
-            note.column = 2;
-        }
-
-        let mut marked = Vec::new();
-        assert!(mark_crossed_held_mine_candidates(
-            &mut notes,
-            &mine_ix,
-            &mine_times,
-            2,
-            mine_times[0],
-            mine_times[2],
-            25_000_000,
-            1.0,
-            |note_index, mark| marked.push((note_index, mark)),
-        ));
-
-        assert_eq!(marked.len(), 2);
-        assert_eq!(marked[0].0, 1);
-        assert_eq!(marked[0].1.note_time_ns, mine_times[1]);
-        assert_eq!(marked[1].0, 2);
-        assert_eq!(marked[1].1.note_time_ns, mine_times[2]);
-        assert_eq!(notes[0].mine_result, None);
-        assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
-        assert_eq!(notes[2].mine_result, Some(MineResult::Hit));
-    }
-
-    #[test]
-    fn crossed_held_mine_marking_filters_invalid_candidates() {
-        let mine_times = [
-            song_time_ns_from_seconds(1.0),
-            song_time_ns_from_seconds(1.5),
-            song_time_ns_from_seconds(2.0),
-        ];
-        let mine_ix = [0usize, 99, 1, 2];
-        let mut wrong_column = test_note_at(NoteType::Mine, None, false, 72, 1.5);
-        wrong_column.column = 1;
-        let mut already_hit = test_note_at(NoteType::Mine, None, false, 96, 2.0);
-        already_hit.column = 2;
-        already_hit.mine_result = Some(MineResult::Hit);
-        let mut notes = vec![
-            test_note_at(NoteType::Tap, None, false, 48, 1.0),
-            wrong_column,
-            already_hit,
-        ];
-
-        let mut marked = Vec::new();
-        assert!(!mark_crossed_held_mine_candidates(
-            &mut notes,
-            &mine_ix,
-            &mine_times,
-            2,
-            mine_times[0],
-            mine_times[2],
-            25_000_000,
-            1.0,
-            |note_index, mark| marked.push((note_index, mark)),
-        ));
-        assert!(marked.is_empty());
-        assert_eq!(notes[0].mine_result, None);
-        assert_eq!(notes[1].mine_result, None);
-        assert_eq!(notes[2].mine_result, Some(MineResult::Hit));
-    }
-
-    #[test]
-    fn crossed_held_mine_marking_rejects_invalid_ranges() {
-        let mine_times = [song_time_ns_from_seconds(1.0)];
-        let mine_ix = [0usize];
-        let mut notes = vec![test_note_at(NoteType::Mine, None, false, 48, 1.0)];
-        notes[0].column = 0;
-
-        let mut marked = Vec::new();
-        assert!(!mark_crossed_held_mine_candidates(
-            &mut notes,
-            &mine_ix,
-            &mine_times,
-            0,
-            INVALID_SONG_TIME_NS,
-            mine_times[0],
-            25_000_000,
-            1.0,
-            |note_index, mark| marked.push((note_index, mark)),
-        ));
-        assert!(!mark_crossed_held_mine_candidates(
-            &mut notes,
-            &mine_ix,
-            &mine_times,
-            0,
-            mine_times[0],
-            mine_times[0],
-            25_000_000,
-            1.0,
-            |note_index, mark| marked.push((note_index, mark)),
-        ));
-        assert!(marked.is_empty());
-        assert_eq!(notes[0].mine_result, None);
-    }
-
     #[test]
     fn mine_avoid_cursor_end_stops_before_cutoff_row() {
         let notes = vec![
@@ -19553,41 +19405,6 @@ mod tests {
         assert_eq!(
             step_search_row_bounds(&timing, song_time_ns_from_seconds(0.0), 0),
             (0, 96)
-        );
-    }
-
-    #[test]
-    fn crossed_mine_held_start_tracks_existing_or_new_hold() {
-        let previous = song_time_ns_from_seconds(1.0);
-        let pressed_before = song_time_ns_from_seconds(0.9);
-        let pressed_after = song_time_ns_from_seconds(1.25);
-        let current = song_time_ns_from_seconds(1.5);
-
-        assert_eq!(
-            crossed_mine_held_start_time(true, true, None, previous, current),
-            Some(previous)
-        );
-        assert_eq!(
-            crossed_mine_held_start_time(true, false, Some(pressed_before), previous, current),
-            Some(previous)
-        );
-        assert_eq!(
-            crossed_mine_held_start_time(true, false, Some(pressed_after), previous, current),
-            Some(pressed_after)
-        );
-        assert_eq!(
-            crossed_mine_held_start_time(false, true, Some(previous), previous, current),
-            None
-        );
-        assert_eq!(
-            crossed_mine_held_start_time(
-                true,
-                false,
-                Some(INVALID_SONG_TIME_NS),
-                previous,
-                current,
-            ),
-            None
         );
     }
 

@@ -1337,13 +1337,7 @@ where
                 let active_matches = self.hold_runtime.active_holds[column]
                     .as_ref()
                     .is_some_and(|active| active.note_index == note_index);
-                if lane_pressed && self.chart_runtime.notes[note_index].result.is_none() {
-                    self.judge_a_tap(column, event.time_ns);
-                }
-                let active_matches_after = self.hold_runtime.active_holds[column]
-                    .as_ref()
-                    .is_some_and(|active| active.note_index == note_index);
-                if !active_matches && !active_matches_after {
+                if !active_matches {
                     self.start_unstepped_pump_hold(event, lane_pressed);
                 }
             }
@@ -2102,55 +2096,8 @@ where
     }
 
     pub fn run_autoplay(&mut self, now_music_time_ns: SongTimeNs) {
-        if !self.stage_autoplay_enabled() {
-            return;
-        }
-
-        for player in 0..self.setup.num_players {
-            let note_range = self.note_range_for_player(player);
-            let mut cursor = self.autoplay_cursor(player).max(note_range.0);
-            // Player::CrossedRows uses the float displayed beat and truncates
-            // to the native note row. A rounded float can cross a row before
-            // its precise nanosecond deadline; waiting for that deadline loses
-            // a whole gameplay frame. Delay rows cross only after the delay.
-            let position = self.timing_runtime.timing_players[player]
-                .get_song_position(song_time_ns_to_seconds(now_music_time_ns));
-            let crossed_row = (position.beat * ROWS_PER_BEAT as f32) as i32;
-            loop {
-                while cursor < note_range.1 && self.chart_runtime.notes[cursor].result.is_some() {
-                    cursor += 1;
-                }
-                if position.is_in_delay || crossed_row < 0 || cursor >= note_range.1
-                    || beat_to_note_row(self.chart_runtime.notes[cursor].beat) > crossed_row {
-                    break;
-                }
-                let mut events = [None; MAX_COLS];
-                let update = collect_next_autoplay_row_events(
-                    &self.chart_runtime.notes,
-                    &self.chart_runtime.note_time_cache_ns,
-                    note_range,
-                    cursor,
-                    self.setup.num_cols,
-                    SongTimeNs::MAX,
-                    &mut events,
-                );
-                cursor = update.cursor;
-                if !update.row_ready {
-                    break;
-                }
-                for event in events.iter().take(update.event_count).flatten() {
-                    self.mark_autoplay_used();
-                    match event.action {
-                        AutoplayNoteAction::Lift => {
-                            let _ = self.judge_a_lift(event.column, update.row_time_ns);
-                        }
-                        AutoplayNoteAction::Tap => {
-                            let _ = self.judge_a_tap(event.column, update.row_time_ns);
-                        }
-                    }
-                }
-            }
-            self.set_autoplay_cursor(player, cursor);
+        if self.live_autoplay_enabled() {
+            self.cross_pad_stick_rows(now_music_time_ns);
         }
     }
 
@@ -2332,18 +2279,24 @@ where
         } else {
             None
         };
-        let current_inputs = self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
+        // Native UpdateHoldNotes precedes CrossedRows for every preference
+        // value. A crossed head keeps its freshly reset life for this frame.
+        let previous_active_holds_us = phase_timings.active_holds_us;
+        let current_inputs = lane_inputs_from_mask(
+            self.pad_stick_pressed_lane_mask(), self.setup.num_cols.min(MAX_COLS),
+        );
         self.process_pump_hold_events(previous_music_time_ns, music_time_ns, &current_inputs);
-        if let Some(started) = held_mines_started {
-            phase_timings.held_mines_us = elapsed_us_since(started);
-        }
-
         if !holds_before_autoplay {
             let started = trace_enabled.then(Instant::now);
             self.update_active_holds(&current_inputs, music_time_ns);
             if let Some(started) = started {
                 phase_timings.active_holds_us = elapsed_us_since(started);
             }
+        }
+        self.scan_held_lane_activity(previous_music_time_ns, music_time_ns);
+        if let Some(started) = held_mines_started {
+            phase_timings.held_mines_us = elapsed_us_since(started)
+                .saturating_sub(phase_timings.active_holds_us.saturating_sub(previous_active_holds_us));
         }
         self.apply_pending_mine_hits();
 
@@ -2427,34 +2380,15 @@ where
     #[inline(always)]
     fn scan_held_lane_activity(
         &mut self,
-        previous_music_time_ns: SongTimeNs,
+        _previous_music_time_ns: SongTimeNs,
         music_time_ns: SongTimeNs,
     ) -> [bool; MAX_COLS] {
         let columns = self.setup.num_cols.min(MAX_COLS);
         let pressed_lane_mask =
-            self.control.input_state.pressed_lane_mask() & input_lane_mask(columns);
+            self.pad_stick_pressed_lane_mask() & input_lane_mask(columns);
         let current_inputs = lane_inputs_from_mask(pressed_lane_mask, columns);
+        self.cross_pad_stick_rows(music_time_ns);
         if pressed_lane_mask != 0 {
-            if !self.live_autoplay_enabled() {
-                let mut held_lanes = pressed_lane_mask;
-                while held_lanes != 0 {
-                    let col = held_lanes.trailing_zeros() as usize;
-                    held_lanes &= held_lanes - 1;
-                    let crossed_from_ns = self.held_mine_crossing_start_time(
-                        &current_inputs,
-                        col,
-                        previous_music_time_ns,
-                        music_time_ns,
-                    );
-                    if let Some(crossed_from_ns) = crossed_from_ns {
-                        let _ = self.try_hit_crossed_mines_while_held(
-                            col,
-                            crossed_from_ns,
-                            music_time_ns,
-                        );
-                    }
-                }
-            }
             self.track_held_misses(&current_inputs, music_time_ns);
         }
         self.set_previous_lane_inputs(current_inputs);
@@ -2488,14 +2422,20 @@ where
     #[inline(always)]
     pub fn judge_a_tap(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
         let hit = self.judge_a_tap_internal(column, current_time_ns);
-        if let Some(mut callback) = self.step_callback.take() {
-            callback(self, column);
-            self.step_callback = Some(callback);
-        }
+        self.dispatch_step_callback(column);
         hit
     }
 
     fn judge_a_tap_internal(&mut self, column: usize, current_time_ns: SongTimeNs) -> bool {
+        let player = self.player_for_col(column);
+        let search = self.closest_lane_note_search_cached(column, player, current_time_ns);
+        self.judge_a_tap_with_search(column, current_time_ns, search, None)
+    }
+
+    fn judge_a_tap_with_search(
+        &mut self, column: usize, current_time_ns: SongTimeNs, search: LaneNoteSearch,
+        synthetic_step: Option<SyntheticStepTiming>,
+    ) -> bool {
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();
         let input_log = gameplay_input_log_enabled();
@@ -2507,7 +2447,6 @@ where
         let hide_early_dw_column_flash =
             self.profiles_runtime.profiles[player].hide_early_dw_column_flash();
         let scoring_blocked = self.autoplay_blocks_scoring();
-        let search = self.closest_lane_note_search_cached(column, player, current_time_ns);
         let lane_notes = &self.chart_runtime.lane_indices.note_indices[column];
         let current_row_index = search.current_row_index;
         if let Some((note_index, _)) = search.candidate {
@@ -2567,11 +2506,26 @@ where
                 return false;
             }
 
-            let Some(mut hit) = self.note_hit_eval(
-                player,
-                self.chart_runtime.note_time_cache_ns[note_index],
-                current_time_ns,
-            ) else {
+            let note_time_ns = self.chart_runtime.note_time_cache_ns[note_index];
+            let w5_ns = self.timing_runtime.player_judgment_timing[player]
+                .profile_music_ns.windows_ns[4];
+            // Native Pump hold heads use the first enabled judgment whenever
+            // they are not too early, including synthetic steps beyond W5 late.
+            // Their measured offset remains the actual offset of that step.
+            let hit = if self.setup.session.play_style.is_pump()
+                && matches!(note_type, NoteType::Hold | NoteType::Roll)
+                && w5_ns != 0
+                && time_error_music_ns >= w5_ns.saturating_neg()
+            {
+                self.note_hit_eval(player, note_time_ns, note_time_ns)
+                    .map(|mut hit| {
+                        hit.measured_offset_music_ns = time_error_music_ns;
+                        hit
+                    })
+            } else {
+                self.note_hit_eval(player, note_time_ns, current_time_ns)
+            };
+            let Some(hit) = hit else {
                 log_tap_judge_candidate(
                     input_log,
                     "outside_tap_window",
@@ -2586,16 +2540,6 @@ where
                 );
                 return false;
             };
-            if self.setup.session.play_style.is_pump()
-                && matches!(note_type, NoteType::Hold | NoteType::Roll)
-                && let Some(max_hit) = self.note_hit_eval(
-                    player,
-                    self.chart_runtime.note_time_cache_ns[note_index],
-                    self.chart_runtime.note_time_cache_ns[note_index],
-                )
-            {
-                hit = max_hit;
-            }
             let (song_offset_s, global_offset_s, lead_in_s, stream_pos_s) = if timing_hit_log {
                 (
                     self.clock.offsets.song_offset_seconds(),
@@ -2730,7 +2674,9 @@ where
                             lead_in_s,
                         );
 
-                        self.start_active_hold_for_hit(note_index, note_col, hit, current_time_ns);
+                        self.start_active_hold_after_step(
+                            note_index, note_col, hit, current_time_ns, synthetic_step,
+                        );
                     }
                     return true;
                 }
@@ -2804,7 +2750,9 @@ where
             if let Some(window_key) = hit_plan.receptor_window {
                 self.trigger_receptor_score_pulse(note_col, window_key);
             }
-            self.start_active_hold_for_hit(note_index, note_col, hit, current_time_ns);
+            self.start_active_hold_after_step(
+                note_index, note_col, hit, current_time_ns, synthetic_step,
+            );
             return true;
         }
         if input_log {

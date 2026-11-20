@@ -119,6 +119,7 @@ pub const DEFAULT_SMOOTH_HISTOGRAM: bool = true;
 pub const DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS: bool = false;
 pub const DEFAULT_AUTO_SCREENSHOT_EVAL: u8 = 0;
 pub const DEFAULT_INPUT_DEBOUNCE_SECONDS: f32 = 0.02;
+pub const DEFAULT_PAD_STICK_SECONDS: f32 = 0.0;
 pub const DEFAULT_AXIS_FIX: bool = false;
 pub const DEFAULT_ARCADE_OPTIONS_NAVIGATION: bool = false;
 pub const DEFAULT_THREE_KEY_NAVIGATION: bool = false;

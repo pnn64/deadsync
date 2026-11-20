@@ -276,6 +276,10 @@ pub struct GameplayConfig {
     pub default_fail_type: GameplayFailType,
     pub global_offset_seconds: f32,
     pub visual_delay_seconds: f32,
+    /// ITGmania's crossed-row delay, independent of input debounce.
+    pub pad_stick_seconds: f32,
+    /// InputFilter release retention when reconstructing replay input snapshots.
+    pub input_debounce_seconds: f32,
     pub note_scroll_clock: GameplayNoteScrollClock,
     pub machine_pack_ini_offsets: bool,
     pub machine_default_sync_pref: SyncPref,
@@ -412,6 +416,8 @@ impl Default for GameplayConfig {
             default_fail_type: GameplayFailType::ImmediateContinue,
             global_offset_seconds: -0.008,
             visual_delay_seconds: 0.0,
+            pad_stick_seconds: 0.0,
+            input_debounce_seconds: 0.02,
             note_scroll_clock: GameplayNoteScrollClock::RawAudio,
             machine_pack_ini_offsets: false,
             machine_default_sync_pref: SyncPref::Null,

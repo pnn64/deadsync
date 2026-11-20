@@ -31,13 +31,14 @@ pub(super) use player_options::install_states as install_player_states;
 pub(super) fn install(
     vm: &mut Vm,
     context: &crate::SongLuaCompileContext,
+    pad_stick_seconds: std::sync::Arc<std::sync::atomic::AtomicU32>,
     #[cfg(feature = "test-support")] observations: crate::observations::Observations,
 ) -> Result<deadlib_lua::Root, Error> {
     for (index, name) in ["PLAYER_1", "PLAYER_2"].into_iter().enumerate() {
         let value = vm.try_intern(crate::player_number_name(index).as_bytes())?;
         vm.set_global(name.as_bytes(), value)?;
     }
-    preferences::install(vm, context)?;
+    preferences::install(vm, context, pad_stick_seconds)?;
     display::install(vm, context)?;
     theme::install(vm, context)?;
     theme_preferences::install(vm)?;

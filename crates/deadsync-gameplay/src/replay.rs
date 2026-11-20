@@ -60,6 +60,154 @@ pub struct ReplayOffsetSnapshot {
     pub beat0_time_ns: SongTimeNs,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct ReplayInputTransition {
+    raw_music_time_ns: SongTimeNs,
+    reported_music_time_ns: SongTimeNs,
+    pressed: bool,
+}
+
+/// Legacy replay edges retain source/lane identity and raw song time, but not
+/// physical binding IDs, original delivery time, pauses, or preference history.
+/// Keep the available identities separate and use playback delivery time for
+/// cleanup; ages themselves always come from the recorded raw timestamp.
+#[derive(Clone, Debug)]
+struct ReplayInputAgeState {
+    current: [[Option<ReplayInputTransition>; 2]; MAX_COLS],
+    snapshot: [[Option<ReplayInputTransition>; 2]; MAX_COLS],
+}
+
+impl Default for ReplayInputAgeState {
+    fn default() -> Self {
+        Self {
+            current: [[None; 2]; MAX_COLS],
+            snapshot: [[None; 2]; MAX_COLS],
+        }
+    }
+}
+
+impl ReplayInputAgeState {
+    fn clear(&mut self) {
+        self.current.fill([None; 2]);
+        self.snapshot.fill([None; 2]);
+    }
+
+    fn record(&mut self, edge: RecordedLaneEdge, reported_music_time_ns: SongTimeNs) {
+        if song_time_ns_invalid(edge.event_music_time_ns)
+            || song_time_ns_invalid(reported_music_time_ns)
+        {
+            return;
+        }
+        let Some(lane) = self.current.get_mut(edge.lane_index as usize) else {
+            return;
+        };
+        let source = match edge.source {
+            InputSource::Keyboard => 0,
+            InputSource::Gamepad => 1,
+        };
+        lane[source] = Some(ReplayInputTransition {
+            raw_music_time_ns: edge.event_music_time_ns,
+            reported_music_time_ns,
+            pressed: edge.pressed,
+        });
+    }
+
+    fn begin_snapshot(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        music_rate: f32,
+        debounce_seconds: f32,
+    ) {
+        if song_time_ns_invalid(music_time_ns) {
+            self.snapshot.fill([None; 2]);
+            return;
+        }
+        self.snapshot = self.current;
+        let rate = normalized_song_rate(music_rate);
+        let debounce = if debounce_seconds.is_finite() {
+            debounce_seconds.max(0.0)
+        } else {
+            0.0
+        };
+        for lane in &mut self.current {
+            for transition in lane {
+                if transition.is_some_and(|input| {
+                    !input.pressed
+                        && song_time_ns_to_seconds(
+                            music_time_ns.saturating_sub(input.reported_music_time_ns),
+                        ) / rate > debounce
+                }) {
+                    // Native MakeButtonStateList precedes map pruning, so this
+                    // released timestamp remains visible for this whole update.
+                    *transition = None;
+                }
+            }
+        }
+    }
+
+    fn age_seconds(&self, column: usize, music_time_ns: SongTimeNs, music_rate: f32) -> f32 {
+        if song_time_ns_invalid(music_time_ns) {
+            return 0.0;
+        }
+        let Some(lane) = self.snapshot.get(column) else {
+            return 0.0;
+        };
+        let rate = normalized_song_rate(music_rate);
+        lane.iter().flatten().fold(0.0_f32, |age, input| {
+            age.max(
+                song_time_ns_to_seconds(music_time_ns.saturating_sub(input.raw_music_time_ns))
+                    .max(0.0)
+                    / rate,
+            )
+        })
+    }
+}
+
+impl<Profile, OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
+where
+    Profile: GameplayProfileData,
+{
+    fn record_replay_input_age(&mut self, edge: RecordedLaneEdge) {
+        let reported = self.clock.song_position.current_music_time_ns;
+        self.control.input_state.replay_input_ages.record(edge, reported);
+        let width = self.setup.cols_per_player;
+        if self.setup.session.play_style.is_routine() && (edge.lane_index as usize) < width {
+            self.control.input_state.replay_input_ages.record(
+                RecordedLaneEdge {
+                    lane_index: edge.lane_index + width as u8,
+                    ..edge
+                },
+                reported,
+            );
+        }
+    }
+
+    /// Snapshot replay input after processing its edges and before crossing rows.
+    /// The format has no recorded debounce preference, so use the playback value.
+    pub fn begin_replay_input_snapshot(
+        &mut self,
+        music_time_ns: SongTimeNs,
+        input_debounce_seconds: f32,
+    ) {
+        let rate = self.music_rate();
+        self.control.input_state.replay_input_ages.begin_snapshot(
+            music_time_ns,
+            rate,
+            input_debounce_seconds,
+        );
+    }
+
+    #[must_use]
+    pub fn replay_input_age_seconds(&self, column: usize, music_time_ns: SongTimeNs) -> f32 {
+        self.control.input_state.replay_input_ages.age_seconds(
+            column,
+            music_time_ns,
+            self.music_rate(),
+        )
+    }
+}
+
 #[must_use]
 pub fn build_replay_input_edges(
     replay_edges: &[ReplayInputEdge],
@@ -658,4 +806,96 @@ pub fn collect_ready_replay_edges(
         event_count += 1;
     }
     event_count
+}
+
+#[cfg(test)]
+mod replay_input_age_tests {
+    use super::*;
+
+    fn edge(source: InputSource, pressed: bool, raw_music_time_ns: SongTimeNs) -> RecordedLaneEdge {
+        RecordedLaneEdge {
+            lane_index: 0,
+            pressed,
+            source,
+            event_music_time_ns: raw_music_time_ns,
+        }
+    }
+
+    #[test]
+    fn replay_input_age_uses_recorded_time_and_playback_rate() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, true, 1_000_000_000), 1_500_000_000);
+        ages.begin_snapshot(2_000_000_000, 2.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 2.0), 0.5);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 0.5), 2.0);
+        assert_eq!(ages.age_seconds(1, 2_000_000_000, 2.0), 0.0);
+        assert_eq!(ages.age_seconds(0, 500_000_000, 2.0), 0.0);
+    }
+
+    #[test]
+    fn replay_input_age_maxes_sources_and_replaces_release_timestamp() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, true, 1_000_000_000), 1_000_000_000);
+        ages.record(edge(InputSource::Gamepad, true, 1_500_000_000), 1_500_000_000);
+        ages.begin_snapshot(2_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 1.0), 1.0);
+
+        ages.record(edge(InputSource::Keyboard, false, 1_900_000_000), 2_000_000_000);
+        ages.begin_snapshot(2_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 1.0), 0.5);
+        ages.record(edge(InputSource::Gamepad, false, 1_950_000_000), 2_000_000_000);
+        ages.begin_snapshot(2_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 1.0), 0.1);
+    }
+
+    #[test]
+    fn replay_release_cleanup_uses_report_time_and_retains_pruning_snapshot() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, false, 10_000_000), 20_000_000);
+        ages.begin_snapshot(40_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 40_000_000, 1.0), 0.03);
+        ages.begin_snapshot(41_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 41_000_000, 1.0), 0.031);
+        assert_eq!(ages.age_seconds(0, 41_000_000, 1.0), 0.031);
+        ages.begin_snapshot(42_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 42_000_000, 1.0), 0.0);
+    }
+
+    #[test]
+    fn replay_release_cleanup_obeys_configured_debounce_and_rate() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, false, 10_000_000), 20_000_000);
+        ages.begin_snapshot(120_000_000, 2.0, 0.05);
+        assert_eq!(ages.age_seconds(0, 120_000_000, 2.0), 0.055);
+        ages.begin_snapshot(122_000_000, 2.0, 0.05);
+        assert_eq!(ages.age_seconds(0, 122_000_000, 2.0), 0.056);
+        ages.begin_snapshot(124_000_000, 2.0, 0.05);
+        assert_eq!(ages.age_seconds(0, 124_000_000, 2.0), 0.0);
+    }
+
+    #[test]
+    fn replay_legacy_edges_use_source_lane_identity_and_reset_cleanly() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, true, 1_000_000_000), 1_000_000_000);
+        // Legacy records cannot distinguish two keyboard bindings on this lane.
+        // The later reported timestamp replaces the earlier fallback identity.
+        ages.record(edge(InputSource::Keyboard, true, 1_500_000_000), 1_500_000_000);
+        ages.begin_snapshot(2_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 1.0), 0.5);
+        ages.clear();
+        assert_eq!(ages.age_seconds(0, 2_000_000_000, 1.0), 0.0);
+        ages.begin_snapshot(3_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 3_000_000_000, 1.0), 0.0);
+    }
+
+    #[test]
+    fn replay_input_age_rejects_invalid_times_and_columns() {
+        let mut ages = ReplayInputAgeState::default();
+        ages.record(edge(InputSource::Keyboard, true, INVALID_SONG_TIME_NS), 0);
+        ages.record(edge(InputSource::Gamepad, true, 0), INVALID_SONG_TIME_NS);
+        ages.begin_snapshot(1_000_000_000, 1.0, 0.02);
+        assert_eq!(ages.age_seconds(0, 1_000_000_000, 1.0), 0.0);
+        assert_eq!(ages.age_seconds(MAX_COLS, 1_000_000_000, 1.0), 0.0);
+        assert_eq!(ages.age_seconds(0, INVALID_SONG_TIME_NS, 1.0), 0.0);
+    }
 }

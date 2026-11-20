@@ -180,7 +180,7 @@ pub use random::RandomSnapshot;
 pub mod test_support;
 use std::sync::{
     Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 const FREEZE: &str = "__songlua_freeze";
@@ -239,6 +239,7 @@ pub struct SongRuntime {
     players: Vec<Root>,
     operations: [Root; 6],
     option_snapshots: live_frames::OptionSnapshots,
+    pad_stick_seconds: Arc<AtomicU32>,
 }
 
 impl SongRuntime {
@@ -306,9 +307,11 @@ impl SongRuntime {
         actors.install_sound_manager(&mut vm, &context.song_dir)?;
         let actor_file_loader = vm.rooted(loader)?;
         actors.bind_source_loader(&mut vm, actor_file_loader, &context.song_dir)?;
+        let pad_stick_seconds = Arc::new(AtomicU32::new(context.pad_stick_seconds.to_bits()));
         let catalog = managers::install(
             &mut vm,
             context,
+            pad_stick_seconds.clone(),
             #[cfg(feature = "test-support")]
             observations.clone(),
         )?;
@@ -479,7 +482,13 @@ impl SongRuntime {
             players,
             operations: roots.try_into().expect("six clock operations"),
             option_snapshots: Default::default(),
+            pad_stick_seconds,
         })
+    }
+
+    /// The typed native preference, including writes from retained Lua callbacks.
+    pub fn pad_stick_seconds(&self) -> f32 {
+        f32::from_bits(self.pad_stick_seconds.load(Ordering::Relaxed))
     }
 
     /// Register additional song bindings or execute scripts in this same VM.
@@ -2574,6 +2583,7 @@ pub struct SongLuaCompileContext {
     pub player_step_indices: [Option<usize>; LUA_PLAYERS],
     pub event_mode: bool,
     pub global_offset_seconds: f32,
+    pub pad_stick_seconds: f32,
     /// Theme coordinate space exposed through `SCREEN_WIDTH/SCREEN_HEIGHT`.
     pub screen_width: f32,
     pub screen_height: f32,
@@ -2659,6 +2669,7 @@ impl SongLuaCompileContext {
             // PrefsManager defaults EventMode to true in ITGmania.
             event_mode: true,
             global_offset_seconds: 0.0,
+            pad_stick_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
             display_width: 640.0,

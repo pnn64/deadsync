@@ -15,7 +15,7 @@ use rustc_hash::{FxBuildHasher, FxHashMap};
 
 use crate::debounce::{
     DebounceEdges, DebounceStore, DebounceWindows, DebouncedEdge, debounce_input_edge_in_store_mut,
-    next_due_edge,
+    next_due_edge, next_due_edge_between_snapshots,
 };
 use crate::{
     GamepadCodeBinding, InputEvent, SYSTEM_ACTION_MASK, VirtualAction,
@@ -799,6 +799,43 @@ impl InputState {
         }
     }
 
+    /// Actions with at least one reported-down physical binding, including
+    /// inputs held before gameplay starts. Bits use [`VirtualAction::bit`].
+    /// Released entries can retain an input age without contributing here.
+    #[must_use]
+    pub fn pressed_action_mask(&self) -> u32 {
+        self.keyboard.pressed_action_mask() | self.pad.pressed_action_mask()
+    }
+
+    /// Maximum age of each action's reported physical input, in wall seconds.
+    ///
+    /// Entries use the bit indices from [`VirtualAction::bit`]. Like ITGmania's
+    /// `InputMapper::GetSecsHeld`, this measures from the original timestamp of
+    /// the last reported transition and includes released slots through the
+    /// snapshot that prunes them. Missing inputs contribute zero. Multiple bindings
+    /// contribute their maximum age rather than a continuous logical hold time.
+    #[must_use]
+    pub fn input_age_by_action(&self, now: Instant) -> [f32; 32] {
+        let mut ages = [0.0; 32];
+        self.keyboard.accumulate_input_ages(now, &mut ages);
+        self.pad.accumulate_input_ages(now, &mut ages);
+        ages
+    }
+
+    /// Starts the input snapshot for one update, before draining delayed edges.
+    ///
+    /// ITGmania builds its snapshot before pruning expired releases. Their ages
+    /// remain visible for that update, until the next update or raw input rebuild.
+    pub fn begin_input_snapshot(&mut self) {
+        self.keyboard.begin_input_snapshot();
+        self.pad.begin_input_snapshot();
+    }
+
+    fn rebuild_input_snapshot(&mut self) {
+        self.keyboard.rebuild_input_snapshot(false);
+        self.pad.rebuild_input_snapshot(false);
+    }
+
     /// Identity of the physical source that produced a normalized edge.
     pub fn physical_input(&self, event: &InputEvent) -> Option<PhysicalInput> {
         let slots = match event.source { InputSource::Keyboard => &self.physical_keys,
@@ -834,6 +871,7 @@ impl InputState {
         key: KeyEvent,
         now: F,
     ) -> impl Iterator<Item = InputEvent> + use<F> {
+        self.rebuild_input_snapshot();
         let ev = key.raw;
         let binding = key.binding;
         if binding.mapped() { self.physical_keys[binding.slot as usize] = Some(PhysicalInput::Key(ev.code)); }
@@ -867,6 +905,7 @@ impl InputState {
         ev: &PadEvent,
         now: F,
     ) -> impl Iterator<Item = InputEvent> + use<F> {
+        self.rebuild_input_snapshot();
         let km = &self.compiled;
         let binding = match *ev {
             PadEvent::Dir {
@@ -949,6 +988,17 @@ impl InputState {
             .or_else(|| next_due_edge(&mut self.pad, now, self.windows))
             .map(input_events)
     }
+
+    /// Drains timer-driven input between Player updates. Cleanup still runs at
+    /// its usual deadline, but its last timestamp survives the next snapshot.
+    pub fn next_due_between_snapshots(
+        &mut self,
+        now: Instant,
+    ) -> Option<impl Iterator<Item = InputEvent> + use<>> {
+        next_due_edge_between_snapshots(&mut self.keyboard, now, self.windows)
+            .or_else(|| next_due_edge_between_snapshots(&mut self.pad, now, self.windows))
+            .map(input_events)
+    }
 }
 
 fn input_events(edge: DebouncedEdge) -> impl Iterator<Item = InputEvent> {
@@ -969,6 +1019,233 @@ fn input_events(edge: DebouncedEdge) -> impl Iterator<Item = InputEvent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn report_age_test_key(
+        input: &mut InputState,
+        code: KeyCode,
+        pressed: bool,
+        timestamp: Instant,
+        reported_at: Instant,
+    ) -> usize {
+        let event = input.key_event(RawKeyboardEvent {
+            code,
+            pressed,
+            repeat: false,
+            timestamp,
+            host_nanos: 0,
+        });
+        input.map_key(event, || reported_at).count()
+    }
+
+    #[test]
+    fn input_age_snapshot_ignores_suppressed_raw_chatter() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        assert_eq!(report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start), 1);
+        let release = start + Duration::from_millis(1);
+        assert_eq!(report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release), 0);
+        let repress = start + Duration::from_millis(5);
+        assert_eq!(report_age_test_key(&mut input, KeyCode::ArrowLeft, true, repress, repress), 0);
+
+        let ages = input.input_age_by_action(start + Duration::from_millis(50));
+        assert_eq!(ages[VirtualAction::p1_left.ix()], 0.05);
+        assert_eq!(ages[VirtualAction::p2_left.ix()], 0.0);
+    }
+
+    #[test]
+    fn input_age_snapshot_retains_original_delayed_release_through_pruning() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        assert_eq!(input.pressed_action_mask(), 0);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        assert_eq!(input.pressed_action_mask(), VirtualAction::p1_left.bit());
+        let release = start + Duration::from_millis(1);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+        assert_eq!(input.pressed_action_mask(), VirtualAction::p1_left.bit());
+
+        input.begin_input_snapshot();
+        let due = start + Duration::from_millis(20);
+        let events: Vec<_> = input.next_due(due).unwrap().collect();
+        assert_eq!(events.iter().map(|event| event.action).collect::<Vec<_>>(), [
+            VirtualAction::p1_left,
+            VirtualAction::p1_menu_left,
+        ]);
+        assert!(events.iter().all(|event| !event.pressed && event.timestamp == release));
+        assert_eq!(input.input_age_by_action(due)[VirtualAction::p1_left.ix()], 0.019);
+        assert_eq!(input.pressed_action_mask(), 0);
+        assert!(input.next_due(due).is_none());
+
+        input.begin_input_snapshot();
+        let cleanup = start + Duration::from_millis(41);
+        assert!(input.next_due(cleanup).is_none());
+        assert!(!input.has_pending());
+        assert_eq!(input.input_age_by_action(cleanup)[VirtualAction::p1_left.ix()], 0.04);
+        assert_eq!(input.pressed_action_mask(), 0);
+
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(cleanup)[VirtualAction::p1_left.ix()], 0.0);
+    }
+
+    #[test]
+    fn input_age_snapshot_takes_maximum_over_physical_bindings_and_sources() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[
+            InputBinding::Key(KeyCode::ArrowLeft),
+            InputBinding::Key(KeyCode::ArrowRight),
+            InputBinding::PadDir(PadDir::Left),
+        ]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        let second = start + Duration::from_millis(10);
+        report_age_test_key(&mut input, KeyCode::ArrowRight, true, second, second);
+        let third = start + Duration::from_millis(20);
+        input.map_pad(&PadEvent::Dir {
+            id: PadId(0), dir: PadDir::Left, pressed: true, timestamp: third, host_nanos: 0,
+        }, || third).for_each(drop);
+        let now = start + Duration::from_millis(30);
+        assert_eq!(input.input_age_by_action(now)[VirtualAction::p1_left.ix()], 0.03);
+
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, now, now);
+        assert_eq!(input.input_age_by_action(now)[VirtualAction::p1_left.ix()], 0.02);
+        report_age_test_key(&mut input, KeyCode::ArrowRight, false, now, now);
+        assert_eq!(input.input_age_by_action(now)[VirtualAction::p1_left.ix()], 0.01);
+        assert_eq!(input.pressed_action_mask(), VirtualAction::p1_left.bit());
+
+        input.clear();
+        assert_eq!(input.input_age_by_action(now), [0.0; 32]);
+        assert_eq!(input.pressed_action_mask(), 0);
+    }
+
+    #[test]
+    fn raw_input_rebuild_invalidates_pruned_releases_across_sources() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        keymap.bind(VirtualAction::p1_right, &[InputBinding::PadDir(PadDir::Right)]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        let release = start + Duration::from_millis(30);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+        input.begin_input_snapshot();
+        let cleanup = start + Duration::from_millis(51);
+        assert!(input.next_due(cleanup).is_none());
+        assert_eq!(input.input_age_by_action(cleanup)[VirtualAction::p1_left.ix()], 0.021);
+
+        input.map_pad(&PadEvent::Dir {
+            id: PadId(0), dir: PadDir::Right, pressed: true, timestamp: cleanup, host_nanos: 0,
+        }, || cleanup).for_each(drop);
+        let later = cleanup + Duration::from_millis(10);
+        let ages = input.input_age_by_action(later);
+        assert_eq!(ages[VirtualAction::p1_left.ix()], 0.0);
+        assert_eq!(ages[VirtualAction::p1_right.ix()], 0.01);
+        assert_eq!(input.pressed_action_mask(), VirtualAction::p1_right.bit());
+    }
+
+    #[test]
+    fn between_frame_cleanup_survives_the_next_snapshot_then_expires() {
+        for clear_with_raw_input in [false, true] {
+            let mut keymap = Keymap::default();
+            keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+            keymap.bind(VirtualAction::p1_right, &[InputBinding::Key(KeyCode::ArrowRight)]);
+            let mut input = InputState::new(&keymap, 0.02);
+            let start = Instant::now();
+            report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+            let release = start + Duration::from_millis(30);
+            report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+            input.begin_input_snapshot();
+            assert!(input.next_due(start + Duration::from_millis(40)).is_none());
+
+            assert!(input.next_due_between_snapshots(start + Duration::from_millis(51)).is_none());
+            assert!(input.next_due_between_snapshots(start + Duration::from_millis(52)).is_none());
+            input.begin_input_snapshot();
+            let next_frame = start + Duration::from_millis(60);
+            assert!(input.next_due(next_frame).is_none());
+            assert_eq!(input.input_age_by_action(next_frame)[VirtualAction::p1_left.ix()], 0.03);
+
+            if clear_with_raw_input {
+                report_age_test_key(&mut input, KeyCode::ArrowRight, true, next_frame, next_frame);
+            } else {
+                input.begin_input_snapshot();
+            }
+            assert_eq!(input.input_age_by_action(next_frame)[VirtualAction::p1_left.ix()], 0.0);
+        }
+    }
+
+    #[test]
+    fn zero_debounce_release_survives_one_update_snapshot_and_repress_replaces_it() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        let mut input = InputState::new(&keymap, 0.0);
+        let start = Instant::now();
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        let release = start + Duration::from_millis(10);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+        let now = release + Duration::from_millis(20);
+        input.begin_input_snapshot();
+        assert!(input.next_due(now).is_none());
+        assert_eq!(input.input_age_by_action(now)[VirtualAction::p1_left.ix()], 0.02);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(now)[VirtualAction::p1_left.ix()], 0.0);
+
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, now, now);
+        let released_again = now + Duration::from_millis(10);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, released_again, released_again);
+        let repressed = released_again + Duration::from_millis(10);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, repressed, repressed);
+        assert_eq!(input.input_age_by_action(repressed)[VirtualAction::p1_left.ix()], 0.0);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(repressed + Duration::from_millis(5))[VirtualAction::p1_left.ix()], 0.005);
+    }
+
+    #[test]
+    fn released_input_at_exact_debounce_boundary_survives_next_snapshot() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        let release = start + Duration::from_millis(30);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+        let boundary = start + Duration::from_millis(50);
+        input.begin_input_snapshot();
+        assert!(input.next_due(boundary).is_none());
+        assert_eq!(input.input_age_by_action(boundary)[VirtualAction::p1_left.ix()], 0.02);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(boundary + Duration::from_millis(1))[VirtualAction::p1_left.ix()], 0.021);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(boundary + Duration::from_millis(2))[VirtualAction::p1_left.ix()], 0.0);
+    }
+
+    #[test]
+    fn release_flushed_after_disabling_debounce_keeps_native_snapshot_lifetime() {
+        let mut keymap = Keymap::default();
+        keymap.bind(VirtualAction::p1_left, &[InputBinding::Key(KeyCode::ArrowLeft)]);
+        let mut input = InputState::new(&keymap, 0.02);
+        let start = Instant::now();
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, true, start, start);
+        let release = start + Duration::from_millis(1);
+        report_age_test_key(&mut input, KeyCode::ArrowLeft, false, release, release);
+        input.set_debounce_seconds(0.0);
+        input.begin_input_snapshot();
+        // The existing due schedule is only revisited at its old deadline.
+        let flush = start + Duration::from_millis(20);
+        let events: Vec<_> = input.next_due(flush).unwrap().collect();
+        assert_eq!(events.iter().map(|event| event.action).collect::<Vec<_>>(), [
+            VirtualAction::p1_left,
+            VirtualAction::p1_menu_left,
+        ]);
+        assert!(events.iter().all(|event| !event.pressed && event.timestamp == release));
+        assert_eq!(input.input_age_by_action(flush)[VirtualAction::p1_left.ix()], 0.019);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(flush + Duration::from_millis(1))[VirtualAction::p1_left.ix()], 0.02);
+        input.begin_input_snapshot();
+        assert_eq!(input.input_age_by_action(flush + Duration::from_millis(2))[VirtualAction::p1_left.ix()], 0.0);
+    }
 
     #[test]
     fn rebinding_replaces_reverse_entries_without_disturbing_shared_bindings() {
