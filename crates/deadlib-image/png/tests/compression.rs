@@ -32,7 +32,7 @@ fn data() -> Vec<Vec<u8>> {
 #[test]
 fn bidirectional_differential() {
     for bytes in data() {
-        for mode in [Compression::Stored, Compression::Fast] {
+        for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
             let compressed = zlib::compress(&bytes, mode).unwrap();
             assert_eq!(zlib::decompress(&compressed, bytes.len()).unwrap(), bytes);
             let mut reference = Vec::new();
@@ -58,7 +58,7 @@ fn bidirectional_differential() {
 
 #[test]
 fn truncation_checksums_limits_and_trailing_data() {
-    for mode in [Compression::Stored, Compression::Fast] {
+    for mode in [Compression::Stored, Compression::Fast, Compression::Rle] {
         let compressed = zlib::compress(&vec![9; 1000], mode).unwrap();
         for end in 0..compressed.len() {
             assert!(

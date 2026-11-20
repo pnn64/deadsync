@@ -23,9 +23,39 @@ Build/test independently using `cargo test -p deadlib-image-png` or
 dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
 
-The separate [benchmark workspace](bench/README.md) measures decoder CPU cycles
-and allocation requests against Rust png and image, checking native samples
-and RGBA16 pixels before measurement.
+The separate [benchmark workspace](bench/README.md) measures decoding and encoding
+CPU cycles, throughput and allocation requests against Rust png and image.
+Decoder measurements check native samples and RGBA16 pixels first; encoder
+measurements verify opaque RGBA8 pixels and report the encoded file size.
+
+`encode` returns an owned PNG byte vector. `encode_writer` writes PNG/APNG to
+`std::io::Write` using bounded row, compression and chunk buffers. Select the
+optional zero-run compressor explicitly:
+
+```rust
+use deadlib_image_png::{EncodeOptions, Filter, Png, encode_writer};
+use deadlib_image_png::zlib::Compression;
+
+fn write_png(
+    png: &Png,
+    destination: impl std::io::Write,
+) -> Result<(), deadlib_image_png::Error> {
+    let options = EncodeOptions {
+        compression: Compression::Rle,
+        filter: Filter::Adaptive,
+        ..Default::default()
+    };
+    encode_writer(png, &options, destination)?;
+    Ok(())
+}
+```
+
+`Compression::Rle` encodes zero runs in filtered bytes with distance-one DEFLATE
+matches and an analytic Huffman tree. It keeps no match dictionary and selects
+stored blocks when smaller. The same options work with `encode`.
+`EncodeOptions::default()` remains `Compression::Fast`, `Filter::Adaptive`,
+noninterlaced output and a 64 KiB IDAT chunk size. All compression modes preserve
+the supplied samples; their encoded sizes and CPU costs depend on the input.
 
 For reference color samples with 1–16 significant bits per channel, use
 `Png::from_reference_samples(width, height, color_type, channel_depths, samples)`.
@@ -138,9 +168,13 @@ filtered-image buffers. See `tests/png_stream.rs` for fragmented IO and events.
 
 `zlib::Deflater` is the matching bounded encoder: pass input/output fragments to
 `process`, mark final input with `finish=true`, and drain to `Done`. It retains
-32 KiB input blocks and cross-block LZ77 history. `encode_writer(&png, &options,
+a 32 KiB input block; `Fast` also retains cross-block LZ77 history and a match
+dictionary. `Stored` and `Rle` need neither. `encode_writer(&png, &options,
 writer)` filters native rows and emits PNG/APNG chunks directly to `Write`,
-handling partial and Interrupted writes. It returns byte and image-buffer
-statistics; the caller controls flushing. Compressed chunks are capped at
-64 KiB while honoring smaller `idat_chunk_size` values. Encoding retains the
-caller's images and metadata without whole filtered/compressed output buffers.
+handling partial and Interrupted writes. Filter scratch depends on row width;
+compression and chunk buffers are bounded independently of image height.
+Compressed chunks are capped at 64 KiB while honoring smaller
+`idat_chunk_size` values. `EncodeStats::peak_image_buffer_bytes` reports image
+pipeline storage, excluding the caller's images, metadata validation temporaries
+and the destination's buffers. A destination `Vec` accumulates the complete
+PNG. The caller controls flushing.

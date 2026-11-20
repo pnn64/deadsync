@@ -122,6 +122,12 @@ impl Adler32 {
             self.b %= 65521;
         }
     }
+    #[inline]
+    pub(crate) fn update_zeros(&mut self, len: usize) {
+        // a and b are normalized. Even their largest possible product plus b
+        // is 65520*65520+65520 = 4292935920, which fits in u32.
+        self.b = (self.b + self.a * (len % 65521) as u32) % 65521;
+    }
     fn update_bulk(&mut self, input: &[u8]) {
         #[cfg(target_arch = "x86_64")]
         if x86::adler_update(self, input) {
@@ -247,6 +253,103 @@ mod tests {
                     b = (b + a) % 65521;
                 }
                 assert_eq!(adler32(&data), (b << 16) | a, "len={len} byte={byte}");
+            }
+        }
+    }
+
+    #[test]
+    fn adler_zero_advancement_matches_modular_addition() {
+        // Binary repeated addition avoids both the implementation's product
+        // and its reduction of len before multiplying.
+        fn oracle(a: u32, b: u32, mut len: usize) -> (u32, u32) {
+            let mut delta = u64::from(a);
+            let mut sum = u64::from(b);
+            while len != 0 {
+                if len & 1 != 0 {
+                    sum = (sum + delta) % 65521;
+                }
+                delta = (delta + delta) % 65521;
+                len >>= 1;
+            }
+            (a, sum as u32)
+        }
+        let mut lengths = vec![
+            0,
+            1,
+            2,
+            3,
+            31,
+            32,
+            127,
+            128,
+            129,
+            5551,
+            5552,
+            5553,
+            65520,
+            65521,
+            65522,
+            usize::MAX / 2,
+            usize::MAX - 1,
+            usize::MAX,
+        ];
+        for factor in [2usize, 65521] {
+            if let Some(after) = 65521usize
+                .checked_mul(factor)
+                .and_then(|n| n.checked_add(1))
+            {
+                lengths.extend([after - 2, after - 1, after]);
+            }
+        }
+        for a in [0, 1, 65520] {
+            for b in [0, 1, 65520] {
+                for &len in &lengths {
+                    let expected = oracle(a, b, len);
+                    let mut actual = Adler32 { a, b };
+                    actual.update_zeros(len);
+                    assert_eq!((actual.a, actual.b), expected, "a={a} b={b} len={len}");
+                    let split = len / 2;
+                    let mut fragmented = Adler32 { a, b };
+                    fragmented.update_zeros(split);
+                    fragmented.update_zeros(len - split);
+                    assert_eq!(
+                        (fragmented.a, fragmented.b),
+                        expected,
+                        "fragmented a={a} b={b} len={len}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adler_zero_advancement_interleaves_with_nonzero_spans() {
+        let prefix: Vec<u8> = (0usize..137).map(|n| (n * 137 + 71) as u8).collect();
+        let suffix: Vec<u8> = (0usize..257).map(|n| (n * 59 + 193) as u8).collect();
+        for len in [0, 1, 127, 128, 129, 5552, 65520, 65521, 65522] {
+            for initial in [(1, 0), (65520, 65520)] {
+                let (mut a, mut b) = (u64::from(initial.0), u64::from(initial.1));
+                for byte in prefix
+                    .iter()
+                    .copied()
+                    .chain(core::iter::repeat_n(0, len))
+                    .chain(suffix.iter().copied())
+                {
+                    a = (a + u64::from(byte)) % 65521;
+                    b = (b + a) % 65521;
+                }
+                let mut actual = Adler32 {
+                    a: initial.0,
+                    b: initial.1,
+                };
+                actual.update(&prefix);
+                actual.update_zeros(len);
+                actual.update(&suffix);
+                assert_eq!(
+                    (actual.a, actual.b),
+                    (a as u32, b as u32),
+                    "initial={initial:?} len={len}"
+                );
             }
         }
     }

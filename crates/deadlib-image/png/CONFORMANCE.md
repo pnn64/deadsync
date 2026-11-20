@@ -48,7 +48,7 @@ audit; the metadata policy has separate regression coverage.
 | 5.6: ordering | All 720 core and 120 APNG permutations; `tests/ancillary_order.rs` uses explicit strict metadata policy and checks all 18 non-animation ancillary types across all native formats, optional palettes, critical-boundary placements, ordered pairs, duplicates and 720 six-type permutations per context | Covered for the Table 7 representative matrix, every small-stream IDAT split and direct event error termination; metadata recovery boundaries are checked separately |
 | 5.7–5.8: extensions and private fields | Public raw ancillary API enforces alphabetic names, ancillary/reserved bits; unknown critical chunks fail; encoder emits only supported IHDR methods | Covered for current extension API; no new public chunk definitions |
 | 7.1: integers and byte order | Big-endian native u16 samples; checked dimensions/lengths; `tests/decoder_boundaries.rs`, `tests/scalar_fields.rs`, `tests/animation_fields.rs` | Covered for IHDR, scalar metadata and APNG zero/31-bit/high-bit boundaries, all timestamp years, every delay-word value and native word-byte positions; large integer Cartesian products are not enumerated |
-| 7.2: scanlines | Native sub-byte packing/unpacking, per-row padding, 8/16-bit samples; 3,240 format/geometry/filter/interlace/compression cases | Covered; nonzero unused input bits are not image samples |
+| 7.2: scanlines | Native sub-byte packing/unpacking, per-row padding, 8/16-bit samples; 4,860 format/geometry/filter/interlace/compression cases across Stored/Fast/Rle | Covered; nonzero unused input bits are not image samples |
 | 7.3, 9.1–9.4: filters | Native None/Sub/Up/Average/Paeth plus adaptive encoder selection; byte-wise wrapping arithmetic and pass resets | Covered by reference sample matrix and PNGSuite |
 | 8.1: Adam7 | All seven pass origins/steps, empty passes, plain/stream writer and row-reader paths | Covered by geometry matrix, PNGSuite and APNG subframes |
 | 10.1, RFC 1950: zlib | All 65,536 CMF/FLG pairs, advertised-window boundaries, Adler-32, limits and prefix consumption; `tests/zlib_headers.rs`, `tests/deflate_prefix.rs` | Covered by buffered/fragmented raw and PNG tests, all level hints, 92 independent window fixtures, C zlib default/strict builds and 88,414 prefix/suffix cases; consumed-byte arithmetic is checked at virtual usize boundaries without a large input allocation |
@@ -111,7 +111,7 @@ reference difference does not change native known answers.
 | 12.3–12.4: alpha and source precision | `Png::from_reference_samples` accepts per-channel depths 1–16, scales to the smallest legal PNG depth, records sBIT and preserves high bits/alpha endpoints | Covered by exhaustive declaration/value checks, 3,456 static and 1,152 APNG writer files, 576 C native files and 576 independent C unshift recoveries; native `Image` remains the PNG-image representation |
 | 12.5: suggested palettes | PLTE/sPLT/hIST serialization and usage checks; no automatic quantization | Covered for supplied metadata; palette generation is Application |
 | 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; predictor exhaustively compared over all byte triplets, independent row/score matrix |
-| 12.8: compression | Native stored/fixed-Huffman LZ77, bounded 16-candidate chains, per-block coding choice and cross-block streaming history | Covered by flate2/C zlib comparisons, block/window/fragment tests and fresh encoder ASan campaigns; no requirement for compressed-byte identity with another encoder |
+| 12.8: compression | Native Stored, fixed-Huffman LZ77 Fast with bounded 16-candidate chains and cross-block history, and optional zero-run Rle with an analytic dynamic Huffman tree; per-block stored fallback | Stored/Fast have recorded flate2/C zlib and ASan evidence. Rle has the current format matrix and buffered/fragmented flate2 checks described below. No requirement for compressed-byte identity with another encoder |
 | 12.9: text | UTF-8 serialization, keyword byte/length classes, strict Latin-1 body encoding, native metadata compression and raw/typed APIs | Covered for these wire/encoder rules, including body NBSP and LF, empty/long text and unchanged non-null iTXt controls; line wrapping/display conventions are Application |
 | 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered by the independent encoder field/order matrix, byte-fault tests, direct APNG wire checks and prior property-bit/editor tests |
 | 13.1: errors/recovery | Default `MetadataPolicy::Recover` with explicit Strict validation; independent `AnimationPolicy::RecoverDefault`, first animation-error event/diagnostic, discarded animation frames and verified native static image; palette/profile recovery | Covered for the known metadata compatibility cases and recovery boundaries, APNG fault/CRC/sequence/data classes, fragments/truncations, fatal core/resource/IO cases and diagnostic-free static reencoding; presentation remains Application |
@@ -173,14 +173,26 @@ metadata-order pairs and APNG sequencing. Condition 7 maps to literal chunk
 dispatch and the private-name/property matrices. Condition 8 maps to all native
 formats, scanlines, filters, Adam7 and independent zlib output checks.
 
+The current `tests/static_png.rs` format matrix contains 4,860 cases: all 15
+legal color/depth combinations, nine geometries, six filter choices, plain/Adam7
+and Stored/Fast/Rle compression. It checks both native writers against native
+and Rust png decoding. `tests/deflate_stream.rs` covers Rle zero-run and literal
+boundaries, interleaved checksum spans, stored fallback, block transitions,
+fragmented input/output, empty buffers and separate finalization, with flate2
+and native inflation. Checksum unit tests independently verify zero advancement,
+normalized-state extremes, large lengths and interleaved nonzero spans.
+`Compression::Rle` is an explicit option; the default remains Fast.
+
 The recorded encoder audit passed all 145 regular tests, all 21 optional
 reference checks, the complete standalone offline debug suite, strict all-target
 Clippy and scoped rustfmt. Its ASan campaigns completed 30,000 PNG/APNG writer
 and 20,000 buffered/streaming
 DEFLATE executions without a finding; native/dependency/harness instrumentation
 and all 57 source identities were verified at that checkpoint. This recorded
-baseline predates the metadata recovery policy described above. No known missing
-required encoder feature or correctness defect was identified by that audit.
+baseline predates the metadata recovery policy described above and
+`Compression::Rle`. Its external-oracle/reference and ASan totals belong to
+that checkpoint and do not represent Rle runs. No known missing required
+encoder feature or correctness defect was identified by that audit.
 Finite testing is not a formal proof for
 every possible input; application color transforms, quantization and opaque
 profile/Exif interpretation remain the documented caller responsibilities.

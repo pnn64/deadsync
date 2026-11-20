@@ -1,5 +1,9 @@
 //! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
-use crate::{Error, checksum::adler32, reserve};
+use crate::{
+    Error,
+    checksum::{Adler32, adler32},
+    reserve,
+};
 
 #[path = "zlib/deflate.rs"]
 mod deflate;
@@ -1016,7 +1020,144 @@ pub enum Compression {
     Stored,
     #[default]
     Fast,
+    /// Zero-run encoding with an analytic residual tree and no match dictionary.
+    Rle,
 }
+
+// Signed residual magnitudes determine the literal widths. Giving both signs
+// of 32..=38 nine bits closes the Kraft sum without an input histogram.
+const fn rle_lengths() -> [u8; 286] {
+    let mut lengths = [0; 286];
+    let mut symbol = 0;
+    while symbol < 256 {
+        let magnitude = if symbol <= 128 { symbol } else { 256 - symbol };
+        lengths[symbol] = match magnitude {
+            0 => 2,
+            1 => 4,
+            2 => 5,
+            3 => 6,
+            4..=7 => 7,
+            8..=15 => 8,
+            16..=38 => 9,
+            _ => 10,
+        };
+        symbol += 1;
+    }
+    lengths[256] = 10;
+    symbol = 257;
+    while symbol < 285 {
+        lengths[symbol] = 8;
+        symbol += 1;
+    }
+    lengths[285] = 5;
+    lengths
+}
+
+const fn rle_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
+    let mut counts = [0u16; 11];
+    let mut symbol = 0;
+    while symbol < N {
+        let bits = lengths[symbol] as usize;
+        if bits != 0 {
+            counts[bits] += 1;
+        }
+        symbol += 1;
+    }
+    let mut next = [0u16; 11];
+    let mut code = 0u16;
+    let mut bits = 1;
+    while bits <= 10 {
+        code = (code + counts[bits - 1]) << 1;
+        next[bits] = code;
+        bits += 1;
+    }
+    assert!(code + counts[10] == 1024);
+    let mut codes = [(0, 0); N];
+    symbol = 0;
+    while symbol < N {
+        let bits = lengths[symbol];
+        if bits != 0 {
+            let index = bits as usize;
+            codes[symbol] = (next[index].reverse_bits() >> (16 - bits), bits);
+            next[index] += 1;
+        }
+        symbol += 1;
+    }
+    codes
+}
+
+const RLE_LENGTHS: [u8; 286] = rle_lengths();
+const RLE_CODES: [(u16, u8); 286] = rle_codes(RLE_LENGTHS);
+
+struct RleHeader {
+    words: [u32; 11],
+    bits: usize,
+}
+impl RleHeader {
+    const fn write(&mut self, value: u32, count: u8) {
+        let mut bit = 0;
+        while bit < count {
+            self.words[self.bits / 32] |= ((value >> bit) & 1) << (self.bits % 32);
+            self.bits += 1;
+            bit += 1;
+        }
+    }
+}
+
+const fn rle_header() -> RleHeader {
+    // Values 10 and 16 get two bits; eight other used values get four.
+    // This complete code-length tree needs 18 entries in DEFLATE order.
+    const META_LENGTHS: [u8; 19] = [0, 4, 4, 0, 4, 4, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 2, 0, 0];
+    const META_CODES: [(u16, u8); 19] = rle_codes(META_LENGTHS);
+    const ORDER: [usize; 18] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1];
+    let mut header = RleHeader {
+        words: [0; 11],
+        bits: 0,
+    };
+    header.write(29, 5); // 286 literal/length symbols.
+    header.write(0, 5); // One distance symbol.
+    header.write(14, 4); // 18 code-length symbols.
+    let mut at = 0;
+    while at < ORDER.len() {
+        header.write(META_LENGTHS[ORDER[at]] as u32, 3);
+        at += 1;
+    }
+    let mut lengths = [0u8; 287];
+    at = 0;
+    while at < 286 {
+        lengths[at] = RLE_LENGTHS[at];
+        at += 1;
+    }
+    lengths[286] = 1; // Distance one has the sole one-bit code, zero.
+    at = 0;
+    while at < lengths.len() {
+        let value = lengths[at];
+        let mut end = at + 1;
+        while end < lengths.len() && lengths[end] == value {
+            end += 1;
+        }
+        let (code, bits) = META_CODES[value as usize];
+        header.write(code as u32, bits);
+        let mut remaining = end - at - 1;
+        while remaining >= 3 {
+            let repeat = if remaining > 6 { 6 } else { remaining };
+            let (repeat_code, repeat_bits) = META_CODES[16];
+            header.write(repeat_code as u32, repeat_bits);
+            header.write((repeat - 3) as u32, 2);
+            remaining -= repeat;
+        }
+        while remaining != 0 {
+            header.write(code as u32, bits);
+            remaining -= 1;
+        }
+        at = end;
+    }
+    header
+}
+
+// Computed at compile time: 332 header bits after the three block-type bits.
+// Eleven words also bound future header growth within the encoder's slack.
+const RLE_HEADER: RleHeader = rle_header();
 
 struct Writer {
     bytes: Vec<u8>,
@@ -1074,20 +1215,130 @@ impl Writer {
     }
     fn finish_fixed(&mut self, checkpoint: Checkpoint, input: &[u8], final_block: bool) {
         self.literal(256);
-        let fixed = (self.bytes.len() - checkpoint.bytes) * 8 + self.count as usize
+        self.finish_compressed(checkpoint, input, final_block);
+    }
+    #[inline]
+    fn finish_compressed(&mut self, checkpoint: Checkpoint, input: &[u8], final_block: bool) {
+        let compressed = (self.bytes.len() - checkpoint.bytes) * 8 + self.count as usize
             - checkpoint.count as usize;
-        let fixed_padding = if final_block {
+        let padding = if final_block {
             (8 - self.count as usize % 8) % 8
         } else {
             0
         };
         let stored = 3 + (8 - (checkpoint.count as usize + 3) % 8) % 8 + 32 + input.len() * 8;
-        if stored < fixed + fixed_padding {
+        if stored < compressed + padding {
             self.bytes.truncate(checkpoint.bytes);
             self.word = checkpoint.word;
             self.count = checkpoint.count;
             self.stored(input, final_block);
         }
+    }
+
+    fn rle_literals(&mut self, literals: &[u8]) {
+        debug_assert!(literals.len() <= 4);
+        // Seven pending bits plus four ten-bit literals need at most 47 bits.
+        let mut word = self.word;
+        let mut count = self.count;
+        for &literal in literals {
+            let (code, bits) = RLE_CODES[usize::from(literal)];
+            word |= u64::from(code) << count;
+            count += bits;
+        }
+        let complete = usize::from(count / 8);
+        let start = self.bytes.len();
+        // A fixed-width store avoids a variable-length copy for every group.
+        // All eight bytes are initialized before the unused suffix is removed.
+        self.bytes.extend_from_slice(&word.to_le_bytes());
+        self.bytes.truncate(start + complete);
+        self.word = word >> (complete * 8);
+        self.count = count % 8;
+    }
+
+    fn start_rle(&mut self, final_block: bool) -> Checkpoint {
+        let checkpoint = Checkpoint {
+            bytes: self.bytes.len(),
+            word: self.word,
+            count: self.count,
+        };
+        self.write(u32::from(final_block) | 4, 3);
+        let whole = RLE_HEADER.bits / 32;
+        for &word in &RLE_HEADER.words[..whole] {
+            self.write(word, 32);
+        }
+        let tail = (RLE_HEADER.bits % 32) as u8;
+        if tail != 0 {
+            self.write(RLE_HEADER.words[whole], tail);
+        }
+        checkpoint
+    }
+
+    fn rle_block(&mut self, input: &[u8], final_block: bool, checksum: &mut Adler32) {
+        debug_assert!(input.len() <= matcher::WINDOW);
+        let checkpoint = self.start_rle(final_block);
+        let mut checksum_start = 0;
+        let mut pos = 0;
+        while pos < input.len() {
+            // Batch literals until a profitable zero prefix appears. Short
+            // runs and unaligned prefixes remain literals. The lookahead leaves
+            // at least eight bytes for the run/tail handling below.
+            while let Some(bytes) = input[pos..].first_chunk::<16>() {
+                if bytes[..6] == [0; 6] || bytes[4..10] == [0; 6] {
+                    break;
+                }
+                self.rle_literals(&bytes[..4]);
+                self.rle_literals(&bytes[4..8]);
+                pos += 8;
+            }
+            if input[pos] != 0 {
+                let count = input[pos..]
+                    .iter()
+                    .position(|&byte| byte == 0)
+                    .unwrap_or(input.len() - pos);
+                for literals in input[pos..pos + count].chunks(4) {
+                    self.rle_literals(literals);
+                }
+                pos += count;
+                continue;
+            }
+            let start = pos;
+            while let Some(word) = input[pos..].first_chunk::<8>() {
+                if *word != [0; 8] {
+                    break;
+                }
+                pos += 8;
+            }
+            while pos < input.len() && input[pos] == 0 {
+                pos += 1;
+            }
+            if pos - start >= 128 {
+                checksum.update(&input[checksum_start..start]);
+                checksum.update_zeros(pos - start);
+                checksum_start = pos;
+            }
+            // Seed each run with a literal, so distance one never refers to
+            // data before this block and no retained dictionary is needed.
+            self.write(RLE_CODES[0].0 as u32, RLE_CODES[0].1);
+            let mut remaining = pos - start - 1;
+            // A short match costs at least nine bits; up to four two-bit zeros
+            // are cheaper as literals, including after a 258-byte match.
+            while remaining >= 5 {
+                let length = remaining.min(258);
+                let index = length_code(length);
+                let (code, bits) = RLE_CODES[257 + index];
+                let value = u32::from(code) | (((length - LENGTH_BASE[index]) as u32) << bits);
+                // The high zero bit is the sole distance code.
+                self.write(value, bits + LENGTH_EXTRA[index] + 1);
+                remaining -= length;
+            }
+            if remaining != 0 {
+                self.rle_literals(&input[pos - remaining..pos]);
+            }
+        }
+        // Short runs stay in these spans so bulk checksum code handles noise.
+        checksum.update(&input[checksum_start..]);
+        self.write(RLE_CODES[256].0 as u32, RLE_CODES[256].1);
+        self.finish_compressed(checkpoint, input, final_block);
     }
 }
 
@@ -1116,11 +1367,15 @@ fn distance_code(distance: usize) -> usize {
     }
 }
 
-/// Encode a standards-compliant zlib stream with stored or fixed Huffman LZ77 blocks.
+/// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
 pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
     let bound = input
         .len()
-        .checked_add(input.len().div_ceil(8))
+        .checked_add(
+            input
+                .len()
+                .div_ceil(if mode == Compression::Rle { 4 } else { 8 }),
+        )
         .and_then(|n| n.checked_add(64))
         .ok_or(Error::LimitExceeded)?;
     let mut bytes = Vec::new();
@@ -1139,6 +1394,22 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
             bytes.extend_from_slice(&(!len).to_le_bytes());
             bytes.extend_from_slice(block);
         }
+    } else if mode == Compression::Rle {
+        let mut writer = Writer {
+            bytes,
+            word: 0,
+            count: 0,
+        };
+        let mut checksum = Adler32::new();
+        for start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
+            let end = input.len().min(start + matcher::WINDOW);
+            writer.rle_block(&input[start..end], end == input.len(), &mut checksum);
+        }
+        writer.align();
+        writer
+            .bytes
+            .extend_from_slice(&checksum.finish().to_be_bytes());
+        return Ok(writer.bytes);
     } else {
         let mut w = Writer {
             bytes,

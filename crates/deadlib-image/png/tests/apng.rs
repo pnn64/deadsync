@@ -157,6 +157,7 @@ fn all_formats_apng_default_roles_and_interlace() {
                     for compression in [
                         deadlib_image_png::zlib::Compression::Stored,
                         deadlib_image_png::zlib::Compression::Fast,
+                        deadlib_image_png::zlib::Compression::Rle,
                     ] {
                         let mut streamed = Vec::new();
                         deadlib_image_png::encode_writer(

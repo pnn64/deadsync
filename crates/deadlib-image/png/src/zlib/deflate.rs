@@ -13,7 +13,8 @@ pub struct DeflateProgress {
     pub status: StreamStatus,
 }
 
-/// Bounded zlib encoder with 32 KiB input blocks and cross-block LZ77 history.
+/// Bounded zlib encoder with 32 KiB input blocks. Fast retains LZ77 history;
+/// Stored and Rle need no match dictionary.
 ///
 /// `finish=true` marks the supplied input as the end of the stream. Resubmit any
 /// unconsumed suffix with `finish=true` and drain until `Done`. Intermediate
@@ -37,7 +38,8 @@ pub struct Deflater {
 impl Deflater {
     pub fn new(mode: Compression) -> Result<Self, Error> {
         let mut bytes = Vec::new();
-        reserve(&mut bytes, BLOCK * 9 / 8 + 64)?;
+        let bits = if mode == Compression::Rle { 10 } else { 9 };
+        reserve(&mut bytes, BLOCK * bits / 8 + 64)?;
         bytes.extend_from_slice(&[0x78, 0x01]);
         let mut block = Vec::new();
         reserve(&mut block, BLOCK)?;
@@ -138,7 +140,9 @@ impl Deflater {
             let n = (BLOCK - self.block.len()).min(input.len() - consumed);
             self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
             self.block.extend_from_slice(&input[consumed..consumed + n]);
-            self.checksum.update(&input[consumed..consumed + n]);
+            if self.mode != Compression::Rle {
+                self.checksum.update(&input[consumed..consumed + n]);
+            }
             consumed += n;
             let final_block = finish && consumed == input.len();
             if self.block.len() == BLOCK || final_block {
@@ -162,6 +166,9 @@ impl Deflater {
     fn encode_block(&mut self, final_block: bool) {
         if self.mode == Compression::Stored {
             self.writer.stored(&self.block, final_block);
+        } else if self.mode == Compression::Rle {
+            self.writer
+                .rle_block(&self.block, final_block, &mut self.checksum);
         } else {
             let checkpoint = self.writer.start_fixed(final_block);
             // Hash the previous block's three trailing positions once their
