@@ -379,10 +379,9 @@ impl Table {
         }
     }
     // All storage was reserved before tombstones or traversal positions change.
-    fn rebuild(&mut self, slots: usize) {
-        let old_len = self.entries.len();
-        self.entries.retain(|entry| entry.value != Value::Nil);
-        if self.entries.len() != old_len {
+    fn rebuild(&mut self, slots: usize, live: usize) {
+        if live < self.entries.len() {
+            self.entries.retain(|entry| entry.value != Value::Nil);
             self.invalidate_trace();
         }
         self.slots.resize(slots, 0);
@@ -668,7 +667,7 @@ impl Table {
             .try_reserve(slots.saturating_sub(self.slots.len()))
             .map_err(|_| Error::memory())?;
         if rebuild {
-            self.rebuild(slots);
+            self.rebuild(slots, live);
         }
         let slot = if rebuild {
             self.slot(k).expect("table rebuild creates slots").0
