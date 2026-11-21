@@ -14,14 +14,6 @@ pub(super) fn searches(bits: usize, consumed: usize) -> usize {
     }
 }
 
-/// Sample long matches while retaining every position near the next search.
-#[inline]
-pub(super) fn positions(start: usize, length: usize) -> impl Iterator<Item = usize> {
-    let end = start + length;
-    let tail = end.saturating_sub(8).max(start + 1);
-    (start + 1..tail).step_by(4).chain(tail..end)
-}
-
 /// Flat four-byte hash heads and a 32 KiB ring of backward links. Low 32-bit
 /// positions wrap independently of stream length; candidates are bounded by
 /// distance and their bytes are always verified before emitting a match.
@@ -58,6 +50,23 @@ impl Matcher {
             0
         };
         candidate
+    }
+    /// Hash a match's interior: every fourth position, then each of the last
+    /// eight, which the next search may reach. `data[0]` is position `base`;
+    /// only positions with four bytes of lookahead in `data` are hashed.
+    #[inline]
+    pub(super) fn insert_match(&mut self, data: &[u8], base: usize, start: usize, length: usize) {
+        let end = start + length;
+        let stop = end.min(data.len().saturating_sub(3));
+        let tail = end.saturating_sub(8).max(start + 1);
+        let mut next = start + 1;
+        while next < tail.min(stop) {
+            self.insert(&data[next..], base + next);
+            next += 4;
+        }
+        for next in tail..stop {
+            self.insert(&data[next..], base + next);
+        }
     }
     #[inline]
     pub(super) fn next(&self, candidate: usize, position: usize) -> Option<usize> {

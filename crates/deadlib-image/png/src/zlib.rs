@@ -1372,7 +1372,7 @@ fn distance_code(distance: usize) -> usize {
 /// caller bounds lookahead by the slice it supplies.
 #[inline(always)]
 fn fast_block(
-    writer: &mut Writer,
+    w: &mut Writer,
     matcher: &mut matcher::Matcher,
     data: &[u8],
     base: usize,
@@ -1380,7 +1380,6 @@ fn fast_block(
     end: usize,
     final_block: bool,
 ) {
-    let w = writer;
     let checkpoint = w.start_fixed(final_block);
     let mut pos = start;
     let mut misses = 0usize;
@@ -1389,30 +1388,21 @@ fn fast_block(
         let mut distance = 0;
         if pos + 3 < data.len() {
             let mut candidate = matcher.insert(&data[pos..], base + pos);
-            let max = (end - pos).min(258);
+            let current = &data[pos..end.min(pos + 258)];
             let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
                 - checkpoint.count as usize;
-            let searches = matcher::searches(bits, pos - start);
-            for attempt in 0..searches {
-                let Some(absolute) = candidate else {
-                    break;
-                };
+            let mut searches = matcher::searches(bits, pos - start);
+            // Measure every candidate instead of pre-testing single bytes; only
+            // a strictly longer match replaces the earliest longest one.
+            while let Some(absolute) = candidate {
                 let previous = absolute - base;
-                if length < max
-                    && data[previous + length] == data[pos + length]
-                    && data[previous] == data[pos]
-                {
-                    let matched =
-                        matcher::prefix(&data[previous..previous + max], &data[pos..pos + max]);
-                    if matched > length {
-                        length = matched;
-                        distance = pos - previous;
-                    }
-                    if length == max {
-                        break;
-                    }
+                let matched = matcher::prefix(&data[previous..previous + current.len()], current);
+                if matched > length {
+                    length = matched;
+                    distance = pos - previous;
                 }
-                if attempt + 1 == searches {
+                searches -= 1;
+                if length == current.len() || searches == 0 {
                     break;
                 }
                 candidate = matcher.next(absolute, base + pos);
@@ -1426,11 +1416,7 @@ fn fast_block(
             let index = distance_code(distance);
             w.write((index as u32).reverse_bits() >> 27, 5);
             w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
-            for next in matcher::positions(pos, length) {
-                if next + 3 < data.len() {
-                    matcher.insert(&data[next..], base + next);
-                }
-            }
+            matcher.insert_match(data, base, pos, length);
             pos += length;
         } else {
             // Bound work on sustained incompressible input. Search resumes
