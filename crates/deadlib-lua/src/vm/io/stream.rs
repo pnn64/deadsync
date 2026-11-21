@@ -1,7 +1,7 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
 use crate::{
     locale::{ascii_space, is_space},
-    memory::bytes::ByteOutput,
+    memory::{Buffer, bytes::ByteOutput},
     pattern::{find_byte, scan_boundary},
 };
 use std::{
@@ -221,6 +221,30 @@ impl Stream {
             }
         }
         Ok(())
+    }
+    pub(super) fn read_digits(
+        &mut self,
+        out: &mut Buffer<u8>,
+        mut digits: i32,
+        keep: impl Fn(u8) -> bool,
+    ) -> Result<i32, i32> {
+        while let Some(byte) = self.peek()?.filter(|&byte| keep(byte)) {
+            out.try_push(byte).map_err(|_| 12)?;
+            self.peek = None;
+            digits += 1;
+            let tail = &self.read[self.position..];
+            // Keep the same growth points, with the next byte in lookahead
+            // if allocation fails. Let the scalar increment handle overflow.
+            let count_room = (i64::from(i32::MAX) - i64::from(digits)) as usize;
+            let available = tail.len().min(out.capacity() - out.len()).min(count_room);
+            if available >= 32 && keep(tail[0]) && keep(tail[7]) {
+                let count = scan_boundary(&tail[..available], |byte| !keep(byte));
+                out.extend_from_slice(&tail[..count]);
+                self.position += count;
+                digits += count as i32;
+            }
+        }
+        Ok(digits)
     }
     /// Skip at most `limit` bytes, returning true at a delimiter or EOF.
     /// When `consume` is false, a found delimiter remains in lookahead.
@@ -490,5 +514,35 @@ impl Drop for Stream {
         if self.resource.is_some() && !matches!(self.resource, Some(Resource::Output)) {
             let _ = self.close();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::tests::with_memory;
+
+    #[test]
+    fn numeric_run_leaves_the_first_uncopied_byte_on_growth_failure() {
+        with_memory(|memory, attempts, reject| {
+            let mut file = Stream::closed();
+            file.readable = true;
+            file.read = vec![b'1'; 64];
+            file.read.extend_from_slice(b"2;");
+            let mut bytes = Buffer::new_in(memory.clone());
+            bytes.try_reserve_exact(64).unwrap();
+            reject.set(attempts.get() + 1);
+            let digit = |byte: u8| byte.is_ascii_digit();
+
+            assert_eq!(file.read_digits(&mut bytes, 0, digit), Err(12));
+            assert_eq!(&*bytes, &file.read[..64]);
+            assert_eq!(file.position, 65);
+            assert_eq!(file.peek(), Ok(Some(b'2')));
+
+            reject.set(0);
+            assert_eq!(file.read_digits(&mut bytes, 0, digit), Ok(1));
+            assert_eq!(&*bytes, &file.read[..65]);
+            assert_eq!(file.get(), Ok(Some(b';')));
+        });
     }
 }
