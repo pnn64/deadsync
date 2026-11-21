@@ -3,6 +3,7 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::i18n::{tr, tr_fmt, tr_fmt_into};
+#[cfg(test)]
 use crate::screens::Screen;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
@@ -44,7 +45,7 @@ use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CourseLifeConfig, CrossoverRow, ExitTransitionKind,
-    FantasticWindowOptions, GameplayAction, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
+    FantasticWindowOptions, GameplayAction, GameplayAudioSnapshot, GameplayConfig,
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
     GameplayReceptorStepBehavior, GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey,
     LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
@@ -1445,7 +1446,10 @@ impl SongLuaGameplayHost for State {
     }
 
     fn gameplay_effect(action: GameplayAction) -> ThemeEffect {
-        map_gameplay_action(action)
+        match action {
+            GameplayAction::None => ThemeEffect::None,
+            action => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::GameplayAction(action)),
+        }
     }
 
     fn reload_song_lua_effect() -> ThemeEffect {
@@ -1863,26 +1867,6 @@ pub fn init(
         }
     }
     state
-}
-
-#[inline(always)]
-const fn screen_for_exit(exit: GameplayExit) -> Screen {
-    match exit {
-        GameplayExit::Complete => Screen::Evaluation,
-        GameplayExit::Cancel => Screen::SelectMusic,
-    }
-}
-
-#[inline(always)]
-const fn map_gameplay_action(action: GameplayAction) -> ThemeEffect {
-    match action {
-        GameplayAction::None => ThemeEffect::None,
-        GameplayAction::Navigate(exit) => ThemeEffect::Navigate(screen_for_exit(exit)),
-        GameplayAction::NavigateNoFade(exit) => ThemeEffect::NavigateNoFade(screen_for_exit(exit)),
-        GameplayAction::Restart => {
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RestartGameplay)
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -5711,6 +5695,47 @@ mod tests {
     use deadlib_present::actors::SpriteSource;
 
     use deadlib_present::actors::SizeSpec;
+
+    #[test]
+    fn gameplay_host_preserves_semantic_actions() {
+        use deadsync_gameplay::GameplayExit;
+
+        assert!(matches!(
+            <State as SongLuaGameplayHost>::gameplay_effect(GameplayAction::None),
+            ThemeEffect::None
+        ));
+        for action in [
+            GameplayAction::Navigate(GameplayExit::Complete),
+            GameplayAction::NavigateNoFade(GameplayExit::Complete),
+            GameplayAction::Navigate(GameplayExit::Cancel),
+            GameplayAction::NavigateNoFade(GameplayExit::Cancel),
+            GameplayAction::Restart,
+        ] {
+            assert!(matches!(
+                <State as SongLuaGameplayHost>::gameplay_effect(action),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::GameplayAction(actual))
+                    if actual == action
+            ));
+        }
+    }
+
+    #[test]
+    fn song_lua_named_destinations_keep_immediate_navigation() {
+        for (name, expected) in [
+            (None, Screen::Evaluation),
+            (Some(""), Screen::Evaluation),
+            (Some("ScreenEvaluationStage"), Screen::Evaluation),
+            (Some("ScreenSelectMusic"), Screen::SelectMusic),
+            (Some("ScreenSelectCourse"), Screen::SelectCourse),
+            (Some("ScreenTitleMenu"), Screen::Menu),
+        ] {
+            let effect = <State as SongLuaGameplayHost>::next_screen_effect(name).unwrap();
+            assert!(matches!(effect, ThemeEffect::NavigateNoFade(screen) if screen == expected));
+        }
+        for name in ["ScreenUnknown", "ScreenGameplay"] {
+            assert!(<State as SongLuaGameplayHost>::next_screen_effect(Some(name)).is_err());
+        }
+    }
 
     #[test]
     fn background_start_cache_tracks_the_active_timeline_cursor() {

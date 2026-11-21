@@ -6,6 +6,9 @@
 
 use crate::gameplay_lobby::LobbyRuntimeView;
 use crate::lobbies::{self, JoinedLobby, MachinePlayerStats};
+use crate::lobby_selection::{
+    LobbySelectionSyncState, LobbySelectionSyncStep, RemoteSelectionOutcome,
+};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayerSide;
 use deadsync_rules::timing::WindowCounts;
@@ -364,6 +367,7 @@ impl EvaluationLobbySession {
 #[derive(Clone, Debug, Default)]
 pub struct SelectMusicLobbySession {
     state: LobbyWaitState,
+    selection: LobbySelectionSyncState,
 }
 
 impl SelectMusicLobbySession {
@@ -371,6 +375,7 @@ impl SelectMusicLobbySession {
     pub fn new(runtime_view: LobbyRuntimeView) -> Self {
         Self {
             state: LobbyWaitState::new(runtime_view),
+            selection: LobbySelectionSyncState::default(),
         }
     }
 
@@ -383,6 +388,27 @@ impl SelectMusicLobbySession {
     /// Snapshot refresh does not discard inputs held across a live update.
     pub fn sync_runtime_view(&mut self, runtime_view: LobbyRuntimeView) {
         self.state.runtime_view = runtime_view;
+    }
+
+    /// Queue returned presence before applying a requested remote selection.
+    /// The borrowed snapshot is not retained alongside this session's view.
+    #[must_use]
+    pub fn prepare_selection_sync<'snapshot>(
+        &mut self,
+        snapshot: &'snapshot lobbies::Snapshot,
+        content_generation: u64,
+    ) -> LobbySelectionSyncStep<'snapshot> {
+        self.selection.prepare_sync(snapshot, content_generation)
+    }
+
+    pub fn record_selection_attempt(
+        &mut self,
+        remote: &lobbies::LobbySongInfo,
+        content_generation: u64,
+        outcome: RemoteSelectionOutcome,
+    ) {
+        self.selection
+            .record_attempt(remote, content_generation, outcome);
     }
 
     #[must_use]

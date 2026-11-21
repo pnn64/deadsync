@@ -37,8 +37,8 @@ theme to describe an input or store a setting:
 `deadsync-gameplay` owns target-score reachability and each player's one-shot
 fail/restart decision. The HUD uses the same current-score facts and reachability
 predicate, retaining its conditional calculations and single EX snapshot. Profile
-adapters select the persisted ITG, EX, or Hard EX policy; themes map the resulting
-`GameplayAction` to screen effects.
+adapters select the persisted ITG, EX, or Hard EX policy; themes forward the
+resulting `GameplayAction` as a semantic effect for game-owned routing.
 
 Frame ordering is part of compatibility. Target policy runs after song-Lua
 updates and before frame input and Draw. Existing completion/cancellation takes
@@ -46,6 +46,56 @@ priority. Lua outro suppression still tests the original core action, so a
 target-triggered failure retains its immediate exit. Autoplay invalidation and
 natural-completion mine bookkeeping also live in the game and run at their
 existing stage-exit boundaries.
+
+`deadsync-gameplay::exit_route` owns course continuation, completion destinations,
+course cancellation, and consumption of a pending restart. It accepts the
+existing `GameplayAction` plus live session facts and returns a semantic
+destination with the original normal or immediate transition mode. Only normal
+completion can advance a course; immediate completion always requests results.
+An immediate cancel from gameplay consumes a pending restart before considering
+course cancellation. A direct Restart action still begins the existing exit
+protocol before its eventual cancel returns to the stage.
+
+Normal gameplay effects carry the original game action to the shell instead of
+first becoming a concrete screen request. The shell calls the game policy for
+each effect when it executes, after preceding effects have changed session state.
+It reads failure state only for normal completion from gameplay, and consumes a
+pending restart before offset-prompt or transition-busy early returns. The theme
+maps the resulting destination to its screens. Explicit song-Lua navigation to
+Evaluation or Select Music uses the same policy through a compatibility adapter;
+other named destinations and validation before End retain their existing paths.
+No-op actions still become empty effects, and existing effect buffers are reused.
+
+`deadsync-gameplay::course_progress::CourseProgress` owns the course cursor,
+interruption state, availability and completion rules, entry/reload advancement,
+and Endless renewal decisions. Queries receive the current prepared stage count
+and Endless flag, so appended cycles and changes to the course mode are observed
+immediately. The value contains no stage metadata, result history, or theme types.
+
+The canonical cursor advances only after successful gameplay entry. A song-Lua
+replacement uses a separate entry view with a saturating cursor rewind; it does
+not advance canonical progress or record the outgoing stage. The game also
+selects whether that entry uses the next-stage lead-in. Endless lookup retains
+modulo availability, while entry requires a new cycle at the prepared boundary
+and rejects skipped, unprepared history. Loading interruption recovers recorded
+course results without marking players failed. The shell retains chart loading,
+transactional cycle append, notices, and result/evaluation assembly; failed
+appends preserve the existing stages, progress, and totals.
+
+`deadsync-rules::course::CourseType` is the shared course mode. The simfile parser
+classifies its file data into that game type, and theme views carry the same value.
+The parser's `CourseType` and theme's `CourseTypeView` public paths remain
+reexports, with the same variants and Nonstop default. Course selection passes
+the value directly instead of converting between duplicate enums.
+
+`deadsync-gameplay::course_life_config` owns course life-model selection and Oni
+rewards alongside life initialization, damage, and carry. Its `CourseLifeStage`
+borrows song metadata and copies the selected chart indices and authored gains.
+Missing stages use Bar; explicit nonnegative Oni rewards, including zero, skip
+chart lookup. Automatic rewards retain each player's difficulty/edit-slot lookup
+and the meter-eight boundary. Survival gains pass through unchanged so existing
+initialization applies its minimum and nonfinite handling. The shell retains its
+life-config wrapper and calls it with the existing reload-adjusted entry view.
 
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
@@ -128,6 +178,32 @@ barrier. Select Music clears its existing navigation holds before sampling the
 disconnect deadline. The game owns whether input is blocked; the displayed
 status label does not participate in that decision.
 
+`deadsync-online::lobby_selection` owns remote song resolution, confirmation
+publication, Select Music presence, and synchronization retries. Its private
+selection cache lives inside the existing `SelectMusicLobbySession`, which
+retains the single lobby view. Successful and failed identities are independent:
+changes to the wheel generation retry a failed lookup without reapplying a
+successful one. Room changes clear both identities; disconnection in the same
+room or a missing remote selection clears only failure. Reconstructing the screen
+starts a new session.
+
+Song resolution preserves grouped-wheel precedence, the catalog's ordered
+full-path or pack/song matching, and its first song-directory fallback. Cached
+identity uses case-sensitive normalized paths and exact chart/rate values.
+Confirmation separately accepts optional remote metadata and its existing rate
+tolerance, and builds a local payload only when publication is eligible. Presence
+is emitted on each connected, joined synchronization; the online runtime still
+deduplicates machine-state requests.
+
+The theme focuses the resolved song before passing live local selection facts
+back to the game. The game chooses the local-style chart, participant row,
+preferred difficulty, accepted rate, and whether preview must stop. The theme
+applies those decisions and resets wheel animations and image caches. A resolved
+song remains successful even without a chart for the local style. Synchronization
+keeps its existing frame position and profile/audio/online request buffers, with
+no candidate list or additional retained snapshot. Stable cache hits reuse their
+retained keys without allocating.
+
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
@@ -135,6 +211,22 @@ Workspace callers are updated for these source-level changes:
 - Import `REFLEX_PAD_ID_BASE` and `PAD_ID_COUNT_CAP` from `deadsync-input`.
   Persisted device IDs are unchanged.
 - Exhaustive `GameplayAction` matches must handle the new `Restart` action.
+- Normal gameplay effects now carry `SimplyLoveRuntimeRequest::GameplayAction`;
+  exhaustive runtime-request matches must handle that variant. The exit-routing
+  extraction adds no further `GameplayAction` variants. The public
+  `resolve_effect_route` context, result, and function remain compatible adapters
+  around the game policy. Raw semantic runtime effects have no `ThemeFlowEvent`
+  until routing maps them to navigation.
+- The shell's internal `CourseRunState` stores a `CourseProgress` value instead of
+  public cursor/interruption fields. Entry, reload, and loading-failure paths use
+  its game-owned operations; existing `has_next_stage`, `next_stage`, and
+  `is_finished` shell query signatures are retained.
+- Course modes have one definition in `deadsync_rules::course::CourseType`.
+  `deadsync_simfile::course::CourseType` and
+  `deadsync_theme::views::CourseTypeView` remain enum reexports, preserving
+  existing qualified and glob variant imports. The shell's
+  `course_life_config_for_stage` signature remains compatible and delegates to
+  the game using borrowed stage facts.
 - Initialize gameplay through `init_gameplay_runtime`.
   `GameplayControlRuntimeState` now keeps one-shot target handling private and
   no longer supports struct-literal construction outside `deadsync-gameplay`.
@@ -152,6 +244,11 @@ Workspace callers are updated for these source-level changes:
   and runtime-view refresh wrappers. Their lobby view and disconnect holds now
   live in `EvaluationLobbySession` and `SelectMusicLobbySession`; direct state
   access uses the sessions' read-only runtime-view and countdown accessors.
+- Select Music's room and remote-selection caches are private session state.
+  `prepare_selection_sync` and `record_selection_attempt` coordinate presence
+  and retries; `lobby_selection` supplies song resolution, publication, and typed
+  chart/rate decisions. Existing playlist path and sync-label adapters retain
+  their signatures and delegate to the game-owned formatters.
 - Practice screen entry/update/input signatures and `MusicStartSnap` remain
   compatible. Its private playback mode is replaced by `PracticePlayback`, and
   its editor fields are owned by `PracticeEditor`. `PracticeRuntimeView` keeps
@@ -178,16 +275,36 @@ guards keep editor state, input/repeat decisions, and rate audio commands in the
 game. Game-owned editor tests exercise the real gameplay core, including held
 input ordering, selection restoration, seeking, playback ranges, rate feedback,
 and gameplay function keys, without requiring a theme dependency.
-Lobby guards keep wait decisions, disconnect holds, and Evaluation stat
-conversion in `deadsync-online`. Its controller tests exercise barrier precedence,
-live local sides, exact hold deadlines, publication ordering, and the screens'
-distinct snapshot behavior without importing a theme.
+Lobby guards keep wait decisions, disconnect holds, Evaluation stat conversion,
+and remote-selection policy in `deadsync-online`. Its controller tests exercise
+barrier precedence, live local sides, exact hold deadlines, publication ordering,
+the screens' distinct snapshot behavior, song matching, selection retries,
+chart/rate decisions, and allocation-free stable cache hits without importing a
+theme.
+Exit-routing guards keep course/restart decisions in `deadsync-gameplay` and
+require the shell to resolve each atomic effect before executing it. Game tests
+cover semantic destinations and restart consumption, while theme tests cover
+legacy navigation and mapping to concrete screens.
+Course-progress guards enforce private game-owned state, live course facts, and
+entry/renewal ordering in the shell. Scalar game tests cover finite and Endless
+boundaries, interruption, cursor saturation, and reload views. Shell regressions
+retain real chart loading, append rollback, and accumulated-result coverage.
+Course-mode and life-selection guards require the canonical game type, public
+compatibility paths, borrowed shell adapter, lazy chart lookup, and reload entry
+ordering. Game regressions cover life-model selection, authored and automatic
+rewards, actual chart-slot lookup, raw Survival gains, and initialization/carry.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
 cargo test -p deadsync-gameplay --lib
+cargo test -p deadsync-gameplay --lib exit_route
+cargo test -p deadsync-gameplay --lib course_progress
+cargo test -p deadsync-gameplay --lib course_life_config_tests
+cargo test -p deadsync-simfile --lib course::tests::course_type_follows_itg_precedence
+cargo test -p deadsync-shell --lib -- course::partner_tests app::course_transition_tests --test-threads=1
 cargo test -p deadsync-online --lib gameplay_lobby
 cargo test -p deadsync-online --lib lobby_wait
+cargo test -p deadsync-online --lib lobby_selection
 cargo test -p deadsync-input --test input_pipeline_allocations
 cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ```
@@ -197,11 +314,12 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 The production crate graph follows these directions. Normal song-Lua lifecycle,
 callback input sequencing, practice playback/editor behavior, and gameplay lobby
 coordination now have game owners, as do Evaluation and Select Music lobby input
-barriers and disconnect handling. Simply Love still wraps gameplay state. Music
-selection retains remote song-selection, presence, deduplication, and retry
-policy; these decisions still need game-owned controllers. Course continuation,
-failure, cancellation, and restart routing still cross the theme effect adapter
-and should produce semantic outcomes before a theme selects its screen and fade.
+barriers, disconnect handling, and remote song-selection synchronization. Simply
+Love still wraps gameplay state. Course continuation and restart destinations,
+course progress, interruption, Endless renewal, course modes, and life selection
+now have game owners. Course preparation and result orchestration still run
+through the shell's course/session code; carry algorithms and score aggregation
+already have game owners.
 
 The shell still uses concrete theme screen types. Consolidate that integration
 behind a theme-neutral presentation interface after the remaining runtime work;

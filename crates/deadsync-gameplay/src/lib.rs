@@ -44,6 +44,8 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+pub mod course_progress;
+pub mod exit_route;
 pub mod practice;
 
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
@@ -173,3 +175,5 @@ include!("tests.rs");
 include!("runtime_regression_tests.rs");
 #[cfg(test)]
 mod calibration_tests;
+#[cfg(test)]
+mod course_life_config_tests;

@@ -1,14 +1,16 @@
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::course_progress::{CourseProgress, CourseRenewal};
 use deadsync_gameplay::{
-    CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, course_display_timing_for_stages,
-    course_display_totals_for_chart, course_display_totals_for_chart_side,
+    CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, CourseLifeStage,
+    course_display_timing_for_stages, course_display_totals_for_chart,
+    course_display_totals_for_chart_side, course_life_config,
 };
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
+use deadsync_rules::course::CourseType;
 use deadsync_score::{self as score_data, stage_stats};
-use deadsync_theme::views::CourseTypeView;
 use deadsync_theme_simply_love::views::{
     CourseGraphStage, CourseStagePlan, ScoreInfo, SelectedCoursePlan,
 };
@@ -34,42 +36,44 @@ pub struct CourseRunState {
     pub course_difficulty_name: String,
     pub course_meter: Option<u32>,
     pub course_stepchart_label: String,
-    pub course_type: CourseTypeView,
+    pub course_type: CourseType,
     pub lives: i32,
     pub song_stub: Arc<SongData>,
     pub stages: Vec<CourseStageRuntime>,
     pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
-    pub next_stage_index: usize,
-    /// A loading error ends the course without marking its players as failed.
-    pub interrupted: bool,
+    pub progress: CourseProgress,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
 }
 
 impl CourseRunState {
     pub fn has_next_stage(&self) -> bool {
-        !self.interrupted
-            && !self.stages.is_empty()
-            && (self.course_type == CourseTypeView::Endless
-                || self.next_stage_index < self.stages.len())
+        self.progress.has_next_stage(
+            self.stages.len(),
+            self.course_type == CourseType::Endless,
+        )
     }
 
     pub fn next_stage(&self) -> Option<&CourseStageRuntime> {
-        if self.interrupted || self.stages.is_empty() {
-            return None;
-        }
-        let index = if self.course_type == CourseTypeView::Endless {
-            self.next_stage_index % self.stages.len()
-        } else {
-            self.next_stage_index
-        };
+        let index = self.progress.stage_index(
+            self.stages.len(),
+            self.course_type == CourseType::Endless,
+        )?;
         self.stages.get(index)
     }
 
     pub fn is_finished(&self, failed: bool) -> bool {
-        failed
-            || self.interrupted
-            || (self.course_type != CourseTypeView::Endless
-                && self.next_stage_index >= self.stages.len())
+        self.progress.is_finished(
+            self.stages.len(),
+            self.course_type == CourseType::Endless,
+            failed,
+        )
+    }
+
+    pub fn renewal(&self) -> CourseRenewal {
+        self.progress.renewal(
+            self.stages.len(),
+            self.course_type == CourseType::Endless,
+        )
     }
 }
 
@@ -77,32 +81,13 @@ pub fn course_life_config_for_stage(
     course: &CourseRunState,
     chart_type: &str,
 ) -> [CourseLifeConfig; MAX_PLAYERS] {
-    let Some(stage) = course.next_stage() else {
-        return [CourseLifeConfig::Bar; MAX_PLAYERS];
-    };
-    match course.course_type {
-        CourseTypeView::Nonstop | CourseTypeView::Endless => [CourseLifeConfig::Bar; MAX_PLAYERS],
-        CourseTypeView::Oni => {
-            let total_lives = u32::try_from(course.lives).unwrap_or(1).max(1);
-            std::array::from_fn(|player| {
-                let reward_lives = u32::try_from(stage.gain_lives).unwrap_or_else(|_| {
-                    stage
-                        .song
-                        .chart_for_steps_index(chart_type, stage.steps_index[player])
-                        .map_or(1, |chart| if chart.meter >= 8 { 2 } else { 1 })
-                });
-                CourseLifeConfig::Battery {
-                    total_lives,
-                    reward_lives,
-                }
-            })
-        }
-        CourseTypeView::Survival => {
-            [CourseLifeConfig::Survival {
-                gain_seconds: stage.gain_seconds,
-            }; MAX_PLAYERS]
-        }
-    }
+    let stage = course.next_stage().map(|stage| CourseLifeStage {
+        song: stage.song.as_ref(),
+        steps_index: stage.steps_index,
+        gain_lives: stage.gain_lives,
+        gain_seconds: stage.gain_seconds,
+    });
+    course_life_config(course.course_type, course.lives, stage, chart_type)
 }
 
 fn course_stage_runtime_from_plan(
@@ -231,8 +216,9 @@ fn append_endless_cycle_with_loader(
     chart_type: &str,
     load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<bool, String> {
-    if course.interrupted
-        || course.course_type != CourseTypeView::Endless
+    if !course
+        .progress
+        .can_append_endless_cycle(course.course_type == CourseType::Endless)
         || selection.path != course.path
     {
         return Ok(false);
@@ -292,8 +278,7 @@ pub fn build_course_run_from_selection(
         song_stub: selection.song_stub,
         stages,
         course_display_totals,
-        next_stage_index: 0,
-        interrupted: false,
+        progress: CourseProgress::default(),
         stage_summaries: Vec::new(),
     })
 }
@@ -312,15 +297,17 @@ pub fn course_total_seconds(course: &CourseRunState) -> f32 {
 }
 
 pub fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTiming {
-    course_display_timing_for_stages(&course.stages, course.next_stage_index, |stage| {
-        stage.song.music_length_seconds
-    })
+    course_display_timing_for_stages(
+        &course.stages,
+        course.progress.next_stage_index(),
+        |stage| stage.song.music_length_seconds,
+    )
 }
 
 fn course_summary_totals(
     course: &CourseRunState,
 ) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
-    if course.course_type == CourseTypeView::Endless {
+    if course.course_type == CourseType::Endless {
         [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
     } else {
         course

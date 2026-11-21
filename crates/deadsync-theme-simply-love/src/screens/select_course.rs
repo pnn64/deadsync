@@ -970,12 +970,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             total_length_seconds: meta_total_length_seconds,
             has_random_entries,
             has_most_played_entries,
-            course_type: match course_type {
-                course::CourseType::Nonstop => CourseTypeView::Nonstop,
-                course::CourseType::Oni => CourseTypeView::Oni,
-                course::CourseType::Endless => CourseTypeView::Endless,
-                course::CourseType::Survival => CourseTypeView::Survival,
-            },
+            course_type,
             lives: course.lives,
         });
 

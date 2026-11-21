@@ -81,8 +81,8 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::{
-    LateJoinContext, ProfileSelectionContext, ThemeEffectRouteContext,
-    evaluation_summary_return_to, late_join_side, profile_selection_plan, theme_effect_route_plan,
+    LateJoinContext, ProfileSelectionContext, evaluation_summary_return_to, late_join_side,
+    profile_selection_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -173,9 +173,11 @@ use deadlib_present::actors::Actor;
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 #[cfg(test)]
-use deadsync_gameplay::CourseDisplayTotals;
+use deadsync_gameplay::{CourseDisplayTotals, course_progress::CourseProgress};
+use deadsync_gameplay::exit_route::{GameplayExitRouteContext, resolve_gameplay_exit_route};
 use deadsync_gameplay::{
-    GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
+    GameplayAction, GameplayExit, GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
+    ReplayOffsetSnapshot,
 };
 use deadsync_input as logical_input;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -211,7 +213,7 @@ use deadsync_theme_simply_love::{
     SimplyLoveInputResult as ThemeInputResult, SimplyLoveLobbyRequest, SimplyLoveMediaRequest,
     SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
     SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner,
-    SimplyLoveSyncRequest,
+    SimplyLoveSyncRequest, effect_for_gameplay_exit, gameplay_action_for_effect,
 };
 
 /// The main Options rows that launch standalone child screens should regain
@@ -3197,8 +3199,8 @@ impl App {
         if let Some(sound) = song_start_sfx {
             self.audio.play_sfx(&sound);
         }
-        if !finish.lua_reload && let Some(course) = self.state.session.course_run.as_mut() {
-            course.next_stage_index = course.next_stage_index.saturating_add(1);
+        if let Some(course) = self.state.session.course_run.as_mut() {
+            course.progress.finish_entry(finish.lua_reload);
         }
         commands
     }
@@ -3266,10 +3268,9 @@ impl App {
         let Some(course) = self.state.session.course_run.as_mut() else {
             return false;
         };
-        if course.stage_summaries.is_empty() {
+        if !course.progress.interrupt_loading(course.stage_summaries.len()) {
             return false;
         }
-        course.interrupted = true;
         error!("Unable to prepare next course stage: {error}");
         self.state.shell.interaction.show_message(
             "Unable to prepare next course stage".to_string(),
@@ -5663,27 +5664,34 @@ impl App {
         action: ThemeEffect,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let (action, clear_restart_pending) = match action {
-            action @ (ThemeEffect::Navigate(_) | ThemeEffect::NavigateNoFade(_)) => {
-                let current_screen = self.state.screens.current_screen;
+        let (action, clear_restart_pending) = match gameplay_action_for_effect(&action) {
+            Some(GameplayAction::None) => (ThemeEffect::None, false),
+            Some(GameplayAction::Restart) => (
+                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay),
+                false,
+            ),
+            Some(gameplay_action) => {
+                let from_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
                 let course = self.state.session.course_run.as_ref();
-                let gameplay_failed =
-                    matches!(action, ThemeEffect::Navigate(CurrentScreen::Evaluation))
-                        && current_screen == CurrentScreen::Gameplay
-                        && self.current_gameplay_stage_failed();
-                let plan = theme_effect_route_plan(
-                    action,
-                    ThemeEffectRouteContext {
-                        current_screen,
+                let all_joined_players_failed = matches!(
+                    gameplay_action,
+                    GameplayAction::Navigate(GameplayExit::Complete)
+                ) && from_gameplay
+                    && self.current_gameplay_stage_failed();
+                let route = resolve_gameplay_exit_route(
+                    gameplay_action,
+                    GameplayExitRouteContext {
+                        from_gameplay,
                         restart_pending: self.state.session.restart_pending,
                         course_active: course.is_some(),
                         course_has_next_stage: course.is_some_and(CourseRunState::has_next_stage),
-                        gameplay_failed,
+                        all_joined_players_failed,
                     },
-                );
-                (plan.action, plan.clear_restart_pending)
+                )
+                .expect("navigation action must have a gameplay exit route");
+                (effect_for_gameplay_exit(route), route.consume_restart_pending)
             }
-            action => (action, false),
+            None => (action, false),
         };
         if clear_restart_pending {
             self.state.session.restart_pending = false;
@@ -5720,6 +5728,9 @@ impl App {
             ThemeEffect::Exit => self.handle_process_exit(ProcessExitRequest::Exit),
             ThemeEffect::Shutdown => self.handle_process_exit(ProcessExitRequest::Shutdown),
             ThemeEffect::Runtime(request) => match request {
+                SimplyLoveRuntimeRequest::GameplayAction(_) => {
+                    unreachable!("gameplay actions must be normalized before runtime execution")
+                }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
                     profile_id,
                     display_name,
@@ -10106,8 +10117,8 @@ impl App {
             // The session cursor already points past the active stage. A Lua
             // screen replacement reloads that stage without recording it.
             let mut entry_course = self.state.session.course_run.clone();
-            if lua_reload && let Some(course) = &mut entry_course {
-                course.next_stage_index = course.next_stage_index.saturating_sub(1);
+            if let Some(course) = &mut entry_course {
+                course.progress = course.progress.for_entry(lua_reload);
             }
             let entry_course = entry_course.as_ref();
             let course_display_totals = entry_course.map(|course| course.course_display_totals);
@@ -10385,7 +10396,7 @@ impl App {
 
                 let color_index = po_state.active_color_index;
                 let lead_in_timing = entry_course.and_then(|course| {
-                    (course.next_stage_index > 0).then_some(LeadInTiming {
+                    course.progress.uses_next_stage_lead_in().then_some(LeadInTiming {
                         min_seconds_to_step: COURSE_MIN_SECONDS_TO_STEP_NEXT_SONG,
                         min_seconds_to_music: COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG,
                     })
@@ -10405,7 +10416,7 @@ impl App {
                     });
                 let stage_intro_text: Arc<str> = if let Some(course) = entry_course
                 {
-                    let stage_num = course.next_stage_index.saturating_add(1);
+                    let stage_num = course.progress.next_stage_index().saturating_add(1);
                     if course.course_type == deadsync_theme::views::CourseTypeView::Endless {
                         Arc::from(format!("STAGE {stage_num}"))
                     } else {
@@ -12529,8 +12540,7 @@ mod tests {
             song_stub: song_a.clone(),
             stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
             course_display_totals,
-            next_stage_index: 1,
-            interrupted: false,
+            progress: CourseProgress::new(1),
             stage_summaries: vec![stage_stats::StageSummary {
                 song: song_a,
                 music_rate: 1.0,
@@ -12616,8 +12626,7 @@ mod tests {
                     ..CourseDisplayTotals::default()
                 },
             ],
-            next_stage_index: 1,
-            interrupted: false,
+            progress: CourseProgress::new(1),
             stage_summaries: vec![stage],
         };
         let summary = build_course_summary_stage(&course).expect("course summary");
@@ -12739,8 +12748,7 @@ mod tests {
             song_stub: song.clone(),
             stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
             course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
-            next_stage_index: 1,
-            interrupted: false,
+            progress: CourseProgress::new(1),
             stage_summaries: Vec::new(),
         };
         let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
@@ -12751,7 +12759,8 @@ mod tests {
             .course_run
             .as_mut()
             .expect("active course")
-            .next_stage_index = 2;
+            .progress
+            .finish_entry(false);
         session.record_stage_result(stages[1].clone());
         let completed = session.take_final_course(false).expect("completed course");
         assert!(session.course_run.is_none());

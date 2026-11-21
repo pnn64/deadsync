@@ -55,15 +55,14 @@ use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_online::lobby_selection::{self, LocalSongSelection, RemoteSelectionOutcome};
 use deadsync_online::lobby_wait::{LobbyWaitReason, LocalLobbyPlayers, SelectMusicLobbySession};
 use deadsync_profile as profile_data;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{BpmTimeline, beat_at_sec_from_bpms, sec_at_beat_from_bpms};
-use deadsync_simfile::playlist::{
-    normalize_song_path as normalize_lobby_song_path, song_pack_and_dir_name,
-};
+use deadsync_simfile::playlist::song_pack_and_dir_name;
 use deadsync_simfile::song_sort::{
     GroupedSongs, SongSortGroup, alpha_group_char, artist_grouped_songs, bpm_grouped_songs,
     genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_cmp,
@@ -1872,14 +1871,6 @@ pub struct State {
     music_wheel_moved: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
-    lobby_last_joined_code: Option<String>,
-    /// Main-thread, screen-lifetime, single-entry identity for the last remote
-    /// selection applied to the wheel. Stable hits only compare borrowed text;
-    /// replacement allocates at most the three identity strings below.
-    lobby_last_applied_remote_song: Option<LobbySongKey>,
-    /// One failed remote identity plus the wheel generation it searched. A miss
-    /// performs no work until content replacement can change the lookup result.
-    lobby_last_failed_remote_song: Option<FailedLobbySong>,
     lobby_notice_text: Option<String>,
     lobby_notice_time_left: f32,
 
@@ -4081,9 +4072,6 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
-        lobby_last_joined_code: None,
-        lobby_last_applied_remote_song: None,
-        lobby_last_failed_remote_song: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
         step_artist_cycle_base: 0.0,
@@ -4337,9 +4325,6 @@ pub fn init_placeholder() -> State {
         heart_rate_view: heart_rate::HeartRateView::default(),
         prev_selected_index: 0,
         time_since_selection_change: 0.0,
-        lobby_last_joined_code: None,
-        lobby_last_applied_remote_song: None,
-        lobby_last_failed_remote_song: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
         step_artist_cycle_base: 0.0,
@@ -7677,92 +7662,6 @@ const fn selected_steps_index_for_sync(state: &State) -> usize {
     }
 }
 
-#[inline(always)]
-const fn preferred_steps_index_for_sync(state: &State) -> usize {
-    match (state.session.play_style, state.session.player_side) {
-        (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-            | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple
-            | profile_data::PlayStyle::Routine
-            | profile_data::PlayStyle::PumpRoutine,
-            profile_data::PlayerSide::P2,
-        ) => state.p2_preferred_difficulty_index,
-        _ => state.preferred_difficulty_index,
-    }
-}
-
-#[inline(always)]
-const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
-    match (state.session.play_style, state.session.player_side) {
-        (
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
-            | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple
-            | profile_data::PlayStyle::Routine
-            | profile_data::PlayStyle::PumpRoutine,
-            profile_data::PlayerSide::P2,
-        ) => {
-            state.p2_selected_steps_index = steps_index;
-            if steps_index < STANDARD_DIFFICULTY_COUNT {
-                state.p2_preferred_difficulty_index = steps_index;
-            }
-        }
-        _ => {
-            state.selected_steps_index = steps_index;
-            if steps_index < STANDARD_DIFFICULTY_COUNT {
-                state.preferred_difficulty_index = steps_index;
-            }
-        }
-    }
-}
-
-fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String)> {
-    deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
-}
-
-fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {
-    let needle = normalize_lobby_song_path(song_path);
-    let needle_leaf = needle.rsplit('/').next().unwrap_or(needle.as_str());
-    let needle_pack_and_song = pack_and_song_name_from_lobby_path(song_path);
-    if let Some(song) = state.group_entries.iter().find_map(|entry| match entry {
-        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref(), &state.song_scan_roots)
-            .filter(|path| path.eq_ignore_ascii_case(needle.as_str()))
-            .map(|_| song.clone()),
-        _ => None,
-    }) {
-        return Some(song);
-    }
-
-    let mut leaf_match = None;
-    for pack in &state.song_packs {
-        for song in &pack.songs {
-            let Some(path) = lobby_song_path(song.as_ref(), &state.song_scan_roots) else {
-                continue;
-            };
-            if path.eq_ignore_ascii_case(needle.as_str()) {
-                return Some(song.clone());
-            }
-            if let Some((needle_pack, needle_song)) = needle_pack_and_song.as_ref()
-                && let Some((pack_dir, song_dir)) = song_pack_and_dir_name(song.as_ref())
-                && pack_dir.eq_ignore_ascii_case(needle_pack.as_str())
-                && song_dir.eq_ignore_ascii_case(needle_song.as_str())
-            {
-                return Some(song.clone());
-            }
-            if leaf_match.is_none()
-                && path
-                    .rsplit('/')
-                    .next()
-                    .is_some_and(|leaf| leaf.eq_ignore_ascii_case(needle_leaf))
-            {
-                leaf_match = Some(song.clone());
-            }
-        }
-    }
-    leaf_match
-}
-
 fn debug_screen_name(screen_name: &str) -> String {
     let screen_name = screen_name.trim();
     if screen_name.is_empty() || screen_name.eq_ignore_ascii_case("NoScreen") {
@@ -7788,11 +7687,7 @@ fn set_lobby_notice(state: &mut State, text: impl Into<String>) {
 
 
 fn sync_chart_label(chart: &ChartData) -> String {
-    if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
-        format!("{} ({})", chart.difficulty, chart.description)
-    } else {
-        chart.difficulty.clone()
-    }
+    lobby_selection::chart_label(chart)
 }
 
 pub(crate) fn selected_chart_ix_for_sync(
@@ -7805,129 +7700,36 @@ pub(crate) fn selected_chart_ix_for_sync(
     chart_ix_for_steps_index(&standard, steps_index, edits.as_slice())
 }
 
+fn local_lobby_song_selection(state: &State) -> LocalSongSelection {
+    LocalSongSelection {
+        play_style: state.session.play_style,
+        player_side: state.session.player_side,
+        music_rate: state.session.music_rate,
+        selected_steps: [state.selected_steps_index, state.p2_selected_steps_index],
+        preferred_steps: [
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ],
+    }
+}
+
 fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
     let song = selected_song_arc(state)?;
-    let song_path = lobby_song_path(song.as_ref(), &state.song_scan_roots)?;
-    let chart_type = state.session.play_style.chart_type();
-    let chart = song.chart_for_steps_index(chart_type, selected_steps_index_for_sync(state))?;
-    Some(lobby_data::LobbySongInfo {
-        song_path,
-        title: Some(song.display_full_title(false)),
-        artist: Some(song.artist.clone()),
-        song_length_seconds: Some(song.music_length_seconds),
-        chart_hash: Some(chart.short_hash.clone()),
-        chart_type: Some(chart.chart_type.clone()),
-        chart_label: Some(sync_chart_label(chart)),
-        rate: Some(state.session.music_rate),
-    })
-}
-
-#[derive(Debug)]
-struct LobbySongKey {
-    song_path: Box<str>,
-    chart_hash: Box<str>,
-    chart_type: Box<str>,
-    rate_bits: u32,
-}
-
-impl LobbySongKey {
-    fn new(song_info: &lobby_data::LobbySongInfo) -> Self {
-        Self {
-            song_path: normalize_lobby_song_path(song_info.song_path.as_str()).into_boxed_str(),
-            chart_hash: song_info.chart_hash.as_deref().unwrap_or("").into(),
-            chart_type: song_info.chart_type.as_deref().unwrap_or("").into(),
-            rate_bits: song_info.rate.unwrap_or(1.0).to_bits(),
-        }
-    }
-
-    fn matches(&self, song_info: &lobby_data::LobbySongInfo) -> bool {
-        lobby_song_paths_match(&self.song_path, song_info.song_path.as_str())
-            && self.chart_hash.as_ref() == song_info.chart_hash.as_deref().unwrap_or("")
-            && self.chart_type.as_ref() == song_info.chart_type.as_deref().unwrap_or("")
-            && self.rate_bits == song_info.rate.unwrap_or(1.0).to_bits()
-    }
-}
-
-#[derive(Debug)]
-struct FailedLobbySong {
-    key: LobbySongKey,
-    content_generation: u64,
-}
-
-impl FailedLobbySong {
-    fn matches(&self, song_info: &lobby_data::LobbySongInfo, content_generation: u64) -> bool {
-        self.content_generation == content_generation && self.key.matches(song_info)
-    }
-}
-
-fn lobby_song_paths_match(left: &str, right: &str) -> bool {
-    lobby_song_path_parts(left).eq(lobby_song_path_parts(right))
-}
-
-fn lobby_song_path_parts(path: &str) -> impl Iterator<Item = &str> {
-    path.trim()
-        .split(['/', '\\'])
-        .filter(|segment| !segment.is_empty())
-}
-
-fn lobby_song_matches_remote_selection(
-    local_song_info: &lobby_data::LobbySongInfo,
-    remote_song_info: &lobby_data::LobbySongInfo,
-) -> bool {
-    if !lobby_song_paths_match(
-        local_song_info.song_path.as_str(),
-        remote_song_info.song_path.as_str(),
-    ) {
-        return false;
-    }
-
-    lobby_song_metadata_matches_remote_selection(local_song_info, remote_song_info)
-}
-
-fn lobby_song_metadata_matches_remote_selection(
-    local_song_info: &lobby_data::LobbySongInfo,
-    remote_song_info: &lobby_data::LobbySongInfo,
-) -> bool {
-    if let Some(remote_chart_hash) = remote_song_info
-        .chart_hash
-        .as_deref()
-        .filter(|chart_hash| !chart_hash.is_empty())
-        && local_song_info.chart_hash.as_deref() != Some(remote_chart_hash)
-    {
-        return false;
-    }
-
-    if let Some(remote_chart_type) = remote_song_info
-        .chart_type
-        .as_deref()
-        .map(str::trim)
-        .filter(|chart_type| !chart_type.is_empty())
-        && !local_song_info
-            .chart_type
-            .as_deref()
-            .is_some_and(|chart_type| chart_type.eq_ignore_ascii_case(remote_chart_type))
-    {
-        return false;
-    }
-
-    if let Some(remote_rate) = remote_song_info
-        .rate
-        .filter(|rate| rate.is_finite() && *rate > 0.0)
-        && !local_song_info
-            .rate
-            .is_some_and(|local_rate| (local_rate - remote_rate).abs() < 0.0005)
-    {
-        return false;
-    }
-
-    true
+    lobby_selection::local_song_info(song.as_ref(), local_lobby_song_selection(state))
 }
 
 fn apply_remote_lobby_song_selection(
     state: &mut State,
     song_info: &lobby_data::LobbySongInfo,
 ) -> bool {
-    let Some(target_song) = find_song_by_lobby_path(state, song_info.song_path.as_str()) else {
+    let Some(target_song) = lobby_selection::resolve_remote_song(
+        song_info.song_path.as_str(),
+        state.group_entries.iter().filter_map(|entry| match entry {
+            MusicWheelEntry::Song(song) => Some(song),
+            _ => None,
+        }),
+        &state.song_packs,
+    ) else {
         return false;
     };
 
@@ -7936,27 +7738,31 @@ fn apply_remote_lobby_song_selection(
     let old_rate = state.session.music_rate;
     focus_song_from_search(state, &target_song);
 
-    let target_chart_type = state.session.play_style.chart_type();
-    if let Some(chart_hash) = song_info.chart_hash.as_deref()
-        && let Some(index) = target_song.steps_index_for_chart_hash(target_chart_type, chart_hash)
-    {
-        set_selected_steps_index_for_sync(state, index);
-    } else if let Some(index) =
-        target_song.best_steps_index(target_chart_type, preferred_steps_index_for_sync(state))
-    {
-        set_selected_steps_index_for_sync(state, index);
-    }
-
-    let mut rate_changed = false;
-    if let Some(rate) = song_info
-        .rate
-        .filter(|rate| rate.is_finite() && *rate > 0.0)
-    {
-        let rate = rate.clamp(0.5, 3.0);
-        if (rate - old_rate).abs() >= 0.0005 {
-            set_music_rate(state, rate);
-            rate_changed = true;
+    let options = lobby_selection::remote_song_options(
+        target_song.as_ref(),
+        song_info,
+        local_lobby_song_selection(state),
+        old_rate,
+    );
+    if let Some(chart) = options.chart {
+        let (selected_steps, preferred_difficulty) = if chart.player_index == 1 {
+            (
+                &mut state.p2_selected_steps_index,
+                &mut state.p2_preferred_difficulty_index,
+            )
+        } else {
+            (
+                &mut state.selected_steps_index,
+                &mut state.preferred_difficulty_index,
+            )
+        };
+        *selected_steps = chart.steps_index;
+        if let Some(index) = chart.preferred_difficulty_index {
+            *preferred_difficulty = index;
         }
+    }
+    if let Some(rate) = options.music_rate {
+        set_music_rate(state, rate);
     }
 
     state.prev_selected_index = state.selected_index;
@@ -7977,9 +7783,7 @@ fn apply_remote_lobby_song_selection(
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
 
-    if rate_changed
-        || old_song_path != lobby_song_path(target_song.as_ref(), &state.song_scan_roots)
-    {
+    if options.should_clear_preview(old_song_path.as_deref(), target_song.as_ref()) {
         clear_preview(state);
     }
 
@@ -7988,25 +7792,13 @@ fn apply_remote_lobby_song_selection(
 
 fn publish_lobby_confirmed_song_selection(state: &mut State) {
     let snapshot = &state.lobby_session.runtime_view().snapshot;
-    let Some(joined) = snapshot.joined_lobby.as_ref() else {
+    let Some(song_info) = lobby_selection::confirmed_song_to_publish(
+        snapshot,
+        local_lobby_players(state.session),
+        || build_local_lobby_song_info(state),
+    ) else {
         return;
     };
-    if joined.players.len() <= local_lobby_players(state.session).count() {
-        return;
-    }
-    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
-        return;
-    }
-
-    let Some(song_info) = build_local_lobby_song_info(state) else {
-        return;
-    };
-
-    if joined.song_info.as_ref().is_some_and(|remote_song_info| {
-        lobby_song_matches_remote_selection(&song_info, remote_song_info)
-    }) {
-        return;
-    }
 
     queue_online(
         state,
@@ -8020,79 +7812,63 @@ fn sync_lobby_select_music(state: &mut State) {
 }
 
 fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapshot) {
-    let Some(joined) = snapshot.joined_lobby.as_ref() else {
-        state.lobby_last_joined_code = None;
-        state.lobby_last_applied_remote_song = None;
-        state.lobby_last_failed_remote_song = None;
+    let step = state
+        .lobby_session
+        .prepare_selection_sync(snapshot, state.wheel_content_generation);
+    if let Some(presence) = step.presence {
+        queue_online(
+            state,
+            crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::UpdateMachineState {
+                screen_name: presence.screen_name,
+                ready: presence.ready,
+            }),
+        );
+    }
+
+    let Some(song_info) = step.remote_to_apply else {
         return;
     };
-
-    if state.lobby_last_joined_code.as_deref() != Some(joined.code.as_str()) {
-        state.lobby_last_joined_code = Some(joined.code.clone());
-        state.lobby_last_applied_remote_song = None;
-        state.lobby_last_failed_remote_song = None;
-    }
-
-    if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
-        state.lobby_last_failed_remote_song = None;
-        return;
-    }
-
-    // Always republish SelectMusic presence here. The online layer already dedupes
-    // identical machine-state payloads, and SelectMusic can be re-entered multiple
-    // times during a session while this screen state persists locally.
-    queue_online(
-        state,
-        crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::UpdateMachineState {
-            screen_name: "ScreenSelectMusic",
-            ready: true,
-        }),
-    );
-
-    if let Some(song_info) = joined.song_info.as_ref() {
-        let already_applied = state
-            .lobby_last_applied_remote_song
-            .as_ref()
-            .is_some_and(|key| key.matches(song_info));
-        let failed_without_content_change = state
-            .lobby_last_failed_remote_song
-            .as_ref()
-            .is_some_and(|failed| failed.matches(song_info, state.wheel_content_generation));
-        if !already_applied && !failed_without_content_change {
-            if apply_remote_lobby_song_selection(state, song_info) {
-                state.lobby_last_applied_remote_song = Some(LobbySongKey::new(song_info));
-                state.lobby_last_failed_remote_song = None;
-            } else {
-                let matched_path = find_song_by_lobby_path(state, song_info.song_path.as_str())
-                    .and_then(|song| lobby_song_path(song.as_ref(), &state.song_scan_roots));
-                let player_screens = joined
-                    .players
-                    .iter()
-                    .map(|player| {
-                        format!(
-                            "{}={}",
-                            player.label,
-                            debug_screen_name(player.screen_name.as_str())
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                warn!(
-                    "Lobby remote song could not be resolved locally: remote_path='{}' matched_path={:?} local_selected={:?} screens=[{}]",
-                    song_info.song_path,
-                    matched_path,
-                    build_local_lobby_song_info(state).map(|song| song.song_path),
-                    player_screens,
-                );
-                state.lobby_last_failed_remote_song = Some(FailedLobbySong {
-                    key: LobbySongKey::new(song_info),
-                    content_generation: state.wheel_content_generation,
-                });
-            }
-        }
+    let outcome = if apply_remote_lobby_song_selection(state, song_info) {
+        RemoteSelectionOutcome::Resolved
     } else {
-        state.lobby_last_failed_remote_song = None;
-    }
+        let matched_path = lobby_selection::resolve_remote_song(
+            song_info.song_path.as_str(),
+            state.group_entries.iter().filter_map(|entry| match entry {
+                MusicWheelEntry::Song(song) => Some(song),
+                _ => None,
+            }),
+            &state.song_packs,
+        )
+        .and_then(|song| lobby_song_path(song.as_ref(), &state.song_scan_roots));
+        let players = snapshot
+            .joined_lobby
+            .as_ref()
+            .map_or(&[][..], |joined| joined.players.as_slice());
+        let player_screens = players
+            .iter()
+            .map(|player| {
+                format!(
+                    "{}={}",
+                    player.label,
+                    debug_screen_name(player.screen_name.as_str())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        warn!(
+            "Lobby remote song could not be resolved locally: remote_path='{}' matched_path={:?} local_selected={:?} screens=[{}]",
+            song_info.song_path,
+            matched_path,
+            build_local_lobby_song_info(state).map(|song| song.song_path),
+            player_screens,
+        );
+        RemoteSelectionOutcome::Unresolved
+    };
+    state.lobby_session.record_selection_attempt(
+        song_info,
+        state.wheel_content_generation,
+        outcome,
+    );
 }
 
 fn select_music_lobby_lock_text(state: &State) -> Option<String> {
@@ -14945,7 +14721,7 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 mod tests {
     use super::{
         PREVIEW_DELAY_SECONDS, SyncGraphCols, WheelSortMode, append_pending_runtime,
-        banner_texture_key, build_displayed_entries, build_local_lobby_song_info,
+        banner_texture_key, build_displayed_entries,
         build_playlist_entries_from_text, build_playlist_song_lookup, build_sync_heat_image,
         current_preview_path, delayed_selection_updates_blocked, dispatch_menu_action,
         first_song_entry_index, handle_downloads_overlay_raw_key,
@@ -14954,7 +14730,7 @@ mod tests {
         prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
         select_music_lobby_lock_text, solo_runtime_side,
         steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y,
-        sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
+        sync_bias_axis_pos, sync_graph_cols, sync_low_confidence_warning,
         sync_overlay_graph_size,
     };
 
@@ -18453,122 +18229,6 @@ mod tests {
             players,
             song_info,
         }
-    }
-
-    #[test]
-    fn lobby_song_key_preserves_normalized_selection_identity() {
-        let song = test_lobby_song_info("Songs/Pack/Song");
-        let key = super::LobbySongKey::new(&song);
-        let mut equivalent = song;
-        equivalent.song_path = " /Songs\\Pack//Song/ ".to_string();
-
-        assert!(key.matches(&equivalent));
-        equivalent.chart_hash = Some("other-hash".to_string());
-        assert!(!key.matches(&equivalent));
-    }
-
-    #[test]
-    fn stable_lobby_selection_reuses_typed_remote_key() {
-        let mut state = init_placeholder();
-        let entry = super::MusicWheelEntry::Song(super::test_folder_stats_song(0));
-        state.group_entries = Arc::from([entry.clone()]);
-        state.entries = vec![entry];
-        let song_info = build_local_lobby_song_info(&state).expect("fixture should select a chart");
-        state
-            .lobby_session
-            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
-                snapshot: Arc::new(lobby_data::Snapshot {
-                    connection: lobby_data::ConnectionState::Connected,
-                    joined_lobby: Some(test_joined_lobby(
-                        vec![test_lobby_player("ScreenSelectMusic")],
-                        Some(song_info),
-                    )),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            });
-
-        sync_lobby_select_music(&mut state);
-        let path_ptr = state
-            .lobby_last_applied_remote_song
-            .as_ref()
-            .expect("remote selection should be retained")
-            .song_path
-            .as_ptr();
-        state.pending_online.clear();
-
-        sync_lobby_select_music(&mut state);
-
-        assert_eq!(
-            state
-                .lobby_last_applied_remote_song
-                .as_ref()
-                .expect("stable selection should remain retained")
-                .song_path
-                .as_ptr(),
-            path_ptr
-        );
-        assert!(state.lobby_last_failed_remote_song.is_none());
-        assert!(matches!(
-            state.pending_online.as_slice(),
-            [crate::SimplyLoveOnlineRequest::Lobby(
-                crate::SimplyLoveLobbyRequest::UpdateMachineState {
-                    screen_name: "ScreenSelectMusic",
-                    ready: true,
-                }
-            )]
-        ));
-    }
-
-    #[test]
-    fn failed_remote_selection_retries_only_after_content_replacement() {
-        let mut state = init_placeholder();
-        let song_info = test_lobby_song_info("Missing/Remote Song");
-        state
-            .lobby_session
-            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
-                snapshot: Arc::new(lobby_data::Snapshot {
-                    connection: lobby_data::ConnectionState::Connected,
-                    joined_lobby: Some(test_joined_lobby(
-                        vec![test_lobby_player("ScreenSelectMusic")],
-                        Some(song_info),
-                    )),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            });
-
-        sync_lobby_select_music(&mut state);
-        let first_ptr = state
-            .lobby_last_failed_remote_song
-            .as_ref()
-            .expect("missing selection should be retained")
-            .key
-            .song_path
-            .as_ptr();
-        sync_lobby_select_music(&mut state);
-        assert_eq!(
-            state
-                .lobby_last_failed_remote_song
-                .as_ref()
-                .expect("stable failure should remain retained")
-                .key
-                .song_path
-                .as_ptr(),
-            first_ptr
-        );
-
-        state.wheel_content_generation = state.wheel_content_generation.wrapping_add(1);
-        sync_lobby_select_music(&mut state);
-
-        assert_eq!(
-            state
-                .lobby_last_failed_remote_song
-                .as_ref()
-                .expect("replacement should retry the missing selection")
-                .content_generation,
-            state.wheel_content_generation
-        );
     }
 
     #[test]

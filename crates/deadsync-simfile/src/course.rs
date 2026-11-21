@@ -27,14 +27,7 @@ pub const COURSE_RATING_ORDER: [Difficulty; 6] = [
     Difficulty::Edit,
 ];
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CourseType {
-    #[default]
-    Nonstop,
-    Oni,
-    Endless,
-    Survival,
-}
+pub use deadsync_rules::course::CourseType;
 
 #[must_use]
 pub fn course_type(course: &CourseFile) -> CourseType {

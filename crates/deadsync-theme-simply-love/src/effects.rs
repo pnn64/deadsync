@@ -15,6 +15,11 @@ use deadsync_config::theme::{
     SelectMusicStepArtistBoxMode, SelectMusicWheelScoreMode, SelectMusicWheelScoreType,
     SelectMusicWheelStyle, SrpgVariant, TournamentScoringSystem, VersionOverlaySide, VisualStyle,
 };
+use deadsync_gameplay::exit_route::{
+    GameplayExitDestination, GameplayExitRoute, GameplayExitRouteContext,
+    resolve_gameplay_exit_route,
+};
+use deadsync_gameplay::{GameplayAction, GameplayExit};
 use deadsync_input::{InputBinding, VirtualAction};
 use deadsync_profile::{ActiveProfile, PlayMode, PlayStyle, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
@@ -958,6 +963,8 @@ pub enum SimplyLoveUpdaterRequest {
 /// produced a generic theme effect.
 #[derive(Clone, Debug)]
 pub enum SimplyLoveRuntimeRequest {
+    /// Preserve the game action until the shell supplies current session facts.
+    GameplayAction(deadsync_gameplay::GameplayAction),
     RestartGameplay,
     /// Replace the gameplay screen without committing its stage or Lua VM.
     ReloadSongLua,
@@ -1011,54 +1018,83 @@ pub struct SimplyLoveEffectRoutePlan {
     pub clear_restart_pending: bool,
 }
 
-/// Apply Simply Love's gameplay and course redirects before the shell executes
-/// an effect.
+/// Read semantic gameplay actions and legacy gameplay navigation requests.
+#[must_use]
+pub fn gameplay_action_for_effect(effect: &SimplyLoveEffect) -> Option<GameplayAction> {
+    match effect {
+        SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(action)) => {
+            Some(*action)
+        }
+        SimplyLoveEffect::Navigate(SimplyLoveScreen::Evaluation) => {
+            Some(GameplayAction::Navigate(GameplayExit::Complete))
+        }
+        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Evaluation) => {
+            Some(GameplayAction::NavigateNoFade(GameplayExit::Complete))
+        }
+        SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic) => {
+            Some(GameplayAction::Navigate(GameplayExit::Cancel))
+        }
+        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic) => {
+            Some(GameplayAction::NavigateNoFade(GameplayExit::Cancel))
+        }
+        _ => None,
+    }
+}
+
+/// Select Simply Love's screen for an already resolved game destination.
+#[must_use]
+pub const fn effect_for_gameplay_exit(route: GameplayExitRoute) -> SimplyLoveEffect {
+    let screen = match route.destination {
+        GameplayExitDestination::Results => SimplyLoveScreen::Evaluation,
+        GameplayExitDestination::SongSelection => SimplyLoveScreen::SelectMusic,
+        GameplayExitDestination::CourseSelection => SimplyLoveScreen::SelectCourse,
+        GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
+            SimplyLoveScreen::Gameplay
+        }
+    };
+    if route.immediate {
+        SimplyLoveEffect::NavigateNoFade(screen)
+    } else {
+        SimplyLoveEffect::Navigate(screen)
+    }
+}
+
+/// Compatibility adapter for callers that resolve effects through the theme.
+/// Gameplay destinations are decided by the game-owned exit policy.
 #[must_use]
 pub fn resolve_effect_route(
     effect: SimplyLoveEffect,
     context: SimplyLoveEffectRouteContext,
 ) -> SimplyLoveEffectRoutePlan {
-    let (effect, clear_restart_pending) = match effect {
-        // SL/zmod parity: a restart-triggered Cancel exit returns to the wheel.
-        // Redirect it to Gameplay so the player skips the wheel round-trip.
-        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic)
-            if context.restart_pending && context.current_screen == SimplyLoveScreen::Gameplay =>
-        {
-            (
-                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Gameplay),
-                true,
+    let Some(action) = gameplay_action_for_effect(&effect) else {
+        return SimplyLoveEffectRoutePlan {
+            action: effect,
+            clear_restart_pending: false,
+        };
+    };
+    let (action, clear_restart_pending) = match action {
+        GameplayAction::None => (SimplyLoveEffect::None, false),
+        GameplayAction::Restart => (
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay),
+            false,
+        ),
+        action => {
+            let route = resolve_gameplay_exit_route(
+                action,
+                GameplayExitRouteContext {
+                    from_gameplay: context.current_screen == SimplyLoveScreen::Gameplay,
+                    restart_pending: context.restart_pending,
+                    course_active: context.course_active,
+                    course_has_next_stage: context.course_has_next_stage,
+                    all_joined_players_failed: context.gameplay_failed,
+                },
             )
+            .expect("gameplay navigation has an exit route");
+            (effect_for_gameplay_exit(route), route.consume_restart_pending)
         }
-        SimplyLoveEffect::Navigate(SimplyLoveScreen::Evaluation)
-            if context.current_screen == SimplyLoveScreen::Gameplay
-                && context.course_has_next_stage
-                && !context.gameplay_failed =>
-        {
-            (
-                SimplyLoveEffect::Navigate(SimplyLoveScreen::Gameplay),
-                false,
-            )
-        }
-        SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic)
-            if context.current_screen == SimplyLoveScreen::Gameplay && context.course_active =>
-        {
-            (
-                SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectCourse),
-                false,
-            )
-        }
-        SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic)
-            if context.current_screen == SimplyLoveScreen::Gameplay && context.course_active =>
-        {
-            (
-                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectCourse),
-                false,
-            )
-        }
-        effect => (effect, false),
     };
     SimplyLoveEffectRoutePlan {
-        action: effect,
+        action,
         clear_restart_pending,
     }
 }
@@ -1068,37 +1104,131 @@ mod tests {
     use super::*;
 
     #[test]
-    fn course_and_restart_redirects_are_theme_owned() {
+    fn gameplay_action_adapter_preserves_semantic_requests() {
+        for action in [
+            GameplayAction::None,
+            GameplayAction::Restart,
+            GameplayAction::Navigate(GameplayExit::Complete),
+            GameplayAction::NavigateNoFade(GameplayExit::Complete),
+            GameplayAction::Navigate(GameplayExit::Cancel),
+            GameplayAction::NavigateNoFade(GameplayExit::Cancel),
+        ] {
+            let effect =
+                SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(action));
+            assert_eq!(gameplay_action_for_effect(&effect), Some(action));
+        }
+        for effect in [
+            SimplyLoveEffect::Navigate(SimplyLoveScreen::Gameplay),
+            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectCourse),
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay),
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::ReloadSongLua),
+            SimplyLoveEffect::None,
+        ] {
+            assert_eq!(gameplay_action_for_effect(&effect), None);
+        }
+    }
+
+    #[test]
+    fn gameplay_exit_adapter_preserves_destination_and_transition_mode() {
+        for (destination, screen) in [
+            (GameplayExitDestination::Results, SimplyLoveScreen::Evaluation),
+            (
+                GameplayExitDestination::SongSelection,
+                SimplyLoveScreen::SelectMusic,
+            ),
+            (
+                GameplayExitDestination::CourseSelection,
+                SimplyLoveScreen::SelectCourse,
+            ),
+            (
+                GameplayExitDestination::NextCourseStage,
+                SimplyLoveScreen::Gameplay,
+            ),
+            (
+                GameplayExitDestination::RestartStage,
+                SimplyLoveScreen::Gameplay,
+            ),
+        ] {
+            for immediate in [false, true] {
+                let effect = effect_for_gameplay_exit(GameplayExitRoute {
+                    destination,
+                    immediate,
+                    consume_restart_pending: false,
+                });
+                let expected = if immediate {
+                    deadsync_theme::ThemeFlowEvent::NavigateNoFade(screen)
+                } else {
+                    deadsync_theme::ThemeFlowEvent::Navigate(screen)
+                };
+                assert_eq!(effect.flow_event(), Some(expected));
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_and_semantic_gameplay_requests_share_compatibility_resolution() {
+        let context = SimplyLoveEffectRouteContext {
+            current_screen: SimplyLoveScreen::Gameplay,
+            restart_pending: true,
+            course_active: true,
+            course_has_next_stage: true,
+            gameplay_failed: false,
+        };
+        for (legacy, action) in [
+            (
+                SimplyLoveEffect::Navigate(SimplyLoveScreen::Evaluation),
+                GameplayAction::Navigate(GameplayExit::Complete),
+            ),
+            (
+                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Evaluation),
+                GameplayAction::NavigateNoFade(GameplayExit::Complete),
+            ),
+            (
+                SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic),
+                GameplayAction::Navigate(GameplayExit::Cancel),
+            ),
+            (
+                SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic),
+                GameplayAction::NavigateNoFade(GameplayExit::Cancel),
+            ),
+        ] {
+            assert_eq!(gameplay_action_for_effect(&legacy), Some(action));
+            let legacy = resolve_effect_route(legacy, context);
+            let semantic = resolve_effect_route(
+                SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(action)),
+                context,
+            );
+            assert_eq!(legacy.action.flow_event(), semantic.action.flow_event());
+            assert_eq!(legacy.clear_restart_pending, semantic.clear_restart_pending);
+        }
+        let none = resolve_effect_route(
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(
+                GameplayAction::None,
+            )),
+            context,
+        );
+        assert!(matches!(none.action, SimplyLoveEffect::None));
+        assert!(!none.clear_restart_pending);
         let restart = resolve_effect_route(
-            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::SelectMusic),
-            SimplyLoveEffectRouteContext {
-                current_screen: SimplyLoveScreen::Gameplay,
-                restart_pending: true,
-                course_active: false,
-                course_has_next_stage: false,
-                gameplay_failed: false,
-            },
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::GameplayAction(
+                GameplayAction::Restart,
+            )),
+            context,
         );
         assert!(matches!(
             restart.action,
-            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Gameplay)
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay)
         ));
-        assert!(restart.clear_restart_pending);
-
-        let course = resolve_effect_route(
-            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectMusic),
-            SimplyLoveEffectRouteContext {
-                current_screen: SimplyLoveScreen::Gameplay,
-                restart_pending: false,
-                course_active: true,
-                course_has_next_stage: false,
-                gameplay_failed: false,
-            },
+        assert!(!restart.clear_restart_pending);
+        let named = resolve_effect_route(
+            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Menu),
+            context,
         );
         assert!(matches!(
-            course.action,
-            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectCourse)
+            named.action,
+            SimplyLoveEffect::NavigateNoFade(SimplyLoveScreen::Menu)
         ));
+        assert!(!named.clear_restart_pending);
     }
 
     #[test]

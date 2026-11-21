@@ -593,6 +593,157 @@ fn evaluation_and_selection_lobby_decisions_stay_below_the_theme() {
 }
 
 #[test]
+fn select_music_remote_selection_policy_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller =
+        production_source(&root.join("crates/deadsync-online/src/lobby_selection.rs"));
+    let session = production_source(&root.join("crates/deadsync-online/src/lobby_wait.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    let selection = production_source(&theme.join("select_music.rs"));
+    let playlists = production_source(&theme.join("select_music/playlists.rs"));
+
+    for contract in [
+        "pub(crate) struct LobbySelectionSyncState",
+        "pub struct LocalSongSelection",
+        "pub struct RemoteChartSelection",
+        "pub struct RemoteSongOptions",
+        "pub struct SelectMusicPresence",
+        "pub struct LobbySelectionSyncStep<",
+        "pub enum RemoteSelectionOutcome",
+        "pub fn local_song_info(",
+        "pub fn resolve_remote_song<",
+        "pub fn remote_song_options(",
+        "pub fn confirmed_song_to_publish(",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned lobby selection is missing {contract}"
+        );
+    }
+    for dependency in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "i18n::",
+        "lobbies::runtime_",
+    ] {
+        assert!(
+            !controller.contains(dependency),
+            "lobby selection policy must remain independent of presentation and I/O: {dependency}"
+        );
+    }
+    for exposed_cache in [
+        "pub struct LobbySongKey",
+        "pub struct FailedLobbySong",
+        "pub room:",
+        "pub applied:",
+        "pub failed:",
+    ] {
+        assert!(
+            !contains_rust(&controller, exposed_cache),
+            "lobby selection must retain private cache state: {exposed_cache}"
+        );
+    }
+    assert!(
+        contains_rust(&session, "selection: LobbySelectionSyncState")
+            && !contains_rust(&session, "pub selection:")
+            && contains_rust(&session, "pub fn prepare_selection_sync<")
+            && contains_rust(&session, "pub fn record_selection_attempt(")
+            && contains_rust(&controller, "pub remote_to_apply: Option<&")
+            && contains_rust(&controller, "build_local: impl FnOnce() -> Option<LobbySongInfo>"),
+        "the existing lobby session must own selection history and expose borrowed, lazy decisions"
+    );
+
+    for former_policy in [
+        "struct LobbySongKey",
+        "struct FailedLobbySong",
+        "lobby_last_joined_code:",
+        "lobby_last_applied_remote_song:",
+        "lobby_last_failed_remote_song:",
+        "fn lobby_song_paths_match(",
+        "fn lobby_song_path_parts(",
+        "fn lobby_song_matches_remote_selection(",
+        "fn lobby_song_metadata_matches_remote_selection(",
+    ] {
+        assert!(
+            !contains_rust(&selection, former_policy),
+            "SelectMusic still owns remote-selection policy through {former_policy}"
+        );
+    }
+    for delegation in [
+        "lobby_selection::chart_label(",
+        "lobby_selection::local_song_info(",
+        "lobby_selection::resolve_remote_song(",
+        "lobby_selection::remote_song_options(",
+        "lobby_selection::confirmed_song_to_publish(",
+        ".prepare_selection_sync(",
+        ".record_selection_attempt(",
+        "options.should_clear_preview(",
+    ] {
+        assert!(
+            contains_rust(&selection, delegation),
+            "SelectMusic must use the game-owned selection decision through {delegation}"
+        );
+    }
+    assert!(
+        contains_rust(&playlists, "deadsync_online::lobby_selection::song_path(song)"),
+        "the presentation's compatibility path helper must delegate to the game owner"
+    );
+
+    let application = selection
+        .split_once("fn apply_remote_lobby_song_selection(")
+        .and_then(|(_, rest)| rest.split_once("fn publish_lobby_confirmed_song_selection("))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's remote-selection adapter should be present");
+    for policy in [
+        "steps_index_for_chart_hash(",
+        "best_steps_index(",
+        ".clamp(0.5, 3.0)",
+    ] {
+        assert!(
+            !contains_rust(application, policy),
+            "the remote-selection adapter still decides chart/rate policy through {policy}"
+        );
+    }
+    let previous_rate = application
+        .find("let old_rate = state.session.music_rate")
+        .expect("the adapter must preserve the rate before focusing the song");
+    let focus = application
+        .find("focus_song_from_search(")
+        .expect("the adapter must focus the resolved song");
+    let options = application
+        .find("lobby_selection::remote_song_options(")
+        .expect("the adapter must request options from the game owner");
+    assert!(
+        previous_rate < focus && focus < options,
+        "remote options must use live selection facts after focus and the preceding music rate"
+    );
+
+    let synchronization = selection
+        .split_once("fn sync_lobby_select_music_with(")
+        .and_then(|(_, rest)| rest.split_once("fn select_music_lobby_lock_text("))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's synchronization adapter should be present");
+    let prepare = synchronization
+        .find(".prepare_selection_sync(")
+        .expect("the game owner must prepare synchronization");
+    let presence = synchronization
+        .find("SimplyLoveLobbyRequest::UpdateMachineState")
+        .expect("the adapter must queue the returned presence");
+    let apply = synchronization
+        .find("apply_remote_lobby_song_selection(")
+        .expect("the adapter must apply requested remote selection");
+    let record = synchronization
+        .find(".record_selection_attempt(")
+        .expect("the adapter must report the completed resolution");
+    assert!(
+        prepare < presence && presence < apply && apply < record,
+        "presence publication must precede remote application and its recorded result"
+    );
+}
+
+#[test]
 fn asset_catalog_policy_stays_above_the_engine() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
@@ -5199,13 +5350,18 @@ fn content_reload_execution_is_shell_owned() {
         "pub fn sync_reload_events",
         "SimplyLoveContentReloadEvent::Finished { song_packs }",
         "pub fn refresh_from_song_packs",
-        "for pack in &state.song_packs",
     ] {
         assert!(
             theme.contains(prepared_boundary),
             "Select Music is missing content boundary {prepared_boundary}"
         );
     }
+    assert!(
+        contains_rust(&theme, "song_packs: Vec<SongPack>")
+            && contains_rust(&theme, "lobby_selection::resolve_remote_song(")
+            && contains_rust(&theme, "&state.song_packs,"),
+        "Select Music must retain the prepared catalog and borrow it for game-owned lookup"
+    );
 
     let init =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/init.rs"))
@@ -11706,6 +11862,530 @@ fn root_screen_tree_is_removed() {
 }
 
 #[test]
+fn course_type_is_owned_by_game_rules() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let rules = production_source(&root.join("crates/deadsync-rules/src/course.rs"));
+    let rules_root = production_source(&root.join("crates/deadsync-rules/src/lib.rs"));
+    let parser = production_source(&root.join("crates/deadsync-simfile/src/course.rs"));
+    let theme = production_source(&root.join("crates/deadsync-theme/src/views.rs"));
+    let selection = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    );
+    let shell = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+
+    assert!(
+        contains_rust(&rules_root, "pub mod course;")
+            && contains_rust(
+                &rules,
+                "pub enum CourseType { #[default] Nonstop, Oni, Endless, Survival, }",
+            ),
+        "game rules must own the canonical course modes and Nonstop default"
+    );
+    assert!(
+        contains_rust(&parser, "pub use deadsync_rules::course::CourseType;")
+            && contains_rust(
+                &theme,
+                "pub use deadsync_rules::course::CourseType as CourseTypeView;",
+            ),
+        "parser and theme compatibility paths must reexport the same game-owned type"
+    );
+    assert!(
+        contains_rust(&shell, "use deadsync_rules::course::CourseType;")
+            && contains_rust(&shell, "pub course_type: CourseType,"),
+        "the course runtime must refer directly to the canonical game rule"
+    );
+    for (name, source) in [
+        ("parser", &parser),
+        ("theme", &theme),
+        ("selection", &selection),
+        ("shell", &shell),
+    ] {
+        for duplicate in ["enum CourseType {", "enum CourseTypeView {"] {
+            assert!(
+                !contains_rust(source, duplicate),
+                "{name} must not duplicate the game-owned course type with {duplicate}"
+            );
+        }
+    }
+    for variant in ["Nonstop", "Oni", "Endless", "Survival"] {
+        let conversion = format!("course::CourseType::{variant} => CourseTypeView::{variant}");
+        assert!(
+            !contains_rust(&selection, &conversion),
+            "course selection must not convert the canonical {variant} mode into a theme enum"
+        );
+    }
+}
+
+#[test]
+fn course_life_selection_stays_in_gameplay() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let life = production_source(&root.join("crates/deadsync-gameplay/src/life.rs"));
+    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    for contract in [
+        "pub struct CourseLifeStage<'a>",
+        "pub song: &'a SongData",
+        "pub steps_index: [usize; MAX_PLAYERS]",
+        "pub gain_lives: i32",
+        "pub gain_seconds: f32",
+    ] {
+        assert!(
+            contains_rust(&life, contract),
+            "gameplay course life selection must accept borrowed stage facts through {contract}"
+        );
+    }
+    let selection = life
+        .split_once("pub fn course_life_config(")
+        .and_then(|(_, rest)| rest.split_once("pub enum CourseLifeState"))
+        .map(|(body, _)| body)
+        .expect("course life selection must live alongside gameplay's life state");
+    assert!(
+        contains_rust(selection, "mode: deadsync_rules::course::CourseType")
+            && contains_rust(selection, "stage: Option<CourseLifeStage<'_>>")
+            && contains_rust(selection, "-> [CourseLifeConfig; MAX_PLAYERS]"),
+        "gameplay must select per-player life from the canonical mode and optional live stage"
+    );
+    let compact_selection: String = selection.chars().filter(|ch| !ch.is_whitespace()).collect();
+    let reward_fallback = compact_selection
+        .split_once("u32::try_from(stage.gain_lives).unwrap_or_else(")
+        .and_then(|(_, rest)| rest.split_once("});"))
+        .map(|(body, _)| body)
+        .expect("negative gain_lives must retain a lazy chart-based reward fallback");
+    assert!(
+        contains_rust(
+            reward_fallback,
+            ".chart_for_steps_index(chart_type, stage.steps_index[player])",
+        ) && compact_selection.matches("chart_for_steps_index(").count() == 1,
+        "chart lookup must remain inside the negative reward fallback for each player's live index"
+    );
+    let initialization = life
+        .split_once("pub fn init_course_life(")
+        .and_then(|(_, rest)| rest.split_once("pub fn course_life_carry("))
+        .map(|(body, _)| body)
+        .expect("course life initialization boundary");
+    assert!(
+        contains_rust(selection, "gain_seconds: stage.gain_seconds")
+            && !selection.contains("SURVIVAL_MIN_GAIN_SECONDS")
+            && !contains_rust(selection, "gain_seconds.is_finite()")
+            && contains_rust(initialization, "gain_seconds.is_finite()")
+            && contains_rust(initialization, "gain_seconds.max(SURVIVAL_MIN_GAIN_SECONDS)"),
+        "Survival gain must reach existing life initialization before normalization"
+    );
+
+    let adapter = course
+        .split_once("pub fn course_life_config_for_stage(")
+        .and_then(|(_, rest)| rest.split_once("fn course_stage_runtime_from_plan("))
+        .map(|(body, _)| body)
+        .expect("the shell must retain its course-life compatibility adapter");
+    for fact in [
+        "course.next_stage().map(|stage| CourseLifeStage {",
+        "song: stage.song.as_ref()",
+        "steps_index: stage.steps_index",
+        "gain_lives: stage.gain_lives",
+        "gain_seconds: stage.gain_seconds",
+        "course_life_config(course.course_type, course.lives, stage, chart_type)",
+    ] {
+        assert!(
+            contains_rust(adapter, fact),
+            "the shell must delegate life selection using live stage facts through {fact}"
+        );
+    }
+    for policy in [
+        "CourseLifeConfig::",
+        "CourseType::",
+        "CourseTypeView::",
+        "chart_for_steps_index",
+        "u32::try_from",
+        "Arc::",
+        ".clone(",
+    ] {
+        assert!(
+            !contains_rust(adapter, policy),
+            "the borrowed shell adapter must not own life policy or cloning through {policy}"
+        );
+    }
+
+    // App declares out-of-line test modules before its production methods.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell application source should be readable");
+    let screen_entry = app
+        .split_once("fn handle_screen_entry_on_fade(")
+        .and_then(|(_, rest)| rest.split_once("impl ApplicationHandler<UserEvent> for App {"))
+        .map(|(body, _)| body)
+        .expect("screen entry must prepare course life from its reload-adjusted entry view");
+    let entry: String = screen_entry.chars().filter(|ch| !ch.is_whitespace()).collect();
+    let adjusted = entry
+        .find("course.progress=course.progress.for_entry(lua_reload)")
+        .expect("Lua reload must adjust the entry view's progress");
+    let borrowed = entry
+        .find("letentry_course=entry_course.as_ref()")
+        .expect("course life must consume the prepared entry view");
+    let selected = entry
+        .find("letcourse_life_config=entry_course.map_or(")
+        .expect("course life must be selected from entry_course");
+    let life_entry = entry[selected..]
+        .split_once(");")
+        .map(|(body, _)| body)
+        .expect("course life selection call must complete in the entry scope");
+    assert!(
+        adjusted < borrowed
+            && borrowed < selected
+            && contains_rust(life_entry, "course_life_config_for_stage(course,"),
+        "life selection must use the entry course after applying Lua reload progress"
+    );
+}
+
+#[test]
+fn course_progress_policy_stays_in_gameplay() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let progress = production_source(&root.join("crates/deadsync-gameplay/src/course_progress.rs"));
+    let course = production_source(&root.join("crates/deadsync-shell/src/course.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    // App declares out-of-line test modules before its production methods.
+    // Read the complete file and inspect the specific lifecycle scopes below.
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell application source should be readable");
+
+    assert!(
+        contains_rust(
+            &progress,
+            "pub struct CourseProgress { next_stage_index: usize, interrupted: bool, }",
+        ),
+        "the game must privately own the course cursor and interruption state"
+    );
+    for contract in [
+        "pub enum CourseRenewal",
+        "pub const fn has_next_stage(",
+        "pub const fn stage_index(",
+        "pub const fn is_finished(",
+        "pub const fn for_entry(",
+        "pub const fn finish_entry(",
+        "pub const fn interrupt_loading(",
+        "pub const fn can_append_endless_cycle(",
+        "pub const fn renewal(",
+        "pub const fn uses_next_stage_lead_in(",
+    ] {
+        assert!(
+            contains_rust(&progress, contract),
+            "course progress policy must remain game-owned through {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "CurrentScreen",
+        "CourseTypeView",
+    ] {
+        assert!(
+            !progress.contains(presentation),
+            "course progress must consume scalar game facts, not {presentation}"
+        );
+    }
+    assert!(
+        course.contains("deadsync_gameplay::course_progress::")
+            && contains_rust(&course, "pub progress: CourseProgress")
+            && !contains_rust(&course, "pub next_stage_index:")
+            && !contains_rust(&course, "pub interrupted:"),
+        "CourseRunState must retain metadata while delegating progress to its game owner"
+    );
+    let wrappers = course
+        .split_once("impl CourseRunState {")
+        .and_then(|(_, rest)| rest.split_once("pub fn course_life_config_for_stage("))
+        .map(|(body, _)| body)
+        .expect("course runtime compatibility methods must remain available");
+    for delegation in [
+        "self.progress.has_next_stage(",
+        "self.progress.stage_index(",
+        "self.progress.is_finished(",
+        "self.progress.renewal(",
+        "self.stages.get(index)",
+    ] {
+        assert!(
+            contains_rust(wrappers, delegation),
+            "the course runtime must use game-owned progress through {delegation}"
+        );
+    }
+    let wrapper_facts: String = wrappers.chars().filter(|ch| !ch.is_whitespace()).collect();
+    assert!(
+        wrapper_facts.matches("self.stages.len()").count() == 4
+            && wrapper_facts.matches("self.course_type==CourseType::Endless").count() == 4
+            && !wrappers.contains("next_stage_index")
+            && !wrappers.contains("interrupted"),
+        "course availability, selection, completion and renewal must use live catalog facts"
+    );
+    let append = course
+        .split_once("fn append_endless_cycle_with_loader(")
+        .and_then(|(_, rest)| rest.split_once("pub fn build_course_run_from_selection("))
+        .map(|(body, _)| body)
+        .expect("the shell must retain its course loading boundary");
+    assert!(
+        contains_rust(append, ".can_append_endless_cycle(")
+            && contains_rust(append, "selection.path != course.path")
+            && !append.contains("course.interrupted"),
+        "cycle loading must retain path validation and use game-owned append authorization"
+    );
+
+    let transition = navigation
+        .split_once("fn resolve_course_stage_transition(")
+        .and_then(|(_, rest)| rest.split_once("fn reject_missing_course_plan("))
+        .map(|(body, _)| body)
+        .expect("course renewal must remain before screen commitment");
+    for decision in [
+        "course.renewal()",
+        "CourseRenewal::NotRequired",
+        "CourseRenewal::AppendCycle",
+        "CourseRenewal::InvalidCursor",
+        "course.progress.interrupt()",
+        "self.pending_song_lua_reload.is_some()",
+    ] {
+        assert!(
+            contains_rust(transition, decision),
+            "course entry must apply the game-owned renewal decision through {decision}"
+        );
+    }
+    assert!(
+        !transition.contains("next_stage_index")
+            && !transition.contains("Ordering::")
+            && !transition.contains("CourseTypeView::Endless"),
+        "the navigation adapter must not recalculate cursor or renewal policy"
+    );
+    let global_entry = navigation
+        .split_once("pub(super) fn prepare_global_fade_entry(")
+        .and_then(|(_, rest)| rest.split_once("pub(super) fn get_out_transition_for_route("))
+        .map(|(body, _)| body)
+        .expect("global screen entry boundary");
+    let renewed = global_entry
+        .find("self.resolve_course_stage_transition(prev, requested)")
+        .expect("course renewal must run before screen entry");
+    let committed = global_entry
+        .find("self.commit_screen_change(target)")
+        .expect("the resolved destination must be committed");
+    assert!(
+        renewed < committed,
+        "renewal must resolve before the application commits its destination screen"
+    );
+    let finish = app
+        .split_once("fn finish_gameplay_init(")
+        .and_then(|(_, rest)| rest.split_once("fn poll_pending_gameplay_init("))
+        .map(|(body, _)| body)
+        .expect("successful gameplay initialization boundary");
+    let entered = finish
+        .find("crate::gameplay_runtime::enter(")
+        .expect("gameplay must enter before advancing course progress");
+    let advanced = finish
+        .find(".finish_entry(")
+        .expect("successful entry must delegate course advancement");
+    assert!(
+        entered < advanced && contains_rust(finish, ".finish_entry(finish.lua_reload)"),
+        "course progress must advance only after successful entry, preserving reload semantics"
+    );
+    let failed_load = app
+        .split_once("fn interrupt_course_loading(")
+        .and_then(|(_, rest)| rest.split_once("pub(super) fn apply_window_focus_change("))
+        .map(|(body, _)| body)
+        .expect("course load-failure boundary");
+    assert!(
+        contains_rust(failed_load, ".interrupt_loading(course.stage_summaries.len())")
+            && !failed_load.contains("course.stage_summaries.is_empty()")
+            && !failed_load.contains("course.interrupted"),
+        "the game must decide whether recorded history permits course-loading interruption"
+    );
+    let screen_entry = app
+        .split_once("fn handle_screen_entry_on_fade(")
+        .and_then(|(_, rest)| rest.split_once("impl ApplicationHandler<UserEvent> for App {"))
+        .map(|(body, _)| body)
+        .expect("screen entry must prepare gameplay from a course entry view");
+    let entry_view = screen_entry
+        .split_once("let mut entry_course = self.state.session.course_run.clone();")
+        .and_then(|(_, rest)| rest.split_once("let entry_course = entry_course.as_ref();"))
+        .map(|(body, _)| body)
+        .expect("course entry must retain a separate view of canonical progress");
+    assert!(
+        contains_rust(entry_view, "course.progress = course.progress.for_entry(lua_reload)")
+            && contains_rust(screen_entry, "course.progress.uses_next_stage_lead_in()")
+            && !contains_rust(&app, "course.next_stage_index =")
+            && !contains_rust(&app, "course.interrupted ="),
+        "reload entry views and lead-in policy must use game-owned progress without raw mutations"
+    );
+}
+
+#[test]
+fn gameplay_exit_routing_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let policy = production_source(&root.join("crates/deadsync-gameplay/src/exit_route.rs"));
+    let theme = production_source(&root.join("crates/deadsync-theme-simply-love/src/effects.rs"));
+    let gameplay = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    // Out-of-line test modules precede the app's production imports and methods.
+    let shell = read_source(&root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app source should be readable");
+    let shell_flow = production_source(&root.join("crates/deadsync-shell/src/screen_flow.rs"));
+    let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+
+    for contract in [
+        "pub struct GameplayExitRouteContext",
+        "pub enum GameplayExitDestination",
+        "pub struct GameplayExitRoute",
+        "pub const fn resolve_gameplay_exit_route(",
+        "pub consume_restart_pending: bool",
+    ] {
+        assert!(
+            contains_rust(&policy, contract),
+            "the game must own semantic exit routing through {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "CurrentScreen",
+        "Screen::",
+    ] {
+        assert!(
+            !policy.contains(presentation),
+            "game exit policy must not depend on presentation through {presentation}"
+        );
+    }
+    for adapter in [
+        "GameplayAction(deadsync_gameplay::GameplayAction)",
+        "pub fn gameplay_action_for_effect(",
+        "pub const fn effect_for_gameplay_exit(",
+        "pub fn resolve_effect_route(",
+    ] {
+        assert!(
+            contains_rust(&theme, adapter),
+            "the theme must preserve its semantic and compatibility adapters: {adapter}"
+        );
+    }
+    let compatibility = theme
+        .split_once("pub fn resolve_effect_route(")
+        .map(|(_, body)| body)
+        .expect("the public compatibility adapter must remain available");
+    assert!(
+        contains_rust(compatibility, "resolve_gameplay_exit_route(")
+            && contains_rust(compatibility, "effect_for_gameplay_exit(route)")
+            && contains_rust(compatibility, "route.consume_restart_pending"),
+        "the compatibility adapter must use the game's destination and restart decision"
+    );
+    for (fact, projection) in [
+        ("restart_pending", "restart_pending: context.restart_pending"),
+        ("course_active", "course_active: context.course_active"),
+        (
+            "course_has_next_stage",
+            "course_has_next_stage: context.course_has_next_stage",
+        ),
+        (
+            "gameplay_failed",
+            "all_joined_players_failed: context.gameplay_failed",
+        ),
+    ] {
+        assert!(
+            contains_rust(compatibility, projection)
+                && compatibility.matches(format!("context.{fact}").as_str()).count() == 1,
+            "the theme may only forward {fact}; it must not decide course/restart policy"
+        );
+    }
+    assert!(
+        contains_rust(
+            &gameplay,
+            "ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::GameplayAction(action))",
+        ) && !gameplay.contains("fn map_gameplay_action(")
+            && !gameplay.contains("fn screen_for_exit("),
+        "normal gameplay must emit semantic actions without choosing concrete exit screens"
+    );
+    assert!(
+        contains_rust(
+            &gameplay,
+            "let destination = song_lua_transition_screen(name)?; Ok(ThemeEffect::NavigateNoFade(destination))",
+        ),
+        "explicit song Lua destinations must remain validated immediate navigation"
+    );
+
+    assert!(
+        shell.contains("deadsync_gameplay::exit_route::"),
+        "the shell must import the game-owned route policy directly"
+    );
+    for old_router in ["theme_effect_route_plan", "resolve_effect_route"] {
+        assert!(
+            !shell.contains(old_router) && !shell_flow.contains(old_router),
+            "the shell must not route gameplay through the theme compatibility API {old_router}"
+        );
+    }
+    let batch = shell
+        .split_once("fn handle_action(")
+        .and_then(|(_, rest)| rest.split_once("fn handle_single_action("))
+        .map(|(body, _)| body)
+        .expect("the shell's per-effect execution boundary must remain present");
+    assert!(
+        contains_rust(
+            batch,
+            "for effect in effects { self.handle_single_action(effect, event_loop)?; }",
+        ) && !batch.contains("resolve_gameplay_exit_route(")
+            && !batch.contains("GameplayExitRouteContext"),
+        "each batch item must be routed after the preceding item executes"
+    );
+    let routing = shell
+        .split_once("fn handle_single_action(")
+        .and_then(|(_, rest)| rest.split_once("let commands = match action {"))
+        .map(|(body, _)| body)
+        .expect("routing must happen before individual effect execution");
+    for live_fact in [
+        "gameplay_action_for_effect(&action)",
+        "Some(GameplayAction::None) => (ThemeEffect::None, false)",
+        "Some(GameplayAction::Restart)",
+        "ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RestartGameplay)",
+        "self.state.screens.current_screen == CurrentScreen::Gameplay",
+        "self.state.session.course_run.as_ref()",
+        "restart_pending: self.state.session.restart_pending",
+        "course_active: course.is_some()",
+        "course_has_next_stage: course.is_some_and(CourseRunState::has_next_stage)",
+        "resolve_gameplay_exit_route(",
+        "effect_for_gameplay_exit(route)",
+        "route.consume_restart_pending",
+    ] {
+        assert!(
+            contains_rust(routing, live_fact),
+            "each individual effect must use current game facts through {live_fact}"
+        );
+    }
+    assert!(
+        contains_rust(
+            routing,
+            "matches!(gameplay_action, GameplayAction::Navigate(GameplayExit::Complete)) && from_gameplay && self.current_gameplay_stage_failed()",
+        ),
+        "failure lookup must remain lazy and limited to normal gameplay completion"
+    );
+    let decision = routing
+        .find("resolve_gameplay_exit_route(")
+        .expect("game-owned routing decision");
+    let consume = routing
+        .find("self.state.session.restart_pending = false;")
+        .expect("the shell must consume the resolved pending restart before execution");
+    assert!(
+        decision < consume
+            && contains_rust(
+                routing,
+                "if clear_restart_pending { self.state.session.restart_pending = false; }",
+            ),
+        "only the resolved route may consume pending restart, before its effect executes"
+    );
+    for misplaced_policy in [
+        "resolve_gameplay_exit_route(",
+        "GameplayExitRouteContext",
+        "gameplay_action_for_effect(",
+        "restart_pending",
+    ] {
+        assert!(
+            !navigation.contains(misplaced_policy),
+            "course/restart routing must precede navigation and fade execution: {misplaced_policy}"
+        );
+    }
+}
+
+#[test]
 fn theme_screen_contract_has_explicit_owners() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_screen = read_source(root.join("crates/deadsync-theme/src/screen.rs"))
@@ -11715,9 +12395,6 @@ fn theme_screen_contract_has_explicit_owners() {
     let simply_love_flow =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
-    let shell_flow = read_source(root.join("crates/deadsync-shell/src/screen_flow.rs"))
-        .expect("shell effect router should be readable");
-
     for token in ["pub struct ThemeScreenId", "pub trait Theme"] {
         assert!(
             generic_screen.contains(token),
@@ -11743,10 +12420,10 @@ fn theme_screen_contract_has_explicit_owners() {
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(
-        shell_flow.contains("theme_effect_route_plan")
+        shell_app.contains("resolve_gameplay_exit_route(")
             && shell_app.contains("ThemeEffect::Batch(effects)")
             && shell_app.contains("self.handle_single_action(effect, event_loop)?"),
-        "deadsync-shell must own ordered ThemeEffect routing and execution"
+        "the shell must execute effects in order using game-owned exit routing"
     );
 }
 
@@ -11756,7 +12433,7 @@ fn theme_owned_screen_architecture_has_no_contract_crate() {
     let removed_crate_name = ["deadsync", "screens"].join("-");
     assert!(
         !root.join("crates").join(&removed_crate_name).exists(),
-        "the retired screen contract crate must stay absent; screens and redirects are theme-owned"
+        "the retired screen contract crate must stay absent; concrete presentation screens are theme-owned"
     );
 
     let mut files = rust_files(&root.join("crates"));
