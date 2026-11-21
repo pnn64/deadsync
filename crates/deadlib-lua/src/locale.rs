@@ -338,6 +338,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         crate::pattern::find_byte(bytes, 0)
     };
     let bytes = &bytes[..nul.unwrap_or(bytes.len())];
+    let ascii_prefix = if bytes.len() >= 128 && ascii_space(bytes[0]) {
+        crate::pattern::scan_boundary(bytes, |byte| !ascii_space(byte))
+    } else {
+        0
+    };
+    let bytes = &bytes[ascii_prefix..];
     let start = bytes
         .iter()
         .position(|&b| !is_space(b))

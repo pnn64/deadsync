@@ -252,8 +252,15 @@ fn runtime_conversion_keeps_exact_rounding_without_allocating() {
             Some((-42.0f64).to_bits()),
         );
     }
-    for len in [30, 31, 32, 61, 62, 63, 64, 65, 4098] {
+    for len in [
+        30, 31, 32, 61, 62, 63, 64, 65, 124, 125, 126, 127, 128, 129, 4098,
+    ] {
         let padding: String = " \t\u{b}\u{c}\r\n".chars().cycle().take(len).collect();
+        check(
+            &format!("{padding}-42\0ignored"),
+            Some((-42.0f64).to_bits()),
+        );
+        check(&format!("{padding}\u{ff}42"), None);
         check(&format!("-42{padding}"), Some((-42.0f64).to_bits()));
         check(&format!("42\u{ff}{padding}"), None);
         check(&padding, None);
