@@ -2,6 +2,7 @@ use crate::{Error, reserve};
 
 pub(super) const WINDOW: usize = 32768;
 pub(super) const SEARCH: usize = 16;
+const HASHES: usize = 1 << 16;
 
 /// Spend deeper searches only after the current block shows useful repetition.
 #[inline]
@@ -24,22 +25,20 @@ pub(super) fn positions(start: usize, length: usize) -> impl Iterator<Item = usi
 /// Flat four-byte hash heads and a 32 KiB ring of backward links. Low 32-bit
 /// positions wrap independently of stream length; candidates are bounded by
 /// distance and their bytes are always verified before emitting a match.
+/// Fixed table sizes let the hash and ring masks bound every index.
 pub(super) struct Matcher {
-    heads: Vec<u32>,
-    previous: Vec<u16>,
+    heads: Box<[u32; HASHES]>,
+    previous: Box<[u16; WINDOW]>,
 }
 impl Matcher {
     pub(super) fn new() -> Result<Self, Error> {
-        let mut heads = Vec::new();
-        reserve(&mut heads, 65536)?;
-        heads.resize(65536, u32::MAX);
-        let mut previous = Vec::new();
-        reserve(&mut previous, WINDOW)?;
-        previous.resize(WINDOW, 0);
-        Ok(Self { heads, previous })
+        Ok(Self {
+            heads: table(u32::MAX)?,
+            previous: table(0)?,
+        })
     }
     pub(super) fn memory(&self) -> usize {
-        self.heads.capacity() * 4 + self.previous.capacity() * 2
+        HASHES * 4 + WINDOW * 2
     }
     #[inline]
     pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
@@ -70,6 +69,16 @@ impl Matcher {
             .checked_sub(distance)
             .filter(|&next| position - next <= WINDOW)
     }
+}
+
+fn table<T: Copy, const N: usize>(value: T) -> Result<Box<[T; N]>, Error> {
+    let mut table = Vec::new();
+    reserve(&mut table, N)?;
+    table.resize(N, value);
+    let Ok(table) = table.into_boxed_slice().try_into() else {
+        unreachable!("the table has exactly N entries")
+    };
+    Ok(table)
 }
 
 /// Equal-prefix length in portable eight-byte groups. Little-endian words make

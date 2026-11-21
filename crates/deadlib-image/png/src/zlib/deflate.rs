@@ -1,7 +1,4 @@
-use super::{
-    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer,
-    distance_code, length_code, matcher,
-};
+use super::{Compression, StreamStatus, Writer, fast_block, matcher};
 use crate::{Error, checksum::Adler32, reserve};
 
 const BLOCK: usize = 32768;
@@ -24,8 +21,10 @@ pub struct Deflater {
     mode: Compression,
     writer: Writer,
     pending: usize,
-    block: Vec<u8>,
-    history: Vec<u8>,
+    /// The previous Fast block (`history` bytes) followed by the current block,
+    /// so matches read one contiguous slice across the block boundary.
+    window: Vec<u8>,
+    history: usize,
     matcher: Option<matcher::Matcher>,
     encoded: usize,
     total_in: usize,
@@ -41,14 +40,13 @@ impl Deflater {
         let bits = if mode == Compression::Rle { 10 } else { 9 };
         reserve(&mut bytes, BLOCK * bits / 8 + 64)?;
         bytes.extend_from_slice(&[0x78, 0x01]);
-        let mut block = Vec::new();
-        reserve(&mut block, BLOCK)?;
-        let mut history = Vec::new();
+        let mut window = Vec::new();
         let mut matcher = None;
         if mode == Compression::Fast {
-            reserve(&mut history, BLOCK)?;
-            history.resize(BLOCK, 0);
+            reserve(&mut window, BLOCK * 2)?;
             matcher = Some(matcher::Matcher::new()?);
+        } else {
+            reserve(&mut window, BLOCK)?;
         }
         Ok(Self {
             mode,
@@ -58,8 +56,8 @@ impl Deflater {
                 count: 0,
             },
             pending: 0,
-            block,
-            history,
+            window,
+            history: 0,
             matcher,
             encoded: 0,
             total_in: 0,
@@ -82,8 +80,7 @@ impl Deflater {
     pub fn working_memory_bytes(&self) -> usize {
         core::mem::size_of::<Self>()
             + self.writer.bytes.capacity()
-            + self.block.capacity()
-            + self.history.capacity()
+            + self.window.capacity()
             + self.matcher.as_ref().map_or(0, matcher::Matcher::memory)
     }
     pub fn process(
@@ -137,15 +134,16 @@ impl Deflater {
                     status: StreamStatus::Done,
                 });
             }
-            let n = (BLOCK - self.block.len()).min(input.len() - consumed);
+            let n = (self.history + BLOCK - self.window.len()).min(input.len() - consumed);
             self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
-            self.block.extend_from_slice(&input[consumed..consumed + n]);
+            self.window
+                .extend_from_slice(&input[consumed..consumed + n]);
             if self.mode != Compression::Rle {
                 self.checksum.update(&input[consumed..consumed + n]);
             }
             consumed += n;
             let final_block = finish && consumed == input.len();
-            if self.block.len() == BLOCK || final_block {
+            if self.window.len() == self.history + BLOCK || final_block {
                 self.encode_block(final_block);
             } else {
                 return Ok(DeflateProgress {
@@ -156,117 +154,40 @@ impl Deflater {
             }
         }
     }
-    fn value(&self, index: usize) -> u8 {
-        if index >= self.encoded {
-            self.block[index - self.encoded]
-        } else {
-            self.history[index & (BLOCK - 1)]
-        }
-    }
     fn encode_block(&mut self, final_block: bool) {
+        let start = self.history;
+        let end = self.window.len();
+        let block = &self.window[start..];
         if self.mode == Compression::Stored {
-            self.writer.stored(&self.block, final_block);
+            self.writer.stored(block, final_block);
         } else if self.mode == Compression::Rle {
             self.writer
-                .rle_block(&self.block, final_block, &mut self.checksum);
+                .rle_block(block, final_block, &mut self.checksum);
         } else {
-            let checkpoint = self.writer.start_fixed(final_block);
+            let matcher = self.matcher.as_mut().unwrap();
             // Hash the previous block's three trailing positions once their
             // lookahead is available. Absolute positions retain full history.
             for back in (1..=3).rev() {
-                if self.encoded >= back && self.block.len() >= 4 - back {
-                    let index = self.encoded - back;
-                    let bytes = [
-                        self.value(index),
-                        self.value(index + 1),
-                        self.value(index + 2),
-                        self.value(index + 3),
-                    ];
-                    self.matcher.as_mut().unwrap().insert(&bytes, index);
+                if self.encoded >= back && end - start >= 4 - back {
+                    matcher.insert(&self.window[start - back..], self.encoded - back);
                 }
             }
-            let mut pos = 0;
-            let mut misses = 0usize;
-            while pos < self.block.len() {
-                let global = self.encoded + pos;
-                let mut length = 0;
-                let mut distance = 0;
-                if pos + 3 < self.block.len() {
-                    let mut candidate = self
-                        .matcher
-                        .as_mut()
-                        .unwrap()
-                        .insert(&self.block[pos..], global);
-                    let bits = (self.writer.bytes.len() - checkpoint.bytes) * 8
-                        + self.writer.count as usize
-                        - checkpoint.count as usize;
-                    let searches = matcher::searches(bits, pos);
-                    for attempt in 0..searches {
-                        let Some(previous) = candidate else {
-                            break;
-                        };
-                        let max = (self.block.len() - pos).min(258);
-                        if length < max
-                            && self.value(previous + length) == self.block[pos + length]
-                            && self.value(previous) == self.block[pos]
-                        {
-                            let matched = self.match_length(previous, pos, max);
-                            if matched > length {
-                                length = matched;
-                                distance = global - previous;
-                            }
-                            if length == max {
-                                break;
-                            }
-                        }
-                        if attempt + 1 == searches {
-                            break;
-                        }
-                        candidate = self.matcher.as_ref().unwrap().next(previous, global);
-                    }
-                }
-                let count = if length >= 3 {
-                    misses = 0;
-                    let index = length_code(length);
-                    self.writer.literal(257 + index);
-                    self.writer
-                        .write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
-                    let index = distance_code(distance);
-                    self.writer.write((index as u32).reverse_bits() >> 27, 5);
-                    self.writer
-                        .write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
-                    length
-                } else {
-                    let count = (1 + (misses >> 8)).min(16).min(self.block.len() - pos);
-                    for &byte in &self.block[pos..pos + count] {
-                        self.writer.literal(byte as usize);
-                    }
-                    misses += count;
-                    count
-                };
-                if length >= 3 {
-                    for next in matcher::positions(pos, count) {
-                        if next + 3 < self.block.len() {
-                            self.matcher
-                                .as_mut()
-                                .unwrap()
-                                .insert(&self.block[next..], self.encoded + next);
-                        }
-                    }
-                }
-                pos += count;
-            }
-            // Current-block references read from `block`; keep the previous
-            // block intact until all matches have been selected.
-            let at = self.encoded & (BLOCK - 1);
-            let first = self.block.len().min(BLOCK - at);
-            self.history[at..at + first].copy_from_slice(&self.block[..first]);
-            self.history[..self.block.len() - first].copy_from_slice(&self.block[first..]);
-            self.writer
-                .finish_fixed(checkpoint, &self.block, final_block);
+            let base = self.encoded - start;
+            fast_block(
+                &mut self.writer,
+                matcher,
+                &self.window,
+                base,
+                start,
+                end,
+                final_block,
+            );
+            // The current block becomes the next block's history.
+            self.window.copy_within(start.., 0);
+            self.history = end - start;
         }
-        self.encoded += self.block.len();
-        self.block.clear();
+        self.encoded += end - start;
+        self.window.truncate(self.history);
         if final_block {
             self.writer.align();
             self.writer
@@ -274,29 +195,5 @@ impl Deflater {
                 .extend_from_slice(&self.checksum.finish().to_be_bytes());
             self.finishing = true;
         }
-    }
-    #[inline(always)]
-    fn match_length(&self, previous: usize, pos: usize, max: usize) -> usize {
-        let mut length = 0;
-        while length < max {
-            let source = previous + length;
-            let bytes = if source >= self.encoded {
-                &self.block[source - self.encoded..]
-            } else {
-                let ring = source & (BLOCK - 1);
-                let count = (self.encoded - source).min(BLOCK - ring);
-                &self.history[ring..ring + count]
-            };
-            let count = bytes.len().min(max - length);
-            let equal = matcher::prefix(
-                &bytes[..count],
-                &self.block[pos + length..pos + length + count],
-            );
-            length += equal;
-            if equal != count {
-                break;
-            }
-        }
-        length
     }
 }

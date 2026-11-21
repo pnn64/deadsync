@@ -1367,6 +1367,85 @@ fn distance_code(distance: usize) -> usize {
     }
 }
 
+/// Fixed-code LZ77 for `data[start..end]`; `data[0]` is stream position `base`.
+/// Only positions with four bytes inside `data` are hashed or searched, so a
+/// caller bounds lookahead by the slice it supplies.
+#[inline(always)]
+fn fast_block(
+    writer: &mut Writer,
+    matcher: &mut matcher::Matcher,
+    data: &[u8],
+    base: usize,
+    start: usize,
+    end: usize,
+    final_block: bool,
+) {
+    let w = writer;
+    let checkpoint = w.start_fixed(final_block);
+    let mut pos = start;
+    let mut misses = 0usize;
+    while pos < end {
+        let mut length = 0;
+        let mut distance = 0;
+        if pos + 3 < data.len() {
+            let mut candidate = matcher.insert(&data[pos..], base + pos);
+            let max = (end - pos).min(258);
+            let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
+                - checkpoint.count as usize;
+            let searches = matcher::searches(bits, pos - start);
+            for attempt in 0..searches {
+                let Some(absolute) = candidate else {
+                    break;
+                };
+                let previous = absolute - base;
+                if length < max
+                    && data[previous + length] == data[pos + length]
+                    && data[previous] == data[pos]
+                {
+                    let matched =
+                        matcher::prefix(&data[previous..previous + max], &data[pos..pos + max]);
+                    if matched > length {
+                        length = matched;
+                        distance = pos - previous;
+                    }
+                    if length == max {
+                        break;
+                    }
+                }
+                if attempt + 1 == searches {
+                    break;
+                }
+                candidate = matcher.next(absolute, base + pos);
+            }
+        }
+        if length >= 3 {
+            misses = 0;
+            let index = length_code(length);
+            w.literal(257 + index);
+            w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+            let index = distance_code(distance);
+            w.write((index as u32).reverse_bits() >> 27, 5);
+            w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+            for next in matcher::positions(pos, length) {
+                if next + 3 < data.len() {
+                    matcher.insert(&data[next..], base + next);
+                }
+            }
+            pos += length;
+        } else {
+            // Bound work on sustained incompressible input. Search resumes
+            // within at most 15 literal bytes of new structure.
+            let count = (1 + (misses >> 8)).min(16).min(end - pos);
+            for &byte in &data[pos..pos + count] {
+                w.literal(byte as usize);
+            }
+            misses += count;
+            pos += count;
+        }
+    }
+    w.finish_fixed(checkpoint, &data[start..end], final_block);
+}
+
 /// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
 pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
     let bound = input
@@ -1417,73 +1496,17 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
             count: 0,
         };
         let mut matcher = matcher::Matcher::new()?;
-        for block_start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
-            let end = input.len().min(block_start + matcher::WINDOW);
-            let final_block = end == input.len();
-            let checkpoint = w.start_fixed(final_block);
-            let mut pos = block_start;
-            let mut misses = 0usize;
-            while pos < end {
-                let mut length = 0;
-                let mut distance = 0;
-                if pos + 3 < input.len() {
-                    let mut candidate = matcher.insert(&input[pos..], pos);
-                    let max = (end - pos).min(258);
-                    let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
-                        - checkpoint.count as usize;
-                    let searches = matcher::searches(bits, pos - block_start);
-                    for attempt in 0..searches {
-                        let Some(previous) = candidate else {
-                            break;
-                        };
-                        if length < max
-                            && input[previous + length] == input[pos + length]
-                            && input[previous] == input[pos]
-                        {
-                            let matched = matcher::prefix(
-                                &input[previous..previous + max],
-                                &input[pos..pos + max],
-                            );
-                            if matched > length {
-                                length = matched;
-                                distance = pos - previous;
-                            }
-                            if length == max {
-                                break;
-                            }
-                        }
-                        if attempt + 1 == searches {
-                            break;
-                        }
-                        candidate = matcher.next(previous, pos);
-                    }
-                }
-                if length >= 3 {
-                    misses = 0;
-                    let index = length_code(length);
-                    w.literal(257 + index);
-                    w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
-                    let index = distance_code(distance);
-                    w.write((index as u32).reverse_bits() >> 27, 5);
-                    w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
-                    for next in matcher::positions(pos, length) {
-                        if next + 3 < input.len() {
-                            matcher.insert(&input[next..], next);
-                        }
-                    }
-                    pos += length;
-                } else {
-                    // Bound work on sustained incompressible input. Search
-                    // resumes within at most 15 literal bytes of new structure.
-                    let count = (1 + (misses >> 8)).min(16).min(end - pos);
-                    for &byte in &input[pos..pos + count] {
-                        w.literal(byte as usize);
-                    }
-                    misses += count;
-                    pos += count;
-                }
-            }
-            w.finish_fixed(checkpoint, &input[block_start..end], final_block);
+        for start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
+            let end = input.len().min(start + matcher::WINDOW);
+            fast_block(
+                &mut w,
+                &mut matcher,
+                input,
+                0,
+                start,
+                end,
+                end == input.len(),
+            );
         }
         w.align();
         bytes = w.bytes;
