@@ -6,6 +6,7 @@ pub mod gameplay_lobby;
 pub mod groovestats;
 pub mod itgdb;
 pub mod lobbies;
+pub mod lobby_wait;
 pub mod pack_archive;
 pub mod pack_page;
 pub mod player_leaderboards;

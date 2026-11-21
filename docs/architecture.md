@@ -107,6 +107,27 @@ Readiness and reconnect changes never re-pause a stage that has already started.
 The entry-time refresh flag and active local sides remain fixed for the stage.
 Themes retain lobby HUD visibility, translated status text, and countdown display.
 
+`deadsync-online::lobby_wait` owns Evaluation and Select Music input barriers,
+held-Start disconnects, and Evaluation machine-stat publication. Each screen has
+one game-owned session with a retained lobby view and private hold state. Calls
+supply the current joined sides and selected-side fallback, so a context refresh
+changes policy immediately. Typed wait reasons preserve each screen's barrier
+precedence without constructing presentation strings during input or frame checks.
+
+Evaluation lazily requests scalar score facts when publication is allowed. The
+game converts judgments and score percentages, publishes stats, and then checks
+for a completed disconnect hold. It emits Disconnect before clearing its local
+snapshot and reconnect state. Select Music retains its snapshot after requesting
+disconnect, preserving the same-frame remote-selection and presence updates.
+Themes adapt effects and score facts without moving theme view types into the
+game or adding an intermediate event buffer or snapshot clone.
+
+The themes retain status wording, countdown formatting, notices, overlays, and
+navigation cleanup. Evaluation favorite-code handling still precedes the lobby
+barrier. Select Music clears its existing navigation holds before sampling the
+disconnect deadline. The game owns whether input is blocked; the displayed
+status label does not participate in that decision.
+
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
@@ -127,6 +148,10 @@ Workspace callers are updated for these source-level changes:
   operations. Existing theme entry/update/refresh wrappers still delegate to
   those operations. `SimplyLoveLobbyRuntimeView` remains an alias for the
   game-owned `LobbyRuntimeView`, with the same fields and defaults.
+- Evaluation and Select Music retain their screen entry/update/input signatures
+  and runtime-view refresh wrappers. Their lobby view and disconnect holds now
+  live in `EvaluationLobbySession` and `SelectMusicLobbySession`; direct state
+  access uses the sessions' read-only runtime-view and countdown accessors.
 - Practice screen entry/update/input signatures and `MusicStartSnap` remain
   compatible. Its private playback mode is replaced by `PracticePlayback`, and
   its editor fields are owned by `PracticeEditor`. `PracticeRuntimeView` keeps
@@ -153,11 +178,16 @@ guards keep editor state, input/repeat decisions, and rate audio commands in the
 game. Game-owned editor tests exercise the real gameplay core, including held
 input ordering, selection restoration, seeking, playback ranges, rate feedback,
 and gameplay function keys, without requiring a theme dependency.
+Lobby guards keep wait decisions, disconnect holds, and Evaluation stat
+conversion in `deadsync-online`. Its controller tests exercise barrier precedence,
+live local sides, exact hold deadlines, publication ordering, and the screens'
+distinct snapshot behavior without importing a theme.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
 cargo test -p deadsync-gameplay --lib
 cargo test -p deadsync-online --lib gameplay_lobby
+cargo test -p deadsync-online --lib lobby_wait
 cargo test -p deadsync-input --test input_pipeline_allocations
 cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ```
@@ -166,10 +196,10 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 
 The production crate graph follows these directions. Normal song-Lua lifecycle,
 callback input sequencing, practice playback/editor behavior, and gameplay lobby
-coordination now have game owners. Simply Love still wraps gameplay state.
-Evaluation and music selection also retain lobby input barriers, disconnect
-handling, and remote-selection policy; those decisions need game-owned
-controllers with typed status facts for presentation. Course continuation,
+coordination now have game owners, as do Evaluation and Select Music lobby input
+barriers and disconnect handling. Simply Love still wraps gameplay state. Music
+selection retains remote song-selection, presence, deduplication, and retry
+policy; these decisions still need game-owned controllers. Course continuation,
 failure, cancellation, and restart routing still cross the theme effect adapter
 and should produce semantic outcomes before a theme selects its screen and fade.
 

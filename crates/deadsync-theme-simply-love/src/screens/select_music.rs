@@ -32,7 +32,6 @@ use crate::views::{
     SelectMusicPadProfileView, SelectMusicPlaylistView, SelectMusicPolicyView,
     SelectMusicProfileView, SelectMusicRuntimeView, SelectMusicScoreboxRequest,
     SelectMusicSessionView, SimplyLoveContentReloadEvent, SimplyLoveContentReloadPhase,
-    SimplyLoveLobbyRuntimeView,
 };
 use crate::{SimplyLoveEffect as ThemeEffect, SimplyLoveInputResult as ThemeInputResult};
 use deadlib_platform::input::{KeyCode, PadDir, PadEvent, RawKeyboardEvent};
@@ -56,6 +55,7 @@ use deadsync_config::theme::GameFlag;
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, Keymap, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_online::lobby_wait::{LobbyWaitReason, LocalLobbyPlayers, SelectMusicLobbySession};
 use deadsync_profile as profile_data;
 use deadsync_profile::favorites_view::ascii_case_insensitive_cmp;
 use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
@@ -690,7 +690,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     }
     state.audio_playback = view.audio_playback;
     if let Some(lobby) = view.lobby {
-        state.lobby_view = lobby;
+        state.lobby_session.sync_runtime_view(lobby);
     }
     if let Some(downloads) = view.downloads {
         state.downloads = downloads;
@@ -1844,7 +1844,7 @@ pub struct State {
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
-    lobby_view: SimplyLoveLobbyRuntimeView,
+    lobby_session: SelectMusicLobbySession,
     lobby_hud_cache: RefCell<lobby_hud::LobbyHudCache>,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
@@ -1882,8 +1882,6 @@ pub struct State {
     lobby_last_failed_remote_song: Option<FailedLobbySong>,
     lobby_notice_text: Option<String>,
     lobby_notice_time_left: f32,
-    lobby_disconnect_hold_p1: Option<Instant>,
-    lobby_disconnect_hold_p2: Option<Instant>,
 
     // Caches to avoid O(N) ops in hot paths
     cached_song: Option<Arc<SongData>>,
@@ -4050,7 +4048,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: deadsync_theme::views::AudioPlaybackView::default(),
-        lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_session: SelectMusicLobbySession::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
         policy: init_view.policy,
@@ -4088,8 +4086,6 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         lobby_last_failed_remote_song: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
-        lobby_disconnect_hold_p1: None,
-        lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_bpm_timeline: BpmTimeline::default(),
@@ -4308,7 +4304,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: deadsync_theme::views::AudioPlaybackView::default(),
-        lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_session: SelectMusicLobbySession::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
@@ -4346,8 +4342,6 @@ pub fn init_placeholder() -> State {
         lobby_last_failed_remote_song: None,
         lobby_notice_text: None,
         lobby_notice_time_left: 0.0,
-        lobby_disconnect_hold_p1: None,
-        lobby_disconnect_hold_p2: None,
         step_artist_cycle_base: 0.0,
         cached_song: None,
         cached_bpm_timeline: BpmTimeline::default(),
@@ -4683,7 +4677,11 @@ fn preview_hotkey_allowed(state: &State) -> bool {
 
 #[inline(always)]
 fn preview_mute_allowed(state: &State) -> bool {
-    preview_hotkey_allowed(state) && select_music_lobby_lock_text(state).is_none()
+    preview_hotkey_allowed(state)
+        && state
+            .lobby_session
+            .wait_reason(local_lobby_players(state.session))
+            .is_none()
 }
 
 #[inline(always)]
@@ -7579,8 +7577,11 @@ fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect
         return ThemeEffect::None;
     }
 
-    let outcome =
-        lobby_overlay::handle_input(&mut state.lobby_overlay, ev, &state.lobby_view.snapshot);
+    let outcome = lobby_overlay::handle_input(
+        &mut state.lobby_overlay,
+        ev,
+        &state.lobby_session.runtime_view().snapshot,
+    );
     apply_lobby_input_outcome(state, outcome)
 }
 
@@ -7773,28 +7774,10 @@ fn debug_screen_name(screen_name: &str) -> String {
         .to_string()
 }
 
-fn local_lobby_player_count(session: SelectMusicSessionView) -> usize {
-    let mut count = 0usize;
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        if session.side_joined(side) {
-            count += 1;
-        }
-    }
-    if count == 0 { 1 } else { count }
-}
-
-fn local_lobby_side_is_active(
-    session: SelectMusicSessionView,
-    side: profile_data::PlayerSide,
-) -> bool {
-    let p1_joined = session.side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = session.side_joined(profile_data::PlayerSide::P2);
-    if !(p1_joined || p2_joined) {
-        return session.player_side == side;
-    }
-    match side {
-        profile_data::PlayerSide::P1 => p1_joined,
-        profile_data::PlayerSide::P2 => p2_joined,
+const fn local_lobby_players(session: SelectMusicSessionView) -> LocalLobbyPlayers {
+    LocalLobbyPlayers {
+        joined: session.joined,
+        player_side: session.player_side,
     }
 }
 
@@ -7803,41 +7786,6 @@ fn set_lobby_notice(state: &mut State, text: impl Into<String>) {
     state.lobby_notice_time_left = 2.5;
 }
 
-const fn clear_lobby_disconnect_holds(state: &mut State) {
-    state.lobby_disconnect_hold_p1 = None;
-    state.lobby_disconnect_hold_p2 = None;
-}
-
-fn set_lobby_disconnect_hold(
-    state: &mut State,
-    side: profile_data::PlayerSide,
-    started_at: Option<Instant>,
-) {
-    match side {
-        profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(state.session, profile_data::PlayerSide::P1) =>
-        {
-            state.lobby_disconnect_hold_p1 = started_at;
-        }
-        profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(state.session, profile_data::PlayerSide::P2) =>
-        {
-            state.lobby_disconnect_hold_p2 = started_at;
-        }
-        _ => {}
-    }
-}
-
-fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
-    [
-        state.lobby_disconnect_hold_p1,
-        state.lobby_disconnect_hold_p2,
-    ]
-    .into_iter()
-    .flatten()
-    .map(|started_at| started_at.elapsed().as_secs_f32())
-    .max_by(f32::total_cmp)
-}
 
 fn sync_chart_label(chart: &ChartData) -> String {
     if chart.difficulty.eq_ignore_ascii_case("edit") && !chart.description.trim().is_empty() {
@@ -7975,53 +7923,6 @@ fn lobby_song_metadata_matches_remote_selection(
     true
 }
 
-fn lobby_player_on_screen(player: &lobby_data::LobbyPlayer, screen_name: &str) -> bool {
-    player.screen_name.eq_ignore_ascii_case(screen_name)
-}
-
-fn select_music_lobby_lock_text_for(
-    joined: &lobby_data::JoinedLobby,
-    local_player_count: usize,
-    reconnect_status_text: Option<&str>,
-) -> Option<String> {
-    if joined.players.len() <= local_player_count {
-        return None;
-    }
-    if let Some(text) = reconnect_status_text {
-        return Some(text.to_string());
-    }
-
-    let any_in_gameplay = joined
-        .players
-        .iter()
-        .any(|player| lobby_player_on_screen(player, "ScreenGameplay"));
-    let any_in_eval = joined
-        .players
-        .iter()
-        .any(|player| lobby_player_on_screen(player, "ScreenEvaluationStage"));
-    let all_in_select_music = joined
-        .players
-        .iter()
-        .all(|player| lobby_player_on_screen(player, "ScreenSelectMusic"));
-    if any_in_eval {
-        return Some(tr("Lobby", "WaitingForPlayersEvaluation").to_string());
-    }
-    // SL-OnlineHelpers.lua allows song selection once a song is selected and
-    // nobody remains in evaluation. ITGmania's pre-song radar stats can report
-    // minesHit > 0 while paused, so scores cannot gate arrival in Gameplay.
-    if joined.song_info.is_some() {
-        return None;
-    }
-    if any_in_gameplay {
-        return Some(tr("Lobby", "WaitingForPlayersGameplay").to_string());
-    }
-    if all_in_select_music {
-        return None;
-    }
-
-    Some(tr("Lobby", "WaitingForSync").to_string())
-}
-
 fn apply_remote_lobby_song_selection(
     state: &mut State,
     song_info: &lobby_data::LobbySongInfo,
@@ -8086,11 +7987,11 @@ fn apply_remote_lobby_song_selection(
 }
 
 fn publish_lobby_confirmed_song_selection(state: &mut State) {
-    let snapshot = &state.lobby_view.snapshot;
+    let snapshot = &state.lobby_session.runtime_view().snapshot;
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         return;
     };
-    if joined.players.len() <= local_lobby_player_count(state.session) {
+    if joined.players.len() <= local_lobby_players(state.session).count() {
         return;
     }
     if !matches!(snapshot.connection, lobby_data::ConnectionState::Connected) {
@@ -8114,7 +8015,7 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
 }
 
 fn sync_lobby_select_music(state: &mut State) {
-    let snapshot = std::sync::Arc::clone(&state.lobby_view.snapshot);
+    let snapshot = std::sync::Arc::clone(&state.lobby_session.runtime_view().snapshot);
     sync_lobby_select_music_with(state, &snapshot);
 }
 
@@ -8195,13 +8096,23 @@ fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapsh
 }
 
 fn select_music_lobby_lock_text(state: &State) -> Option<String> {
-    let snapshot = &state.lobby_view.snapshot;
-    let joined = snapshot.joined_lobby.as_ref()?;
-    select_music_lobby_lock_text_for(
-        joined,
-        local_lobby_player_count(state.session),
-        state.lobby_view.reconnect_status_text.as_deref(),
-    )
+    match state
+        .lobby_session
+        .wait_reason(local_lobby_players(state.session))?
+    {
+        LobbyWaitReason::Reconnecting => state
+            .lobby_session
+            .runtime_view()
+            .reconnect_status_text
+            .clone(),
+        LobbyWaitReason::WaitingForGameplay => {
+            Some(tr("Lobby", "WaitingForPlayersGameplay").to_string())
+        }
+        LobbyWaitReason::WaitingForEvaluation => {
+            Some(tr("Lobby", "WaitingForPlayersEvaluation").to_string())
+        }
+        LobbyWaitReason::WaitingForSync => Some(tr("Lobby", "WaitingForSync").to_string()),
+    }
 }
 
 fn select_music_lobby_status_text(state: &State) -> Option<String> {
@@ -8210,8 +8121,9 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
     }
     let mut text = select_music_lobby_lock_text(state)?;
     text.push('\n');
-    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
-        let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
+    if let Some(elapsed) = state.lobby_session.disconnect_hold_elapsed() {
+        let remaining =
+            (state.lobby_session.runtime_view().disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         i18n::tr_fmt_into(
             &mut text,
@@ -11171,7 +11083,11 @@ fn handle_raw_key_event_impl(
         return ThemeInputResult::consumed(ThemeEffect::None);
     }
 
-    if select_music_lobby_lock_text(state).is_some() {
+    if state
+        .lobby_session
+        .wait_reason(local_lobby_players(state.session))
+        .is_some()
+    {
         return ThemeInputResult::ignored();
     }
 
@@ -11374,32 +11290,8 @@ fn handle_input_impl(
         return handle_profile_switch_overlay_input(state, ev, effects);
     }
 
-    if select_music_lobby_lock_text(state).is_some() {
-        match ev.action {
-            VirtualAction::p1_start => {
-                if ev.pressed {
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P1,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
-                }
-            }
-            VirtualAction::p2_start => {
-                if ev.pressed {
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P2,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
-                }
-            }
-            _ => {}
-        }
+    let local_players = local_lobby_players(state.session);
+    if state.lobby_session.handle_input(local_players, ev) {
         return ThemeEffect::None;
     }
 
@@ -11672,7 +11564,8 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         state.smx_pads.clone_from(&smx.pads);
     }
     process_smx_pad_profile_events(state);
-    let lobby_locked = select_music_lobby_lock_text(state).is_some();
+    let local_players = local_lobby_players(state.session);
+    let lobby_locked = state.lobby_session.wait_reason(local_players).is_some();
     if state.lobby_notice_time_left > 0.0 {
         state.lobby_notice_time_left = (state.lobby_notice_time_left - dt.max(0.0)).max(0.0);
         if state.lobby_notice_time_left <= 0.0 {
@@ -11689,18 +11582,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         state.last_steps_nav_time_p1 = None;
         state.last_steps_nav_dir_p2 = None;
         state.last_steps_nav_time_p2 = None;
-        if lobby_disconnect_hold_elapsed(state)
-            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
-        {
-            clear_lobby_disconnect_holds(state);
-            queue_online(
-                state,
-                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Disconnect),
-            );
-            set_lobby_notice(state, "Disconnected from lobby.");
-        }
-    } else {
-        clear_lobby_disconnect_holds(state);
+    }
+    let lobby_update = state.lobby_session.update(local_players);
+    if lobby_update.disconnect_requested {
+        queue_online(
+            state,
+            crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Disconnect),
+        );
+        set_lobby_notice(state, "Disconnected from lobby.");
     }
 
     if state.reload_ui.is_some() {
@@ -11720,7 +11609,11 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         update_overlay_nav_hold(state);
         return ThemeEffect::None;
     }
-    lobby_overlay::update_overlay(&mut state.lobby_overlay, dt, &state.lobby_view.snapshot);
+    lobby_overlay::update_overlay(
+        &mut state.lobby_overlay,
+        dt,
+        &state.lobby_session.runtime_view().snapshot,
+    );
     queue_lobby_sounds(state);
     if pack_sync::poll(state) {
         if crate::screens::pack_sync::update(&mut state.pack_sync_overlay, dt) {
@@ -14550,14 +14443,24 @@ pub fn push_actors(
         actors,
         &state.lobby_overlay,
         state.active_color_index,
-        &state.lobby_view.snapshot,
-        state.lobby_view.reconnect_status_text.as_deref(),
+        &state.lobby_session.runtime_view().snapshot,
+        state
+            .lobby_session
+            .runtime_view()
+            .reconnect_status_text
+            .as_deref(),
         state.policy.machine_font,
     ) {
         return;
     }
 
-    if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
+    if let Some(joined) = state
+        .lobby_session
+        .runtime_view()
+        .snapshot
+        .joined_lobby
+        .as_ref()
+    {
         let mut cache = state.lobby_hud_cache.borrow_mut();
         lobby_hud::push_cached_panel(
             actors,
@@ -15049,7 +14952,7 @@ mod tests {
         handle_profile_switch_overlay_input, init_placeholder, keymap_has_player_input,
         maybe_prewarm_replaygain_for_pack, maybe_refresh_select_music_leaderboard,
         prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
+        select_music_lobby_lock_text, solo_runtime_side,
         steps_index_for_side, sync_beat_axis_rows, sync_beat_marker_rows, sync_beat_row_y,
         sync_bias_axis_pos, sync_graph_cols, sync_lobby_select_music, sync_low_confidence_warning,
         sync_overlay_graph_size,
@@ -17525,7 +17428,7 @@ mod tests {
             "unchanged profile identity stays retained"
         );
         assert_eq!(
-            state.lobby_view.snapshot.connection,
+            state.lobby_session.runtime_view().snapshot.connection,
             deadsync_online::lobbies::ConnectionState::Connected,
             "unchanged lobby view stays retained"
         );
@@ -18571,14 +18474,19 @@ mod tests {
         state.group_entries = Arc::from([entry.clone()]);
         state.entries = vec![entry];
         let song_info = build_local_lobby_song_info(&state).expect("fixture should select a chart");
-        state.lobby_view.snapshot = Arc::new(lobby_data::Snapshot {
-            connection: lobby_data::ConnectionState::Connected,
-            joined_lobby: Some(test_joined_lobby(
-                vec![test_lobby_player("ScreenSelectMusic")],
-                Some(song_info),
-            )),
-            ..Default::default()
-        });
+        state
+            .lobby_session
+            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
+                snapshot: Arc::new(lobby_data::Snapshot {
+                    connection: lobby_data::ConnectionState::Connected,
+                    joined_lobby: Some(test_joined_lobby(
+                        vec![test_lobby_player("ScreenSelectMusic")],
+                        Some(song_info),
+                    )),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
 
         sync_lobby_select_music(&mut state);
         let path_ptr = state
@@ -18616,14 +18524,19 @@ mod tests {
     fn failed_remote_selection_retries_only_after_content_replacement() {
         let mut state = init_placeholder();
         let song_info = test_lobby_song_info("Missing/Remote Song");
-        state.lobby_view.snapshot = Arc::new(lobby_data::Snapshot {
-            connection: lobby_data::ConnectionState::Connected,
-            joined_lobby: Some(test_joined_lobby(
-                vec![test_lobby_player("ScreenSelectMusic")],
-                Some(song_info),
-            )),
-            ..Default::default()
-        });
+        state
+            .lobby_session
+            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
+                snapshot: Arc::new(lobby_data::Snapshot {
+                    connection: lobby_data::ConnectionState::Connected,
+                    joined_lobby: Some(test_joined_lobby(
+                        vec![test_lobby_player("ScreenSelectMusic")],
+                        Some(song_info),
+                    )),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            });
 
         sync_lobby_select_music(&mut state);
         let first_ptr = state
@@ -18665,12 +18578,17 @@ mod tests {
             vec![test_lobby_player("ScreenSelectMusic")],
             Some(test_lobby_song_info("Pack/Song")),
         );
-        state.lobby_view.snapshot = Arc::new(lobby_data::Snapshot {
-            connection: lobby_data::ConnectionState::Connected,
-            available_lobbies: Vec::new(),
-            joined_lobby: Some(joined),
-            last_status: None,
-        });
+        state
+            .lobby_session
+            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
+                snapshot: Arc::new(lobby_data::Snapshot {
+                    connection: lobby_data::ConnectionState::Connected,
+                    available_lobbies: Vec::new(),
+                    joined_lobby: Some(joined),
+                    last_status: None,
+                }),
+                ..Default::default()
+            });
         let assets = deadlib_assets::AssetManager::new();
 
         let _ = super::get_actors(&state, &assets, 1);
@@ -19568,7 +19486,12 @@ mod tests {
             last_status: None,
         };
 
-        state.lobby_view.snapshot = std::sync::Arc::new(snapshot);
+        state
+            .lobby_session
+            .sync_runtime_view(crate::views::SimplyLoveLobbyRuntimeView {
+                snapshot: std::sync::Arc::new(snapshot),
+                ..Default::default()
+            });
         assert_eq!(
             select_music_lobby_lock_text(&state).as_deref(),
             Some("Waiting for players to finish evaluation...")
@@ -21672,108 +21595,4 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn lobby_lock_text_allows_joining_remote_gameplay_before_progress() {
-        let song = test_lobby_song_info("Songs/Pack/Song");
-        let joined = test_joined_lobby(
-            vec![
-                test_lobby_player("ScreenSelectMusic"),
-                test_lobby_player("ScreenGameplay"),
-            ],
-            Some(song),
-        );
-
-        assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
-    }
-
-    #[test]
-    fn lobby_lock_ignores_scores() {
-        let song = test_lobby_song_info("Songs/Pack/Song");
-        let mut remote = test_lobby_player("ScreenGameplay");
-        remote.judgments = Some(lobby_data::LobbyJudgments {
-            fantastics: 1,
-            ..Default::default()
-        });
-        remote.score = Some(1.0);
-        remote.ex_score = Some(1.0);
-        let joined = test_joined_lobby(
-            vec![test_lobby_player("ScreenSelectMusic"), remote],
-            Some(song),
-        );
-
-        assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
-    }
-
-    #[test]
-    fn lobby_lock_ignores_mines() {
-        // ITGmania reports possible mines minus radar mines avoided. The latter
-        // stays zero until song end, including while waiting for ready-up.
-        for player_count in [2, 4] {
-            for gameplay_count in 1..player_count {
-                for ready in [false, true] {
-                    let mut remote = test_lobby_player("ScreenGameplay");
-                    remote.ready = ready;
-                    remote.judgments = Some(lobby_data::LobbyJudgments {
-                        total_steps: 100,
-                        mines_hit: 20,
-                        total_mines: 20,
-                        ..Default::default()
-                    });
-                    remote.score = Some(0.0);
-                    remote.ex_score = Some(0.0);
-                    let mut players = vec![remote; gameplay_count];
-                    players.resize(player_count, test_lobby_player("ScreenSelectMusic"));
-                    let joined =
-                        test_joined_lobby(players, Some(test_lobby_song_info("Songs/Pack/Song")));
-
-                    assert_eq!(
-                        select_music_lobby_lock_text_for(&joined, 1, None),
-                        None,
-                        "{gameplay_count}/{player_count} players in Gameplay, ready={ready}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn lobby_lock_keeps_barriers() {
-        let mut joined = test_joined_lobby(
-            vec![
-                test_lobby_player("ScreenSelectMusic"),
-                test_lobby_player("ScreenGameplay"),
-            ],
-            None,
-        );
-        assert_eq!(
-            select_music_lobby_lock_text_for(&joined, 1, None).as_deref(),
-            Some("Waiting for players to finish gameplay...")
-        );
-
-        joined.song_info = Some(test_lobby_song_info("Songs/Pack/Song"));
-        assert_eq!(
-            select_music_lobby_lock_text_for(&joined, 1, Some("Reconnecting...")).as_deref(),
-            Some("Reconnecting...")
-        );
-
-        joined.players[1] = test_lobby_player("ScreenEvaluationStage");
-        assert_eq!(
-            select_music_lobby_lock_text_for(&joined, 1, None).as_deref(),
-            Some("Waiting for players to finish evaluation...")
-        );
-    }
-
-    #[test]
-    fn lobby_lock_text_stays_unlocked_when_remote_is_in_options() {
-        let song = test_lobby_song_info("Songs/Pack/Song");
-        let joined = test_joined_lobby(
-            vec![
-                test_lobby_player("ScreenSelectMusic"),
-                test_lobby_player("ScreenPlayerOptions"),
-            ],
-            Some(song),
-        );
-
-        assert_eq!(select_music_lobby_lock_text_for(&joined, 1, None), None);
-    }
 }

@@ -461,6 +461,138 @@ fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
 }
 
 #[test]
+fn evaluation_and_selection_lobby_decisions_stay_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller = production_source(&root.join("crates/deadsync-online/src/lobby_wait.rs"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens");
+    // Evaluation has test modules between its production items.
+    let evaluation = read_source(theme.join("evaluation.rs"))
+        .expect("Evaluation source should be readable");
+    let selection = production_source(&theme.join("select_music.rs"));
+
+    for contract in [
+        "pub struct LocalLobbyPlayers",
+        "pub enum LobbyWaitReason",
+        "pub struct EvaluationLobbySession",
+        "pub struct SelectMusicLobbySession",
+        "pub struct EvaluationPlayerStatsFacts",
+        "pub enum EvaluationLobbyAction",
+        "pub struct SelectMusicLobbyUpdate",
+        "pub fn wait_reason(",
+        "pub fn handle_input(",
+        "pub fn update_at(",
+        "pub fn sync_runtime_view(",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned lobby waiting is missing {contract}"
+        );
+    }
+    for presentation_or_runtime in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "SimplyLove",
+        "ThemeEffect",
+        "i18n::",
+        "lobbies::runtime_",
+    ] {
+        assert!(
+            !controller.contains(presentation_or_runtime),
+            "lobby waiting must emit game decisions without presentation or I/O: {presentation_or_runtime}"
+        );
+    }
+    assert!(
+        contains_rust(&controller, "disconnect_holds: [Option<Instant>; 2]")
+            && !contains_rust(&controller, "pub disconnect_holds:")
+            && !contains_rust(&controller, "pub state:")
+            && !controller.contains("fn runtime_view_mut"),
+        "lobby sessions must retain their own private snapshot and hold state"
+    );
+    assert!(
+        contains_rust(&controller, "emit: impl FnMut(EvaluationLobbyAction)")
+            && !contains_rust(&controller, "Vec<EvaluationLobbyAction>"),
+        "Evaluation must publish decisions immediately in callback order"
+    );
+
+    for (name, source, session) in [
+        ("Evaluation", evaluation.as_str(), "EvaluationLobbySession"),
+        ("SelectMusic", selection.as_str(), "SelectMusicLobbySession"),
+    ] {
+        assert!(
+            contains_rust(source, &format!("lobby_session: {session}"))
+                && source.contains("LocalLobbyPlayers")
+                && source.contains("LobbyWaitReason")
+                && contains_rust(source, "state.lobby_session.handle_input(")
+                && contains_rust(source, "state.lobby_session.update(")
+                && contains_rust(source, "state.lobby_session.sync_runtime_view(lobby)"),
+            "{name} must delegate waiting, input, update and snapshot refresh to its game owner"
+        );
+        for former_policy in [
+            "lobby_view: SimplyLoveLobbyRuntimeView",
+            "lobby_disconnect_hold_p1:",
+            "lobby_disconnect_hold_p2:",
+            "fn local_lobby_player_count(",
+            "fn local_lobby_side_is_active(",
+            "fn set_lobby_disconnect_hold(",
+            "fn clear_lobby_disconnect_holds(",
+            "fn lobby_disconnect_hold_elapsed(",
+            "fn evaluation_lobby_lock_text(",
+            "fn select_music_lobby_lock_text_for(",
+            "fn evaluation_lobby_player_stats(",
+            "apply_local_lobby_disconnect(",
+        ] {
+            assert!(
+                !contains_rust(source, former_policy),
+                "{name} still owns lobby waiting policy through {former_policy}"
+            );
+        }
+    }
+    for text_gate in [
+        "select_music_lobby_lock_text(state).is_some()",
+        "select_music_lobby_lock_text(state).is_none()",
+        "evaluation_lobby_status_label(state).is_some()",
+        "evaluation_lobby_status_label(state).is_none()",
+    ] {
+        assert!(
+            !contains_rust(&selection, text_gate) && !contains_rust(&evaluation, text_gate),
+            "localized lobby status must not decide input or update policy: {text_gate}"
+        );
+    }
+
+    // The game decides whether a hold disconnects. SelectMusic still clears its
+    // presentation navigation state before that clock sample and queues the
+    // request before showing the notice; it must not eagerly clear the snapshot.
+    let update = selection
+        .split_once("fn update_impl(")
+        .and_then(|(_, rest)| rest.split_once("if state.reload_ui.is_some()"))
+        .map(|(body, _)| body)
+        .expect("SelectMusic's lobby update adapter should be present");
+    let tick = update.find("state.lobby_session.update(local_players)")
+        .expect("SelectMusic must advance the game-owned disconnect clock");
+    for cleanup in [
+        "clear_menu_chord(state)",
+        "clear_p1_ud_chord(state)",
+        "clear_p2_ud_chord(state)",
+        "clear_overlay_nav_hold(state)",
+        "clear_nav_hold(state)",
+        "state.last_steps_nav_dir_p1 = None",
+        "state.last_steps_nav_time_p1 = None",
+        "state.last_steps_nav_dir_p2 = None",
+        "state.last_steps_nav_time_p2 = None",
+    ] {
+        assert!(
+            update.find(cleanup).is_some_and(|position| position < tick),
+            "SelectMusic must clear {cleanup} before updating the disconnect hold"
+        );
+    }
+    let request = update.find("SimplyLoveLobbyRequest::Disconnect")
+        .expect("SelectMusic must queue the requested disconnect");
+    let notice = update.find("set_lobby_notice(state,")
+        .expect("SelectMusic must display its queued-disconnect notice");
+    assert!(tick < request && request < notice);
+}
+
+#[test]
 fn asset_catalog_policy_stays_above_the_engine() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
@@ -5285,7 +5417,7 @@ fn select_music_lobby_runtime_is_shell_owned() {
         );
     }
     assert!(
-        select_music.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+        select_music.contains("lobby_session: SelectMusicLobbySession")
             && select_music.contains("SimplyLoveOnlineRequest::Lobby")
             && overlay.contains("snapshot: &lobby_data::Snapshot")
     );
@@ -5379,7 +5511,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
             && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
     );
     assert!(
-        evaluation.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+        evaluation.contains("lobby_session: EvaluationLobbySession")
             && evaluation.contains("pub fn sync_runtime_view")
             && evaluation.contains("EvaluationRuntimeView")
             && evaluation.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
