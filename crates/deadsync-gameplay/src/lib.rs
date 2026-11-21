@@ -44,6 +44,8 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+pub mod practice;
+
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;

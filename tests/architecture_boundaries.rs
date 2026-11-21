@@ -180,6 +180,167 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 }
 
 #[test]
+fn practice_playback_lifecycle_stays_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller = production_source(&root.join("crates/deadsync-gameplay/src/practice.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
+    );
+
+    for contract in [
+        "pub struct PracticePlayback",
+        "pub enum PracticePlaybackUpdate",
+        "pub enum PracticePlaybackInput",
+        "pub type MusicStartSnap",
+        "pub fn on_enter<",
+        "pub fn start<",
+        "pub fn stop<",
+        "pub fn update<",
+        "pub fn handle_input<",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned practice playback is missing {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "ThemeEffect",
+        "PracticeRuntimeView",
+    ] {
+        assert!(
+            !controller.contains(presentation),
+            "practice playback depends on presentation through {presentation}"
+        );
+    }
+    for former_policy in [
+        "enum Mode {",
+        "const LEAD_IN_SECONDS:",
+        "const LOOP_AFTER_SECONDS:",
+        "update_core(",
+        "handle_core_input(",
+        "disable_score_for_practice(",
+        "start_practice_music_at(",
+        "reset_practice_playback(",
+        "GameplayAudioCommand::StopMusic",
+    ] {
+        assert!(
+            !contains_rust(&theme, former_policy),
+            "practice theme still owns playback policy: {former_policy}"
+        );
+    }
+    for delegation in [
+        "playback: PracticePlayback",
+        "PracticePlayback::new(",
+        "state.playback.on_enter(",
+        "state.playback.start(",
+        "state.playback.stop(",
+        "state.playback.update(",
+        "state.playback.handle_input(",
+        "state.playback.restore_editing(",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "practice theme must delegate playback through {delegation}"
+        );
+    }
+    assert!(
+        !contains_rust(&controller, "pub range:"),
+        "themes must not replace the canonical practice loop range"
+    );
+}
+
+#[test]
+fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    let views = production_source(&root.join("crates/deadsync-theme-simply-love/src/views.rs"));
+    let shell = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
+    let lobby_views = production_source(&root.join("crates/deadsync-shell/src/app/lobby_views.rs"));
+
+    for contract in [
+        "pub struct LobbyRuntimeView",
+        "pub struct GameplayLobbySession",
+        "pub enum GameplayLobbyAction",
+        "pub trait GameplayLobbyHost",
+        "pub fn on_enter<",
+        "pub fn prepare_update<",
+        "pub fn prepare_update_at<",
+        "pub fn handle_input<",
+        "pub fn sync_runtime_view<",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned lobby coordination is missing {contract}"
+        );
+    }
+    for mutable_policy in [
+        "pub music_started:",
+        "pub ready:",
+        "pub disconnect_holds:",
+        "pub joined_sides:",
+    ] {
+        assert!(
+            !contains_rust(&controller, mutable_policy),
+            "lobby session must keep its policy state private: {mutable_policy}"
+        );
+    }
+    for former_policy in [
+        "lobby_music_started:",
+        "lobby_ready_p1:",
+        "lobby_ready_p2:",
+        "lobby_disconnect_hold_p1:",
+        "lobby_disconnect_hold_p2:",
+        "fn append_lobby_machine_state(",
+        "fn gameplay_lobby_player_stats(",
+        "apply_local_lobby_disconnect(",
+        "state.start_stage_music(",
+    ] {
+        assert!(
+            !contains_rust(&theme, former_policy),
+            "gameplay theme still owns lobby behavior: {former_policy}"
+        );
+    }
+    for delegation in [
+        "lobby_session: GameplayLobbySession",
+        "impl GameplayLobbyHost for State",
+        "gameplay_lobby::handle_input(",
+        "state.lobby_session.waiting(",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "gameplay theme must delegate lobby behavior through {delegation}"
+        );
+    }
+    for entry in ["on_enter", "prepare_update"] {
+        assert!(
+            contains_rust(&shell, &format!("deadsync_online::gameplay_lobby::{entry}(")),
+            "shell must invoke canonical lobby coordination through {entry}"
+        );
+    }
+    assert!(
+        lobby_views.contains("deadsync_online::gameplay_lobby::LobbyRuntimeView"),
+        "shell must prepare the game-owned lobby snapshot contract"
+    );
+    assert!(
+        !contains_rust(&views, "pub struct SimplyLoveLobbyRuntimeView"),
+        "the compatibility theme view must alias the game-owned lobby contract"
+    );
+    assert!(
+        contains_rust(&views, "LobbyRuntimeView as SimplyLoveLobbyRuntimeView")
+            || contains_rust(
+                &views,
+                "pub type SimplyLoveLobbyRuntimeView = deadsync_online::gameplay_lobby::LobbyRuntimeView"
+            ),
+        "the existing theme lobby view name must remain compatible"
+    );
+}
+
+#[test]
 fn asset_catalog_policy_stays_above_the_engine() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
@@ -5004,9 +5165,11 @@ fn select_music_lobby_runtime_is_shell_owned() {
         read_source(theme.join("views.rs")).expect("Simply Love views should be readable");
     let effects = read_source(theme.join("effects.rs"))
         .expect("Simply Love effects should be readable");
+    let lobby_view = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
     assert!(
-        views.contains("pub struct SimplyLoveLobbyRuntimeView")
-            && views.contains("pub snapshot: std::sync::Arc<deadsync_online::lobbies::Snapshot>",)
+        views.contains("LobbyRuntimeView as SimplyLoveLobbyRuntimeView")
+            && lobby_view.contains("pub struct LobbyRuntimeView")
+            && contains_rust(&lobby_view, "pub snapshot: Arc<lobbies::Snapshot>")
             && effects.contains("pub enum SimplyLoveLobbyRequest")
     );
 
@@ -5081,7 +5244,8 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
         );
     }
     assert!(
-        gameplay.contains("runtime_view: GameplayRuntimeView")
+        gameplay.contains("runtime_view: GameplayPresentationView")
+            && gameplay.contains("lobby_session: GameplayLobbySession")
             && gameplay.contains("pub fn sync_runtime_view")
             && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
     );
@@ -5100,7 +5264,7 @@ fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
     );
     for shell_owner in [
         "fn sync_active_online_runtime_view",
-        "gameplay::sync_lobby_runtime_view",
+        "deadsync_online::gameplay_lobby::sync_runtime_view",
         "evaluation::sync_runtime_view",
         "SimplyLoveLobbyRequest::UpdateMachineStats",
         "runtime_update_machine_state_sides_with_stats_default",
@@ -5153,7 +5317,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         );
     }
     for contract in [
-        "runtime_view: GameplayRuntimeView",
+        "runtime_view: GameplayPresentationView",
         "init_view: GameplayInitView",
         "runtime_view.policy.translated_titles",
         "background_changes,",
@@ -5238,7 +5402,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     assert!(
         shell.contains("crate::gameplay_runtime::init_view(")
-            && shell.contains("gameplay::sync_lobby_runtime_view(state, lobby)")
+            && shell.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)")
     );
 }
 
@@ -5260,8 +5424,8 @@ fn gameplay_frame_hot_path_uses_song_lifetime_caches() {
         );
     }
     assert!(
-        online_sync.contains(".is_some_and(gameplay::uses_live_lobby_runtime)")
-            && online_sync.contains("gameplay::sync_lobby_runtime_view(state, lobby)"),
+        online_sync.contains(".is_some_and(deadsync_online::gameplay_lobby::uses_live_runtime)")
+            && online_sync.contains("deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby)"),
         "offline Gameplay must skip lobby runtime work and live lobbies must update only lobby state"
     );
 

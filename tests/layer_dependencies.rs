@@ -1,4 +1,4 @@
-//! Check production layering and the theme-free song-Lua test build, including
+//! Check production layering and theme-free game-controller test builds, including
 //! dependencies hidden by aliases, optional features, and target/build tables.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
@@ -174,14 +174,17 @@ fn production_crate_dependencies_follow_layer_direction() {
 }
 
 #[test]
-fn song_lua_test_build_stays_independent_of_themes_and_application() {
-    let failures = dependency_violations(&workspace_metadata(), Some("deadsync-song-lua"));
-    assert!(
-        failures.is_empty(),
-        "song-Lua behavior must be testable without a theme or application; \
-         its test build has upward dependencies:\n{}",
-        failures.join("\n")
-    );
+fn game_controller_test_builds_stay_independent_of_themes_and_application() {
+    let metadata = workspace_metadata();
+    for owner in ["deadsync-gameplay", "deadsync-online", "deadsync-song-lua"] {
+        let failures = dependency_violations(&metadata, Some(owner));
+        assert!(
+            failures.is_empty(),
+            "{owner} behavior must be testable without a theme or application; \
+             its test build has upward dependencies:\n{}",
+            failures.join("\n")
+        );
+    }
 }
 
 #[test]

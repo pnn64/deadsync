@@ -15,10 +15,12 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
+use deadsync_gameplay::practice::{
+    PracticePlayback, PracticePlaybackInput, PracticePlaybackUpdate,
+};
 use deadsync_gameplay::{
-    AutosyncMode, GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot,
-    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayTimingTickMode, ScrollEffects,
-    handle_core_input, spacing_multiplier_for_percent, update_core,
+    AutosyncMode, GameplayAudioCommand, GameplayAudioSnapshot, GameplayOffsetAdjustKey,
+    GameplayRawKeyInput, GameplayTimingTickMode, ScrollEffects, spacing_multiplier_for_percent,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{TimingLabelStyle, TimingSegmentLabel as PracticeTimingLabel};
@@ -26,11 +28,8 @@ use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
 use deadsync_theme::FontRole;
-use std::path::Path;
 use std::sync::Arc;
 
-const LEAD_IN_SECONDS: f32 = 1.0;
-const LOOP_AFTER_SECONDS: f32 = 1.0;
 const BEATS_PER_MEASURE: f32 = 4.0;
 const MIN_CURSOR_BEAT: f32 = 0.0;
 const BEAT_EPSILON: f32 = 0.000_1;
@@ -78,7 +77,7 @@ const PRACTICE_DENSITY_Z: i16 = 2990;
 const PRACTICE_DENSITY_LINE_Z: i16 = PRACTICE_DENSITY_Z + 1;
 const PRACTICE_DENSITY_LINE_WIDTH: f32 = 2.0;
 
-pub type MusicStartSnap = fn(&Path, f64) -> f64;
+pub use deadsync_gameplay::practice::MusicStartSnap;
 
 // PARITY[ITGmania NoteField]: Simply Love inherits these timing label
 // colors, sides, and offsets from `_fallback/metrics.ini` `[NoteField]`.
@@ -122,12 +121,6 @@ const FAKE_LABEL_STYLE: TimingLabelStyle = TimingLabelStyle {
     left_side: true,
     offset_x: 90.0,
 };
-
-#[derive(Clone, Copy, Debug)]
-enum Mode {
-    Editing,
-    Playing { start_beat: f32, stop_beat: f32 },
-}
 
 #[derive(Clone, Copy, Debug)]
 enum MarkerPlacement {
@@ -320,13 +313,48 @@ enum PracticeNavMode {
     DedicatedThreeKey,
 }
 
+// Editor navigation remains here until its commands and repeat policy are moved
+// into a game-owned editor controller. Grouping held inputs lets playback clear
+// them before core resets without borrowing presentation state or choosing policy.
+struct EditHoldInputs<Dir> {
+    dir: Option<Dir>,
+    up_count: u8,
+    down_count: u8,
+    delay_left: f32,
+    repeat_left: f32,
+}
+
+impl<Dir: Copy> EditHoldInputs<Dir> {
+    const fn new() -> Self {
+        Self {
+            dir: None,
+            up_count: 0,
+            down_count: 0,
+            delay_left: 0.0,
+            repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
+        }
+    }
+
+    const fn clear_timer(&mut self) {
+        self.dir = None;
+        self.delay_left = 0.0;
+        self.repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    }
+
+    const fn clear_inputs(&mut self) {
+        self.up_count = 0;
+        self.down_count = 0;
+        self.clear_timer();
+    }
+}
+
 pub struct State {
     pub gameplay: gameplay_screen::State,
     runtime: PracticeRuntimeView,
     density_graph: PracticeDensityGraph,
     edit_text: PracticeEditText,
     menu_text: PracticeMenuText,
-    mode: Mode,
+    playback: PracticePlayback,
     menu: Option<MenuState>,
     cursor_beat: f32,
     display_beat: f32,
@@ -338,16 +366,8 @@ pub struct State {
     shift_held: bool,
     ctrl_held: bool,
     tab_held: bool,
-    cursor_hold_dir: Option<CursorHoldDir>,
-    cursor_hold_up_count: u8,
-    cursor_hold_down_count: u8,
-    cursor_hold_delay_left: f32,
-    cursor_hold_repeat_left: f32,
-    page_hold_dir: Option<PageHoldDir>,
-    page_hold_up_count: u8,
-    page_hold_down_count: u8,
-    page_hold_delay_left: f32,
-    page_hold_repeat_left: f32,
+    cursor_hold: EditHoldInputs<CursorHoldDir>,
+    page_hold: EditHoldInputs<PageHoldDir>,
     music_rate_hold_dir: Option<MusicRateHoldDir>,
     music_rate_hold_lower_count: u8,
     music_rate_hold_raise_count: u8,
@@ -507,7 +527,7 @@ const SNAP_BEATS: [f32; 9] = [
 ];
 
 pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) -> State {
-    gameplay.disable_score_for_practice();
+    let playback = PracticePlayback::new(&mut gameplay);
     let active_players = gameplay.num_players();
     let density_graph = build_practice_density_graph(&gameplay);
     let timing_labels = std::array::from_fn(|player| {
@@ -527,7 +547,7 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
         density_graph,
         edit_text: PracticeEditText::new(),
         menu_text: PracticeMenuText::new(),
-        mode: Mode::Editing,
+        playback,
         menu: None,
         cursor_beat: 0.0,
         display_beat: 0.0,
@@ -539,16 +559,8 @@ pub fn init(mut gameplay: gameplay_screen::State, runtime: PracticeRuntimeView) 
         shift_held: false,
         ctrl_held: false,
         tab_held: false,
-        cursor_hold_dir: None,
-        cursor_hold_up_count: 0,
-        cursor_hold_down_count: 0,
-        cursor_hold_delay_left: 0.0,
-        cursor_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
-        page_hold_dir: None,
-        page_hold_up_count: 0,
-        page_hold_down_count: 0,
-        page_hold_delay_left: 0.0,
-        page_hold_repeat_left: EDIT_CURSOR_REPEAT_INTERVAL_SECONDS,
+        cursor_hold: EditHoldInputs::new(),
+        page_hold: EditHoldInputs::new(),
         music_rate_hold_dir: None,
         music_rate_hold_lower_count: 0,
         music_rate_hold_raise_count: 0,
@@ -604,7 +616,7 @@ pub const fn edit_snapshot(state: &State) -> EditSnapshot {
 pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
-    state.mode = Mode::Editing;
+    state.playback.restore_editing();
     state.menu = None;
     state.shift_anchor = None;
     state.shift_held = false;
@@ -627,9 +639,7 @@ pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
 }
 
 pub fn on_enter(state: &mut State) {
-    state
-        .gameplay
-        .push_audio_command(GameplayAudioCommand::StopMusic);
+    state.playback.on_enter(&mut state.gameplay);
     set_cursor(state, state.cursor_beat);
     snap_display_to_cursor(state);
 }
@@ -672,28 +682,29 @@ fn update_inner(
     }
     update_music_rate_hold(state, delta_time);
 
-    let Mode::Playing {
-        start_beat,
-        stop_beat,
-    } = state.mode
-    else {
+    if !state.playback.is_playing() {
         state.gameplay.advance_screen_elapsed(delta_time);
         update_cursor_hold(state, delta_time);
         update_page_hold(state, delta_time);
         update_display_scroll(state, delta_time);
         return ThemeEffect::None;
-    };
+    }
 
-    let action = update_core(
+    let cursor_hold = &mut state.cursor_hold;
+    let page_hold = &mut state.page_hold;
+    let update = state.playback.update(
         &mut state.gameplay,
         delta_time,
         audio_snapshot,
         fallback_host_nanos,
+        snap_music_start,
+        || {
+            cursor_hold.clear_inputs();
+            page_hold.clear_inputs();
+        },
     );
-    let current_time = state.gameplay.current_music_time_seconds();
-    let stop_time = state.gameplay.music_time_for_beat(stop_beat);
-    if current_time >= stop_time + LOOP_AFTER_SECONDS || !matches!(action, GameplayAction::None) {
-        start_playback(state, start_beat, stop_beat, snap_music_start);
+    if update == PracticePlaybackUpdate::Restarted {
+        state.flash = None;
     }
     ThemeEffect::None
 }
@@ -722,31 +733,28 @@ fn handle_input_inner(
         return handle_menu_input(state, ev, snap_music_start);
     }
 
-    if !ev.pressed {
-        if matches!(state.mode, Mode::Editing)
-            && let Some(dir) = edit_cursor_hold_dir_for_action(state, ev.action)
-        {
-            release_cursor_hold_input(state, dir);
-            return ThemeEffect::None;
-        }
-        if matches!(state.mode, Mode::Playing { .. }) && ev.action.is_gameplay_arrow() {
-            let _ = handle_core_input(&mut state.gameplay, ev);
-        }
-        return ThemeEffect::None;
-    }
-
-    match state.mode {
-        Mode::Playing { .. } => match ev.action {
-            VirtualAction::p1_back | VirtualAction::p2_back => {
-                stop_playback(state);
+    let cursor_hold = &mut state.cursor_hold;
+    let page_hold = &mut state.page_hold;
+    match state.playback.handle_input(&mut state.gameplay, ev, || {
+        cursor_hold.clear_inputs();
+        page_hold.clear_inputs();
+    }) {
+        PracticePlaybackInput::Editing => {
+            if !ev.pressed {
+                if let Some(dir) = edit_cursor_hold_dir_for_action(state, ev.action) {
+                    release_cursor_hold_input(state, dir);
+                }
                 ThemeEffect::None
+            } else {
+                handle_edit_input(state, ev)
             }
-            _ => {
-                let _ = handle_core_input(&mut state.gameplay, ev);
-                ThemeEffect::None
-            }
-        },
-        Mode::Editing => handle_edit_input(state, ev),
+        }
+        PracticePlaybackInput::Handled => ThemeEffect::None,
+        PracticePlaybackInput::Stopped { cursor_beat } => {
+            set_cursor(state, cursor_beat);
+            snap_display_to_cursor(state);
+            ThemeEffect::None
+        }
     }
 }
 
@@ -861,7 +869,7 @@ fn handle_raw_key_event_inner(
         return (true, ThemeEffect::None);
     }
 
-    if matches!(state.mode, Mode::Playing { .. }) {
+    if state.playback.is_playing() {
         return match raw_key.code {
             KeyCode::Escape | KeyCode::Enter => {
                 stop_playback(state);
@@ -1052,7 +1060,7 @@ fn set_offset_adjust_flash(state: &mut State) {
 }
 
 pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
-    if matches!(state.mode, Mode::Editing) {
+    if !state.playback.is_playing() {
         append_edit_markers(state, actors);
         append_density_graph(state, actors);
         append_edit_overlay(state, actors);
@@ -1066,7 +1074,7 @@ pub fn push_overlay(actors: &mut Vec<Actor>, state: &mut State) {
 }
 
 pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
-    let playback_visuals = practice_playback_visuals(state.mode);
+    let playback_visuals = state.playback.is_playing();
     let mut notefield = if playback_visuals {
         gameplay_screen::NotefieldViewOverride::default()
     } else {
@@ -1080,10 +1088,6 @@ pub fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
         show_song_visuals: playback_visuals,
         ..Default::default()
     }
-}
-
-const fn practice_playback_visuals(mode: Mode) -> bool {
-    matches!(mode, Mode::Playing { .. })
 }
 
 fn practice_notefield_view(state: &State) -> gameplay_screen::NotefieldViewOverride {
@@ -1379,17 +1383,6 @@ fn start_selection_like_itg(state: &mut State, snap_music_start: MusicStartSnap)
     );
 }
 
-fn snapped_playback_music_time(
-    state: &State,
-    playback_music_time: f32,
-    snap_music_start: MusicStartSnap,
-) -> f32 {
-    let Some(music_path) = state.gameplay.charts()[0].music_path.as_ref() else {
-        return playback_music_time;
-    };
-    snap_music_start(music_path, f64::from(playback_music_time)) as f32
-}
-
 fn start_playback(
     state: &mut State,
     start_beat: f32,
@@ -1398,30 +1391,19 @@ fn start_playback(
 ) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
-    let start_time = state.gameplay.music_time_for_beat(start_beat);
-    let playback_time =
-        snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS, snap_music_start);
-    state
-        .gameplay
-        .start_practice_music_at(playback_time, start_time);
-    state.mode = Mode::Playing {
+    state.playback.start(
+        &mut state.gameplay,
         start_beat,
         stop_beat,
-    };
+        snap_music_start,
+    );
     state.flash = None;
 }
 
 fn stop_playback(state: &mut State) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
-    state
-        .gameplay
-        .push_audio_command(GameplayAudioCommand::StopMusic);
-    let current_beat = state.gameplay.current_beat().max(MIN_CURSOR_BEAT);
-    let current_time = state.gameplay.music_time_for_beat(current_beat);
-    // Practice hits mutate note results, which the edit notefield uses for hide logic.
-    state.gameplay.reset_practice_playback(current_time);
-    state.mode = Mode::Editing;
+    let current_beat = state.playback.stop(&mut state.gameplay);
     set_cursor(state, current_beat);
     snap_display_to_cursor(state);
 }
@@ -1435,15 +1417,15 @@ const fn opposite_cursor_hold_dir(dir: CursorHoldDir) -> CursorHoldDir {
 
 const fn cursor_hold_count(state: &State, dir: CursorHoldDir) -> u8 {
     match dir {
-        CursorHoldDir::Up => state.cursor_hold_up_count,
-        CursorHoldDir::Down => state.cursor_hold_down_count,
+        CursorHoldDir::Up => state.cursor_hold.up_count,
+        CursorHoldDir::Down => state.cursor_hold.down_count,
     }
 }
 
 const fn cursor_hold_count_mut(state: &mut State, dir: CursorHoldDir) -> &mut u8 {
     match dir {
-        CursorHoldDir::Up => &mut state.cursor_hold_up_count,
-        CursorHoldDir::Down => &mut state.cursor_hold_down_count,
+        CursorHoldDir::Up => &mut state.cursor_hold.up_count,
+        CursorHoldDir::Down => &mut state.cursor_hold.down_count,
     }
 }
 
@@ -1456,7 +1438,7 @@ const fn press_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
 fn release_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
     let count = cursor_hold_count_mut(state, dir);
     *count = count.saturating_sub(1);
-    if state.cursor_hold_dir != Some(dir) || cursor_hold_count(state, dir) != 0 {
+    if state.cursor_hold.dir != Some(dir) || cursor_hold_count(state, dir) != 0 {
         return;
     }
 
@@ -1469,21 +1451,17 @@ fn release_cursor_hold_input(state: &mut State, dir: CursorHoldDir) {
 }
 
 const fn start_cursor_hold(state: &mut State, dir: CursorHoldDir) {
-    state.cursor_hold_dir = Some(dir);
-    state.cursor_hold_delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
-    state.cursor_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    state.cursor_hold.dir = Some(dir);
+    state.cursor_hold.delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
+    state.cursor_hold.repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
 const fn clear_cursor_hold_timer(state: &mut State) {
-    state.cursor_hold_dir = None;
-    state.cursor_hold_delay_left = 0.0;
-    state.cursor_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    state.cursor_hold.clear_timer();
 }
 
 const fn clear_cursor_hold_inputs(state: &mut State) {
-    state.cursor_hold_up_count = 0;
-    state.cursor_hold_down_count = 0;
-    clear_cursor_hold_timer(state);
+    state.cursor_hold.clear_inputs();
 }
 
 const fn opposite_page_hold_dir(dir: PageHoldDir) -> PageHoldDir {
@@ -1503,15 +1481,15 @@ const fn page_hold_dir_for_key(code: KeyCode) -> Option<PageHoldDir> {
 
 const fn page_hold_count(state: &State, dir: PageHoldDir) -> u8 {
     match dir {
-        PageHoldDir::Up => state.page_hold_up_count,
-        PageHoldDir::Down => state.page_hold_down_count,
+        PageHoldDir::Up => state.page_hold.up_count,
+        PageHoldDir::Down => state.page_hold.down_count,
     }
 }
 
 const fn page_hold_count_mut(state: &mut State, dir: PageHoldDir) -> &mut u8 {
     match dir {
-        PageHoldDir::Up => &mut state.page_hold_up_count,
-        PageHoldDir::Down => &mut state.page_hold_down_count,
+        PageHoldDir::Up => &mut state.page_hold.up_count,
+        PageHoldDir::Down => &mut state.page_hold.down_count,
     }
 }
 
@@ -1532,7 +1510,7 @@ const fn press_page_hold_input(state: &mut State, dir: PageHoldDir) {
 fn release_page_hold_input(state: &mut State, dir: PageHoldDir) {
     let count = page_hold_count_mut(state, dir);
     *count = count.saturating_sub(1);
-    if state.page_hold_dir != Some(dir) || page_hold_count(state, dir) != 0 {
+    if state.page_hold.dir != Some(dir) || page_hold_count(state, dir) != 0 {
         return;
     }
 
@@ -1545,21 +1523,17 @@ fn release_page_hold_input(state: &mut State, dir: PageHoldDir) {
 }
 
 const fn start_page_hold(state: &mut State, dir: PageHoldDir) {
-    state.page_hold_dir = Some(dir);
-    state.page_hold_delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
-    state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    state.page_hold.dir = Some(dir);
+    state.page_hold.delay_left = EDIT_CURSOR_REPEAT_DELAY_SECONDS;
+    state.page_hold.repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
 }
 
 const fn clear_page_hold_timer(state: &mut State) {
-    state.page_hold_dir = None;
-    state.page_hold_delay_left = 0.0;
-    state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+    state.page_hold.clear_timer();
 }
 
 const fn clear_page_hold_inputs(state: &mut State) {
-    state.page_hold_up_count = 0;
-    state.page_hold_down_count = 0;
-    clear_page_hold_timer(state);
+    state.page_hold.clear_inputs();
 }
 
 const fn opposite_music_rate_hold_dir(dir: MusicRateHoldDir) -> MusicRateHoldDir {
@@ -1660,7 +1634,7 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
     if state.menu.is_some() || state.ctrl_held || delta_time <= 0.0 {
         return;
     }
-    let Some(dir) = state.cursor_hold_dir else {
+    let Some(dir) = state.cursor_hold.dir else {
         return;
     };
     if cursor_hold_count(state, dir) == 0 {
@@ -1669,22 +1643,22 @@ fn update_cursor_hold(state: &mut State, delta_time: f32) {
     }
 
     let mut remaining = edit_scroll_hold_delta_time(state, delta_time);
-    if state.cursor_hold_delay_left > 0.0 {
-        let elapsed = remaining.min(state.cursor_hold_delay_left);
-        state.cursor_hold_delay_left -= elapsed;
+    if state.cursor_hold.delay_left > 0.0 {
+        let elapsed = remaining.min(state.cursor_hold.delay_left);
+        state.cursor_hold.delay_left -= elapsed;
         remaining -= elapsed;
-        if state.cursor_hold_delay_left > 0.0 {
+        if state.cursor_hold.delay_left > 0.0 {
             return;
         }
         move_cursor_by_hold_dir(state, dir);
-        state.cursor_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+        state.cursor_hold.repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
     }
 
-    state.cursor_hold_repeat_left -= remaining;
+    state.cursor_hold.repeat_left -= remaining;
     let mut repeats = 0;
-    while state.cursor_hold_repeat_left <= 0.0 && repeats < MAX_EDIT_CURSOR_REPEATS_PER_FRAME {
+    while state.cursor_hold.repeat_left <= 0.0 && repeats < MAX_EDIT_CURSOR_REPEATS_PER_FRAME {
         move_cursor_by_hold_dir(state, dir);
-        state.cursor_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+        state.cursor_hold.repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
         repeats += 1;
     }
 }
@@ -1693,7 +1667,7 @@ fn update_page_hold(state: &mut State, delta_time: f32) {
     if state.menu.is_some() || delta_time <= 0.0 {
         return;
     }
-    let Some(dir) = state.page_hold_dir else {
+    let Some(dir) = state.page_hold.dir else {
         return;
     };
     if page_hold_count(state, dir) == 0 {
@@ -1702,22 +1676,22 @@ fn update_page_hold(state: &mut State, delta_time: f32) {
     }
 
     let mut remaining = edit_scroll_hold_delta_time(state, delta_time);
-    if state.page_hold_delay_left > 0.0 {
-        let elapsed = remaining.min(state.page_hold_delay_left);
-        state.page_hold_delay_left -= elapsed;
+    if state.page_hold.delay_left > 0.0 {
+        let elapsed = remaining.min(state.page_hold.delay_left);
+        state.page_hold.delay_left -= elapsed;
         remaining -= elapsed;
-        if state.page_hold_delay_left > 0.0 {
+        if state.page_hold.delay_left > 0.0 {
             return;
         }
         move_cursor_by_page_dir(state, dir);
-        state.page_hold_repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+        state.page_hold.repeat_left = EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
     }
 
-    state.page_hold_repeat_left -= remaining;
+    state.page_hold.repeat_left -= remaining;
     let mut repeats = 0;
-    while state.page_hold_repeat_left <= 0.0 && repeats < MAX_EDIT_CURSOR_REPEATS_PER_FRAME {
+    while state.page_hold.repeat_left <= 0.0 && repeats < MAX_EDIT_CURSOR_REPEATS_PER_FRAME {
         move_cursor_by_page_dir(state, dir);
-        state.page_hold_repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
+        state.page_hold.repeat_left += EDIT_CURSOR_REPEAT_INTERVAL_SECONDS;
         repeats += 1;
     }
 }
@@ -2935,7 +2909,7 @@ mod tests {
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir,
         music_rate_hold_dir_for_event, next_display_beat, normalize_flash_text,
         page_hold_dir_for_key, practice_density_geom, practice_edit_beat_travel,
-        practice_nav_mode_from_config, practice_playback_visuals, practice_style_notefield_width,
+        practice_nav_mode_from_config, practice_style_notefield_width,
         push_selection_info, quantized_music_rate, rotate_practice_density_mesh,
         timing_speed_label,
     };
@@ -3008,15 +2982,6 @@ mod tests {
         "InfoNumLifts",
         "InfoNumFakes",
     ];
-
-    #[test]
-    fn practice_only_applies_song_visuals_and_attacks_during_playback() {
-        assert!(!practice_playback_visuals(super::Mode::Editing));
-        assert!(practice_playback_visuals(super::Mode::Playing {
-            start_beat: 4.0,
-            stop_beat: 8.0,
-        }));
-    }
 
     #[test]
     fn edit_info_key_tracks_every_dynamic_text_source() {

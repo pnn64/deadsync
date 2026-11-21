@@ -1,10 +1,10 @@
-use deadsync_theme_simply_love::views::SimplyLoveLobbyRuntimeView;
+use deadsync_online::gameplay_lobby::LobbyRuntimeView;
 use std::time::Instant;
 
 fn runtime_view(
     refresh: deadsync_online::lobbies::RuntimeViewRefresh,
-) -> SimplyLoveLobbyRuntimeView {
-    SimplyLoveLobbyRuntimeView {
+) -> LobbyRuntimeView {
+    LobbyRuntimeView {
         snapshot: refresh.snapshot,
         reconnect_status_text: refresh.reconnect_status_text,
         disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
@@ -12,7 +12,7 @@ fn runtime_view(
 }
 
 /// Read the current lobby view without retaining its source cursor.
-pub(super) fn refresh() -> SimplyLoveLobbyRuntimeView {
+pub(super) fn refresh() -> LobbyRuntimeView {
     runtime_view(deadsync_online::lobbies::runtime_refresh_view_state_default())
 }
 
@@ -48,7 +48,7 @@ impl RuntimeCursor {
         self.rebuild = true;
     }
 
-    pub(super) fn refresh_now(&mut self) -> SimplyLoveLobbyRuntimeView {
+    pub(super) fn refresh_now(&mut self) -> LobbyRuntimeView {
         let refresh = deadsync_online::lobbies::runtime_refresh_view_state_default();
         self.generation = refresh.generation;
         self.refresh_at = refresh.next_refresh_at;
@@ -63,7 +63,7 @@ impl RuntimeCursor {
             || self.refresh_at.is_some_and(|refresh_at| now >= refresh_at)
     }
 
-    pub(super) fn refresh_if_dirty(&mut self, now: Instant) -> Option<SimplyLoveLobbyRuntimeView> {
+    pub(super) fn refresh_if_dirty(&mut self, now: Instant) -> Option<LobbyRuntimeView> {
         let generation = deadsync_online::lobbies::runtime_view_generation();
         self.is_dirty(generation, now).then(|| self.refresh_now())
     }

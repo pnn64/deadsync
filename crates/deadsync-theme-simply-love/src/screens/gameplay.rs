@@ -59,6 +59,9 @@ use deadsync_notefield::{
 use deadsync_noteskin::{
     NoteskinSlot, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
 };
+use deadsync_online::gameplay_lobby::{
+    self, GameplayLobbyAction, GameplayLobbyHost, GameplayLobbySession,
+};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::{
@@ -89,6 +92,7 @@ use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
+#[cfg(test)]
 use std::time::Instant;
 
 /// Selects the entry cue during song preparation, including indexed restarts.
@@ -780,6 +784,30 @@ fn smooth_life_p(value: f32) -> f32 {
 /// Compatibility alias for the game-owned held-input reload token.
 pub type SongLuaHeldInputs = deadsync_input::HeldCallbackInputs;
 
+/// The presentation portion of an incoming gameplay view. The lobby snapshot is
+/// consumed by the game session and is never retained a second time here.
+#[derive(Clone, Debug)]
+struct GameplayPresentationView {
+    policy: crate::views::GameplayPolicyView,
+    play_style: profile_data::PlayStyle,
+    player_side: profile_data::PlayerSide,
+    joined: [bool; 2],
+}
+
+impl GameplayPresentationView {
+    fn split(view: GameplayRuntimeView) -> (Self, crate::views::SimplyLoveLobbyRuntimeView) {
+        (
+            Self {
+                policy: view.policy,
+                play_style: view.play_style,
+                player_side: view.player_side,
+                joined: view.joined,
+            },
+            view.lobby,
+        )
+    }
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     /// Game-owned song callbacks, frame ordering, input and exit state.
@@ -812,14 +840,9 @@ pub struct State {
     /// score snapshot changes; completed songs pay one boolean test per frame.
     scorebox_refresh_pending: bool,
     itl_cmod_warning: [bool; MAX_PLAYERS],
-    runtime_view: GameplayRuntimeView,
-    live_lobby_runtime: bool,
+    runtime_view: GameplayPresentationView,
+    lobby_session: GameplayLobbySession,
     lobby_hud_visibility: GameplayLobbyHudVisibility,
-    pub lobby_music_started: bool,
-    pub lobby_ready_p1: bool,
-    pub lobby_ready_p2: bool,
-    pub lobby_disconnect_hold_p1: Option<Instant>,
-    pub lobby_disconnect_hold_p2: Option<Instant>,
     step_stats_mode: GameplayStepStatsMode,
     pub(crate) song_banner_key: Option<Arc<str>>,
     pub(crate) pack_banner_key: Option<Arc<str>>,
@@ -1077,6 +1100,9 @@ impl State {
         hud_snapshot: profile_data::GameplayHudSnapshot,
         judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     ) -> Self {
+        let (runtime_view, lobby) = GameplayPresentationView::split(runtime_view);
+        let lobby_session =
+            GameplayLobbySession::new(lobby, runtime_view.joined, runtime_view.player_side);
         let song_lua = SongLuaGameplaySession::for_gameplay(&mut gameplay);
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
@@ -1222,14 +1248,9 @@ impl State {
             scorebox_plans,
             scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
-            live_lobby_runtime: runtime_view.lobby.snapshot.joined_lobby.is_some(),
+            lobby_session,
             lobby_hud_visibility: GameplayLobbyHudVisibility::default(),
             runtime_view,
-            lobby_music_started: false,
-            lobby_ready_p1: false,
-            lobby_ready_p2: false,
-            lobby_disconnect_hold_p1: None,
-            lobby_disconnect_hold_p2: None,
             step_stats_mode,
             song_banner_key,
             pack_banner_key,
@@ -1364,6 +1385,41 @@ impl State {
     #[inline(always)]
     const fn display_mods_text(&self, player: usize) -> &Arc<str> {
         &self.display_mods_text[player]
+    }
+}
+
+impl GameplayLobbyHost for State {
+    type Profile = GameplayProfile;
+    type OverlayActor = <Self as SongLuaGameplayHost>::OverlayActor;
+    type CapturedActor = <Self as SongLuaGameplayHost>::CapturedActor;
+    type StateDelta = <Self as SongLuaGameplayHost>::StateDelta;
+    type Effect = ThemeEffect;
+
+    fn lobby_parts(&mut self) -> (&mut GameplayCoreState, &mut GameplayLobbySession) {
+        (&mut self.gameplay, &mut self.lobby_session)
+    }
+
+    fn lobby_session(&self) -> &GameplayLobbySession {
+        &self.lobby_session
+    }
+
+    fn lobby_effect(action: GameplayLobbyAction) -> ThemeEffect {
+        let request = match action {
+            GameplayLobbyAction::Disconnect => crate::SimplyLoveLobbyRequest::Disconnect,
+            GameplayLobbyAction::UpdateMachineStats {
+                p1_ready,
+                p2_ready,
+                p1_stats,
+                p2_stats,
+            } => crate::SimplyLoveLobbyRequest::UpdateMachineStats {
+                screen_name: gameplay_lobby::GAMEPLAY_SCREEN_NAME,
+                p1_ready,
+                p2_ready,
+                p1_stats,
+                p2_stats,
+            },
+        };
+        crate::effects::lobby(request)
     }
 }
 
@@ -1829,17 +1885,6 @@ const fn map_gameplay_action(action: GameplayAction) -> ThemeEffect {
     }
 }
 
-fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> bool {
-    let [p1_joined, p2_joined] = state.runtime_view.joined;
-    if !(p1_joined || p2_joined) {
-        return state.runtime_view.player_side == side;
-    }
-    match side {
-        profile_data::PlayerSide::P1 => p1_joined,
-        profile_data::PlayerSide::P2 => p2_joined,
-    }
-}
-
 #[derive(Debug)]
 struct GameplayLobbyHudVisibility {
     visible: bool,
@@ -2281,139 +2326,6 @@ fn difficulty_meter_x(
     }
 }
 
-fn gameplay_lobby_player_stats(
-    state: &State,
-    side: profile_data::PlayerSide,
-) -> Option<lobby_data::MachinePlayerStats> {
-    let player_idx = gameplay_player_index_for_side(state, side)?;
-    let blue_window_ms = player_blue_window_ms(state, player_idx);
-    let ex_data = state.display_ex_score_data(player_idx, blue_window_ms);
-    let judgments = lobby_data::LobbyJudgments {
-        fantastic_plus: ex_data.counts.w0,
-        fantastics: ex_data.counts.w1,
-        excellents: ex_data.counts.w2,
-        greats: ex_data.counts.w3,
-        decents: ex_data.counts.w4,
-        way_offs: ex_data.counts.w5,
-        misses: ex_data.counts.miss,
-        total_steps: ex_data.total_steps,
-        mines_hit: ex_data.mines_hit,
-        total_mines: ex_data.mines_total,
-        holds_held: ex_data.holds_held,
-        total_holds: ex_data.holds_total,
-        rolls_held: ex_data.rolls_held,
-        total_rolls: ex_data.rolls_total,
-    };
-    Some(lobby_data::MachinePlayerStats {
-        judgments: Some(judgments),
-        // Each participant's own score, like its judgments and EX score.
-        score: Some((state.participant_display_itg_score_percent(player_idx) * 100.0) as f32),
-        ex_score: Some(state.display_ex_score_percent(player_idx, blue_window_ms) as f32),
-    })
-}
-
-fn append_lobby_machine_state(state: &State, effects: &mut Vec<ThemeEffect>) {
-    if !lobby_data::can_update_machine_state(&state.runtime_view.lobby.snapshot) {
-        return;
-    }
-
-    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    effects.push(crate::effects::lobby(
-        crate::SimplyLoveLobbyRequest::UpdateMachineStats {
-            screen_name: "ScreenGameplay",
-            p1_ready,
-            p2_ready,
-            p1_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
-            p2_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
-        },
-    ));
-}
-
-fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
-    (
-        local_lobby_side_is_active(state, profile_data::PlayerSide::P1) && state.lobby_ready_p1,
-        local_lobby_side_is_active(state, profile_data::PlayerSide::P2) && state.lobby_ready_p2,
-    )
-}
-
-fn local_lobby_players_ready(state: &State) -> bool {
-    let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    let mut any_active = false;
-    let mut all_ready = true;
-    if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) {
-        any_active = true;
-        all_ready &= p1_ready;
-    }
-    if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) {
-        any_active = true;
-        all_ready &= p2_ready;
-    }
-    any_active && all_ready
-}
-
-fn set_all_local_lobby_players_ready(state: &mut State, ready: bool) {
-    state.lobby_ready_p1 = local_lobby_side_is_active(state, profile_data::PlayerSide::P1) && ready;
-    state.lobby_ready_p2 = local_lobby_side_is_active(state, profile_data::PlayerSide::P2) && ready;
-}
-
-fn set_local_lobby_player_ready(state: &mut State, side: profile_data::PlayerSide) {
-    match side {
-        profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
-        {
-            state.lobby_ready_p1 = true;
-        }
-        profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
-        {
-            state.lobby_ready_p2 = true;
-        }
-        _ => {}
-    }
-}
-
-const fn clear_lobby_disconnect_holds(state: &mut State) {
-    state.lobby_disconnect_hold_p1 = None;
-    state.lobby_disconnect_hold_p2 = None;
-}
-
-fn set_lobby_disconnect_hold(
-    state: &mut State,
-    side: profile_data::PlayerSide,
-    started_at: Option<Instant>,
-) {
-    match side {
-        profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
-        {
-            state.lobby_disconnect_hold_p1 = started_at;
-        }
-        profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
-        {
-            state.lobby_disconnect_hold_p2 = started_at;
-        }
-        _ => {}
-    }
-}
-
-fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
-    [
-        state.lobby_disconnect_hold_p1,
-        state.lobby_disconnect_hold_p2,
-    ]
-    .into_iter()
-    .flatten()
-    .map(|started_at| started_at.elapsed().as_secs_f32())
-    .max_by(f32::total_cmp)
-}
-
-fn gameplay_requires_lobby_wait(state: &State) -> bool {
-    lobby_data::gameplay_lobby_wait_required(
-        state.runtime_view.lobby.snapshot.joined_lobby.as_ref(),
-    )
-}
-
 fn write_gameplay_lobby_wait_text(
     joined: &lobby_data::JoinedLobby,
     local_players_ready: bool,
@@ -2440,15 +2352,7 @@ fn write_gameplay_lobby_wait_text(
 }
 
 fn gameplay_lobby_wait_active(state: &State) -> bool {
-    if state.lobby_music_started {
-        return false;
-    }
-    let Some(joined) = state.runtime_view.lobby.snapshot.joined_lobby.as_ref() else {
-        return false;
-    };
-    state.runtime_view.lobby.reconnect_status_text.is_some()
-        || lobby_data::gameplay_lobby_wait_status(joined, "ScreenGameplay")
-            != lobby_data::GameplayLobbyWaitStatus::Ready
+    state.lobby_session.waiting()
 }
 
 fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
@@ -2456,24 +2360,23 @@ fn write_gameplay_lobby_hud_status(state: &State, text: &mut String) -> bool {
     if !gameplay_lobby_wait_active(state) {
         return false;
     }
-    let joined = state
-        .runtime_view
-        .lobby
+    let lobby = state.lobby_session.runtime_view();
+    let joined = lobby
         .snapshot
         .joined_lobby
         .as_ref()
         .expect("active lobby wait has a joined lobby");
     if !write_gameplay_lobby_wait_text(
         joined,
-        local_lobby_players_ready(state),
-        state.runtime_view.lobby.reconnect_status_text.as_deref(),
+        state.lobby_session.local_players_ready(),
+        lobby.reconnect_status_text.as_deref(),
         text,
     ) {
         return false;
     }
     text.push('\n');
-    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
-        let remaining = (state.runtime_view.lobby.disconnect_hold_seconds - elapsed)
+    if let Some(elapsed) = state.lobby_session.disconnect_hold_elapsed() {
+        let remaining = (lobby.disconnect_hold_seconds - elapsed)
             .ceil()
             .max(0.0) as i32;
         let mut remaining_text = InlineText::new();
@@ -2526,17 +2429,7 @@ pub fn push_scorebox_actors_for_side(
 }
 
 pub fn on_enter(state: &mut State) {
-    state.lobby_music_started = false;
-    set_all_local_lobby_players_ready(state, false);
-    clear_lobby_disconnect_holds(state);
-
-    if gameplay_requires_lobby_wait(state) {
-        return;
-    }
-
-    set_all_local_lobby_players_ready(state, true);
-    state.start_stage_music();
-    state.lobby_music_started = true;
+    gameplay_lobby::on_enter(state);
 }
 
 pub const fn on_exit(state: &mut State) {
@@ -2545,6 +2438,7 @@ pub const fn on_exit(state: &mut State) {
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
+    let (view, lobby) = GameplayPresentationView::split(view);
     if state.runtime_view.policy.scorebox_pane_filter != view.policy.scorebox_pane_filter {
         state.scorebox_plans = std::array::from_fn(|side| {
             gs_scorebox::GameplayScoreboxPlan::new_with_palette(
@@ -2555,6 +2449,7 @@ pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
             )
         });
     }
+    gameplay_lobby::sync_runtime_view(state, lobby);
     state.runtime_view = view;
 }
 
@@ -2562,14 +2457,14 @@ pub fn sync_runtime_view(state: &mut State, view: GameplayRuntimeView) {
 /// live lobby/reconnect snapshots until the stage ends.
 #[inline(always)]
 pub const fn uses_live_lobby_runtime(state: &State) -> bool {
-    state.live_lobby_runtime
+    state.lobby_session.uses_live_runtime()
 }
 
 /// Refresh only the stage's live lobby state. Gameplay policy, play style,
 /// joined sides, and player side are fixed at stage construction.
 #[inline(always)]
 pub fn sync_lobby_runtime_view(state: &mut State, lobby: crate::views::SimplyLoveLobbyRuntimeView) {
-    state.runtime_view.lobby = lobby;
+    gameplay_lobby::sync_runtime_view(state, lobby);
 }
 
 #[inline(always)]
@@ -2628,39 +2523,9 @@ pub const fn rival_score_type_for_side(
     state.rival_score_types[profile_data::player_side_index(side)]
 }
 
-/// Runs concrete-theme work that must happen before the deterministic gameplay
-/// update. Returns `false` while an online lobby is still waiting for players.
-///
-/// Starting stage music only queues a gameplay audio command. The shell drains
-/// that command before it samples the stream clock for [`update`].
+/// Compatibility wrapper for the game-owned lobby frame boundary.
 pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool {
-    if !state.lobby_music_started {
-        if lobby_disconnect_hold_elapsed(state)
-            .is_some_and(|elapsed| elapsed >= state.runtime_view.lobby.disconnect_hold_seconds)
-        {
-            clear_lobby_disconnect_holds(state);
-            effects.push(crate::effects::lobby(
-                crate::SimplyLoveLobbyRequest::Disconnect,
-            ));
-            lobby_data::apply_local_lobby_disconnect(std::sync::Arc::make_mut(
-                &mut state.runtime_view.lobby.snapshot,
-            ));
-            state.runtime_view.lobby.reconnect_status_text = None;
-        }
-
-        append_lobby_machine_state(state, effects);
-
-        if gameplay_lobby_wait_active(state) {
-            return false;
-        }
-
-        clear_lobby_disconnect_holds(state);
-        set_all_local_lobby_players_ready(state, true);
-        state.start_stage_music();
-        state.lobby_music_started = true;
-    }
-    append_lobby_machine_state(state, effects);
-    true
+    gameplay_lobby::prepare_update(state, effects)
 }
 
 fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
@@ -2818,7 +2683,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, effects: &mut Vec<ThemeE
 pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
     physical: Option<deadsync_input::PhysicalInput>, effects: &mut Vec<ThemeEffect>) {
     let lobby_waiting = gameplay_lobby_wait_active(state);
-    let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
+    let joined_lobby = state.lobby_session.runtime_view().snapshot.joined_lobby.is_some();
     let lobby_hud_toggled = state.lobby_hud_visibility.handle_input(
         ev,
         joined_lobby,
@@ -2826,34 +2691,7 @@ pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
         state.runtime_view.joined,
         state.runtime_view.player_side,
     );
-    if lobby_waiting {
-        match ev.action {
-            VirtualAction::p1_start => {
-                if ev.pressed {
-                    set_local_lobby_player_ready(state, profile_data::PlayerSide::P1);
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P1,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
-                }
-            }
-            VirtualAction::p2_start => {
-                if ev.pressed {
-                    set_local_lobby_player_ready(state, profile_data::PlayerSide::P2);
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P2,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
-                }
-            }
-            _ => {}
-        }
+    if gameplay_lobby::handle_input(state, ev) {
         return;
     }
     if lobby_hud_toggled {
@@ -4268,15 +4106,15 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Lobby => {
-            let joined_lobby = state.runtime_view.lobby.snapshot.joined_lobby.is_some();
+            let joined_lobby = state.lobby_session.runtime_view().snapshot.joined_lobby.is_some();
             if state
                 .lobby_hud_visibility
                 .should_render(joined_lobby, gameplay_lobby_wait_active(state))
             {
                 let has_status = write_gameplay_lobby_hud_status(state, lobby_hud_status_scratch);
                 let joined = state
-                    .runtime_view
-                    .lobby
+                    .lobby_session
+                    .runtime_view()
                     .snapshot
                     .joined_lobby
                     .as_ref()

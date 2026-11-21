@@ -64,6 +64,28 @@ dispatch, and its storage is reused across frames. Callback routing reads the
 current game session, including Single/Double changes made by Lua reloads and
 the active P2 side, rather than a possibly stale theme snapshot.
 
+`deadsync-gameplay::practice::PracticePlayback` owns practice playback mode,
+loop ranges, score/replay disabling, entry audio stop, audio-start snapping,
+judgment reset, core advancement, and playing-input routing. Practice retains
+its separate core loop: it does not run the normal song-Lua controller. Audio
+starts one second before the requested beat and may be snapped by the audio
+owner, while judgment reset uses the unsnapped requested beat. The game restarts
+the range at the one-second tail boundary or on a core exit action. Static
+preparation hooks clear editor navigation holds before restart/stop, preserving
+input cleanup order; the theme applies cursor/display and flash updates afterward.
+
+`deadsync-online::gameplay_lobby` owns gameplay readiness, disconnect holds,
+waiting-input consumption, machine-stat publication, and one-time music start.
+The shell calls its entry, update, and snapshot-refresh operations directly.
+An entered lobby always waits until the next update, and the server snapshot
+decides when playback begins. The update that starts playback publishes pre-start stats,
+starts music, and publishes post-start stats in the original order. A completed
+disconnect hold clears the local snapshot and starts offline in the same update.
+The shell drains the queued audio command before sampling the stream clock.
+Readiness and reconnect changes never re-pause a stage that has already started.
+The entry-time refresh flag and active local sides remain fixed for the stage.
+Themes retain lobby HUD visibility, translated status text, and countdown display.
+
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
@@ -79,6 +101,13 @@ Workspace callers are updated for these source-level changes:
   matches or assignments must use the session API. Existing theme update/input
   wrappers delegate to the canonical controller, and `SongLuaHeldInputs` remains
   an alias for the game-owned reload token.
+- Lobby readiness, music-start, and hold fields now live inside the private
+  `GameplayLobbySession` state. Use its read-only accessors and controller
+  operations. Existing theme entry/update/refresh wrappers still delegate to
+  those operations. `SimplyLoveLobbyRuntimeView` remains an alias for the
+  game-owned `LobbyRuntimeView`, with the same fields and defaults.
+- Practice screen entry/update/input signatures and `MusicStartSnap` remain
+  compatible. Its private playback mode is replaced by `PracticePlayback`.
 
 ## Enforcement
 
@@ -89,9 +118,10 @@ target-specific, and build dependencies are included. Development dependencies
 are excluded because tests may exercise multiple layers together. Third-party
 dependency internals are not traversed.
 
-The song-Lua crate additionally has a test-build guard: its direct development
-dependencies and their production closures must remain independent of themes and
-the application shell. This keeps controller behavior tests usable by any theme.
+The gameplay, online, and song-Lua controller crates additionally have a
+test-build guard: their direct development dependencies and production closures
+must remain independent of themes and the application shell. This keeps
+controller behavior tests usable by any theme.
 
 `tests/architecture_boundaries.rs` additionally checks source ownership and the
 specific APIs that protect canonical gameplay and notefield composition.
@@ -99,16 +129,18 @@ specific APIs that protect canonical gameplay and notefield composition.
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
 cargo test -p deadsync-gameplay --lib
+cargo test -p deadsync-online --lib gameplay_lobby
 cargo test -p deadsync-input --test input_pipeline_allocations
 cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ```
 
 ## Remaining separation
 
-The production crate graph follows these directions, and normal song-Lua
-lifecycle and callback input sequencing now have game owners. Simply Love still
-wraps gameplay state, coordinates lobby readiness and practice playback, and
-exposes concrete screen types used by the shell. Move those remaining runtime
-responsibilities into game/application owners before replacing the concrete
-screen integration with a theme-neutral presentation interface. Practice has a
-separate playback loop and must retain its editing and looping semantics.
+The production crate graph follows these directions. Normal song-Lua lifecycle,
+callback input sequencing, practice playback, and gameplay lobby coordination
+now have game owners. Simply Love still wraps gameplay state and owns practice
+editor cursor/selection commands, navigation repeats, and music-rate controls.
+Those editor behaviors should move to a game-owned editor controller, while
+display easing, layout, menus, localization, and appearance stay in the theme.
+The shell also still uses concrete theme screen types; replace that integration
+with a theme-neutral presentation interface after the remaining runtime work.

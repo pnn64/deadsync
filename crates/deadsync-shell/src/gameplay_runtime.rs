@@ -623,7 +623,7 @@ pub(crate) fn enter(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    gameplay::on_enter(state);
+    deadsync_online::gameplay_lobby::on_enter(state);
     enter_smx_sensors(state, smx_input);
     drain(state, audio, sounds, music_clock);
 }
@@ -643,7 +643,7 @@ pub(crate) fn update(
 ) {
     let start_len = effects.len();
     crate::heart_rate::refresh_gameplay(state);
-    if !gameplay::prepare_update(state, effects) {
+    if !deadsync_online::gameplay_lobby::prepare_update(state, effects) {
         debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
         return;
     }

@@ -1143,22 +1143,7 @@ pub struct SelectMusicDownloadView {
 }
 
 /// Shell-prepared online lobby state consumed by Simply Love lobby-aware screens.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SimplyLoveLobbyRuntimeView {
-    pub snapshot: std::sync::Arc<deadsync_online::lobbies::Snapshot>,
-    pub reconnect_status_text: Option<String>,
-    pub disconnect_hold_seconds: f32,
-}
-
-impl Default for SimplyLoveLobbyRuntimeView {
-    fn default() -> Self {
-        Self {
-            snapshot: Arc::default(),
-            reconnect_status_text: None,
-            disconnect_hold_seconds: 5.0,
-        }
-    }
-}
+pub use deadsync_online::gameplay_lobby::LobbyRuntimeView as SimplyLoveLobbyRuntimeView;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SimplyLoveGrooveStatsService {

@@ -3547,14 +3547,14 @@ impl App {
                     .screens
                     .gameplay_state
                     .as_ref()
-                    .is_some_and(gameplay::uses_live_lobby_runtime);
+                    .is_some_and(deadsync_online::gameplay_lobby::uses_live_runtime);
                 if !uses_live_lobby {
                     return;
                 }
                 if let Some(lobby) = self.gameplay_lobby.refresh_if_dirty(now)
                     && let Some(state) = self.state.screens.gameplay_state.as_mut()
                 {
-                    gameplay::sync_lobby_runtime_view(state, lobby);
+                    deadsync_online::gameplay_lobby::sync_runtime_view(state, lobby);
                 }
             }
             CurrentScreen::Evaluation => {

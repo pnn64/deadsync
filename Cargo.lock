@@ -1702,6 +1702,7 @@ dependencies = [
  "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
+ "deadsync-input",
  "deadsync-net",
  "deadsync-profile",
  "deadsync-profile-gameplay",
