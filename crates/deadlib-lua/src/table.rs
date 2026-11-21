@@ -143,15 +143,11 @@ impl Key {
 }
 
 fn array_index(value: Value) -> Option<usize> {
-    if let Value::Number(n) = value
-        && n >= 1.0
-        && n <= f64::from(u32::MAX)
-    {
-        let index = n as u32;
-        (f64::from(index) == n).then_some(index as usize - 1)
-    } else {
-        None
-    }
+    let Value::Number(n) = value else {
+        return None;
+    };
+    let index = n as u32;
+    (index != 0 && f64::from(index) == n).then_some(index.wrapping_sub(1) as usize)
 }
 
 #[derive(Clone, Copy, Debug)]
