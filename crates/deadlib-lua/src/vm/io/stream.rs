@@ -210,6 +210,41 @@ impl Stream {
             None => self.raw(),
         }
     }
+    /// Skip at most `limit` bytes, returning true at a delimiter or EOF.
+    /// When `consume` is false, a found delimiter remains in lookahead.
+    pub(in crate::vm) fn skip_until(
+        &mut self,
+        delimiter: u8,
+        mut limit: usize,
+        consume: bool,
+    ) -> Result<bool, i32> {
+        while limit != 0 {
+            if self.peek.is_none() && self.readable && self.position < self.read.len() {
+                let available = &self.read[self.position..];
+                let bytes = &available[..available.len().min(limit)];
+                if let Some(offset) = find_byte(bytes, delimiter) {
+                    self.position += offset + 1;
+                    self.peek = (!consume).then_some(delimiter);
+                    return Ok(true);
+                }
+                self.position += bytes.len();
+                limit -= bytes.len();
+            } else {
+                let Some(byte) = self.peek()? else {
+                    return Ok(true);
+                };
+                let matched = byte == delimiter;
+                if !matched || consume {
+                    self.peek = None;
+                }
+                if matched {
+                    return Ok(true);
+                }
+                limit -= 1;
+            }
+        }
+        Ok(false)
+    }
     pub fn clear_eof(&mut self) {
         self.eof = false;
     }
