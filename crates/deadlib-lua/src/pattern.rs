@@ -207,7 +207,7 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         .filter(|&(_, bits)| bits != 0);
     let (index, bits) = words.next()?;
     if words.next().is_some() {
-        return None;
+        return excluded_set_run(bytes, set);
     }
     let offset = bits.trailing_zeros();
     let normalized = bits >> offset;
@@ -229,6 +229,34 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     } else {
         scan_boundary(bytes, |byte| byte.wrapping_sub(first) > width)
     })
+}
+
+#[inline(never)]
+fn excluded_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+    let mut holes = set
+        .iter()
+        .copied()
+        .enumerate()
+        .filter(|&(_, bits)| bits != u64::MAX);
+    let Some((index, bits)) = holes.next() else {
+        return Some(bytes.len());
+    };
+    if holes.next().is_some() {
+        return None;
+    }
+    let missing = !bits;
+    let base = (index * 64) as u8;
+    let first = base + missing.trailing_zeros() as u8;
+    match missing & (missing - 1) {
+        0 => Some(find_byte(bytes, first).unwrap_or(bytes.len())),
+        second if second.is_power_of_two() => {
+            let second = base + second.trailing_zeros() as u8;
+            Some(scan_boundary(bytes, |byte| {
+                (byte == first) | (byte == second)
+            }))
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn find_byte(bytes: &[u8], byte: u8) -> Option<usize> {
@@ -919,6 +947,28 @@ mod byte_search_tests {
         }
         assert_eq!(range_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
         assert_eq!(range_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+    }
+
+    #[test]
+    fn negated_set_runs_stop_at_the_first_excluded_byte() {
+        for excluded in [b"".as_slice(), b"\0", b"\r\n", b"\xff"] {
+            let mut set = [u64::MAX; 4];
+            for &byte in excluded {
+                set[usize::from(byte / 64)] &= !(1 << (byte % 64));
+            }
+            for index in [0, 1, 31, 32, 33, 63, 64, 72] {
+                let mut bytes = [b'A'; 73];
+                for byte in 0..=u8::MAX {
+                    bytes[index] = byte;
+                    let end = if excluded.contains(&byte) {
+                        index
+                    } else {
+                        bytes.len()
+                    };
+                    assert_eq!(range_set_run(&bytes, &set), Some(end));
+                }
+            }
+        }
     }
 
     #[test]
