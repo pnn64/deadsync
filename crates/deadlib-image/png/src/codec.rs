@@ -582,8 +582,7 @@ pub fn encode(png: &Png, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
     }
     write_ancillary(&mut out, png, ChunkPosition::BeforeData)?;
     crate::apng::write_control(&mut out, png)?;
-    let raw = scanline::encode(&png.image, options.interlaced, options.filter)?;
-    let compressed = zlib::compress(&raw, options.compression)?;
+    let compressed = crate::stream::compress_image(&png.image, options)?;
     for part in compressed.chunks(options.idat_chunk_size) {
         write_chunk(&mut out, b"IDAT", part)?;
     }

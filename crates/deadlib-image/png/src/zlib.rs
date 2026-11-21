@@ -1445,20 +1445,21 @@ fn fast_block(
     w.finish_fixed(checkpoint, &data[start..end], final_block);
 }
 
-/// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
-pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
-    let bound = input
-        .len()
-        .checked_add(
-            input
-                .len()
-                .div_ceil(if mode == Compression::Rle { 4 } else { 8 }),
-        )
+/// A zlib header with room for the worst-case encoding of `len` bytes.
+fn zlib_output(len: usize, mode: Compression) -> Result<Vec<u8>, Error> {
+    let bound = len
+        .checked_add(len.div_ceil(if mode == Compression::Rle { 4 } else { 8 }))
         .and_then(|n| n.checked_add(64))
         .ok_or(Error::LimitExceeded)?;
     let mut bytes = Vec::new();
     reserve(&mut bytes, bound)?;
     bytes.extend_from_slice(&[0x78, 0x01]);
+    Ok(bytes)
+}
+
+/// Encode zlib with stored blocks, fixed LZ77 codes, or an analytic zero-run tree.
+pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+    let mut bytes = zlib_output(input.len(), mode)?;
     if mode == Compression::Stored {
         if input.is_empty() {
             bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
@@ -1512,6 +1513,111 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
     }
     bytes.extend_from_slice(&adler32(input).to_be_bytes());
     Ok(bytes)
+}
+
+/// `compress` fed in pieces, without holding the whole input. Each block is
+/// encoded once three bytes beyond it have arrived, or at the end, so it sees
+/// the lookahead, history and final flag that `compress` gives it and the
+/// output is identical.
+pub(crate) struct Compressor {
+    mode: Compression,
+    w: Writer,
+    matcher: Option<matcher::Matcher>,
+    /// Fast history, then the pending block and up to three lookahead bytes.
+    window: Vec<u8>,
+    history: usize,
+    /// Stream position of `window[history]`.
+    position: usize,
+    checksum: Adler32,
+}
+impl Compressor {
+    const LOOKAHEAD: usize = 3;
+
+    /// `len` sizes the output reservation as `compress` does.
+    pub(crate) fn new(mode: Compression, len: usize) -> Result<Self, Error> {
+        let mut window = Vec::new();
+        let mut matcher = None;
+        if mode == Compression::Fast {
+            reserve(&mut window, 2 * matcher::WINDOW + Self::LOOKAHEAD)?;
+            matcher = Some(matcher::Matcher::new()?);
+        } else {
+            reserve(&mut window, Self::block(mode) + Self::LOOKAHEAD)?;
+        }
+        Ok(Self {
+            mode,
+            w: Writer {
+                bytes: zlib_output(len, mode)?,
+                word: 0,
+                count: 0,
+            },
+            matcher,
+            window,
+            history: 0,
+            position: 0,
+            checksum: Adler32::new(),
+        })
+    }
+    fn block(mode: Compression) -> usize {
+        if mode == Compression::Stored {
+            65535
+        } else {
+            matcher::WINDOW
+        }
+    }
+    pub(crate) fn push(&mut self, mut input: &[u8]) {
+        while !input.is_empty() {
+            let full = self.history + Self::block(self.mode) + Self::LOOKAHEAD;
+            let n = (full - self.window.len()).min(input.len());
+            self.window.extend_from_slice(&input[..n]);
+            if self.mode != Compression::Rle {
+                self.checksum.update(&input[..n]);
+            }
+            input = &input[n..];
+            if self.window.len() == full {
+                self.encode(Self::block(self.mode), false);
+            }
+        }
+    }
+    fn encode(&mut self, len: usize, final_block: bool) {
+        let start = self.history;
+        let end = start + len;
+        if let Some(matcher) = &mut self.matcher {
+            let base = self.position - start;
+            fast_block(
+                &mut self.w,
+                matcher,
+                &self.window,
+                base,
+                start,
+                end,
+                final_block,
+            );
+        } else if self.mode == Compression::Rle {
+            let block = &self.window[start..end];
+            self.w.rle_block(block, final_block, &mut self.checksum);
+        } else {
+            self.w.stored(&self.window[start..end], final_block);
+        }
+        // Fast keeps the block as history; every mode keeps the lookahead.
+        let keep = if self.matcher.is_some() { start } else { end };
+        self.window.copy_within(keep.., 0);
+        self.window.truncate(self.window.len() - keep);
+        self.history = end - keep;
+        self.position += len;
+    }
+    pub(crate) fn finish(mut self) -> Vec<u8> {
+        // One full block and part of its lookahead can remain.
+        let block = Self::block(self.mode);
+        if self.window.len() - self.history > block {
+            self.encode(block, false);
+        }
+        self.encode(self.window.len() - self.history, true);
+        self.w.align();
+        self.w
+            .bytes
+            .extend_from_slice(&self.checksum.finish().to_be_bytes());
+        self.w.bytes
+    }
 }
 
 #[cfg(test)]

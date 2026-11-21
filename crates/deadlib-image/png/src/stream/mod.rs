@@ -6,6 +6,7 @@ mod read;
 mod rows;
 mod write;
 pub use decode::StreamDecoder;
+pub(crate) use encode_rows::compress_image;
 pub use read::decode_reader;
 pub use write::{EncodeStats, encode_writer};
 

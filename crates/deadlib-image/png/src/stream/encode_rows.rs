@@ -1,4 +1,22 @@
-use crate::{Error, Filter, Image, Samples, reserve, scanline};
+use crate::{EncodeOptions, Error, Filter, Image, Samples, reserve, scanline, zlib};
+
+/// Filter and compress an image into the stream that `zlib::compress` gives
+/// for its whole filtered bytes, holding only rows and a compression window.
+pub(crate) fn compress_image(image: &Image, options: &EncodeOptions) -> Result<Vec<u8>, Error> {
+    let size = scanline::filtered_size(
+        image.width,
+        image.height,
+        image.color_type,
+        image.bit_depth,
+        options.interlaced,
+    )?;
+    let mut rows = Rows::new(image, options.interlaced, options.filter)?;
+    let mut compressor = zlib::Compressor::new(options.compression, size)?;
+    while let Some(row) = rows.next_row()? {
+        compressor.push(row);
+    }
+    Ok(compressor.finish())
+}
 
 pub(super) struct Rows<'a> {
     image: &'a Image,
