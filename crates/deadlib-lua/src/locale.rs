@@ -395,6 +395,13 @@ fn parse_normalized(bytes: &[u8]) -> Option<f64> {
         _ => (false, bytes),
     };
     if let [b'0', b'x' | b'X', hex @ ..] = unsigned {
+        let hex = if hex.len() >= 64 && hex[0] == b'0' {
+            // Leading integer zeros leave both the significand and radix
+            // position unchanged. Keep one so the digit check still applies.
+            &hex[crate::pattern::byte_run(hex, b'0') - 1..]
+        } else {
+            hex
+        };
         return crate::numeric::hex_number(hex.iter().copied(), negative);
     }
     if let Some(integer) = crate::lexer::short_decimal_integer(unsigned) {
