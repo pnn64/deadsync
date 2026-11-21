@@ -12,6 +12,7 @@ mod callback_input;
 pub mod debounce;
 pub mod fsr;
 pub mod keymap;
+pub mod practice;
 
 pub use bindings::{
     DEFAULT_KEYMAP_INI_LINES, binding_to_token, cleared_keymap, default_binding_for_action,

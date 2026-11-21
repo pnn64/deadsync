@@ -252,6 +252,126 @@ fn practice_playback_lifecycle_stays_below_the_theme() {
 }
 
 #[test]
+fn practice_editor_decisions_stay_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    let input = production_source(&root.join("crates/deadsync-input/src/practice.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
+    );
+    for contract in [
+        "pub struct PracticeEditor",
+        "pub struct PracticeEditorConfig",
+        "pub struct PracticeEditorSnapshot",
+        "pub enum PracticeEditorCommand",
+        "pub enum PracticeEditorRequest",
+        "pub enum PracticeEditorFeedback",
+        "pub fn handle_raw_key<",
+        "pub fn update_navigation_holds<",
+        "pub fn update_music_rate_hold<",
+        "pub fn playback_range<",
+    ] {
+        assert!(
+            contains_rust(&editor, contract),
+            "the game-owned practice editor is missing {contract}"
+        );
+    }
+    for presentation in [
+        "deadsync_theme",
+        "deadsync_shell",
+        "ThemeEffect",
+        "PracticeRuntimeView",
+        "assets/sounds/",
+        "lookup_key(",
+    ] {
+        assert!(
+            !editor.contains(presentation),
+            "practice editor decisions depend on presentation through {presentation}"
+        );
+    }
+    assert!(
+        editor.contains("deadsync_input::practice")
+            && contains_rust(&editor, "event: &PracticeKeyEvent"),
+        "the deterministic editor must receive typed practice input"
+    );
+    for physical_input in ["deadlib_platform", "RawKeyboardEvent", "KeyCode"] {
+        assert!(
+            !editor.contains(physical_input),
+            "physical keyboard translation must stay in the input owner: {physical_input}"
+        );
+    }
+    assert!(
+        input.contains("pub enum PracticeKey")
+            && input.contains("pub struct PracticeKeyEvent")
+            && contains_rust(&input, "fn from_raw(event: &RawKeyboardEvent)")
+            && theme.contains("deadsync_input::practice::PracticeKeyEvent")
+            && contains_rust(&theme, "PracticeKeyEvent::from_raw(raw_key)")
+            && !theme.contains("KeyCode::"),
+        "practice presentation must use the canonical physical-input translation"
+    );
+    assert!(
+        contains_rust(&editor, "impl FnMut(&Game<")
+            && !contains_rust(&editor, "FnMut(&mut Game<")
+            && !contains_rust(&editor, "Vec<PracticeEditorFeedback>"),
+        "editor feedback must expose immutable game facts without allocating an event queue"
+    );
+    let state = theme
+        .split_once("pub struct State {")
+        .and_then(|(_, rest)| rest.split_once("\n}"))
+        .map(|(body, _)| body)
+        .expect("practice presentation state should be present");
+    assert!(contains_rust(state, "editor: PracticeEditor"));
+    for former_state in [
+        "runtime: PracticeRuntimeView",
+        "cursor_beat:",
+        "selection_anchor:",
+        "selection_end:",
+        "snap_index:",
+        "shift_anchor:",
+        "shift_held:",
+        "ctrl_held:",
+        "tab_held:",
+        "cursor_hold:",
+        "page_hold:",
+        "music_rate_hold_",
+    ] {
+        assert!(
+            !contains_rust(state, former_state),
+            "the theme still stores canonical editor policy in {former_state}"
+        );
+    }
+    for former_policy in [
+        "const EDIT_CURSOR_REPEAT_DELAY_SECONDS:",
+        "const MUSIC_RATE_HOTKEY_STEP:",
+        "fn update_cursor_hold(",
+        "fn update_page_hold(",
+        "fn update_music_rate_hold(",
+        "fn quantized_music_rate(",
+        "fn quantize_beat(",
+        "fn clamp_selection(",
+        "fn gameplay_hotkey_input(",
+        "GameplayAudioCommand::SetMusicRate",
+    ] {
+        assert!(
+            !contains_rust(&theme, former_policy),
+            "the practice theme still implements game-owned editor policy: {former_policy}"
+        );
+    }
+    for delegation in [
+        "PracticeEditorConfig",
+        "PracticeEditorSnapshot",
+        ".handle_raw_key(",
+        ".update_navigation_holds(",
+        ".update_music_rate_hold(",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "practice presentation must use the game-owned editor through {delegation}"
+        );
+    }
+}
+
+#[test]
 fn gameplay_lobby_start_and_readiness_stay_below_the_theme() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let controller = production_source(&root.join("crates/deadsync-online/src/gameplay_lobby.rs"));
@@ -2013,6 +2133,7 @@ fn practice_runtime_is_shell_prepared() {
         .expect("shell app should be readable");
     let loading = read_source(root.join("crates/deadsync-shell/src/app/lua_loading.rs"))
         .expect("shell Lua loading completion should be readable");
+    let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -2027,14 +2148,16 @@ fn practice_runtime_is_shell_prepared() {
     }
     assert!(
         views.contains("pub struct PracticeRuntimeView")
-            && practice.contains("runtime: PracticeRuntimeView")
+            && practice.contains("hud: profile_data::GameplayHudSnapshot")
+            && practice.contains("editor: PracticeEditor")
             && practice.contains("SimplyLoveProfileRequest::SetMusicRate")
-            && practice.contains("GameplayAudioCommand::SetMusicRate")
+            && editor.contains("GameplayAudioCommand::SetMusicRate")
+            && editor.contains("PracticeEditorFeedback::PersistMusicRate")
             && shell.contains("pub(crate) fn practice_view(")
             && shell.contains("hud: gameplay.hud.clone()")
             && shell_app.contains("runtime: practice_runtime_view")
             && loading.contains("practice::init(gs, finish.runtime)"),
-        "shell must prepare Practice policy/HUD state and execute typed rate persistence"
+        "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
 }
 
@@ -3433,7 +3556,13 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     assert!(options.contains("audio_options: AudioOptionsView"));
     let practice =
         read_source(screens.join("practice.rs")).expect("Practice should be readable");
-    assert!(practice.contains("GameplayAudioCommand::SetMusicRate"));
+    let practice_editor =
+        production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
+    assert!(
+        practice_editor.contains("GameplayAudioCommand::SetMusicRate")
+            && !practice.contains("GameplayAudioCommand::SetMusicRate"),
+        "practice rate audio commands must originate in the game-owned editor"
+    );
 
     let gameplay_runtime =
         read_source(root.join("crates/deadsync-shell/src/gameplay_runtime.rs"))

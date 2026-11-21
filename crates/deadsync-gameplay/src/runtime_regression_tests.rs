@@ -4,6 +4,7 @@ mod runtime_regression_tests {
     include!("replay_pad_stick_tests.rs");
     include!("stage_policy_tests.rs");
     include!("practice_session_tests.rs");
+    include!("practice_editor_tests.rs");
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{
         ArrowStats, GameplayChartData, SongData, StaminaCounts, SyncPref, TechCounts,

@@ -4,6 +4,8 @@
 //! particular, practice advances the core directly rather than running a normal
 //! song-Lua gameplay session.
 
+pub mod editor;
+
 use crate::{
     GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, GameplayProfileData,
     GameplayRuntimeState, handle_core_input, update_core,

@@ -74,6 +74,27 @@ the range at the one-second tail boundary or on a core exit action. Static
 preparation hooks clear editor navigation holds before restart/stop, preserving
 input cleanup order; the theme applies cursor/display and flash updates afterward.
 
+`deadsync-gameplay::practice::editor::PracticeEditor` owns the edit cursor, snap
+resolution, selection, note seeking, playback-range selection, modifier and held
+input state, navigation repeats, music-rate controls, and gameplay function-key
+dispatch. Configuration is copied into the controller at entry; its canonical
+state is private and exposed through read-only accessors and a restorable
+snapshot. Both logical and raw input use the same controller, including the
+existing precedence of modifiers, global hotkeys, playback, and menus.
+`deadsync-input::practice` translates physical keys and their aliases into game
+roles while preserving edge, repeat, and timestamp data. The editor consumes
+that typed input without importing platform event types or services.
+
+The theme applies semantic menu/zoom/playback requests and maps typed feedback to
+localized flashes, sounds, and profile requests. It retains menu rows, display
+easing, edit-field zoom, and render/text caches. Feedback runs inline with an
+immutable view of the core, reusing the existing presentation queues without an
+intermediate event buffer or chart/state clone. Each rate change preserves the
+core mutation, profile request, audio command, flash, and sound ordering. The
+theme refreshes its derived rate-text cache after that controller call, before
+any rendering observes it. Rate repeats still run during playback and while a
+menu is open; Control and Tab retain their existing navigation semantics.
+
 `deadsync-online::gameplay_lobby` owns gameplay readiness, disconnect holds,
 waiting-input consumption, machine-stat publication, and one-time music start.
 The shell calls its entry, update, and snapshot-refresh operations directly.
@@ -107,7 +128,10 @@ Workspace callers are updated for these source-level changes:
   those operations. `SimplyLoveLobbyRuntimeView` remains an alias for the
   game-owned `LobbyRuntimeView`, with the same fields and defaults.
 - Practice screen entry/update/input signatures and `MusicStartSnap` remain
-  compatible. Its private playback mode is replaced by `PracticePlayback`.
+  compatible. Its private playback mode is replaced by `PracticePlayback`, and
+  its editor fields are owned by `PracticeEditor`. `PracticeRuntimeView` keeps
+  its existing fields, and the opaque `EditSnapshot` still saves/restores the
+  editor and the theme's scroll-speed selection through the existing functions.
 
 ## Enforcement
 
@@ -124,7 +148,11 @@ must remain independent of themes and the application shell. This keeps
 controller behavior tests usable by any theme.
 
 `tests/architecture_boundaries.rs` additionally checks source ownership and the
-specific APIs that protect canonical gameplay and notefield composition.
+specific APIs that protect canonical gameplay and notefield composition. Practice
+guards keep editor state, input/repeat decisions, and rate audio commands in the
+game. Game-owned editor tests exercise the real gameplay core, including held
+input ordering, selection restoration, seeking, playback ranges, rate feedback,
+and gameplay function keys, without requiring a theme dependency.
 
 ```sh
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
@@ -137,10 +165,15 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ## Remaining separation
 
 The production crate graph follows these directions. Normal song-Lua lifecycle,
-callback input sequencing, practice playback, and gameplay lobby coordination
-now have game owners. Simply Love still wraps gameplay state and owns practice
-editor cursor/selection commands, navigation repeats, and music-rate controls.
-Those editor behaviors should move to a game-owned editor controller, while
-display easing, layout, menus, localization, and appearance stay in the theme.
-The shell also still uses concrete theme screen types; replace that integration
-with a theme-neutral presentation interface after the remaining runtime work.
+callback input sequencing, practice playback/editor behavior, and gameplay lobby
+coordination now have game owners. Simply Love still wraps gameplay state.
+Evaluation and music selection also retain lobby input barriers, disconnect
+handling, and remote-selection policy; those decisions need game-owned
+controllers with typed status facts for presentation. Course continuation,
+failure, cancellation, and restart routing still cross the theme effect adapter
+and should produce semantic outcomes before a theme selects its screen and fade.
+
+The shell still uses concrete theme screen types. Consolidate that integration
+behind a theme-neutral presentation interface after the remaining runtime work;
+concrete screen identifiers, menu layout, translations, and transition appearance
+remain valid theme responsibilities.
