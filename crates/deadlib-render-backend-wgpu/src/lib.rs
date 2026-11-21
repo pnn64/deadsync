@@ -785,15 +785,15 @@ fn init(
                 depth: depth_format.map(|format_depth| {
                     writes.map(|write| {
                         deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
-                            build_tmesh_pipelines(
-                                &device,
-                                &pipeline_layout,
-                                format,
-                                &tmesh_shader,
+                        build_tmesh_pipelines(
+                            &device,
+                            &pipeline_layout,
+                            format,
+                            &tmesh_shader,
                                 depth_mode,
-                                write,
-                                Some(format_depth),
-                            )
+                            write,
+                            Some(format_depth),
+                        )
                         })
                     })
                 }),
@@ -1554,7 +1554,10 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
         &state.tmesh_pipelines
     };
     let tmesh_depth_pipelines = if let Some(capture) = capture {
-        capture.depth.as_ref().map(|p| &p[write_alpha as usize])
+        capture
+            .depth
+            .as_ref()
+            .map(|p| &p[write_alpha as usize])
     } else {
         Some(&state.tmesh_depth_pipelines)
     };
@@ -1713,7 +1716,9 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 } else {
                     deadlib_render_core::DepthMode::Off
                 };
-                if last_blend != Some(run.blend) || last_tmesh_depth != Some(depth_mode) {
+                if last_blend != Some(run.blend)
+                    || last_tmesh_depth != Some(depth_mode)
+                {
                     pass.set_pipeline(if let Some(pipelines) = tmesh_depth_pipelines {
                         pipelines[depth_mode as usize].get(run.blend)
                     } else {
@@ -3215,13 +3220,13 @@ fn build_textured_mesh_pipeline_set(
     );
     let depth_pipelines = deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
         build_tmesh_pipelines(
-            device,
-            pipeline_layout,
-            format,
-            &shader,
+        device,
+        pipeline_layout,
+        format,
+        &shader,
             depth_mode,
-            surface_write_mask(),
-            Some(DEPTH_FORMAT),
+        surface_write_mask(),
+        Some(DEPTH_FORMAT),
         )
     });
 

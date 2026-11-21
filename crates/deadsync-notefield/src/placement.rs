@@ -684,11 +684,8 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        deadsync_gameplay::gameplay_side_field_center_x(
-            deadsync_gameplay::GameplayViewport::new(
-                request.screen_width,
-                request.screen_height,
-            ),
+        deadsync_gameplay::gameplay_notefield_side_field_center_x(
+            deadsync_gameplay::GameplayViewport::new(request.screen_width, request.screen_height),
             request.screen_center_x,
             request.placement == FieldPlacement::P2,
         )

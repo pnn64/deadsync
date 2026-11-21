@@ -40,8 +40,11 @@ fn viewport_field_zoom_fits_fields_across_aspect_presets() {
         assert!(512.0 * zoom <= screen_width, "{aspect_ratio}: double field");
         let half_field_width = 128.0 * zoom;
         for p2 in [false, true] {
-            let center_x =
-                deadsync_gameplay::gameplay_side_field_center_x(viewport, viewport.center_x(), p2);
+            let center_x = deadsync_gameplay::gameplay_notefield_side_field_center_x(
+                viewport,
+                viewport.center_x(),
+                p2,
+            );
             let (left, right) = if p2 {
                 (screen_width * 0.5, screen_width)
             } else {

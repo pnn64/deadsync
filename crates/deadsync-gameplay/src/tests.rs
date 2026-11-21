@@ -1552,13 +1552,12 @@ mod tests {
 
     #[test]
     fn gameplay_side_field_centers_match_native_margins_and_translated_origins() {
-        // Below 4:3, side fields use symmetric quarter-screen placement.
-        // At and above 4:3, preserve native margin placement.
+        // These are native Player centers; song Lua uses these exact margins.
         for (width, height, expected) in [
-            (480.0, 480.0, [120.0, 360.0]),
-            (960.0, 960.0, [240.0, 720.0]),
-            (600.0, 480.0, [150.0, 450.0]),
-            (1200.0, 960.0, [300.0, 900.0]),
+            (480.0, 480.0, [80.0, 400.0]),
+            (960.0, 960.0, [266.25, 693.75]),
+            (600.0, 480.0, [140.0, 460.0]),
+            (1200.0, 960.0, [386.25, 813.75]),
             (640.0, 480.0, [160.0, 480.0]),
             (642.0, 480.0, [160.25, 481.75]),
             (852.0, 480.0, [213.0, 639.0]),
@@ -1583,6 +1582,57 @@ mod tests {
             );
             assert_eq!(defaults.map(|player| player.x), expected);
         }
+    }
+
+    #[test]
+    fn gameplay_notefield_centers_fit_narrow_viewports_without_changing_lua_centers() {
+        let narrow_viewport = GameplayViewport::new(480.0, 480.0);
+        assert_eq!(
+            [
+                gameplay_notefield_side_field_center_x(
+                    narrow_viewport,
+                    narrow_viewport.center_x(),
+                    false,
+                ),
+                gameplay_notefield_side_field_center_x(
+                    narrow_viewport,
+                    narrow_viewport.center_x(),
+                    true,
+                ),
+            ],
+            [120.0, 360.0]
+        );
+        assert_eq!(
+            [
+                gameplay_side_field_center_x(
+                    narrow_viewport.width(),
+                    narrow_viewport.center_x(),
+                    false,
+                ),
+                gameplay_side_field_center_x(
+                    narrow_viewport.width(),
+                    narrow_viewport.center_x(),
+                    true,
+                ),
+            ],
+            [80.0, 400.0]
+        );
+
+        let viewport = GameplayViewport::new(960.0, 960.0);
+        assert_eq!(
+            [
+                gameplay_notefield_side_field_center_x(viewport, viewport.center_x(), false),
+                gameplay_notefield_side_field_center_x(viewport, viewport.center_x(), true),
+            ],
+            [240.0, 720.0]
+        );
+        assert_eq!(
+            [
+                gameplay_side_field_center_x(viewport.width(), viewport.center_x(), false),
+                gameplay_side_field_center_x(viewport.width(), viewport.center_x(), true),
+            ],
+            [266.25, 693.75]
+        );
     }
 
     #[test]
