@@ -108,7 +108,17 @@ impl LeadingByte<'_> {
     pub(crate) fn find_in(self, bytes: &[u8]) -> Option<usize> {
         match self {
             Self::Literal(byte) => find_byte(bytes, byte),
-            Self::Class(set) => bytes.iter().position(|&byte| set_has(set, byte)),
+            Self::Class(set) => {
+                if bytes.len() >= 64 {
+                    if set_has(set, bytes[0]) {
+                        return Some(0);
+                    }
+                    if let Some(end) = range_set_run(bytes, &set.map(|word| !word)) {
+                        return (end < bytes.len()).then_some(end);
+                    }
+                }
+                bytes.iter().position(|&byte| set_has(set, byte))
+            }
         }
     }
 }
@@ -281,7 +291,8 @@ fn excluded_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     }
     let missing = !bits;
     let base = (index * 64) as u8;
-    let first = base + missing.trailing_zeros() as u8;
+    let offset = missing.trailing_zeros();
+    let first = base + offset as u8;
     match missing & (missing - 1) {
         0 => Some(find_byte(bytes, first).unwrap_or(bytes.len())),
         second if second.is_power_of_two() => {
@@ -290,7 +301,16 @@ fn excluded_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
                 (byte == first) | (byte == second)
             }))
         }
-        _ => None,
+        _ => {
+            let run = missing >> offset;
+            if run & run.wrapping_add(1) != 0 {
+                return None;
+            }
+            let width = run.ilog2() as u8;
+            Some(scan_boundary(bytes, |byte| {
+                byte.wrapping_sub(first) <= width
+            }))
+        }
     }
 }
 
@@ -1156,7 +1176,7 @@ mod byte_search_tests {
 
     #[test]
     fn negated_set_runs_stop_at_the_first_excluded_byte() {
-        for excluded in [b"".as_slice(), b"\0", b"\r\n", b"\xff"] {
+        for excluded in [b"".as_slice(), b"\0", b"\r\n", b"\xff", b"0123456789"] {
             let mut set = [u64::MAX; 4];
             for &byte in excluded {
                 set[usize::from(byte / 64)] &= !(1 << (byte % 64));
