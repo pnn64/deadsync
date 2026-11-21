@@ -216,6 +216,12 @@ fn runtime_conversion_keeps_exact_rounding_without_allocating() {
         };
         check(&text, Some(value.to_bits()));
     }
+    let zeroes = "0".repeat(4096);
+    let nines = "9".repeat(4096);
+    check(&format!("0x1p+{zeroes}3"), Some(8.0f64.to_bits()));
+    check(&format!("-0x1p-{nines}"), Some((-0.0f64).to_bits()));
+    check(&format!("0x1p+{nines}x"), None);
+    check(&format!("0x1p+{zeroes}x"), None);
     for text in [
         "",
         ".",

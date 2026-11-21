@@ -35,24 +35,37 @@ pub(crate) fn localized_number(bytes: &[u8], point: &[u8]) -> Option<f64> {
 
 // A textual exponent may be arbitrarily long. Saturation here cannot hide a
 // finite result: input lengths fit usize, far below i128's exponent magnitude.
-fn exponent(bytes: impl Iterator<Item = u8>) -> Option<i128> {
-    let mut bytes = bytes.peekable();
-    let negative = bytes.peek() == Some(&b'-');
-    if matches!(bytes.peek(), Some(b'-' | b'+')) {
-        bytes.next();
+fn exponent(mut bytes: impl Iterator<Item = u8>) -> Option<i128> {
+    let mut first = bytes.next()?;
+    let negative = first == b'-';
+    if matches!(first, b'-' | b'+') {
+        first = bytes.next()?;
     }
-    let mut any = false;
-    let mut value = 0i128;
-    for byte in bytes {
+    if first == b'0' {
+        let Some(nonzero) = bytes.find(|&byte| byte != b'0') else {
+            return Some(0);
+        };
+        first = nonzero;
+    }
+    if !first.is_ascii_digit() {
+        return None;
+    }
+    let mut value = i128::from(first - b'0');
+    for byte in bytes.by_ref() {
         if !byte.is_ascii_digit() {
             return None;
         }
-        any = true;
         value = value
             .saturating_mul(10)
             .saturating_add(i128::from(byte - b'0'));
+        if value == i128::MAX {
+            // The remaining digits can only leave the value saturated.
+            return bytes
+                .all(|byte| byte.is_ascii_digit())
+                .then_some(if negative { -value } else { value });
+        }
     }
-    any.then_some(if negative { -value } else { value })
+    Some(if negative { -value } else { value })
 }
 
 fn decimal_number(mut bytes: impl Iterator<Item = u8>, negative: bool) -> Option<f64> {
