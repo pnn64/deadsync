@@ -73,20 +73,22 @@ impl Matcher {
         if let Some(first) = words.first() {
             // While later words repeat the first, each chain head is the
             // previous insert, so only links are stored and the head is set
-            // once. A link to a position that reads as an empty head is zero.
-            self.insert_word(u32::from_le_bytes(*first), base + from);
-            let mut last = base + from;
-            k = 1;
-            while let Some(word) = words.get(k)
-                && word == first
-            {
-                let position = last + 4;
-                self.previous[position & (WINDOW - 1)] =
-                    if last as u32 != u32::MAX { 4 } else { 0 };
-                last = position;
-                k += 1;
+            // once. Words repeat exactly while the strided bytes equal
+            // themselves shifted by one word.
+            let first_position = base + from;
+            self.insert_word(u32::from_le_bytes(*first), first_position);
+            let bytes = words.as_flattened();
+            let run = prefix(&bytes[4..], &bytes[..bytes.len() - 4]) / 4;
+            for n in 1..=run {
+                self.previous[(first_position + 4 * n) & (WINDOW - 1)] = 4;
             }
-            self.heads[hash(u32::from_le_bytes(*first))] = last as u32;
+            // A link to a position whose low bits read as an empty head is zero.
+            let empty = u32::MAX.wrapping_sub(first_position as u32) as usize;
+            if empty.is_multiple_of(4) && empty / 4 < run {
+                self.previous[(first_position + empty + 4) & (WINDOW - 1)] = 0;
+            }
+            self.heads[hash(u32::from_le_bytes(*first))] = (first_position + 4 * run) as u32;
+            k = 1 + run;
         }
         for (k, word) in words.iter().enumerate().skip(k) {
             self.insert_word(u32::from_le_bytes(*word), base + from + 4 * k);
@@ -156,6 +158,45 @@ mod tests {
                 let mut b = a.clone();
                 b[mismatch] ^= 0x81;
                 assert_eq!(prefix(&a, &b), mismatch);
+            }
+        }
+    }
+
+    #[test]
+    fn match_inserts_equal_individual_inserts_across_position_wrap() {
+        let mut data = vec![0; 420];
+        for (n, byte) in data[220..].iter_mut().enumerate() {
+            *byte = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 7][n % 14];
+        }
+        let mut bases = vec![0];
+        if let Some(wrap) = (u32::MAX as usize).checked_add(1) {
+            bases.extend((wrap - 330..wrap + 20).step_by(5));
+        }
+        for base in bases {
+            for start in [0, 1, 2, 3, 157, 210, 213] {
+                for length in [3, 9, 10, 11, 12, 13, 14, 41, 100, 258] {
+                    if start + length > data.len() {
+                        continue;
+                    }
+                    let mut matched = Matcher::new().unwrap();
+                    let mut single = Matcher::new().unwrap();
+                    for position in 0..=start {
+                        matched.insert(&data[position..], base + position);
+                        single.insert(&data[position..], base + position);
+                    }
+                    matched.insert_match(&data, base, start, length);
+                    let end = start + length;
+                    let stop = end.min(data.len() - 3);
+                    let tail = end.saturating_sub(8).max(start + 1);
+                    let strided = (start + 1..tail.min(stop)).step_by(4);
+                    for position in strided.chain(tail..stop) {
+                        single.insert(&data[position..], base + position);
+                    }
+                    assert!(
+                        matched.heads == single.heads && matched.previous == single.previous,
+                        "base={base} start={start} length={length}"
+                    );
+                }
             }
         }
     }
