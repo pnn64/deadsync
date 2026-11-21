@@ -277,29 +277,29 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 #[inline(never)]
-pub(crate) fn find_pair(bytes: &[u8], needle: [u8; 2]) -> Option<usize> {
-    if bytes.starts_with(&needle) {
-        return Some(0);
-    }
-    let shifted = bytes.get(1..)?;
-    let (left, left_tail) = bytes[..shifted.len()].as_chunks::<32>();
-    let (right, right_tail) = shifted.as_chunks::<32>();
-    let matches = |(&a, &b): (&u8, &u8)| (a == needle[0]) & (b == needle[1]);
+pub(crate) fn find_dense_literal(bytes: &[u8], needle: &[u8], anchor: usize) -> Option<usize> {
+    let count = bytes.len().checked_sub(needle.len())? + 1;
+    let middle = (needle.len() - usize::from(anchor != 0)) / 2;
+    let (left, left_tail) = bytes[anchor..anchor + count].as_chunks::<32>();
+    let (right, right_tail) = bytes[middle..middle + count].as_chunks::<32>();
+    let (first, second) = (needle[anchor], needle[middle]);
+    let matches = |(&a, &b): (&u8, &u8)| (a == first) & (b == second);
+    let verify = |start, a: &[u8], b: &[u8]| {
+        a.iter()
+            .zip(b)
+            .zip(bytes[start..].windows(needle.len()))
+            .position(|(pair, window)| matches(pair) && window == needle)
+            .map(|offset| start + offset)
+    };
     for (index, (a, b)) in left.iter().zip(right).enumerate() {
-        // The shifted slice includes pairs that straddle block boundaries.
-        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair)) {
-            return a
-                .iter()
-                .zip(b)
-                .position(matches)
-                .map(|offset| index * 32 + offset);
+        // Check both bytes in parallel before comparing any full windows.
+        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair))
+            && let Some(found) = verify(index * 32, a, b)
+        {
+            return Some(found);
         }
     }
-    left_tail
-        .iter()
-        .zip(right_tail)
-        .position(matches)
-        .map(|offset| left.len() * 32 + offset)
+    verify(left.len() * 32, left_tail, right_tail)
 }
 
 pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
@@ -805,7 +805,8 @@ impl Pattern {
 #[cfg(test)]
 mod byte_search_tests {
     use super::{
-        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_pair, range_set_run, set_has,
+        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, range_set_run,
+        set_has,
     };
 
     #[test]
@@ -839,19 +840,29 @@ mod byte_search_tests {
     }
 
     #[test]
-    fn pair_search_keeps_first_match_across_blocks_and_binary_tails() {
-        for needle in [[0, 255], [255, 0], [b':'; 2]] {
+    fn dense_literal_search_keeps_first_match_across_blocks_and_binary_tails() {
+        for needle in [
+            b"\0\xff".as_slice(),
+            b"\xff\0",
+            b"::",
+            b"\0a\0b\xff",
+            b"xxxYx",
+        ] {
             for len in 0..=68 {
                 let mut bytes = vec![b'x'; len];
                 if let Some(last) = bytes.last_mut() {
                     *last = needle[0];
                 }
-                assert_eq!(find_pair(&bytes, needle), None);
-                for start in 0..len.saturating_sub(1) {
+                assert_eq!(find_dense_literal(&bytes, needle, 0), None);
+                for start in 0..(len + 1).saturating_sub(needle.len()) {
                     let mut subject = bytes.clone();
-                    subject[start..start + 2].copy_from_slice(&needle);
-                    let expected = subject.windows(2).position(|pair| pair == needle);
-                    assert_eq!(find_pair(&subject, needle), expected);
+                    subject[start..start + needle.len()].copy_from_slice(needle);
+                    let expected = subject
+                        .windows(needle.len())
+                        .position(|window| window == needle);
+                    for anchor in [0, needle.len() - 1] {
+                        assert_eq!(find_dense_literal(&subject, needle, anchor), expected);
+                    }
                 }
             }
         }

@@ -1,6 +1,6 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte, find_pair};
+use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte, find_dense_literal};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -430,6 +430,9 @@ impl Vm {
                         // occurs less often in a small sample of the haystack.
                         let mut anchor = 0;
                         if text.len() >= 1024 {
+                            if text.starts_with(raw) {
+                                break 'literal Some(0);
+                            }
                             let last = raw.len() - 1;
                             let (first_hits, last_hits) =
                                 text[..64].iter().fold((0u8, 0u8), |(first, end), &byte| {
@@ -438,14 +441,11 @@ impl Vm {
                                         end + u8::from(byte == raw[last]),
                                     )
                                 });
-                            if first_hits.min(last_hits) >= 4
-                                && let [a, b] = raw
-                            {
-                                // Both anchors would produce many false candidates.
-                                break 'literal find_pair(text, [*a, *b]);
-                            }
                             if last_hits < first_hits {
                                 anchor = last;
+                            }
+                            if first_hits.min(last_hits) >= 4 {
+                                break 'literal find_dense_literal(text, raw, anchor);
                             }
                         }
                         let mut cursor = anchor;
