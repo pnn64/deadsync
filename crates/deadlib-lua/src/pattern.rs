@@ -879,8 +879,19 @@ impl Pattern {
                         }
                     }
                     Alternative::Longer(atom) => {
-                        if source.get(choice.pos).is_some_and(|&b| self.atom(atom, b)) {
-                            choice.pos += 1;
+                        let tail = &source[pos..];
+                        if tail.len() >= 64
+                            && self.code[atom].kind == Kind::Any
+                            && let Some(next) = self.code.get(pc)
+                            && matches!(next.kind, Kind::Byte | Kind::Literal)
+                            && next.repeat == Repeat::One
+                        {
+                            // The mandatory literal rejects every skipped position
+                            // before any capture or deferred error can be reached.
+                            pos += find_byte(tail, next.arg as u8).unwrap_or(tail.len());
+                        }
+                        if source.get(pos).is_some_and(|&b| self.atom(atom, b)) {
+                            choice.pos = pos + 1;
                             work.choices.push(choice);
                         }
                     }
@@ -931,6 +942,32 @@ mod byte_search_tests {
         let deferred = Pattern::compile(b"^abcdef%", true, memory).unwrap();
         assert!(deferred.find(b"abcde", 0, &mut work).unwrap().is_none());
         assert!(deferred.find(b"abcdef", 0, &mut work).is_err());
+    }
+
+    #[test]
+    fn minimal_dot_preserves_capture_undo_and_deferred_errors() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let mut source = [b'x'; 136];
+        source[64..72].copy_from_slice(b"|endbad_");
+        source[128..].copy_from_slice(b"|endtail");
+
+        let pattern = compile(b"^(.-|end)()tail$");
+        let found = pattern.find(&source, 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.end, source.len());
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 0..132);
+        let position = found.capture(1).unwrap();
+        assert!(position.position());
+        assert_eq!(position.start, 132);
+
+        let deferred = compile(b"^.-|end%");
+        assert!(
+            deferred
+                .find(&source[..67], 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        assert!(deferred.find(&source, 0, &mut work).is_err());
     }
 
     #[test]
