@@ -3,6 +3,7 @@ name = "deadsync-theme-simply-love"
 version.workspace = true
 edition = "2024"
 license = "GPL-3.0"
+autoexamples = false
 
 [features]
 test-support = []
