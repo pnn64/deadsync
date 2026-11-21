@@ -336,6 +336,23 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
 }
 
 #[inline(never)]
+fn rfind_byte(bytes: &[u8], byte: u8) -> Option<usize> {
+    let (head, blocks) = bytes.as_rchunks::<32>();
+    for (index, block) in blocks.iter().enumerate().rev() {
+        if block
+            .iter()
+            .fold(false, |hit, &candidate| hit | (candidate == byte))
+        {
+            return block
+                .iter()
+                .rposition(|&candidate| candidate == byte)
+                .map(|offset| head.len() + index * 32 + offset);
+        }
+    }
+    head.iter().rposition(|&candidate| candidate == byte)
+}
+
+#[inline(never)]
 pub(crate) fn find_dense_literal(bytes: &[u8], needle: &[u8], anchor: usize) -> Option<usize> {
     let count = bytes.len().checked_sub(needle.len())? + 1;
     let middle = (needle.len() - usize::from(anchor != 0)) / 2;
@@ -644,6 +661,11 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
+    fn literal_byte(&self, pc: usize) -> Option<u8> {
+        let next = self.code.get(pc)?;
+        (next.repeat == Repeat::One && matches!(next.kind, Kind::Byte | Kind::Literal))
+            .then_some(next.arg as u8)
+    }
     /// The mandatory literal or class at the start of a match. Other bytes fail the
     /// first instruction without reaching any later instruction or error.
     pub(crate) fn leading_byte(&self) -> Option<LeadingByte<'_>> {
@@ -873,8 +895,16 @@ impl Pattern {
                 match choice.alternative {
                     Alternative::Once => {}
                     Alternative::Shorter(min) => {
-                        if choice.pos > min {
-                            choice.pos -= 1;
+                        if pos - min >= 64
+                            && let Some(needle) = self.literal_byte(pc)
+                            && source[pos] != needle
+                        {
+                            // All shorter lengths are valid for the repetition.
+                            // The next literal decides which ones can match.
+                            pos = min + rfind_byte(&source[min..pos], needle).unwrap_or(0);
+                        }
+                        if pos > min {
+                            choice.pos = pos - 1;
                             work.choices.push(choice);
                         }
                     }
@@ -882,13 +912,11 @@ impl Pattern {
                         let tail = &source[pos..];
                         if tail.len() >= 64
                             && self.code[atom].kind == Kind::Any
-                            && let Some(next) = self.code.get(pc)
-                            && matches!(next.kind, Kind::Byte | Kind::Literal)
-                            && next.repeat == Repeat::One
+                            && let Some(needle) = self.literal_byte(pc)
                         {
                             // The mandatory literal rejects every skipped position
                             // before any capture or deferred error can be reached.
-                            pos += find_byte(tail, next.arg as u8).unwrap_or(tail.len());
+                            pos += find_byte(tail, needle).unwrap_or(tail.len());
                         }
                         if source.get(pos).is_some_and(|&b| self.atom(atom, b)) {
                             choice.pos = pos + 1;
@@ -968,6 +996,27 @@ mod byte_search_tests {
                 .is_none()
         );
         assert!(deferred.find(&source, 0, &mut work).is_err());
+    }
+
+    #[test]
+    fn greedy_scan_keeps_capture_order_and_the_minimum_length() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let mut source = [b'x'; 256];
+        source[..8].copy_from_slice(b"|headend");
+        source[64..72].copy_from_slice(b"|headend");
+        source[128..136].copy_from_slice(b"|headbad");
+
+        let pattern = compile(b"^(.*|head)()end");
+        let found = pattern.find(&source, 0, &mut work).unwrap().unwrap();
+        assert_eq!(found.end, 72);
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 0..69);
+        assert!(found.capture(1).unwrap().position());
+        assert_eq!(found.capture(1).unwrap().start, 69);
+
+        source[64..].fill(b'x');
+        let plus = compile(b"^.+|head");
+        assert!(plus.find(&source, 0, &mut work).unwrap().is_none());
     }
 
     #[test]
