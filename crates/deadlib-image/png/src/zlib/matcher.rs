@@ -39,7 +39,7 @@ impl Matcher {
     /// Make `position` the head of the chain for `word`, its four bytes.
     #[inline(always)]
     fn insert_word(&mut self, word: u32, position: usize) -> Option<usize> {
-        let hash = (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize;
+        let hash = hash(word);
         let head = self.heads[hash];
         self.heads[hash] = position as u32;
         let distance = (position as u32).wrapping_sub(head) as usize;
@@ -69,7 +69,26 @@ impl Matcher {
         let strided = tail.min(stop);
         let from = (start + 1).min(strided);
         let words = data[from..strided + 3].as_chunks::<4>().0;
-        for (k, word) in words.iter().enumerate() {
+        let mut k = 0;
+        if let Some(first) = words.first() {
+            // While later words repeat the first, each chain head is the
+            // previous insert, so only links are stored and the head is set
+            // once. A link to a position that reads as an empty head is zero.
+            self.insert_word(u32::from_le_bytes(*first), base + from);
+            let mut last = base + from;
+            k = 1;
+            while let Some(word) = words.get(k)
+                && word == first
+            {
+                let position = last + 4;
+                self.previous[position & (WINDOW - 1)] =
+                    if last as u32 != u32::MAX { 4 } else { 0 };
+                last = position;
+                k += 1;
+            }
+            self.heads[hash(u32::from_le_bytes(*first))] = last as u32;
+        }
+        for (k, word) in words.iter().enumerate().skip(k) {
             self.insert_word(u32::from_le_bytes(*word), base + from + 4 * k);
         }
         for next in tail..stop {
@@ -86,6 +105,10 @@ impl Matcher {
             .checked_sub(distance)
             .filter(|&next| position - next <= WINDOW)
     }
+}
+
+fn hash(word: u32) -> usize {
+    (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize
 }
 
 fn table<T: Copy, const N: usize>(value: T) -> Result<Box<[T; N]>, Error> {
