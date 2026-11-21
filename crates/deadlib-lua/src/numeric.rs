@@ -68,7 +68,7 @@ fn exponent(mut bytes: impl Iterator<Item = u8>) -> Option<i128> {
     Some(if negative { -value } else { value })
 }
 
-fn decimal_number(mut bytes: impl Iterator<Item = u8>, negative: bool) -> Option<f64> {
+pub(crate) fn decimal_number(mut bytes: impl Iterator<Item = u8>, negative: bool) -> Option<f64> {
     // Every binary64 rounding midpoint has at most 768 significant decimal
     // digits: its denominator divides 2^1075 and its significand has at most
     // 54 bits. Keep 800 plus a sticky digit. Replacing a nonzero discarded
