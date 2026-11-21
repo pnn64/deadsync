@@ -34,6 +34,7 @@ const DIST_EXTRA: [u8; 30] = [
     13,
 ];
 
+#[derive(Clone)]
 struct Bits<'a> {
     input: &'a [u8],
     pos: usize,
@@ -436,91 +437,47 @@ fn reserve_output(output: &mut Vec<u8>, additional: usize, limit: usize) -> Resu
     Ok(())
 }
 
-// Keep the Huffman tables and coded-block loop out of stored-block decoding.
-#[inline(never)]
-fn inflate_codes(
-    bits: &mut Bits<'_>,
-    output: &mut Vec<u8>,
-    fixed_codes: bool,
-    window: usize,
-    limit: usize,
-) -> Result<(), Error> {
-    let dynamic_tables;
-    let (lit, dist) = if fixed_codes {
-        (&FIXED.0, &FIXED.1)
-    } else {
-        dynamic_tables = dynamic(bits)?;
-        (&dynamic_tables.0, &dynamic_tables.1)
-    };
-    loop {
-        match lit.decode(bits)? {
-            literal @ 0..=255 => {
-                if output.len() == limit {
-                    return Err(Error::LimitExceeded);
-                }
-                if output.len() == output.capacity() {
-                    // A bounded compressed-size hint avoids a chain of tiny
-                    // reallocations for text/profile streams. Defer it until
-                    // the first actual byte, and never exceed the output cap.
-                    let additional = if output.is_empty() {
-                        (bits.input.len() - bits.pos).clamp(1, 4096).min(limit)
-                    } else {
-                        1
-                    };
-                    reserve_output(output, additional, limit)?;
-                }
-                output.push(literal as u8);
-                let mut room = (limit - output.len()).min(output.capacity() - output.len());
-                let mut word = bits.word;
-                let mut count = bits.count;
-                // Append complete primary literals from prefetched
-                // bits, without a refill or capacity growth here.
-                while room != 0 && count >= 9 {
-                    let entry = lit.fast[(word & 511) as usize];
-                    if !(1..4096).contains(&entry) {
-                        break;
-                    }
-                    let n = (entry & 15) as u8;
-                    output.push((entry >> 4) as u8);
-                    word >>= n;
-                    count -= n;
-                    room -= 1;
-                }
-                bits.word = word;
-                bits.count = count;
-            }
-            256 => break,
-            symbol @ 257..=285 => {
-                let index = symbol - 257;
-                let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
-                let symbol = dist.decode(bits)?;
-                if symbol >= 30 {
-                    return Err(Error::Invalid("reserved distance symbol"));
-                }
-                let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
-                if distance > output.len() || distance > window {
-                    return Err(Error::Invalid("distance outside history window"));
-                }
-                if len > limit.saturating_sub(output.len()) {
-                    return Err(Error::LimitExceeded);
-                }
-                reserve_output(output, len, limit)?;
-                let start = output.len() - distance;
-                if distance == 1 {
-                    output.resize(output.len() + len, output[start]);
-                } else {
-                    let mut left = len;
-                    while left != 0 {
-                        let count = (output.len() - start).min(left);
-                        output.extend_from_within(start..start + count);
-                        left -= count;
-                    }
-                }
-            }
-            _ => return Err(Error::Invalid("reserved literal symbol")),
-        }
-    }
+/// Grow unsized output toward `limit` to at least `needed` bytes, doubling so
+/// that repeated growth stays linear.
+fn grow(output: &mut Vec<u8>, needed: usize, limit: usize) -> Result<(), Error> {
+    let len = output.len();
+    let target = (len * 2).max(len + 4096).max(needed).min(limit);
+    output
+        .try_reserve_exact(target - len)
+        .map_err(|_| Error::Allocation)?;
+    output.resize(target, 0);
     Ok(())
+}
+
+/// Output for the sized inflater: an exact slice, or a vector that grows
+/// toward its limit.
+trait Output {
+    fn slice(&mut self) -> &mut [u8];
+    /// Grow to hold any token at `pos` below `limit`, returning whether it grew.
+    fn room(&mut self, pos: usize, limit: usize) -> Result<bool, Error>;
+}
+impl Output for &mut [u8] {
+    #[inline(always)]
+    fn slice(&mut self) -> &mut [u8] {
+        self
+    }
+    #[inline(always)]
+    fn room(&mut self, _: usize, _: usize) -> Result<bool, Error> {
+        Ok(false)
+    }
+}
+impl Output for &mut Vec<u8> {
+    #[inline(always)]
+    fn slice(&mut self) -> &mut [u8] {
+        self.as_mut_slice()
+    }
+    fn room(&mut self, pos: usize, limit: usize) -> Result<bool, Error> {
+        if self.len() - pos >= 258 || self.len() == limit {
+            return Ok(false);
+        }
+        grow(self, pos + 258, limit)?;
+        Ok(true)
+    }
 }
 
 // An image's filtered size is known before inflation. Using a slice and a
@@ -690,13 +647,16 @@ fn inflate_sized_fast(
     Ok(ended)
 }
 
+/// Without `FAST`, every symbol takes the slow path, and `written` is exact
+/// even when a symbol fails. With it, a failure leaves `written` behind.
 #[inline(always)]
-fn inflate_sized_codes(
+fn inflate_sized_codes<O: Output, const FAST: bool>(
     bits: &mut Bits<'_>,
-    output: &mut [u8],
+    mut buffer: O,
     written: &mut usize,
     fixed_codes: bool,
     window: usize,
+    limit: usize,
 ) -> Result<(), Error> {
     let (dynamic_tables, primary);
     let (lit, dist, (fast, distance_fast)) = if fixed_codes {
@@ -711,9 +671,19 @@ fn inflate_sized_codes(
     };
     let mut pos = *written;
     loop {
-        if inflate_sized_fast(bits, output, &mut pos, dist, fast, distance_fast, window)? {
+        let output = buffer.slice();
+        if FAST && inflate_sized_fast(bits, output, &mut pos, dist, fast, distance_fast, window)? {
             break;
         }
+        // Unsized output grows toward its limit, leaving the fast loop room
+        // for any token.
+        if buffer.room(pos, limit)? {
+            continue;
+        }
+        if !FAST {
+            *written = pos;
+        }
+        let output = buffer.slice();
         bits.fill_wide();
         bits.fill_huffman(12);
         let entry = fast[(bits.word & 4095) as usize];
@@ -925,19 +895,64 @@ fn decompress_bits_into<const DISPATCH: bool>(
         return Err(Error::Invalid("zlib dictionary not permitted"));
     }
     let window = 1usize << ((cmf >> 4) + 8);
-    let mut written = 0;
-    // Checksum each block's output while it is still cached, rather than
-    // rereading the whole output afterwards.
-    let mut checksum = Adler32::new();
-    let mut checked = 0;
-    // Stored blocks append into the reservation until a coded block needs
-    // the initialized output slice. The produced prefix remains its history.
-    let mut sized_initialized = false;
     if sized {
         output
             .try_reserve_exact(limit)
             .map_err(|_| Error::Allocation)?;
     }
+    let mut written = 0;
+    // Checksum each block's output while it is still cached, rather than
+    // rereading the whole output afterwards.
+    let mut checksum = Adler32::new();
+    let result = inflate_blocks::<DISPATCH>(
+        &mut bits,
+        limit,
+        sized,
+        window,
+        output,
+        &mut written,
+        &mut checksum,
+    );
+    // Every exit, including errors, leaves exactly the produced bytes.
+    output.truncate(written);
+    result?;
+    bits.align();
+    if bits.read(32)?.swap_bytes() != checksum.finish() {
+        return Err(Error::Checksum);
+    }
+    Ok(bits.consumed())
+}
+
+fn inflate_block<const DISPATCH: bool, O: Output>(
+    bits: &mut Bits<'_>,
+    output: O,
+    written: &mut usize,
+    fixed: bool,
+    window: usize,
+    limit: usize,
+) -> Result<(), Error> {
+    #[cfg(target_arch = "x86_64")]
+    if DISPATCH {
+        return x86::inflate(bits, output, written, fixed, window, limit);
+    }
+    inflate_sized_codes::<O, true>(bits, output, written, fixed, window, limit)
+}
+
+#[inline(always)]
+fn inflate_blocks<const DISPATCH: bool>(
+    bits: &mut Bits<'_>,
+    limit: usize,
+    sized: bool,
+    window: usize,
+    output: &mut Vec<u8>,
+    written: &mut usize,
+    checksum: &mut Adler32,
+) -> Result<(), Error> {
+    let mut checked = 0;
+    // Stored blocks append into the output until a coded block needs an
+    // initialized slice: zeroed to its exact size when sized, or grown as
+    // needed. The produced prefix remains its history.
+    let mut initialized = false;
     loop {
         let last = bits.read(1)? != 0;
         let kind = bits.read(2)?;
@@ -947,18 +962,21 @@ fn decompress_bits_into<const DISPATCH: bool>(
             if len ^ bits.read(16)? as usize != 65535 {
                 return Err(Error::Invalid("stored block length"));
             }
-            let produced = if sized { written } else { output.len() };
-            if len > limit.saturating_sub(produced) {
+            if len > limit.saturating_sub(*written) {
                 return Err(Error::LimitExceeded);
             }
-            // A nonfinal stored block can amortize the next payload's growth.
-            let additional = if last {
-                len
-            } else {
-                len.saturating_mul(2)
-                    .min(limit.saturating_sub(output.len()))
-            };
-            if !sized {
+            if initialized {
+                if output.len() - *written < len {
+                    grow(output, *written + len, limit)?;
+                }
+            } else if !sized {
+                // A nonfinal stored block can amortize the next payload's growth.
+                let additional = if last {
+                    len
+                } else {
+                    len.saturating_mul(2)
+                        .min(limit.saturating_sub(output.len()))
+                };
                 reserve_output(output, additional, limit)?;
             }
             // Drain bytes prefetched by a preceding Huffman block, then copy
@@ -966,14 +984,12 @@ fn decompress_bits_into<const DISPATCH: bool>(
             let mut left = len;
             while left != 0 && bits.count >= 8 {
                 let byte = bits.read(8)? as u8;
-                if sized_initialized {
-                    output[written] = byte;
+                if initialized {
+                    output[*written] = byte;
                 } else {
                     output.push(byte);
                 }
-                if sized {
-                    written += 1;
-                }
+                *written += 1;
                 left -= 1;
             }
             if left != 0 {
@@ -990,52 +1006,68 @@ fn decompress_bits_into<const DISPATCH: bool>(
                 let count = left.min(bits.input.len() - bits.pos);
                 let end = bits.pos + count;
                 let bytes = &bits.input[bits.pos..end];
-                if sized_initialized {
-                    output[written..written + count].copy_from_slice(bytes);
+                if initialized {
+                    output[*written..*written + count].copy_from_slice(bytes);
                 } else {
                     output.extend_from_slice(bytes);
                 }
-                if sized {
-                    written += count;
-                }
+                *written += count;
                 bits.pos = end;
                 left -= count;
             }
         } else if kind == 1 || kind == 2 {
-            if sized {
-                if !sized_initialized {
+            if !initialized {
+                if sized {
                     output.resize(limit, 0);
-                    sized_initialized = true;
                 }
-                #[cfg(target_arch = "x86_64")]
-                if DISPATCH {
-                    x86::inflate(&mut bits, output, &mut written, kind == 1, window)?;
-                } else {
-                    inflate_sized_codes(&mut bits, output, &mut written, kind == 1, window)?;
-                }
-                #[cfg(not(target_arch = "x86_64"))]
-                inflate_sized_codes(&mut bits, output, &mut written, kind == 1, window)?;
+                initialized = true;
+            }
+            if sized {
+                inflate_block::<DISPATCH, _>(
+                    bits,
+                    output.as_mut_slice(),
+                    written,
+                    kind == 1,
+                    window,
+                    limit,
+                )?;
             } else {
-                inflate_codes(&mut bits, output, kind == 1, window, limit)?;
+                let (start, produced) = (bits.clone(), *written);
+                let result = inflate_block::<DISPATCH, _>(
+                    bits,
+                    &mut *output,
+                    written,
+                    kind == 1,
+                    window,
+                    limit,
+                );
+                if let Err(error) = result {
+                    // Unsized callers charge the length produced before an
+                    // error, which the fast loop does not report. Decoding the
+                    // block again a symbol at a time stops at the same symbol
+                    // with that length.
+                    *bits = start;
+                    *written = produced;
+                    let again = inflate_sized_codes::<_, false>(
+                        bits,
+                        output,
+                        written,
+                        kind == 1,
+                        window,
+                        limit,
+                    );
+                    return Err(again.err().unwrap_or(error));
+                }
             }
         } else {
             return Err(Error::Invalid("reserved block type"));
         }
-        let produced = if sized { written } else { output.len() };
-        checksum.update(&output[checked..produced]);
-        checked = produced;
+        checksum.update(&output[checked..*written]);
+        checked = *written;
         if last {
-            break;
+            return Ok(());
         }
     }
-    if sized {
-        output.truncate(written);
-    }
-    bits.align();
-    if bits.read(32)?.swap_bytes() != checksum.finish() {
-        return Err(Error::Checksum);
-    }
-    Ok(bits.consumed())
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -2026,6 +2058,67 @@ mod tests {
                 decompress_bits::<false>(Bits::new(&bytes), raw.len() - 1, true),
             ] {
                 assert_eq!(actual, Err(Error::LimitExceeded), "padding={ones}");
+            }
+        }
+    }
+
+    #[test]
+    fn metadata_errors_charge_exactly_the_bytes_produced_before_them() {
+        use huffman_fixtures::{Codes, Wire};
+        let mut lengths = [8; 288];
+        lengths[144..256].fill(9);
+        lengths[256..280].fill(7);
+        let literals = Codes::new(&lengths);
+        let distances = Codes::new(&[5; 32]);
+        // The faults land in the symbol-at-a-time path, in the fast loop, and
+        // after the unsized output has grown.
+        for produced in [0, 1, 257, 300, 4095, 9000] {
+            for fault in 0..4 {
+                let raw: Vec<u8> = (0..produced).map(|n| (n * 7 + n / 5) as u8).collect();
+                let mut wire = Wire::default();
+                wire.put(3, 3); // Final fixed-Huffman block.
+                for &byte in &raw {
+                    literals.symbol(&mut wire, usize::from(byte));
+                }
+                let (expected, limit) = match fault {
+                    0 => {
+                        literals.symbol(&mut wire, 257);
+                        distances.symbol(&mut wire, 29);
+                        wire.put(8191, 13); // Distance 32768, before the output.
+                        (Error::Invalid("distance outside history window"), 1 << 20)
+                    }
+                    1 => {
+                        literals.symbol(&mut wire, 257);
+                        distances.symbol(&mut wire, 30);
+                        (Error::Invalid("reserved distance symbol"), 1 << 20)
+                    }
+                    2 => {
+                        literals.symbol(&mut wire, 286);
+                        (Error::Invalid("reserved literal symbol"), 1 << 20)
+                    }
+                    _ => {
+                        literals.symbol(&mut wire, 65);
+                        (Error::LimitExceeded, produced)
+                    }
+                };
+                // Trailing symbols keep each fault away from the input end.
+                for _ in 0..64 {
+                    literals.symbol(&mut wire, 0);
+                }
+                literals.symbol(&mut wire, 256);
+                let bytes = wire.finish(&raw, false);
+                let mut remaining = limit;
+                assert_eq!(
+                    decompress_metadata(&bytes, &mut remaining),
+                    Err(expected.clone()),
+                    "produced={produced} fault={fault}"
+                );
+                assert_eq!(
+                    limit - remaining,
+                    produced,
+                    "produced={produced} fault={fault}"
+                );
+                assert_eq!(decompress_prefix(&bytes, limit), Err(expected));
             }
         }
     }
