@@ -1,6 +1,8 @@
 //! Byte strings, pattern callbacks, iterators and Lua 5.1 formatting.
 use super::*;
-use crate::pattern::{Capture, Matched, Pattern, Work, byte_run, find_byte, find_dense_literal};
+use crate::pattern::{
+    Capture, Matched, Pattern, Work, byte_run, find_byte, find_dense_literal, has_magic,
+};
 #[cfg(test)]
 mod allocation_tests;
 #[cfg(test)]
@@ -398,26 +400,7 @@ impl Vm {
                     .clamp(0, len as i64) as usize;
                 let raw = self.strings.bytes[slot_index(pattern.0)].as_ref();
                 let plain = id == STR_FIND
-                    && (self.argument(base, count, 3).is_truthy()
-                        || raw
-                            .iter()
-                            .copied()
-                            .find(|&byte| {
-                                matches!(
-                                    byte,
-                                    0 | b'^'
-                                        | b'$'
-                                        | b'*'
-                                        | b'+'
-                                        | b'?'
-                                        | b'.'
-                                        | b'('
-                                        | b'['
-                                        | b'%'
-                                        | b'-'
-                                )
-                            })
-                            .is_none_or(|byte| byte == 0));
+                    && (self.argument(base, count, 3).is_truthy() || !has_magic(raw));
                 if plain {
                     let text = &self.strings.bytes[slot_index(source.0)][start..];
                     let found = 'literal: {

@@ -196,6 +196,36 @@ pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usiz
             .unwrap_or(tail.len())
 }
 
+/// Whether string.find should interpret the needle as a Lua pattern.
+pub(crate) fn has_magic(bytes: &[u8]) -> bool {
+    let special = |byte| {
+        matches!(
+            byte,
+            0 | b'^' | b'$' | b'*' | b'+' | b'?' | b'.' | b'(' | b'[' | b'%' | b'-'
+        )
+    };
+    let rest = if bytes.len() >= 128 {
+        let (prefix, tail) = bytes.split_at(8);
+        if let Some(&byte) = prefix.iter().find(|&&byte| special(byte)) {
+            return byte != 0;
+        }
+        // The ranges also flag some ordinary punctuation. Verify from the
+        // first potential byte so a preceding NUL still selects plain search.
+        let start = scan_boundary(tail, |byte| {
+            (byte == 0)
+                | (byte == b'?')
+                | (byte.wrapping_sub(b'$') <= b'.' - b'$')
+                | (byte.wrapping_sub(b'[') <= b'^' - b'[')
+        });
+        &tail[start..]
+    } else {
+        bytes
+    };
+    rest.iter()
+        .find(|&&byte| special(byte))
+        .is_some_and(|&byte| byte != 0)
+}
+
 #[inline(never)]
 fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
@@ -865,9 +895,23 @@ impl Pattern {
 #[cfg(test)]
 mod byte_search_tests {
     use super::{
-        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, range_set_run,
-        set_has,
+        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, has_magic,
+        range_set_run, set_has,
     };
+
+    #[test]
+    fn magic_scan_keeps_the_first_special_byte_across_blocks() {
+        for index in [0, 7, 8, 31, 32, 39, 40, 63, 64, 127, 128, 159] {
+            let mut bytes = [b'x'; 161];
+            for byte in 0..=u8::MAX {
+                bytes[index] = byte;
+                bytes[160] = b'x';
+                assert_eq!(has_magic(&bytes), b"^$*+?.([%-".contains(&byte));
+                bytes[160] = b'$';
+                assert_eq!(has_magic(&bytes), byte != 0);
+            }
+        }
+    }
 
     #[test]
     fn packed_literals_preserve_backtracking_and_deferred_errors() {
