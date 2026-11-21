@@ -57,9 +57,17 @@ impl Matcher {
     }
     /// Hash a match's interior: every fourth position, then each of the last
     /// eight, which the next search may reach. `data[0]` is position `base`;
-    /// only positions with four bytes of lookahead in `data` are hashed.
+    /// only positions with four bytes of lookahead in `data` are hashed. The
+    /// match repeats the `length` bytes found `distance` bytes earlier.
     #[inline(always)]
-    pub(super) fn insert_match(&mut self, data: &[u8], base: usize, start: usize, length: usize) {
+    pub(super) fn insert_match(
+        &mut self,
+        data: &[u8],
+        base: usize,
+        start: usize,
+        length: usize,
+        distance: usize,
+    ) {
         let end = start + length;
         debug_assert!(length >= 3 && end <= data.len());
         let stop = end.min(data.len().saturating_sub(3));
@@ -73,12 +81,17 @@ impl Matcher {
         if let Some(first) = words.first() {
             // While later words repeat the first, each chain head is the
             // previous insert, so only links are stored and the head is set
-            // once. Words repeat exactly while the strided bytes equal
-            // themselves shifted by one word.
+            // once. A match at a distance dividing four repeats every word
+            // inside it; otherwise words repeat exactly while the strided
+            // bytes equal themselves shifted by one word.
             let first_position = base + from;
             self.insert_word(u32::from_le_bytes(*first), first_position);
             let bytes = words.as_flattened();
-            let run = prefix(&bytes[4..], &bytes[..bytes.len() - 4]) / 4;
+            let run = if 4 % distance == 0 {
+                words.len() - 1
+            } else {
+                prefix(&bytes[4..], &bytes[..bytes.len() - 4]) / 4
+            };
             for n in 1..=run {
                 self.previous[(first_position + 4 * n) & (WINDOW - 1)] = 4;
             }
@@ -165,37 +178,51 @@ mod tests {
     #[test]
     fn match_inserts_equal_individual_inserts_across_position_wrap() {
         let mut data = vec![0; 420];
-        for (n, byte) in data[220..].iter_mut().enumerate() {
+        for (n, byte) in data[220..320].iter_mut().enumerate() {
             *byte = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 7][n % 14];
+        }
+        for (n, byte) in data[320..].iter_mut().enumerate() {
+            *byte = [1, 2, 3][n % 3];
         }
         let mut bases = vec![0];
         if let Some(wrap) = (u32::MAX as usize).checked_add(1) {
             bases.extend((wrap - 330..wrap + 20).step_by(5));
         }
         for base in bases {
-            for start in [0, 1, 2, 3, 157, 210, 213] {
+            for start in [0, 1, 2, 3, 157, 210, 213, 330] {
                 for length in [3, 9, 10, 11, 12, 13, 14, 41, 100, 258] {
                     if start + length > data.len() {
                         continue;
                     }
-                    let mut matched = Matcher::new().unwrap();
-                    let mut single = Matcher::new().unwrap();
-                    for position in 0..=start {
-                        matched.insert(&data[position..], base + position);
-                        single.insert(&data[position..], base + position);
-                    }
-                    matched.insert_match(&data, base, start, length);
                     let end = start + length;
-                    let stop = end.min(data.len() - 3);
-                    let tail = end.saturating_sub(8).max(start + 1);
-                    let strided = (start + 1..tail.min(stop)).step_by(4);
-                    for position in strided.chain(tail..stop) {
-                        single.insert(&data[position..], base + position);
+                    // Real match distances, or a distance that does not
+                    // divide four when no match exists.
+                    let mut distances: Vec<_> = [1, 2, 3, 4, 14]
+                        .into_iter()
+                        .filter(|&d| d <= start && data[start..end] == data[start - d..end - d])
+                        .collect();
+                    if distances.is_empty() {
+                        distances.push(3);
                     }
-                    assert!(
-                        matched.heads == single.heads && matched.previous == single.previous,
-                        "base={base} start={start} length={length}"
-                    );
+                    for distance in distances {
+                        let mut matched = Matcher::new().unwrap();
+                        let mut single = Matcher::new().unwrap();
+                        for position in 0..=start {
+                            matched.insert(&data[position..], base + position);
+                            single.insert(&data[position..], base + position);
+                        }
+                        matched.insert_match(&data, base, start, length, distance);
+                        let stop = end.min(data.len() - 3);
+                        let tail = end.saturating_sub(8).max(start + 1);
+                        let strided = (start + 1..tail.min(stop)).step_by(4);
+                        for position in strided.chain(tail..stop) {
+                            single.insert(&data[position..], base + position);
+                        }
+                        assert!(
+                            matched.heads == single.heads && matched.previous == single.previous,
+                            "base={base} start={start} length={length} distance={distance}"
+                        );
+                    }
                 }
             }
         }

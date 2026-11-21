@@ -1429,7 +1429,7 @@ fn fast_block(
                 | u32::from(FIXED_DISTANCE_CODES[index].0) << n
                 | ((distance - DIST_BASE[index]) as u32) << (n + 5);
             w.write(token, n + 5 + DIST_EXTRA[index]);
-            matcher.insert_match(data, base, pos, length);
+            matcher.insert_match(data, base, pos, length, distance);
             pos += length;
         } else {
             // Bound work on sustained incompressible input. Search resumes
