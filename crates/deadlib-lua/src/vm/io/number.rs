@@ -42,9 +42,7 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<O
 }
 fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>, i32> {
     file.flush()?;
-    while file.peek()?.is_some_and(crate::locale::is_space) {
-        file.get()?;
-    }
+    file.skip_space()?;
     if file.peek()?.is_some_and(|b| matches!(b, b'+' | b'-')) {
         take(file, bytes)?;
     }

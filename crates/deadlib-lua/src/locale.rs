@@ -202,7 +202,7 @@ pub(crate) fn is_alnum(byte: u8) -> bool {
 pub(crate) fn is_digit(byte: u8) -> bool {
     byte.is_ascii_digit() || (byte >= 128 && mask(byte) & 4 != 0)
 }
-fn ascii_space(byte: u8) -> bool {
+pub(crate) fn ascii_space(byte: u8) -> bool {
     (byte == b' ') | (byte.wrapping_sub(b'\t') <= b'\r' - b'\t')
 }
 pub(crate) fn is_space(byte: u8) -> bool {

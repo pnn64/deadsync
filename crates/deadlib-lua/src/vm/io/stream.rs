@@ -1,5 +1,6 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
 use crate::{
+    locale::{ascii_space, is_space},
     memory::bytes::ByteOutput,
     pattern::{find_byte, scan_boundary},
 };
@@ -209,6 +210,17 @@ impl Stream {
             byte @ Some(_) => Ok(byte),
             None => self.raw(),
         }
+    }
+    pub(super) fn skip_space(&mut self) -> Result<(), i32> {
+        while self.peek()?.is_some_and(is_space) {
+            self.peek = None;
+            let tail = &self.read[self.position..];
+            if tail.len() >= 64 && ascii_space(tail[0]) && ascii_space(tail[7]) {
+                // Only skip bytes whose classification is independent of LC_CTYPE.
+                self.position += scan_boundary(tail, |byte| !ascii_space(byte));
+            }
+        }
+        Ok(())
     }
     /// Skip at most `limit` bytes, returning true at a delimiter or EOF.
     /// When `consume` is false, a found delimiter remains in lookahead.
