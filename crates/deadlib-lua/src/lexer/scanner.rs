@@ -2,7 +2,7 @@
 use super::{Kind, Token, parse_number};
 use crate::memory::fallible::{self, SliceExt, VecExt};
 use crate::memory::text::Text;
-use crate::pattern::scan_boundary;
+use crate::pattern::{byte_run, scan_boundary};
 use crate::{Error, ErrorKind};
 
 #[derive(Clone, Copy, Debug)]
@@ -223,6 +223,14 @@ impl Scanner {
         self.pos += 1 + scan_token_boundary(tail, |byte| {
             !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
         });
+    }
+    fn skip_bracket_equals(&mut self, input: &[u8]) -> usize {
+        if input.get(self.pos) != Some(&b'=') {
+            return 0;
+        }
+        let count = byte_run(&input[self.pos..], b'=');
+        self.pos += count;
+        count
     }
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
@@ -646,14 +654,8 @@ impl Scanner {
                         })?;
                     self.emit(Kind::Number);
                 }
-                State::Bracket {
-                    comment,
-                    mut equals,
-                } => {
-                    while input.get(self.pos) == Some(&b'=') {
-                        self.pos += 1;
-                        equals += 1;
-                    }
+                State::Bracket { comment, equals } => {
+                    let equals = equals + self.skip_bracket_equals(input);
                     self.state = State::Bracket { comment, equals };
                     if self.pos == input.len() && !closed {
                         return Ok(None);
@@ -736,10 +738,7 @@ impl Scanner {
                     equals,
                     mut seen,
                 } => {
-                    while input.get(self.pos) == Some(&b'=') {
-                        self.pos += 1;
-                        seen += 1;
-                    }
+                    seen += self.skip_bracket_equals(input);
                     self.state = State::LongClose {
                         comment,
                         equals,
@@ -758,7 +757,13 @@ impl Scanner {
                     } else {
                         if !comment {
                             self.text.try_push(b']')?;
-                            self.text.try_extend(std::iter::repeat_n(b'=', seen))?;
+                            while seen != 0 {
+                                // Grow at the same byte as an individual push.
+                                fallible::reserve(&mut self.text, 1)?;
+                                let count = seen.min(self.text.capacity() - self.text.len());
+                                self.text.resize(self.text.len() + count, b'=');
+                                seen -= count;
+                            }
                         }
                         self.state = State::Long { comment, equals };
                     }
@@ -1051,6 +1056,19 @@ mod tests {
                 tokens(input, &(0..=input.len()).collect::<Vec<_>>()),
                 tokens(input, &[input.len()])
             );
+        }
+    }
+
+    #[test]
+    fn rejected_long_closer_keeps_equals_across_reader_splits() {
+        let equals = "=".repeat(96);
+        let source = format!("[{equals}[before]{equals}xafter]{equals}]");
+        let input = source.as_bytes();
+        let complete = tokens(input, &[input.len()]).unwrap();
+        assert_eq!(complete[0].0, Kind::String);
+        assert_eq!(complete[0].3, format!("before]{equals}xafter").into_bytes());
+        for split in 0..=input.len() {
+            assert_eq!(tokens(input, &[split, input.len()]).unwrap(), complete);
         }
     }
 
