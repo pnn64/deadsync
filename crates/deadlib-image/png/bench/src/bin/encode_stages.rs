@@ -1,7 +1,7 @@
 //! Diagnostic encoder stages; input preparation is outside all measurements.
 #![allow(dead_code, unused_imports)]
 pub use deadlib_image_png::{ColorType, Error, Image, Samples};
-use deadlib_image_png::{EncodeOptions, Filter, Png};
+use deadlib_image_png::{EncodeOptions as PngOptions, Filter, Png};
 use std::{
     hint::black_box,
     time::{Duration, Instant},
@@ -14,10 +14,36 @@ fn reserve<T>(v: &mut Vec<T>, n: usize) -> Result<(), Error> {
 }
 #[path = "../../../src/checksum.rs"]
 mod checksum;
+#[path = "../../../src/stream/encode_rows.rs"]
+mod encode_rows;
 #[path = "../../../src/scanline.rs"]
 mod scanline;
 #[path = "../../../src/zlib.rs"]
 mod zlib;
+/// The source-level options that `encode_rows` reads.
+pub struct EncodeOptions {
+    pub interlaced: bool,
+    pub filter: Filter,
+    pub compression: zlib::Compression,
+}
+
+/// Every filtered row of a plain image, collected into one buffer.
+fn adaptive_filter(image: &Image) -> Vec<u8> {
+    let size = scanline::filtered_size(
+        image.width,
+        image.height,
+        image.color_type,
+        image.bit_depth,
+        false,
+    )
+    .unwrap();
+    let mut filtered = Vec::with_capacity(size);
+    let mut rows = encode_rows::Rows::new(image, false, Filter::Adaptive).unwrap();
+    while let Some(row) = rows.next_row().unwrap() {
+        filtered.extend_from_slice(row);
+    }
+    filtered
+}
 
 #[cfg(windows)]
 mod cycles {
@@ -95,8 +121,8 @@ fn main() {
     };
     image.validate().expect("invalid prepared RGBA8 image");
     let png = Png::new(image);
-    let options = EncodeOptions::default();
-    let filtered = scanline::encode(&png.image, false, Filter::Adaptive).unwrap();
+    let options = PngOptions::default();
+    let filtered = adaptive_filter(&png.image);
     let compressed = zlib::compress(&filtered, zlib::Compression::Fast).unwrap();
     eprintln!(
         "Opaque RGBA8 {width}x{height}; filtered={} zlib={} bytes; five median batches of at least 40 ms.",
@@ -119,9 +145,7 @@ fn main() {
         drop(black_box(output));
     });
     measure("adaptive-filter", || {
-        drop(black_box(
-            scanline::encode(black_box(&png.image), false, Filter::Adaptive).unwrap(),
-        ));
+        drop(black_box(adaptive_filter(black_box(&png.image))));
     });
     measure("deflate-fast", || {
         drop(black_box(
@@ -133,7 +157,7 @@ fn main() {
             zlib::compress(black_box(&filtered), zlib::Compression::Rle).unwrap(),
         ));
     });
-    let rle_options = EncodeOptions {
+    let rle_options = PngOptions {
         compression: deadlib_image_png::zlib::Compression::Rle,
         ..options
     };
