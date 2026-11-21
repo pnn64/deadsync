@@ -35,21 +35,15 @@ const GLIBC: bool = cfg!(all(
 ));
 
 impl Output {
-    fn emit(bytes: &[u8]) -> std::io::Result<()> {
+    fn emit(mut bytes: &[u8]) -> std::io::Result<()> {
         if cfg!(windows) {
-            let mut start = 0;
-            for (at, &byte) in bytes.iter().enumerate() {
-                if byte == b'\n' {
-                    super::stdio::write_all(1, &bytes[start..at])?;
-                    super::stdio::write_all(1, b"\r\n")?;
-                    start = at + 1;
-                }
+            while let Some(at) = crate::pattern::find_byte(bytes, b'\n') {
+                super::stdio::write_all(1, &bytes[..at])?;
+                super::stdio::write_all(1, b"\r\n")?;
+                bytes = &bytes[at + 1..];
             }
-            super::stdio::write_all(1, &bytes[start..])?;
-        } else {
-            super::stdio::write_all(1, bytes)?;
         }
-        Ok(())
+        super::stdio::write_all(1, bytes)
     }
     fn flush(&mut self) -> std::io::Result<()> {
         Self::emit(&self.bytes)?;

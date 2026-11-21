@@ -183,6 +183,37 @@ fn cli_stdin_and_mixed_stdout_keep_text_translation_and_write_order() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn cli_stdout_translates_newlines_across_scan_and_buffer_boundaries() {
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_deadlua"))
+        .args([
+            "-e",
+            r#"for _,mode in ipairs{'no','full'} do
+                assert(io.stdout:setvbuf(mode,4096))
+                for _,len in ipairs{0,15,16,17,31,32,33,4095,4096,4097} do
+                    assert(io.write(string.rep('x',len)..'\0\255\r\n\n'))
+                end
+            end
+            assert(io.flush())"#,
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let mut expected = Vec::new();
+    for _ in 0..2 {
+        for len in [0, 15, 16, 17, 31, 32, 33, 4095, 4096, 4097] {
+            expected.resize(expected.len() + len, b'x');
+            expected.extend_from_slice(b"\0\xff\r\r\n\r\n");
+        }
+    }
+    assert_eq!(result.stdout, expected);
+}
+
 #[test]
 fn file_finalization_clears_weak_values_and_closes_once() {
     compare(br#"
