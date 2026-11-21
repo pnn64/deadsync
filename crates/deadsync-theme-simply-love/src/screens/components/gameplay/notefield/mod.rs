@@ -1,6 +1,7 @@
 use crate::color;
 use crate::screens::gameplay::GameplayCoreState as State;
 use crate::screens::gameplay::GameplayNoteskinAssets;
+use crate::ui_layout::UILayoutType;
 use deadlib_present::actors::{Actor, ActorResourceArena, FlatDraw, SpriteSource};
 use deadlib_present::space::*;
 use deadsync_assets::noteskin::SpriteSlot;
@@ -69,6 +70,19 @@ fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const MEASURE_PREWARM_CAP: i32 = 64;
+
+fn viewport_field_zoom() -> f32 {
+    let aspect_ratio = screen_width() / screen_height().max(1.0);
+    viewport_field_zoom_for_aspect(aspect_ratio)
+}
+
+fn viewport_field_zoom_for_aspect(aspect_ratio: f32) -> f32 {
+    if UILayoutType::from_aspect_ratio(aspect_ratio) == UILayoutType::Squareish {
+        (aspect_ratio / (4.0 / 3.0)).clamp(0.5, 1.0)
+    } else {
+        1.0
+    }
+}
 
 #[inline(always)]
 const fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
@@ -718,7 +732,7 @@ pub(crate) fn compose_frame(
     } else {
         profile.mini_percent as f32
     };
-    let field_zoom = if apply_attacks {
+    let field_zoom = (if apply_attacks {
         state.field_zoom_for_player(player_idx)
     } else {
         let visual_mask = profile.visual_effects_active_mask.bits();
@@ -726,7 +740,7 @@ pub(crate) fn compose_frame(
         let mini =
             effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
         mini.mul_add(-0.5, 1.0)
-    };
+    }) * viewport_field_zoom();
     // Canonical composition applies current DrawSize, Tilt, Mini, and the
     // Centered/Boomerang extension to these unscaled theme metrics.
     let viewport_height = state.setup.viewport.height();

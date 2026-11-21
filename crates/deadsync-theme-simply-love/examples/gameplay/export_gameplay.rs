@@ -1,96 +1,59 @@
 //! Export the real Simply Love gameplay presentation without changing player settings.
 mod export_gameplay_viewer;
+use crate::export_support;
+pub use export_support::Size;
 
 use deadlib_assets::AssetManager;
 use deadlib_present::{
     actors::Actor,
     compose::{self, ComposeScratch, TextLayoutCache},
     space::{self, Metrics},
-    texture::{TextureContext, TextureMeta},
+    texture::TextureContext,
 };
-use deadlib_render::{Backend, BackendType, PresentModePolicy, RenderFrame, TextureHandle};
+use deadlib_render::{Backend, RenderFrame};
 use deadsync_gameplay::{
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplaySession, GameplayViewport,
 };
 use deadsync_profile as profile;
 use deadsync_theme_simply_love::{self as theme, screens::gameplay, views::GameplayInitView};
 use std::{
-    cell::RefCell,
     collections::BTreeSet,
-    error::Error,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Instant,
 };
 
-type Result<T> = std::result::Result<T, Box<dyn Error>>;
+use export_support::{CaptureTextures, PRESETS, ScreenshotBackendTimings, ScreenshotTimer};
 
-const PRESETS: &[(&str, u32, u32)] = &[
-    ("vga", 640, 480),
-    ("svga", 800, 600),
-    ("xga", 1024, 768),
-    ("5-4", 1280, 1024),
-    ("720p", 1280, 720),
-    ("square", 640, 640),
-    ("16-10", 1280, 800),
-    ("ultrawide", 1280, 540),
-    ("uwqhd", 1720, 720),
-    ("portrait-9-16", 540, 960),
-    ("portrait-10-16", 540, 960),
-];
+pub(super) type Result<T> = export_support::Result<T>;
 const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
 const HELP: &str = "\
 Export Simply Love gameplay PNGs (requires a desktop and Vulkan-capable GPU).
 
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
   --reverse       Use reverse scrolling
+    --images-only   Export images without writing the gallery index
+    --index-only    Write the gallery index without exporting images
   --help          Show this help
 
 Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
 uwqhd, portrait-9-16, portrait-10-16.";
 
-#[derive(Clone, Debug, PartialEq)]
-struct Size {
-    width: u32,
-    height: u32,
-    aspect: (u32, u32),
-}
-
-impl Size {
-    fn from_preset(width: u32, height: u32) -> Self {
-        let divisor = gcd(width, height);
-        Self {
-            width,
-            height,
-            aspect: (width / divisor, height / divisor),
-        }
-    }
-
-    fn name(&self) -> String {
-        format!(
-            "{}x{}-{}x{}",
-            self.width, self.height, self.aspect.0, self.aspect.1
-        )
-    }
-}
-
-fn gcd(mut a: u32, mut b: u32) -> u32 {
-    while b != 0 {
-        (a, b) = (b, a % b);
-    }
-    a
-}
-
 struct Options {
     sizes: Vec<Size>,
     reverse: bool,
+    images_only: bool,
+    index_only: bool,
 }
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     let mut args = args.into_iter();
     let mut sizes = Vec::new();
     let mut reverse = false;
+    let mut images_only = false;
+    let mut index_only = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -98,6 +61,8 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
                 return Ok(None);
             }
             "--reverse" => reverse = true,
+            "--images-only" => images_only = true,
+            "--index-only" => index_only = true,
             "--preset" => {
                 let name = args.next().ok_or("--preset requires a name")?;
                 let &(_, width, height) = PRESETS
@@ -112,6 +77,9 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             _ => return Err(format!("unknown option '{arg}'; use --help").into()),
         }
     }
+    if images_only && index_only {
+        return Err("--images-only and --index-only cannot be combined".into());
+    }
     if sizes.is_empty() {
         for &(_, width, height) in PRESETS {
             let size = Size::from_preset(width, height);
@@ -120,51 +88,43 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             }
         }
     }
-    Ok(Some(Options { sizes, reverse }))
+    Ok(Some(Options {
+        sizes,
+        reverse,
+        images_only,
+        index_only,
+    }))
 }
 
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("Simply Love crate is under the workspace crates directory")
-        .to_path_buf()
-}
-
-struct Logger;
-impl log::Log for Logger {
-    fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        metadata.level() <= log::Level::Warn
-    }
-    fn log(&self, record: &log::Record<'_>) {
-        if self.enabled(record.metadata()) {
-            eprintln!("{}: {}", record.level(), record.args());
-        }
-    }
-    fn flush(&self) {}
-}
-
-fn main() -> Result<()> {
+pub(super) fn run(args: Vec<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         return std::thread::Builder::new()
             .name("gameplay-export".into())
             .stack_size(32 * 1024 * 1024)
-            .spawn(|| run().map_err(|error| error.to_string()))?
+            .spawn(move || run_with_args(args).map_err(|error| error.to_string()))?
             .join()
             .map_err(|_| "gameplay export thread panicked")?
             .map_err(Into::into);
     }
     #[cfg(not(target_os = "windows"))]
-    run()
+    run_with_args(args)
 }
 
-fn run() -> Result<()> {
-    let Some(options) = options(std::env::args().skip(1))? else {
+fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<()> {
+    let Some(options) = options(args)? else {
         return Ok(());
     };
-    log::set_logger(&Logger).map_err(|e| e.to_string())?;
-    log::set_max_level(log::LevelFilter::Warn);
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("gameplay-exports");
+    if options.index_only {
+        std::fs::create_dir_all(&output)?;
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+        return Ok(());
+    }
+    let started = Instant::now();
+    export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let dirs = deadsync_config::dirs::AppDirs {
@@ -173,24 +133,8 @@ fn run() -> Result<()> {
         exe_dir: root.to_path_buf(),
         portable: false,
     };
-    dirs.ensure_dirs_exist();
-    deadsync_assets::init_paths(dirs.asset_paths(None))?;
+    export_support::initialize_runtime(&dirs)?;
     theme::i18n::init_for_tests();
-    deadsync_config::runtime::init_paths(dirs.config_path(), dirs.judgment_palettes_path())?;
-    deadsync_profile::app_runtime::init_paths(
-        dirs.profiles_root(),
-        dirs.default_player_options_path(),
-        dirs.pad_config_path(),
-    )?;
-    deadsync_simfile::app_runtime::init_paths(deadsync_simfile::app_runtime::ScanPaths {
-        song_cache: dirs.song_cache_dir(),
-        extra_songs: Vec::new(),
-        extra_courses: Vec::new(),
-        autogen_courses: dirs.courses_dir(),
-        song_movies: Vec::new(),
-        random_movies: Vec::new(),
-        bg_animations: Vec::new(),
-    })?;
     let (simfile, pack_directory, pack_name) = sample_song(isolated.path())?;
     let song = Arc::new(deadsync_simfile::app_runtime::parse_song_for_test(
         &simfile, 0.0,
@@ -227,7 +171,12 @@ fn run() -> Result<()> {
                 .with_inner_size(winit::dpi::PhysicalSize::new(640, 480)),
         )?,
     );
-    export(&options, song, window)
+    export(&options, song, window)?;
+    println!(
+        "Gameplay export completed in {:.1}s",
+        started.elapsed().as_secs_f64()
+    );
+    Ok(())
 }
 
 fn export(
@@ -235,28 +184,32 @@ fn export(
     song: Arc<deadsync_chart::SongData>,
     window: Arc<winit::window::Window>,
 ) -> Result<()> {
-    let mut backend = deadlib_render::create_backend(
-        BackendType::VulkanWgpu,
-        window,
-        Metrics::centered(640.0, 480.0).projection(),
-        false,
-        PresentModePolicy::Immediate,
-        false,
-        true,
-    )?;
+    let mut backend = export_support::create_backend(window)?;
     let mut assets = AssetManager::new();
-    deadsync_assets::load_initial_assets(&mut assets, &mut backend, theme::asset_manifest())?;
-    let output = workspace_root().join("target").join("gameplay-exports");
+    export_support::load_initial_assets(&mut assets, &mut backend)?;
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("gameplay-exports");
     std::fs::create_dir_all(&output)?;
-    export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    if !options.images_only {
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    }
     for size in &options.sizes {
+        let mut timer = ScreenshotTimer::new();
+        let mut acquire_us = 0u64;
+        let mut gpu_wait_us = 0u64;
+        let mut present_us = 0u64;
+        let mut suboptimal_frames = 0u32;
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let logical_height = 480.0;
         let metrics = Metrics::centered(logical_width, logical_height);
         space::set_current_metrics(metrics);
         space::set_current_window_px(size.width, size.height);
+        let resize_started = Instant::now();
         backend.resize(size.width, size.height);
+        timer.record_resize(resize_started.elapsed());
         backend.set_default_projection(metrics.projection());
+        let mut captures = export_support::CaptureBatch::default();
         for &layout in LAYOUTS {
             let mut variants = vec![(layout.to_owned(), false)];
             if matches!(layout, "p1" | "p2") {
@@ -266,6 +219,7 @@ fn export(
                 let folder = output.join(size.name()).join(&export_layout);
                 std::fs::create_dir_all(&folder)?;
                 for (show_scorebox, stem) in [(true, "gameplay"), (false, "gameplay-hmr")] {
+                    let prepare_started = Instant::now();
                     let mut state = sample_state(
                         song.clone(),
                         logical_width,
@@ -276,10 +230,7 @@ fn export(
                         center_single_notefield,
                     )?;
                     preload_noteskins(&state, &mut assets, &mut backend)?;
-                    let context = CaptureTextures {
-                        assets: &assets,
-                        keys: RefCell::default(),
-                    };
+                    let context = CaptureTextures::new(&assets);
                     drop(compose(
                         &mut state,
                         &assets,
@@ -287,14 +238,8 @@ fn export(
                         &context,
                         center_single_notefield,
                     ));
-                    let missing: Vec<_> = context
-                        .keys
-                        .into_inner()
-                        .into_iter()
-                        .filter(|key| !assets.has_uploaded_texture_key(key))
-                        .collect();
-                    for key in missing {
-                        load_texture(&mut assets, &mut backend, &key, false)?;
+                    for key in context.missing_keys() {
+                        export_support::load_texture(&mut assets, &mut backend, &key, false)?;
                     }
                     let frame = compose(
                         &mut state,
@@ -303,28 +248,31 @@ fn export(
                         assets.texture_context(),
                         center_single_notefield,
                     );
-                    backend.request_screenshot();
-                    backend.draw(&frame, assets.textures(), false)?;
-                    let image = backend.capture_frame()?;
-                    if image.dimensions() != (size.width, size.height) {
-                        return Err(format!(
-                            "capture returned {:?}, expected {}x{}",
-                            image.dimensions(),
-                            size.width,
-                            size.height
-                        )
-                        .into());
-                    }
                     let filename = format!(
                         "{stem}{}.png",
                         if options.reverse { "-reverse" } else { "" }
                     );
                     let output = folder.join(&filename);
-                    image.save(&output)?;
-                    println!("{}", output.display());
+                    timer.record_prepare(prepare_started.elapsed());
+                    let stats = captures.draw(&mut backend, &frame, assets.textures(), output)?;
+                    acquire_us += u64::from(stats.acquire_us);
+                    gpu_wait_us += u64::from(stats.gpu_wait_us);
+                    present_us += u64::from(stats.present_us);
+                    suboptimal_frames += u32::from(stats.present_stats.suboptimal);
                 }
             }
         }
+        timer.record_captures(captures.finish(&mut backend, size)?);
+        timer.report(
+            "gameplay",
+            size,
+            Some(ScreenshotBackendTimings {
+                acquire_us,
+                gpu_wait_us,
+                present_us,
+                suboptimal_frames,
+            }),
+        );
     }
     backend.dispose_textures(&mut assets.take_textures());
     backend.cleanup();
@@ -655,24 +603,6 @@ fn sample_state(
     Ok(state)
 }
 
-fn load_texture(
-    assets: &mut AssetManager,
-    backend: &mut Backend,
-    key: &str,
-    model: bool,
-) -> Result<()> {
-    if assets.has_uploaded_texture_key(key) || assets.load_generated_texture(backend, key, None)? {
-        return Ok(());
-    }
-    assets
-        .load_texture(
-            backend,
-            &deadsync_assets::textures::texture_decode_job(key, model),
-        )
-        .map_err(|e| format!("cannot load capture texture '{key}': {e}"))?;
-    Ok(())
-}
-
 fn preload_noteskins(
     state: &gameplay::State,
     assets: &mut AssetManager,
@@ -698,29 +628,9 @@ fn preload_noteskins(
         });
     }
     for (key, model) in keys {
-        load_texture(assets, backend, &key, model)?;
+        export_support::load_texture(assets, backend, &key, model)?;
     }
     Ok(())
-}
-
-struct CaptureTextures<'a> {
-    assets: &'a AssetManager,
-    keys: RefCell<BTreeSet<String>>,
-}
-impl TextureContext for CaptureTextures<'_> {
-    fn texture_registry_generation(&self) -> u64 {
-        self.assets.texture_context().revision()
-    }
-    fn texture_dims(&self, key: &str) -> Option<TextureMeta> {
-        self.assets.texture_context().texture_dims(key)
-    }
-    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-        self.assets.texture_context().sprite_sheet_dims(key)
-    }
-    fn texture_handle(&self, key: &str) -> TextureHandle {
-        self.keys.borrow_mut().insert(key.to_owned());
-        self.assets.texture_context().texture_handle(key)
-    }
 }
 
 fn compose(

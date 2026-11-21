@@ -72,6 +72,7 @@ pub(crate) struct FieldLayoutRequest {
     pub shared_sides: bool,
     pub center_one_player: bool,
     pub screen_width: f32,
+    pub screen_height: f32,
     pub screen_center_x: f32,
     pub screen_center_y: f32,
     pub num_cols: usize,
@@ -683,8 +684,8 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
-        deadsync_gameplay::gameplay_side_field_center_x(
-            request.screen_width,
+        deadsync_gameplay::gameplay_viewport_side_field_center_x(
+            deadsync_gameplay::GameplayViewport::new(request.screen_width, request.screen_height),
             request.screen_center_x,
             request.placement == FieldPlacement::P2,
         )
@@ -1228,6 +1229,7 @@ mod tests {
             shared_sides: false,
             center_one_player: false,
             screen_width: 854.0,
+            screen_height: 480.0,
             screen_center_x: 427.0,
             screen_center_y: 240.0,
             num_cols: 4,

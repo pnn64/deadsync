@@ -113,5 +113,6 @@ pub(super) fn write_index(output: &Path, sizes: &[Size], reverse: bool) -> Resul
     }
     .render()?;
     std::fs::write(output.join("index.html"), html)?;
+    std::fs::write(output.join("gameplay.css"), include_str!("gameplay.css"))?;
     Ok(())
 }

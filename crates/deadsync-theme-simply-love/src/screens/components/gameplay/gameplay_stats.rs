@@ -2,6 +2,7 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::i18n::{LookupKey, lookup_key, tr};
+use crate::screens::components::gameplay::layout::gameplay_top_row_layout;
 use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter,
 };
@@ -15,6 +16,7 @@ use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
     StepStatsPaneParams, StepStatsSongInfoSlide,
 };
+use crate::ui_layout::UILayoutType;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::{Actor, InlineText, SizeSpec, TextAlign, TextContent};
 use deadlib_present::compose::{
@@ -1530,18 +1532,17 @@ pub fn push_step_stats(
     actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
-    playfield_center_x: f32,
+    layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
 ) {
     if !step_stats_theme::step_stats_aspect_enabled(screen_width(), screen_height()) {
         return;
     }
-    let wide = is_wide();
+    let gif_wide = is_wide();
     let mask = step_stats_mask(state, player_side);
     if mask.is_empty() {
         return;
     }
-    let layout = step_stats_pane_layout(state, playfield_center_x, player_side);
     let player_idx = step_stats_player_idx(state, player_side);
     let profile = &state.profiles()[player_idx];
     let show_duration = mask.contains(profile_data::StepStatisticsMask::SONG_DURATION);
@@ -1556,7 +1557,6 @@ pub fn push_step_stats(
     let song_info_slide = step_stats_theme::song_info_slide(
         layout,
         player_side,
-        wide,
         state.num_players(),
         show_duration,
         live_timing_rows,
@@ -1565,7 +1565,7 @@ pub fn push_step_stats(
     let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
     let mut pane_actors = Vec::with_capacity(48 + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
-        build_banner(&mut pane_actors, state, layout, wide, player_side);
+        build_banner(&mut pane_actors, state, layout, player_side);
     }
     let show_pack_info = mask.pack_info_enabled();
     if show_pack_info {
@@ -1586,7 +1586,7 @@ pub fn push_step_stats(
         player_idx,
         crate::step_stats_gifs::GifRenderParams {
             player_side,
-            wide,
+            wide: gif_wide,
             aspect_ratio: screen_width() / screen_height().max(1.0),
             pane_x: layout.sidepane_center_x,
             pane_y: layout.sidepane_center_y,
@@ -1599,7 +1599,6 @@ pub fn push_step_stats(
         state,
         asset_manager,
         layout,
-        wide,
         player_side,
         mask,
     );
@@ -1607,7 +1606,7 @@ pub fn push_step_stats(
         let player_idx = step_stats_player_idx(state, player_side);
         build_holds_mines_rolls_pane(&mut pane_actors, state, asset_manager, layout, player_side);
         if state.profiles()[player_idx].display_scorebox {
-            build_scorebox_pane(&mut pane_actors, state, layout, wide, player_side);
+            build_scorebox_pane(&mut pane_actors, state, layout, player_side);
         }
     }
     push_step_stats_pane_background(actors, layout);
@@ -1635,7 +1634,7 @@ pub fn push_step_stats(
     }
 }
 
-fn step_stats_pane_layout(
+pub fn step_stats_pane_layout(
     state: &State,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
@@ -1649,7 +1648,7 @@ fn step_stats_pane_layout(
         player_side,
         num_players: state.num_players(),
         notefield_width: notefield_width(state),
-        wide: is_wide(),
+        layout_type: UILayoutType::current(),
     })
 }
 
@@ -1712,13 +1711,17 @@ fn centered_single_split_geometry(
     if state.num_players() != 1 {
         return None;
     }
+    let screen_w = screen_width();
+    let screen_h = screen_height();
+    let notefield_width =
+        notefield_width? * gameplay_top_row_layout(screen_w, screen_h).field_scale;
     step_stats_theme::centered_single_split_layout(
         screen_center_x(),
         screen_center_y(),
-        screen_width(),
-        screen_height(),
+        screen_w,
+        screen_h,
         playfield_center_x,
-        notefield_width?,
+        notefield_width,
         state.gameplay.density_graph_view().graph_w,
     )
 }
@@ -1785,13 +1788,9 @@ pub fn push_versus_step_stats(
     state: &State,
     asset_manager: &AssetManager,
 ) {
-    if !is_wide() {
-        return;
-    }
-    // Simply Love shows centered step stats in 2P versus on widescreen, but not on ultrawide
+    // Simply Love shows centered step stats in 2P versus on wide layouts, but not on ultrawide
     // (ultrawide already has native per-player side panes).
-    let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
-    if is_ultrawide {
+    if UILayoutType::current() != UILayoutType::Wide {
         return;
     }
     if state.num_players() < 2 {
@@ -2130,17 +2129,12 @@ fn push_split_step_stats(
     centered_single_split: bool,
 ) {
     let aspect_ratio = screen_width() / screen_height().max(1.0);
-    let is_ultrawide = aspect_ratio > (21.0 / 9.0);
-    if is_ultrawide {
+    let layout_type = UILayoutType::current();
+    if !centered_single_split && (layout_type != UILayoutType::Wide || state.cols_per_player() <= 4)
+    {
         return;
     }
-    if centered_single_split {
-        if is_wide() || state.cols_per_player() > 4 {
-            return;
-        }
-    } else if !is_wide() || state.cols_per_player() <= 4 {
-        return;
-    }
+
     let mask = state
         .profiles()
         .first()
@@ -2244,7 +2238,7 @@ fn push_split_step_stats(
             sidepane_center_y: pane_cy,
             sidepane_width: split.sidepane_width,
             note_field_is_centered: true,
-            is_ultrawide: false,
+            layout_type,
             banner_data_zoom,
         };
         let slide = StepStatsSongInfoSlide {
@@ -2629,7 +2623,7 @@ fn push_split_step_stats(
                 sidepane_center_y: pane_cy,
                 sidepane_width,
                 note_field_is_centered,
-                is_ultrawide,
+                layout_type,
                 banner_data_zoom,
             }),
         );
@@ -2658,12 +2652,10 @@ fn build_banner(
     actors: &mut Vec<Actor>,
     state: &State,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
     if let Some(banner_key) = &state.song_banner_key {
-        let placement =
-            step_stats_theme::song_banner_placement(layout, wide, player_side, state.num_players());
+        let placement = step_stats_theme::song_banner_placement(layout, player_side, state.num_players());
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(placement.x, placement.y):
             setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H): zoom(placement.zoom):
@@ -3061,10 +3053,9 @@ fn build_scorebox_pane(
     actors: &mut Vec<Actor>,
     state: &State,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
-    let frame = step_stats_theme::scorebox_frame(layout, wide, player_side, state.num_players());
+    let frame = step_stats_theme::scorebox_frame(layout, player_side, state.num_players());
 
     gameplay_screen::push_scorebox_actors_for_side(
         actors,
@@ -3152,7 +3143,6 @@ fn build_side_pane(
     state: &State,
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
-    wide: bool,
     player_side: profile_data::PlayerSide,
     mask: profile_data::StepStatisticsMask,
 ) {
@@ -3163,7 +3153,7 @@ fn build_side_pane(
         -1.0
     };
     let final_judgments_center_x =
-        step_stats_theme::judgment_count_center_x(layout, player_side, wide, state.num_players());
+        step_stats_theme::judgment_count_center_x(layout, player_side, state.num_players());
     let final_judgments_center_y = layout.sidepane_center_y;
     let parent_local_zoom = 0.8;
     let final_text_base_zoom = layout.banner_data_zoom * parent_local_zoom;
@@ -3573,7 +3563,6 @@ fn build_side_pane(
 
             let scorebox_frame = step_stats_theme::scorebox_frame(
                 layout,
-                wide,
                 player_side,
                 state.num_players(),
             );

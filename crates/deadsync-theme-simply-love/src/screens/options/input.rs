@@ -313,12 +313,7 @@ pub(super) fn apply_submenu_choice_delta(
 
     submenu_choice_indices_mut(state, kind)[row_index] = new_index;
     submenu_cursor_indices_mut(state, kind)[row_index] = new_index;
-    let inline_x = borrow_submenu_row_layout(state, asset_manager, kind, row_index)
-        .filter(|layout| layout.inline_row)
-        .and_then(|layout| layout.centers.get(new_index).copied());
-    if let Some(x) = inline_x {
-        state.sub_inline_x = x;
-    }
+    sync_submenu_inline_x_from_row(state, asset_manager, kind, state.sub_selected);
     queue_sfx(state, "assets/sounds/change_value.ogg");
 
     if matches!(kind, SubmenuKind::Coin) {

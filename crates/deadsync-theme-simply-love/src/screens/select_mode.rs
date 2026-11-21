@@ -9,11 +9,12 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{screen_bar, select_flow_footer, visual_style_bg};
 use crate::screens::select_mode_flow::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
+use crate::ui_layout::{self, UILayoutType};
 use crate::views::SelectFlowRuntimeView;
 use deadlib_assets::AssetManager;
 use deadlib_present::actors::Actor;
 use deadlib_present::font;
-use deadlib_present::space::{screen_center_x, screen_center_y};
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_width};
 use deadsync_config::theme::GameFlag;
 use deadsync_input::InputEvent;
 use deadsync_theme::AudioRequest;
@@ -24,10 +25,13 @@ use std::sync::Arc;
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
 const ROOT_ZOOM: f32 = 1.25;
+const ROOT_REFERENCE_WIDTH: f32 = 640.0;
 
 // Simply Love: Graphics/ScreenSelectPlayMode Icon.lua
 const CURSOR_MIN_W: f32 = 90.0;
 const CURSOR_MAX_W: f32 = 170.0;
+const CURSOR_LABEL_PADDING: f32 = 18.0;
+const CURSOR_LABEL_RIGHT_GAP: f32 = 9.0;
 
 const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
@@ -184,6 +188,22 @@ const fn choice_cursor_label_width(choice: Choice) -> f32 {
     }
 }
 
+fn choice_label_right_x(choice: Choice) -> f32 {
+    match choice {
+        Choice::Marathon => -156.0,
+        Choice::Regular | Choice::PremiumFree => -160.0,
+    }
+}
+
+fn cursor_layout(base_width: f32, choice_zoom: f32) -> (f32, f32) {
+    let text_width = base_width * choice_zoom;
+    let max_text_width = CURSOR_MAX_W - CURSOR_LABEL_PADDING;
+    let text_scale = ui_layout::clamp_text_scale(text_width, max_text_width);
+    let cursor_width =
+        (text_width.mul_add(text_scale, CURSOR_LABEL_PADDING)).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
+    (text_scale, cursor_width)
+}
+
 pub struct State {
     pub active_color_index: i32,
     flow: ModeFlow,
@@ -302,16 +322,55 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 #[inline(always)]
+fn root_scale() -> f32 {
+    root_scale_for_width(UILayoutType::current(), screen_width())
+}
+
+fn root_scale_for_width(layout_type: UILayoutType, width: f32) -> f32 {
+    let width_scale = if layout_type == UILayoutType::Squareish {
+        (width / ROOT_REFERENCE_WIDTH).clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    ROOT_ZOOM * width_scale
+}
+
 fn root_pt(x: f32, y: f32) -> (f32, f32) {
+    let scale = root_scale();
     (
-        x.mul_add(ROOT_ZOOM, screen_center_x() + ROOT_X_OFF),
-        y.mul_add(ROOT_ZOOM, screen_center_y()),
+        x.mul_add(scale, screen_center_x() + ROOT_X_OFF),
+        y.mul_add(scale, screen_center_y()),
     )
 }
 
 #[inline(always)]
 fn root_sz(w: f32, h: f32) -> (f32, f32) {
-    (w * ROOT_ZOOM, h * ROOT_ZOOM)
+    let scale = root_scale();
+    (w * scale, h * scale)
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::{CURSOR_LABEL_PADDING, CURSOR_MAX_W, cursor_layout, root_scale_for_width};
+    use crate::ui_layout::UILayoutType;
+
+    #[test]
+    fn play_mode_content_scales_to_squareish_widths() {
+        assert!((root_scale_for_width(UILayoutType::Squareish, 480.0) - 0.9375).abs() < 0.001);
+        assert!((root_scale_for_width(UILayoutType::Squareish, 600.0) - 1.171875).abs() < 0.001);
+        assert_eq!(root_scale_for_width(UILayoutType::Wide, 853.0), 1.25);
+        assert_eq!(root_scale_for_width(UILayoutType::UltraWide, 1147.0), 1.25);
+    }
+
+    #[test]
+    fn selected_choice_label_fits_its_cursor() {
+        let (text_scale, cursor_width) = cursor_layout(260.0, 0.75);
+        let text_width = 260.0 * 0.75 * text_scale;
+
+        assert!(text_scale < 1.0);
+        assert!(cursor_width <= CURSOR_MAX_W);
+        assert!(cursor_width >= text_width + CURSOR_LABEL_PADDING - f32::EPSILON);
+    }
 }
 
 #[inline(always)]
@@ -346,6 +405,7 @@ pub fn push_actors(
     asset_manager: &AssetManager,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let root_scale = root_scale();
     actors.reserve(256);
     let exit_t = exit_anim_t(state.flow.exit_requested());
 
@@ -422,7 +482,7 @@ pub fn push_actors(
         settext(Arc::clone(&text.descriptions[selected_index])):
         align(0.0, 0.0):
         xy(dx, dy):
-        zoom(0.825 * ROOT_ZOOM):
+        zoom(0.825 * root_scale):
         diffuse(1.0, 1.0, 1.0, desc_alpha):
         horizalign(left)
     ));
@@ -431,25 +491,23 @@ pub fn push_actors(
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
     let labels = &text.labels;
-    let label = &labels[selected_index];
-    let measured_w = asset_manager.with_fonts(|all_fonts| {
-        asset_manager
-            .with_font(
-                machine_font_key(visual_policy.machine_font, FontRole::Header),
-                |f| font::measure_line_width_logical(f, label, all_fonts) as f32,
-            )
-            .unwrap_or(0.0)
+    let measured_widths: [f32; 3] = std::array::from_fn(|index| {
+        asset_manager.with_fonts(|all_fonts| {
+            asset_manager
+                .with_font(
+                    machine_font_key(visual_policy.machine_font, FontRole::Header),
+                    |f| font::measure_line_width_logical(f, &labels[index], all_fonts) as f32,
+                )
+                .unwrap_or_else(|| choice_cursor_label_width(Choice::from_index(index)))
+        })
     });
-    let base_w = if measured_w > 0.0 {
-        measured_w
-    } else {
-        choice_cursor_label_width(choice)
-    };
-    let cursor_w = (base_w / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
+    let selected_zoom = state.flow.choice_zoom(selected_index);
+    let (_, cursor_w) = cursor_layout(measured_widths[selected_index], selected_zoom);
     let (cw, ch_outer) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT + 2.0);
     let (cw2, ch_inner) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT);
-    let (cx_outer, cy_outer) = root_pt(-151.0, state.flow.cursor_y());
-    let (cx_inner, cy_inner) = root_pt(-150.0, state.flow.cursor_y());
+    let cursor_right_x = choice_label_right_x(choice) + CURSOR_LABEL_RIGHT_GAP;
+    let (cx_outer, cy_outer) = root_pt(cursor_right_x, state.flow.cursor_y());
+    let (cx_inner, cy_inner) = root_pt(cursor_right_x + 1.0, state.flow.cursor_y());
     actors.push(act!(quad:
         align(1.0, 0.5): xy(cx_outer, cy_outer):
         zoomto(cw, ch_outer):
@@ -470,9 +528,14 @@ pub fn push_actors(
     let zoom_den =
         (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
     for (i, label) in labels.iter().take(state.flow.choice_count()).enumerate() {
-        let (x, y) = root_pt(-160.0, mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0));
-        let zoom = state.flow.choice_zoom(i);
-        let t = ((zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
+        let choice = Choice::from_index(i);
+        let (x, y) = root_pt(
+            choice_label_right_x(choice),
+            mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0),
+        );
+        let choice_zoom = state.flow.choice_zoom(i);
+        let (text_scale, _) = cursor_layout(measured_widths[i], choice_zoom);
+        let t = ((choice_zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
 
         let rgb = [
             (label_selected[0] - label_unselected[0]).mul_add(t, label_unselected[0]),
@@ -485,7 +548,7 @@ pub fn push_actors(
             settext(Arc::clone(label)):
             align(1.0, 0.5):
             xy(x, y):
-            zoom(zoom):
+            zoom(choice_zoom * text_scale * root_scale):
             diffuse(rgb[0], rgb[1], rgb[2], label_alpha):
             horizalign(right)
         ));
@@ -499,7 +562,7 @@ pub fn push_actors(
         settext("77.41"):
         align(0.5, 0.5):
         xy(sx, sy):
-        zoom(0.225 * ROOT_ZOOM):
+        zoom(0.225 * root_scale):
         diffuse(1.0, 1.0, 1.0, score_alpha)
     ));
 
@@ -556,8 +619,8 @@ pub fn push_actors(
 
     for &(dir, x_off) in demo.columns {
         let (x, y) = (
-            (x_off * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
-            ((-55.0) * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
+            (x_off * root_scale).mul_add(demo.field_zoom, nfx),
+            ((-55.0) * root_scale).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let receptor_texture = if dir == "center" {
@@ -616,8 +679,8 @@ pub fn push_actors(
 
         let tint = color::decorative_rgba(state.active_color_index + i as i32);
         let (x, y) = (
-            (col_x * ROOT_ZOOM).mul_add(demo.field_zoom, nfx),
-            (y * ROOT_ZOOM).mul_add(demo.field_zoom, nfy),
+            (col_x * root_scale).mul_add(demo.field_zoom, nfx),
+            (y * root_scale).mul_add(demo.field_zoom, nfy),
         );
         let (aw, ah) = root_sz(ARROW_SPRITE_SZ, ARROW_SPRITE_SZ);
         let is_center = *dir == "center";

@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 // --- Constants ---
-const BAR_H: f32 = 32.0;
+pub(crate) const SCREEN_BAR_HEIGHT: f32 = 32.0;
 const AVATAR_SIZE: f32 = 32.0;
 const TEXT_CACHE_LIMIT: usize = 512;
 
@@ -285,7 +285,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
                     // Centered perfectly within the bar.
                     (
                         [0.5, 0.5],
-                        [screen_center_x(), 0.5 * BAR_H],
+                        [screen_center_x(), 0.5 * SCREEN_BAR_HEIGHT],
                         actors::TextAlign::Center,
                     )
                 }
@@ -337,7 +337,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
             if let Some(avatar) = params.left_avatar {
                 children.push(act!(sprite(avatar.texture_key):
                     align(0.0, 1.0):
-                    xy(0.0, BAR_H):
+                    xy(0.0, SCREEN_BAR_HEIGHT):
                     setsize(AVATAR_SIZE, AVATAR_SIZE):
                     z(2)
                 ));
@@ -345,7 +345,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
             if let Some(avatar) = params.right_avatar {
                 children.push(act!(sprite(avatar.texture_key):
                     align(1.0, 1.0):
-                    xy(screen_width(), BAR_H):
+                    xy(screen_width(), SCREEN_BAR_HEIGHT):
                     setsize(AVATAR_SIZE, AVATAR_SIZE):
                     z(2)
                 ));
@@ -355,7 +355,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
                 let margin_x = wide_scale(38.0, 45.0);
                 children.push(act!(text:
                     align(0.0, 1.0): // horizalign,left; vertalign,bottom
-                    xy(margin_x, BAR_H - 9.0):
+                    xy(margin_x, SCREEN_BAR_HEIGHT - 9.0):
                     zoom(text_zoom):
                     z(2):
                     diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
@@ -365,7 +365,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
             if let Some(text) = center_text {
                 children.push(act!(text:
                     align(0.5, 1.0): // horizalign,center; vertalign,bottom
-                    xy(screen_center_x(), BAR_H - 9.0):
+                    xy(screen_center_x(), SCREEN_BAR_HEIGHT - 9.0):
                     zoom(text_zoom):
                     z(2):
                     diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
@@ -376,7 +376,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
                 let margin_x = wide_scale(38.0, 45.0);
                 children.push(act!(text:
                     align(1.0, 1.0): // horizalign,right; vertalign,bottom
-                    xy(screen_width() - margin_x, BAR_H - 9.0):
+                    xy(screen_width() - margin_x, SCREEN_BAR_HEIGHT - 9.0):
                     zoom(text_zoom):
                     z(2):
                     diffuse(params.fg_color[0], params.fg_color[1], params.fg_color[2], params.fg_color[3]):
@@ -389,7 +389,7 @@ fn build_with_context(params: ScreenBarParams, context: ScreenBarContext) -> Act
     Actor::Frame {
         align,
         offset,
-        size: [SizeSpec::Fill, SizeSpec::Px(BAR_H)],
+        size: [SizeSpec::Fill, SizeSpec::Px(SCREEN_BAR_HEIGHT)],
         children,
         background,
         z: 120i16,

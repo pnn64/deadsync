@@ -945,7 +945,8 @@ where
     let wide = viewport.is_wide();
     let sw = viewport.width();
     let sh = viewport.height().max(1.0_f32);
-    let density_graph_enabled = sw >= sh && wants_density_graph;
+    let density_graph_enabled =
+        sw / sh >= crate::MIN_DENSITY_GRAPH_ASPECT_RATIO && wants_density_graph;
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {

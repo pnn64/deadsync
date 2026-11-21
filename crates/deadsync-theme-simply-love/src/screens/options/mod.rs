@@ -12,7 +12,7 @@ use crate::views::{
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
-use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
+use deadlib_present::space::{screen_height, screen_width, widescale};
 use deadsync_config as config;
 use deadsync_config::null_or_die::{
     null_or_die_graph_orientation_choice_index, null_or_die_graph_origin_choice_index,
@@ -129,7 +129,7 @@ pub use render::{
     clear_description_layout_cache, clear_render_cache, get_actors, push_actors,
     sync_updater_panels,
 };
-pub use state::{State, init};
+pub use state::{State, SubmenuKind, init};
 pub use submenus::update_monitor_specs;
 pub use transitions::{in_transition, out_transition};
 pub use update::{
@@ -139,6 +139,11 @@ pub use update::{
     sync_refresh_rate, sync_show_stats_mode, sync_song_packs, sync_translated_titles,
     sync_video_renderer, sync_vsync, update,
 };
+
+/// Open an Options submenu directly, resetting its transient render and navigation state.
+pub fn open_submenu(state: &mut State, kind: SubmenuKind) {
+    update::open_submenu_now(state, kind);
+}
 
 #[inline(always)]
 fn queue_sfx(state: &mut State, path: &'static str) {

@@ -8,9 +8,12 @@ use crate::screens::components::gameplay::score_counter::{
     ScoreCounterParams, prewarm_score_counter_layout, push_score_counter, score_comparison_enabled,
     score_leader_alphas,
 };
+use crate::screens::components::gameplay::layout::{
+    DIFFICULTY_METER_SIZE, gameplay_hud_x_positions, gameplay_top_row_layout,
+};
 use crate::screens::components::gameplay::{
-    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats, notefield,
-    step_stats_gifs,
+    FRAME_TEXT_BPM, FRAME_TEXT_LIFE_BASE, FRAME_TEXT_VERTEX_BUFFERS, gameplay_stats,
+    notefield, step_stats_gifs,
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::density::{self, DensityHistCache};
@@ -19,6 +22,7 @@ pub use crate::screens::components::shared::heart_rate::{HeartRatePlayerView, He
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::components::shared::{gs_scorebox, lobby_hud};
 use crate::screens::input as screen_input;
+use crate::ui_layout::UILayoutType;
 use crate::views::{GameplayInitView, GameplayRuntimeView, GameplayScoreRuntimeView};
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
@@ -113,7 +117,6 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
-const DIFFICULTY_METER_SIZE: f32 = 30.0;
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 const DEFAULT_NOTEFIELD_WIDTH: f32 = 256.0;
 
@@ -611,6 +614,25 @@ enum GameplayStepStatsMode {
     Side,
     Versus,
     Double,
+}
+
+fn split_step_stats_enabled(
+    play_style: profile_data::PlayStyle,
+    layout_type: UILayoutType,
+) -> bool {
+    match play_style {
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
+            matches!(layout_type, UILayoutType::Squareish | UILayoutType::Wide)
+        }
+        profile_data::PlayStyle::Double
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => layout_type == UILayoutType::Wide,
+        profile_data::PlayStyle::Versus
+        | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => false,
+    }
 }
 
 const fn gameplay_step_stats_mode(
@@ -4237,11 +4259,9 @@ pub fn frame_layers<'a>(
             });
         }
         ScreenLayer::Hud => {
-            let clamped_width = screen_width().clamp(640.0, 854.0);
-            let score_x_p1 = screen_center_x() - clamped_width / 4.3;
-            let score_x_p2 = screen_center_x() + clamped_width / 2.75;
-            let diff_x_p1 = screen_center_x() - widescale(292.5, 342.5);
-            let diff_x_p2 = screen_center_x() + widescale(292.5, 342.5);
+            let hud_x = gameplay_hud_x_positions(screen_width(), screen_height());
+            let top_row = gameplay_top_row_layout(screen_width(), screen_height());
+            let hud_width = screen_width().min(854.0);
 
             let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
             let player_count = match play_style {
@@ -4254,17 +4274,17 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P1,
                         per_player_fields[0].1,
-                        diff_x_p1,
-                        score_x_p1,
-                        score_x_p2,
+                        hud_x.difficulty_p1,
+                        hud_x.score_p1,
+                        hud_x.score_p2,
                     );
                     players[1] = (
                         1,
                         profile_data::PlayerSide::P2,
                         per_player_fields[1].1,
-                        diff_x_p2,
-                        score_x_p2,
-                        score_x_p1,
+                        hud_x.difficulty_p2,
+                        hud_x.score_p2,
+                        hud_x.score_p1,
                     );
                     2
                 }
@@ -4273,9 +4293,9 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P2,
                         per_player_fields[0].1,
-                        diff_x_p2,
-                        score_x_p2,
-                        score_x_p1,
+                        hud_x.difficulty_p2,
+                        hud_x.score_p2,
+                        hud_x.score_p1,
                     );
                     1
                 }
@@ -4284,9 +4304,9 @@ pub fn frame_layers<'a>(
                         0,
                         profile_data::PlayerSide::P1,
                         per_player_fields[0].1,
-                        diff_x_p1,
-                        score_x_p1,
-                        score_x_p2,
+                        hud_x.difficulty_p1,
+                        hud_x.score_p1,
+                        hud_x.score_p2,
                     );
                     1
                 }
@@ -4576,14 +4596,14 @@ pub fn frame_layers<'a>(
                             (pos.hard_ex_x, pos.hard_ex_y)
                         } else if single_score_swapped {
                             let swapped_base = if is_p2_side {
-                                screen_center_x() - clamped_width / 4.3
+                                screen_center_x() - hud_width / 4.3
                             } else {
-                                screen_center_x() + clamped_width / 4.3
+                                screen_center_x() + hud_width / 4.3
                             };
                             (swapped_base + 115.0, score_y)
                         } else if is_p2_side {
                             // Arrow Cloud: HardEX uses /4.3 on P2 (while EX uses /2.75).
-                            (screen_center_x() + clamped_width / 4.3, score_y)
+                            (screen_center_x() + hud_width / 4.3, score_y)
                         } else {
                             (score_x, score_y)
                         };
@@ -4649,7 +4669,7 @@ pub fn frame_layers<'a>(
             }
             // Song Title Box (SongMeter)
             {
-                let w = widescale(310.0, 417.0);
+                let w = top_row.song_meter_width;
                 let h = 22.0;
                 let box_cx = screen_center_x();
                 let box_cy = 20.0;
@@ -4767,30 +4787,19 @@ pub fn frame_layers<'a>(
                                 life_visual.hot_age,
                                 || player_life_color(player_idx),
                             );
-                            let w = 136.0;
+                            let w = top_row.health_meter_width;
                             let h = 18.0;
                             let meter_cy = 20.0;
                             let meter_cx = screen_center_x()
-                                + match play_style {
-                                    profile_data::PlayStyle::Versus
-                                    | profile_data::PlayStyle::PumpVersus
-                                    | profile_data::PlayStyle::Couple
-                                    | profile_data::PlayStyle::PumpCouple
-                                    | profile_data::PlayStyle::Routine
-                                    | profile_data::PlayStyle::PumpRoutine => match side {
-                                        profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                        profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
-                                    },
-                                    _ => match side {
-                                        profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
-                                        profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
-                                    },
+                                + match side {
+                                    profile_data::PlayerSide::P1 => -top_row.health_meter_offset,
+                                    profile_data::PlayerSide::P2 => top_row.health_meter_offset,
                                 };
 
                             // Frames/border
                             presentation_skeleton.push(static_life_slot, actors, |actors| {
                                 actors.push(act!(quad:
-                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0, h + 4.0):
+                                align(0.5, 0.5): xy(meter_cx, meter_cy): zoomto(w + 4.0 * top_row.scale, h + 4.0):
                                 diffuse(1.0, 1.0, 1.0, 1.0): z(90)
                             ));
                                 actors.push(act!(quad:
@@ -4833,9 +4842,19 @@ pub fn frame_layers<'a>(
                                 let life_text_color = player_life_color(player_idx);
                                 let (outer_x, inner_x, text_x, align_x) =
                                     if side == profile_data::PlayerSide::P1 {
-                                        (meter_cx - 76.0, meter_cx - 77.0, meter_cx - 77.0, 1.0)
+                                    (
+                                        meter_cx - 76.0 * top_row.scale,
+                                        meter_cx - 77.0 * top_row.scale,
+                                        meter_cx - 77.0 * top_row.scale,
+                                        1.0,
+                                    )
                                     } else {
-                                        (meter_cx + 76.0, meter_cx + 77.0, meter_cx + 78.0, 0.0)
+                                    (
+                                        meter_cx + 76.0 * top_row.scale,
+                                        meter_cx + 77.0 * top_row.scale,
+                                        meter_cx + 78.0 * top_row.scale,
+                                        0.0,
+                                    )
                                     };
                                 actors.push(act!(quad:
                             align(align_x, 0.5): xy(outer_x, meter_cy):
@@ -4922,24 +4941,34 @@ pub fn frame_layers<'a>(
                                 life_visual.hot_age,
                                 || player_life_color(player_idx),
                             );
-                            let bar_w = 16.0;
+                            let bar_w = 16.0 * top_row.scale;
                             let bar_h = 250.0;
 
                             let x = {
                                 // SL: default to _screen.cx +/- SL_WideScale(302, 400).
                                 let mut x = screen_center_x()
                                     + match side {
-                                        profile_data::PlayerSide::P1 => -widescale(302.0, 400.0),
-                                        profile_data::PlayerSide::P2 => widescale(302.0, 400.0),
+                                        profile_data::PlayerSide::P1 => {
+                                            -top_row.vertical_health_meter_offset
+                                        }
+                                        profile_data::PlayerSide::P2 => {
+                                            top_row.vertical_health_meter_offset
+                                        }
                                     };
 
                                 // SL: Double and Center1Player sit next to the notefield.
                                 if play_style.is_double() || centered_single_notefield {
-                                    let half_nf = state.notefield_width(player_idx) * 0.5;
+                                    let half_nf = state.notefield_width(player_idx)
+                                        * 0.5
+                                        * top_row.field_scale;
                                     x = screen_center_x()
                                         + match side {
-                                            profile_data::PlayerSide::P1 => -(half_nf + 10.0),
-                                            profile_data::PlayerSide::P2 => half_nf + 10.0,
+                                            profile_data::PlayerSide::P1 => {
+                                                -(half_nf + 10.0 * top_row.field_scale)
+                                            }
+                                            profile_data::PlayerSide::P2 => {
+                                                half_nf + 10.0 * top_row.field_scale
+                                            }
                                         };
                                 } else if screen_width() / screen_height().max(1.0) > (21.0 / 9.0)
                                     && state.num_players() > 1
@@ -4952,7 +4981,9 @@ pub fn frame_layers<'a>(
                                         };
                                 }
 
-                                x
+                                let half_bar_width =
+                                    ((bar_w + 2.0) * 0.5).min(screen_width() * 0.5);
+                                x.clamp(half_bar_width, screen_width() - half_bar_width)
                             };
 
                             let cy = bar_h + 10.0;
@@ -5033,7 +5064,8 @@ pub fn frame_layers<'a>(
             match state.step_stats_mode {
                 GameplayStepStatsMode::Hidden => {}
                 GameplayStepStatsMode::Side
-                    if centered_single_notefield && !is_wide() =>
+                    if centered_single_notefield
+                        && split_step_stats_enabled(play_style, UILayoutType::current()) =>
                 {
                     gameplay_stats::push_centered_single_split_step_stats(
                         actors,
@@ -5042,17 +5074,26 @@ pub fn frame_layers<'a>(
                         playfield_center_x,
                     );
                 }
-                GameplayStepStatsMode::Side => gameplay_stats::push_step_stats(
-                    actors,
-                    state,
-                    asset_manager,
-                    playfield_center_x,
-                    player_side,
-                ),
+                GameplayStepStatsMode::Side => {
+                    let layout = gameplay_stats::step_stats_pane_layout(
+                        state,
+                        playfield_center_x,
+                        player_side,
+                    );
+                    gameplay_stats::push_step_stats(
+                        actors,
+                        state,
+                        asset_manager,
+                        layout,
+                        player_side,
+                    );
+                }
                 GameplayStepStatsMode::Versus => {
                     gameplay_stats::push_versus_step_stats(actors, state, asset_manager);
                 }
-                GameplayStepStatsMode::Double => {
+                GameplayStepStatsMode::Double
+                    if split_step_stats_enabled(play_style, UILayoutType::current()) =>
+                {
                     gameplay_stats::push_double_step_stats(
                         actors,
                         state,
@@ -5060,6 +5101,7 @@ pub fn frame_layers<'a>(
                         playfield_center_x,
                     );
                 }
+                GameplayStepStatsMode::Double => {}
             }
             gameplay_stats::push_heart_rates(actors, state, playfield_center_x);
         }
@@ -5068,7 +5110,7 @@ pub fn frame_layers<'a>(
                 return;
             }
             let (value, color) = score_value_color(state, player);
-            let width = screen_width().clamp(640.0, 854.0);
+            let width = screen_width().min(854.0);
             let p2 = if play_style.is_versus() {
                 player == 1
             } else {
@@ -5756,6 +5798,31 @@ mod tests {
         ];
         for (style, cols, p1, p2, expected) in cases {
             assert_eq!(gameplay_step_stats_mode(style, cols, p1, p2), expected);
+        }
+    }
+
+    #[test]
+    fn split_step_stats_follow_play_style_and_layout() {
+        use profile_data::PlayStyle::{
+            Couple, Double, PumpCouple, PumpDouble, PumpRoutine, PumpSingle, PumpVersus, Routine,
+            Single, Versus,
+        };
+        use UILayoutType::{Squareish, UltraWide, Wide};
+
+        for style in [Single, PumpSingle] {
+            assert!(split_step_stats_enabled(style, Squareish));
+            assert!(split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
+        }
+        for style in [Double, PumpDouble, Couple, PumpCouple] {
+            assert!(!split_step_stats_enabled(style, Squareish));
+            assert!(split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
+        }
+        for style in [Versus, PumpVersus, Routine, PumpRoutine] {
+            assert!(!split_step_stats_enabled(style, Squareish));
+            assert!(!split_step_stats_enabled(style, Wide));
+            assert!(!split_step_stats_enabled(style, UltraWide));
         }
     }
 

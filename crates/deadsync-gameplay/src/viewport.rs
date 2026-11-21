@@ -55,6 +55,12 @@ impl GameplayViewport {
 
     #[inline(always)]
     #[must_use]
+    pub fn is_squarish(self) -> bool {
+        self.width / self.height <= 4.0 / 3.0
+    }
+
+    #[inline(always)]
+    #[must_use]
     pub fn is_wide(self) -> bool {
         self.width / self.height >= 1.6
     }
@@ -103,4 +109,3 @@ pub fn draw_distance_after_targets(
         centered_percent.clamp(0.0, 1.0),
     )
 }
-

@@ -436,6 +436,9 @@ pub struct PaneState {
     pub selected_row: [usize; PLAYER_SLOTS],
     pub prev_selected_row: [usize; PLAYER_SLOTS],
     pub(super) inline_choice_x: [f32; PLAYER_SLOTS],
+    pub(super) inline_choice_focus: [Option<(usize, usize)>; PLAYER_SLOTS],
+    pub(super) inline_choice_start: [usize; RowId::COUNT],
+    pub(super) inline_choice_width_bits: [u32; RowId::COUNT],
     pub(super) arcade_row_focus: [bool; PLAYER_SLOTS],
     /// Whether every row's choice widths, offsets, and height are prepared.
     ///
@@ -464,6 +467,9 @@ impl PaneState {
             selected_row: [0; PLAYER_SLOTS],
             prev_selected_row: [0; PLAYER_SLOTS],
             inline_choice_x: [f32::NAN; PLAYER_SLOTS],
+            inline_choice_focus: [None; PLAYER_SLOTS],
+            inline_choice_start: [0; RowId::COUNT],
+            inline_choice_width_bits: [u32::MAX; RowId::COUNT],
             arcade_row_focus: [false; PLAYER_SLOTS],
             choice_layout_ready: false,
             row_tweens: Vec::new(),
@@ -482,6 +488,9 @@ impl PaneState {
         self.selected_row = [0; PLAYER_SLOTS];
         self.prev_selected_row = [0; PLAYER_SLOTS];
         self.inline_choice_x = [f32::NAN; PLAYER_SLOTS];
+        self.inline_choice_focus = [None; PLAYER_SLOTS];
+        self.inline_choice_start = [0; RowId::COUNT];
+        self.inline_choice_width_bits = [u32::MAX; RowId::COUNT];
         self.arcade_row_focus = [false; PLAYER_SLOTS];
         self.layout_key = None;
         self.cursor_initialized = [false; PLAYER_SLOTS];

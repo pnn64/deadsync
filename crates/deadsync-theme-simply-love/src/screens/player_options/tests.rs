@@ -3408,8 +3408,12 @@ pub(super) mod tests {
         super::super::prepare_presentation(&mut state, &asset_manager);
         let row = state.pane().row_map.get(RowId::Perspective).unwrap();
         let left_x = super::super::inline_choice_left_x_for_row(&state, row_idx);
-        let expected_x =
-            row.choice_widths[last_choice].mul_add(0.5, left_x + row.choice_offsets[last_choice]);
+        let expected_x = super::inline_nav::inline_choice_geometry_for_view(
+            row,
+            left_x,
+            state.pane().inline_choice_start[row.id.index()],
+            last_choice,
+        )[0];
         let cursor =
             super::super::cursor_dest_for_player(&state, &asset_manager, P1).expect("cursor");
 
@@ -3480,12 +3484,14 @@ pub(super) mod tests {
                     let split = inline_choice_line_break(row);
                     assert!(split > 0 && split < row.choices.len());
                     let left = inline_choice_left_x_for_row(&state, row_idx);
-                    let right = (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(width - 13.0);
+                    let right =
+                        (widescale(13.0, 30.666) + widescale(614.0, 792.0)).min(width - 13.0);
                     let scale = inline_choice_scale(row);
                     for i in 0..row.choices.len() {
                         let [x, y] = inline_choice_position(row, i);
                         assert!(
-                            left + x + row.choice_widths[i] * scale + INLINE_SPACING <= right + 0.001,
+                            left + x + row.choice_widths[i] * scale + INLINE_SPACING
+                                <= right + 0.001,
                             "choice {} must fit at {width}: x={x}",
                             row.choices[i].as_str()
                         );
@@ -3517,7 +3523,8 @@ pub(super) mod tests {
                                     < 0.001
                             );
                             assert!(
-                                (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y)).abs() < 0.001
+                                (cursor.1 - (state.pane().row_tweens[row_idx].to_y + y)).abs()
+                                    < 0.001
                             );
                             commit_inline_focus_selection(&mut state, player, row_idx);
                             assert!(super::super::choice::toggle_bitmask_row_generic(
@@ -3547,6 +3554,7 @@ pub(super) mod tests {
                         &mut underlines,
                         &state,
                         row,
+                        row_idx,
                         active,
                         left,
                         &row.choice_offsets,
@@ -3788,8 +3796,20 @@ pub(super) mod tests {
             .row_map
             .get(RowId::Perspective)
             .expect("Perspective row present");
+        let row_idx = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::Perspective)
+            .expect("Perspective row index");
+        let viewport = super::inline_nav::inline_choice_viewport(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            super::inline_nav::inline_choice_left_x_for_row(&state, row_idx),
+        );
 
-        for choice in &row.choices {
+        for choice in &row.choices[viewport.start..viewport.end] {
             assert!(matches!(choice, TextContent::Inline(_)));
             assert!(actors.iter().any(|actor| {
                 matches!(
@@ -3798,6 +3818,17 @@ pub(super) mod tests {
                         content: deadlib_present::actors::TextContent::Inline(rendered),
                         ..
                     } if rendered.as_str() == choice.as_str()
+                )
+            }));
+        }
+        if viewport.has_next {
+            assert!(actors.iter().any(|actor| {
+                matches!(
+                    actor,
+                    deadlib_present::actors::Actor::Text {
+                        content: rendered,
+                        ..
+                    } if rendered.as_str() == ">"
                 )
             }));
         }
@@ -5820,6 +5851,63 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn inline_choice_viewport_scrolls_only_when_choices_exceed_available_width() {
+        use super::super::inline_nav::{
+            inline_choice_left_x, inline_choice_start_for_focus, inline_choice_viewport,
+        };
+        use super::super::render::INLINE_CHOICE_SPACING;
+        use deadlib_present::space;
+        space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+        space::set_current_window_px(1280, 720);
+        let choices = ["One", "Two", "Three", "Four", "Five", "Six"];
+        let mut row = cycle_test_row(&choices, [0, 0]);
+        row.choice_height = 18.0;
+        row.choice_widths = vec![20.0; choices.len()].into_boxed_slice();
+        let mut offset = 0.0;
+        row.choice_offsets = row
+            .choice_widths
+            .iter()
+            .map(|width| {
+                let current = offset;
+                offset += *width + INLINE_CHOICE_SPACING;
+                current
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let left_x = inline_choice_left_x();
+        let fits = inline_choice_viewport(&row, 0, left_x);
+        assert_eq!(fits.start, 0);
+        assert_eq!(fits.end, choices.len());
+        assert!(!fits.has_previous && !fits.has_next);
+
+        row.choice_widths = vec![100.0; choices.len()].into_boxed_slice();
+        let mut offset = 0.0;
+        row.choice_offsets = row
+            .choice_widths
+            .iter()
+            .map(|width| {
+                let current = offset;
+                offset += *width + INLINE_CHOICE_SPACING;
+                current
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+
+        let first = inline_choice_viewport(&row, 0, left_x);
+        assert_eq!(first.start, 0);
+        assert!(first.end < choices.len());
+        assert!(!first.has_previous && first.has_next);
+
+        let last_choice = choices.len() - 1;
+        let start = inline_choice_start_for_focus(&row, 0, last_choice, left_x);
+        let last = inline_choice_viewport(&row, start, left_x);
+        assert!(start > 0);
+        assert!(last.start <= last_choice && last_choice < last.end);
+        assert!(last.has_previous && !last.has_next);
+    }
+
+    #[test]
     fn inline_nav_what_comes_next_syncs_both_players_on_focus_commit() {
         ensure_i18n();
         let (mut state, asset_manager) = setup_state();
@@ -5854,11 +5942,24 @@ pub(super) mod tests {
             .selected_choice_index = [0, 0];
         super::super::prepare_presentation(&mut state, &asset_manager);
         let row = state.pane().row_map.get(RowId::WhatComesNext).unwrap();
+        let row_key = row.id.index();
         let left_x = super::inline_nav::inline_choice_left_x_for_row(&state, row_index);
         let target = 1usize;
-        let [target_x, _] = super::inline_nav::inline_choice_geometry(row, left_x, target)
-            .expect("prepared inline choice center");
+        let start = super::inline_nav::inline_choice_start_for_focus(
+            row,
+            state.pane().inline_choice_start[row_key],
+            target,
+            left_x,
+        );
+        let [target_x, _] =
+            super::inline_nav::inline_choice_geometry_for_view(row, left_x, start, target);
+        state.pane_mut().inline_choice_start[row_key] = start;
         state.pane_mut().inline_choice_x[P1] = target_x;
+        state.pane_mut().inline_choice_focus[P1] = None;
+        assert_eq!(
+            super::inline_nav::focused_inline_choice_index(&state, P1, row_index),
+            Some(target)
+        );
 
         let changed = super::inline_nav::commit_inline_focus_selection(&mut state, P1, row_index);
         assert!(changed, "commit should report a change");
@@ -5894,19 +5995,19 @@ pub(super) mod tests {
         } else {
             (-1, current - 1)
         };
-        let [target_x, _] = super::inline_nav::inline_choice_geometry(
-            row,
-            super::inline_nav::inline_choice_left_x_for_row(&state, row_idx),
-            target_idx,
-        )
-        .expect("target center");
-
         assert!(super::inline_nav::move_inline_focus(
             &mut state,
             P1,
             delta,
             super::NavWrap::Clamp,
         ));
+        let row = state.pane().row_map.get_at(row_idx).unwrap();
+        let [target_x, _] = super::inline_nav::inline_choice_geometry_for_view(
+            row,
+            super::inline_nav::inline_choice_left_x_for_row(&state, row_idx),
+            state.pane().inline_choice_start[row.id.index()],
+            target_idx,
+        );
         assert_eq!(state.pane().inline_choice_x[P1], target_x);
     }
 

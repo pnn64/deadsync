@@ -126,7 +126,12 @@ impl App {
         slot: DensityGraphSlot,
         chart: Option<deadsync_theme::views::DensityGraphView>,
     ) {
-        let mesh = build_density_graph_mesh(chart, deadlib_present::space::is_wide());
+        let graph_size = self
+            .state
+            .screens
+            .select_music_state
+            .density_graph_dimensions();
+        let mesh = build_density_graph_mesh(chart, graph_size);
         match slot {
             DensityGraphSlot::SelectMusicP1 => {
                 self.state.screens.select_music_state.current_graph_mesh = mesh;

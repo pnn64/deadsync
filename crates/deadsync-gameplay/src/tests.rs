@@ -1293,7 +1293,7 @@ mod tests {
             true,
             false,
         );
-        let expected = ((854.0 - 512.0) * 0.5) * 0.95;
+        let expected = ((854.0 - 512.0 - 2.0 * CENTERED_ULTRAWIDE_NOTEFIELD_GAP) * 0.5) * 0.95;
         assert_near(width, expected);
     }
 
@@ -1321,7 +1321,7 @@ mod tests {
                 true,
                 true,
             ),
-            299.0,
+            283.0,
         );
         assert_near(
             step_stats_density_graph_width(
@@ -1346,6 +1346,18 @@ mod tests {
                 false,
             ),
             512.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                1720.0,
+                720.0,
+                true,
+                true,
+            ),
+            716.0,
         );
     }
 
@@ -1540,11 +1552,12 @@ mod tests {
 
     #[test]
     fn gameplay_side_field_centers_match_native_margins_and_translated_origins() {
-        // SafeFArg truncates toward zero, including the negative outer margins
-        // below 640px; it truncates the combined middle before splitting it.
+        // This helper retains the original native margins.
         for (width, expected) in [
-            (500.0, [90.0, 410.0]),
-            (501.0, [90.75, 410.25]),
+            (480.0, [80.0, 400.0]),
+            (960.0, [266.25, 693.75]),
+            (600.0, [140.0, 460.0]),
+            (1200.0, [386.25, 813.75]),
             (640.0, [160.0, 480.0]),
             (642.0, [160.25, 481.75]),
             (852.0, [213.0, 639.0]),
@@ -1559,11 +1572,39 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn song_lua_player_defaults_match_viewport_notefield_centers() {
+        for (width, height) in [
+            (270.0, 480.0),
+            (480.0, 480.0),
+            (600.0, 480.0),
+            (640.0, 480.0),
+            (642.0, 480.0),
+            (854.0, 480.0),
+            (960.0, 960.0),
+            (1280.0, 960.0),
+        ] {
+            let viewport = GameplayViewport::new(width, height);
+            let expected = [
+                gameplay_viewport_side_field_center_x(viewport, viewport.center_x(), false),
+                gameplay_viewport_side_field_center_x(viewport, viewport.center_x(), true),
+            ];
             let defaults = build_song_lua_player_actor_defaults_like(
-                2, GameplayViewport::new(width, 480.0), SongLuaCompilePlayStyle::Versus,
-                false, [0.0; MAX_PLAYERS], false,
+                2,
+                viewport,
+                SongLuaCompilePlayStyle::Versus,
+                false,
+                [0.0; MAX_PLAYERS],
+                false,
             );
-            assert_eq!(defaults.map(|player| player.x), expected);
+            assert_eq!(
+                defaults.map(|player| player.x),
+                expected,
+                "viewport {width}x{height}"
+            );
         }
     }
 

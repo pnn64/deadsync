@@ -10,6 +10,7 @@ use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBa
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::views::MappingsRuntimeView;
+use crate::ui_layout::UILayoutType;
 use deadlib_assets::AssetManager;
 use deadlib_platform::input::KeyCode;
 use deadlib_platform::input::PadEvent;
@@ -58,18 +59,18 @@ const ROW_GAP: f32 = 2.5;
 
 /// Base widths (unscaled) for our custom layout.
 const SIDE_W_BASE: f32 = 260.0;
-const DESC_W_BASE: f32 = 260.0;
-const SIDE_GAP_BASE: f32 = 35.0;
+const DESC_W_BASE: f32 = 220.0;
+const SIDE_GAP_BASE: f32 = 30.0;
 /// Extra vertical padding so the mappings table sits well below the top screen bar.
-const TABLE_TOP_EXTRA_PX: f32 = 32.0;
+const TABLE_TOP_EXTRA_PX: f32 = 44.0;
 /// Vertical offset (in px, unscaled) from the first row to the column headers
 /// ("Primary / Secondary / Default"). Smaller values move these closer to the
 /// items table; larger values push them upward toward the top bar.
-const COLUMN_HEADER_OFFSET_PX: f32 = 7.0;
+const COLUMN_HEADER_OFFSET_PX: f32 = 18.0;
 /// Vertical gap (in px, unscaled) between the Player labels ("Player 1/2")
 /// and the column headers beneath them. Adjust this to move the Player labels
 /// up or down together relative to the column header row.
-const PLAYER_HEADER_GAP_PX: f32 = 19.0;
+const PLAYER_HEADER_GAP_PX: f32 = 28.0;
 
 const DESC_BODY_ZOOM: f32 = 1.0;
 
@@ -650,7 +651,11 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         let content_left = LEFT_MARGIN_PX;
         let content_right = sw - RIGHT_MARGIN_PX;
         let avail_w = (content_right - content_left).max(0.0);
-        let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
+        let avail_h = (content_h
+            - FIRST_ROW_TOP_MARGIN_PX
+            - TABLE_TOP_EXTRA_PX
+            - BOTTOM_MARGIN_PX)
+            .max(0.0);
 
         let total_w_base = SIDE_GAP_BASE.mul_add(2.0, SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8));
         let rows_h_base =
@@ -1306,7 +1311,11 @@ pub fn push_actors(
     let content_left = LEFT_MARGIN_PX;
     let content_right = sw - RIGHT_MARGIN_PX;
     let avail_w = (content_right - content_left).max(0.0);
-    let avail_h = (content_h - FIRST_ROW_TOP_MARGIN_PX - BOTTOM_MARGIN_PX).max(0.0);
+    let avail_h = (content_h
+        - FIRST_ROW_TOP_MARGIN_PX
+        - TABLE_TOP_EXTRA_PX
+        - BOTTOM_MARGIN_PX)
+        .max(0.0);
 
     // Base layout extents (unscaled).
     let total_w_base = SIDE_GAP_BASE.mul_add(2.0, SIDE_W_BASE.mul_add(2.0, DESC_W_BASE * 0.8));
@@ -1408,7 +1417,7 @@ pub fn push_actors(
     // First line: "Player 1"/"Player 2" centered over each side.
     // Second line: "Primary"/"Secondary"/"Default" per column.
     let header_sub_y = COLUMN_HEADER_OFFSET_PX.mul_add(-s, first_row_y);
-    let header_main_y = PLAYER_HEADER_GAP_PX.mul_add(-s, header_sub_y);
+    let header_main_y = header_sub_y - PLAYER_HEADER_GAP_PX;
     let p1_primary_x = p1_side_x + col_w * 0.5;
     let p1_secondary_x = p1_side_x + col_w * 1.5;
     let p1_default_x = p1_side_x + col_w * 2.5;
@@ -1416,7 +1425,10 @@ pub fn push_actors(
     let p2_secondary_x = p2_side_x + col_w * 1.5;
     let p2_default_x = p2_side_x + col_w * 2.5;
 
-    let header_zoom = 0.25_f32;
+    let header_zoom = match UILayoutType::current() {
+        UILayoutType::Squareish => 0.2,
+        UILayoutType::Wide | UILayoutType::UltraWide => 0.25,
+    };
     let header_main_zoom = 0.65_f32;
     let p1_center_x = p1_side_x + side_w * 0.5;
     let p2_center_x = p2_side_x + side_w * 0.5;

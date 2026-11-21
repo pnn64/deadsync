@@ -77,6 +77,7 @@ use visibility::*;
 
 // --- External API ---
 pub use input::{handle_input, handle_raw_key_event, update};
+pub use pane::OptionsPane;
 pub use profile::{
     SpeedMod, SpeedModType, apply_no_cmod_alternative, convert_speed_mod_to_type,
     effective_scroll_speed_with_alt, no_cmod_alt_speed_mod_type, scroll_speed_for_mod,
@@ -91,6 +92,7 @@ pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_speed_headers(state, asset_manager);
     prepare_music_rate_text(state);
     prepare_choice_layouts(state, asset_manager);
+    prepare_active_inline_choice_focus(state);
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

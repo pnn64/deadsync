@@ -107,6 +107,44 @@ fn main_visible_items_match_updater_capabilities_and_are_stable() {
 }
 
 #[test]
+fn overflowing_inline_submenu_choices_keep_a_scrollable_inline_layout() {
+    let state = init();
+    let asset_manager = AssetManager::new();
+    let mut found_overflowing_row = false;
+
+    for kind in SubmenuKind::ALL {
+        for (row_idx, row) in submenu_rows(kind).iter().enumerate() {
+            if !row.inline {
+                continue;
+            }
+            let Some(layout) = build_submenu_row_layout(&state, &asset_manager, kind, row_idx)
+            else {
+                continue;
+            };
+            if layout.texts.len() < 2 {
+                continue;
+            }
+            let last_choice = layout.texts.len() - 1;
+            let viewport = submenu_inline_choice_viewport(&layout, 0, last_choice);
+            if viewport.has_previous || viewport.has_next {
+                assert!(layout.inline_row);
+                assert!(viewport.contains(last_choice));
+                found_overflowing_row = true;
+                break;
+            }
+        }
+        if found_overflowing_row {
+            break;
+        }
+    }
+
+    assert!(
+        found_overflowing_row,
+        "expected an inline submenu row to overflow"
+    );
+}
+
+#[test]
 fn restoring_main_selection_preserves_child_rows_clamps_and_does_not_arm_change_sfx() {
     for item_id in [ItemId::ManageLocalProfiles, ItemId::Credits] {
         let mut state = init();

@@ -432,8 +432,21 @@ pub(super) fn cursor_dest_for_player_with_visibility(
         let focus_idx = focused_inline_choice_index(state, player_idx, row_idx)
             .unwrap_or_else(|| row.selected_choice_index[player_idx])
             .min(row.choices.len().saturating_sub(1));
+        let viewport = inline_choice_viewport(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            choice_inner_left,
+        );
+        if !viewport.contains(focus_idx) {
+            return None;
+        }
+        let [offset_x, offset_y] = inline_choice_position_for_view(
+            row,
+            state.pane().inline_choice_start[row.id.index()],
+            focus_idx,
+            choice_inner_left,
+        );
         let draw_w = *row.choice_widths.get(focus_idx)? * choice_scale;
-        let [offset_x, offset_y] = inline_choice_position(row, focus_idx);
         let center_x = choice_inner_left + offset_x + draw_w * 0.5;
 
         let mut size_t = draw_w / width_ref;
