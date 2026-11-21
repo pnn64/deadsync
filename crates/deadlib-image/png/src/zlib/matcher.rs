@@ -34,7 +34,11 @@ impl Matcher {
     }
     #[inline]
     pub(super) fn insert(&mut self, bytes: &[u8], position: usize) -> Option<usize> {
-        let word = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        self.insert_word(u32::from_le_bytes(bytes[..4].try_into().unwrap()), position)
+    }
+    /// Make `position` the head of the chain for `word`, its four bytes.
+    #[inline(always)]
+    fn insert_word(&mut self, word: u32, position: usize) -> Option<usize> {
         let hash = (word.wrapping_mul(0x1e35_a7bd) >> 16) as usize;
         let head = self.heads[hash];
         self.heads[hash] = position as u32;
@@ -54,15 +58,19 @@ impl Matcher {
     /// Hash a match's interior: every fourth position, then each of the last
     /// eight, which the next search may reach. `data[0]` is position `base`;
     /// only positions with four bytes of lookahead in `data` are hashed.
-    #[inline]
+    #[inline(always)]
     pub(super) fn insert_match(&mut self, data: &[u8], base: usize, start: usize, length: usize) {
         let end = start + length;
+        debug_assert!(length >= 3 && end <= data.len());
         let stop = end.min(data.len().saturating_sub(3));
         let tail = end.saturating_sub(8).max(start + 1);
-        let mut next = start + 1;
-        while next < tail.min(stop) {
-            self.insert(&data[next..], base + next);
-            next += 4;
+        // Each position in the stride starts one four-byte chunk of this slice,
+        // so the words need no individual bounds checks.
+        let strided = tail.min(stop);
+        let from = (start + 1).min(strided);
+        let words = data[from..strided + 3].as_chunks::<4>().0;
+        for (k, word) in words.iter().enumerate() {
+            self.insert_word(u32::from_le_bytes(*word), base + from + 4 * k);
         }
         for next in tail..stop {
             self.insert(&data[next..], base + next);
