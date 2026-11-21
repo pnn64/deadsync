@@ -8,7 +8,7 @@ use crate::ErrorKind;
 use std::{
     cmp::Ordering,
     sync::{
-        Mutex, RwLock,
+        Mutex, RwLock, RwLockReadGuard,
         atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
     },
 };
@@ -17,15 +17,8 @@ static DECIMAL: Mutex<Decimal> = Mutex::new(Decimal::Dot);
 static DECIMAL_DOT: AtomicBool = AtomicBool::new(true);
 static COLLATE_C: AtomicBool = AtomicBool::new(true);
 static REVISION: AtomicU64 = AtomicU64::new(0);
-// Publish the class/case table and its C-locale flag as one snapshot.
-struct Ctype {
-    values: [u32; 256],
-    is_c: bool,
-}
-static CTYPE: RwLock<Ctype> = RwLock::new(Ctype {
-    values: [0; 256],
-    is_c: true,
-});
+static CTYPE_C: AtomicBool = AtomicBool::new(true);
+static CTYPE: RwLock<[u32; 256]> = RwLock::new([0; 256]);
 
 #[cfg(all(windows, target_env = "msvc"))]
 #[allow(unsafe_code)]
@@ -56,12 +49,12 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
                 DECIMAL_DOT.store(&**decimal == b".", AtomicOrdering::Release);
             }
             if let Some((ctype, ctype_c)) = cache.ctype {
-                *CTYPE
+                let mut values = CTYPE
                     .write()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Ctype {
-                    values: ctype,
-                    is_c: ctype_c,
-                };
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                *values = ctype;
+                CTYPE_C.store(ctype_c, AtomicOrdering::Release);
+                drop(values);
                 REVISION.fetch_add(1, AtomicOrdering::Release);
             }
             if let Some(collate_c) = cache.collate_c {
@@ -186,12 +179,18 @@ pub(crate) fn try_localize_owned_from(
     }
     Ok(())
 }
-fn mask(byte: u8) -> u32 {
-    CTYPE
+fn ctype() -> Option<RwLockReadGuard<'static, [u32; 256]>> {
+    if CTYPE_C.load(AtomicOrdering::Acquire) {
+        return None;
+    }
+    let values = CTYPE
         .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .values[usize::from(byte)]
-        >> 16
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    // A locale change can publish C before this reader acquires the lock.
+    (!CTYPE_C.load(AtomicOrdering::Relaxed)).then_some(values)
+}
+fn mask(byte: u8) -> u32 {
+    ctype().map_or(0, |values| values[usize::from(byte)] >> 16)
 }
 pub(crate) fn is_alpha(byte: u8) -> bool {
     byte.is_ascii_alphabetic() || (byte >= 128 && mask(byte) & 0x103 != 0)
@@ -255,18 +254,12 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
         }
     };
     let mut bits = [lo, hi, 0, 0];
-    if flags != 0 {
-        let ctype = CTYPE
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if !ctype.is_c {
-            for (word, values) in bits[2..]
-                .iter_mut()
-                .zip(ctype.values[128..].as_chunks::<64>().0)
-            {
-                for (bit, &value) in values.iter().enumerate() {
-                    *word |= u64::from(value & (flags << 16) != 0) << bit;
-                }
+    if flags != 0
+        && let Some(ctype) = ctype()
+    {
+        for (word, values) in bits[2..].iter_mut().zip(ctype[128..].as_chunks::<64>().0) {
+            for (bit, &value) in values.iter().enumerate() {
+                *word |= u64::from(value & (flags << 16) != 0) << bit;
             }
         }
     }
@@ -276,31 +269,22 @@ pub(crate) fn add_class_bits(set: &mut [u64; 4], code: u8) {
     }
 }
 pub(crate) fn map_case(bytes: &mut [u8], upper: bool) {
-    let ctype = CTYPE
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if ctype.is_c {
-        if upper {
-            bytes.make_ascii_uppercase();
-        } else {
-            bytes.make_ascii_lowercase();
-        }
-    } else {
+    if let Some(ctype) = ctype() {
         let shift = if upper { 8 } else { 0 };
         for byte in bytes {
-            *byte = (ctype.values[usize::from(*byte)] >> shift) as u8;
+            *byte = (ctype[usize::from(*byte)] >> shift) as u8;
         }
+    } else if upper {
+        bytes.make_ascii_uppercase();
+    } else {
+        bytes.make_ascii_lowercase();
     }
 }
 pub(crate) fn lower(byte: u8) -> u8 {
-    let ctype = CTYPE
-        .read()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if ctype.is_c {
-        byte.to_ascii_lowercase()
-    } else {
-        ctype.values[usize::from(byte)] as u8
-    }
+    ctype().map_or_else(
+        || byte.to_ascii_lowercase(),
+        |values| values[usize::from(byte)] as u8,
+    )
 }
 pub(crate) fn compare(left: &[u8], right: &[u8]) -> Result<Ordering, Error> {
     if COLLATE_C.load(AtomicOrdering::Acquire) {
