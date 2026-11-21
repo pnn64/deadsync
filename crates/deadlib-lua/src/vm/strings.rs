@@ -287,12 +287,16 @@ impl Vm {
         }
         if id == STR_CHAR {
             let mut bytes = self.try_take_buffer(count)?;
-            for index in 0..count {
-                let n = self.integer_argument(base, count, index, None)? as i32;
-                if !(0..=255).contains(&n) {
-                    return Err(self.argument_error(index, b"invalid value"));
+            if count != 0 {
+                bytes.resize(count, 0);
+                let args = &self.registers[base + 1..base + 1 + count];
+                for (index, (&value, destination)) in args.iter().zip(&mut bytes).enumerate() {
+                    let number = self
+                        .number(value)
+                        .ok_or_else(|| self.argument_type_error(base, count, index, "number"))?;
+                    *destination = u8::try_from(lua_integer(number) as i32)
+                        .map_err(|_| self.argument_error(index, b"invalid value"))?;
                 }
-                bytes.push(n as u8);
             }
             self.registers[base] = self.try_finish_buffer(bytes)?;
             return Ok(1);
