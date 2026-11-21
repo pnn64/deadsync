@@ -246,6 +246,22 @@ impl Stream {
         }
         Ok(digits)
     }
+    pub(super) fn read_nan_payload(&mut self, out: &mut Buffer<u8>) -> Result<(), i32> {
+        let keep = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
+        while let Some(byte) = self.peek()?.filter(|&byte| keep(byte)) {
+            out.try_push(byte).map_err(|_| 12)?;
+            self.peek = None;
+            let tail = &self.read[self.position..];
+            // Only copy buffered bytes that fit without growing the output.
+            let available = tail.len().min(out.capacity() - out.len());
+            if available >= 32 && keep(tail[0]) && keep(tail[7]) {
+                let count = scan_boundary(&tail[..available], |byte| !keep(byte));
+                out.extend_from_slice(&tail[..count]);
+                self.position += count;
+            }
+        }
+        Ok(())
+    }
     /// Skip at most `limit` bytes, returning true at a delimiter or EOF.
     /// When `consume` is false, a found delimiter remains in lookahead.
     pub(in crate::vm) fn skip_until(

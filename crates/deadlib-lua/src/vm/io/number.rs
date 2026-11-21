@@ -81,12 +81,7 @@ fn scan_number(file: &mut Stream, bytes: &mut Buffer<u8>) -> Result<Option<f64>,
             if file.peek()? == Some(b'(') {
                 take(file, bytes)?;
                 let start = bytes.len();
-                while file
-                    .peek()?
-                    .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
-                {
-                    take(file, bytes)?;
-                }
+                file.read_nan_payload(bytes)?;
                 let tail = file.peek()?;
                 if tail != Some(b')') {
                     if cfg!(all(target_os = "linux", target_env = "gnu")) && tail.is_some() {
