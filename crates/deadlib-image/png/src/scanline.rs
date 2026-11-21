@@ -391,6 +391,8 @@ pub(crate) fn decode(
     })
 }
 
+/// With `SCORE`, returns the sum of signed-byte magnitudes, or stops at a
+/// partial sum of at least `limit` with `out` partly written.
 #[inline]
 pub(crate) fn filter_into<const SCORE: bool>(
     row: &[u8],
@@ -398,13 +400,14 @@ pub(crate) fn filter_into<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     match filter {
-        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
-        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
-        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
-        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
-        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
+        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out, limit),
+        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out, limit),
+        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out, limit),
+        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out, limit),
+        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out, limit),
     }
 }
 
@@ -474,6 +477,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     prev: &[u8],
     bpp: usize,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     let prev = if FILTER >= 2 && FILTER <= 4 {
         &prev[..row.len()]
@@ -499,26 +503,45 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         // slices avoid accessing the empty previous row of None/Sub.
         (&row[split..], &row[..row.len() - split])
     };
+    let mut score = if SCORE { score_bytes(&out[..split]) } else { 0 };
     let (values, values_tail) = row[split..].as_chunks::<32>();
     let (left, left_tail) = row[..row.len() - split].as_chunks::<32>();
     let (upper, upper_tail) = upper.as_chunks::<32>();
     let (upper_left, corner_tail) = upper_left.as_chunks::<32>();
     let (output, output_tail) = out[split..].as_chunks_mut::<32>();
+    // Score each 256-byte segment after filtering it. Once the partial score
+    // reaches `limit`, the candidate cannot win and the rest is skipped.
     for ((((values, left), upper), upper_left), output) in values
-        .iter()
-        .zip(left)
-        .zip(upper)
-        .zip(upper_left)
-        .zip(output)
+        .chunks(8)
+        .zip(left.chunks(8))
+        .zip(upper.chunks(8))
+        .zip(upper_left.chunks(8))
+        .zip(output.chunks_mut(8))
     {
-        filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+        for ((((values, left), upper), upper_left), output) in values
+            .iter()
+            .zip(left)
+            .zip(upper)
+            .zip(upper_left)
+            .zip(output.iter_mut())
+        {
+            filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+        }
+        if SCORE {
+            for chunk in output.iter() {
+                score += u64::from(score_chunk(chunk));
+            }
+            if score >= limit {
+                return score;
+            }
+        }
     }
     for ((((&value, &left), &upper), &corner), out) in values_tail
         .iter()
         .zip(left_tail)
         .zip(upper_tail)
         .zip(corner_tail)
-        .zip(output_tail)
+        .zip(output_tail.iter_mut())
     {
         let predictor = match FILTER {
             0 => 0,
@@ -530,7 +553,11 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         };
         *out = value.wrapping_sub(predictor);
     }
-    if SCORE { score_bytes(out) } else { 0 }
+    if SCORE {
+        score + score_bytes(output_tail)
+    } else {
+        0
+    }
 }
 
 pub(crate) fn filter_first<const SCORE: bool>(
@@ -538,13 +565,14 @@ pub(crate) fn filter_first<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     // A pass starts with zero upper predictors: Up equals None, Paeth equals
     // Sub, and Average uses only half the left byte.
     match filter {
-        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out),
-        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out),
-        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out),
+        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out, limit),
+        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out, limit),
+        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out, limit),
         _ => unreachable!("validated scanline filter"),
     }
 }
@@ -911,14 +939,26 @@ mod tests {
                         }
                         let mut actual = vec![0xa5; len];
                         let predictors: &[u8] = if filter < 2 { &[] } else { &prev };
-                        assert_eq!(
-                            filter_into::<true>(&row, predictors, bpp, filter, &mut actual),
-                            score
-                        );
-                        assert_eq!(actual, expected);
+                        for limit in [0, score / 2, score, score + 1, u64::MAX] {
+                            // Below the limit the score is exact; otherwise the
+                            // candidate only has to lose.
+                            let partial = filter_into::<true>(
+                                &row,
+                                predictors,
+                                bpp,
+                                filter,
+                                &mut actual,
+                                limit,
+                            );
+                            assert_eq!(partial < limit, score < limit, "limit {limit}");
+                            if partial < limit {
+                                assert_eq!(partial, score);
+                                assert_eq!(actual, expected);
+                            }
+                        }
                         actual.fill(0xa5);
                         assert_eq!(
-                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual),
+                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual, 0),
                             0
                         );
                         assert_eq!(actual, expected);
@@ -927,13 +967,19 @@ mod tests {
                         if prev.iter().all(|&v| v == 0) {
                             let mut first_filtered = vec![0xa5; len];
                             assert_eq!(
-                                filter_first::<true>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<true>(
+                                    &row,
+                                    bpp,
+                                    filter,
+                                    &mut first_filtered,
+                                    u64::MAX
+                                ),
                                 score
                             );
                             assert_eq!(first_filtered, expected);
                             first_filtered.fill(0xa5);
                             assert_eq!(
-                                filter_first::<false>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<false>(&row, bpp, filter, &mut first_filtered, 0),
                                 0
                             );
                             assert_eq!(first_filtered, expected);

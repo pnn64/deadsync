@@ -192,7 +192,7 @@ impl<'a> Rows<'a> {
                     continue;
                 }
                 let score = if self.index == 0 {
-                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..])
+                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..], best)
                 } else {
                     scanline::filter_into::<true>(
                         row,
@@ -200,6 +200,7 @@ impl<'a> Rows<'a> {
                         bpp,
                         kind,
                         &mut self.candidate[1..],
+                        best,
                     )
                 };
                 if score < best {
@@ -217,9 +218,16 @@ impl<'a> Rows<'a> {
             }
         } else {
             if self.index == 0 {
-                scanline::filter_first::<false>(row, bpp, selected, &mut self.output[1..]);
+                scanline::filter_first::<false>(row, bpp, selected, &mut self.output[1..], 0);
             } else {
-                scanline::filter_into::<false>(row, previous, bpp, selected, &mut self.output[1..]);
+                scanline::filter_into::<false>(
+                    row,
+                    previous,
+                    bpp,
+                    selected,
+                    &mut self.output[1..],
+                    0,
+                );
             }
         }
         self.output[0] = selected;
