@@ -349,7 +349,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
         return None;
     }
     let point = decimal();
-    if point.is_empty() || !bytes.windows(point.len()).any(|window| window == &*point) {
+    let has_point = match &*point {
+        [] => false,
+        [byte] => crate::pattern::find_byte(bytes, *byte).is_some(),
+        point => bytes.windows(point.len()).any(|window| window == point),
+    };
+    if !has_point {
         return parse_normalized(bytes);
     }
     crate::numeric::localized_number(bytes, &point)

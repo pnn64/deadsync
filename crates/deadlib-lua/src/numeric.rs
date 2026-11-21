@@ -21,7 +21,20 @@ impl Iterator for Normalized<'_> {
 
 pub(crate) fn localized_number(bytes: &[u8], point: &[u8]) -> Option<f64> {
     assert!(!point.is_empty());
-    let mut normalized = Normalized { bytes, point }.peekable();
+    if let &[separator] = point {
+        normalized_number(
+            bytes
+                .iter()
+                .copied()
+                .map(|byte| if byte == separator { b'.' } else { byte }),
+        )
+    } else {
+        normalized_number(Normalized { bytes, point })
+    }
+}
+
+fn normalized_number(bytes: impl Iterator<Item = u8> + Clone) -> Option<f64> {
+    let mut normalized = bytes.peekable();
     let negative = normalized.peek() == Some(&b'-');
     if matches!(normalized.peek(), Some(b'-' | b'+')) {
         normalized.next();
@@ -252,9 +265,15 @@ mod tests {
     use super::localized_number;
 
     #[test]
-    fn localized_stream_accepts_multibyte_and_long_separators() {
+    fn localized_stream_keeps_numeric_forms_across_separator_widths() {
         let long = format!("1.{}1", "0".repeat(5000));
-        for point in [b"::".as_slice(), b"\xd9\xab", b"\xff\xfe", &[b'~'; 32]] {
+        for point in [
+            b",".as_slice(),
+            b"::",
+            b"\xd9\xab",
+            b"\xff\xfe",
+            &[b'~'; 32],
+        ] {
             for (source, expected) in [
                 ("1.25", Some(1.25f64)),
                 ("-0.0", Some(-0.0)),
