@@ -10406,6 +10406,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "HoldEmitterState",
         "HoldMeshScratch",
         "HoldMeshScratchStats",
+        "HudActorTransform",
         "HudLayoutYs",
         "IndicatorSprite",
         "JudgmentHudFrame",
@@ -11006,9 +11007,10 @@ fn field_metrics_are_shared() {
         assert!(placement.contains(&format!("crate::style::{metric}")));
     }
     assert!(gameplay_metrics.contains("pub fn gameplay_side_field_center_x("));
+    assert!(gameplay_metrics.contains("pub fn gameplay_viewport_side_field_center_x("));
     for (owner, source) in [("notefield", &placement), ("profile", &profile_gameplay)] {
         assert!(
-            source.contains("deadsync_gameplay::gameplay_side_field_center_x("),
+            source.contains("deadsync_gameplay::gameplay_viewport_side_field_center_x("),
             "{owner} placement must use the shared native margin calculation"
         );
     }

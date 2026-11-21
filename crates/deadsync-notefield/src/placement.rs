@@ -1361,7 +1361,8 @@ mod tests {
         let mut narrow_request = request();
         narrow_request.screen_width = 500.0;
         narrow_request.screen_center_x = 250.0;
-        assert_near(field_layout(narrow_request).playfield_center_x, 90.0);
+        // Squarish viewports (<= 4:3) place side fields at a quarter of the width.
+        assert_near(field_layout(narrow_request).playfield_center_x, 125.0);
 
         let mut wide_request = request();
         wide_request.screen_width = 1000.0;
@@ -1377,7 +1378,7 @@ mod tests {
         // yielding Player centers 213.25 and 640.75. Integer outer margins at
         // 640px and 852px retain the exact quarter-screen centers.
         for (width, centers) in [
-            (500.0, [90.0, 410.0]),
+            (500.0, [125.0, 375.0]),
             (640.0, [160.0, 480.0]),
             (642.0, [160.25, 481.75]),
             (800.0, [200.0, 600.0]),

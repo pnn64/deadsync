@@ -15290,6 +15290,9 @@ mod tests {
 
     #[test]
     fn scorebox_presentation_hides_records_until_chart_snapshot_matches() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let mut state = init_placeholder();
         state.session.play_style = profile_data::PlayStyle::Single;
         state.session.player_side = profile_data::PlayerSide::P1;
@@ -18673,6 +18676,9 @@ mod tests {
 
     #[test]
     fn stable_lobby_hud_reuses_select_music_presentation() {
+        deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
+            854.0, 480.0,
+        ));
         let mut state = init_placeholder();
         let joined = test_joined_lobby(
             vec![test_lobby_player("ScreenSelectMusic")],
