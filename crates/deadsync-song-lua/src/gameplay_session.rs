@@ -505,10 +505,14 @@ impl SongLuaGameplaySession {
         let Some(scene) = &mut self.scene else {
             return Ok(());
         };
-        if !scene.has_custom_draw().map_err(|error| error.to_string())? {
+        let custom = scene.has_custom_draw().map_err(|error| error.to_string())?;
+        let output = scene.draw().map_err(|error| error.to_string())?;
+        if !custom {
+            // The native Player draw still publishes NoteField getter state.
+            // With no Lua draw callback, the existing visual publication is current.
+            self.output.append(output);
             return Ok(());
         }
-        let output = scene.draw().map_err(|error| error.to_string())?;
         scene.apply_output_player_writes(&output, game);
         scene
             .prepare_gameplay_player_options(game)

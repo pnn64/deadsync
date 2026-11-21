@@ -490,11 +490,12 @@ impl SongLiveScene {
         if self.ended || !self.updated {
             return Ok(Default::default());
         }
-        if Self::custom_draw(runtime)? {
-            let root = self.root(runtime)?;
-            runtime
-                .actors
-                .compiler_read(&mut runtime.vm, root, Query::Draw)?;
+        let custom = Self::custom_draw(runtime)?;
+        let root = self.root(runtime)?;
+        runtime
+            .actors
+            .compiler_read(&mut runtime.vm, root, Query::Draw)?;
+        if custom {
             self.read_states(runtime)?;
         }
         self.take_output(runtime)

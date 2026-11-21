@@ -275,6 +275,7 @@ fn advance(call: &mut HostCall<'_>) -> Result<(), Error> {
                         live_feedback::update(call, statistics, catalog, actor)?;
                     } else {
                         live_feedback::hud_position(call, catalog, actor)?;
+                        live_feedback::note_field_zoom(call, catalog, actor)?;
                     }
                 }
                 Job::Transition(_) => {
@@ -595,7 +596,20 @@ fn collect(
     source: DeltaSource,
 ) -> Result<(), Error> {
     collect_self(call, plan, actor, parent, source)?;
-    for i in 1usize.. {
+    collect_children(call, plan, actor, 1, None)?;
+    collect_after_children(call, plan, actor)
+}
+fn collect_children(
+    call: &mut HostCall<'_>,
+    plan: &mut Plan,
+    actor: TableId,
+    first: usize,
+    end: Option<usize>,
+) -> Result<(), Error> {
+    for i in first.. {
+        if end.is_some_and(|end| i >= end) {
+            break;
+        }
         let child = call.raw_table_get(actor, Value::Number(i as f64))?;
         if child == Value::Nil {
             break;
@@ -607,6 +621,13 @@ fn collect(
             })?;
         }
     }
+    Ok(())
+}
+fn collect_after_children(
+    call: &mut HostCall<'_>,
+    plan: &mut Plan,
+    actor: TableId,
+) -> Result<(), Error> {
     if call.store().actors.contains_key(&actor)
         && let Some(stream) = song_meters::stream(call, actor)?
     {
@@ -685,6 +706,26 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
                 Ok(())
             })?;
         }
+        let background_layers = if let Value::Table(top) = top {
+            let store = call.store_ref();
+            store
+                .actors
+                .get(&top)
+                .and_then(|actor| store.scenes.get(&actor.scene))
+                .and_then(|scene| scene.song_session.as_ref())
+                .filter(|session| session.roots == root)
+                .map(|session| session.background_layer_count)
+        } else {
+            None
+        };
+        let mut screen_actors: FxHashSet<_> = plan.jobs.iter().map(|job| job.actor()).collect();
+        if let Some(count) = background_layers {
+            // The aggregate is a private layer list. Enter it once so background
+            // and foreground children keep their existing delta ancestry.
+            collect_self(call, &mut plan, root, None, DeltaSource::Children)?;
+            collect_children(call, &mut plan, root, 1, Some(count + 1))?;
+        }
+        let player_start = plan.jobs.len();
         for key in [
             "__songlua_top_screen_player_1",
             "__songlua_top_screen_player_2",
@@ -705,8 +746,13 @@ fn build(call: &mut HostCall<'_>, root: TableId, live: bool) -> Result<Arc<Plan>
                 }
             }
         }
-        let mut screen_actors: FxHashSet<_> = plan.jobs.iter().map(|job| job.actor()).collect();
-        collect(call, &mut plan, root, None, DeltaSource::Children)?;
+        screen_actors.extend(plan.jobs[player_start..].iter().map(|job| job.actor()));
+        if let Some(count) = background_layers {
+            collect_children(call, &mut plan, root, count + 1, None)?;
+            collect_after_children(call, &mut plan, root)?;
+        } else {
+            collect(call, &mut plan, root, None, DeltaSource::Children)?;
+        }
         for actor in after {
             let start = plan.jobs.len();
             collect(call, &mut plan, actor, None, DeltaSource::Children)?;
@@ -790,5 +836,6 @@ fn update_only(call: &mut HostCall<'_>) -> Result<(), Error> {
             _ => Ok(false),
         }
     })?;
+    let eligible = eligible && live_feedback::analytic_multitap_fields(call)?;
     call.push(Value::Boolean(eligible))
 }

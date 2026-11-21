@@ -66,6 +66,10 @@ name = "arrows"
 required-features = ["test-support"]
 
 [[test]]
+name = "native_note_field"
+required-features = ["test-support"]
+
+[[test]]
 name = "live_visuals"
 required-features = ["test-support"]
 

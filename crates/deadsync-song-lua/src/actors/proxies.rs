@@ -3,6 +3,8 @@ use super::*;
 use crate::SongLuaProxyTarget;
 use sprites::{field, set};
 
+pub(super) const PLAYER_DRAW_KEY: &str = "native_player_proxy_draw";
+
 pub(super) fn install(call: &mut HostCall<'_>, actor: TableId, proxy: bool) -> Result<(), Error> {
     let methods = get_static(call, actor, b"__songlua_bound_methods")?;
     let methods = if methods == Value::Nil {
@@ -57,7 +59,16 @@ fn set_target(call: &mut HostCall<'_>) -> Result<(), Error> {
     if kind == Value::Nil {
         return Err(call.error(b"ActorProxy.SetTarget requires an Actor"));
     }
-    assets::text(call, kind)?;
+    let target_kind = assets::text(call, kind)?;
+    if target_kind.eq_ignore_ascii_case("PlayerActor")
+        && assets::field(call, actor, b"__songlua_actor_type")?
+            .is_some_and(|kind| kind.eq_ignore_ascii_case("ActorProxy"))
+    {
+        // Ordinary Player proxies also execute the native field positioner.
+        // This only enables traversal; it does not install a Lua draw callback.
+        let helpers = table(call, call.captures()[1])?;
+        set(call, helpers, PLAYER_DRAW_KEY, Value::Boolean(true))?;
+    }
     set(call, actor, "__songlua_proxy_target_kind", Value::Nil)?;
     set(call, actor, "__songlua_proxy_player_index", Value::Nil)?;
     set(
