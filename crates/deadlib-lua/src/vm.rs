@@ -241,7 +241,14 @@ impl Strings {
         id: StringId,
         range: std::ops::Range<usize>,
     ) -> Result<StringId, Error> {
-        let bytes = &self.bytes[slot_index(id.0)][range];
+        let slot = slot_index(id.0);
+        let source = &self.bytes[slot];
+        let bytes = &source[range];
+        if bytes.len() == source.len() {
+            let key = self.bytes.key(slot).expect("live Lua string slot");
+            self.bytes.preserve_new_reference(key);
+            return Ok(StringId(key));
+        }
         let hash = Self::hash(bytes);
         if let Some(id) = self.find_hashed(bytes, hash) {
             self.bytes.preserve_new_reference(id.0);
