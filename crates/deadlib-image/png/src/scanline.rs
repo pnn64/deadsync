@@ -108,14 +108,32 @@ fn unfilter_pixels<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8
     }
 }
 
+/// Unfilter two consecutive Paeth rows together where a vector kernel can.
+/// Returns false, with both rows untouched, where it cannot.
+fn unfilter_paeth_pair(row: &mut [u8], next: &mut [u8], prev: &[u8], bpp: usize) -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        match bpp {
+            3 => x86::unfilter::<3, true>(row, prev, Some(next)),
+            4 => x86::unfilter::<4, true>(row, prev, Some(next)),
+            _ => false,
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = (row, next, prev, bpp);
+        false
+    }
+}
+
 fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize) {
     #[cfg(target_arch = "x86_64")]
     {
         let handled = match bpp {
-            3 => x86::unfilter::<3, PAETH>(row, prev),
-            4 => x86::unfilter::<4, PAETH>(row, prev),
-            6 => x86::unfilter::<6, PAETH>(row, prev),
-            8 => x86::unfilter::<8, PAETH>(row, prev),
+            3 => x86::unfilter::<3, PAETH>(row, prev, None),
+            4 => x86::unfilter::<4, PAETH>(row, prev, None),
+            6 => x86::unfilter::<6, PAETH>(row, prev, None),
+            8 => x86::unfilter::<8, PAETH>(row, prev, None),
             _ => false,
         };
         if handled {
@@ -294,9 +312,34 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
+        let mut paired = false;
         for row_index in 0..h {
+            if paired {
+                // Unfiltered and compacted together with the previous row.
+                paired = false;
+                continue;
+            }
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
+            if reuse
+                && row_index != 0
+                && row_index + 1 < h
+                && filter == 4
+                && after.get(stride + 1) == Some(&4)
+                && after.len() >= 2 * (stride + 1)
+            {
+                let (row, next) = after.split_at_mut(stride + 1);
+                let previous = &before[(row_index - 1) * stride..row_index * stride];
+                if unfilter_paeth_pair(&mut row[1..], &mut next[1..1 + stride], previous, bpp) {
+                    for n in 0..2 {
+                        let start = position + 1;
+                        raw.copy_within(start..start + stride, (row_index + n) * stride);
+                        position += stride + 1;
+                    }
+                    paired = true;
+                    continue;
+                }
+            }
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
             if row_index == 0 {
                 unfilter_first(row, bpp, filter)?;
@@ -887,6 +930,82 @@ mod tests {
             for b in 0..=255 {
                 for c in 0..=255 {
                     assert_eq!(paeth(a, b, c), reference_paeth(a, b, c), "{a} {b} {c}");
+                }
+            }
+        }
+    }
+
+    // PNG Third Edition 9.2 and 9.3, one byte at a time.
+    fn reference_unfilter(raw: &[u8], stride: usize, bpp: usize) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        for (index, row) in raw.chunks(stride + 1).enumerate() {
+            let start = out.len();
+            for x in 0..stride {
+                let a = if x >= bpp { out[start + x - bpp] } else { 0 };
+                let b = if index > 0 {
+                    out[start + x - stride]
+                } else {
+                    0
+                };
+                let c = if index > 0 && x >= bpp {
+                    out[start + x - bpp - stride]
+                } else {
+                    0
+                };
+                let predictor = match row[0] {
+                    0 => 0,
+                    1 => a,
+                    2 => b,
+                    3 => ((u16::from(a) + u16::from(b)) / 2) as u8,
+                    _ => reference_paeth(a, b, c),
+                };
+                out.push(row[1 + x].wrapping_add(predictor));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn paeth_row_runs_decode_like_the_specification() {
+        let mut state = 0x2545_f491u32;
+        // Runs of Paeth rows of odd and even lengths, at the start and end.
+        let filters = [4, 4, 4, 1, 4, 4, 3, 4, 4, 4, 4, 0, 2, 4, 4, 4];
+        for (color, bpp) in [
+            (ColorType::Rgb, 3),
+            (ColorType::Rgba, 4),
+            (ColorType::GrayscaleAlpha, 2),
+        ] {
+            for width in [21, 22, 23, 40, 64] {
+                for height in [filters.len() - 1, filters.len()] {
+                    let stride = width * bpp;
+                    let mut raw = Vec::new();
+                    for &filter in &filters[..height] {
+                        raw.push(filter);
+                        raw.extend((0..stride).map(|_| {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            state as u8
+                        }));
+                    }
+                    let expected = reference_unfilter(&raw, stride, bpp);
+                    let image = decode(
+                        raw,
+                        width as u32,
+                        height as u32,
+                        color,
+                        8,
+                        false,
+                        usize::MAX,
+                    )
+                    .unwrap();
+                    let Samples::U8(samples) = image.samples else {
+                        panic!("eight-bit samples")
+                    };
+                    assert!(
+                        samples == expected,
+                        "bpp={bpp} width={width} height={height}"
+                    );
                 }
             }
         }
