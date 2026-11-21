@@ -1,0 +1,18 @@
+{
+    "started_utc":  "2026-11-20T21:49:47.9497423Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\candidate2-rgba4444\\bmp-allocations.exe",
+    "executable_sha256":  "2ecba460fb67d129e5b5b4bee0c656185dd14266caebea5ceea397bebbd252bc",
+    "arguments":  [
+                      "--mode",
+                      "decode",
+                      "target/bmp-decode-opt-20261120-pass2/alpha-controls"
+                  ],
+    "milliseconds":  null,
+    "samples":  null,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "measurement":  "allocation counters only",
+    "completed_utc":  "2026-11-20T21:49:48.5570346Z",
+    "exit_code":  0
+}

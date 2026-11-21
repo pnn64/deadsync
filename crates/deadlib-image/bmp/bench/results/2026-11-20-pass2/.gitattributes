@@ -1,0 +1,2 @@
+# Preserve raw evidence bytes and manifest hashes across Git checkouts.
+* -text

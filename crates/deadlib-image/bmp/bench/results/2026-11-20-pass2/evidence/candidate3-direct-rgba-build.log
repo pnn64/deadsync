@@ -1,0 +1,56 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261120231503
+Username: WS-X998M\PerfectTaste
+RunAs User: WS-X998M\PerfectTaste
+Configuration Name: 
+Machine: WS-X998M (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoProfile -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$global:__cos_ok = $true
+. {
+$bmpCache = 'target/bmp-decode-opt-20261120-pass2/timing/release'
+$bmpAssembly = 'target/bmp-decode-opt-20261120-pass2/assembly-candidate2'
+$bmpTimingHash = (Get-FileHash -LiteralPath "$bmpCache/bmp-codec-bench.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($bmpTimingHash -ne '9c72b410f3ca18861fe953c70c775dfe7ac4b5a404276042cc4b36b07c6516a8') { throw 'Cached timing executable differs from frozen candidate2.' }
+New-Item -ItemType Directory -Path $bmpAssembly -ErrorAction Stop | Out-Null
+[System.IO.File]::Copy((Join-Path (Get-Location) "$bmpCache/bmp_codec_bench.pdb"), (Join-Path (Get-Location) "$bmpAssembly/bmp_codec_bench.pdb"), $false)
+$bmpPdbRecord = [ordered]@{stage='candidate2-rgba4444'; executable_sha256=$bmpTimingHash; pdb_sha256=(Get-FileHash -LiteralPath "$bmpAssembly/bmp_codec_bench.pdb" -Algorithm SHA256).Hash.ToLowerInvariant()}
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "$bmpAssembly/identity.json"), (ConvertTo-Json -InputObject $bmpPdbRecord), [System.Text.UTF8Encoding]::new($false))
+& git apply target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba.patch
+if ($LASTEXITCODE -ne 0) { throw 'Candidate3 apply failed.' }
+& rustfmt --edition 2024 crates/deadlib-image/bmp/src/decode.rs crates/deadlib-image/bmp/tests/bmp_optimized.rs
+if ($LASTEXITCODE -ne 0) { throw 'Candidate3 formatting failed.' }
+& python target/bmp-decode-opt-20261120-pass2/freeze-stage.py candidate3-direct-rgba candidate2-rgba4444
+if ($LASTEXITCODE -ne 0) { throw 'Candidate3 freeze failed.' }
+& .\target\bmp-decode-opt-20261120-pass2\build-candidate1-logical.ps1 -Stage candidate3-direct-rgba
+$global:__cos_ok = $?
+} | Out-Default
+if ($global:__cos_ok) { exit 0 }; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1
+Process ID: 30336
+PSVersion: 5.1.26100.8457
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8457
+BuildVersion: 10.0.26100.8457
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+
+
+
+Verified 22570 exact native records (42819895 bytes): C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline\native.snapshot
+
+Completed candidate3-direct-rgba-decode-allocations (decode, allocation counts only).
+Completed candidate3-direct-rgba-owned-rgba-allocations (owned-rgba, allocation counts only).
+Completed candidate3-direct-rgba-rgba-allocations (rgba, allocation counts only).
+Completed candidate3-direct-rgba-corpus-allocations (owned-rgba, allocation counts only).
+Completed candidate3-direct-rgba-alpha-controls-decode-allocations (decode, allocation counts only).
+Completed candidate3-direct-rgba-alpha-controls-owned-rgba-allocations (owned-rgba, allocation counts only).
+
+BMP candidate3-direct-rgba build, snapshot, tests, and allocation-only passes complete. No timings were run.
+**********************
+Windows PowerShell transcript end
+End time: 20261120231702
+**********************

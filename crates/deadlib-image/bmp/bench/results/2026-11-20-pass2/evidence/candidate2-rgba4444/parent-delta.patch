@@ -1,0 +1,86 @@
+--- a/crates/deadlib-image/bmp/src/decode.rs
++++ b/crates/deadlib-image/bmp/src/decode.rs
+@@ -233,15 +233,27 @@
+                 [red.sample(word), green.sample(word), blue.sample(word)]
+             }),
+         },
+-        (16, Some(alpha)) => map_row::<2, 4>(row, output, |packed| {
+-            let word = u32::from(u16::from_le_bytes(packed));
+-            [
+-                red.sample(word),
+-                green.sample(word),
+-                blue.sample(word),
+-                alpha.sample(word),
+-            ]
+-        }),
++        (16, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
++            [0x0f00, 0x00f0, 0x000f, 0xf000] => {
++                map_row::<2, 4>(row, output, |[low, high]| {
++                    [
++                        (high & 15) * 17,
++                        (low >> 4) * 17,
++                        (low & 15) * 17,
++                        (high >> 4) * 17,
++                    ]
++                });
++            }
++            _ => map_row::<2, 4>(row, output, |packed| {
++                let word = u32::from(u16::from_le_bytes(packed));
++                [
++                    red.sample(word),
++                    green.sample(word),
++                    blue.sample(word),
++                    alpha.sample(word),
++                ]
++            }),
++        },
+         (32, None) => match rgb.map(|channel| channel.mask) {
+             [0xff0000, 0xff00, 0xff] => {
+                 map_row::<4, 3>(row, output, |bgrx| [bgrx[2], bgrx[1], bgrx[0]]);
+--- a/crates/deadlib-image/bmp/tests/bmp_optimized.rs
++++ b/crates/deadlib-image/bmp/tests/bmp_optimized.rs
+@@ -167,6 +167,44 @@
+ }
+ 
+ #[test]
++fn every_16_bit_word_preserves_rgba4444_and_mask_permutations() {
++    let (width, height) = (257usize, 256usize);
++    let pitch = (width * 2).div_ceil(4) * 4;
++    let mut rows = vec![0xa5; pitch * height];
++    for y in 0..height {
++        for x in 0..width {
++            let word = (y * width + x) as u16;
++            rows[y * pitch + x * 2..y * pitch + x * 2 + 2].copy_from_slice(&word.to_le_bytes());
++        }
++    }
++    for shifts in [[8, 4, 0, 12], [0, 4, 8, 12], [12, 8, 4, 0], [8, 0, 4, 12]] {
++        let expected: Vec<_> = (0..width * height)
++            .flat_map(|i| {
++                let word = u32::from(i as u16);
++                shifts.map(|shift| repeat_bits((word >> shift) & 15, 4))
++            })
++            .collect();
++        for header in [56, 108, 124] {
++            let format = Format {
++                bits: 16,
++                header,
++                compression: 3,
++                masks: shifts.map(|shift| 15 << shift),
++            };
++            for top_down in [false, true] {
++                assert_eq!(
++                    decode(&wire(format, width, height, top_down, &[], &rows))
++                        .unwrap()
++                        .pixels,
++                    Pixels::Rgba(expected.clone()),
++                    "shifts={shifts:?}, header={header}, top_down={top_down}"
++                );
++            }
++        }
++    }
++}
++
++#[test]
+ fn packed_indices_cover_every_byte_with_short_palettes_and_partial_tails() {
+     for bits in [1u16, 4] {
+         let sizes: &[usize] = if bits == 1 { &[1, 2] } else { &[1, 7, 15, 16] };

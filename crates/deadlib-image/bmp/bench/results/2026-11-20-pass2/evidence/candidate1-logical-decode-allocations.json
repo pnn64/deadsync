@@ -1,0 +1,17 @@
+{
+    "started_utc":  "2026-11-20T21:42:54.3769852Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\candidate1-logical\\bmp-allocations.exe",
+    "executable_sha256":  "e2fa2070dc4779a2223b7f07f46680904a75eaac35af994319fce5495be08fa1",
+    "arguments":  [
+                      "--mode",
+                      "decode"
+                  ],
+    "milliseconds":  null,
+    "samples":  null,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "measurement":  "allocation counters only",
+    "completed_utc":  "2026-11-20T21:43:06.0826062Z",
+    "exit_code":  0
+}

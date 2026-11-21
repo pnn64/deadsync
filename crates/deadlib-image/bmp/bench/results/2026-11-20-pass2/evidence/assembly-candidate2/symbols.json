@@ -1,0 +1,62 @@
+{
+  "executable": "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\assembly-candidate2\\bmp-codec-bench.exe",
+  "symbol_count": 1325,
+  "bmp_symbols": [
+    {
+      "name": "deadlib_image_bmp::decode::Channel::new",
+      "address": "0x140025290",
+      "size": 256,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::model::Bitmap::into_rgba8",
+      "address": "0x140024580",
+      "size": 338,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::decode::masks_format",
+      "address": "0x140024f10",
+      "size": 881,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::model::Bitmap::to_rgba8_with_limits",
+      "address": "0x1400246e0",
+      "size": 1941,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::decode::decode",
+      "address": "0x140025390",
+      "size": 11842,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::encode::encode",
+      "address": "0x1400281e0",
+      "size": 2653,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::impl$0::fmt",
+      "address": "0x140028c40",
+      "size": 229,
+      "flags": 0,
+      "tag": 5
+    },
+    {
+      "name": "deadlib_image_bmp::impl$3::fmt",
+      "address": "0x1400173b0",
+      "size": 397,
+      "flags": 0,
+      "tag": 5
+    }
+  ]
+}

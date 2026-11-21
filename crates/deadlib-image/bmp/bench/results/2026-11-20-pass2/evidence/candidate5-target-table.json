@@ -1,0 +1,62 @@
+{
+  "decode": {
+    "rgba4444": {
+      "before_cycles": 33108782.5,
+      "after_cycles": 25565149.369999997,
+      "before_mpix_s": 290.8201545025618,
+      "after_mpix_s": 376.2018853639956,
+      "geomean": 0.8070194155890806,
+      "wins": 6,
+      "image_geomean": null
+    },
+    "rgba32-swapped": {
+      "before_cycles": 15454557.01,
+      "after_cycles": 13860266.8,
+      "before_mpix_s": 624.1695205922944,
+      "after_mpix_s": 696.6631237514165,
+      "geomean": 0.7737028997839478,
+      "wins": 8,
+      "image_geomean": null
+    }
+  },
+  "owned": {
+    "rgba4444": {
+      "before_cycles": 34061026.31,
+      "after_cycles": 25518030.82,
+      "before_mpix_s": 283.25352217745854,
+      "after_mpix_s": 377.36892599234784,
+      "geomean": 0.751981509502696,
+      "wins": 8,
+      "image_geomean": 0.9848830535226571
+    },
+    "rgba32-swapped": {
+      "before_cycles": 15624566.08,
+      "after_cycles": 14302892.4,
+      "before_mpix_s": 618.0295570901266,
+      "after_mpix_s": 674.1395464773719,
+      "geomean": 0.7689161647737598,
+      "wins": 8,
+      "image_geomean": 0.9776495885611536
+    }
+  },
+  "rgba": {
+    "rgba4444": {
+      "before_cycles": 46335372.11,
+      "after_cycles": 37771016.510000005,
+      "before_mpix_s": 208.23282052092966,
+      "after_mpix_s": 255.55024930653423,
+      "geomean": 0.8158981952915094,
+      "wins": 7,
+      "image_geomean": 0.9924754144430641
+    },
+    "rgba32-swapped": {
+      "before_cycles": 28194139.4,
+      "after_cycles": 27656301.73,
+      "before_mpix_s": 342.1030769672271,
+      "after_mpix_s": 348.40481132688325,
+      "geomean": 0.846333318909525,
+      "wins": 8,
+      "image_geomean": 0.9681966135390295
+    }
+  }
+}

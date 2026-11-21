@@ -1,0 +1,8 @@
+Pinned benchmark thread to logical CPU 2
+NON_EQUIVALENT	rgb565-17x9-bottom	mask-expansion	63 differing samples	max 1
+NON_EQUIVALENT	rgb565-17x9-top	mask-expansion	63 differing samples	max 1
+NON_EQUIVALENT	rgb565-511x257-bottom	mask-expansion	53352 differing samples	max 1
+NON_EQUIVALENT	rgb565-511x257-top	mask-expansion	53352 differing samples	max 1
+NON_EQUIVALENT	rgb565-1920x1080-bottom	mask-expansion	842407 differing samples	max 1
+NON_EQUIVALENT	rgb565-1920x1080-top	mask-expansion	842407 differing samples	max 1
+Verified 8 BMP cases; synthetic expected pixels are generated independently of both codecs.

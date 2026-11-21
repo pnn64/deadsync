@@ -1,0 +1,301 @@
+{
+  "policy": "all independent process medians retained; stage comparison uses the geometric mean of both runs, never the fastest",
+  "groups": [
+    {
+      "orientation": "bottom",
+      "mode": "native-decode",
+      "stages": {
+        "baseline": {
+          "cycles": [
+            688081.92,
+            683344.26
+          ],
+          "geomean_cycles": 685708.9983672228,
+          "max_over_min": 1.0069330501144476
+        },
+        "candidate1-logical": {
+          "cycles": [
+            682769.71,
+            659894.46
+          ],
+          "geomean_cycles": 671234.6453251692,
+          "max_over_min": 1.0346650129476764
+        }
+      },
+      "logical_over_baseline": 0.9788914057179952
+    },
+    {
+      "orientation": "bottom",
+      "mode": "native-owned-rgba",
+      "stages": {
+        "baseline": {
+          "cycles": [
+            667891.11,
+            681969.04
+          ],
+          "geomean_cycles": 674893.3686970366,
+          "max_over_min": 1.0210781814418821
+        },
+        "candidate1-logical": {
+          "cycles": [
+            672087.4,
+            672737.58
+          ],
+          "geomean_cycles": 672412.4114146702,
+          "max_over_min": 1.0009674039418086
+        }
+      },
+      "logical_over_baseline": 0.99632392701212
+    },
+    {
+      "orientation": "top",
+      "mode": "native-decode",
+      "stages": {
+        "baseline": {
+          "cycles": [
+            680982.12,
+            675063.92
+          ],
+          "geomean_cycles": 678016.5627601661,
+          "max_over_min": 1.0087668735132518
+        },
+        "candidate1-logical": {
+          "cycles": [
+            683535.01,
+            686391.07
+          ],
+          "geomean_cycles": 684961.551400048,
+          "max_over_min": 1.0041783668110869
+        }
+      },
+      "logical_over_baseline": 1.010243095849472
+    },
+    {
+      "orientation": "top",
+      "mode": "native-owned-rgba",
+      "stages": {
+        "baseline": {
+          "cycles": [
+            195148.62,
+            192397.05
+          ],
+          "geomean_cycles": 193767.9509092539,
+          "max_over_min": 1.014301518656341
+        },
+        "candidate1-logical": {
+          "cycles": [
+            192769.13,
+            190591.61
+          ],
+          "geomean_cycles": 191677.27785264305,
+          "max_over_min": 1.0114250569581738
+        }
+      },
+      "logical_over_baseline": 0.989210429037411
+    }
+  ],
+  "runs": [
+    {
+      "run": "alpha-isolated-bottom-decode-1-baseline",
+      "stage": "baseline",
+      "orientation": "bottom",
+      "mode": "native-decode",
+      "cycles": 688081.92,
+      "min": 680528.97,
+      "max": 693680.02,
+      "ns": 314900.39,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-bottom-decode-2-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "bottom",
+      "mode": "native-decode",
+      "cycles": 682769.71,
+      "min": 662816.02,
+      "max": 737992.85,
+      "ns": 312417.8,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-bottom-decode-3-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "bottom",
+      "mode": "native-decode",
+      "cycles": 659894.46,
+      "min": 654557.09,
+      "max": 669974.7,
+      "ns": 302093.01,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-bottom-decode-4-baseline",
+      "stage": "baseline",
+      "orientation": "bottom",
+      "mode": "native-decode",
+      "cycles": 683344.26,
+      "min": 676893.11,
+      "max": 692276.43,
+      "ns": 313113.67,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-bottom-owned-rgba-1-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "bottom",
+      "mode": "native-owned-rgba",
+      "cycles": 672087.4,
+      "min": 668891.34,
+      "max": 677824.31,
+      "ns": 307365.15,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-bottom-owned-rgba-2-baseline",
+      "stage": "baseline",
+      "orientation": "bottom",
+      "mode": "native-owned-rgba",
+      "cycles": 667891.11,
+      "min": 662639.83,
+      "max": 675908.69,
+      "ns": 305607.2,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-bottom-owned-rgba-3-baseline",
+      "stage": "baseline",
+      "orientation": "bottom",
+      "mode": "native-owned-rgba",
+      "cycles": 681969.04,
+      "min": 679611.09,
+      "max": 685255.0,
+      "ns": 312145.08,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-bottom-owned-rgba-4-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "bottom",
+      "mode": "native-owned-rgba",
+      "cycles": 672737.58,
+      "min": 669585.57,
+      "max": 678875.25,
+      "ns": 307820.08,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-top-decode-1-baseline",
+      "stage": "baseline",
+      "orientation": "top",
+      "mode": "native-decode",
+      "cycles": 680982.12,
+      "min": 679803.97,
+      "max": 685515.63,
+      "ns": 311584.09,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-top-decode-2-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "top",
+      "mode": "native-decode",
+      "cycles": 683535.01,
+      "min": 672641.94,
+      "max": 708225.61,
+      "ns": 312871.88,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-top-decode-3-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "top",
+      "mode": "native-decode",
+      "cycles": 686391.07,
+      "min": 677184.93,
+      "max": 709167.33,
+      "ns": 314089.84,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-top-decode-4-baseline",
+      "stage": "baseline",
+      "orientation": "top",
+      "mode": "native-decode",
+      "cycles": 675063.92,
+      "min": 661966.25,
+      "max": 688220.82,
+      "ns": 309311.36,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-top-owned-rgba-1-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "top",
+      "mode": "native-owned-rgba",
+      "cycles": 192769.13,
+      "min": 189929.0,
+      "max": 194048.2,
+      "ns": 88165.79,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    },
+    {
+      "run": "alpha-isolated-top-owned-rgba-2-baseline",
+      "stage": "baseline",
+      "orientation": "top",
+      "mode": "native-owned-rgba",
+      "cycles": 195148.62,
+      "min": 193868.03,
+      "max": 201178.04,
+      "ns": 89246.68,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-top-owned-rgba-3-baseline",
+      "stage": "baseline",
+      "orientation": "top",
+      "mode": "native-owned-rgba",
+      "cycles": 192397.05,
+      "min": 191077.85,
+      "max": 194050.14,
+      "ns": 87977.19,
+      "executable_sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "run": "alpha-isolated-top-owned-rgba-4-candidate1-logical",
+      "stage": "candidate1-logical",
+      "orientation": "top",
+      "mode": "native-owned-rgba",
+      "cycles": 190591.61,
+      "min": 190510.26,
+      "max": 194744.82,
+      "ns": 87120.0,
+      "executable_sha256": "2eb3bf981a599b27364dd7184d2e4f029cdbbb516726572cb694f2e17b3f32ee"
+    }
+  ],
+  "process_monitor": [
+    {
+      "path": "candidate1-logical-controls-processes.jsonl",
+      "checks": 21,
+      "external_processes": 0,
+      "first_utc": "2026-11-20T22:04:19.006057+00:00",
+      "last_utc": "2026-11-20T22:04:56.965030+00:00",
+      "sha256": "ef68ce5087b1544670b0bc327a62a1441deb1899e084f77a1b8d5b78eec936c0"
+    },
+    {
+      "path": "candidate2-4444-focus-processes.jsonl",
+      "checks": 88,
+      "external_processes": 0,
+      "first_utc": "2026-11-20T22:05:20.172128+00:00",
+      "last_utc": "2026-11-20T22:06:56.413200+00:00",
+      "sha256": "963194732cde512577c733526e82f4da7d99b592027bedb3f123f0d3a159684f"
+    },
+    {
+      "path": "alpha-isolated-processes.jsonl",
+      "checks": 48,
+      "external_processes": 0,
+      "first_utc": "2026-11-20T22:07:15.716766+00:00",
+      "last_utc": "2026-11-20T22:07:35.313220+00:00",
+      "sha256": "6d0a28f3e36ee07969b23afe5e988573b06674d752ba1844cc4dc912cfb8c129"
+    }
+  ]
+}

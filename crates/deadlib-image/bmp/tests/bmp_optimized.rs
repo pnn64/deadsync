@@ -167,6 +167,44 @@ fn every_16_bit_word_preserves_555_565_and_explicit_alpha() {
 }
 
 #[test]
+fn every_16_bit_word_preserves_rgba4444_and_mask_permutations() {
+    let (width, height) = (257usize, 256usize);
+    let pitch = (width * 2).div_ceil(4) * 4;
+    let mut rows = vec![0xa5; pitch * height];
+    for y in 0..height {
+        for x in 0..width {
+            let word = (y * width + x) as u16;
+            rows[y * pitch + x * 2..y * pitch + x * 2 + 2].copy_from_slice(&word.to_le_bytes());
+        }
+    }
+    for shifts in [[8, 4, 0, 12], [0, 4, 8, 12], [12, 8, 4, 0], [8, 0, 4, 12]] {
+        let expected: Vec<_> = (0..width * height)
+            .flat_map(|i| {
+                let word = u32::from(i as u16);
+                shifts.map(|shift| repeat_bits((word >> shift) & 15, 4))
+            })
+            .collect();
+        for header in [56, 108, 124] {
+            let format = Format {
+                bits: 16,
+                header,
+                compression: 3,
+                masks: shifts.map(|shift| 15 << shift),
+            };
+            for top_down in [false, true] {
+                assert_eq!(
+                    decode(&wire(format, width, height, top_down, &[], &rows))
+                        .unwrap()
+                        .pixels,
+                    Pixels::Rgba(expected.clone()),
+                    "shifts={shifts:?}, header={header}, top_down={top_down}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn packed_indices_cover_every_byte_with_short_palettes_and_partial_tails() {
     for bits in [1u16, 4] {
         let sizes: &[usize] = if bits == 1 { &[1, 2] } else { &[1, 7, 15, 16] };
@@ -329,6 +367,61 @@ fn common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication() 
 }
 
 #[test]
+fn rgba_byte_order_copy_preserves_explicit_alpha_and_source_extent() {
+    for header in [56, 108, 124] {
+        let format = Format {
+            bits: 32,
+            header,
+            compression: 3,
+            masks: [0xff, 0xff00, 0xff0000, 0xff000000],
+        };
+        for width in [1usize, 3, 17, 257] {
+            for zero_alpha in [false, true] {
+                let mut expected = Vec::new();
+                for i in 0..width * 3 {
+                    expected.extend([
+                        i as u8,
+                        (i * 71 + 19) as u8,
+                        (i * 139 + 41) as u8,
+                        if zero_alpha { 0 } else { (i * 43) as u8 },
+                    ]);
+                }
+                for top_down in [false, true] {
+                    let original = wire(format, width, 3, top_down, &[], &expected);
+                    let offset = u32::from_le_bytes(original[10..14].try_into().unwrap()) as usize;
+                    for gap in [0, 1, 7] {
+                        let mut bytes = original[..offset].to_vec();
+                        bytes.resize(offset + gap, 0xff);
+                        bytes.extend_from_slice(&original[offset..]);
+                        let source_end = bytes.len();
+                        bytes.extend_from_slice(&[0xa5; 9]);
+                        bytes[10..14].copy_from_slice(&((offset + gap) as u32).to_le_bytes());
+                        let limits = Limits {
+                            max_decoded_bytes: expected.len(),
+                            ..Limits::default()
+                        };
+                        let bitmap = deadlib_image_bmp::decode_with_limits(&bytes, limits).unwrap();
+                        assert_eq!((bitmap.width, bitmap.height), (width as u32, 3));
+                        assert_eq!(bitmap.pixels, Pixels::Rgba(expected.clone()));
+                        assert_eq!(decode(&bytes[..source_end - 1]), Err(Error::Truncated));
+                        assert_eq!(
+                            deadlib_image_bmp::decode_with_limits(
+                                &bytes,
+                                Limits {
+                                    max_decoded_bytes: expected.len() - 1,
+                                    ..limits
+                                }
+                            ),
+                            Err(Error::LimitExceeded)
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels() {
     for width in [1usize, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 257] {
         let count = width * 3;
@@ -370,6 +463,39 @@ fn bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels() {
                         Pixels::Rgba(wanted.clone())
                     );
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn implicit_alpha_ignores_nonzero_header_gaps_and_trailing_bytes() {
+    for header in [40, 52, 56, 108, 124] {
+        for top_down in [false, true] {
+            let original = wire(
+                Format {
+                    header,
+                    ..Format::rgb(32)
+                },
+                1,
+                2,
+                top_down,
+                &[],
+                &[3, 2, 1, 0, 6, 5, 4, 0],
+            );
+            let offset = u32::from_le_bytes(original[10..14].try_into().unwrap()) as usize;
+            for gap in [0, 1, 7, 12] {
+                let mut bytes = original[..offset].to_vec();
+                bytes.resize(offset + gap, 0xff);
+                bytes.extend_from_slice(&original[offset..]);
+                bytes.extend_from_slice(&[0xff; 9]);
+                bytes[10..14].copy_from_slice(&((offset + gap) as u32).to_le_bytes());
+                // Size fields are advisory; neither the gap nor suffix is a pixel.
+                assert_eq!(
+                    decode(&bytes).unwrap().pixels,
+                    Pixels::Rgba(vec![1, 2, 3, 255, 4, 5, 6, 255]),
+                    "header={header}, top_down={top_down}, gap={gap}"
+                );
             }
         }
     }

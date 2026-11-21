@@ -1,0 +1,10 @@
+{
+  "stage": "candidate5-two-layouts",
+  "parent": "baseline",
+  "changed_since_baseline": [
+    "crates/deadlib-image/bmp/src/decode.rs",
+    "crates/deadlib-image/bmp/tests/bmp_optimized.rs"
+  ],
+  "input_hashes_unchanged": 13,
+  "patch_sha256": "a05fdfaa951c1f5e88099fa7280f1bfaefb107018edeafd7f2069a73680a2d45"
+}

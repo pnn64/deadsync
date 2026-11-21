@@ -1,0 +1,37 @@
+{
+  "status": "prepared, not executed; exclusive timing grant required",
+  "watcher_parent_sha256": "4866d91135259e1914465567804f08cf1b8ffbdfbd29328ada7187f3165196a1",
+  "watcher_sha256": "ea1401c8a20aa050359d31ef88e59b04a22ed3b3827c29d3ca9295c3d108c471",
+  "watcher_change": "also detects all bench/timing/snapshot/rssp names and clang/clippy/ninja/cmake processes; matching external process aborts the current descendant tree",
+  "frozen_timing_executables": {
+    "baseline": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1",
+    "candidate2-rgba4444": "9c72b410f3ca18861fe953c70c775dfe7ac4b5a404276042cc4b36b07c6516a8",
+    "candidate3-direct-rgba": "762925d31da68079aca897395e08faa913f56884021b62633c7887fb44ad9fc4"
+  },
+  "focus": {
+    "jobs": 16,
+    "batches": 5,
+    "milliseconds": 40,
+    "cpu": 2,
+    "native_cases": 64,
+    "decode_rows_per_binary": 64,
+    "owned_rows_per_binary": 106
+  },
+  "full_matrix": {
+    "jobs": 8,
+    "batches": 5,
+    "milliseconds": 20,
+    "cpu": 2,
+    "decode_rows": 120,
+    "owned_rows": 218,
+    "rgba_rows": 218,
+    "corpus_rows": 24
+  },
+  "conditions": [
+    "Focus compares candidate3 directly to its frozen candidate2 parent.",
+    "Full matrix explicitly compares the original frozen baseline with candidate3, not with a descendant baseline.",
+    "Full matrix must be regenerated with a new label/executable identity if candidate3 is rejected.",
+    "All per-input losses and native/image semantic differences remain in the raw outputs.",
+    "RGB333, RGB555, RGB565 controls are explicit in focus and full matrix."
+  ]
+}

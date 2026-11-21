@@ -1,0 +1,10 @@
+{
+  "stage": "candidate4-alpha-dispatch",
+  "parent": "candidate3-direct-rgba",
+  "changed_since_baseline": [
+    "crates/deadlib-image/bmp/src/decode.rs",
+    "crates/deadlib-image/bmp/tests/bmp_optimized.rs"
+  ],
+  "input_hashes_unchanged": 13,
+  "patch_sha256": "a1ca3865a1e681793307e4e7823a69c03d4fc3ac5236896187b4124b560e0e8e"
+}

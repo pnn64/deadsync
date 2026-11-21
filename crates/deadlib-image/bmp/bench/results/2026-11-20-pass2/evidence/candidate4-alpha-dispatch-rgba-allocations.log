@@ -1,0 +1,24 @@
+Pinned benchmark thread to logical CPU 2
+NON_EQUIVALENT	rgb555-1x1-bottom	mask-expansion	1 differing samples	max 1
+NON_EQUIVALENT	rgb555-1x1-top	mask-expansion	1 differing samples	max 1
+NON_EQUIVALENT	rgb555-17x9-bottom	mask-expansion	58 differing samples	max 1
+NON_EQUIVALENT	rgb555-17x9-top	mask-expansion	58 differing samples	max 1
+NON_EQUIVALENT	rgb555-511x257-bottom	mask-expansion	49248 differing samples	max 1
+NON_EQUIVALENT	rgb555-511x257-top	mask-expansion	49248 differing samples	max 1
+NON_EQUIVALENT	rgb555-1920x1080-bottom	mask-expansion	777610 differing samples	max 1
+NON_EQUIVALENT	rgb555-1920x1080-top	mask-expansion	777610 differing samples	max 1
+NON_EQUIVALENT	rgb565-17x9-bottom	mask-expansion	63 differing samples	max 1
+NON_EQUIVALENT	rgb565-17x9-top	mask-expansion	63 differing samples	max 1
+NON_EQUIVALENT	rgb565-511x257-bottom	mask-expansion	53352 differing samples	max 1
+NON_EQUIVALENT	rgb565-511x257-top	mask-expansion	53352 differing samples	max 1
+NON_EQUIVALENT	rgb565-1920x1080-bottom	mask-expansion	842407 differing samples	max 1
+NON_EQUIVALENT	rgb565-1920x1080-top	mask-expansion	842407 differing samples	max 1
+NON_EQUIVALENT	bgra32-1x1-bottom	implicit-alpha	1 differing samples	max 254
+NON_EQUIVALENT	bgra32-1x1-top	implicit-alpha	1 differing samples	max 254
+NON_EQUIVALENT	bgra32-17x9-bottom	implicit-alpha	153 differing samples	max 254
+NON_EQUIVALENT	bgra32-17x9-top	implicit-alpha	153 differing samples	max 254
+NON_EQUIVALENT	bgra32-511x257-bottom	implicit-alpha	130814 differing samples	max 255
+NON_EQUIVALENT	bgra32-511x257-top	implicit-alpha	130814 differing samples	max 255
+NON_EQUIVALENT	bgra32-1920x1080-bottom	implicit-alpha	2065500 differing samples	max 255
+NON_EQUIVALENT	bgra32-1920x1080-top	implicit-alpha	2065500 differing samples	max 255
+Verified 120 BMP cases; synthetic expected pixels are generated independently of both codecs.

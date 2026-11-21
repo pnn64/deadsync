@@ -1,0 +1,11 @@
+case	mode	pixels	image_equivalent	ns	thread_cycles	cycles_min	cycles_max	mpixels_sec	alloc_calls	requested_bytes
+rgb565-1x1-bottom	native-owned-rgba	1	true	266.90	584.27	579.81	589.81	3.747	0	0
+rgb565-1x1-bottom	image-rgba	1	true	393.51	861.53	855.95	921.09	2.541	0	0
+rgb565-1x1-top	native-owned-rgba	1	true	266.14	583.01	578.19	601.05	3.757	0	0
+rgb565-1x1-top	image-rgba	1	true	396.02	867.33	853.49	876.65	2.525	0	0
+rgb565-17x9-bottom	native-owned-rgba	153	false	795.84	1742.31	1726.81	1804.26	192.250	0	0
+rgb565-17x9-top	native-owned-rgba	153	false	807.74	1768.79	1750.06	1802.51	189.419	0	0
+rgb565-511x257-bottom	native-owned-rgba	131327	false	675370.31	1478527.97	1465193.38	1481306.05	194.452	0	0
+rgb565-511x257-top	native-owned-rgba	131327	false	639082.81	1399727.52	1394504.05	1422459.48	205.493	0	0
+rgb565-1920x1080-bottom	native-owned-rgba	2073600	false	11713775.00	25582780.00	24934651.00	26400801.25	177.022	0	0
+rgb565-1920x1080-top	native-owned-rgba	2073600	false	11333650.00	24814036.00	24311546.25	24944199.75	182.960	0	0

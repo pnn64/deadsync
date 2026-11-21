@@ -163,3 +163,9 @@ before/after stage, final reference comparisons, allocation measurements,
 observed regressions, validation, and exact environment metadata. The consuming
 pipeline beat image on all 98 equivalent synthetic cases in two complete runs
 and on all 12 valid repository BMP fixtures on that host.
+
+The [second-pass report](results/2026-11-20-pass2/README.md) preserves the later
+decoder experiments, target gains, unchanged-format regressions, and complete
+reproduction evidence. No production optimization from that pass was retained:
+the original BMP source was restored after the reduced candidate failed the
+control gate. The additional independent regression tests remain.

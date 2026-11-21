@@ -1,0 +1,9 @@
+    Checking pxfm v0.1.30
+    Checking num-traits v0.2.19
+    Checking moxcms v0.8.1
+    Checking bytemuck v1.25.2
+    Checking byteorder-lite v0.1.0
+    Checking image v0.25.10
+    Checking deadlib-image-bmp v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\bmp)
+    Checking bmp-codec-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\bmp\bench)
+    Finished `release` profile [optimized + debuginfo] target(s) in 12.71s

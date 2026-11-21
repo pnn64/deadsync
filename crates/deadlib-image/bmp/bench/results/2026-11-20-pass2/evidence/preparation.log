@@ -1,0 +1,42 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261120213012
+Username: WS-X998M\PerfectTaste
+RunAs User: WS-X998M\PerfectTaste
+Configuration Name: 
+Machine: WS-X998M (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoProfile -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$global:__cos_ok = $true
+. {
+& .\target\bmp-decode-opt-20261120-pass2\prepare.ps1
+$global:__cos_ok = $?
+} | Out-Default
+if ($global:__cos_ok) { exit 0 }; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1
+Process ID: 25532
+PSVersion: 5.1.26100.8457
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8457
+BuildVersion: 10.0.26100.8457
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+FROZEN: 22 source/config files and 13 corpus inputs at 945da378a907bb7c4fec1f432d02d320c9d2a462
+
+
+PRESERVED timing, allocation, and snapshot executables.
+Captured 22570 exact native records (42819895 bytes): C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline\native.snapshot
+Completed: "--verify-only" "--mode" "owned-rgba" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-verify-synthetic
+Completed: "--verify-only" "--mode" "owned-rgba" "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files" "tests/fixtures/itgmania-primary-bitmaps" "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-verify-corpus
+Completed: "--mode" "decode" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-decode-allocations
+Completed: "--mode" "owned-rgba" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-owned-rgba-allocations
+Completed: "--mode" "rgba" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-rgba-allocations
+Completed: "--mode" "owned-rgba" "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files" "tests/fixtures/itgmania-primary-bitmaps" "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png" -> C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline-corpus-allocations
+BASELINE verification and allocation-only runs complete; no timings were run.
+
+READY: preparation completed without timed measurements or production edits.
+**********************
+Windows PowerShell transcript end
+End time: 20261120213447
+**********************

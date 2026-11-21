@@ -1,0 +1,30 @@
+{"utc": "2026-11-20T23:32:27.147981+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:27.191185+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [15872], "external": []}
+{"utc": "2026-11-20T23:32:29.235479+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [15872, 16896, 42020], "external": []}
+{"utc": "2026-11-20T23:32:31.263939+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [15872, 16896, 42020], "external": []}
+{"utc": "2026-11-20T23:32:33.295582+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [15872, 16896, 42020], "external": []}
+{"utc": "2026-11-20T23:32:35.326507+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [15872, 16896, 42020], "external": []}
+{"utc": "2026-11-20T23:32:35.695512+00:00", "run": "candidate5-baseline-alpha-before-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:35.713016+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:35.752716+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [13372], "external": []}
+{"utc": "2026-11-20T23:32:37.791872+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [13372, 44992, 45920], "external": []}
+{"utc": "2026-11-20T23:32:39.819833+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [13372, 44992, 45920], "external": []}
+{"utc": "2026-11-20T23:32:41.842472+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [13372, 44992, 45920], "external": []}
+{"utc": "2026-11-20T23:32:43.872696+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [13372, 44992, 45920], "external": []}
+{"utc": "2026-11-20T23:32:44.289142+00:00", "run": "candidate5-baseline-alpha-after-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:44.309365+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:44.349774+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [46476], "external": []}
+{"utc": "2026-11-20T23:32:46.381043+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [32264, 42268, 46476], "external": []}
+{"utc": "2026-11-20T23:32:48.410390+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [32264, 42268, 46476], "external": []}
+{"utc": "2026-11-20T23:32:50.443705+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [32264, 42268, 46476], "external": []}
+{"utc": "2026-11-20T23:32:52.467459+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [32264, 42268, 46476], "external": []}
+{"utc": "2026-11-20T23:32:54.491223+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [32264, 42268, 46476], "external": []}
+{"utc": "2026-11-20T23:32:55.696187+00:00", "run": "candidate5-baseline-alpha-after-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:55.712730+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T23:32:55.750685+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288], "external": []}
+{"utc": "2026-11-20T23:32:57.774127+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288, 40732, 47216], "external": []}
+{"utc": "2026-11-20T23:32:59.805050+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288, 40732, 47216], "external": []}
+{"utc": "2026-11-20T23:33:01.840590+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288, 40732, 47216], "external": []}
+{"utc": "2026-11-20T23:33:03.862534+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288, 40732, 47216], "external": []}
+{"utc": "2026-11-20T23:33:05.889440+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [9288, 40732, 47216], "external": []}
+{"utc": "2026-11-20T23:33:06.919178+00:00", "run": "candidate5-baseline-alpha-before-owned", "own_pids": [], "external": []}

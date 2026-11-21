@@ -1,0 +1,98 @@
+diff --git a/crates/deadlib-image/bmp/src/decode.rs b/crates/deadlib-image/bmp/src/decode.rs
+index 74864e968..98a351891 100644
+--- a/crates/deadlib-image/bmp/src/decode.rs
++++ b/crates/deadlib-image/bmp/src/decode.rs
+@@ -99,6 +99,20 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
+             let mut samples = Vec::new();
+             reserve(&mut samples, header.decoded_bytes)?;
+             samples.resize(header.decoded_bytes, 0);
++            // Preserve logical scan order for alpha checks. BI_RGB32 has no
++            // row padding, and conversion writes final alpha without a rewrite.
++            let zero_alpha = |row: &[u8]| row.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0);
++            let opaque = matches!(
++                header.format,
++                Format::Masked {
++                    opaque_if_zero: true,
++                    ..
++                }
++            ) && if header.info.top_down {
++                zero_alpha(source)
++            } else {
++                source.chunks_exact(header.row_pitch).rev().all(zero_alpha)
++            };
+             for (encoded_y, row) in source.chunks_exact(header.row_pitch).enumerate() {
+                 let y = if header.info.top_down {
+                     encoded_y
+@@ -110,6 +124,9 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
+                     Format::Rgb24 => {
+                         map_row::<3, 3>(row, output, |bgr| [bgr[2], bgr[1], bgr[0]]);
+                     }
++                    Format::Masked { .. } if opaque => {
++                        map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], 255]);
++                    }
+                     Format::Masked {
+                         red,
+                         green,
+@@ -128,18 +145,6 @@ pub fn decode_with_limits(input: &[u8], limits: Limits) -> Result<Bitmap, Error>
+                     Format::Indexed { .. } => unreachable!("truecolor format"),
+                 }
+             }
+-            if matches!(
+-                header.format,
+-                Format::Masked {
+-                    opaque_if_zero: true,
+-                    ..
+-                }
+-            ) && samples.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0)
+-            {
+-                for pixel in samples.as_chunks_mut::<4>().0 {
+-                    pixel[3] = 255;
+-                }
+-            }
+             if channels == 4 {
+                 Pixels::Rgba(samples)
+             } else {
+diff --git a/crates/deadlib-image/bmp/tests/bmp_optimized.rs b/crates/deadlib-image/bmp/tests/bmp_optimized.rs
+index 60371b893..ad394a733 100644
+--- a/crates/deadlib-image/bmp/tests/bmp_optimized.rs
++++ b/crates/deadlib-image/bmp/tests/bmp_optimized.rs
+@@ -375,6 +375,39 @@ fn bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels() {
+     }
+ }
+ 
++#[test]
++fn implicit_alpha_ignores_nonzero_header_gaps_and_trailing_bytes() {
++    for header in [40, 52, 56, 108, 124] {
++        for top_down in [false, true] {
++            let original = wire(
++                Format {
++                    header,
++                    ..Format::rgb(32)
++                },
++                1,
++                2,
++                top_down,
++                &[],
++                &[3, 2, 1, 0, 6, 5, 4, 0],
++            );
++            let offset = u32::from_le_bytes(original[10..14].try_into().unwrap()) as usize;
++            for gap in [0, 1, 7, 12] {
++                let mut bytes = original[..offset].to_vec();
++                bytes.resize(offset + gap, 0xff);
++                bytes.extend_from_slice(&original[offset..]);
++                bytes.extend_from_slice(&[0xff; 9]);
++                bytes[10..14].copy_from_slice(&((offset + gap) as u32).to_le_bytes());
++                // Size fields are advisory; neither the gap nor suffix is a pixel.
++                assert_eq!(
++                    decode(&bytes).unwrap().pixels,
++                    Pixels::Rgba(vec![1, 2, 3, 255, 4, 5, 6, 255]),
++                    "header={header}, top_down={top_down}, gap={gap}"
++                );
++            }
++        }
++    }
++}
++
+ #[test]
+ fn rgba_conversion_handles_all_palette_sizes_and_rgb_chunk_tails() {
+     for size in 1..=256 {

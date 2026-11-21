@@ -1,0 +1,44 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261120224749
+Username: WS-X998M\PerfectTaste
+RunAs User: WS-X998M\PerfectTaste
+Configuration Name: 
+Machine: WS-X998M (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoProfile -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$global:__cos_ok = $true
+. {
+& python target/bmp-decode-opt-20261120-pass2/freeze-stage.py candidate2-rgba4444 candidate1-logical
+if ($LASTEXITCODE -ne 0) { throw 'Candidate 2 source freeze failed.' }
+& .\target\bmp-decode-opt-20261120-pass2\build-candidate1-logical.ps1 -Stage candidate2-rgba4444
+$global:__cos_ok = $?
+} | Out-Default
+if ($global:__cos_ok) { exit 0 }; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1
+Process ID: 44848
+PSVersion: 5.1.26100.8457
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8457
+BuildVersion: 10.0.26100.8457
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+
+
+
+Verified 22570 exact native records (42819895 bytes): C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline\native.snapshot
+
+Completed candidate2-rgba4444-decode-allocations (decode, allocation counts only).
+Completed candidate2-rgba4444-owned-rgba-allocations (owned-rgba, allocation counts only).
+Completed candidate2-rgba4444-rgba-allocations (rgba, allocation counts only).
+Completed candidate2-rgba4444-corpus-allocations (owned-rgba, allocation counts only).
+Completed candidate2-rgba4444-alpha-controls-decode-allocations (decode, allocation counts only).
+Completed candidate2-rgba4444-alpha-controls-owned-rgba-allocations (owned-rgba, allocation counts only).
+
+BMP candidate2-rgba4444 build, snapshot, tests, and allocation-only passes complete. No timings were run.
+**********************
+Windows PowerShell transcript end
+End time: 20261120224949
+**********************

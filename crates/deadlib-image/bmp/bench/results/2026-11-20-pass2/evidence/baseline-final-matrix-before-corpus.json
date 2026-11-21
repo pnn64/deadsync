@@ -1,0 +1,19 @@
+{
+    "started_utc":  "2026-11-20T22:50:47.4620776Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\baseline\\bmp-timing.exe",
+    "executable_sha256":  "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1",
+    "arguments":  [
+                      "--mode",
+                      "owned-rgba",
+                      "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files",
+                      "tests/fixtures/itgmania-primary-bitmaps",
+                      "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png"
+                  ],
+    "milliseconds":  20,
+    "samples":  5,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "completed_utc":  "2026-11-20T22:50:50.1625835Z",
+    "exit_code":  0
+}

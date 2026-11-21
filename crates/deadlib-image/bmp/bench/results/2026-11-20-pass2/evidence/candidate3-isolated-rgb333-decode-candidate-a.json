@@ -1,0 +1,18 @@
+{
+    "started_utc":  "2026-11-20T22:46:56.0579759Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\candidate3-direct-rgba\\bmp-timing.exe",
+    "executable_sha256":  "762925d31da68079aca897395e08faa913f56884021b62633c7887fb44ad9fc4",
+    "arguments":  [
+                      "--mode",
+                      "decode",
+                      "--filter",
+                      "rgb333-511x257-bottom"
+                  ],
+    "milliseconds":  80,
+    "samples":  5,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "completed_utc":  "2026-11-20T22:46:56.7705813Z",
+    "exit_code":  0
+}

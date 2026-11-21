@@ -1,0 +1,7 @@
+{
+    "captured_utc":  "2026-11-20T20:57:35.4491372Z",
+    "process_pattern":  "^(cargo|rustc|rustdoc|clippy-driver|cl|clang|clang-cl|link|lld|lld-link|ninja|cmake|native_snapshot)$|bench|timing",
+    "processes":  [
+
+                  ]
+}

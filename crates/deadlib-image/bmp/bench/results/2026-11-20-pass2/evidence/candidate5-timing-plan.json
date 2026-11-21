@@ -1,0 +1,55 @@
+{
+  "status": "prepared only; exclusive timing grant required",
+  "purpose": "one final reduced rebase and full control gate; no additional tuning loop",
+  "stage": "candidate5-two-layouts",
+  "parent": "baseline",
+  "source_sha256": "be772c50798d8e90e196c75ee42434aca65a28135a65cf183b2eef5a887e599e",
+  "source_proof": "candidate5-two-layouts-source-proof.json",
+  "retained_transformations": [
+    "Exact explicit RGBA4444 nibble expansion",
+    "Direct explicit RGBA32 copy without initial zero fill"
+  ],
+  "discarded_transformations": [
+    "Encoded-order alpha prescan",
+    "Logical-order alpha prescan",
+    "Opaque-alpha dispatch relocation"
+  ],
+  "expected_timing_sha256": {
+    "baseline": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1",
+    "candidate5-two-layouts": "c6b467d7cad9654ecbf44e797792c8cba4eff50a75a4b73c2ac34d297f14b351"
+  },
+  "watcher": "watch_commands-strict.py",
+  "expected_watcher_sha256": "ea1401c8a20aa050359d31ef88e59b04a22ed3b3827c29d3ca9295c3d108c471",
+  "full_matrix": {
+    "command_file": "candidate5-baseline-matrix-commands.json",
+    "jobs": 8,
+    "batches": 5,
+    "milliseconds": 20,
+    "cpu": 2,
+    "rows_per_binary": {
+      "decode": 120,
+      "owned": 218,
+      "rgba": 218,
+      "corpus": 24
+    },
+    "order": "decode AB; consuming BA; borrowed AB; repository BA"
+  },
+  "alpha": {
+    "command_file": "candidate5-baseline-alpha-commands.json",
+    "jobs": 4,
+    "batches": 5,
+    "milliseconds": 80,
+    "cpu": 2,
+    "decode_rows_per_binary": 18,
+    "owned_rows_per_binary": 24,
+    "order": "decode AB; consuming BA"
+  },
+  "conditions": [
+    "Use the original frozen baseline and the frozen reduced candidate on identical inputs; preserve all before/after and reference losses.",
+    "RGB333/RGB555/RGB565, canonical RGBA32, mixed/all-zero implicit-alpha cases, indexed paths, and repository files remain mandatory controls.",
+    "Alpha behavior is restored to baseline; the alpha inputs are unchanged-path controls, not a claimed optimization.",
+    "Any medium-size process-regime shifts remain explicit and are not counted as algorithmic gains or erased.",
+    "Do not accept material unchanged-path regressions merely because the two target formats improve or native still beats image.",
+    "No application integration, staging, commit, or old archive modification is authorized."
+  ]
+}

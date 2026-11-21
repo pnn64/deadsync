@@ -1,0 +1,21 @@
+{"utc": "2026-11-20T22:04:19.006057+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:04:19.054833+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [43060], "external": []}
+{"utc": "2026-11-20T22:04:21.080919+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [3828, 43060, 43208], "external": []}
+{"utc": "2026-11-20T22:04:23.114884+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [3828, 43060, 43208], "external": []}
+{"utc": "2026-11-20T22:04:25.149399+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [3828, 43060, 43208], "external": []}
+{"utc": "2026-11-20T22:04:27.174611+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [3828, 43060, 43208], "external": []}
+{"utc": "2026-11-20T22:04:29.204659+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [12128, 25000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:31.231213+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [12128, 25000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:33.250586+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [12128, 25000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:35.269919+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [12128, 25000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:37.301151+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [16192, 43060, 48116], "external": []}
+{"utc": "2026-11-20T22:04:39.320058+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [16192, 43060, 48116], "external": []}
+{"utc": "2026-11-20T22:04:41.350911+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [16192, 43060, 48116], "external": []}
+{"utc": "2026-11-20T22:04:43.382582+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [16192, 43060, 48116], "external": []}
+{"utc": "2026-11-20T22:04:45.405007+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [16192, 43060, 48116], "external": []}
+{"utc": "2026-11-20T22:04:47.438643+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [33840, 43000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:49.464216+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [33840, 43000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:51.483619+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [33840, 43000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:53.504043+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [33840, 43000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:55.523817+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [33840, 43000, 43060], "external": []}
+{"utc": "2026-11-20T22:04:56.965030+00:00", "run": "candidate1-logical-alpha-controls", "own_pids": [], "external": []}

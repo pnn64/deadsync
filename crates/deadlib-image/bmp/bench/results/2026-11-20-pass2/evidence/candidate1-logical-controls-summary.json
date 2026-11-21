@@ -1,0 +1,493 @@
+{
+  "decode": {
+    "all_native_after_over_before": 0.9130932024032511,
+    "groups_after_over_before": {
+      "zero-top": 0.8026419056255799,
+      "zero-bottom": 0.8523288013326148,
+      "first-top": 1.2425797706931305,
+      "first-bottom": 0.628805481617015,
+      "last-top": 1.0207934789228428,
+      "last-bottom": 1.0621434579091393
+    },
+    "native_losses": [
+      {
+        "case": "bgra32-first-17x9-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 630.54,
+        "after_cycles": 657.23,
+        "after_over_before": 1.0423287975386177,
+        "ns_after_over_before": 1.043482790956135
+      },
+      {
+        "case": "bgra32-first-17x9-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 626.56,
+        "after_cycles": 648.98,
+        "after_over_before": 1.035782686414709,
+        "ns_after_over_before": 1.0360511423181722
+      },
+      {
+        "case": "bgra32-first-511x257-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 354617.74,
+        "after_cycles": 670873.48,
+        "after_over_before": 1.8918215428252405,
+        "ns_after_over_before": 1.8909034323830174
+      },
+      {
+        "case": "bgra32-last-17x9-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 873.76,
+        "after_cycles": 940.24,
+        "after_over_before": 1.0760849661234206,
+        "ns_after_over_before": 1.0773163579860154
+      },
+      {
+        "case": "bgra32-last-17x9-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 873.61,
+        "after_cycles": 876.94,
+        "after_over_before": 1.00381176955392,
+        "ns_after_over_before": 1.003505960132225
+      },
+      {
+        "case": "bgra32-last-511x257-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 453758.03,
+        "after_cycles": 516417.13,
+        "after_over_before": 1.1380892366797344,
+        "ns_after_over_before": 1.1396330069580412
+      },
+      {
+        "case": "bgra32-last-511x257-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 406553.12,
+        "after_cycles": 433858.97,
+        "after_over_before": 1.0671642859363617,
+        "ns_after_over_before": 1.067744164331897
+      }
+    ],
+    "native_cases": [
+      {
+        "case": "bgra32-first-17x9-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 630.54,
+        "after_cycles": 657.23,
+        "after_over_before": 1.0423287975386177,
+        "ns_after_over_before": 1.043482790956135
+      },
+      {
+        "case": "bgra32-first-17x9-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 626.56,
+        "after_cycles": 648.98,
+        "after_over_before": 1.035782686414709,
+        "ns_after_over_before": 1.0360511423181722
+      },
+      {
+        "case": "bgra32-first-1920x1080-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 7845111.48,
+        "after_cycles": 7779767.09,
+        "after_over_before": 0.9916706868772245,
+        "ns_after_over_before": 0.9928425487017996
+      },
+      {
+        "case": "bgra32-first-1920x1080-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 7906180.22,
+        "after_cycles": 7740887.09,
+        "after_over_before": 0.9790931745292293,
+        "ns_after_over_before": 0.9803948945028943
+      },
+      {
+        "case": "bgra32-first-511x257-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 735817.97,
+        "after_cycles": 176989.35,
+        "after_over_before": 0.240534150042571,
+        "ns_after_over_before": 0.24078810890834096
+      },
+      {
+        "case": "bgra32-first-511x257-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 354617.74,
+        "after_cycles": 670873.48,
+        "after_over_before": 1.8918215428252405,
+        "ns_after_over_before": 1.8909034323830174
+      },
+      {
+        "case": "bgra32-last-17x9-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 873.76,
+        "after_cycles": 940.24,
+        "after_over_before": 1.0760849661234206,
+        "ns_after_over_before": 1.0773163579860154
+      },
+      {
+        "case": "bgra32-last-17x9-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 873.61,
+        "after_cycles": 876.94,
+        "after_over_before": 1.00381176955392,
+        "ns_after_over_before": 1.003505960132225
+      },
+      {
+        "case": "bgra32-last-1920x1080-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 10874184.76,
+        "after_cycles": 10639552.53,
+        "after_over_before": 0.9784230050179872,
+        "ns_after_over_before": 0.9793955457746939
+      },
+      {
+        "case": "bgra32-last-1920x1080-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 10903107.47,
+        "after_cycles": 10826308.24,
+        "after_over_before": 0.9929562071903525,
+        "ns_after_over_before": 0.9920049574036872
+      },
+      {
+        "case": "bgra32-last-511x257-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 453758.03,
+        "after_cycles": 516417.13,
+        "after_over_before": 1.1380892366797344,
+        "ns_after_over_before": 1.1396330069580412
+      },
+      {
+        "case": "bgra32-last-511x257-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 406553.12,
+        "after_cycles": 433858.97,
+        "after_over_before": 1.0671642859363617,
+        "ns_after_over_before": 1.067744164331897
+      },
+      {
+        "case": "bgra32-zero-17x9-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 994.95,
+        "after_cycles": 892.74,
+        "after_over_before": 0.8972712196592794,
+        "ns_after_over_before": 0.8973338026310002
+      },
+      {
+        "case": "bgra32-zero-17x9-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 984.68,
+        "after_cycles": 843.4,
+        "after_over_before": 0.8565219157492789,
+        "ns_after_over_before": 0.8571142730102267
+      },
+      {
+        "case": "bgra32-zero-1920x1080-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 12984851.5,
+        "after_cycles": 10716738.59,
+        "after_over_before": 0.8253262341891241,
+        "ns_after_over_before": 0.8217490606827438
+      },
+      {
+        "case": "bgra32-zero-1920x1080-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 13300994.43,
+        "after_cycles": 10641230.82,
+        "after_over_before": 0.8000327250719704,
+        "ns_after_over_before": 0.7969046181440456
+      },
+      {
+        "case": "bgra32-zero-511x257-bottom.bmp",
+        "mode": "native-decode",
+        "before_cycles": 503537.99,
+        "after_cycles": 421021.57,
+        "after_over_before": 0.8361267240233453,
+        "ns_after_over_before": 0.835954575888384
+      },
+      {
+        "case": "bgra32-zero-511x257-top.bmp",
+        "mode": "native-decode",
+        "before_cycles": 493057.36,
+        "after_cycles": 372063.19,
+        "after_over_before": 0.7546042716003671,
+        "ns_after_over_before": 0.7549380726246477
+      }
+    ],
+    "reference_after_over_before": null,
+    "reference_cases": []
+  },
+  "owned": {
+    "all_native_after_over_before": 0.9661774131821755,
+    "groups_after_over_before": {
+      "zero-top": 0.7954356967086706,
+      "zero-bottom": 0.8075294306155745,
+      "first-top": 0.8291725740637511,
+      "first-bottom": 1.6170937842179196,
+      "last-top": 0.9598587018404234,
+      "last-bottom": 0.9839893638800914
+    },
+    "native_losses": [
+      {
+        "case": "bgra32-first-17x9-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 679.24,
+        "after_cycles": 697.25,
+        "after_over_before": 1.0265149284494435,
+        "ns_after_over_before": 1.027123667171343
+      },
+      {
+        "case": "bgra32-first-17x9-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 675.88,
+        "after_cycles": 687.52,
+        "after_over_before": 1.0172219920695982,
+        "ns_after_over_before": 1.0171883598226135
+      },
+      {
+        "case": "bgra32-first-1920x1080-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 7914310.96,
+        "after_cycles": 7964198.23,
+        "after_over_before": 1.0063034255606251,
+        "ns_after_over_before": 1.0057111884199388
+      },
+      {
+        "case": "bgra32-first-1920x1080-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 7915838.3,
+        "after_cycles": 8026077.23,
+        "after_over_before": 1.0139263746708924,
+        "ns_after_over_before": 1.0141525021154976
+      },
+      {
+        "case": "bgra32-first-511x257-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 178641.55,
+        "after_cycles": 731297.15,
+        "after_over_before": 4.0936565429487155,
+        "ns_after_over_before": 4.095935047329494
+      },
+      {
+        "case": "bgra32-last-17x9-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 909.57,
+        "after_cycles": 949.2,
+        "after_over_before": 1.0435700385896631,
+        "ns_after_over_before": 1.0438433958177924
+      },
+      {
+        "case": "bgra32-last-17x9-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 914.11,
+        "after_cycles": 916.84,
+        "after_over_before": 1.0029865114701733,
+        "ns_after_over_before": 1.003254990187162
+      },
+      {
+        "case": "bgra32-last-1920x1080-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 10928323.82,
+        "after_cycles": 11027638.62,
+        "after_over_before": 1.0090878346611805,
+        "ns_after_over_before": 1.0085146438587604
+      }
+    ],
+    "native_cases": [
+      {
+        "case": "bgra32-first-17x9-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 679.24,
+        "after_cycles": 697.25,
+        "after_over_before": 1.0265149284494435,
+        "ns_after_over_before": 1.027123667171343
+      },
+      {
+        "case": "bgra32-first-17x9-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 675.88,
+        "after_cycles": 687.52,
+        "after_over_before": 1.0172219920695982,
+        "ns_after_over_before": 1.0171883598226135
+      },
+      {
+        "case": "bgra32-first-1920x1080-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 7914310.96,
+        "after_cycles": 7964198.23,
+        "after_over_before": 1.0063034255606251,
+        "ns_after_over_before": 1.0057111884199388
+      },
+      {
+        "case": "bgra32-first-1920x1080-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 7915838.3,
+        "after_cycles": 8026077.23,
+        "after_over_before": 1.0139263746708924,
+        "ns_after_over_before": 1.0141525021154976
+      },
+      {
+        "case": "bgra32-first-511x257-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 178641.55,
+        "after_cycles": 731297.15,
+        "after_over_before": 4.0936565429487155,
+        "ns_after_over_before": 4.095935047329494
+      },
+      {
+        "case": "bgra32-first-511x257-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 685104.95,
+        "after_cycles": 378677.7,
+        "after_over_before": 0.5527294759729878,
+        "ns_after_over_before": 0.5531100406090249
+      },
+      {
+        "case": "bgra32-last-17x9-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 909.57,
+        "after_cycles": 949.2,
+        "after_over_before": 1.0435700385896631,
+        "ns_after_over_before": 1.0438433958177924
+      },
+      {
+        "case": "bgra32-last-17x9-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 914.11,
+        "after_cycles": 916.84,
+        "after_over_before": 1.0029865114701733,
+        "ns_after_over_before": 1.003254990187162
+      },
+      {
+        "case": "bgra32-last-1920x1080-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 10928323.82,
+        "after_cycles": 11027638.62,
+        "after_over_before": 1.0090878346611805,
+        "ns_after_over_before": 1.0085146438587604
+      },
+      {
+        "case": "bgra32-last-1920x1080-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 10758134.12,
+        "after_cycles": 10619758.53,
+        "after_over_before": 0.9871375845981738,
+        "ns_after_over_before": 0.9875295896964659
+      },
+      {
+        "case": "bgra32-last-511x257-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 526882.96,
+        "after_cycles": 476688.63,
+        "after_over_before": 0.9047334345373402,
+        "ns_after_over_before": 0.9041745626227131
+      },
+      {
+        "case": "bgra32-last-511x257-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 459320.33,
+        "after_cycles": 410265.32,
+        "after_over_before": 0.8932008735602885,
+        "ns_after_over_before": 0.8927957204093967
+      },
+      {
+        "case": "bgra32-zero-17x9-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 1043.53,
+        "after_cycles": 935.28,
+        "after_over_before": 0.8962655601659751,
+        "ns_after_over_before": 0.8967852873948874
+      },
+      {
+        "case": "bgra32-zero-17x9-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 1077.38,
+        "after_cycles": 877.2,
+        "after_over_before": 0.8141974048153854,
+        "ns_after_over_before": 0.8141201307269147
+      },
+      {
+        "case": "bgra32-zero-1920x1080-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 13869309.85,
+        "after_cycles": 10857102.65,
+        "after_over_before": 0.7828149177877082,
+        "ns_after_over_before": 0.7804433965828146
+      },
+      {
+        "case": "bgra32-zero-1920x1080-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 12642181.36,
+        "after_cycles": 10768850.53,
+        "after_over_before": 0.8518190194670645,
+        "ns_after_over_before": 0.8512589999256068
+      },
+      {
+        "case": "bgra32-zero-511x257-bottom.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 525296.81,
+        "after_cycles": 394261.2,
+        "after_over_before": 0.7505493894013938,
+        "ns_after_over_before": 0.7510493605272069
+      },
+      {
+        "case": "bgra32-zero-511x257-top.bmp",
+        "mode": "native-owned-rgba",
+        "before_cycles": 490331.91,
+        "after_cycles": 355818.35,
+        "after_over_before": 0.7256683539115372,
+        "ns_after_over_before": 0.7263093407709467
+      }
+    ],
+    "reference_after_over_before": 0.9747224552040891,
+    "reference_cases": [
+      {
+        "case": "bgra32-zero-17x9-bottom.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 2993.09,
+        "after_cycles": 2964.59,
+        "after_over_before": 0.9904780678162033,
+        "ns_after_over_before": 0.9898854808416099
+      },
+      {
+        "case": "bgra32-zero-17x9-top.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 2835.67,
+        "after_cycles": 2838.13,
+        "after_over_before": 1.000867519845398,
+        "ns_after_over_before": 1.0012190793636098
+      },
+      {
+        "case": "bgra32-zero-1920x1080-bottom.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 39618871.6,
+        "after_cycles": 38249805.2,
+        "after_over_before": 0.9654440839753751,
+        "ns_after_over_before": 0.9645666339570217
+      },
+      {
+        "case": "bgra32-zero-1920x1080-top.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 32303339.83,
+        "after_cycles": 33044370.83,
+        "after_over_before": 1.0229397642441853,
+        "ns_after_over_before": 1.0228492836449745
+      },
+      {
+        "case": "bgra32-zero-511x257-bottom.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 1812903.23,
+        "after_cycles": 1689875.63,
+        "after_over_before": 0.9321378008687203,
+        "ns_after_over_before": 0.9317058661356816
+      },
+      {
+        "case": "bgra32-zero-511x257-top.bmp",
+        "mode": "image-rgba",
+        "before_cycles": 1686716.1,
+        "after_cycles": 1585072.21,
+        "after_over_before": 0.9397385902701705,
+        "ns_after_over_before": 0.9408268309805751
+      }
+    ]
+  }
+}

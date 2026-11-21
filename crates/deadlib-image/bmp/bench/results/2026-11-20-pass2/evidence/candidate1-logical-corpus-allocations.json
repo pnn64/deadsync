@@ -1,0 +1,20 @@
+{
+    "started_utc":  "2026-11-20T21:43:33.0207705Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\candidate1-logical\\bmp-allocations.exe",
+    "executable_sha256":  "e2fa2070dc4779a2223b7f07f46680904a75eaac35af994319fce5495be08fa1",
+    "arguments":  [
+                      "--mode",
+                      "owned-rgba",
+                      "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files",
+                      "tests/fixtures/itgmania-primary-bitmaps",
+                      "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png"
+                  ],
+    "milliseconds":  null,
+    "samples":  null,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "measurement":  "allocation counters only",
+    "completed_utc":  "2026-11-20T21:43:33.1443880Z",
+    "exit_code":  0
+}

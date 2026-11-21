@@ -1,0 +1,90 @@
+   Compiling bmp-pass2-validation v0.0.0 (C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\validation)
+    Finished `release` profile [optimized + debuginfo] target(s) in 51.06s
+     Running unittests ..\..\..\crates\deadlib-image\bmp\src\lib.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/7deba252f454cb46\out\deadlib_image_bmp-7deba252f454cb46.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running alpha_controls.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/14b66be12a22c15b\out\alpha_controls-14b66be12a22c15b.exe)
+
+running 1 test
+test generated_alpha_position_controls_match_every_expected_pixel ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running ..\..\..\crates\deadlib-image\bmp\tests\bmp_decode.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/603c6b632da33282\out\bmp_decode-603c6b632da33282.exe)
+
+running 13 tests
+test bitfield_masks_are_external_or_inline_at_the_declared_header_boundary ... ok
+test implicit_bgra_repairs_only_an_entirely_zero_alpha_channel ... ok
+test declared_sizes_and_suffixes_do_not_replace_physical_input_bounds ... ok
+test input_pixel_and_decoded_limits_apply_to_decode_and_header_only_probe ... ok
+test malformed_bit_masks_are_rejected_before_decoding_pixels ... ok
+test truecolor_pixel_offsets_skip_nonzero_gaps_before_both_row_orientations ... ok
+test malformed_headers_and_unsupported_compressions_return_errors ... ok
+test palette_capacity_comes_from_pixel_offset_and_unused_bits_are_ignored ... ok
+test positive_maximum_signed_dimensions_hit_limits_before_pixel_allocation ... ok
+test probe_needs_headers_and_masks_but_not_palette_or_rows ... ok
+test rgb555_and_rgb565_use_defined_masks_and_bit_replication ... ok
+test rgb24_headers_decode_bgr_rows_with_every_padding_length ... ok
+test indexed_headers_preserve_indices_palettes_orientation_and_packed_tails ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running ..\..\..\crates\deadlib-image\bmp\tests\bmp_encode.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/db604e56974ecb91\out\bmp_encode-db604e56974ecb91.exe)
+
+running 5 tests
+test indexed_input_expands_into_bgr24_rows ... ok
+test invalid_caller_models_return_errors ... ok
+test output_limit_includes_headers_and_row_padding ... ok
+test rgba_v4_masks_preserve_explicit_alpha ... ok
+test rgb_header_pixels_and_zero_padding_are_independent_of_the_decoder ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running ..\..\..\crates\deadlib-image\bmp\tests\bmp_model.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/421e13f77d4b8640\out\bmp_model-421e13f77d4b8640.exe)
+
+running 4 tests
+test indexed_models_allow_short_palettes_for_each_supported_depth ... ok
+test invalid_public_models_return_errors_before_conversion ... ok
+test rgba_conversion_has_independent_pixel_and_output_budgets ... ok
+test valid_models_convert_to_explicit_top_down_rgba_pixels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running ..\..\..\crates\deadlib-image\bmp\tests\bmp_optimized.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/6c14b6c037b738e7\out\bmp_optimized-6c14b6c037b738e7.exe)
+
+running 11 tests
+test full_packed_palettes_still_validate_caller_created_unpacked_indices ... ok
+test implicit_alpha_ignores_nonzero_header_gaps_and_trailing_bytes ... ok
+test bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels ... ok
+test rgba_byte_order_copy_preserves_explicit_alpha_and_source_extent ... ok
+test indexed_rgba_lookup_preserves_pixels_and_errors_across_the_table_threshold ... ok
+test common_and_unusual_32_bit_masks_preserve_channel_order_and_bit_replication ... ok
+test byte_indices_validate_short_palettes_without_including_padding ... ok
+test every_16_bit_word_preserves_555_565_and_explicit_alpha ... ok
+test rgba_conversion_handles_all_palette_sizes_and_rgb_chunk_tails ... ok
+test every_16_bit_word_preserves_rgba4444_and_mask_permutations ... ok
+test packed_indices_cover_every_byte_with_short_palettes_and_partial_tails ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running ..\..\..\crates\deadlib-image\bmp\tests\bmp_owned.rs (target\bmp-decode-opt-20261120-pass2\check\release\build\bmp-pass2-validation/0ad0b161fa65c613\out\bmp_owned-0ad0b161fa65c613.exe)
+
+running 4 tests
+test consuming_conversion_matches_borrowed_errors_and_checks_limits_first ... ok
+test consuming_conversion_obeys_pixel_and_output_limit_boundaries ... ok
+test consuming_rgba_reuses_the_original_allocation_and_preserves_zero_alpha ... ok
+test consuming_rgb_and_indexed_models_produce_exact_rgba_pixels ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_image_bmp
+
+running 1 test
+test ..\..\..\crates\deadlib-image\bmp\src\lib.rs - (line 7) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+all doctests ran in 5.49s; merged doctests compilation took 5.21s

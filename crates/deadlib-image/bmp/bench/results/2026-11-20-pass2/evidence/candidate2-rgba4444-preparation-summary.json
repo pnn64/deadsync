@@ -1,0 +1,50 @@
+{
+  "candidate": "candidate2-rgba4444",
+  "timing_status": "not run",
+  "allocation_pairs": {
+    "decode": {
+      "rows": 120,
+      "changes": []
+    },
+    "owned-rgba": {
+      "rows": 218,
+      "changes": []
+    },
+    "rgba": {
+      "rows": 218,
+      "changes": []
+    },
+    "corpus": {
+      "rows": 24,
+      "changes": []
+    },
+    "alpha-controls-decode": {
+      "rows": 18,
+      "changes": []
+    },
+    "alpha-controls-owned-rgba": {
+      "rows": 24,
+      "changes": []
+    }
+  },
+  "executables": [
+    {
+      "path": "bmp-timing.exe",
+      "bytes": 437760,
+      "sha256": "9c72b410f3ca18861fe953c70c775dfe7ac4b5a404276042cc4b36b07c6516a8"
+    },
+    {
+      "path": "bmp-allocations.exe",
+      "bytes": 404992,
+      "sha256": "2ecba460fb67d129e5b5b4bee0c656185dd14266caebea5ceea397bebbd252bc"
+    },
+    {
+      "path": "native_snapshot.exe",
+      "bytes": 288256,
+      "sha256": "d49a2da290b7bdc5263bd563aba370b46d9145f6b933ae440ec5b82990c48260"
+    }
+  ],
+  "source_config_hashes_verified": 22,
+  "repository_input_hashes_verified": 13,
+  "alpha_control_hashes_verified": 18
+}
