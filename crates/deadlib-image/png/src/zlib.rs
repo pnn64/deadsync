@@ -317,14 +317,18 @@ impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
     }
 }
 
-const FIXED: (Huffman, Huffman<32>) = {
+const fn fixed_lengths() -> [u8; 288] {
     let mut lengths = [8; 288];
     let mut n = 144;
     while n < 280 {
         lengths[n] = if n < 256 { 9 } else { 7 };
         n += 1;
     }
-    let literals = match Huffman::<288>::build(&lengths, false, false) {
+    lengths
+}
+
+const FIXED: (Huffman, Huffman<32>) = {
+    let literals = match Huffman::<288>::build(&fixed_lengths(), false, false) {
         Ok(tree) => tree,
         Err(_) => panic!("invalid fixed literal tree"),
     };
@@ -1053,7 +1057,7 @@ const fn rle_lengths() -> [u8; 286] {
     lengths
 }
 
-const fn rle_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
+const fn canonical_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
     let mut counts = [0u16; 11];
     let mut symbol = 0;
     while symbol < N {
@@ -1087,7 +1091,8 @@ const fn rle_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
 }
 
 const RLE_LENGTHS: [u8; 286] = rle_lengths();
-const RLE_CODES: [(u16, u8); 286] = rle_codes(RLE_LENGTHS);
+const RLE_CODES: [(u16, u8); 286] = canonical_codes(RLE_LENGTHS);
+const FIXED_CODES: [(u16, u8); 288] = canonical_codes(fixed_lengths());
 
 struct RleHeader {
     words: [u32; 11],
@@ -1108,7 +1113,7 @@ const fn rle_header() -> RleHeader {
     // Values 10 and 16 get two bits; eight other used values get four.
     // This complete code-length tree needs 18 entries in DEFLATE order.
     const META_LENGTHS: [u8; 19] = [0, 4, 4, 0, 4, 4, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 2, 0, 0];
-    const META_CODES: [(u16, u8); 19] = rle_codes(META_LENGTHS);
+    const META_CODES: [(u16, u8); 19] = canonical_codes(META_LENGTHS);
     const ORDER: [usize; 18] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1];
     let mut header = RleHeader {
         words: [0; 11],
@@ -1171,23 +1176,26 @@ struct Checkpoint {
     count: u8,
 }
 impl Writer {
+    /// Append up to 32 bits, least significant first.
+    #[inline]
     fn write(&mut self, value: u32, n: u8) {
-        self.word |= u64::from(value) << self.count;
-        self.count += n;
-        while self.count >= 8 {
-            self.bytes.push(self.word as u8);
-            self.word >>= 8;
-            self.count -= 8;
-        }
+        self.put(self.word | u64::from(value) << self.count, self.count + n);
+    }
+    /// Emit the complete bytes of `count` (< 64) bits and keep the rest. A
+    /// fixed-width store replaces a byte loop; all eight bytes are initialized
+    /// before the unused suffix is removed.
+    #[inline]
+    fn put(&mut self, word: u64, count: u8) {
+        let complete = usize::from(count / 8);
+        let start = self.bytes.len();
+        self.bytes.extend_from_slice(&word.to_le_bytes());
+        self.bytes.truncate(start + complete);
+        self.word = word >> (complete * 8);
+        self.count = count % 8;
     }
     fn literal(&mut self, symbol: usize) {
-        let (code, n) = match symbol {
-            0..=143 => (0x30 + symbol, 8),
-            144..=255 => (0x190 + symbol - 144, 9),
-            256..=279 => (symbol - 256, 7),
-            _ => (0xc0 + symbol - 280, 8),
-        };
-        self.write((code as u32).reverse_bits() >> (32 - n), n);
+        let (code, n) = FIXED_CODES[symbol];
+        self.write(u32::from(code), n);
     }
     fn align(&mut self) {
         if self.count != 0 {
@@ -1245,14 +1253,7 @@ impl Writer {
             word |= u64::from(code) << count;
             count += bits;
         }
-        let complete = usize::from(count / 8);
-        let start = self.bytes.len();
-        // A fixed-width store avoids a variable-length copy for every group.
-        // All eight bytes are initialized before the unused suffix is removed.
-        self.bytes.extend_from_slice(&word.to_le_bytes());
-        self.bytes.truncate(start + complete);
-        self.word = word >> (complete * 8);
-        self.count = count % 8;
+        self.put(word, count);
     }
 
     fn start_rle(&mut self, final_block: bool) -> Checkpoint {
@@ -1302,12 +1303,8 @@ impl Writer {
                 continue;
             }
             let start = pos;
-            while let Some(word) = input[pos..].first_chunk::<8>() {
-                if *word != [0; 8] {
-                    break;
-                }
-                pos += 8;
-            }
+            let words = input[pos..].as_chunks::<8>().0;
+            pos += 8 * words.iter().take_while(|word| **word == [0; 8]).count();
             while pos < input.len() && input[pos] == 0 {
                 pos += 1;
             }
@@ -1410,12 +1407,16 @@ fn fast_block(
         }
         if length >= 3 {
             misses = 0;
+            // The whole token is at most 8 + 5 + 5 + 13 = 31 bits.
             let index = length_code(length);
-            w.literal(257 + index);
-            w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+            let (code, bits) = FIXED_CODES[257 + index];
+            let mut token = u32::from(code) | ((length - LENGTH_BASE[index]) as u32) << bits;
+            let mut n = bits + LENGTH_EXTRA[index];
             let index = distance_code(distance);
-            w.write((index as u32).reverse_bits() >> 27, 5);
-            w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+            token |= ((index as u32).reverse_bits() >> 27) << n;
+            token |= ((distance - DIST_BASE[index]) as u32) << (n + 5);
+            n += 5 + DIST_EXTRA[index];
+            w.write(token, n);
             matcher.insert_match(data, base, pos, length);
             pos += length;
         } else {
