@@ -1093,6 +1093,21 @@ const fn canonical_codes<const N: usize>(lengths: [u8; N]) -> [(u16, u8); N] {
 const RLE_LENGTHS: [u8; 286] = rle_lengths();
 const RLE_CODES: [(u16, u8); 286] = canonical_codes(RLE_LENGTHS);
 const FIXED_CODES: [(u16, u8); 288] = canonical_codes(fixed_lengths());
+/// Each match length's fixed code followed by its extra bits, at `length - 3`.
+const FIXED_LENGTH_TOKENS: [(u16, u8); 256] = {
+    let mut tokens = [(0, 0); 256];
+    let mut length = 3;
+    while length <= 258 {
+        let index = length_code(length);
+        let (code, bits) = FIXED_CODES[257 + index];
+        let extra = (length - LENGTH_BASE[index]) as u16;
+        tokens[length - 3] = (code | extra << bits, bits + LENGTH_EXTRA[index]);
+        length += 1;
+    }
+    tokens
+};
+/// Bit-reversed five-bit fixed distance codes.
+const FIXED_DISTANCE_CODES: [(u16, u8); 32] = canonical_codes([5; 32]);
 
 struct RleHeader {
     words: [u32; 11],
@@ -1340,8 +1355,8 @@ impl Writer {
 }
 
 #[inline(always)]
-fn length_code(length: usize) -> usize {
-    debug_assert!((3..=258).contains(&length));
+const fn length_code(length: usize) -> usize {
+    debug_assert!(3 <= length && length <= 258);
     if length <= 10 {
         length - 3
     } else if length == 258 {
@@ -1408,15 +1423,12 @@ fn fast_block(
         if length >= 3 {
             misses = 0;
             // The whole token is at most 8 + 5 + 5 + 13 = 31 bits.
-            let index = length_code(length);
-            let (code, bits) = FIXED_CODES[257 + index];
-            let mut token = u32::from(code) | ((length - LENGTH_BASE[index]) as u32) << bits;
-            let mut n = bits + LENGTH_EXTRA[index];
+            let (code, n) = FIXED_LENGTH_TOKENS[length - 3];
             let index = distance_code(distance);
-            token |= ((index as u32).reverse_bits() >> 27) << n;
-            token |= ((distance - DIST_BASE[index]) as u32) << (n + 5);
-            n += 5 + DIST_EXTRA[index];
-            w.write(token, n);
+            let token = u32::from(code)
+                | u32::from(FIXED_DISTANCE_CODES[index].0) << n
+                | ((distance - DIST_BASE[index]) as u32) << (n + 5);
+            w.write(token, n + 5 + DIST_EXTRA[index]);
             matcher.insert_match(data, base, pos, length);
             pos += length;
         } else {
