@@ -218,6 +218,12 @@ impl Scanner {
     pub(crate) fn heap_bytes(&self) -> usize {
         self.text.capacity() + self.token.text.heap_bytes()
     }
+    fn skip_horizontal_space(&mut self, input: &[u8]) {
+        let tail = &input[self.pos + 1..];
+        self.pos += 1 + scan_token_boundary(tail, |byte| {
+            !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
+        });
+    }
     fn newline(&mut self, input: &[u8], closed: bool) -> Result<bool, Error> {
         if self.pos + 1 == input.len() && !closed {
             return Ok(false);
@@ -287,10 +293,7 @@ impl Scanner {
         loop {
             match input.get(self.pos) {
                 Some(b' ' | b'\t' | 11 | 12) => {
-                    let tail = &input[self.pos + 1..];
-                    self.pos += 1 + scan_token_boundary(tail, |byte| {
-                        !((byte == b' ') | (byte == b'\t') | (byte.wrapping_sub(11) <= 1))
-                    });
+                    self.skip_horizontal_space(input);
                 }
                 Some(b'\n' | b'\r') => {
                     self.newline(input, true)?;
@@ -452,7 +455,10 @@ impl Scanner {
                         continue;
                     };
                     match c {
-                        b' ' | b'\t' | 11 | 12 => self.pos += 1,
+                        b' ' | b'\t' | 11 | 12 => {
+                            self.skip_horizontal_space(input);
+                            self.start = self.pos - 1;
+                        }
                         b'\n' | b'\r' => {
                             if !self.newline(input, closed)? {
                                 return Ok(None);
