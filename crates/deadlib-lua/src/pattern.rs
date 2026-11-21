@@ -356,6 +356,10 @@ pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
 
 fn balance_end(source: &[u8], pos: usize, left: u8, right: u8) -> Option<usize> {
     let rest = source.get(pos..)?.strip_prefix(&[left])?;
+    // The closing byte takes precedence, so equal delimiters cannot nest.
+    if left == right {
+        return find_byte(rest, right).map(|offset| pos + 2 + offset);
+    }
     let (blocks, tail) = rest.as_chunks::<32>();
     let scan = |bytes: &[u8], depth: &mut usize| {
         for (index, &byte) in bytes.iter().enumerate() {
