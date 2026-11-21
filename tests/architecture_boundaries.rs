@@ -983,10 +983,8 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadsync_assets",
     "deadsync_assets::noteskin",
     "deadsync::game::parsing::noteskin",
-    "deadsync-theme-simply-love",
-    "deadsync_theme_simply_love",
-    "deadsync-theme-",
-    "deadsync_theme_",
+    "deadsync-theme",
+    "deadsync_theme",
     "deadsync-shell",
     "deadsync_shell",
     "deadsync-config",
@@ -1220,7 +1218,7 @@ fn notefield_crate_stays_independent_of_themes_and_runtime() {
 
     assert!(
         failures.is_empty(),
-        "deadsync-notefield must consume lower-layer data and generic theme contracts only:\n{}",
+        "deadsync-notefield must consume engine and game-owned data only:\n{}",
         failures.join("\n")
     );
 }
@@ -6050,7 +6048,7 @@ fn presentation_crates_do_not_import_runtime_renderers() {
 }
 
 #[test]
-fn notefield_theme_dependency_points_toward_contracts() {
+fn game_presentation_contracts_are_owned_below_themes() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = |name: &str| {
         read_source(root.join("crates").join(name).join("Cargo.toml"))
@@ -6060,8 +6058,15 @@ fn notefield_theme_dependency_points_toward_contracts() {
     let notefield = manifest("deadsync-notefield");
     let simply_love = manifest("deadsync-theme-simply-love");
 
-    assert!(notefield.contains("deadsync-theme ="));
-    assert!(!notefield.contains("deadsync-theme-simply-love"));
+    for game in [
+        &notefield,
+        &manifest("deadsync-config"),
+        &manifest("deadsync-assets"),
+    ] {
+        assert!(!game.contains("deadsync-theme"));
+    }
+    assert!(notefield.contains("deadsync-core ="));
+    assert!(theme.contains("deadsync-core ="));
     assert!(!theme.contains("deadsync-notefield ="));
     assert!(!theme.contains("deadsync-theme-simply-love"));
     assert!(simply_love.contains("deadsync-theme ="));
@@ -9804,9 +9809,9 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         );
     }
 
-    let theme_contract = read_source(root.join("crates/deadsync-theme/src/lib.rs"))
-        .expect("theme contract should be readable");
-    assert!(theme_contract.contains("pub struct ComboFeedbackStyle"));
+    let game_contract = read_source(root.join("crates/deadsync-core/src/hud_style.rs"))
+        .expect("game-owned HUD contract should be readable");
+    assert!(game_contract.contains("pub struct ComboFeedbackStyle"));
     let simply_love_style =
         read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
             .expect("Simply Love notefield style should be readable");
@@ -10406,6 +10411,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "HoldEmitterState",
         "HoldMeshScratch",
         "HoldMeshScratchStats",
+        "HudActorTransform",
         "HudLayoutYs",
         "IndicatorSprite",
         "JudgmentHudFrame",
@@ -10916,8 +10922,8 @@ fn field_metrics_are_shared() {
         .expect("canonical field-frame composition should be readable");
     let song_lua = read_source(root.join("crates/deadsync-notefield/src/song_lua.rs"))
         .expect("canonical song Lua presentation should be readable");
-    let contract = read_source(root.join("crates/deadsync-theme/src/lib.rs"))
-        .expect("generic theme contract should be readable");
+    let contract = read_source(root.join("crates/deadsync-core/src/hud_style.rs"))
+        .expect("game-owned HUD contract should be readable");
     let theme_style =
         read_source(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
             .expect("Simply Love notefield style should be readable");

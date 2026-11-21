@@ -1,7 +1,7 @@
 use deadsync_core::input::MAX_COLS;
 use deadsync_gameplay::ScrollEffects;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::NotefieldHudStyle;
+use deadsync_core::hud_style::NotefieldHudStyle;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::array::from_fn;
 
@@ -846,7 +846,7 @@ mod tests {
         notefield_camera, notefield_camera_at,
     };
     use deadsync_core::input::MAX_COLS;
-    use deadsync_theme::{
+    use deadsync_core::hud_style::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle, NotefieldHudStyle,

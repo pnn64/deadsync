@@ -1,12 +1,12 @@
 use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::actors::TextContent;
-use deadsync_gameplay::PlayerRuntime;
+use deadsync_gameplay::{GameplayTargetScoreProgress, PlayerRuntime, player_has_judged_score};
 use deadsync_notefield::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
     MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, StreamProgressLookup, ZmodComboColorParams,
     ZmodComboColorStyle, ZmodMiniIndicatorParams,
     zmod_combo_quint_active as crate_zmod_combo_quint_active, zmod_mini_indicator_output,
-    zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom, zmod_percent_from_points,
+    zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom,
     zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
     zmod_resolved_mini_indicator_mode, zmod_static_combo_color as crate_zmod_static_combo_color,
     zmod_target_score_missed as crate_zmod_target_score_missed,
@@ -123,7 +123,6 @@ fn zmod_mini_indicator_progress(
     mode: MiniIndicatorMode,
     needs_target_score: bool,
 ) -> MiniIndicatorProgress {
-    let w1 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)];
     let w2 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)];
     let w3 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Great)];
     let w4 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Decent)];
@@ -134,12 +133,6 @@ fn zmod_mini_indicator_progress(
         .holds_let_go_for_score
         .saturating_add(p.rolls_let_go_for_score);
     let mines_hit = p.mines_hit_for_score;
-    let tap_rows = w1
-        .saturating_add(w2)
-        .saturating_add(w3)
-        .saturating_add(w4)
-        .saturating_add(w5)
-        .saturating_add(miss);
     let current_possible_dp = p.current_possible_points;
 
     let possible_dp = state
@@ -160,94 +153,74 @@ fn zmod_mini_indicator_progress(
         );
     let needs_subtractive_counts = mode == MiniIndicatorMode::SubtractiveScoring;
 
-    let (
-        kept_percent,
-        lost_percent,
-        pace_percent,
-        current_score_percent,
-        current_possible_ratio,
-        white_count,
-        white_10ms_count,
-    ) = match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => {
-            let (kept, lost, pace) = if needs_predictive {
-                judgment::predictive_itg_score_percents(current_possible_dp, possible_dp, actual_dp)
-            } else {
-                (0.0, 0.0, 0.0)
-            };
-            let (current_score, current_possible_ratio) = if needs_current_score {
-                (
-                    zmod_percent_from_points(actual_dp, possible_dp),
-                    (f64::from(current_possible_dp.max(0)) / f64::from(possible_dp))
-                        .clamp(0.0, 1.0),
-                )
-            } else {
-                (0.0, 0.0)
-            };
-            (
-                kept,
-                lost,
-                pace,
-                current_score,
-                current_possible_ratio,
-                0,
-                0,
-            )
-        }
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            if !(needs_predictive || needs_current_score || needs_subtractive_counts) {
-                (0.0, 0.0, 0.0, 0.0, 0.0, 0, 0)
-            } else {
-                let blue_window_ms = player_blue_window_ms(state, player_idx);
-                let score = state.display_scored_ex_score_data(player_idx, blue_window_ms);
-                let (white_count, white_10ms_count) = if needs_subtractive_counts {
-                    let fantastic_total = score.counts.w0.saturating_add(score.counts.w1);
-                    (
-                        score.counts.w1,
-                        fantastic_total.saturating_sub(score.counts_10ms.w0),
+    let (kept_percent, lost_percent, pace_percent, current_progress, white_count, white_10ms_count) =
+        match score_type {
+            profile_data::MiniIndicatorScoreType::Itg => {
+                let (kept, lost, pace) = if needs_predictive {
+                    judgment::predictive_itg_score_percents(
+                        current_possible_dp,
+                        possible_dp,
+                        actual_dp,
                     )
                 } else {
-                    (0, 0)
-                };
-                let current_possible_ratio = if needs_current_score {
-                    judgment::ex_current_possible_ratio(&score)
-                } else {
-                    0.0
-                };
-                let current_score = if !needs_current_score {
-                    0.0
-                } else if score_type == profile_data::MiniIndicatorScoreType::Ex {
-                    judgment::ex_score_percent(&score)
-                } else {
-                    judgment::hard_ex_score_percent(&score)
-                };
-                let (kept, lost, pace) = if !needs_predictive {
                     (0.0, 0.0, 0.0)
-                } else if score_type == profile_data::MiniIndicatorScoreType::Ex {
-                    judgment::predictive_ex_score_percents(&score)
-                } else {
-                    judgment::predictive_hard_ex_score_percents(&score)
                 };
-                (
-                    kept,
-                    lost,
-                    pace,
-                    current_score,
-                    current_possible_ratio,
-                    white_count,
-                    white_10ms_count,
-                )
+                let current_progress = needs_current_score
+                    .then(|| GameplayTargetScoreProgress::from_itg(p, possible_dp));
+                (kept, lost, pace, current_progress, 0, 0)
             }
-        }
-    };
+            profile_data::MiniIndicatorScoreType::Ex
+            | profile_data::MiniIndicatorScoreType::HardEx => {
+                if !(needs_predictive || needs_current_score || needs_subtractive_counts) {
+                    (0.0, 0.0, 0.0, None, 0, 0)
+                } else {
+                    let blue_window_ms = player_blue_window_ms(state, player_idx);
+                    let score = state.display_scored_ex_score_data(player_idx, blue_window_ms);
+                    let (white_count, white_10ms_count) = if needs_subtractive_counts {
+                        let fantastic_total = score.counts.w0.saturating_add(score.counts.w1);
+                        (
+                            score.counts.w1,
+                            fantastic_total.saturating_sub(score.counts_10ms.w0),
+                        )
+                    } else {
+                        (0, 0)
+                    };
+                    let current_progress = needs_current_score.then(|| {
+                        GameplayTargetScoreProgress::from_ex(
+                            p,
+                            &score,
+                            score_type == profile_data::MiniIndicatorScoreType::HardEx,
+                        )
+                    });
+                    let (kept, lost, pace) = if !needs_predictive {
+                        (0.0, 0.0, 0.0)
+                    } else if score_type == profile_data::MiniIndicatorScoreType::Ex {
+                        judgment::predictive_ex_score_percents(&score)
+                    } else {
+                        judgment::predictive_hard_ex_score_percents(&score)
+                    };
+                    (
+                        kept,
+                        lost,
+                        pace,
+                        current_progress,
+                        white_count,
+                        white_10ms_count,
+                    )
+                }
+            }
+        };
 
-    let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
+    let current_progress = current_progress.unwrap_or_else(|| GameplayTargetScoreProgress {
+        judged_any: player_has_judged_score(p),
+        ..GameplayTargetScoreProgress::default()
+    });
     MiniIndicatorProgress {
         kept_percent,
         lost_percent,
         pace_percent,
-        current_score_percent,
-        current_possible_ratio,
+        current_score_percent: current_progress.current_score_percent,
+        current_possible_ratio: current_progress.current_possible_ratio,
         current_possible_dp,
         actual_dp,
         white_count,
@@ -259,30 +232,8 @@ fn zmod_mini_indicator_progress(
         miss,
         let_go,
         mines_hit,
-        judged_any,
+        judged_any: current_progress.judged_any,
     }
-}
-
-pub fn zmod_target_score_missed(
-    state: &State,
-    player_idx: usize,
-    score_type: profile_data::MiniIndicatorScoreType,
-    target_score_percent: f64,
-) -> bool {
-    let Some(player) = state.player(player_idx) else {
-        return false;
-    };
-    crate_zmod_target_score_missed(
-        &zmod_mini_indicator_progress(
-            state,
-            player,
-            player_idx,
-            score_type,
-            MiniIndicatorMode::None,
-            true,
-        ),
-        target_score_percent,
-    )
 }
 
 #[inline(always)]

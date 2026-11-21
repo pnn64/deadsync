@@ -511,7 +511,7 @@ On first run in non-portable mode, if DeadSync finds a `deadsync.ini` next to th
 
 We welcome contributions of all sizes. Keep changes focused, and open a discussion or draft PR when the direction is uncertain.
 
-- Keep layer boundaries sharp: `engine` is reusable infrastructure, `game` owns domain rules, `screens` owns UI, and `app`/`assets` bridge systems.
+- Follow the [three architectural layers](docs/architecture.md): `deadlib-*` owns reusable engine functionality, `deadsync-*` owns game behavior, and `deadsync-theme-*` owns replaceable presentation.
 - Favor idiomatic, direct Rust: small cohesive functions, short names, explicit ownership, and methods or traits only when they reduce complexity.
 - Use `Result` for external failures, panic only on programmer errors, document `unsafe`, and test observable behavior rather than implementation details.
 - Profile before optimizing hot paths. Pre-size and reuse buffers, favor contiguous data, and avoid surprise allocations, I/O, or locks during gameplay.

@@ -952,6 +952,37 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         gameplay_target_score_setting(self.target_score)
     }
 
+    fn target_score_kind(&self) -> deadsync_gameplay::GameplayTargetScoreKind {
+        match self.mini_indicator_score_type {
+            deadsync_profile::MiniIndicatorScoreType::Itg => {
+                deadsync_gameplay::GameplayTargetScoreKind::Itg
+            }
+            deadsync_profile::MiniIndicatorScoreType::Ex => {
+                deadsync_gameplay::GameplayTargetScoreKind::Ex
+            }
+            deadsync_profile::MiniIndicatorScoreType::HardEx => {
+                deadsync_gameplay::GameplayTargetScoreKind::HardEx
+            }
+        }
+    }
+
+    fn target_score_miss_policy(&self) -> deadsync_gameplay::GameplayTargetScoreMissPolicy {
+        match self.target_score_miss_policy {
+            deadsync_profile::TargetScoreMissPolicy::Nothing => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::Nothing
+            }
+            deadsync_profile::TargetScoreMissPolicy::DimMiniIndicator => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::DimMiniIndicator
+            }
+            deadsync_profile::TargetScoreMissPolicy::Fail => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::Fail
+            }
+            deadsync_profile::TargetScoreMissPolicy::RestartSong => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::RestartSong
+            }
+        }
+    }
+
     fn timing_disabled_windows(&self) -> [bool; 5] {
         self.timing_windows.disabled_windows()
     }

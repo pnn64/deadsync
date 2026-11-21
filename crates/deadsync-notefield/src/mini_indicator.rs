@@ -70,12 +70,12 @@ pub fn zmod_target_score_missed(
     progress: &MiniIndicatorProgress,
     target_score_percent: f64,
 ) -> bool {
-    if !progress.judged_any {
-        return false;
+    deadsync_gameplay::GameplayTargetScoreProgress {
+        judged_any: progress.judged_any,
+        current_score_percent: progress.current_score_percent,
+        current_possible_ratio: progress.current_possible_ratio,
     }
-    let attainable = (1.0 - progress.current_possible_ratio.clamp(0.0, 1.0))
-        .mul_add(100.0, progress.current_score_percent.clamp(0.0, 100.0));
-    attainable < target_score_percent.clamp(0.0, 100.0)
+    .missed(target_score_percent)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

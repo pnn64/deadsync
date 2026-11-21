@@ -24,7 +24,7 @@ use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
 };
 use deadsync_smx::SmxPadPreset;
-use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_core::color::DifficultyColorScheme;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use winit::keyboard::KeyCode;
 

@@ -665,7 +665,7 @@ mod tests {
     use deadsync_rules::note::Note;
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::TimingData;
-    use deadsync_theme::{
+    use deadsync_core::hud_style::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle, NotefieldHudStyle,

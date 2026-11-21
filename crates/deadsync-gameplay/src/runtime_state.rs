@@ -964,6 +964,7 @@ pub enum GameplayAction {
     None,
     Navigate(GameplayExit),
     NavigateNoFade(GameplayExit),
+    Restart,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1057,6 +1058,7 @@ impl GameplayExitInputState {
 #[derive(Clone, Debug)]
 pub struct GameplayControlRuntimeState {
     pub paused: bool,
+    pub(crate) missed_target_handled: [bool; MAX_PLAYERS],
     pub exit_input: GameplayExitInputState,
     pub offset_adjust_hold: GameplayOffsetAdjustHoldState,
     pub input_state: GameplayInputState,

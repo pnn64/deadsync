@@ -69,7 +69,7 @@ pub fn open_bundled_image(path: &str) -> image::ImageResult<image::DynamicImage>
 pub fn load_initial_assets<T>(
     assets: &mut deadlib_assets::AssetManager,
     backend: &mut deadlib_render::Backend,
-    manifest: deadsync_theme::ThemeAssetManifest<T>,
+    manifest: deadlib_assets::AssetManifest<T>,
 ) -> Result<(), deadlib_assets::AssetError>
 where
     T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,

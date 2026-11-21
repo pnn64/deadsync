@@ -813,7 +813,6 @@ pub struct State {
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
     rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
-    missed_target_handled: [bool; MAX_PLAYERS],
     scorebox_plans: [gs_scorebox::GameplayScoreboxPlan; MAX_PLAYERS],
     /// Whether an active scorebox still has an asynchronous leaderboard load
     /// to poll. The game thread updates this two-entry reduction only when a
@@ -1368,7 +1367,6 @@ impl State {
             scorebox_profile_snapshot,
             scorebox_side_snapshot,
             rival_score_types,
-            missed_target_handled: [false; MAX_PLAYERS],
             scorebox_plans,
             scorebox_refresh_pending,
             itl_cmod_warning: [false; MAX_PLAYERS],
@@ -1938,6 +1936,9 @@ const fn map_gameplay_action(action: GameplayAction) -> ThemeEffect {
         GameplayAction::None => ThemeEffect::None,
         GameplayAction::Navigate(exit) => ThemeEffect::Navigate(screen_for_exit(exit)),
         GameplayAction::NavigateNoFade(exit) => ThemeEffect::NavigateNoFade(screen_for_exit(exit)),
+        GameplayAction::Restart => {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RestartGameplay)
+        }
     }
 }
 
@@ -2816,14 +2817,6 @@ impl SongLuaOut {
     }
 }
 
-fn fail_autoplay_players(players: &mut [deadsync_gameplay::PlayerRuntime]) {
-    // Simply Love's FailOnHoldStart.lua remembers JudgmentMessage autoplay
-    // use per player, then calls FailPlayer on Off without draining life.
-    for player in players {
-        player.stage_failed |= player.autoplay_judged;
-    }
-}
-
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
 /// Runtime audio commands remain queued until the shell executes them.
 pub fn update(
@@ -2867,17 +2860,14 @@ pub fn update_with_input(
     if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
         // A screen without an owned Lua outro hands off immediately.
-        if state.gameplay.progress.stage.song_completed_naturally {
-            state.gameplay.finalize_completed_mines();
-        }
-        let count = state.gameplay.num_players().min(MAX_PLAYERS);
-        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
+        state.gameplay.finalize_completed_stage();
     }
 
     if let Err(error) = state.advance_song_lua(delta_time, uptime_seconds, effects) {
         state.song_lua_output.errors.push(error);
     }
     update_life_meter_visuals(state, delta_time);
+    let resolved_action = state.gameplay.resolve_frame_action(action);
     match action {
         GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)
@@ -2887,12 +2877,8 @@ pub fn update_with_input(
             // The owned scene handles NotesEnded, Off and the out transition.
             // Repeated Core completion requests keep its original clock.
         }
-        GameplayAction::None => {
-            if let Some(effect) = missed_target_effect(state) {
-                effects.push(effect);
-            }
-        }
-        action => effects.push(map_gameplay_action(action)),
+        GameplayAction::None if resolved_action == GameplayAction::None => {}
+        _ => effects.push(map_gameplay_action(resolved_action)),
     }
     if state.song_lua.is_none() {
         after_update_input(state);
@@ -2938,49 +2924,6 @@ fn update_life_meter_visuals(state: &mut State, delta_time: f32) {
         let dead = runtime.is_failing || life <= 0.0;
         state.life_meter_visuals[player].update(life, dead, delta_time);
     }
-}
-
-fn missed_target_effect(state: &mut State) -> Option<ThemeEffect> {
-    for player_idx in 0..state.gameplay.num_players().min(MAX_PLAYERS) {
-        if state.missed_target_handled[player_idx] {
-            continue;
-        }
-        let profile = &state.gameplay.profiles()[player_idx];
-        let policy = profile.target_score_miss_policy;
-        if matches!(
-            policy,
-            profile_data::TargetScoreMissPolicy::Nothing
-                | profile_data::TargetScoreMissPolicy::DimMiniIndicator
-        ) {
-            continue;
-        }
-        let score_type = profile.mini_indicator_score_type;
-        let target_score_percent = state
-            .gameplay
-            .mini_indicator_target_score_percent(player_idx);
-        if !notefield::zmod_target_score_missed(
-            &state.gameplay,
-            player_idx,
-            score_type,
-            target_score_percent,
-        ) {
-            continue;
-        }
-
-        state.missed_target_handled[player_idx] = true;
-        return Some(match policy {
-            profile_data::TargetScoreMissPolicy::Fail => {
-                state.gameplay.force_fail_player(player_idx);
-                ThemeEffect::NavigateNoFade(Screen::Evaluation)
-            }
-            profile_data::TargetScoreMissPolicy::RestartSong => {
-                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RestartGameplay)
-            }
-            profile_data::TargetScoreMissPolicy::Nothing
-            | profile_data::TargetScoreMissPolicy::DimMiniIndicator => unreachable!(),
-        });
-    }
-    None
 }
 
 /// The pads to drive for the FSR sensor display, as `(store_index, sdk_pad)`:
@@ -3129,8 +3072,7 @@ pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
     state.queue_song_lua_inputs(std::iter::once((*ev, physical)));
     if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
         | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
-        let count = state.gameplay.num_players().min(MAX_PLAYERS);
-        fail_autoplay_players(&mut state.gameplay.players_runtime.players[..count]);
+        state.gameplay.mark_autoplay_stage_failures();
     }
     let effect = map_gameplay_action(action);
     if matches!(&effect, ThemeEffect::NavigateNoFade(_))
@@ -6257,27 +6199,6 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn autoplay_off_failure_preserves_life_and_player_identity() {
-        let mut players = std::array::from_fn::<_, 2, _>(|_| deadsync_gameplay::init_player_runtime());
-        players[0].autoplay_judged = true;
-        super::fail_autoplay_players(&mut players);
-        assert!(players[0].stage_failed);
-        assert!(!players[1].stage_failed);
-        for player in &players {
-            assert_eq!(player.life, 0.5);
-            assert!(!player.is_failing);
-            assert_eq!(player.fail_time, None);
-        }
-        players[1].autoplay_judged = true;
-        super::fail_autoplay_players(&mut players[..1]);
-        assert!(!players[1].stage_failed, "disabled players do not receive Off");
-        players[0].autoplay_judged = false;
-        super::fail_autoplay_players(&mut players);
-        assert!(players[0].stage_failed, "an existing stage failure stays failed");
-        assert!(players[1].stage_failed);
-    }
-
     #[test]
     fn song_lua_out_native_clocks() {
         let native: serde_json::Value = serde_json::from_str(include_str!(concat!(

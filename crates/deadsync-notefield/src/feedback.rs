@@ -8,7 +8,7 @@ use deadsync_gameplay::{
 };
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldHudStyle};
+use deadsync_core::hud_style::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, NotefieldHudStyle};
 
 /// One regular countdown plus the two overlapping crossover countdowns.
 pub const COLUMN_COUNTDOWN_SLOTS_PER_PLAYER: u8 = 3;
@@ -650,7 +650,7 @@ mod tests {
     use super::*;
     use deadlib_present::actors::{FlatDraw, FlatPreparedU32, FlatSprite, SpriteSource, TextAlign};
     use deadsync_gameplay::ColumnCueColumn;
-    use deadsync_theme::{
+    use deadsync_core::hud_style::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
         ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
     };

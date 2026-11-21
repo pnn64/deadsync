@@ -24,7 +24,7 @@ use deadlib_input_native::WindowsPadBackend;
 use deadlib_platform::logging;
 use deadlib_render_core::{BackendType, PresentModePolicy};
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
-use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_core::color::DifficultyColorScheme;
 use log::warn;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 

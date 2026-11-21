@@ -47,6 +47,14 @@ pub use registry::{
 pub use texture_store::{BoundTexture, TextureStore};
 pub use upload::TextureUploadImage;
 
+/// Application-supplied asset catalog, independent of game or theme policy.
+/// The caller resolves resource paths and selects texture sampling requirements.
+pub struct AssetManifest<T> {
+    pub fonts: &'static [FontAssetSpec],
+    pub textures: T,
+    pub texture_needs_repeat_sampler: fn(&str) -> bool,
+}
+
 use deadlib_render_core::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::warn;

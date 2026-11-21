@@ -1338,6 +1338,7 @@ where
         },
         control: GameplayControlRuntimeState {
             paused: false,
+            missed_target_handled: [false; MAX_PLAYERS],
             exit_input: GameplayExitInputState::default(),
             offset_adjust_hold: GameplayOffsetAdjustHoldState::default(),
             input_state: GameplayInputState::default(),

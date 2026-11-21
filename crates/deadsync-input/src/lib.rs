@@ -27,6 +27,12 @@ pub use keymap::{
     set_keymap, with_keymap,
 };
 
+/// Dedicated RE:Flex player slots follow the native device namespace.
+/// These IDs are persisted in DeadSync's bindings and must remain stable.
+pub const REFLEX_PAD_ID_BASE: usize = deadlib_platform::input::NATIVE_PAD_ID_COUNT_CAP;
+/// DeadSync preallocates input state for native devices and two RE:Flex players.
+pub const PAD_ID_COUNT_CAP: usize = REFLEX_PAD_ID_BASE + 2;
+
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;
 pub const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;

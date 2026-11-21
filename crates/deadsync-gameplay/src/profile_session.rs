@@ -198,6 +198,12 @@ pub trait GameplayProfileData: Clone {
     fn scroll_effects(&self) -> ScrollEffects;
     fn mini_indicator_options(&self) -> GameplayMiniIndicatorOptions;
     fn target_score(&self) -> GameplayTargetScoreSetting;
+    fn target_score_kind(&self) -> GameplayTargetScoreKind {
+        GameplayTargetScoreKind::Itg
+    }
+    fn target_score_miss_policy(&self) -> GameplayTargetScoreMissPolicy {
+        GameplayTargetScoreMissPolicy::Nothing
+    }
     fn timing_disabled_windows(&self) -> [bool; 5];
     fn column_flash_options(&self) -> ColumnFlashOptions;
     fn tap_explosion_options(&self) -> TapExplosionOptions;

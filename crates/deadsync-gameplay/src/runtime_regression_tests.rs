@@ -2,6 +2,7 @@ mod runtime_regression_tests {
     use super::*;
     include!("pad_stick_tests.rs");
     include!("replay_pad_stick_tests.rs");
+    include!("stage_policy_tests.rs");
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{
         ArrowStats, GameplayChartData, SongData, StaminaCounts, SyncPref, TechCounts,
@@ -29,6 +30,8 @@ mod runtime_regression_tests {
         pub(super) global_offset_shift_ms: i32,
         mini_indicator_options: GameplayMiniIndicatorOptions,
         target_score: GameplayTargetScoreSetting,
+        target_score_kind: GameplayTargetScoreKind,
+        target_score_miss_policy: GameplayTargetScoreMissPolicy,
         density_graph: bool,
         golf_enabled: bool,
         combo_milestones_enabled: bool,
@@ -54,6 +57,8 @@ mod runtime_regression_tests {
                 global_offset_shift_ms: 0,
                 mini_indicator_options: GameplayMiniIndicatorOptions::default(),
                 target_score: GameplayTargetScoreSetting::default(),
+                target_score_kind: GameplayTargetScoreKind::Itg,
+                target_score_miss_policy: GameplayTargetScoreMissPolicy::Nothing,
                 density_graph: false,
                 golf_enabled: false,
                 combo_milestones_enabled: true,
@@ -129,6 +134,14 @@ mod runtime_regression_tests {
 
         fn target_score(&self) -> GameplayTargetScoreSetting {
             self.target_score
+        }
+
+        fn target_score_kind(&self) -> GameplayTargetScoreKind {
+            self.target_score_kind
+        }
+
+        fn target_score_miss_policy(&self) -> GameplayTargetScoreMissPolicy {
+            self.target_score_miss_policy
         }
 
         fn timing_disabled_windows(&self) -> [bool; 5] {

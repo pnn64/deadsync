@@ -11,7 +11,7 @@ deadlib-present = { path = "../deadlib-present" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadlib-audio-core = { path = "../deadlib-audio-core" }
 deadsync-audio-stream = { path = "../deadsync-audio-stream" }
-deadsync-theme = { path = "../deadsync-theme" }
+deadsync-core = { path = "../deadsync-core" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-input = { path = "../deadsync-input" }
 deadlib-input-native = { path = "../deadlib-input-native" }

@@ -60,7 +60,7 @@ use deadlib_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };
-use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_core::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 
