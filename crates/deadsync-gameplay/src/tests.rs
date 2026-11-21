@@ -1552,17 +1552,17 @@ mod tests {
 
     #[test]
     fn gameplay_side_field_centers_match_native_margins_and_translated_origins() {
-        // These are native Player centers; song Lua uses these exact margins.
-        for (width, height, expected) in [
-            (480.0, 480.0, [80.0, 400.0]),
-            (960.0, 960.0, [266.25, 693.75]),
-            (600.0, 480.0, [140.0, 460.0]),
-            (1200.0, 960.0, [386.25, 813.75]),
-            (640.0, 480.0, [160.0, 480.0]),
-            (642.0, 480.0, [160.25, 481.75]),
-            (852.0, 480.0, [213.0, 639.0]),
-            (854.0, 480.0, [213.25, 640.75]),
-            (1280.0, 480.0, [426.25, 853.75]),
+        // This helper retains the original native margins.
+        for (width, expected) in [
+            (480.0, [80.0, 400.0]),
+            (960.0, [266.25, 693.75]),
+            (600.0, [140.0, 460.0]),
+            (1200.0, [386.25, 813.75]),
+            (640.0, [160.0, 480.0]),
+            (642.0, [160.25, 481.75]),
+            (852.0, [213.0, 639.0]),
+            (854.0, [213.25, 640.75]),
+            (1280.0, [426.25, 853.75]),
         ] {
             for origin in [0.0, 23.75, -250.125] {
                 for (player, x) in expected.into_iter().enumerate() {
@@ -1572,67 +1572,40 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn song_lua_player_defaults_match_viewport_notefield_centers() {
+        for (width, height) in [
+            (270.0, 480.0),
+            (480.0, 480.0),
+            (600.0, 480.0),
+            (640.0, 480.0),
+            (642.0, 480.0),
+            (854.0, 480.0),
+            (960.0, 960.0),
+            (1280.0, 960.0),
+        ] {
+            let viewport = GameplayViewport::new(width, height);
+            let expected = [
+                gameplay_viewport_side_field_center_x(viewport, viewport.center_x(), false),
+                gameplay_viewport_side_field_center_x(viewport, viewport.center_x(), true),
+            ];
             let defaults = build_song_lua_player_actor_defaults_like(
                 2,
-                GameplayViewport::new(width, height),
+                viewport,
                 SongLuaCompilePlayStyle::Versus,
                 false,
                 [0.0; MAX_PLAYERS],
                 false,
             );
-            assert_eq!(defaults.map(|player| player.x), expected);
+            assert_eq!(
+                defaults.map(|player| player.x),
+                expected,
+                "viewport {width}x{height}"
+            );
         }
-    }
-
-    #[test]
-    fn gameplay_notefield_centers_fit_narrow_viewports_without_changing_lua_centers() {
-        let narrow_viewport = GameplayViewport::new(480.0, 480.0);
-        assert_eq!(
-            [
-                gameplay_notefield_side_field_center_x(
-                    narrow_viewport,
-                    narrow_viewport.center_x(),
-                    false,
-                ),
-                gameplay_notefield_side_field_center_x(
-                    narrow_viewport,
-                    narrow_viewport.center_x(),
-                    true,
-                ),
-            ],
-            [120.0, 360.0]
-        );
-        assert_eq!(
-            [
-                gameplay_side_field_center_x(
-                    narrow_viewport.width(),
-                    narrow_viewport.center_x(),
-                    false,
-                ),
-                gameplay_side_field_center_x(
-                    narrow_viewport.width(),
-                    narrow_viewport.center_x(),
-                    true,
-                ),
-            ],
-            [80.0, 400.0]
-        );
-
-        let viewport = GameplayViewport::new(960.0, 960.0);
-        assert_eq!(
-            [
-                gameplay_notefield_side_field_center_x(viewport, viewport.center_x(), false),
-                gameplay_notefield_side_field_center_x(viewport, viewport.center_x(), true),
-            ],
-            [240.0, 720.0]
-        );
-        assert_eq!(
-            [
-                gameplay_side_field_center_x(viewport.width(), viewport.center_x(), false),
-                gameplay_side_field_center_x(viewport.width(), viewport.center_x(), true),
-            ],
-            [266.25, 693.75]
-        );
     }
 
     #[test]

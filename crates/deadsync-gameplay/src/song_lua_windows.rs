@@ -644,7 +644,7 @@ where
 
 /// Native Player center for a side field in Simply Love's coordinate space.
 /// SafeFArg converts native margins to integers before ScreenGameplay places
-/// each Player. Keep this calculation unchanged for song Lua coordinates.
+/// each Player. This is the wide-viewport baseline for viewport-aware placement.
 #[inline]
 #[must_use]
 pub fn gameplay_side_field_center_x(
@@ -662,11 +662,10 @@ pub fn gameplay_side_field_center_x(
     screen_center_x + if p2 { displacement } else { -displacement }
 }
 
-/// Center a rendered side notefield within its half-screen on narrow viewports.
-/// Lua Player coordinates continue to use `gameplay_side_field_center_x`.
+/// Viewport-aware Player center shared by rendered notefields and song Lua.
 #[inline]
 #[must_use]
-pub fn gameplay_notefield_side_field_center_x(
+pub fn gameplay_viewport_side_field_center_x(
     viewport: GameplayViewport,
     screen_center_x: f32,
     p2: bool,
@@ -704,7 +703,7 @@ pub fn song_lua_compile_player_screen_x(
         viewport.center_x()
     } else {
         let offset_sign = if p2_side { 1.0 } else { -1.0 };
-        gameplay_side_field_center_x(viewport.width(), viewport.center_x(), p2_side)
+        gameplay_viewport_side_field_center_x(viewport, viewport.center_x(), p2_side)
             + offset_sign * note_field_offset_x.clamp(0.0, 50.0)
     }
 }
