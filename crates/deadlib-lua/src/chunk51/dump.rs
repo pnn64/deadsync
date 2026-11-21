@@ -33,6 +33,26 @@ impl Output {
         self.block(&n.to_ne_bytes())?;
         Ok(())
     }
+    fn words(&mut self, mut words: &[u32]) -> Result<(), Error> {
+        self.integer(words.len())?;
+        while let Some((&first, tail)) = words.split_first() {
+            self.bytes.try_extend_from_slice(&first.to_ne_bytes())?;
+            let start = self.bytes.len();
+            // Fill the space already reserved so growth occurs at the same word.
+            let room = (self.bytes.capacity() - start) / 4;
+            let (batch, remaining) = tail.split_at(tail.len().min(room));
+            if !batch.is_empty() {
+                let end = start + batch.len() * 4;
+                self.bytes.resize(end, 0);
+                let (out, _) = self.bytes[start..end].as_chunks_mut::<4>();
+                for (out, &word) in out.iter_mut().zip(batch) {
+                    *out = word.to_ne_bytes();
+                }
+            }
+            words = remaining;
+        }
+        self.end()
+    }
     fn string(&mut self, value: Option<&[u8]>) -> Result<(), Error> {
         self.block(&value.map_or(0, |s| s.len() + 1).to_ne_bytes())?;
         if let Some(value) = value {
@@ -124,11 +144,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 for flag in [p.upvalues.len() as u8, p.params as u8, vararg, stack] {
                     output.block(&[flag])?;
                 }
-                output.integer(body.code().len())?;
-                for word in body.code() {
-                    output.bytes.try_extend_from_slice(&word.to_ne_bytes())?;
-                }
-                output.end()?;
+                output.words(body.code())?;
                 output.integer(constants)?;
                 for k in &p.constants[..constants] {
                     match k {
@@ -158,11 +174,7 @@ fn serialize(data: &ProgramData, entry: usize, blocks: bool) -> Result<Output, E
                 )?;
             }
             Task::Debug(p, body) => {
-                output.integer(body.lines().len())?;
-                for line in body.lines() {
-                    output.bytes.try_extend_from_slice(&line.to_ne_bytes())?;
-                }
-                output.end()?;
+                output.words(body.lines())?;
                 let remapped = match &body {
                     Body::Source(lowered) => lowered.locals.as_deref(),
                     _ => None,
