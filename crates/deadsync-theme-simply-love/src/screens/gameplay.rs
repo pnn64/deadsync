@@ -50,8 +50,7 @@ use deadsync_gameplay::{
     LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     TAP_EXPLOSION_WINDOWS, autosync_mode_status_line, blue_fantastic_window_ms,
-    build_crossover_rows, exit_transition_alpha, handle_core_input, scroll_receptor_y,
-    spacing_multiplier_for_percent, update_core,
+    build_crossover_rows, exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
@@ -70,6 +69,9 @@ use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
+use deadsync_song_lua::gameplay_session::{
+    self, SongLuaGameplayHost, SongLuaGameplaySession,
+};
 use deadsync_song_lua::playback::{song_lua_sound_paths, song_meter_progress};
 pub type GameplayCoreState = deadsync_song_lua::playback::GameplayCoreState<
     deadsync_profile_gameplay::GameplayProfile,
@@ -276,9 +278,9 @@ pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 /// Duration of the black-to-transparent fade that ends the in-transition.
 /// The black holds solid for (`TRANSITION_IN_DURATION` - this), then lifts over this window.
 pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
-// Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
-pub const TRANSITION_OUT_DELAY: f32 = 0.5;
-pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
+// The cover follows the game-owned song exit clock.
+pub const TRANSITION_OUT_DELAY: f32 = gameplay_session::SONG_LUA_OUT_DELAY;
+pub const TRANSITION_OUT_FADE_DURATION: f32 = gameplay_session::SONG_LUA_OUT_FADE_DURATION;
 const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -775,22 +777,13 @@ fn smooth_life_p(value: f32) -> f32 {
     }
 }
 
-/// Held physical inputs survive a song-requested ScreenGameplay reload.
-#[derive(Default)]
-pub struct SongLuaHeldInputs(Vec<(InputEvent, Option<deadsync_input::PhysicalInput>, f32)>);
+/// Compatibility alias for the game-owned held-input reload token.
+pub type SongLuaHeldInputs = deadsync_input::HeldCallbackInputs;
 
 pub struct State {
     pub gameplay: GameplayCoreState,
-    /// One initialized song VM owned by the screen, transferred from the load
-    /// worker. Its fixed pose bindings and render plan live until screen exit.
-    pub song_lua: Option<deadsync_song_lua::SongLuaLiveScene>,
-    song_lua_last_input: Option<InputEvent>,
-    song_lua_pending_inputs: Vec<(InputEvent, Option<deadsync_input::PhysicalInput>)>,
-    song_lua_held_inputs: SongLuaHeldInputs,
-    song_lua_output: deadsync_song_lua::SongLuaLiveOutput,
-    song_lua_out: Option<SongLuaOut>,
-    song_lua_ended: bool,
-    song_lua_draw_reload_pending: bool,
+    /// Game-owned song callbacks, frame ordering, input and exit state.
+    pub song_lua: SongLuaGameplaySession,
     #[cfg(feature = "test-support")]
     pub(crate) arrow_tipsy_clock_inputs: [Option<f64>; MAX_PLAYERS],
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
@@ -982,70 +975,28 @@ impl GameplayPresentationSkeleton {
 }
 
 impl State {
-    /// Transfer authored callbacks from the loading worker to the gameplay screen.
-    pub fn attach_song_lua(&mut self, mut scene: deadsync_song_lua::SongLuaLiveScene) -> Result<(), String> {
-        scene.initialize_gameplay_clock(&mut self.gameplay);
-        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
-        scene.prepare_gameplay_player_options(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        // Simply Love's Player metric is -1; Player.cpp compares it unsigned.
-        scene.install_note_field_tap_callback(&mut self.gameplay, u32::MAX)
-            .map_err(|error| error.to_string())?;
-        scene.install_tap_row_judgment_callback(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        scene.install_step_callback(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        scene.install_hold_judgment_callback(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        scene.install_avoided_mine_judgment_callback(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        scene.install_life_changed_callback(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        if let Some(scratch) = &mut self.song_scratch { scratch.enable_dynamic_scene(); }
-        self.song_lua_output = scene.take_startup_output();
-        if !self.song_lua_output.errors.is_empty() {
-            self.gameplay.mods.song_lua_compile_succeeded = false;
-        }
-        scene.apply_output_player_writes(&self.song_lua_output, &mut self.gameplay);
-        self.song_lua = Some(scene);
-        Ok(())
-    }
-
-    fn end_song_lua(&mut self) -> Result<(), String> {
-        if self.song_lua_ended { return Ok(()); }
-        let Some(scene) = &mut self.song_lua else { return Ok(()); };
-        // ScreenGameplay saves final accounting when leaving the screen,
-        // after normal Player updates have finished the out transition.
-        if self.gameplay.progress.stage.song_completed_naturally
-            && self.gameplay.current_music_time_ns() >= self.gameplay.music_end_time_ns()
-        {
-            self.gameplay.finalize_completed_mines();
-        }
-        let output = scene.end().map_err(|error| error.to_string())?;
-        scene.apply_output_player_writes(&output, &mut self.gameplay);
-        self.song_lua_output.append(output);
-        self.song_lua_ended = true;
-        self.gameplay.note_field_tap_callback = None;
-        self.gameplay.tap_row_judgment_callback = None;
-        self.gameplay.hold_judgment_callback = None;
-        self.gameplay.avoided_mine_judgment_callback = None;
-        self.gameplay.life_changed_callback = None;
-        self.gameplay.chart_runtime.mine_scan.pending_avoided_mine_judgments.clear();
-        Ok(())
+    /// Transfer authored callbacks from the loading worker to the game session.
+    pub fn attach_song_lua(
+        &mut self,
+        scene: deadsync_song_lua::SongLuaLiveScene,
+    ) -> Result<(), String> {
+        let song_scratch = &mut self.song_scratch;
+        self.song_lua.attach(&mut self.gameplay, scene, || {
+            if let Some(scratch) = song_scratch {
+                scratch.enable_dynamic_scene();
+            }
+        })
     }
 
     /// The shell drains sounds and requests once after each gameplay frame.
     /// Broadcast listeners have already run in the retained Lua scene.
     pub fn take_song_lua_output(&mut self) -> deadsync_song_lua::SongLuaLiveOutput {
-        if !self.song_lua_output.errors.is_empty() {
-            self.gameplay.mods.song_lua_compile_succeeded = false;
-        }
-        std::mem::take(&mut self.song_lua_output)
+        self.song_lua.take_output(&mut self.gameplay)
     }
 
     #[cfg(feature = "test-support")]
     pub fn song_lua_draw_frames(&self) -> &[deadsync_song_lua::SongLuaDrawFrame] {
-        &self.song_lua_output.draw_frames
+        self.song_lua.draw_frames()
     }
 
     /// Replay raw native cache clocks; actor/effect outputs remain locally computed.
@@ -1059,96 +1010,6 @@ impl State {
             "native ArrowEffects clocks must be finite and nonnegative"
         );
         self.arrow_tipsy_clock_inputs = tipsy;
-    }
-
-    fn advance_song_lua(&mut self, delta: f32, uptime_seconds: Option<f64>, effects: &mut Vec<ThemeEffect>) -> Result<(), String> {
-        let Some(scene) = &mut self.song_lua else { return Ok(()); };
-        scene.apply_pending_player_writes(&mut self.gameplay);
-        scene.runtime_mut().publish_gameplay_life_records(&self.gameplay);
-        let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(&self.gameplay, delta);
-        frame.uptime_seconds = uptime_seconds;
-        let outro_before_actors = frame.gameplay_outro;
-        let output = scene.update(frame).map_err(|error| error.to_string())?;
-        scene.apply_output_player_writes(&output, &mut self.gameplay);
-        scene.prepare_gameplay_player_options(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        let gameplay_clock_active = scene.gameplay_clock_active();
-        scene.finish_gameplay_audio(&mut self.gameplay);
-        scene.finish_gameplay_failures(&mut self.gameplay, gameplay_clock_active)
-            .map_err(|error| error.to_string())?;
-        // Native ScreenGameplay checks failure after updating its actor tree.
-        // Lua can drain life during this update, after the core's earlier check.
-        if !outro_before_actors && self.gameplay.finish_gameplay_if_ready(false).is_some() {
-            scene.note_gameplay_outro_after_actors();
-        }
-        scene.finish_gameplay_clock(&mut self.gameplay, gameplay_clock_active)
-            .map_err(|error| error.to_string())?;
-        let request = output.request.as_ref().or(self.song_lua_output.request.as_ref());
-        if matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message == "SM_DoNextScreen")
-            && self.song_lua_out.is_none()
-        {
-            self.gameplay.progress.stage.song_completed_naturally = true;
-            self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
-        }
-        if self.song_lua_draw_reload_pending
-            || matches!(request, Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay") {
-            effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
-            self.song_lua_draw_reload_pending = false;
-        }
-        // Entry events precede the first real update and must reach the shell
-        // exactly once. The shell drains this buffer every frame.
-        self.song_lua_output.append(output);
-        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)?;
-        // ScreenGameplay owns a separate Failed transition. Its completion
-        // can pop the screen while an authored Out transition is still active.
-        let failed_out = scene.outro_off_dispatched() && scene.failed_outro()
-            && self.song_lua_out.as_ref().is_some_and(|out| out.phase != 2);
-        if scene.outro_off_dispatched() && (self.song_lua_out.is_none() || failed_out) {
-            // ScreenGameplay handles LeaveGameplay after its actor Update.
-            // The newly started Transition receives its first delta next frame.
-            self.song_lua_out = Some(if scene.failed_outro() {
-                // The fallback ScreenGameplay failed actor is _blank. Native
-                // Transition dispatches completion on its following update.
-                SongLuaOut { phase: 2, left: 0.0 }
-            } else {
-                SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY }
-            });
-        } else if self.song_lua_out.as_mut().is_some_and(|out| out.advance(delta)) {
-            let target = scene.next_screen_name().map_err(|error| error.to_string())?;
-            let destination = song_lua_transition_screen(target.as_deref())?;
-            self.end_song_lua()?;
-            if destination == crate::screens::SimplyLoveScreen::Gameplay {
-                effects.push(ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua));
-            } else {
-                effects.push(ThemeEffect::NavigateNoFade(destination));
-            }
-        }
-        Ok(())
-    }
-
-    fn draw_song_lua(&mut self) -> Result<(), String> {
-        if self.song_lua_ended { return Ok(()); }
-        let Some(scene) = &mut self.song_lua else { return Ok(()); };
-        if !scene.has_custom_draw().map_err(|error| error.to_string())? { return Ok(()); }
-        let output = scene.draw().map_err(|error| error.to_string())?;
-        scene.apply_output_player_writes(&output, &mut self.gameplay);
-        scene.prepare_gameplay_player_options(&mut self.gameplay)
-            .map_err(|error| error.to_string())?;
-        match output.request.as_ref() {
-            Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message))
-                if message == "SM_DoNextScreen" && self.song_lua_out.is_none() => {
-                    self.gameplay.progress.stage.song_completed_naturally = true;
-                    self.song_lua_out = Some(SongLuaOut { phase: 0, left: TRANSITION_OUT_DELAY });
-                }
-            Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen == "ScreenGameplay" => {
-                // Draw follows ScreenManager::Update: its delayed screen load
-                // is processed after the next update, not during this draw.
-                self.song_lua_draw_reload_pending = true;
-            }
-            _ => {}
-        }
-        self.song_lua_output.append(output);
-        scene.write_visuals(&mut self.gameplay.mods.song_lua_visuals)
     }
 
     pub const fn machine_font(&self) -> deadsync_config::theme::MachineFont {
@@ -1216,9 +1077,7 @@ impl State {
         hud_snapshot: profile_data::GameplayHudSnapshot,
         judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
     ) -> Self {
-        // Simply Love overrides MusicFadeOutSeconds; OutTransitionLength is
-        // inherited from the native fallback metrics.
-        gameplay.set_music_end_fade_timing(0.25, 5.0);
+        let song_lua = SongLuaGameplaySession::for_gameplay(&mut gameplay);
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
@@ -1341,14 +1200,7 @@ impl State {
         );
         let state = Self {
             gameplay,
-            song_lua: None,
-            song_lua_last_input: None,
-            song_lua_pending_inputs: Vec::new(),
-            song_lua_held_inputs: SongLuaHeldInputs::default(),
-            song_lua_output: deadsync_song_lua::SongLuaLiveOutput::default(),
-            song_lua_out: None,
-            song_lua_ended: false,
-            song_lua_draw_reload_pending: false,
+            song_lua,
             #[cfg(feature = "test-support")]
             arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
@@ -1512,6 +1364,41 @@ impl State {
     #[inline(always)]
     const fn display_mods_text(&self, player: usize) -> &Arc<str> {
         &self.display_mods_text[player]
+    }
+}
+
+impl SongLuaGameplayHost for State {
+    type Profile = GameplayProfile;
+    type OverlayActor = deadsync_song_lua::SongLuaOverlayActor<
+        deadsync_song_lua::SongLuaOverlayKind<
+            noteskin::SpriteSlot,
+            deadlib_render_core::TexturedMeshVertex,
+            deadlib_present::actors::TextAttribute,
+        >,
+    >;
+    type CapturedActor = deadsync_song_lua::SongLuaCapturedActor;
+    type StateDelta = deadsync_song_lua::gameplay::SongLuaRuntimeOverlayStateDelta;
+    type Effect = ThemeEffect;
+
+    fn gameplay_parts(&mut self) -> (&mut GameplayCoreState, &mut SongLuaGameplaySession) {
+        (&mut self.gameplay, &mut self.song_lua)
+    }
+
+    fn update_gameplay_visuals(&mut self, delta_time: f32) {
+        update_life_meter_visuals(self, delta_time);
+    }
+
+    fn gameplay_effect(action: GameplayAction) -> ThemeEffect {
+        map_gameplay_action(action)
+    }
+
+    fn reload_song_lua_effect() -> ThemeEffect {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua)
+    }
+
+    fn next_screen_effect(name: Option<&str>) -> Result<ThemeEffect, String> {
+        let destination = song_lua_transition_screen(name)?;
+        Ok(ThemeEffect::NavigateNoFade(destination))
     }
 }
 
@@ -2776,20 +2663,11 @@ pub fn prepare_update(state: &mut State, effects: &mut Vec<ThemeEffect>) -> bool
     true
 }
 
-// ScreenGameplay out.lua sleeps 0.5s then tweens for 1s. Actor.cpp consumes
-// each step with f32 arithmetic; Transition::UpdateInternal dispatches its
-// completion on the following update, before advancing the finished tween.
-#[derive(Debug)]
-struct SongLuaOut {
-    phase: u8,
-    left: f32,
-}
-
 fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::SimplyLoveScreen, String> {
     use crate::screens::SimplyLoveScreen as Screen;
     let Some(name) = name.filter(|name| !name.is_empty()) else { return Ok(Screen::Evaluation); };
     [
-        Screen::Menu, Screen::Gameplay, Screen::Practice, Screen::Options,
+        Screen::Menu, Screen::Practice, Screen::Options,
         Screen::Credits, Screen::ContentBrowser, Screen::ManageLocalProfiles, Screen::Init,
         Screen::Initials, Screen::GameOver, Screen::Mappings, Screen::Input,
         Screen::SelectProfile, Screen::GrooveStatsLogin, Screen::ArrowCloudLogin, Screen::SelectColor,
@@ -2799,22 +2677,6 @@ fn song_lua_transition_screen(name: Option<&str>) -> Result<crate::screens::Simp
         Screen::SmxAssignPads,
     ].into_iter().find(|screen| screen.current_screen_file_name() == name)
         .ok_or_else(|| format!("unsupported song Lua next screen {name}"))
-}
-
-impl SongLuaOut {
-    fn advance(&mut self, mut delta: f32) -> bool {
-        if self.phase == 2 { return true; }
-        while self.phase < 2 {
-            let used = self.left.min(delta);
-            delta -= used;
-            self.left -= used;
-            if self.left > 0.0 { break; }
-            self.phase += 1;
-            self.left = if self.phase == 1 { TRANSITION_OUT_FADE_DURATION } else { 0.0 };
-            if delta <= 0.0 { break; }
-        }
-        false
-    }
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
@@ -2836,85 +2698,14 @@ pub fn update_with_input(
     effects: &mut Vec<ThemeEffect>,
     after_update_input: impl FnOnce(&mut State),
 ) {
-    if state.song_lua_ended { return; }
-    let effect_start = effects.len();
-    if let Some(scene) = &state.song_lua
-        && let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
-        state.song_lua_output.errors.push(error.to_string());
-    }
-    let host_nanos = audio_snapshot.stream_clock.valid_at_host_nanos;
-    let uptime_seconds = if state.song_lua.is_some() && host_nanos != 0 {
-        Some(host_nanos as f64 / 1_000_000_000.0)
-    } else { None };
-    let action = if let Some(scene) = &mut state.song_lua {
-        let errors = &mut state.song_lua_output.errors;
-        deadsync_gameplay::update_core_with_pre_player(&mut state.gameplay, delta_time, audio_snapshot,
-            fallback_host_nanos, |game| {
-                let mut frame = deadsync_song_lua::SongLuaLiveFrame::from_gameplay(game, delta_time);
-                frame.uptime_seconds = uptime_seconds;
-                if let Err(error) = scene.prepare_gameplay_frame(frame) { errors.push(error.to_string()); }
-                scene.apply_pending_player_writes(game);
-                if let Err(error) = scene.prepare_gameplay_player_options(game) { errors.push(error.to_string()); }
-            })
-    } else { update_core(state, delta_time, audio_snapshot, fallback_host_nanos) };
-    if state.song_lua.is_none() && matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
-        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
-        // A screen without an owned Lua outro hands off immediately.
-        state.gameplay.finalize_completed_stage();
-    }
-
-    if let Err(error) = state.advance_song_lua(delta_time, uptime_seconds, effects) {
-        state.song_lua_output.errors.push(error);
-    }
-    update_life_meter_visuals(state, delta_time);
-    let resolved_action = state.gameplay.resolve_frame_action(action);
-    match action {
-        GameplayAction::Navigate(GameplayExit::Complete)
-        | GameplayAction::NavigateNoFade(GameplayExit::Complete)
-            if state.song_lua_out.is_some() || (state.song_lua.is_some()
-                && state.gameplay.mods.attacks.cleared_for_outro) =>
-        {
-            // The owned scene handles NotesEnded, Off and the out transition.
-            // Repeated Core completion requests keep its original clock.
-        }
-        GameplayAction::None if resolved_action == GameplayAction::None => {}
-        _ => effects.push(map_gameplay_action(resolved_action)),
-    }
-    if state.song_lua.is_none() {
-        after_update_input(state);
-        return;
-    }
-    let mut pending_inputs = std::mem::take(&mut state.song_lua_pending_inputs);
-    for (event, physical) in pending_inputs.drain(..) {
-        dispatch_song_lua_input(state, &event, physical);
-    }
-    pending_inputs.append(&mut state.song_lua_pending_inputs);
-    state.song_lua_pending_inputs = pending_inputs;
-    // InputFilter's default repeat delay/rate. Repeats reach Lua callbacks
-    // without replaying scoring or menu actions, and work for pads as well as keys.
-    let mut repeats = Vec::new();
-    for (event, physical, held) in &mut state.song_lua_held_inputs.0 {
-        let old = *held;
-        *held += delta_time.max(0.0);
-        if *held > 0.375 && (old < 0.375 || ((old-0.375)/0.125) as u32 != ((*held-0.375)/0.125) as u32) {
-            repeats.push((*event, *physical));
-        }
-    }
-    for (event, physical) in repeats { dispatch_song_lua_callback(state, &event, physical, deadsync_song_lua::SongLuaInputType::Repeat); }
-    after_update_input(state);
-    // GameLoop updates the screen manager before drawing. An outgoing screen
-    // is already popped; a replacement has not received its first Update yet.
-    let pops = effects[effect_start..].iter().any(|effect| matches!(effect,
-        ThemeEffect::NavigateNoFade(_)));
-    if pops && let Err(error) = state.end_song_lua() {
-        state.song_lua_output.errors.push(error);
-    }
-    let screen_changes = pops || effects[effect_start..].iter().any(|effect| matches!(effect,
-        ThemeEffect::Navigate(_)
-        | ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ReloadSongLua)));
-    if !screen_changes && let Err(error) = state.draw_song_lua() {
-        state.song_lua_output.errors.push(error);
-    }
+    gameplay_session::update(
+        state,
+        delta_time,
+        audio_snapshot,
+        fallback_host_nanos,
+        effects,
+        after_update_input,
+    );
 }
 
 fn update_life_meter_visuals(state: &mut State, delta_time: f32) {
@@ -3068,19 +2859,7 @@ pub fn handle_input_with_device(state: &mut State, ev: &InputEvent,
     if lobby_hud_toggled {
         return;
     }
-    let action = handle_core_input(state, ev);
-    state.queue_song_lua_inputs(std::iter::once((*ev, physical)));
-    if matches!(action, GameplayAction::Navigate(GameplayExit::Complete)
-        | GameplayAction::NavigateNoFade(GameplayExit::Complete)) {
-        state.gameplay.mark_autoplay_stage_failures();
-    }
-    let effect = map_gameplay_action(action);
-    if matches!(&effect, ThemeEffect::NavigateNoFade(_))
-        && let Err(error) = state.end_song_lua()
-    {
-        state.song_lua_output.errors.push(error);
-    }
-    effect.append_to(effects);
+    gameplay_session::handle_input(state, ev, physical, effects);
 }
 
 impl State {
@@ -3088,167 +2867,29 @@ impl State {
         &mut self,
         events: impl IntoIterator<Item = (InputEvent, Option<deadsync_input::PhysicalInput>)>,
     ) {
-        if self.song_lua.is_some() && !self.song_lua_ended {
-            self.song_lua_pending_inputs.extend(events);
-        }
+        self.song_lua.queue_inputs(events);
     }
-    pub fn reconcile_song_lua_held_inputs(&mut self, mut is_down: impl FnMut(&InputEvent) -> bool) {
-        self.song_lua_held_inputs.0.retain(|(event, _, _)| is_down(event));
+
+    pub fn reconcile_song_lua_held_inputs(&mut self, is_down: impl FnMut(&InputEvent) -> bool) {
+        self.song_lua.reconcile_held_inputs(is_down);
     }
+
     pub fn clear_song_lua_inputs(&mut self) {
-        self.song_lua_pending_inputs.clear();
-        let held = std::mem::take(&mut self.song_lua_held_inputs.0);
-        for (mut event, physical, _) in held {
-            event.pressed = false;
-            dispatch_song_lua_callback(self, &event, physical, deadsync_song_lua::SongLuaInputType::Release);
-        }
-        self.song_lua_last_input = None;
+        self.song_lua.clear_inputs(&mut self.gameplay);
     }
-    pub fn take_song_lua_held_inputs(&mut self) -> SongLuaHeldInputs { std::mem::take(&mut self.song_lua_held_inputs) }
-    pub fn restore_song_lua_held_inputs(&mut self, held: SongLuaHeldInputs) { self.song_lua_held_inputs = held; }
+
+    pub fn take_song_lua_held_inputs(&mut self) -> SongLuaHeldInputs {
+        self.song_lua.take_held_inputs()
+    }
+
+    pub fn restore_song_lua_held_inputs(&mut self, held: SongLuaHeldInputs) {
+        self.song_lua.restore_held_inputs(held);
+    }
 }
 
-fn dispatch_song_lua_input(state: &mut State, event: &InputEvent, physical: Option<deadsync_input::PhysicalInput>) {
-    if state.song_lua.is_none() || state.song_lua_ended { return; }
-    use deadsync_song_lua::SongLuaInputType;
-    // Release aliases exist to clear menu repeat state. They are not another
-    // physical input and must not call authored callbacks a second time.
-    if let Some(previous) = state.song_lua_last_input
-        && previous.timestamp == event.timestamp && previous.input_slot == event.input_slot
-        && previous.source == event.source
-        && event.action.primary_from_menu_alias() == Some(previous.action)
-    { return; }
-    state.song_lua_last_input = Some(*event);
-    state.song_lua_held_inputs.0.retain(|(held, _, _)| held.source != event.source
-        || held.input_slot != event.input_slot || held.action != event.action);
-    if event.pressed { state.song_lua_held_inputs.0.push((*event, physical, 0.0)); }
-    dispatch_song_lua_callback(state, event, physical, if event.pressed { SongLuaInputType::FirstPress } else { SongLuaInputType::Release });
-}
-
-fn dispatch_song_lua_callback(state: &mut State, event: &InputEvent, physical: Option<deadsync_input::PhysicalInput>, kind: deadsync_song_lua::SongLuaInputType) {
-    use deadsync_song_lua::SongLuaInputEvent;
-    let (cabinet, button, menu) = match event.action {
-        VirtualAction::p1_left => (0, "Left", "MenuLeft"),
-        VirtualAction::p1_right => (0, "Right", "MenuRight"),
-        VirtualAction::p1_up => (0, "Up", "MenuUp"),
-        VirtualAction::p1_down => (0, "Down", "MenuDown"),
-        VirtualAction::p2_left => (1, "Left", "MenuLeft"),
-        VirtualAction::p2_right => (1, "Right", "MenuRight"),
-        VirtualAction::p2_up => (1, "Up", "MenuUp"),
-        VirtualAction::p2_down => (1, "Down", "MenuDown"),
-        VirtualAction::p1_start => (0, "Start", "Start"),
-        VirtualAction::p2_start => (1, "Start", "Start"),
-        VirtualAction::p1_select => (0, "Select", "Select"),
-        VirtualAction::p2_select => (1, "Select", "Select"),
-        VirtualAction::p1_back => (0, "Back", "Back"),
-        VirtualAction::p2_back => (1, "Back", "Back"),
-        VirtualAction::p1_menu_left => (0, "MenuLeft", "MenuLeft"),
-        VirtualAction::p1_menu_right => (0, "MenuRight", "MenuRight"),
-        VirtualAction::p1_menu_up => (0, "MenuUp", "MenuUp"),
-        VirtualAction::p1_menu_down => (0, "MenuDown", "MenuDown"),
-        VirtualAction::p2_menu_left => (1, "MenuLeft", "MenuLeft"),
-        VirtualAction::p2_menu_right => (1, "MenuRight", "MenuRight"),
-        VirtualAction::p2_menu_up => (1, "MenuUp", "MenuUp"),
-        VirtualAction::p2_menu_down => (1, "MenuDown", "MenuDown"),
-        VirtualAction::p1_center => (0, "Center", ""),
-        VirtualAction::p2_center => (1, "Center", ""),
-        _ => return,
-    };
-    let player = if state.gameplay.num_players() == 1 {
-        let active = usize::from(state.runtime_view.player_side == profile_data::PlayerSide::P2);
-        if !state.runtime_view.play_style.is_double() && cabinet != active { return; }
-        active
-    } else { cabinet };
-    let joystick = event.source == deadsync_core::input::InputSource::Gamepad;
-    let (device, device_button) = song_lua_device_names(physical);
-    let input = SongLuaInputEvent {
-        player: Some(player), controller: Some(cabinet), button, game_button: menu,
-        kind,
-        device: &device,
-        device_button: &device_button, level: if event.pressed { 1.0 } else { 0.0 },
-        z: 0, down: event.pressed, ago: event.timestamp.elapsed().as_secs_f64(),
-        is_joystick: joystick, is_mouse: false,
-    };
-    handle_song_lua_input(state, &input);
-}
-
-/// The screen's callback input route, shared by hardware and recorded native
-/// input owners. Callback return values do not suppress normal gameplay input.
+/// Compatibility callback route for hardware and recorded native input owners.
 pub fn handle_song_lua_input(state: &mut State, input: &deadsync_song_lua::SongLuaInputEvent<'_>) {
-    if state.song_lua_ended { return; }
-    let Some(scene) = &mut state.song_lua else { return; };
-    if let Err(error) = scene.refresh_gameplay_statistics(&state.gameplay) {
-        state.song_lua_output.errors.push(error.to_string());
-    }
-    match scene.input(&input) {
-        Ok((_, output)) => {
-            // GameLoop delivers callbacks after ScreenManager::Update and
-            // before Draw. Preserve delayed screen actions across output drains.
-            match output.request.as_ref() {
-                Some(deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen)) if screen=="ScreenGameplay" => {
-                    state.song_lua_draw_reload_pending=true;
-                }
-                Some(deadsync_song_lua::SongLuaLiveRequest::Transition(message)) if message=="SM_DoNextScreen" && state.song_lua_out.is_none() => {
-                    state.gameplay.progress.stage.song_completed_naturally=true;
-                    state.song_lua_out=Some(SongLuaOut {phase:0,left:TRANSITION_OUT_DELAY});
-                }
-                _ => {}
-            }
-
-            scene.apply_output_player_writes(&output, &mut state.gameplay);
-            state.song_lua_output.append(output);
-            if let Err(error) = scene.prepare_gameplay_player_options(&mut state.gameplay) {
-                state.song_lua_output.errors.push(error.to_string());
-            }
-            if let Err(error) = scene.write_visuals(&mut state.gameplay.mods.song_lua_visuals) {
-                state.song_lua_output.errors.push(error);
-            }
-        }
-        Err(error) => state.song_lua_output.errors.push(error.to_string()),
-    }
-}
-
-fn song_lua_device_names(physical: Option<deadsync_input::PhysicalInput>) -> (String, String) {
-    use deadsync_input::PhysicalInput;
-    use deadlib_platform::input::{KeyCode, PadDir};
-    let (device, button) = match physical {
-        Some(PhysicalInput::Key(key)) => {
-            let name = match key {
-                KeyCode::ArrowLeft => "left".into(), KeyCode::ArrowRight => "right".into(),
-                KeyCode::ArrowUp => "up".into(), KeyCode::ArrowDown => "down".into(),
-                KeyCode::Enter => "enter".into(), KeyCode::Escape => "escape".into(),
-                KeyCode::Space => "space".into(), KeyCode::Tab => "tab".into(),
-                KeyCode::Backspace => "backspace".into(),
-                KeyCode::ControlLeft => "left ctrl".into(), KeyCode::ControlRight => "right ctrl".into(),
-                KeyCode::ShiftLeft => "left shift".into(), KeyCode::ShiftRight => "right shift".into(),
-                KeyCode::AltLeft => "left alt".into(), KeyCode::AltRight => "right alt".into(),
-                KeyCode::SuperLeft => "left super".into(), KeyCode::SuperRight => "right super".into(),
-                KeyCode::PageUp => "pgup".into(), KeyCode::PageDown => "pgdn".into(),
-                KeyCode::Home => "home".into(), KeyCode::End => "end".into(),
-                KeyCode::Insert => "insert".into(), KeyCode::Delete => "delete".into(),
-                KeyCode::Comma => "comma".into(), KeyCode::Period => "period".into(),
-                KeyCode::Backslash => "backslash".into(), KeyCode::Minus => "-".into(),
-                KeyCode::Equal => "=".into(), KeyCode::BracketLeft => "[".into(), KeyCode::BracketRight => "]".into(),
-                KeyCode::Semicolon => ";".into(), KeyCode::Quote => "'".into(), KeyCode::Backquote => "`".into(),
-                KeyCode::NumpadEnter => "KP enter".into(), KeyCode::NumpadAdd => "KP +".into(),
-                KeyCode::NumpadSubtract => "KP -".into(), KeyCode::NumpadMultiply => "KP *".into(),
-                KeyCode::NumpadDivide => "KP /".into(), KeyCode::NumpadDecimal => "KP .".into(),
-                _ => { let key = format!("{key:?}");
-                    if let Some(key)=key.strip_prefix("Key").or_else(|| key.strip_prefix("Digit")) { key.to_ascii_lowercase() }
-                    else if key.strip_prefix('F').and_then(|n|n.parse::<u8>().ok()).is_some_and(|n|(1..=16).contains(&n)) {key}
-                    else if let Some(n)=key.strip_prefix("Numpad").filter(|n|n.len()==1 && n.as_bytes()[0].is_ascii_digit()) { format!("KP {n}") }
-                    else { "Invalid".into() }
-                }
-
-            };
-            ("InputDevice_Key".into(), name)
-        }
-        Some(PhysicalInput::PadDirection(id, dir)) => (format!("InputDevice_Joy{}", id.0+1),
-            match dir { PadDir::Left => "Left1", PadDir::Right => "Right1", PadDir::Up => "Up1", PadDir::Down => "Down1" }.into()),
-        Some(PhysicalInput::PadButton(id, code)) => (format!("InputDevice_Joy{}", id.0+1), if code.into_u32() < 32 { format!("B{}", code.into_u32()+1) } else { "Invalid".into() }),
-        None => return ("InputDevice_Invalid".into(), "DeviceButton_Invalid".into()),
-    };
-    (device, format!("DeviceButton_{button}"))
+    state.song_lua.input(&mut state.gameplay, input);
 }
 
 thread_local! {
@@ -4148,7 +3789,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn push_song_lua_out(actors: &mut Vec<Actor>, state: &State) {
-    let Some(out) = &state.song_lua_out else { return; };
+    let Some(out) = state.song_lua.out_transition() else { return; };
     let alpha = if out.phase == 0 { 0.0 } else { 1.0 - out.left / TRANSITION_OUT_FADE_DURATION };
     actors.push(act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -6199,22 +5840,6 @@ fn draw_smx_mini_pad(
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn song_lua_out_native_clocks() {
-        let native: serde_json::Value = serde_json::from_str(include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/itgmania-song-lua-micro/native-out-clocks.json")))
-            .expect("complete native transition inputs");
-        for case in native["cases"].as_array().expect("native cases") {
-            let frames = case["frames"].as_array().expect("native frames");
-            let mut out = super::SongLuaOut { phase: 0, left: 0.5 };
-            let completed = frames.iter().enumerate().find(|(_, frame)|
-                out.advance(frame["delta"].as_f64().expect("native delta") as f32));
-            let (index, frame) = completed.expect("native transition completes");
-            assert_eq!(index, frames.len() - 1, "{} completion frame", case["name"]);
-            assert_eq!(frame["seconds"], case["end_seconds"], "{} completion clock", case["name"]);
-        }
-    }
-
     #[test]
     fn pending_gameplay_keeps_intro_black() {
         let assets = AssetManager::new();

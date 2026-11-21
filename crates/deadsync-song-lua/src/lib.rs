@@ -8,6 +8,7 @@
 )]
 mod actor_quaternion;
 pub mod gameplay;
+pub mod gameplay_session;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
 // Playback is tested with concrete asset fixtures by tests/playback.rs.

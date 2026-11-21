@@ -1,5 +1,5 @@
-//! Check the production crate graph, including dependencies hidden by aliases,
-//! optional features, and target-specific or build-dependency tables.
+//! Check production layering and the theme-free song-Lua test build, including
+//! dependencies hidden by aliases, optional features, and target/build tables.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::path::Path;
@@ -56,6 +56,10 @@ fn points_upward(source: Layer, dependency: Layer) -> bool {
 }
 
 fn violations(metadata: &Metadata) -> Vec<String> {
+    dependency_violations(metadata, None)
+}
+
+fn dependency_violations(metadata: &Metadata, test_owner: Option<&str>) -> Vec<String> {
     let members: BTreeSet<_> = metadata
         .workspace_members
         .iter()
@@ -75,10 +79,14 @@ fn violations(metadata: &Metadata) -> Vec<String> {
             let mut dependencies: Vec<_> = package
                 .dependencies
                 .iter()
-                // Dev dependencies can intentionally exercise several layers.
-                // Include every production edge, even when it is optional or
-                // belongs to a platform that is not running this test.
-                .filter(|dependency| dependency.kind.as_deref() != Some("dev"))
+                // A test build includes the owner's dev dependencies, but not
+                // those belonging to its dependencies. The general production
+                // graph excludes all dev edges. Both include optional edges
+                // and target declarations beyond the platform running this test.
+                .filter(|dependency| {
+                    dependency.kind.as_deref() != Some("dev")
+                        || test_owner == Some(package.name.as_str())
+                })
                 .map(|dependency| dependency.name.as_str())
                 .collect();
             dependencies.sort_unstable();
@@ -91,9 +99,18 @@ fn violations(metadata: &Metadata) -> Vec<String> {
         packages.len(),
         "ambiguous workspace package names"
     );
+    if let Some(owner) = test_owner {
+        assert!(
+            graph.contains_key(owner),
+            "missing test-build owner {owner}"
+        );
+    }
 
     let mut failures = Vec::new();
     for &source in graph.keys() {
+        if test_owner.is_some_and(|owner| source != owner) {
+            continue;
+        }
         let source_layer = layer(source);
         if matches!(source_layer, Layer::Application | Layer::Other) {
             continue;
@@ -122,8 +139,7 @@ fn violations(metadata: &Metadata) -> Vec<String> {
     failures
 }
 
-#[test]
-fn production_crate_dependencies_follow_layer_direction() {
+fn workspace_metadata() -> Metadata {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
         .current_dir(root)
@@ -143,12 +159,27 @@ fn production_crate_dependencies_follow_layer_direction() {
         "cargo metadata failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let metadata: Metadata = serde_json::from_slice(&output.stdout).expect("Cargo metadata JSON");
-    let failures = violations(&metadata);
+    serde_json::from_slice(&output.stdout).expect("Cargo metadata JSON")
+}
+
+#[test]
+fn production_crate_dependencies_follow_layer_direction() {
+    let failures = violations(&workspace_metadata());
     assert!(
         failures.is_empty(),
         "production dependencies must point from themes to game to engine; \
          only deadsync and deadsync-shell may compose all layers:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn song_lua_test_build_stays_independent_of_themes_and_application() {
+    let failures = dependency_violations(&workspace_metadata(), Some("deadsync-song-lua"));
+    assert!(
+        failures.is_empty(),
+        "song-Lua behavior must be testable without a theme or application; \
+         its test build has upward dependencies:\n{}",
         failures.join("\n")
     );
 }
@@ -250,4 +281,64 @@ fn guard_accepts_downward_dependencies_and_application_composition() {
         ] }
     ]));
     assert!(violations(&metadata).is_empty());
+}
+
+#[test]
+fn test_build_guard_checks_owner_dependencies_and_transitive_production_edges() {
+    for owner_kind in [None, Some("build"), Some("dev")] {
+        for transitive_kind in [None, Some("build")] {
+            for forbidden in [
+                "deadsync-theme",
+                "deadsync-theme-future",
+                "deadsync-shell",
+                "deadsync",
+            ] {
+                let metadata = fixture(serde_json::json!([
+                    { "name": "deadsync-song-lua", "dependencies": [
+                        { "name": "test-helper", "rename": "fixture", "kind": owner_kind,
+                          "target": "cfg(target_os = \"other\")", "optional": true }
+                    ] },
+                    { "name": "test-helper", "dependencies": [
+                        { "name": forbidden, "rename": "adapter", "kind": transitive_kind }
+                    ] },
+                    { "name": forbidden, "dependencies": [] }
+                ]));
+                assert_eq!(
+                    dependency_violations(&metadata, Some("deadsync-song-lua")),
+                    [format!("deadsync-song-lua -> test-helper -> {forbidden}")],
+                    "owner edge {owner_kind:?}, transitive edge {transitive_kind:?}"
+                );
+                if owner_kind == Some("dev") {
+                    assert!(violations(&metadata).is_empty());
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_build_guard_excludes_dependency_dev_edges_and_unrelated_packages() {
+    let metadata = fixture(serde_json::json!([
+        { "name": "deadsync-song-lua", "dependencies": [
+            { "name": "test-helper", "kind": "dev" }
+        ] },
+        { "name": "test-helper", "dependencies": [
+            { "name": "deadlib-future", "kind": null },
+            { "name": "deadsync-theme-future", "kind": "dev" }
+        ] },
+        { "name": "deadlib-future", "dependencies": [
+            { "name": "deadsync-shell", "kind": "dev" }
+        ] },
+        { "name": "deadsync-unrelated", "dependencies": [
+            { "name": "deadsync-theme-future", "kind": null }
+        ] },
+        { "name": "deadsync-theme-future", "dependencies": [] },
+        { "name": "deadsync-shell", "dependencies": [] }
+    ]));
+    assert!(dependency_violations(&metadata, Some("deadsync-song-lua")).is_empty());
+    assert_eq!(
+        violations(&metadata),
+        ["deadsync-unrelated -> deadsync-theme-future"],
+        "unrelated production violations still belong to the general guard"
+    );
 }

@@ -47,6 +47,23 @@ target-triggered failure retains its immediate exit. Autoplay invalidation and
 natural-completion mine bookkeeping also live in the game and run at their
 existing stage-exit boundaries.
 
+`deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
+Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
+The shell calls its controller directly. The statically bound host adapter
+supplies life-meter animation and converts semantic actions and screen names to
+presentation effects. Game actions decide when End and Draw run, independently
+of those effect values. The reserved `ScreenGameplay` destination reloads through
+game code; other names are validated by the presentation adapter before End.
+Normal gameplay setup also selects music fade/end timing in the game-owned
+session constructor.
+
+`deadsync-input::CallbackInputState` owns physical callback deduplication, held
+input ages, repeats, synthetic releases, and held-input transfer during reload.
+Repeat callbacks do not replay scoring. Their complete batch is collected before
+dispatch, and its storage is reused across frames. Callback routing reads the
+current game session, including Single/Double changes made by Lua reloads and
+the active P2 side, rather than a possibly stale theme snapshot.
+
 ## Rust API migration
 
 Workspace callers are updated for these source-level changes:
@@ -57,6 +74,11 @@ Workspace callers are updated for these source-level changes:
 - Initialize gameplay through `init_gameplay_runtime`.
   `GameplayControlRuntimeState` now keeps one-shot target handling private and
   no longer supports struct-literal construction outside `deadsync-gameplay`.
+- `State::song_lua` is now a `SongLuaGameplaySession`. Its scene accessors retain
+  `as_ref`, `as_mut`, `is_some`, `is_none`, and `take`; direct `Option` pattern
+  matches or assignments must use the session API. Existing theme update/input
+  wrappers delegate to the canonical controller, and `SongLuaHeldInputs` remains
+  an alias for the game-owned reload token.
 
 ## Enforcement
 
@@ -67,6 +89,10 @@ target-specific, and build dependencies are included. Development dependencies
 are excluded because tests may exercise multiple layers together. Third-party
 dependency internals are not traversed.
 
+The song-Lua crate additionally has a test-build guard: its direct development
+dependencies and their production closures must remain independent of themes and
+the application shell. This keeps controller behavior tests usable by any theme.
+
 `tests/architecture_boundaries.rs` additionally checks source ownership and the
 specific APIs that protect canonical gameplay and notefield composition.
 
@@ -74,14 +100,15 @@ specific APIs that protect canonical gameplay and notefield composition.
 cargo test -p deadsync --test layer_dependencies --test architecture_boundaries
 cargo test -p deadsync-gameplay --lib
 cargo test -p deadsync-input --test input_pipeline_allocations
+cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 ```
 
 ## Remaining separation
 
-The production crate graph follows these directions, but screen/runtime
-orchestration still needs further extraction. Simply Love currently wraps the
-gameplay state and drives song-Lua lifecycle, input-repeat, and practice playback
-sequencing; the shell names its concrete screen types. Move that sequencing into
-game/application owners before replacing the concrete screen integration with a
-theme-neutral presentation interface. Preserve native Update/input/Draw/Off
-ordering while doing so.
+The production crate graph follows these directions, and normal song-Lua
+lifecycle and callback input sequencing now have game owners. Simply Love still
+wraps gameplay state, coordinates lobby readiness and practice playback, and
+exposes concrete screen types used by the shell. Move those remaining runtime
+responsibilities into game/application owners before replacing the concrete
+screen integration with a theme-neutral presentation interface. Practice has a
+separate playback loop and must retain its editing and looping semantics.

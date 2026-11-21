@@ -75,6 +75,111 @@ fn chart_lua_playback_has_no_theme_dependency() {
 }
 
 #[test]
+fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let controller = production_source(
+        &root.join("crates/deadsync-song-lua/src/gameplay_session.rs"),
+    );
+    let inputs = production_source(&root.join("crates/deadsync-input/src/callback_input.rs"));
+    let theme = production_source(
+        &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
+    );
+    let shell = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
+
+    for contract in [
+        "pub struct SongLuaGameplaySession",
+        "pub trait SongLuaGameplayHost",
+        "pub fn for_gameplay<",
+        "pub fn update<",
+        "pub fn handle_input<",
+        "CallbackInputState",
+        "append_repeats(",
+        "reset_alias_history(",
+    ] {
+        assert!(
+            contains_rust(&controller, contract),
+            "game-owned song Lua controller is missing {contract}"
+        );
+    }
+    for contract in ["pub struct CallbackInputState", "pub struct HeldCallbackInputs"] {
+        assert!(
+            contains_rust(&inputs, contract),
+            "game input must own callback input state through {contract}"
+        );
+    }
+    for forbidden in [
+        "struct SongLuaOut {",
+        "struct SongLuaHeldInputs(",
+        "fn end_song_lua(",
+        "fn advance_song_lua(",
+        "fn draw_song_lua(",
+        "fn dispatch_song_lua_input(",
+        "fn dispatch_song_lua_callback(",
+        "fn song_lua_device_names(",
+        "fn screen_change(",
+        "song_lua_output:",
+        "song_lua_out:",
+        "song_lua_ended:",
+        "song_lua_pending_inputs:",
+        "song_lua_last_input:",
+        "song_lua_held_inputs:",
+        "song_lua_draw_reload_pending:",
+        "update_core(",
+        "update_core_with_pre_player(",
+        "handle_core_input(",
+        "resolve_frame_action(",
+        "finalize_completed_stage(",
+        "finalize_completed_mines(",
+        "mark_autoplay_stage_failures(",
+        "set_music_end_fade_timing(",
+        "initialize_gameplay_clock(",
+        "prepare_gameplay_player_options(",
+        "install_note_field_tap_callback(",
+        "install_tap_row_judgment_callback(",
+        "install_step_callback(",
+        "install_hold_judgment_callback(",
+        "install_avoided_mine_judgment_callback(",
+        "install_life_changed_callback(",
+        "apply_pending_player_writes(",
+        "apply_output_player_writes(",
+        "finish_gameplay_audio(",
+        "finish_gameplay_failures(",
+        "finish_gameplay_clock(",
+        "finish_gameplay_if_ready(",
+        "refresh_gameplay_statistics(",
+        "outro_off_dispatched(",
+        "failed_outro(",
+        "next_screen_name(",
+    ] {
+        assert!(
+            !contains_rust(&theme, forbidden),
+            "normal gameplay theme still owns lifecycle/callback behavior: {forbidden}"
+        );
+    }
+    for delegation in [
+        "song_lua: SongLuaGameplaySession",
+        "impl SongLuaGameplayHost for State",
+        "gameplay_session::update(",
+        "gameplay_session::handle_input(",
+    ] {
+        assert!(
+            contains_rust(&theme, delegation),
+            "normal gameplay theme must delegate to the game controller through {delegation}"
+        );
+    }
+    assert!(
+        contains_rust(&shell, "deadsync_song_lua::gameplay_session::update("),
+        "shell normal gameplay frames must invoke the canonical game controller"
+    );
+    for former_owner in ["gameplay::update(", "gameplay::update_with_input("] {
+        assert!(
+            !contains_rust(&shell, former_owner),
+            "shell must not route gameplay frame orchestration through {former_owner}"
+        );
+    }
+}
+
+#[test]
 fn asset_catalog_policy_stays_above_the_engine() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for entry in fs::read_dir(root.join("crates/deadlib-assets/src")).expect("engine asset sources")
