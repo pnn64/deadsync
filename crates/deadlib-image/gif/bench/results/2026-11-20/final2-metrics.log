@@ -1,0 +1,74 @@
+final2
+  gif-retained: 393.82 MPix/s; 478,418,925 cycles; 4,821 allocations; 98,895,656 bytes
+  gif-rgba: 258.10 MPix/s; 729,727,566 cycles; 3,621 allocations; 190,974,139 bytes
+  gif-stream: 461.98 MPix/s; 407,854,518 cycles; 2,581 allocations; 45,299,175 bytes
+  image-rgba: 93.26 MPix/s; 2,020,008,712 cycles; 5,414 allocations; 761,753,243 bytes
+  native-retained: 788.11 MPix/s; 239,047,789 cycles; 3,201 allocations; 90,052,156 bytes
+  native-rgba: 525.80 MPix/s; 358,158,520 cycles; 1,514 allocations; 171,286,632 bytes
+  native-stream: 1152.84 MPix/s; 163,411,710 cycles; 1,131 allocations; 36,481,978 bytes
+all 176
+  native-retained/gif-retained: 0.48952 cycles; 174 wins; 2 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.72251 (21,974/12,757)
+    target/gif-generated-20261117/p32-257x193-noise-i0-native.gif: 1.00322 (947,522/944,481)
+  native-stream/gif-stream: 0.47505 cycles; 175 wins; 1 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.77897 (21,015/11,813)
+  native-rgba/gif-rgba: 0.48180 cycles; 174 wins; 2 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.41668 (22,181/15,657)
+    target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif: 1.05145 (150,376/143,018)
+  native-rgba/image-rgba: 0.35055 cycles; 175 wins; 1 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.57849 (22,181/14,052)
+assets 35
+  native-retained/gif-retained: 0.36585 cycles; 35 wins; 0 losses
+  native-stream/gif-stream: 0.34107 cycles; 35 wins; 0 losses
+  native-rgba/gif-rgba: 0.33446 cycles; 35 wins; 0 losses
+  native-rgba/image-rgba: 0.32546 cycles; 35 wins; 0 losses
+upstream 13
+  native-retained/gif-retained: 0.59501 cycles; 12 wins; 1 losses
+  native-stream/gif-stream: 0.52127 cycles; 12 wins; 1 losses
+  native-rgba/gif-rgba: 0.46619 cycles; 12 wins; 1 losses
+  native-rgba/image-rgba: 0.30615 cycles; 12 wins; 1 losses
+generated 128
+  native-retained/gif-retained: 0.51968 cycles; 127 wins; 1 losses
+  native-stream/gif-stream: 0.51522 cycles; 128 wins; 0 losses
+  native-rgba/gif-rgba: 0.53415 cycles; 127 wins; 1 losses
+  native-rgba/image-rgba: 0.36270 cycles; 128 wins; 0 losses
+final2-first
+  gif-asset-first: 241.96 MPix/s; 296,602,361 cycles; 1,593 allocations; 170,341,178 bytes
+  image-first: 97.60 MPix/s; 735,260,868 cycles; 1,945 allocations; 301,106,733 bytes
+  native-copy-first: 199.70 MPix/s; 359,319,215 cycles; 1,257 allocations; 298,240,888 bytes
+  native-first: 306.76 MPix/s; 233,954,779 cycles; 1,081 allocations; 167,244,964 bytes
+all 176
+  native-first/native-copy-first: 0.82135 cycles; 174 wins; 2 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.01169 (21,469/21,221)
+    target/gif-generated-20261117/p2-3x2-noise-i0-native.gif: 1.19431 (2,016/1,688)
+  native-first/gif-asset-first: 0.65544 cycles; 160 wins; 16 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.95386 (21,469/10,988)
+    target/gif-generated-20261117/p128-768x512-flat-i0-native.gif: 1.14050 (1,935,788/1,697,318)
+    target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif: 1.36911 (2,331,712/1,703,086)
+    target/gif-generated-20261117/p16-768x512-flat-i0-native.gif: 1.06610 (2,459,177/2,306,697)
+    target/gif-generated-20261117/p2-768x512-flat-i0-native.gif: 1.02822 (2,739,771/2,664,574)
+    target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif: 1.11078 (2,331,657/2,099,115)
+    target/gif-generated-20261117/p256-768x512-flat-i0-native.gif: 1.04195 (2,299,985/2,207,383)
+    target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif: 1.15032 (2,477,167/2,153,450)
+    target/gif-generated-20261117/p32-768x512-flat-i0-native.gif: 1.06594 (2,209,733/2,073,031)
+    target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif: 1.13377 (2,543,447/2,243,363)
+    target/gif-generated-20261117/p4-768x512-flat-i0-native.gif: 1.43219 (3,034,134/2,118,522)
+    target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif: 1.07455 (1,930,603/1,796,662)
+    target/gif-generated-20261117/p64-768x512-flat-i0-native.gif: 1.09274 (1,917,744/1,754,984)
+    target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif: 1.09421 (1,900,184/1,736,587)
+    target/gif-generated-20261117/p8-768x512-flat-i0-native.gif: 1.07668 (2,232,150/2,073,177)
+    target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif: 1.09448 (2,326,078/2,125,281)
+  native-first/image-first: 0.38297 cycles; 175 wins; 1 losses
+    crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif: 1.82002 (21,469/11,796)
+assets 35
+  native-first/native-copy-first: 0.95050 cycles; 35 wins; 0 losses
+  native-first/gif-asset-first: 0.50747 cycles; 35 wins; 0 losses
+  native-first/image-first: 0.41508 cycles; 35 wins; 0 losses
+upstream 13
+  native-first/native-copy-first: 0.66490 cycles; 12 wins; 1 losses
+  native-first/gif-asset-first: 0.68586 cycles; 12 wins; 1 losses
+  native-first/image-first: 0.35059 cycles; 12 wins; 1 losses
+generated 128
+  native-first/native-copy-first: 0.80631 cycles; 127 wins; 1 losses
+  native-first/gif-asset-first: 0.69970 cycles; 113 wins; 15 losses
+  native-first/image-first: 0.37801 cycles; 128 wins; 0 losses

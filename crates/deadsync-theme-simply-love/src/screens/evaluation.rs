@@ -34,17 +34,18 @@ use deadsync_score as score_data;
 use crate::fonts::{machine_font_key, machine_font_key_for_text};
 use crate::i18n::{tr, tr_fmt};
 use crate::screens::input as screen_input;
-use crate::views::SimplyLoveLobbyRuntimeView;
 use crate::visual_styles;
 use deadlib_assets::AssetManager;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_online::lobbies as lobby_data;
+use deadsync_online::lobby_wait::{
+    EVALUATION_SCREEN_NAME, EvaluationLobbyAction, EvaluationLobbySession,
+    EvaluationPlayerStatsFacts, LocalLobbyPlayers, LobbyWaitReason,
+};
 use deadsync_theme::FontRole;
 use log::warn;
 use std::cell::RefCell;
 use std::sync::Arc;
-use std::time::Instant;
 
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::views::{CourseGraphStage, ScoreInfo};
@@ -2690,11 +2691,9 @@ pub struct State {
     leaderboards_requested: [bool; MAX_PLAYERS],
     online_records: [eval_panes::OnlineRecordsPresentation; MAX_PLAYERS],
     groovestats_service: SimplyLoveGrooveStatsService,
-    lobby_view: SimplyLoveLobbyRuntimeView,
+    lobby_session: EvaluationLobbySession,
     lobby_hud_cache: RefCell<lobby_hud::LobbyHudCache>,
     lobby_hud_status_scratch: RefCell<String>,
-    lobby_disconnect_hold_p1: Option<Instant>,
-    lobby_disconnect_hold_p2: Option<Instant>,
     event_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
@@ -2793,11 +2792,9 @@ impl Clone for State {
             leaderboards_requested: self.leaderboards_requested,
             online_records: self.online_records.clone(),
             groovestats_service: self.groovestats_service,
-            lobby_view: self.lobby_view.clone(),
+            lobby_session: self.lobby_session.clone(),
             lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
             lobby_hud_status_scratch: RefCell::new(String::new()),
-            lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
-            lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
             event_overlay_page: self.event_overlay_page,
             active_pane: self.active_pane,
             active_graph: self.active_graph,
@@ -3294,11 +3291,9 @@ pub fn init(init_view: EvaluationInitView) -> State {
         leaderboards_requested: [false; MAX_PLAYERS],
         online_records: Default::default(),
         groovestats_service: SimplyLoveGrooveStatsService::default(),
-        lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_session: EvaluationLobbySession::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         lobby_hud_status_scratch: RefCell::new(String::new()),
-        lobby_disconnect_hold_p1: None,
-        lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
@@ -3611,11 +3606,9 @@ pub fn init_from_score_info(
         leaderboards_requested: [false; MAX_PLAYERS],
         online_records: Default::default(),
         groovestats_service: SimplyLoveGrooveStatsService::default(),
-        lobby_view: SimplyLoveLobbyRuntimeView::default(),
+        lobby_session: EvaluationLobbySession::default(),
         lobby_hud_cache: RefCell::new(lobby_hud::LobbyHudCache::default()),
         lobby_hud_status_scratch: RefCell::new(String::new()),
-        lobby_disconnect_hold_p1: None,
-        lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
@@ -4056,7 +4049,7 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
         state.context = context;
     }
     if let Some(lobby) = view.lobby {
-        state.lobby_view = lobby;
+        state.lobby_session.sync_runtime_view(lobby);
     }
     if let Some(service) = view.groovestats_service {
         state.groovestats_service = service;
@@ -4086,17 +4079,36 @@ pub const fn leaderboard_requests(state: &State) -> [bool; MAX_PLAYERS] {
     state.leaderboards_requested
 }
 
-fn evaluation_lobby_machine_state(state: &State) -> ThemeEffect {
-    if !lobby_data::can_update_machine_state(&state.lobby_view.snapshot) {
-        return ThemeEffect::None;
-    }
-    crate::effects::lobby(crate::SimplyLoveLobbyRequest::UpdateMachineStats {
-        screen_name: "ScreenEvaluationStage",
-        p1_ready: true,
-        p2_ready: true,
-        p1_stats: evaluation_lobby_player_stats(state, profile_data::PlayerSide::P1),
-        p2_stats: evaluation_lobby_player_stats(state, profile_data::PlayerSide::P2),
-    })
+fn update_evaluation_lobby(state: &mut State) -> ThemeEffect {
+    let local = evaluation_lobby_players(state);
+    let score_info = &state.score_info;
+    let mut effect = ThemeEffect::None;
+    state.lobby_session.update(
+        local,
+        |side| evaluation_lobby_player_facts(score_info, side),
+        |action| {
+            let request = match action {
+                EvaluationLobbyAction::Disconnect => crate::SimplyLoveLobbyRequest::Disconnect,
+                EvaluationLobbyAction::UpdateMachineStats {
+                    p1_ready,
+                    p2_ready,
+                    p1_stats,
+                    p2_stats,
+                } => crate::SimplyLoveLobbyRequest::UpdateMachineStats {
+                    screen_name: EVALUATION_SCREEN_NAME,
+                    p1_ready,
+                    p2_ready,
+                    p1_stats,
+                    p2_stats,
+                },
+            };
+            effect = ThemeEffect::sequence(
+                std::mem::replace(&mut effect, ThemeEffect::None),
+                crate::effects::lobby(request),
+            );
+        },
+    );
+    effect
 }
 
 pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
@@ -4105,24 +4117,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     }
     state.footer_clock.update(dt);
 
-    let mut effect = evaluation_lobby_machine_state(state);
-    if evaluation_lobby_lock_text(state).is_some() {
-        if lobby_disconnect_hold_elapsed(state)
-            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
-        {
-            clear_lobby_disconnect_holds(state);
-            effect = ThemeEffect::sequence(
-                effect,
-                crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect),
-            );
-            lobby_data::apply_local_lobby_disconnect(std::sync::Arc::make_mut(
-                &mut state.lobby_view.snapshot,
-            ));
-            state.lobby_view.reconnect_status_text = None;
-        }
-    } else {
-        clear_lobby_disconnect_holds(state);
-    }
+    let mut effect = update_evaluation_lobby(state);
     sync_submit_event_progress(state);
     sync_missing_submit_status_fallbacks(state);
     sync_submit_text(state);
@@ -4189,122 +4184,58 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     effect
 }
 
-fn local_lobby_player_count(state: &State) -> usize {
-    let count = state
-        .context
-        .players
-        .iter()
-        .filter(|player| player.joined)
-        .count();
-    if count == 0 { 1 } else { count }
-}
-
-fn local_lobby_side_is_active(state: &State, side: profile_data::PlayerSide) -> bool {
-    let p1_joined = state.context.players[0].joined;
-    let p2_joined = state.context.players[1].joined;
-    if !(p1_joined || p2_joined) {
-        return state.context.player_side == side;
-    }
-    match side {
-        profile_data::PlayerSide::P1 => p1_joined,
-        profile_data::PlayerSide::P2 => p2_joined,
+fn evaluation_lobby_players(state: &State) -> LocalLobbyPlayers {
+    LocalLobbyPlayers {
+        joined: std::array::from_fn(|idx| state.context.players[idx].joined),
+        player_side: state.context.player_side,
     }
 }
 
-fn evaluation_lobby_player_stats(
-    state: &State,
+fn evaluation_lobby_player_facts(
+    scores: &[Option<ScoreInfo>; MAX_PLAYERS],
     side: profile_data::PlayerSide,
-) -> Option<lobby_data::MachinePlayerStats> {
-    let score_info = state
-        .score_info
-        .iter()
-        .flatten()
-        .find(|score_info| score_info.side == side)?;
-    let judgments = lobby_data::LobbyJudgments {
-        fantastic_plus: score_info.window_counts.w0,
-        fantastics: score_info.window_counts.w1,
-        excellents: score_info.window_counts.w2,
-        greats: score_info.window_counts.w3,
-        decents: score_info.window_counts.w4,
-        way_offs: score_info.window_counts.w5,
-        misses: score_info.window_counts.miss,
-        total_steps: score_info.chart.stats.total_steps,
-        mines_hit: score_info
-            .mines_total
-            .saturating_sub(score_info.mines_avoided),
-        total_mines: score_info.mines_total,
-        holds_held: score_info.holds_held,
-        total_holds: score_info.holds_total,
-        rolls_held: score_info.rolls_held,
-        total_rolls: score_info.rolls_total,
-    };
-    Some(lobby_data::MachinePlayerStats {
-        judgments: Some(judgments),
-        score: Some((score_info.score_percent * 100.0) as f32),
-        ex_score: Some(score_info.ex_score_percent as f32),
+) -> Option<EvaluationPlayerStatsFacts> {
+    let score = scores.iter().flatten().find(|score| score.side == side)?;
+    Some(EvaluationPlayerStatsFacts {
+        window_counts: score.window_counts,
+        total_steps: score.chart.stats.total_steps,
+        mines_total: score.mines_total,
+        mines_avoided: score.mines_avoided,
+        holds_held: score.holds_held,
+        holds_total: score.holds_total,
+        rolls_held: score.rolls_held,
+        rolls_total: score.rolls_total,
+        score_percent: score.score_percent,
+        ex_score_percent: score.ex_score_percent,
     })
 }
 
-const fn clear_lobby_disconnect_holds(state: &mut State) {
-    state.lobby_disconnect_hold_p1 = None;
-    state.lobby_disconnect_hold_p2 = None;
-}
-
-fn set_lobby_disconnect_hold(
-    state: &mut State,
-    side: profile_data::PlayerSide,
-    started_at: Option<Instant>,
-) {
-    match side {
-        profile_data::PlayerSide::P1
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P1) =>
-        {
-            state.lobby_disconnect_hold_p1 = started_at;
-        }
-        profile_data::PlayerSide::P2
-            if local_lobby_side_is_active(state, profile_data::PlayerSide::P2) =>
-        {
-            state.lobby_disconnect_hold_p2 = started_at;
-        }
-        _ => {}
+fn evaluation_lobby_status_label(state: &State) -> Option<&str> {
+    match state
+        .lobby_session
+        .wait_reason(evaluation_lobby_players(state))?
+    {
+        LobbyWaitReason::Reconnecting => state
+            .lobby_session
+            .runtime_view()
+            .reconnect_status_text
+            .as_deref(),
+        LobbyWaitReason::WaitingForGameplay => Some("Waiting for players to finish gameplay..."),
+        // These reasons are used by music selection, not Evaluation.
+        LobbyWaitReason::WaitingForEvaluation | LobbyWaitReason::WaitingForSync => None,
     }
-}
-
-fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
-    [
-        state.lobby_disconnect_hold_p1,
-        state.lobby_disconnect_hold_p2,
-    ]
-    .into_iter()
-    .flatten()
-    .map(|started_at| started_at.elapsed().as_secs_f32())
-    .max_by(f32::total_cmp)
-}
-
-fn evaluation_lobby_lock_text(state: &State) -> Option<&str> {
-    let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
-    if joined.players.len() <= local_lobby_player_count(state) {
-        return None;
-    }
-    if let Some(text) = state.lobby_view.reconnect_status_text.as_ref() {
-        return Some(text.as_str());
-    }
-    joined
-        .players
-        .iter()
-        .any(|player| player.screen_name.eq_ignore_ascii_case("ScreenGameplay"))
-        .then_some("Waiting for players to finish gameplay...")
 }
 
 fn evaluation_lobby_status_text_into<'a>(state: &State, text: &'a mut String) -> Option<&'a str> {
-    let lock_text = evaluation_lobby_lock_text(state)?;
+    let lock_text = evaluation_lobby_status_label(state)?;
     text.clear();
     text.push_str(lock_text);
     text.push('\n');
-    if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
+    if let Some(elapsed) = state.lobby_session.disconnect_hold_elapsed() {
         use std::fmt::Write as _;
 
-        let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
+        let remaining =
+            (state.lobby_session.runtime_view().disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         let _ = write!(
             text,
@@ -5123,32 +5054,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
         }
     }
-    if evaluation_lobby_lock_text(state).is_some() {
-        match ev.action {
-            VirtualAction::p1_start => {
-                if ev.pressed {
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P1,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P1, None);
-                }
-            }
-            VirtualAction::p2_start => {
-                if ev.pressed {
-                    set_lobby_disconnect_hold(
-                        state,
-                        profile_data::PlayerSide::P2,
-                        Some(ev.timestamp),
-                    );
-                } else {
-                    set_lobby_disconnect_hold(state, profile_data::PlayerSide::P2, None);
-                }
-            }
-            _ => {}
-        }
+    let local = evaluation_lobby_players(state);
+    if state.lobby_session.handle_input(local, ev) {
         return ThemeEffect::sequence(favorite_effect, ThemeEffect::None);
     }
     if !ev.pressed {
@@ -6634,6 +6541,7 @@ pub fn push_actors(
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 tint: [1.0; 4],
                                 vertices: mesh.clone(),
+                                vertex_color_encoding: Default::default(),
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 1,
@@ -6671,6 +6579,7 @@ pub fn push_actors(
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 tint: [1.0; 4],
                                 vertices: mesh.clone(),
+                                vertex_color_encoding: Default::default(),
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 2,
@@ -6696,6 +6605,7 @@ pub fn push_actors(
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 tint: [1.0; 4],
                                 vertices: mesh.clone(),
+                                vertex_color_encoding: Default::default(),
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 3,
@@ -6749,6 +6659,7 @@ pub fn push_actors(
                                 size: [SizeSpec::Px(graph_width), SizeSpec::Px(graph_height)],
                                 tint: [1.0; 4],
                                 vertices: Arc::clone(life_mesh),
+                                vertex_color_encoding: Default::default(),
                                 visible: true,
                                 blend: BlendMode::Alpha,
                                 z: 4,
@@ -7105,7 +7016,7 @@ pub fn push_actors(
         z(121) // a bit above the screen bar (z=120)
     ));
 
-    if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
+    if let Some(joined) = state.lobby_session.runtime_view().snapshot.joined_lobby.as_ref() {
         let mut status_scratch = state.lobby_hud_status_scratch.borrow_mut();
         let status_text = evaluation_lobby_status_text_into(state, &mut status_scratch);
         let mut cache = state.lobby_hud_cache.borrow_mut();

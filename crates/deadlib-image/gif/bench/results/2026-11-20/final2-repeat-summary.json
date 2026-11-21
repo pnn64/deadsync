@@ -1,0 +1,494 @@
+{
+  "groups": {
+    "all": {
+      "files": 2,
+      "comparisons": {
+        "native-retained/gif-retained": {
+          "thread_cycles": {
+            "geomean_ratio": 0.8694002847129849,
+            "native_total": 1094505,
+            "reference_total": 1136059,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.8695225236110887,
+            "native_total": 499753,
+            "reference_total": 518512,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.447213595499958,
+            "native_total": 9,
+            "reference_total": 20,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9252951865274596,
+            "native_total": 124983,
+            "reference_total": 134210,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-stream/gif-stream": {
+          "thread_cycles": {
+            "geomean_ratio": 0.8803561935533369,
+            "native_total": 1055803,
+            "reference_total": 1066926,
+            "native_wins": 1,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                "native": 974049,
+                "reference": 959884,
+                "ratio": 1.0147569914698027
+              }
+            ]
+          },
+          "ns": {
+            "geomean_ratio": 0.8803482363545327,
+            "native_total": 481873,
+            "reference_total": 486873,
+            "native_wins": 1,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                "native": 444572,
+                "reference": 438024,
+                "ratio": 1.014948952568809
+              }
+            ]
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.4330127018922193,
+            "native_total": 7,
+            "reference_total": 16,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9255827891699515,
+            "native_total": 124471,
+            "reference_total": 133590,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-rgba/gif-rgba": {
+          "thread_cycles": {
+            "geomean_ratio": 0.811719352918365,
+            "native_total": 1141709,
+            "reference_total": 1264372,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.811838583391431,
+            "native_total": 521222,
+            "reference_total": 577043,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.6085806194501846,
+            "native_total": 11,
+            "reference_total": 18,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9657890472675834,
+            "native_total": 360651,
+            "reference_total": 369662,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-rgba/image-rgba": {
+          "thread_cycles": {
+            "geomean_ratio": 0.5282310856404123,
+            "native_total": 1141709,
+            "reference_total": 1835623,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.5282428171391786,
+            "native_total": 521222,
+            "reference_total": 837790,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.49792959773196915,
+            "native_total": 11,
+            "reference_total": 22,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.6396953290649345,
+            "native_total": 360651,
+            "reference_total": 597534,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        }
+      }
+    },
+    "generated": {
+      "files": 2,
+      "comparisons": {
+        "native-retained/gif-retained": {
+          "thread_cycles": {
+            "geomean_ratio": 0.8694002847129849,
+            "native_total": 1094505,
+            "reference_total": 1136059,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.8695225236110887,
+            "native_total": 499753,
+            "reference_total": 518512,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.447213595499958,
+            "native_total": 9,
+            "reference_total": 20,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9252951865274596,
+            "native_total": 124983,
+            "reference_total": 134210,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-stream/gif-stream": {
+          "thread_cycles": {
+            "geomean_ratio": 0.8803561935533369,
+            "native_total": 1055803,
+            "reference_total": 1066926,
+            "native_wins": 1,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                "native": 974049,
+                "reference": 959884,
+                "ratio": 1.0147569914698027
+              }
+            ]
+          },
+          "ns": {
+            "geomean_ratio": 0.8803482363545327,
+            "native_total": 481873,
+            "reference_total": 486873,
+            "native_wins": 1,
+            "ties": 0,
+            "losses": [
+              {
+                "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                "native": 444572,
+                "reference": 438024,
+                "ratio": 1.014948952568809
+              }
+            ]
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.4330127018922193,
+            "native_total": 7,
+            "reference_total": 16,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9255827891699515,
+            "native_total": 124471,
+            "reference_total": 133590,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-rgba/gif-rgba": {
+          "thread_cycles": {
+            "geomean_ratio": 0.811719352918365,
+            "native_total": 1141709,
+            "reference_total": 1264372,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.811838583391431,
+            "native_total": 521222,
+            "reference_total": 577043,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.6085806194501846,
+            "native_total": 11,
+            "reference_total": 18,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.9657890472675834,
+            "native_total": 360651,
+            "reference_total": 369662,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        },
+        "native-rgba/image-rgba": {
+          "thread_cycles": {
+            "geomean_ratio": 0.5282310856404123,
+            "native_total": 1141709,
+            "reference_total": 1835623,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "ns": {
+            "geomean_ratio": 0.5282428171391786,
+            "native_total": 521222,
+            "reference_total": 837790,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "alloc_calls": {
+            "geomean_ratio": 0.49792959773196915,
+            "native_total": 11,
+            "reference_total": 22,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          },
+          "requested_bytes": {
+            "geomean_ratio": 0.6396953290649345,
+            "native_total": 360651,
+            "reference_total": 597534,
+            "native_wins": 2,
+            "ties": 0,
+            "losses": []
+          }
+        }
+      }
+    }
+  },
+  "timings": {
+    "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif": {
+      "native-retained": {
+        "ns": 462212,
+        "thread_cycles": 1012215,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "gif-retained": {
+        "ns": 469645,
+        "thread_cycles": 1028961,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "native-stream": {
+        "ns": 444572,
+        "thread_cycles": 974049,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "gif-stream": {
+        "ns": 438024,
+        "thread_cycles": 959884,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "native-rgba": {
+        "ns": 476056,
+        "thread_cycles": 1042731,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "gif-rgba": {
+        "ns": 513513,
+        "thread_cycles": 1125157,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "image-rgba": {
+        "ns": 732611,
+        "thread_cycles": 1605195,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      }
+    },
+    "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif": {
+      "gif-retained": {
+        "ns": 48867,
+        "thread_cycles": 107098,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "native-stream": {
+        "ns": 37301,
+        "thread_cycles": 81754,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "gif-stream": {
+        "ns": 48849,
+        "thread_cycles": 107042,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "native-rgba": {
+        "ns": 45166,
+        "thread_cycles": 98978,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "gif-rgba": {
+        "ns": 63530,
+        "thread_cycles": 139215,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "image-rgba": {
+        "ns": 105179,
+        "thread_cycles": 230428,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      },
+      "native-retained": {
+        "ns": 37541,
+        "thread_cycles": 82290,
+        "alloc_calls": 0,
+        "requested_bytes": 0
+      }
+    }
+  },
+  "allocations": {
+    "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif": {
+      "native-retained": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 4,
+        "requested_bytes": 82449
+      },
+      "gif-retained": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 10,
+        "requested_bytes": 87281
+      },
+      "native-stream": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 3,
+        "requested_bytes": 82193
+      },
+      "gif-stream": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 8,
+        "requested_bytes": 86929
+      },
+      "native-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 5,
+        "requested_bytes": 280693
+      },
+      "gif-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 9,
+        "requested_bytes": 285333
+      },
+      "image-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 11,
+        "requested_bytes": 484281
+      }
+    },
+    "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif": {
+      "gif-retained": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 10,
+        "requested_bytes": 46929
+      },
+      "native-stream": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 4,
+        "requested_bytes": 42278
+      },
+      "gif-stream": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 8,
+        "requested_bytes": 46661
+      },
+      "native-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 6,
+        "requested_bytes": 79958
+      },
+      "gif-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 9,
+        "requested_bytes": 84329
+      },
+      "image-rgba": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 11,
+        "requested_bytes": 113253
+      },
+      "native-retained": {
+        "ns": 0,
+        "thread_cycles": 0,
+        "alloc_calls": 5,
+        "requested_bytes": 42534
+      }
+    }
+  }
+}

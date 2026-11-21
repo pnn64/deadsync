@@ -1,0 +1,2 @@
+# Preserve every archived byte, including hashed scripts, logs and UTF-16 TSVs.
+* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

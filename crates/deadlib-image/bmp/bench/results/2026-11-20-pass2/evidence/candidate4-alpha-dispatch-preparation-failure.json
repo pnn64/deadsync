@@ -1,0 +1,12 @@
+{
+  "phase": "preserve optional candidate3 debugging symbols before compilation",
+  "error": "FileNotFoundError: timing/release/bmp-codec-bench.pdb",
+  "actual_file": "timing/release/bmp_codec_bench.pdb",
+  "completed_before_failure": [
+    "Verified current shared timing executable matches frozen candidate3 SHA-256",
+    "Copied parent executable to new assembly-candidate3 directory",
+    "Created empty candidate4 validation command log"
+  ],
+  "native_build_test_or_timing_commands_started": 0,
+  "recovery": "Corrected the PDB basename, verified and reused the already copied executable, and required the command log to be empty before resuming. No successful native command was replayed."
+}

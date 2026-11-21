@@ -27,14 +27,7 @@ pub const COURSE_RATING_ORDER: [Difficulty; 6] = [
     Difficulty::Edit,
 ];
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CourseType {
-    #[default]
-    Nonstop,
-    Oni,
-    Endless,
-    Survival,
-}
+pub use deadsync_rules::course::CourseType;
 
 #[must_use]
 pub fn course_type(course: &CourseFile) -> CourseType {
@@ -1545,6 +1538,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),

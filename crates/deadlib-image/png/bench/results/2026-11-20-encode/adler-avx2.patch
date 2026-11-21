@@ -1,0 +1,227 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/checksum/x86.rs
+@@
+-#[inline]
+-pub(super) fn adler_update(state: &mut super::Adler32, input: &[u8]) -> bool {
+-    if input.len() >= 128 && std::is_x86_feature_detected!("ssse3") {
+-        // SAFETY: SSSE3 support is checked, and every load uses a checked array.
+-        unsafe {
+-            adler(state, input);
+-        }
+-        true
+-    } else {
+-        false
+-    }
+-}
++#[inline]
++pub(super) fn adler_update(state: &mut super::Adler32, input: &[u8]) -> bool {
++    if input.len() < 128 {
++        return false;
++    }
++    if std::is_x86_feature_detected!("avx2") {
++        // SAFETY: AVX2 support is checked, and every load uses a checked array.
++        unsafe {
++            adler_avx2(state, input);
++        }
++    } else if std::is_x86_feature_detected!("ssse3") {
++        // SAFETY: SSSE3 support is checked, and every load uses a checked array.
++        unsafe {
++            adler(state, input);
++        }
++    } else {
++        return false;
++    }
++    true
++}
+@@
++#[inline]
++#[target_feature(enable = "avx2")]
++fn load256(bytes: &[u8; 32]) -> __m256i {
++    _mm256_set_epi64x(
++        i64::from_le_bytes(bytes[24..].try_into().unwrap()),
++        i64::from_le_bytes(bytes[16..24].try_into().unwrap()),
++        i64::from_le_bytes(bytes[8..16].try_into().unwrap()),
++        i64::from_le_bytes(bytes[..8].try_into().unwrap()),
++    )
++}
++
++#[target_feature(enable = "avx2")]
++unsafe fn adler_avx2(state: &mut super::Adler32, input: &[u8]) {
++    // The largest signed pair is (32 + 31) * 255 = 16065: maddubs cannot
++    // saturate. At most 173 groups bound each sum/prefix/weighted lane by
++    // 176460/15175560/5382030. All horizontal sums still fit in signed i32.
++    // With normalized a,b <= 65520 and at most 5552 bytes, the complete
++    // nonnegative b sum is at most 4294690200, below u32::MAX.
++    let ones8 = _mm256_set1_epi8(1);
++    let ones16 = _mm256_set1_epi16(1);
++    let weights = _mm256_setr_epi8(
++        32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10,
++        9, 8, 7, 6, 5, 4, 3, 2, 1,
++    );
++    for block in input.chunks(5552) {
++        let (groups, tail) = block.as_chunks::<32>();
++        let mut sums = _mm256_setzero_si256();
++        let mut prefixes = _mm256_setzero_si256();
++        let mut weighted = _mm256_setzero_si256();
++        for bytes in groups {
++            let v = load256(bytes);
++            prefixes = _mm256_add_epi32(prefixes, sums);
++            sums = _mm256_add_epi32(
++                sums,
++                _mm256_madd_epi16(_mm256_maddubs_epi16(v, ones8), ones16),
++            );
++            weighted = _mm256_add_epi32(
++                weighted,
++                _mm256_madd_epi16(_mm256_maddubs_epi16(v, weights), ones16),
++            );
++        }
++        // Every later group adds 32 to each earlier byte's weight, while
++        // this group's byte weights descend from 32 to 1 across both halves.
++        state.b +=
++            state.a * (groups.len() * 32) as u32 + 32 * total256(prefixes) + total256(weighted);
++        state.a += total256(sums);
++        for &byte in tail {
++            state.a += u32::from(byte);
++            state.b += state.a;
++        }
++        state.a %= 65521;
++        state.b %= 65521;
++    }
++}
++
++#[inline]
++#[target_feature(enable = "avx2")]
++fn total256(v: __m256i) -> u32 {
++    total(_mm_add_epi32(
++        _mm256_castsi256_si128(v),
++        _mm256_extracti128_si256::<1>(v),
++    ))
++}
++
+ #[target_feature(enable = "ssse3")]
+ unsafe fn adler(state: &mut super::Adler32, input: &[u8]) {
+@@
+                     );
+                 }
+             }
+         }
+     }
+ }
++
++#[cfg(test)]
++fn check_avx2_adler(input: &[u8], initial: (u32, u32), split: usize) {
++    assert!(
++        std::is_x86_feature_detected!("avx2"),
++        "AVX2 validation must execute; for Miri set RUSTFLAGS=-C target-feature=+avx2"
++    );
++    // A byte-at-a-time modular oracle has no SIMD grouping or deferred sums.
++    let (mut a, mut b) = (u64::from(initial.0), u64::from(initial.1));
++    for &byte in input {
++        a = (a + u64::from(byte)) % 65521;
++        b = (b + a) % 65521;
++    }
++    let expected = (a as u32, b as u32);
++    let mut actual = super::Adler32 {
++        a: initial.0,
++        b: initial.1,
++    };
++    // SAFETY: AVX2 was asserted above. All loads use checked byte arrays.
++    unsafe {
++        adler_avx2(&mut actual, input);
++    }
++    assert_eq!(
++        (actual.a, actual.b),
++        expected,
++        "len={} initial={initial:?}",
++        input.len()
++    );
++    let mut fragmented = super::Adler32 {
++        a: initial.0,
++        b: initial.1,
++    };
++    // SAFETY: AVX2 was asserted above; arbitrary slice lengths are supported.
++    unsafe {
++        adler_avx2(&mut fragmented, &input[..split]);
++        adler_avx2(&mut fragmented, &input[split..]);
++    }
++    assert_eq!(
++        (fragmented.a, fragmented.b),
++        expected,
++        "len={} initial={initial:?} split={split}",
++        input.len()
++    );
++    let mut dispatched = super::Adler32 {
++        a: initial.0,
++        b: initial.1,
++    };
++    let used = adler_update(&mut dispatched, input);
++    assert_eq!(used, input.len() >= 128);
++    assert_eq!(
++        (dispatched.a, dispatched.b),
++        if used { expected } else { initial }
++    );
++}
++
++#[cfg(all(test, not(miri)))]
++#[test]
++fn avx2_adler_offsets_states_and_modulus_boundaries() {
++    if !std::is_x86_feature_detected!("avx2") {
++        return;
++    }
++    for pattern in 0..3 {
++        let bytes: Vec<u8> = (0usize..16688)
++            .map(|n| match pattern {
++                0 => 0,
++                1 => 255,
++                _ => ((n * 137 + n * n * 17) ^ (n >> 3)) as u8,
++            })
++            .collect();
++        for offset in 0..32 {
++            for len in (0..=65).chain([
++                95, 96, 97, 127, 128, 129, 255, 256, 257, 5535, 5536, 5537, 5551, 5552, 5553, 11103,
++                11104, 11105, 16656,
++            ]) {
++                for initial in [(0, 0), (1, 0), (65520, 65520), (65520, 0), (0, 65520)] {
++                    check_avx2_adler(&bytes[offset..offset + len], initial, len / 2);
++                }
++            }
++        }
++    }
++}
++
++#[cfg(all(test, miri))]
++#[test]
++fn avx2_adler_miri_executes_vector_path() {
++    // Deliberately fail rather than silently skip if Miri lacks enabled AVX2.
++    assert!(
++        std::is_x86_feature_detected!("avx2"),
++        "run this test with RUSTFLAGS=-C target-feature=+avx2"
++    );
++    for constant in [false, true] {
++        let bytes: Vec<u8> = (0usize..11140)
++            .map(|n| {
++                if constant {
++                    255
++                } else {
++                    ((n * 137 + n * n * 17) ^ (n >> 3)) as u8
++                }
++            })
++            .collect();
++        for (offset, len, initial, split) in [
++            (0, 0, (0, 0), 0),
++            (1, 31, (1, 0), 15),
++            (31, 32, (65520, 65520), 16),
++            (3, 33, (0, 65520), 31),
++            (7, 128, (65520, 0), 64),
++            (15, 129, (1, 0), 127),
++            (1, 5551, (65520, 65520), 5536),
++            (31, 5552, (65520, 65520), 5551),
++            (3, 5553, (65520, 65520), 5552),
++            (7, 11105, (65520, 65520), 5553),
++        ] {
++            check_avx2_adler(&bytes[offset..offset + len], initial, split);
++        }
++    }
++}
+*** End of File
+*** End Patch

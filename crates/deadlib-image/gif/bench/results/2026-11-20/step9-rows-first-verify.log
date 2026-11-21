@@ -1,0 +1,72 @@
+step9-first.exe : VERIFIED	assets/smx-pad-lights/common/common/default_25.gif	552
+At line:4 char:1167
++ ... _MS = '80'; & target/gif-opt-20261120/step9-first.exe --compatibility ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (VERIFIED	assets...ault_25.gif	552:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+VERIFIED	crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon.gif	36
+VERIFIED	target/gif-generated-20261117/p128-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p128-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p128-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p128-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p128-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p128-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p128-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p16-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p16-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p16-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p16-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p16-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p16-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p16-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p16-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p2-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p2-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p2-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p2-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p2-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p2-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p2-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p256-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p256-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p256-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p256-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p256-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p256-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p256-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p32-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p32-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p32-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p32-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p32-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p32-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p32-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p4-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p4-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p4-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p4-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p4-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p4-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p4-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p64-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p64-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p64-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p64-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p64-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p64-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p64-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p8-1x1-flat-i0-native.gif	1
+VERIFIED	target/gif-generated-20261117/p8-1x1-flat-i0-reference.gif	1
+VERIFIED	target/gif-generated-20261117/p8-257x193-bands-i0-native.gif	49601
+VERIFIED	target/gif-generated-20261117/p8-257x193-bands-i0-reference.gif	49601
+VERIFIED	target/gif-generated-20261117/p8-768x512-bands-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p8-768x512-bands-i0-reference.gif	393216
+VERIFIED	target/gif-generated-20261117/p8-768x512-flat-i0-native.gif	393216
+VERIFIED	target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif	393216

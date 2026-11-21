@@ -182,6 +182,9 @@ fn deliver(
         let order = call.store().actor_order.clone();
         let mut actors = Vec::new();
         for actor in order {
+            if !call.store_ref().actors.contains_key(&actor) {
+                continue;
+            }
             let function = call.table_get(Value::Table(actor), key)?;
             if matches!(function, Value::Function(_) | Value::Native(_)) {
                 let identity = call
@@ -236,21 +239,14 @@ fn deliver(
         for (_, actor) in actors {
             // A broadcast is synchronous even when the same handler is already
             // active. Direct playcommand keeps its separate recursion guard.
-            let was_active = call
-                .store()
-                .actors
-                .get_mut(&actor)
-                .unwrap()
-                .active_commands
-                .remove(&field);
+            let Some(instance) = call.store().actors.get_mut(&actor) else {
+                // Earlier subscribers may delete wrappers in this snapshot.
+                continue;
+            };
+            let was_active = instance.active_commands.remove(&field);
             let result = run_named(call, actor, &name, params);
-            if was_active {
-                call.store()
-                    .actors
-                    .get_mut(&actor)
-                    .unwrap()
-                    .active_commands
-                    .insert(field.clone());
+            if was_active && let Some(instance) = call.store().actors.get_mut(&actor) {
+                instance.active_commands.insert(field.clone());
             }
             result?;
             let guard = call.store();

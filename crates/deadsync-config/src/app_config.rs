@@ -24,7 +24,7 @@ use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering, SerialPortName,
 };
 use deadsync_smx::SmxPadPreset;
-use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_core::color::DifficultyColorScheme;
 use null_or_die::{BiasKernel, GraphOrientation, KernelTarget};
 use winit::keyboard::KeyCode;
 
@@ -306,6 +306,8 @@ pub struct Config {
     pub autosubmit_course_scores_individually: bool,
     pub autosubmit_course_post_fail_passes: bool,
     pub global_offset_seconds: f32,
+    /// `ITGmania` held-panel row delay, independent of input debouncing.
+    pub pad_stick_seconds: f32,
     pub visual_delay_seconds: f32,
     /// Visual-only clock used for scrolling note placement.
     pub note_scroll_clock: NoteScrollClock,
@@ -558,6 +560,7 @@ impl Default for Config {
             autosubmit_course_scores_individually: system.autosubmit_course_scores_individually,
             autosubmit_course_post_fail_passes: system.autosubmit_course_post_fail_passes,
             global_offset_seconds: system.global_offset_seconds,
+            pad_stick_seconds: system.pad_stick_seconds,
             visual_delay_seconds: audio.visual_delay_seconds,
             note_scroll_clock: audio.note_scroll_clock,
             master_volume: audio.master_volume,

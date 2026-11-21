@@ -97,6 +97,21 @@ pub(crate) struct Pattern {
     pub anchored: bool,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum LeadingByte<'a> {
+    Literal(u8),
+    Class(&'a [u64; 4]),
+}
+
+impl LeadingByte<'_> {
+    pub(crate) fn find_in(self, bytes: &[u8]) -> Option<usize> {
+        match self {
+            Self::Literal(byte) => find_byte(bytes, byte),
+            Self::Class(set) => bytes.iter().position(|&byte| set_has(set, byte)),
+        }
+    }
+}
+
 impl Pattern {
     pub fn heap_bytes(&self) -> usize {
         self.code.capacity() * std::mem::size_of::<Instruction>()
@@ -181,7 +196,7 @@ pub(crate) fn scan_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usiz
 }
 
 #[inline(never)]
-fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
+fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     if bytes.first().is_some_and(|&byte| !set_has(set, byte)) {
         return Some(0);
     }
@@ -196,10 +211,18 @@ fn contiguous_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     }
     let offset = bits.trailing_zeros();
     let normalized = bits >> offset;
+    let first = (index * 64) as u8 + offset as u8;
     if normalized & normalized.wrapping_add(1) != 0 {
+        // Identical contiguous halves differ only in bit 5, as in [A-Za-z].
+        let half = normalized as u32;
+        if normalized >> 32 == u64::from(half) && half & half.wrapping_add(1) == 0 {
+            let width = half.ilog2() as u8;
+            return Some(scan_boundary(bytes, |byte| {
+                (byte & !0x20).wrapping_sub(first) > width
+            }));
+        }
         return None;
     }
-    let first = (index * 64) as u8 + offset as u8;
     let width = normalized.ilog2() as u8;
     Some(if width == 0 {
         byte_run(bytes, first)
@@ -253,6 +276,32 @@ fn find_byte_in_blocks(bytes: &[u8], byte: u8) -> Option<usize> {
         .map(|offset| bytes.len() - tail.len() + offset)
 }
 
+#[inline(never)]
+pub(crate) fn find_pair(bytes: &[u8], needle: [u8; 2]) -> Option<usize> {
+    if bytes.starts_with(&needle) {
+        return Some(0);
+    }
+    let shifted = bytes.get(1..)?;
+    let (left, left_tail) = bytes[..shifted.len()].as_chunks::<32>();
+    let (right, right_tail) = shifted.as_chunks::<32>();
+    let matches = |(&a, &b): (&u8, &u8)| (a == needle[0]) & (b == needle[1]);
+    for (index, (a, b)) in left.iter().zip(right).enumerate() {
+        // The shifted slice includes pairs that straddle block boundaries.
+        if a.iter().zip(b).fold(false, |hit, pair| hit | matches(pair)) {
+            return a
+                .iter()
+                .zip(b)
+                .position(matches)
+                .map(|offset| index * 32 + offset);
+        }
+    }
+    left_tail
+        .iter()
+        .zip(right_tail)
+        .position(matches)
+        .map(|offset| left.len() * 32 + offset)
+}
+
 pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
     let (blocks, tail) = bytes.as_chunks::<32>();
     let block = [byte; 32];
@@ -274,6 +323,41 @@ pub(crate) fn byte_run(bytes: &[u8], byte: u8) -> usize {
             .iter()
             .position(|&candidate| candidate != byte)
             .unwrap_or(tail.len())
+}
+
+fn balance_end(source: &[u8], pos: usize, left: u8, right: u8) -> Option<usize> {
+    let rest = source.get(pos..)?.strip_prefix(&[left])?;
+    let (blocks, tail) = rest.as_chunks::<32>();
+    let scan = |bytes: &[u8], depth: &mut usize| {
+        for (index, &byte) in bytes.iter().enumerate() {
+            if byte == right {
+                *depth -= 1;
+                if *depth == 0 {
+                    return Some(index);
+                }
+            } else if byte == left {
+                *depth += 1;
+            }
+        }
+        None
+    };
+    let mut depth = 1usize;
+    for (index, block) in blocks.iter().enumerate() {
+        let (opens, closes) = block.iter().fold((0u8, 0u8), |(opens, closes), &byte| {
+            (
+                opens + u8::from(byte == left),
+                closes + u8::from(byte == right),
+            )
+        });
+        // Only inspect order when the closing delimiters could exhaust depth.
+        if usize::from(closes) < depth {
+            depth += usize::from(opens);
+            depth -= usize::from(closes);
+        } else if let Some(offset) = scan(block, &mut depth) {
+            return Some(pos + 2 + index * 32 + offset);
+        }
+    }
+    scan(tail, &mut depth).map(|offset| source.len() - tail.len() + offset + 1)
 }
 
 // Bracket syntax is parsed into a bitmap; errors remain deferred instructions.
@@ -484,15 +568,18 @@ impl Pattern {
             _ => unreachable!("repeated pattern atom"),
         }
     }
-    /// A byte every match must start with. Attempts elsewhere fail on the
+    /// The mandatory literal or class at the start of a match. Other bytes fail the
     /// first instruction without reaching any later instruction or error.
-    pub fn first_byte(&self) -> Option<u8> {
-        self.code
-            .first()
-            .filter(|i| {
-                matches!(i.kind, Kind::Byte) && matches!(i.repeat, Repeat::One | Repeat::Plus)
-            })
-            .map(|i| i.arg as u8)
+    pub(crate) fn leading_byte(&self) -> Option<LeadingByte<'_>> {
+        let first = self.code.first()?;
+        if !matches!(first.repeat, Repeat::One | Repeat::Plus) {
+            return None;
+        }
+        match first.kind {
+            Kind::Byte => Some(LeadingByte::Literal(first.arg as u8)),
+            Kind::Set => Some(LeadingByte::Class(&self.sets[first.arg as usize])),
+            _ => None,
+        }
     }
     pub fn find(
         &self,
@@ -500,14 +587,14 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        let first = self.first_byte().filter(|_| !self.anchored);
+        let first = self.leading_byte().filter(|_| !self.anchored);
         let mut pos = start;
         while pos <= source.len() {
-            if let Some(byte) = first {
-                match find_byte(&source[pos..], byte) {
-                    Some(offset) => pos += offset,
-                    None => return Ok(None),
-                }
+            if let Some(first) = first {
+                let Some(offset) = first.find_in(&source[pos..]) else {
+                    return Ok(None);
+                };
+                pos += offset;
             }
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
@@ -585,7 +672,7 @@ impl Pattern {
                                 Kind::Set => {
                                     let set = &self.sets[i.arg as usize];
                                     if rest.len() >= 64
-                                        && let Some(run) = contiguous_set_run(rest, set)
+                                        && let Some(run) = range_set_run(rest, set)
                                     {
                                         run
                                     } else {
@@ -639,28 +726,10 @@ impl Pattern {
                 Kind::Balance => {
                     let left = i.arg as u8;
                     let right = (i.arg >> 8) as u8;
-                    if source.get(pos) != Some(&left) {
-                        matched = false;
+                    if let Some(end) = balance_end(source, pos, left, right) {
+                        pos = end;
                     } else {
-                        let mut depth = 1usize;
-                        let mut end = pos + 1;
-                        while end < source.len() {
-                            let b = source[end];
-                            end += 1;
-                            if b == right {
-                                depth -= 1;
-                                if depth == 0 {
-                                    break;
-                                }
-                            } else if b == left {
-                                depth += 1;
-                            }
-                        }
-                        if depth == 0 {
-                            pos = end;
-                        } else {
-                            matched = false;
-                        }
+                        matched = false;
                     }
                 }
                 Kind::Frontier => {
@@ -735,14 +804,94 @@ impl Pattern {
 
 #[cfg(test)]
 mod byte_search_tests {
-    use super::{byte_run, contiguous_set_run, find_byte, set_has};
+    use super::{
+        Memory, Pattern, Work, balance_end, byte_run, find_byte, find_pair, range_set_run, set_has,
+    };
 
     #[test]
-    fn contiguous_set_runs_match_bitmap_membership_across_blocks() {
-        for (first, last) in [(0, 0), (0, 63), (22, 38), (91, 97), (128, 191), (250, 255)] {
+    fn required_class_skips_only_positions_that_cannot_match() {
+        let compile = |bytes: &[u8]| Pattern::compile(bytes, true, Memory::default()).unwrap();
+        let mut work = Work::default();
+        let deferred = compile(b"%d[");
+        assert!(deferred.find(b"abc", 0, &mut work).unwrap().is_none());
+        assert!(deferred.find(b"abc1", 0, &mut work).is_err());
+        assert!(
+            compile(b"^%d")
+                .find(b"abc1", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+
+        for (pat, expected) in [
+            (b"%d+".as_slice(), (3, 5)),
+            (b"%d?", (0, 0)),
+            (b"%d-", (0, 0)),
+            (b"%d*", (0, 0)),
+            (b"[\xff0-9]", (1, 2)),
+            (b"%z", (2, 3)),
+        ] {
+            let matched = compile(pat)
+                .find(b"a\xff\x0042", 0, &mut work)
+                .unwrap()
+                .unwrap();
+            assert_eq!((matched.start, matched.end), expected);
+        }
+    }
+
+    #[test]
+    fn pair_search_keeps_first_match_across_blocks_and_binary_tails() {
+        for needle in [[0, 255], [255, 0], [b':'; 2]] {
+            for len in 0..=68 {
+                let mut bytes = vec![b'x'; len];
+                if let Some(last) = bytes.last_mut() {
+                    *last = needle[0];
+                }
+                assert_eq!(find_pair(&bytes, needle), None);
+                for start in 0..len.saturating_sub(1) {
+                    let mut subject = bytes.clone();
+                    subject[start..start + 2].copy_from_slice(&needle);
+                    let expected = subject.windows(2).position(|pair| pair == needle);
+                    assert_eq!(find_pair(&subject, needle), expected);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn balance_counts_nested_and_identical_delimiters_across_blocks() {
+        for close in [32, 33, 34, 64, 65, 66, 98] {
+            let mut bytes = [b'x'; 102];
+            bytes[1] = 0;
+            bytes[close - 1] = 0;
+            bytes[close] = 255;
+            bytes[close + 1] = 255;
+            assert_eq!(balance_end(&bytes, 0, 0, 255), None);
+            assert_eq!(balance_end(&bytes[..close + 1], 1, 0, 255), None);
+            assert_eq!(balance_end(&bytes, 1, 0, 255), Some(close + 2));
+            assert_eq!(balance_end(&bytes, 1, 0, 0), Some(close));
+        }
+    }
+
+    #[test]
+    fn range_set_runs_match_bitmap_membership_across_blocks() {
+        for (first, last, paired) in [
+            (0, 0, false),
+            (0, 63, false),
+            (22, 38, false),
+            (91, 97, false),
+            (128, 191, false),
+            (250, 255, false),
+            (0, 0, true),
+            (65, 90, true),
+            (130, 159, true),
+            (194, 223, true),
+        ] {
             let mut set = [0u64; 4];
             for byte in first..=last {
                 set[usize::from(byte / 64)] |= 1 << (byte % 64);
+                if paired {
+                    set[usize::from(byte / 64)] |= 1 << ((byte ^ 0x20) % 64);
+                }
             }
             let mut bytes = [first; 73];
             for index in [0, 1, 31, 32, 33, 63, 64, 72] {
@@ -752,13 +901,13 @@ mod byte_search_tests {
                         .iter()
                         .position(|&byte| !set_has(&set, byte))
                         .unwrap_or(bytes.len());
-                    assert_eq!(contiguous_set_run(&bytes, &set), Some(end));
+                    assert_eq!(range_set_run(&bytes, &set), Some(end));
                 }
                 bytes[index] = first;
             }
         }
-        assert_eq!(contiguous_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
-        assert_eq!(contiguous_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+        assert_eq!(range_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
+        assert_eq!(range_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
     }
 
     #[test]

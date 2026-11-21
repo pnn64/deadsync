@@ -314,7 +314,21 @@ pub struct WholeSongComposer {
 
 impl WholeSongComposer {
     fn refresh_layout<S: NoteskinSlot + Clone>(&mut self, overlays: &[SongLuaOverlayActor<S>]) {
+        // The GPU shell refreshes live Sprite and AMV resources before composition.
+        // Headless playback owns its own registry; refresh current published keys
+        // at this shared entry point, including recorded and AFT-layer draws.
+        // This scans the current overlay slice; existing keys return immediately.
+        for overlay in overlays {
+            match &overlay.kind {
+                SongLuaOverlayKind::Sprite { texture_key, .. }
+                | SongLuaOverlayKind::ActorMultiVertex {
+                    texture_key: Some(texture_key), ..
+                } => queue_texture(&mut self.assets, texture_key),
+                _ => {}
+            }
+        }
         if self.mesh_scratch.len() == overlays.len() {
+            self.topology.refresh_texture_bindings(overlays);
             return;
         }
         self.topology.refresh_wrappers(overlays);
@@ -542,23 +556,25 @@ impl WholeSongComposer {
                 ) {
                     return None;
                 }
-                let [_, view, space] = song_lua_model_camera(
-                    *camera,
-                    screen_width() / screen[0].max(1.0),
-                    screen_height() / screen[1].max(1.0),
-                );
-                Some((
-                    *overlay,
-                    deadlib_present::compose::build_screen_with_texture_context(
-                        &self.manual.banks[self.manual.bank][op].actors,
-                        [0.0; 4],
-                        &deadlib_present::space::Metrics::centered(screen[0], screen[1]),
-                        &font::FontMap::default(),
-                        seconds,
-                        self.assets.texture_context(),
-                    ),
-                    [matrix_rows(space), matrix_rows(view)],
-                ))
+                let slot = &self.manual.banks[self.manual.bank][op];
+                let viewport = slot.viewport;
+                let camera = SongLuaDrawCamera::from(*camera).resolve_for(screen);
+                let metrics = deadlib_present::space::Metrics::centered(viewport[0], viewport[1]);
+                Some(deadlib_present::space::with_current_metrics(metrics, || {
+                    let [_, view, space] = song_lua_model_camera(camera, 1.0, 1.0);
+                    (
+                        *overlay,
+                        deadlib_present::compose::build_screen_with_texture_context(
+                            &slot.actors,
+                            [0.0; 4],
+                            &metrics,
+                            &font::FontMap::default(),
+                            seconds,
+                            self.assets.texture_context(),
+                        ),
+                        [matrix_rows(space), matrix_rows(view)],
+                    )
+                }))
             })
             .collect()
     }
@@ -591,11 +607,6 @@ impl WholeSongComposer {
         screen_state: Option<SongLuaOverlayState>,
     ) -> deadlib_render_core::RenderFrame {
         self.refresh_layout(overlays);
-        // A retained Sprite can bind its first image, or replace it, after the
-        // composer was warmed. Resolve that published resource before drawing.
-        if let SongLuaOverlayKind::Sprite { texture_key, .. } = &overlays[index].kind {
-            queue_texture(&mut self.assets, texture_key);
-        }
         deadlib_present::space::set_current_metrics(deadlib_present::space::Metrics::centered(
             screen[0], screen[1],
         ));
@@ -713,18 +724,26 @@ fn queue_texture(assets: &mut AssetManager, key: &str) {
     // independent source image/movie's logical size before reserving its handle;
     // a 1px placeholder would overwrite the registry and shrink live sprites.
     let source_key = key.strip_suffix("#itg-model").unwrap_or(key);
-    let source_dims = image::image_dimensions(source_key).ok().or_else(|| {
-        let path = Path::new(source_key);
-        crate::is_song_lua_video_path(path)
-            .then(|| deadlib_video::dimensions(path).ok())
-            .flatten()
-    });
+    // Song assets can have a misleading extension. Use the same content-aware
+    // source dimensions as live Sprite loading before publishing the metadata.
+    let source_dims = deadlib_assets::texture_source_size(Path::new(source_key))
+        .ok()
+        .or_else(|| {
+            let path = Path::new(source_key);
+            crate::is_song_lua_video_path(path)
+                .then(|| deadlib_video::dimensions(path).ok())
+                .flatten()
+        });
     let dims = source_dims.map(|(w,h)| deadlib_assets::TexMeta { w,h })
         .or_else(|| deadlib_assets::texture_dims(key));
     let width = dims.map_or(1, |dims| dims.w.max(1));
     let height = dims.map_or(1, |dims| dims.h.max(1));
     assets.queue_texture_upload(key.to_owned(), image::RgbaImage::new(width, height));
 }
+
+#[cfg(test)]
+#[path = "image_metadata_tests.rs"]
+mod image_metadata_tests;
 
 #[cfg(test)]
 #[path = "movie_metadata_tests.rs"]

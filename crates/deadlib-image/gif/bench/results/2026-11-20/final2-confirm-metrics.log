@@ -1,0 +1,28 @@
+all 9
+  gif-asset-first: 6,364,642 -> 6,512,462 total cycles; after/before geomean 1.01100
+  image-first: 22,601,698 -> 23,660,930 total cycles; after/before geomean 1.00978
+  native-copy-first: 12,066,319 -> 11,092,896 total cycles; after/before geomean 0.98363
+  native-first: 7,704,287 -> 7,158,184 total cycles; after/before geomean 0.98389
+  after native-first/gif-asset-first: 0.79216; 6 wins, 3 losses
+  after native-first/image-first: 0.40470; 9 wins, 0 losses
+assets 3
+  gif-asset-first: 30,295 -> 30,338 total cycles; after/before geomean 1.00204
+  image-first: 37,611 -> 37,960 total cycles; after/before geomean 1.00142
+  native-copy-first: 17,489 -> 17,757 total cycles; after/before geomean 1.02136
+  native-first: 17,007 -> 17,383 total cycles; after/before geomean 1.02245
+  after native-first/gif-asset-first: 0.57931; 3 wins, 0 losses
+  after native-first/image-first: 0.47922; 3 wins, 0 losses
+generated 6
+  gif-asset-first: 6,334,347 -> 6,482,124 total cycles; after/before geomean 1.01550
+  image-first: 22,564,087 -> 23,622,970 total cycles; after/before geomean 1.01399
+  native-copy-first: 12,048,830 -> 11,075,139 total cycles; after/before geomean 0.96529
+  native-first: 7,687,280 -> 7,140,801 total cycles; after/before geomean 0.96516
+  after native-first/gif-asset-first: 0.92632; 3 wins, 3 losses
+  after native-first/image-first: 0.37190; 6 wins, 0 losses
+large-flat 3
+  gif-asset-first: 5,172,316 -> 5,285,355 total cycles; after/before geomean 1.02168
+  image-first: 20,415,809 -> 21,633,393 total cycles; after/before geomean 1.05461
+  native-copy-first: 10,796,501 -> 9,770,355 total cycles; after/before geomean 0.90452
+  native-first: 6,574,383 -> 5,981,924 total cycles; after/before geomean 0.90887
+  after native-first/gif-asset-first: 1.12952; 0 wins, 3 losses
+  after native-first/image-first: 0.27716; 3 wins, 0 losses

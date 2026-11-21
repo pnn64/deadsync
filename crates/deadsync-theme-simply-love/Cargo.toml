@@ -6,7 +6,7 @@ license = "GPL-3.0"
 autoexamples = false
 
 [features]
-test-support = []
+test-support = ["deadsync-song-lua/test-support"]
 
 [[example]]
 name = "export_screenshot"

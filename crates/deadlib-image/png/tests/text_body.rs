@@ -1,6 +1,7 @@
 use deadlib_image_png::{
-    ChunkPosition, DecodeEvent, DecodeOptions, DecodeStatus, EncodeOptions, Limits, Metadata, Png,
-    Samples, StreamDecoder, decode, decode_reader, encode, encode_writer, zlib::Compression,
+    ChunkPosition, DecodeEvent, DecodeOptions, DecodeStatus, EncodeOptions, Limits, Metadata,
+    MetadataPolicy, Png, Samples, StreamDecoder, decode, decode_reader, decode_with_options,
+    encode, encode_writer, zlib::Compression,
 };
 use std::io::{self, Cursor, Read};
 #[path = "support/text_body.rs"]
@@ -24,6 +25,15 @@ fn value(text: &[u8], compressed: bool) -> Metadata {
         text: text.to_vec(),
         compressed,
     }
+}
+fn body_options(byte: u8) -> DecodeOptions {
+    let mut options = DecodeOptions::default();
+    // Null text is a strict conformance failure; other controls continue to
+    // exercise the default decoder's established text recovery behavior.
+    if byte == 0 {
+        options.metadata_policy = MetadataPolicy::Strict;
+    }
+    options
 }
 fn base() -> Png {
     let mut png = decode(&body::fixture(b"", false, ChunkPosition::BeforePalette)).unwrap();
@@ -72,6 +82,7 @@ fn every_body_byte_context_and_placement_preserves_decode_recovery_but_enforces_
     let mut count = 0;
     for byte in 0u8..=255 {
         let encodable = matches!(byte,10|32..=126|160..=255);
+        let options = body_options(byte);
         for compressed in [false, true] {
             for text in [
                 vec![byte],
@@ -84,9 +95,9 @@ fn every_body_byte_context_and_placement_preserves_decode_recovery_but_enforces_
                     let expected = value(&text, compressed);
                     let bytes = body::fixture(&text, compressed, position);
                     for result in [
-                        decode(&bytes),
-                        decode_reader(Fragmented(&bytes, 1), &DecodeOptions::default()),
-                        decode_reader(Fragmented(&bytes, 7), &DecodeOptions::default()),
+                        decode_with_options(&bytes, &options),
+                        decode_reader(Fragmented(&bytes, 1), &options),
+                        decode_reader(Fragmented(&bytes, 7), &options),
                     ] {
                         if byte == 0 {
                             assert!(result.is_err());
@@ -151,7 +162,7 @@ fn recovery_events_preserve_non_null_controls_and_itxt_unicode_rules() {
         for compressed in [false, true] {
             let wire = body::fixture(&[byte], compressed, ChunkPosition::AfterData);
             let expected = value(&[byte], compressed);
-            let mut decoder = StreamDecoder::new(DecodeOptions::default());
+            let mut decoder = StreamDecoder::new(body_options(byte));
             let (mut offset, mut metadata) = (0, 0);
             loop {
                 let end = wire.len().min(offset + 1);

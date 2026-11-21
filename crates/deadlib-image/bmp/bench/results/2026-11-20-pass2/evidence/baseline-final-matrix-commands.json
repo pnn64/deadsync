@@ -1,0 +1,164 @@
+[
+  {
+    "name": "baseline-final-matrix-before-decode",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-before-decode",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-after-decode",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-after-decode",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-after-owned",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-after-owned",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-before-owned",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-before-owned",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-before-rgba",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-before-rgba",
+      "-Mode",
+      "rgba",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-after-rgba",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-after-rgba",
+      "-Mode",
+      "rgba",
+      "-Milliseconds",
+      "20"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-after-corpus",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-after-corpus",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "20",
+      "-Corpus"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "baseline-final-matrix-before-corpus",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "baseline-final-matrix-before-corpus",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "20",
+      "-Corpus"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  }
+]

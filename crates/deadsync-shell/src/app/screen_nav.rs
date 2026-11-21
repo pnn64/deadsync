@@ -15,6 +15,7 @@ use crate::navigation::{
 use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
+use deadsync_gameplay::course_progress::CourseRenewal;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
@@ -70,11 +71,8 @@ impl App {
         let Some(course) = self.state.session.course_run.as_mut() else {
             return target;
         };
-        let renewed = match (
-            course.course_type,
-            course.next_stage_index.cmp(&course.stages.len()),
-        ) {
-            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Equal) => {
+        let renewed = match course.renewal() {
+            CourseRenewal::AppendCycle => {
                 select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
                     .or_else(|| {
                         select_course::selected_course_plan(&self.state.screens.select_course_state)
@@ -88,13 +86,13 @@ impl App {
                     })
             }
             // Skipping unprepared history cannot repair an invalid cursor.
-            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Greater) => false,
-            _ => return target,
+            CourseRenewal::InvalidCursor => false,
+            CourseRenewal::NotRequired => return target,
         };
         if renewed {
             return target;
         }
-        course.interrupted = true;
+        course.progress.interrupt();
         warn!("Unable to renew Endless course; finishing with the recorded course result.");
         self.state.shell.interaction.show_message(
             "Unable to prepare next course stage".to_string(),

@@ -1,0 +1,7 @@
+{
+  "captured_utc": "2026-11-20T23:41:32.951287+00:00",
+  "status": "passed",
+  "raw_before_after_record_pairs": 622,
+  "numeric_checks": 7221,
+  "scope": "Every final C5 native/reference median, range, cycle/ns ratio, group sum, geometric ratio, throughput and cohort count independently recalculated from raw TSVs."
+}

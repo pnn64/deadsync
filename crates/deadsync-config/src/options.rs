@@ -16,7 +16,8 @@ use crate::defaults::{
     DEFAULT_ENABLE_BOOGIESTATS, DEFAULT_ENABLE_GROOVESTATS, DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG,
     DEFAULT_GLOBAL_OFFSET_SECONDS, DEFAULT_HIDE_INACTIVE_SERIES, DEFAULT_HIDE_MOUSE_CURSOR,
     DEFAULT_HIGH_DPI, DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
-    DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
+    DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_PAD_STICK_SECONDS,
+    DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
     DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
     DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHARE_RIPS,
@@ -59,7 +60,7 @@ use deadlib_input_native::WindowsPadBackend;
 use deadsync_lights::{
     DriverKind as LightsDriverKind, GameplayPadLightMode, PacDriveLightOrdering,
 };
-use deadsync_theme::color::DifficultyColorScheme;
+use deadsync_core::color::DifficultyColorScheme;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -362,6 +363,7 @@ pub struct SystemOptions {
     pub smx_judge_gifs_pack: SmxPackName,
     pub gfx_debug: bool,
     pub global_offset_seconds: f32,
+    pub pad_stick_seconds: f32,
     pub language_flag: LanguageFlag,
     pub log_level: LogLevel,
     pub log_to_file: bool,
@@ -427,6 +429,7 @@ impl Default for SystemOptions {
             smx_judge_gifs_pack: SmxPackName::default(),
             gfx_debug: DEFAULT_GFX_DEBUG,
             global_offset_seconds: DEFAULT_GLOBAL_OFFSET_SECONDS,
+            pad_stick_seconds: DEFAULT_PAD_STICK_SECONDS,
             language_flag: LanguageFlag::Auto,
             log_level: LogLevel::Warn,
             log_to_file: DEFAULT_LOG_TO_FILE,
@@ -867,6 +870,11 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "GlobalOffsetSeconds")
             .and_then(|value| value.parse::<f32>().ok())
             .unwrap_or(default.global_offset_seconds),
+        pad_stick_seconds: conf
+            .get("Options", "PadStickSeconds")
+            .and_then(|value| value.parse::<f32>().ok())
+            .filter(|value| value.is_finite())
+            .unwrap_or(default.pad_stick_seconds),
         language_flag: conf
             .get("Options", "Language")
             .and_then(|value| LanguageFlag::from_str(value).ok())
@@ -911,6 +919,7 @@ pub fn push_system_gameplay_option_lines(content: &mut String, options: SystemOp
         clamp_bg_brightness(options.bg_brightness),
     );
     push_line(content, "SongLuaMode", options.song_lua_mode.as_str());
+    push_line(content, "PadStickSeconds", options.pad_stick_seconds);
 }
 
 pub fn push_gameplay_bg_color_option_line(content: &mut String, color_hex: &str) {
@@ -2879,6 +2888,7 @@ mod tests {
             smx_judge_gifs_pack: SmxPackName::default(),
             gfx_debug: false,
             global_offset_seconds: -0.008,
+            pad_stick_seconds: 0.0,
             language_flag: LanguageFlag::Auto,
             log_level: LogLevel::Warn,
             log_to_file: true,
@@ -3521,6 +3531,7 @@ mod tests {
             concat!(
                 "BGBrightness=1\n",
                 "SongLuaMode=Baked\n",
+                "PadStickSeconds=0\n",
                 "BannerCache=0\n",
                 "CDTitleCache=0\n",
                 "Center1Player=1\n",

@@ -1,0 +1,52 @@
+{
+  "status": "prepared only; no timing started; exclusive timing grant required",
+  "purpose": "final source-selection discriminator, not an open-ended tuning loop",
+  "stage": "candidate4-alpha-dispatch",
+  "parent": "candidate3-direct-rgba",
+  "expected_timing_sha256": {
+    "baseline": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1",
+    "candidate3-direct-rgba": "762925d31da68079aca897395e08faa913f56884021b62633c7887fb44ad9fc4",
+    "candidate4-alpha-dispatch": "fab8fef6e02991e32db9a20ce1204b3f78810fcd81072d344376707332a2ab57"
+  },
+  "watcher": "watch_commands-strict.py",
+  "expected_watcher_sha256": "ea1401c8a20aa050359d31ef88e59b04a22ed3b3827c29d3ca9295c3d108c471",
+  "focus": {
+    "command_file": "candidate4-focus-commands.json",
+    "jobs": 20,
+    "batches": 5,
+    "milliseconds": 40,
+    "cpu": 2,
+    "native_cases": 72,
+    "decode_rows_per_binary": 72,
+    "owned_rows_per_binary": 122,
+    "coverage": "all 32-bit layouts; RGB333/RGB555/RGB565 unchanged controls; RGBA4444 target"
+  },
+  "full_matrix": {
+    "command_file": "candidate4-baseline-matrix-commands.json",
+    "jobs": 8,
+    "batches": 5,
+    "milliseconds": 20,
+    "cpu": 2,
+    "rows_per_binary": {
+      "decode": 120,
+      "owned": 218,
+      "rgba": 218,
+      "corpus": 24
+    }
+  },
+  "alpha": {
+    "command_file": "candidate4-baseline-alpha-commands.json",
+    "jobs": 4,
+    "batches": 5,
+    "milliseconds": 80,
+    "cpu": 2,
+    "decode_rows_per_binary": 18,
+    "owned_rows_per_binary": 24
+  },
+  "conditions": [
+    "Focus compares candidate4 with its frozen candidate3 parent on identical workload order.",
+    "Full matrix and alpha compare candidate4 with the original frozen baseline, conditional on a defensible focus result.",
+    "Preserve all observed losses, semantic exclusions and process-context sensitivity.",
+    "If material non-target losses persist, recommend a smaller retained subset and one rebase/gate; do not retain all changes only because target groups improve or image remains slower."
+  ]
+}

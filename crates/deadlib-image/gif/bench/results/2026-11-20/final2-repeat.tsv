@@ -1,0 +1,15 @@
+file	codec	ns	thread_cycles	alloc_calls	requested_bytes
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	native-retained	462212	1012215	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	gif-retained	469645	1028961	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	native-stream	444572	974049	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	gif-stream	438024	959884	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	native-rgba	476056	1042731	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	gif-rgba	513513	1125157	0	0
+target/gif-generated-20261117/p32-257x193-noise-i0-native.gif	image-rgba	732611	1605195	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	gif-retained	48867	107098	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	native-stream	37301	81754	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	gif-stream	48849	107042	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	native-rgba	45166	98978	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	gif-rgba	63530	139215	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	image-rgba	105179	230428	0	0
+target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif	native-retained	37541	82290	0	0

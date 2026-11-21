@@ -1,0 +1,26 @@
+--- a/crates/deadlib-image/bmp/src/decode.rs
++++ b/crates/deadlib-image/bmp/src/decode.rs
+@@ -99,15 +99,20 @@
+             let mut samples = Vec::new();
+             reserve(&mut samples, header.decoded_bytes)?;
+             samples.resize(header.decoded_bytes, 0);
+-            // BI_RGB32 has no row padding. Read its legacy alpha policy from
+-            // the validated source so conversion needs no later alpha rewrite.
++            // Preserve logical scan order for alpha checks. BI_RGB32 has no
++            // row padding, and conversion writes final alpha without a rewrite.
++            let zero_alpha = |row: &[u8]| row.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0);
+             let opaque = matches!(
+                 header.format,
+                 Format::Masked {
+                     opaque_if_zero: true,
+                     ..
+                 }
+-            ) && source.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 0);
++            ) && if header.info.top_down {
++                zero_alpha(source)
++            } else {
++                source.chunks_exact(header.row_pitch).rev().all(zero_alpha)
++            };
+             for (encoded_y, row) in source.chunks_exact(header.row_pitch).enumerate() {
+                 let y = if header.info.top_down {
+                     encoded_y

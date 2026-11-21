@@ -374,8 +374,7 @@ pub(crate) fn write_frames(
                 .image
                 .as_ref()
                 .ok_or(Error::Invalid("missing APNG frame"))?;
-            let raw = scanline::encode(image, options.interlaced, options.filter)?;
-            let compressed = zlib::compress(&raw, options.compression)?;
+            let compressed = crate::stream::compress_image(image, options)?;
             let chunk_size = options.idat_chunk_size.min(0x7fff_fffb);
             let mut payload = Vec::new();
             for part in compressed.chunks(chunk_size) {

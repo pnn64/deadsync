@@ -881,3 +881,175 @@ fn mixed_case_texture_resolves_on_linux_and_preserves_its_logical_path() {
 #[allow(dead_code)]
 #[path = "../../deadlib-lua/src/reference_test.rs"]
 mod reference_test;
+
+#[test]
+fn scheduled_amv_aft_publication_tracks_binding_changes_without_replacing_slots() {
+    use deadlib_render_core::{DrawOp, TextureHandle, render_target_base_handle};
+    use deadsync_assets::song_lua::SongLuaOverlayKind as RenderKind;
+    use song::playback::actor_conformance::WholeSongComposer;
+
+    type RenderActor = deadsync_assets::song_lua::SongLuaOverlayActor;
+    fn script(scene: &mut song::SongLiveScene, source: &str) {
+        let code = compile_named(source.as_bytes(), b"@/live-aft-binding.lua").unwrap();
+        let result = {
+            let mut runtime = scene.runtime_mut();
+            runtime.vm_mut().execute(&code).map(|_| ())
+        };
+        result.unwrap();
+    }
+    fn publish(scene: &mut song::SongLiveScene, visual: &mut Visuals<RenderActor>, seconds: f64) {
+        let output = scene.update(song::SongLuaLiveFrame {
+            music_seconds: seconds, screen_seconds: seconds, beat: seconds * 2.,
+            delta_seconds: 0., ..Default::default()
+        }).unwrap();
+        assert!(output.errors.is_empty(), "{:?}", output.errors);
+        scene.write_visuals(visual).unwrap();
+    }
+    #[track_caller]
+    fn bound_texture(composer: &mut WholeSongComposer, visual: &Visuals<RenderActor>, index: usize) -> TextureHandle {
+        let states = visual.overlays.iter().map(|actor| actor.initial_state).collect::<Vec<_>>();
+        let frame = composer.render_overlay(&visual.overlays, &states, index, [640., 480.], 0.6, 1.2);
+        let [DrawOp::TexturedMesh(draw)] = frame.ops.as_slice() else {
+            panic!("expected one textured AMV submission for {:?}: {:?}; kind={:?}; state={:?}",
+                visual.overlays[index].name, frame.ops, visual.overlays[index].kind, states[index]);
+        };
+        draw.texture_handle
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("foreground.lua");
+    let ordinary = dir.path().join("ordinary.png");
+    image::RgbaImage::from_pixel(8, 8, image::Rgba([255; 4])).save(&ordinary).unwrap();
+    std::fs::write(&path, r#"
+        CREATE_COUNT=0
+        local vertices={{{-8,-8,0},{1,1,1,1},{0,0}},{{8,-8,0},{1,1,1,1},{1,0}},{{0,8,0},{1,1,1,1},{.5,1}}}
+        return Def.ActorFrame {
+            OnCommand=function(self)
+                self:sleep(1000)
+                CREATE_COUNT=CREATE_COUNT+1
+                A:SetWidth(32.9):SetHeight(16.9):SetTextureName('capture-a')
+                    :EnableAlphaBuffer(true):EnableDepthBuffer(true):EnableFloat(true):Create()
+                M:SetTexture(A:GetTexture())
+            end,
+            Def.ActorFrameTexture {Name='A',InitCommand=function(self) A=self end,
+                Def.Quad {InitCommand=function(self) self:setsize(8,8) end}},
+            Def.ActorFrameTexture {Name='B',InitCommand=function(self)
+                B=self;self:SetWidth(64):SetHeight(32):SetTextureName('capture-b'):Create()
+            end},
+            Def.ActorMultiVertex {Name='Mesh',InitCommand=function(self)
+                M=self;self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+            end},
+            Def.Sprite {Name='Ordinary',Texture='ordinary.png',InitCommand=function(self) IMAGE=self end},
+            Def.ActorMultiVertex {Name='Alias',Texture='capture-b',InitCommand=function(self)
+                ALIAS=self;self:SetDrawState{Mode='DrawMode_Triangles'}:SetVertices(vertices)
+            end},
+        }
+    "#).unwrap();
+    let mut context = song::SongLuaCompileContext::new(dir.path(), "late AMV AFT binding");
+    context.live = true;
+    context.defer_initial_live_update = true;
+    context.layer_start_beats = vec![1.];
+    context.music_length_seconds = 10.;
+    context.players[0].step_statistics_enabled = false;
+    context.players[1].enabled = false;
+    let mut output: deadsync_assets::song_lua::CompiledSongLua = song::compile_song_lua_layers(
+        &[&path], 0, &context, Default::default(),
+        |_, _, _| Ok(Arc::<[deadsync_assets::noteskin::SpriteSlot]>::from([])),
+        |_| None, |_, _| None,
+    ).unwrap().remove(0);
+    let mut scene = output.live_scene.take().unwrap();
+    scene.bind_targets(output.live_actor_indices().iter().copied().enumerate()
+        .map(|(local, global)| (global, Target::Root(local))).collect()).unwrap();
+    let mut visual = visuals(output);
+    let index = |name| visual.overlays.iter().position(|actor| actor.name.as_deref() == Some(name)).unwrap();
+    let (a, b, mesh, alias) = (index("A"), index("B"), index("Mesh"), index("Alias"));
+    let count = visual.overlays.len();
+    scene.write_visuals(&mut visual).unwrap();
+    assert!(matches!(visual.overlays[a].kind, RenderKind::ActorFrameTexture { capture_size: None, .. }));
+    assert!(matches!(visual.overlays[mesh].kind, RenderKind::ActorMultiVertex { capture_name: None, .. }));
+    assert!(matches!(&visual.overlays[alias].kind, RenderKind::ActorMultiVertex { capture_name: Some(name), .. } if name == "capture-b"),
+        "unchanged declarative registered-texture binding remains valid");
+    let mut composer = WholeSongComposer::new(&visual.overlays);
+    let a_handle = composer.capture_handle(a).unwrap();
+    let b_handle = composer.capture_handle(b).unwrap();
+    publish(&mut scene, &mut visual, 0.);
+    assert!(matches!(visual.overlays[a].kind, RenderKind::ActorFrameTexture { capture_size: None, .. }));
+    publish(&mut scene, &mut visual, 0.6);
+    let RenderKind::ActorFrameTexture { capture_name, capture_size, alpha_buffer, depth_buffer, float_buffer } = &visual.overlays[a].kind else { panic!("AFT slot changed kind") };
+    assert_eq!(capture_name, "capture-a");
+    assert_eq!(*capture_size, Some([32., 16.]));
+    assert_eq!((*alpha_buffer, *depth_buffer, *float_buffer), (true, true, true));
+    assert!(visual.overlays[a].initial_state.aft_created);
+    assert_eq!(visual.overlays.len(), count);
+    assert!(matches!(&visual.overlays[mesh].kind, RenderKind::ActorMultiVertex { capture_name: Some(name), texture_path: None, texture_key: None, .. } if name == "capture-a"));
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, mesh)), a_handle);
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, alias)), b_handle);
+
+    script(&mut scene, "saved=B:GetTexture();M:SetTexture(saved);collectgarbage('collect');assert(M:GetTexture()==saved)");
+    publish(&mut scene, &mut visual, 0.7);
+    assert!(matches!(&visual.overlays[mesh].kind, RenderKind::ActorMultiVertex { capture_name: Some(name), .. } if name == "capture-b"));
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, mesh)), b_handle);
+    script(&mut scene, "M:SetTexture(M:GetTexture());A:SetWidth(128):SetHeight(256):SetTextureName('later-request'):EnableAlphaBuffer(false):EnableDepthBuffer(false):EnableFloat(false)");
+    publish(&mut scene, &mut visual, 0.8);
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, mesh)), b_handle);
+    let RenderKind::ActorFrameTexture { capture_name, capture_size, alpha_buffer, depth_buffer, float_buffer } = &visual.overlays[a].kind else { panic!("AFT slot changed kind") };
+    assert_eq!(capture_name, "capture-a");
+    assert_eq!(*capture_size, Some([32., 16.]));
+    assert_eq!((*alpha_buffer, *depth_buffer, *float_buffer), (true, true, true),
+        "Create freezes allocation metadata independently of later request setters");
+
+    // The file and its binding did not exist when this composer was constructed.
+    // This exercises late resource publication on every platform, independently
+    // of Windows separator differences in the earlier prepared Sprite's handle.
+    let late = dir.path().join("late-ordinary.png");
+    assert!(!late.exists());
+    image::RgbaImage::from_pixel(9, 5, image::Rgba([255; 4])).save(&late).unwrap();
+    script(&mut scene, &format!("M:LoadTexture({:?})", song::file_path_string(&late)));
+    publish(&mut scene, &mut visual, 0.85);
+    let RenderKind::ActorMultiVertex {
+        capture_name: None, texture_path: Some(late_path), texture_key: Some(late_key), ..
+    } = &visual.overlays[mesh].kind else { panic!("late ordinary texture retained the AFT binding") };
+    assert_eq!(late_path, &late);
+    let late_key = late_key.clone();
+    let late_handle = bound_texture(&mut composer, &visual, mesh);
+    assert!(!deadlib_render_core::is_render_target_texture(late_handle));
+    assert_eq!(composer.texture_key(late_handle), late_key.as_ref());
+    assert_eq!((composer.capture_handle(a), composer.capture_handle(b)), (Some(a_handle), Some(b_handle)));
+    assert_eq!(visual.overlays.len(), count);
+
+    script(&mut scene, "saved=IMAGE:GetTexture();M:SetTexture(saved);ALIAS:SetTexture(saved);collectgarbage('collect');assert(M:GetTexture()==saved);assert(ALIAS:GetTexture()==saved)");
+    publish(&mut scene, &mut visual, 0.9);
+    let RenderKind::ActorMultiVertex { capture_name: None, texture_path: Some(path), texture_key: Some(key), .. } = &visual.overlays[mesh].kind else { panic!("ordinary texture did not replace AFT") };
+    assert_eq!(path, &ordinary);
+    let key = key.clone();
+    let handle = bound_texture(&mut composer, &visual, mesh);
+    assert!(!deadlib_render_core::is_render_target_texture(handle));
+    assert_eq!(composer.texture_key(handle), key.as_ref());
+    let RenderKind::ActorMultiVertex { capture_name: None, texture_path: Some(alias_path), texture_key: Some(alias_key), .. } = &visual.overlays[alias].kind else { panic!("declarative alias retained a stale AFT after ordinary SetTexture") };
+    assert_eq!(alias_path, &ordinary);
+    assert_eq!(alias_key, &key);
+    let alias_handle = bound_texture(&mut composer, &visual, alias);
+    assert!(!deadlib_render_core::is_render_target_texture(alias_handle));
+    assert_eq!(composer.texture_key(alias_handle), key.as_ref());
+
+    script(&mut scene, "M:SetTexture(A:GetTexture());ALIAS:LoadTexture(nil)");
+    publish(&mut scene, &mut visual, 1.);
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, mesh)), a_handle);
+    assert!(matches!(visual.overlays[alias].kind, RenderKind::ActorMultiVertex { capture_name: None, .. }));
+    let alias_handle = bound_texture(&mut composer, &visual, alias);
+    assert!(!deadlib_render_core::is_render_target_texture(alias_handle));
+    assert_eq!(composer.texture_key(alias_handle), "__songlua_native_default_texture.png");
+    script(&mut scene, "M:LoadTexture(nil);saved=B:GetTexture();ALIAS:SetTexture(saved);collectgarbage('collect');assert(ALIAS:GetTexture()==saved);assert(M:GetTexture():GetPath()=='');assert(CREATE_COUNT==1)");
+    publish(&mut scene, &mut visual, 1.1);
+    let RenderKind::ActorMultiVertex { capture_name: None, texture_key: Some(key), .. } = &visual.overlays[mesh].kind else { panic!("default texture retained a stale AFT") };
+    let key = key.clone();
+    let handle = bound_texture(&mut composer, &visual, mesh);
+    assert!(!deadlib_render_core::is_render_target_texture(handle));
+    assert_eq!(composer.texture_key(handle), key.as_ref());
+    assert_eq!(key.as_ref(), "__songlua_native_default_texture.png");
+    assert!(matches!(&visual.overlays[alias].kind, RenderKind::ActorMultiVertex { capture_name: Some(name), texture_path: None, texture_key: None, .. } if name == "capture-b"));
+    assert_eq!(render_target_base_handle(bound_texture(&mut composer, &visual, alias)), b_handle);
+    assert_eq!((composer.capture_handle(a), composer.capture_handle(b)), (Some(a_handle), Some(b_handle)));
+    assert_eq!(visual.overlays.len(), count);
+    scene.end().unwrap();
+}

@@ -1,0 +1,45 @@
+﻿**********************
+Windows PowerShell transcript start
+Start time: 20261120222558
+Username: WS-X998M\PerfectTaste
+RunAs User: WS-X998M\PerfectTaste
+Configuration Name: 
+Machine: WS-X998M (Microsoft Windows NT 10.0.26100.0)
+Host Application: C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.EXE -NoProfile -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$global:__cos_ok = $true
+. {
+& .\target\bmp-decode-opt-20261120-pass2\build-candidate1.ps1
+$global:__cos_ok = $?
+} | Out-Default
+if ($global:__cos_ok) { exit 0 }; if ($LASTEXITCODE -is [int] -and $LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; exit 1
+Process ID: 34476
+PSVersion: 5.1.26100.8457
+PSEdition: Desktop
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1.26100.8457
+BuildVersion: 10.0.26100.8457
+CLRVersion: 4.0.30319.42000
+WSManStackVersion: 3.0
+PSRemotingProtocolVersion: 2.3
+SerializationVersion: 1.1.0.1
+**********************
+
+
+
+
+
+Verified 22570 exact native records (42819895 bytes): C:\GitHub\deadsync\target\bmp-decode-opt-20261120-pass2\baseline\native.snapshot
+
+Completed candidate1-alpha-decode-allocations (decode, 5 batches x 20 ms, CPU 2).
+Completed candidate1-alpha-owned-rgba-allocations (owned-rgba, 5 batches x 20 ms, CPU 2).
+Completed candidate1-alpha-rgba-allocations (rgba, 5 batches x 20 ms, CPU 2).
+Completed candidate1-alpha-corpus-allocations (owned-rgba, 5 batches x 20 ms, CPU 2).
+Completed baseline-alpha-controls-decode-allocations (decode, 5 batches x 20 ms, CPU 2).
+Completed baseline-alpha-controls-owned-rgba-allocations (owned-rgba, 5 batches x 20 ms, CPU 2).
+Completed candidate1-alpha-alpha-controls-decode-allocations (decode, 5 batches x 20 ms, CPU 2).
+Completed candidate1-alpha-alpha-controls-owned-rgba-allocations (owned-rgba, 5 batches x 20 ms, CPU 2).
+
+BMP candidate 1 build, snapshot, tests, and allocation-only passes complete. No timings were run.
+**********************
+Windows PowerShell transcript end
+End time: 20261120222756
+**********************

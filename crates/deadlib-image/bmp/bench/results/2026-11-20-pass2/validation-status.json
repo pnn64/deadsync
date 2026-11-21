@@ -1,0 +1,145 @@
+{
+  "status": "complete; all production candidates rejected, original production restored",
+  "production_optimizations_retained": 0,
+  "baseline_git_head": "945da378a907bb7c4fec1f432d02d320c9d2a462",
+  "production": [
+    {
+      "path": "crates/deadlib-image/bmp/src/decode.rs",
+      "bytes": 19937,
+      "sha256": "84591b2faaf4455f788ad7b475693fa93d7b4aa2793dda43b901cd66a463454e",
+      "matches": "original baseline"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/encode.rs",
+      "bytes": 5190,
+      "sha256": "a9cb5eaa16c6f816cd39bd217463a5b25ef3bbaf871db295c65d26fe4de4bf51",
+      "matches": "original baseline"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/lib.rs",
+      "bytes": 2281,
+      "sha256": "fd77ac85b9fa26a02cc7f49c3b94215b66f6c91ffe30c209ea8f0ba2933cb4c0",
+      "matches": "original baseline"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/model.rs",
+      "bytes": 7790,
+      "sha256": "02b7095ae208426daa8ccd1af24453129045d0ed82567f47d6a72d13ef7ae271",
+      "matches": "original baseline"
+    }
+  ],
+  "retained_tests": "evidence/retained-regression-tests.patch",
+  "final_restored_validation": {
+    "captured_utc": "2026-11-20T23:41:02.061736+00:00",
+    "production_decision": "Original BMP production restored exactly; zero production optimizations retained.",
+    "crate_integration_tests": 37,
+    "independent_alpha_tests": 1,
+    "doctests": 1,
+    "formatting": "passed",
+    "strict_codec_all_target_clippy": "passed",
+    "commands": [
+      {
+        "name": "format-check",
+        "arguments": [
+          "rustfmt",
+          "--check",
+          "--edition",
+          "2024",
+          "crates/deadlib-image/bmp/src/decode.rs",
+          "crates/deadlib-image/bmp/tests/bmp_optimized.rs",
+          "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\validation\\alpha_controls.rs"
+        ],
+        "cwd": "C:\\GitHub\\deadsync",
+        "started_utc": "2026-11-20T23:40:02.877856+00:00",
+        "completed_utc": "2026-11-20T23:40:03.054851+00:00",
+        "exit_code": 0,
+        "log": "final-restored-validation\\format-check.log"
+      },
+      {
+        "name": "tests",
+        "arguments": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\validation\\Cargo.toml",
+          "--release",
+          "--locked",
+          "--offline",
+          "-j",
+          "2",
+          "--target-dir",
+          "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\check"
+        ],
+        "cwd": "C:\\GitHub\\deadsync",
+        "started_utc": "2026-11-20T23:40:03.056165+00:00",
+        "completed_utc": "2026-11-20T23:41:00.649328+00:00",
+        "exit_code": 0,
+        "log": "final-restored-validation\\tests.log"
+      },
+      {
+        "name": "clippy-codec",
+        "arguments": [
+          "cargo",
+          "clippy",
+          "--manifest-path",
+          "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\validation\\Cargo.toml",
+          "--release",
+          "--locked",
+          "--offline",
+          "--all-targets",
+          "-j",
+          "2",
+          "--target-dir",
+          "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\check",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "cwd": "C:\\GitHub\\deadsync",
+        "started_utc": "2026-11-20T23:41:00.650444+00:00",
+        "completed_utc": "2026-11-20T23:41:02.024877+00:00",
+        "exit_code": 0,
+        "log": "final-restored-validation\\clippy-codec.log"
+      }
+    ],
+    "source_config_files_verified_before_and_after": 22,
+    "new_benchmark_builds": 0,
+    "new_timed_benchmarks": 0,
+    "new_snapshot_builds": 0,
+    "baseline_snapshot_applicable": true,
+    "baseline_snapshot_sha256": "076e78cae341e782b60f72fa3f60c0ff85142759e4821069f1012063f37bf0df",
+    "rationale": "All production and harness/compiler inputs are exact baseline bytes; only public regression tests differ. Existing original baseline timing, allocation, and snapshot evidence applies."
+  },
+  "candidate5_summary_audit": {
+    "captured_utc": "2026-11-20T23:41:32.951287+00:00",
+    "status": "passed",
+    "raw_before_after_record_pairs": 622,
+    "numeric_checks": 7221,
+    "scope": "Every final C5 native/reference median, range, cycle/ns ratio, group sum, geometric ratio, throughput and cohort count independently recalculated from raw TSVs."
+  },
+  "snapshot": {
+    "records": 22570,
+    "bytes": 42819895,
+    "sha256": "076e78cae341e782b60f72fa3f60c0ff85142759e4821069f1012063f37bf0df",
+    "exact_candidate_replays": [
+      "candidate1-alpha",
+      "candidate1-logical",
+      "candidate2-rgba4444",
+      "candidate3-direct-rgba",
+      "candidate4-alpha-dispatch",
+      "candidate5-two-layouts"
+    ],
+    "restored_production": "Exact original source and compiler/harness inputs; original snapshot applies."
+  },
+  "allocation_records_per_candidate": 622,
+  "candidate_allocation_changes": [],
+  "early_log_limitation": "Early PowerShell transcripts omitted native Cargo output; those results were observed through Core and exit-checked. Candidate4/candidate5 and final restored-source gates have direct durable native stdout/stderr and checked exit statuses.",
+  "archive_omits": [
+    "executables",
+    "PDBs",
+    "large behavior snapshot",
+    "generated BMP payloads",
+    "build caches",
+    "full disassembly"
+  ]
+}

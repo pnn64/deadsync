@@ -542,18 +542,7 @@ pub(crate) fn infer_components(
     components: &[ComponentSpec],
     metadata: &[MetadataSegment<'_>],
 ) -> ColorSpace {
-    let adobe = metadata
-        .iter()
-        .rev()
-        .filter(|s| s.preceding_scans == 0)
-        .find_map(|s| s.adobe().ok().flatten().map(|a| a.transform));
-    let jfif = metadata.iter().any(|s| {
-        s.preceding_scans == 0
-            && s.marker == 0xe0
-            && s.data.len() >= 14
-            && s.data.starts_with(b"JFIF\0")
-    });
-    infer_components_with_hints(components, jfif, adobe)
+    ColorHints::from_metadata(metadata).color(components)
 }
 
 pub(crate) fn infer_components_with_hints(
@@ -565,11 +554,14 @@ pub(crate) fn infer_components_with_hints(
         (1, _) => ColorSpace::Grayscale,
         (3, _) if jfif => ColorSpace::YCbCr,
         (3, Some(0)) => ColorSpace::Rgb,
-        (3, Some(1)) => ColorSpace::YCbCr,
+        // Some encoders use the four-component transform tag for YCbCr.
+        (3, Some(1 | 2)) => ColorSpace::YCbCr,
         (3, None) if components.iter().map(|c| c.id).eq(*b"RGB") => ColorSpace::Rgb,
         (3, None) => ColorSpace::YCbCr,
         (4, Some(2)) => ColorSpace::Ycck,
-        (4, None | Some(0)) => ColorSpace::Cmyk,
+        // A YCbCr tag cannot describe four components; retain Adobe's CMYK
+        // polarity convention when recovering the encoded CMYK samples.
+        (4, None | Some(0 | 1)) => ColorSpace::Cmyk,
         _ => ColorSpace::Unknown,
     }
 }
@@ -580,10 +572,17 @@ pub(crate) fn infer_components_with_hints(
 pub(crate) struct ColorHints {
     jfif: bool,
     adobe: Option<u8>,
-    inverted: bool,
 }
 
 impl ColorHints {
+    fn from_metadata(metadata: &[MetadataSegment<'_>]) -> Self {
+        let mut hints = Self::default();
+        for segment in metadata.iter().filter(|s| s.preceding_scans == 0) {
+            hints.observe(segment.marker, segment.data);
+        }
+        hints
+    }
+
     pub fn observe(&mut self, marker: u8, data: &[u8]) {
         self.jfif |= marker == 0xe0 && data.len() >= 14 && data.starts_with(b"JFIF\0");
         let segment = MetadataSegment {
@@ -594,7 +593,6 @@ impl ColorHints {
         };
         if let Some(adobe) = segment.adobe().ok().flatten() {
             self.adobe = Some(adobe.transform);
-            self.inverted |= adobe.transform == 0 || adobe.transform == 2;
         }
     }
 
@@ -603,7 +601,9 @@ impl ColorHints {
     }
 
     pub fn polarity(&self) -> CmykPolarity {
-        if self.inverted {
+        // Color and polarity follow the same last well-formed Adobe marker.
+        // This includes transform 1 recovered as CMYK for four components.
+        if matches!(self.adobe, Some(0..=2)) {
             CmykPolarity::AdobeInverted
         } else {
             CmykPolarity::Conventional
@@ -612,16 +612,7 @@ impl ColorHints {
 }
 
 pub(crate) fn infer_cmyk_polarity(metadata: &[MetadataSegment<'_>]) -> CmykPolarity {
-    if metadata.iter().filter(|s| s.preceding_scans == 0).any(|s| {
-        s.adobe()
-            .ok()
-            .flatten()
-            .is_some_and(|a| a.transform == 0 || a.transform == 2)
-    }) {
-        CmykPolarity::AdobeInverted
-    } else {
-        CmykPolarity::Conventional
-    }
+    ColorHints::from_metadata(metadata).polarity()
 }
 
 // Centered 2:1 interpolation has alternating 1:3 and 3:1 weights. Keep the
@@ -666,16 +657,72 @@ fn high(a: i16, c: i16) -> i16 {
 /// `((2x * c >> 16) + 1) >> 1 == (x * c + 32768) >> 16`; green keeps its
 /// 32-bit sum, which LLVM forms with pmaddwd. All 2^24 inputs are tested.
 #[inline(always)]
-pub(crate) fn ycbcr_chunk(y: &[i16; CHUNK], cb: &[i16; CHUNK], cr: &[i16; CHUNK], out: &mut [u8; CHUNK * 3]) {
+pub(crate) fn ycbcr_chunk(
+    y: &[i16; CHUNK],
+    cb: &[i16; CHUNK],
+    cr: &[i16; CHUNK],
+    out: &mut [u8; CHUNK * 3],
+) {
     for i in 0..CHUNK {
         let (luma, cb, cr) = (y[i], cb[i] - 128, cr[i] - 128);
         let red = luma + cr + ((high(cr * 2, 26345) + 1) >> 1);
         let blue = luma + 2 * cb + ((high(cb * 2, -14942) + 1) >> 1);
-        let green = luma - cr
-            + ((i32::from(cb) * -22554 + i32::from(cr) * 18734 + 32768) >> 16) as i16;
+        let green =
+            luma - cr + ((i32::from(cb) * -22554 + i32::from(cr) * 18734 + 32768) >> 16) as i16;
         out[3 * i] = red.clamp(0, 255) as u8;
         out[3 * i + 1] = green.clamp(0, 255) as u8;
         out[3 * i + 2] = blue.clamp(0, 255) as u8;
+    }
+}
+
+/// Rounded product of two 8-bit samples divided by 255. Every intermediate
+/// fits u16: the largest is 255*255 + 128 + 254 = 65407.
+#[inline(always)]
+fn multiply8(a: u16, b: u16) -> u8 {
+    let product = a * b + 128;
+    ((product + (product >> 8)) >> 8) as u8
+}
+
+/// Convert 8-bit CMYK samples with the same rounding as cmyk_to_rgb.
+/// Inverting an 8-bit sample is exactly an XOR with 255.
+#[inline(always)]
+pub(crate) fn cmyk_chunk(
+    values: &[[i16; CHUNK]; 4],
+    polarity: CmykPolarity,
+    out: &mut [u8; CHUNK * 3],
+) {
+    let invert = if polarity == CmykPolarity::Conventional {
+        255
+    } else {
+        0
+    };
+    for i in 0..CHUNK {
+        let k = values[3][i] as u16 ^ invert;
+        out[3 * i] = multiply8(values[0][i] as u16 ^ invert, k);
+        out[3 * i + 1] = multiply8(values[1][i] as u16 ^ invert, k);
+        out[3 * i + 2] = multiply8(values[2][i] as u16 ^ invert, k);
+    }
+}
+
+/// YCCK's first three components share the exact 8-bit YCbCr transform.
+/// Apply its complement and ink polarity directly to the converted chunk.
+#[inline(always)]
+pub(crate) fn ycck_chunk(
+    values: &[[i16; CHUNK]; 4],
+    polarity: CmykPolarity,
+    out: &mut [u8; CHUNK * 3],
+) {
+    ycbcr_chunk(&values[0], &values[1], &values[2], out);
+    let invert = if polarity == CmykPolarity::AdobeInverted {
+        255
+    } else {
+        0
+    };
+    for i in 0..CHUNK {
+        let k = values[3][i] as u16 ^ (invert ^ 255);
+        out[3 * i] = multiply8(u16::from(out[3 * i]) ^ invert, k);
+        out[3 * i + 1] = multiply8(u16::from(out[3 * i + 1]) ^ invert, k);
+        out[3 * i + 2] = multiply8(u16::from(out[3 * i + 2]) ^ invert, k);
     }
 }
 
@@ -821,6 +868,67 @@ fn sample(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chunked_subtractive_conversion_matches_native_rounding() {
+        struct Exhaustive;
+        impl crate::simd::Kernel for Exhaustive {
+            type Output = ();
+            #[inline(always)]
+            fn run(self) {
+                let mut values = [[0; CHUNK]; 4];
+                let mut out = [0; CHUNK * 3];
+                // Every possible ink/complement and black pair is covered in
+                // each channel; retain the independent wide-division oracle.
+                for k in 0..256 {
+                    values[3].fill(k as i16);
+                    for base in (0..256).step_by(CHUNK) {
+                        for i in 0..CHUNK {
+                            values[0][i] = (base + i) as i16;
+                            values[1][i] = (255 - base - i) as i16;
+                            values[2][i] = ((base + i + 91) & 255) as i16;
+                        }
+                        for polarity in [CmykPolarity::Conventional, CmykPolarity::AdobeInverted] {
+                            cmyk_chunk(&values, polarity, &mut out);
+                            for i in 0..CHUNK {
+                                let pixel = core::array::from_fn(|c| i32::from(values[c][i]));
+                                assert_eq!(
+                                    out[3 * i..3 * i + 3],
+                                    cmyk_to_rgb(pixel, polarity, 8).map(|v| v as u8),
+                                );
+                            }
+                        }
+                    }
+                }
+                // YCCK composes independently tested YCbCr conversion with
+                // the rounded ink multiplication. Exercise clipping, both
+                // polarities and a broad set of all four input components.
+                let mut state = 0x391f_2a85u32;
+                for _ in 0..1024 {
+                    for row in &mut values {
+                        for value in row {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            *value = (state & 255) as i16;
+                        }
+                    }
+                    for polarity in [CmykPolarity::Conventional, CmykPolarity::AdobeInverted] {
+                        ycck_chunk(&values, polarity, &mut out);
+                        for i in 0..CHUNK {
+                            let pixel = core::array::from_fn(|c| i32::from(values[c][i]));
+                            assert_eq!(
+                                out[3 * i..3 * i + 3],
+                                cmyk_to_rgb(ycck_to_cmyk(pixel, 8), polarity, 8).map(|v| v as u8),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        crate::simd::dispatch(Exhaustive);
+        crate::simd::portable(|| crate::simd::dispatch(Exhaustive));
+    }
     #[test]
     fn chunked_color_conversion_matches_fixed_point_for_every_input() {
         // Through dispatch, so the AVX2-compiled kernel (where available) is

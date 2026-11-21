@@ -8,9 +8,11 @@ use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
 
 pub mod bindings;
+mod callback_input;
 pub mod debounce;
 pub mod fsr;
 pub mod keymap;
+pub mod practice;
 
 pub use bindings::{
     DEFAULT_KEYMAP_INI_LINES, binding_to_token, cleared_keymap, default_binding_for_action,
@@ -21,11 +23,18 @@ pub use bindings::{
     updated_keymap_unique_gamepad, updated_keymap_unique_keyboard,
     write_default_keymap_ini_section, write_keymap_ini_section,
 };
+pub use callback_input::{CallbackInputState, HeldCallbackInputs};
 pub use keymap::{
     InputBinding, Keymap, PhysicalInput, any_player_has_dedicated_menu_buttons_for_mode,
     any_player_has_four_way_menu_buttons, any_player_has_three_key_menu_buttons, get_keymap,
     set_keymap, with_keymap,
 };
+
+/// Dedicated RE:Flex player slots follow the native device namespace.
+/// These IDs are persisted in DeadSync's bindings and must remain stable.
+pub const REFLEX_PAD_ID_BASE: usize = deadlib_platform::input::NATIVE_PAD_ID_COUNT_CAP;
+/// DeadSync preallocates input state for native devices and two RE:Flex players.
+pub const PAD_ID_COUNT_CAP: usize = REFLEX_PAD_ID_BASE + 2;
 
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;

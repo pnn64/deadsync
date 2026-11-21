@@ -9,6 +9,7 @@ deadsync-config = { path = "../deadsync-config" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
+deadsync-input = { path = "../deadsync-input" }
 deadsync-net = { path = "../deadsync-net" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }

@@ -272,3 +272,195 @@ fn song_lua_native_vertex_colors_include_aft_sprites() {
     assert_eq!(colors[0], rgba([112, 32, 56, 0]));
     assert_eq!(colors[1], rgba([112, 32, 56, 70]));
 }
+
+fn multi_vertex_overlay() -> SongLuaOverlayActor {
+    SongLuaOverlayActor {
+        kind: SongLuaOverlayKind::ActorMultiVertex {
+            vertices: Arc::from([
+                SongLuaOverlayMeshVertex {
+                    pos: [0.0, 0.0], z: 0.0, uv: [0.1, 0.2],
+                    color: [0.1234, 0.501, 0.8761, 0.1234],
+                },
+                SongLuaOverlayMeshVertex {
+                    pos: [40.0, 0.0], z: 2.0, uv: [0.8, 0.2],
+                    color: [-0.125, 1.25, 0.501, 0.499],
+                },
+                SongLuaOverlayMeshVertex {
+                    pos: [0.0, 30.0], z: 4.0, uv: [0.1, 0.9],
+                    color: [0.1234, 0.501, 0.8761, 0.1234],
+                },
+            ]),
+            texture_path: Some("native-colors.png".into()),
+            texture_key: Some(Arc::from("native-colors.png")),
+            capture_name: None,
+        },
+        name: None,
+        parent_index: None,
+        initial_state: Default::default(),
+        message_commands: Vec::new(),
+    }
+}
+
+fn multi_vertex_actors(
+    overlay: &SongLuaOverlayActor,
+    state: SongLuaOverlayState,
+    assets: &AssetManager,
+    path: usize,
+) -> Vec<Actor> {
+    if path == 2 {
+        let overlays = std::slice::from_ref(overlay);
+        let topology = SongLuaOverlayTopologyIndex::new(overlays);
+        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &overlay.kind else {
+            unreachable!()
+        };
+        let vertices = song_lua_actor_multi_vertex_textured_mesh(vertices);
+        let op = SongLuaDrawOp::Draw {
+            source: SongLuaDrawSource::Overlay(0),
+            state,
+            parents: Arc::from([]),
+            inherited_diffuse: [1.0; 4],
+            inherited_glow: [0.0; 4],
+            camera: None,
+            vertices: None,
+        };
+        return vec![song_lua_manual_mesh(
+            overlays, &topology, &op, &vertices, None.into(), assets, [640.0, 480.0], [0.0; 2], 0,
+        ).expect("manual textured ActorMultiVertex")];
+    }
+    let mut scratch = SongLuaProjectedMeshScratch::textured(3);
+    build_song_lua_overlay_actor_with_scratch(
+        overlay, state, None, assets, 0, 640.0, 480.0, 0.0, 0.0, 0.0,
+        None, (path == 1).then_some(&mut scratch),
+    ).expect("textured ActorMultiVertex").into_iter().collect()
+}
+
+#[test]
+fn song_lua_native_multi_vertex_colors_use_bytes_in_static_reusable_and_manual_draws() {
+    let metrics = metrics();
+    let assets = color_assets();
+    let overlay = multi_vertex_overlay();
+    let state = SongLuaOverlayState {
+        x: 120.0, y: 160.0,
+        diffuse: [0.8, 0.6, 0.75, 0.8],
+        ..Default::default()
+    };
+    for path in 0..3 {
+        let mut actors = multi_vertex_actors(&overlay, state, &assets, path);
+        assert_eq!(actors.len(), 1);
+        song_lua_style_capture_actor_in_place(
+            &mut actors[0], [0.875, 0.875, 0.75, 0.875], None, 0,
+        );
+        let frame = deadlib_present::compose::build_screen_with_texture_context(
+            &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+            assets.texture_context(),
+        );
+        assert_eq!(submitted_colors(&frame, 0), vec![
+            rgba([21, 67, 126, 21]), rgba([0, 133, 72, 88]), rgba([21, 67, 126, 21]),
+        ], "draw path {path}");
+        let DrawOp::TexturedMesh(run) = frame.ops[0] else { unreachable!() };
+        let SongLuaOverlayKind::ActorMultiVertex { vertices, .. } = &overlay.kind else {
+            unreachable!()
+        };
+        for (actual, source) in frame.tmesh_geometries[run.geometry as usize]
+            .vertices.iter().zip(vertices.iter())
+        {
+            assert_eq!(actual.pos, [source.pos[0], source.pos[1], source.z]);
+            assert_eq!(actual.uv, source.uv);
+        }
+        assert_eq!(vertices[0].color, [0.1234, 0.501, 0.8761, 0.1234]);
+        assert_eq!(state.diffuse, [0.8, 0.6, 0.75, 0.8]);
+    }
+}
+
+#[test]
+fn song_lua_native_multi_vertex_colors_keep_glow_separate_from_diffuse_bytes() {
+    let metrics = metrics();
+    let assets = color_assets();
+    let overlay = multi_vertex_overlay();
+    let state = SongLuaOverlayState {
+        x: 120.0, y: 160.0,
+        diffuse: [1.0, 1.0, 1.0, 0.001],
+        glow: [0.4375, 0.25, 0.125, 0.31339297],
+        ..Default::default()
+    };
+    for path in 0..3 {
+        let actors = multi_vertex_actors(&overlay, state, &assets, path);
+        let frame = deadlib_present::compose::build_screen_with_texture_context(
+            &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+            assets.texture_context(),
+        );
+        assert_eq!(frame.ops.len(), 2, "draw path {path}");
+        for color in submitted_colors(&frame, 0) {
+            assert_eq!(color[3], 0.0, "positive float alpha keeps the diffuse pass");
+        }
+        for color in submitted_colors(&frame, 1) {
+            assert_eq!(color, rgba([112, 64, 32, 80]), "draw path {path}");
+        }
+    }
+}
+
+#[test]
+fn song_lua_native_multi_vertex_colors_pack_untextured_meshes_after_capture_tint() {
+    let metrics = metrics();
+    let assets = color_assets();
+    let mut overlay = multi_vertex_overlay();
+    let SongLuaOverlayKind::ActorMultiVertex { texture_path, texture_key, .. } = &mut overlay.kind else {
+        unreachable!()
+    };
+    *texture_path = None;
+    *texture_key = None;
+    let state = SongLuaOverlayState {
+        x: 120.0, y: 160.0, diffuse: [0.8, 0.6, 0.75, 0.8], ..Default::default()
+    };
+    for path in 0..2 {
+        let mut actors = multi_vertex_actors(&overlay, state, &assets, path);
+        assert_eq!(actors.len(), 1);
+        song_lua_style_capture_actor_in_place(&mut actors[0], [0.875, 0.875, 0.75, 0.875], None, 0);
+        let frame = deadlib_present::compose::build_screen(
+            &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+        );
+        let colors = frame.mesh_vertices.iter().map(|vertex| vertex.color).collect::<Vec<_>>();
+        assert_eq!(colors, [rgba([21,67,126,21]), rgba([0,133,72,88]), rgba([21,67,126,21])]);
+        assert_eq!(frame.mesh_vertices.iter().map(|vertex| vertex.pos).collect::<Vec<_>>(),
+            [[-200.0, 80.0], [-160.0, 80.0], [-200.0, 110.0]]);
+        let source = match &actors[0] {
+            Actor::Mesh { vertices, .. } => vertices.as_ref(),
+            Actor::ReusableMesh { vertices, .. } => vertices.as_slice(),
+            _ => panic!("expected an untextured mesh"),
+        };
+        assert_eq!(source[0].color, [0.1234, 0.501, 0.8761, 0.1234]);
+    }
+}
+
+#[test]
+fn song_lua_native_multi_vertex_colors_emit_untextured_glow_separately() {
+    let metrics = metrics();
+    let assets = color_assets();
+    let mut overlay = multi_vertex_overlay();
+    let SongLuaOverlayKind::ActorMultiVertex { texture_path, texture_key, .. } = &mut overlay.kind else {
+        unreachable!()
+    };
+    *texture_path = None;
+    *texture_key = None;
+    for path in 0..2 {
+        for alpha in [0.001, 0.0] {
+            let state = SongLuaOverlayState {
+                x: 120.0, y: 160.0,
+                diffuse: [1.0, 1.0, 1.0, alpha],
+                glow: [0.4375, 0.25, 0.125, 0.31339297], ..Default::default()
+            };
+            let actors = multi_vertex_actors(&overlay, state, &assets, path);
+            let frame = deadlib_present::compose::build_screen(
+                &actors, [0.0; 4], &metrics, &font::FontMap::default(), 0.0,
+            );
+            let diffuse_vertices = if alpha > 0.0 { 3 } else { 0 };
+            assert_eq!(frame.mesh_vertices.len(), diffuse_vertices + 3);
+            for vertex in &frame.mesh_vertices[..diffuse_vertices] {
+                assert_eq!(vertex.color[3], 0.0, "positive float alpha retains the diffuse pass");
+            }
+            for vertex in &frame.mesh_vertices[diffuse_vertices..] {
+                assert_eq!(vertex.color, rgba([112,64,32,80]));
+            }
+        }
+    }
+}

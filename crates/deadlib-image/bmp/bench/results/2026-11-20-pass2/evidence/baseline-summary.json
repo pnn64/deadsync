@@ -1,0 +1,108 @@
+{
+  "decode": {
+    "rows": 120,
+    "native_cases": 120,
+    "reference_cases": 0
+  },
+  "owned-rgba": {
+    "rows": 218,
+    "native_cases": 120,
+    "reference_cases": 98,
+    "thread_cycles": {
+      "image_over_native_geomean": 2.404853660929273,
+      "wins": 98,
+      "ties": 0,
+      "losses": [],
+      "worst": {
+        "case": "rgb565-1x1-bottom",
+        "native": 607.15,
+        "image": 824.84,
+        "image_over_native": 1.3585440171292102
+      }
+    },
+    "ns": {
+      "image_over_native_geomean": 2.404636208618836,
+      "wins": 98,
+      "ties": 0,
+      "losses": [],
+      "worst": {
+        "case": "rgb565-1x1-bottom",
+        "native": 277.39,
+        "image": 376.82,
+        "image_over_native": 1.3584483939579655
+      }
+    }
+  },
+  "rgba": {
+    "rows": 218,
+    "native_cases": 120,
+    "reference_cases": 98,
+    "thread_cycles": {
+      "image_over_native_geomean": 2.1671824922840437,
+      "wins": 97,
+      "ties": 0,
+      "losses": [
+        {
+          "case": "indexed1-511x257-top",
+          "native": 833864.8,
+          "image": 794934.95,
+          "image_over_native": 0.9533139544923829
+        }
+      ],
+      "worst": {
+        "case": "indexed1-511x257-top",
+        "native": 833864.8,
+        "image": 794934.95,
+        "image_over_native": 0.9533139544923829
+      }
+    },
+    "ns": {
+      "image_over_native_geomean": 2.1665946370726017,
+      "wins": 97,
+      "ties": 0,
+      "losses": [
+        {
+          "case": "indexed1-511x257-top",
+          "native": 381116.07,
+          "image": 363696.43,
+          "image_over_native": 0.9542930845188449
+        }
+      ],
+      "worst": {
+        "case": "indexed1-511x257-top",
+        "native": 381116.07,
+        "image": 363696.43,
+        "image_over_native": 0.9542930845188449
+      }
+    }
+  },
+  "corpus": {
+    "rows": 24,
+    "native_cases": 12,
+    "reference_cases": 12,
+    "thread_cycles": {
+      "image_over_native_geomean": 2.634530596080211,
+      "wins": 12,
+      "ties": 0,
+      "losses": [],
+      "worst": {
+        "case": "tests/fixtures/itgmania-primary-bitmaps\\win8-full-table.bmp",
+        "native": 1809.47,
+        "image": 3065.55,
+        "image_over_native": 1.6941701161113476
+      }
+    },
+    "ns": {
+      "image_over_native_geomean": 2.635090970972552,
+      "wins": 12,
+      "ties": 0,
+      "losses": [],
+      "worst": {
+        "case": "tests/fixtures/itgmania-primary-bitmaps\\win8-full-table.bmp",
+        "native": 827.33,
+        "image": 1400.77,
+        "image_over_native": 1.6931212454522377
+      }
+    }
+  }
+}

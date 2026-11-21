@@ -1,0 +1,181 @@
+{
+  "head": "945da378a907bb7c4fec1f432d02d320c9d2a462",
+  "source_config_hashes_verified": 22,
+  "input_hashes_verified": 13,
+  "executables": [
+    {
+      "path": "bmp-timing.exe",
+      "bytes": 436224,
+      "sha256": "7c68d70fc54ba83bdebd5112847ae989ed32ec906fde11092b95cd50449b12e1"
+    },
+    {
+      "path": "bmp-allocations.exe",
+      "bytes": 403456,
+      "sha256": "17442690dd7fae2c546433d60748e6fabbfe8d4ce656e5c05bcf7d877c430f3d"
+    },
+    {
+      "path": "native_snapshot.exe",
+      "bytes": 287232,
+      "sha256": "dd7c374e84dd4517287a64793bb2d59d4123be81c516a8a775f89b4b6a16fff8"
+    }
+  ],
+  "snapshot_bytes": 42819895,
+  "snapshot_sha256": "076e78cae341e782b60f72fa3f60c0ff85142759e4821069f1012063f37bf0df",
+  "matches_historical_behavior_snapshot": true,
+  "allocations": {
+    "decode": {
+      "rows": 120,
+      "native_cases": 120,
+      "native_alloc_calls_sum": 156,
+      "native_requested_bytes_sum": 180826602,
+      "native_allocation_call_distribution": {
+        "1": 84,
+        "2": 36
+      },
+      "reference_cases": 0
+    },
+    "owned-rgba": {
+      "rows": 218,
+      "native_cases": 120,
+      "native_alloc_calls_sum": 236,
+      "native_requested_bytes_sum": 357233082,
+      "native_allocation_call_distribution": {
+        "1": 40,
+        "2": 44,
+        "3": 36
+      },
+      "reference_cases": 98
+    },
+    "rgba": {
+      "rows": 218,
+      "native_cases": 120,
+      "native_alloc_calls_sum": 276,
+      "native_requested_bytes_sum": 445436322,
+      "native_allocation_call_distribution": {
+        "2": 84,
+        "3": 36
+      },
+      "reference_cases": 98
+    },
+    "corpus": {
+      "rows": 24,
+      "native_cases": 12,
+      "native_alloc_calls_sum": 36,
+      "native_requested_bytes_sum": 5174,
+      "native_allocation_call_distribution": {
+        "3": 12
+      },
+      "reference_cases": 12
+    }
+  },
+  "representative_allocations": {
+    "indexed1-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 2,
+        "requested_bytes": 2073606
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 10368006
+      },
+      "image-rgba": {
+        "alloc_calls": 6,
+        "requested_bytes": 14517352
+      },
+      "native-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 10368006
+      }
+    },
+    "indexed8-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 2,
+        "requested_bytes": 2074368
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 10368768
+      },
+      "image-rgba": {
+        "alloc_calls": 6,
+        "requested_bytes": 14519032
+      },
+      "native-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 10368768
+      }
+    },
+    "rgb24-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 1,
+        "requested_bytes": 6220800
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 14515200
+      },
+      "image-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 14515320
+      },
+      "native-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 14515200
+      }
+    },
+    "rgba4444-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "image-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 8294520
+      },
+      "native-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 16588800
+      }
+    },
+    "rgba32-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "image-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 8294520
+      },
+      "native-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 16588800
+      }
+    },
+    "bgra32-zero-1920x1080-bottom": {
+      "native-decode": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "native-owned-rgba": {
+        "alloc_calls": 1,
+        "requested_bytes": 8294400
+      },
+      "image-rgba": {
+        "alloc_calls": 3,
+        "requested_bytes": 14515320
+      },
+      "native-rgba": {
+        "alloc_calls": 2,
+        "requested_bytes": 16588800
+      }
+    }
+  }
+}

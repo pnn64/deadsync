@@ -225,11 +225,17 @@ impl<T> Buffer<T> {
         T: Copy,
     {
         assert!(range.start <= range.end && range.end <= self.len);
-        self.try_reserve(range.len())
+        let count = range.len();
+        self.try_reserve(count)
             .expect("reserve Lua buffer before extend");
-        for index in range {
-            self.push(self[index]);
+        let pointer = self.raw.pointer.as_ptr();
+        // SAFETY: the initialized source ends at or before len. The reserved
+        // destination starts at len, so the spans do not overlap. The pointer
+        // is taken after any growth, and Copy elements can be duplicated.
+        unsafe {
+            std::ptr::copy_nonoverlapping(pointer.add(range.start), pointer.add(self.len), count);
         }
+        self.len += count;
     }
     pub(crate) fn try_extend_from_slice(&mut self, values: &[T]) -> Result<(), Error>
     where

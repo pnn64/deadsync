@@ -1,0 +1,1814 @@
+{
+  "final2": {
+    "groups": {
+      "all": {
+        "files": 176,
+        "comparisons": {
+          "native-retained/gif-retained": {
+            "thread_cycles": {
+              "geomean_ratio": 0.4895157989792572,
+              "native_total": 239047789,
+              "reference_total": 478418925,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21974,
+                  "reference": 12757,
+                  "ratio": 1.7225052912126675
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                  "native": 947522,
+                  "reference": 944481,
+                  "ratio": 1.0032197577293773
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.489432654076745,
+              "native_total": 109085674,
+              "reference_total": 218298250,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10019,
+                  "reference": 5818,
+                  "ratio": 1.7220694396699896
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                  "native": 432191,
+                  "reference": 430708,
+                  "ratio": 1.0034431679931648
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.49301927081991365,
+              "native_total": 3201,
+              "reference_total": 4821,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 18,
+                  "ratio": 5.222222222222222
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.23000412160381972,
+              "native_total": 90052156,
+              "reference_total": 98895656,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-stream/gif-stream": {
+            "thread_cycles": {
+              "geomean_ratio": 0.4750521999845786,
+              "native_total": 163411710,
+              "reference_total": 407854518,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21015,
+                  "reference": 11813,
+                  "ratio": 1.7789723186320157
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.4750364732530319,
+              "native_total": 74573007,
+              "reference_total": 186093871,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9588,
+                  "reference": 5387,
+                  "ratio": 1.7798403564135883
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.4323027819347834,
+              "native_total": 1131,
+              "reference_total": 2581,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 92,
+                  "reference": 15,
+                  "ratio": 6.133333333333334
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.13785432287196486,
+              "native_total": 36481978,
+              "reference_total": 45299175,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/gif-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.4817985070932218,
+              "native_total": 358158520,
+              "reference_total": 729727566,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 22181,
+                  "reference": 15657,
+                  "ratio": 1.4166826339656384
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif",
+                  "native": 150376,
+                  "reference": 143018,
+                  "ratio": 1.0514480694737725
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.48160883791076486,
+              "native_total": 163506589,
+              "reference_total": 333086061,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10124,
+                  "reference": 7139,
+                  "ratio": 1.4181257879254798
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif",
+                  "native": 68623,
+                  "reference": 65226,
+                  "ratio": 1.0520804587127832
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.5433253536606815,
+              "native_total": 1514,
+              "reference_total": 3621,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 16,
+                  "ratio": 5.875
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.16280949767073552,
+              "native_total": 171286632,
+              "reference_total": 190974139,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/image-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.35055146320685576,
+              "native_total": 358158520,
+              "reference_total": 2020008712,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 22181,
+                  "reference": 14052,
+                  "ratio": 1.5784941645317392
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.35071772210291047,
+              "native_total": 163506589,
+              "reference_total": 921795061,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10124,
+                  "reference": 6406,
+                  "ratio": 1.5803933812051203
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.40521838137500743,
+              "native_total": 1514,
+              "reference_total": 5414,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 19,
+                  "ratio": 4.947368421052632
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.10149422507982113,
+              "native_total": 171286632,
+              "reference_total": 761753243,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "assets": {
+        "files": 35,
+        "comparisons": {
+          "native-retained/gif-retained": {
+            "thread_cycles": {
+              "geomean_ratio": 0.36585159295867226,
+              "native_total": 61833953,
+              "reference_total": 120061468,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3658215115506447,
+              "native_total": 28242872,
+              "reference_total": 54824741,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.7795131288063049,
+              "native_total": 1224,
+              "reference_total": 1361,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.09049471609309673,
+              "native_total": 17750820,
+              "reference_total": 18965752,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-stream/gif-stream": {
+            "thread_cycles": {
+              "geomean_ratio": 0.34106523130807903,
+              "native_total": 60794304,
+              "reference_total": 122054916,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3410174791476352,
+              "native_total": 27763905,
+              "reference_total": 55724649,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.6159443582358368,
+              "native_total": 173,
+              "reference_total": 280,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.030971872717597215,
+              "native_total": 17133628,
+              "reference_total": 18349324,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/gif-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.3344603366312342,
+              "native_total": 139305158,
+              "reference_total": 215126589,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3343728185310148,
+              "native_total": 63642208,
+              "reference_total": 98247589,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.7703364428826018,
+              "native_total": 243,
+              "reference_total": 315,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.042294211198302234,
+              "native_total": 85305376,
+              "reference_total": 86516716,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/image-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.3254626454132238,
+              "native_total": 139305158,
+              "reference_total": 436244820,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3254354299736442,
+              "native_total": 63642208,
+              "reference_total": 199229566,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.29710205611480606,
+              "native_total": 243,
+              "reference_total": 1337,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.0271166435413796,
+              "native_total": 85305376,
+              "reference_total": 156548300,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "upstream": {
+        "files": 13,
+        "comparisons": {
+          "native-retained/gif-retained": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5950051909280536,
+              "native_total": 114552957,
+              "reference_total": 254826625,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21974,
+                  "reference": 12757,
+                  "ratio": 1.7225052912126675
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.5949198215803586,
+              "native_total": 52257123,
+              "reference_total": 116238470,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10019,
+                  "reference": 5818,
+                  "ratio": 1.7220694396699896
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.6278324442780514,
+              "native_total": 1097,
+              "reference_total": 1652,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 18,
+                  "ratio": 5.222222222222222
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.16969345023284454,
+              "native_total": 51021416,
+              "reference_total": 55369816,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-stream/gif-stream": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5212746673010985,
+              "native_total": 40431085,
+              "reference_total": 182712244,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21015,
+                  "reference": 11813,
+                  "ratio": 1.7789723186320157
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.5211875408437379,
+              "native_total": 18441219,
+              "reference_total": 83337763,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9588,
+                  "reference": 5387,
+                  "ratio": 1.7798403564135883
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.4622291861066071,
+              "native_total": 414,
+              "reference_total": 957,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 92,
+                  "reference": 15,
+                  "ratio": 6.133333333333334
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.09232648266599963,
+              "native_total": 1069054,
+              "reference_total": 5414723,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/gif-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.4661910394957032,
+              "native_total": 79023763,
+              "reference_total": 300174343,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 22181,
+                  "reference": 15657,
+                  "ratio": 1.4166826339656384
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.4660118207857283,
+              "native_total": 36049016,
+              "reference_total": 136944034,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10124,
+                  "reference": 7139,
+                  "ratio": 1.4181257879254798
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.5942403829518569,
+              "native_total": 439,
+              "reference_total": 970,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 16,
+                  "ratio": 5.875
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.11620965018446476,
+              "native_total": 3442152,
+              "reference_total": 7785079,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/image-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.3061497581524926,
+              "native_total": 79023763,
+              "reference_total": 1140237921,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 22181,
+                  "reference": 14052,
+                  "ratio": 1.5784941645317392
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.306052006926277,
+              "native_total": 36049016,
+              "reference_total": 520185701,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 10124,
+                  "reference": 6406,
+                  "ratio": 1.5803933812051203
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.43007121990472796,
+              "native_total": 439,
+              "reference_total": 2029,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 19,
+                  "ratio": 4.947368421052632
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.04273161380676919,
+              "native_total": 3442152,
+              "reference_total": 422489143,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "generated": {
+        "files": 128,
+        "comparisons": {
+          "native-retained/gif-retained": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5196827112553298,
+              "native_total": 62660879,
+              "reference_total": 103530832,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                  "native": 947522,
+                  "reference": 944481,
+                  "ratio": 1.0032197577293773
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.5195805990974934,
+              "native_total": 28585679,
+              "reference_total": 47235039,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p32-257x193-noise-i0-native.gif",
+                  "native": 432191,
+                  "reference": 430708,
+                  "ratio": 1.0034431679931648
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.42442296896191734,
+              "native_total": 880,
+              "reference_total": 1808,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.3061413221966871,
+              "native_total": 21279920,
+              "reference_total": 24560088,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-stream/gif-stream": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5152221377441246,
+              "native_total": 62186321,
+              "reference_total": 103087358,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.5152271573467289,
+              "native_total": 28367883,
+              "reference_total": 47031459,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.38975681413019597,
+              "native_total": 544,
+              "reference_total": 1344,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.2159798163538838,
+              "native_total": 18279296,
+              "reference_total": 21535128,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/gif-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5341503135322776,
+              "native_total": 139829599,
+              "reference_total": 214426634,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif",
+                  "native": 150376,
+                  "reference": 143018,
+                  "ratio": 1.0514480694737725
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.5339202561736476,
+              "native_total": 63815365,
+              "reference_total": 97894438,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p4-129x73-noise-i1-reference.gif",
+                  "native": 68623,
+                  "reference": 65226,
+                  "ratio": 1.0520804587127832
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.4893845390162912,
+              "native_total": 832,
+              "reference_total": 2336,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.24356915275554633,
+              "native_total": 82539104,
+              "reference_total": 96672344,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-rgba/image-rgba": {
+            "thread_cycles": {
+              "geomean_ratio": 0.3626970357714671,
+              "native_total": 139829599,
+              "reference_total": 443525971,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3629536538363099,
+              "native_total": 63815365,
+              "reference_total": 202379794,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.43844838869635183,
+              "native_total": 832,
+              "reference_total": 2048,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.15897667376312222,
+              "native_total": 82539104,
+              "reference_total": 182715800,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      }
+    },
+    "aggregate_one_decode_per_file": {
+      "gif-retained": {
+        "pixels": 85970999,
+        "thread_cycles": 478418925,
+        "ns": 218298250,
+        "megapixels_per_second": 393.82358310247565,
+        "alloc_calls": 4821,
+        "requested_bytes": 98895656
+      },
+      "gif-rgba": {
+        "pixels": 85970999,
+        "thread_cycles": 729727566,
+        "ns": 333086061,
+        "megapixels_per_second": 258.104463278636,
+        "alloc_calls": 3621,
+        "requested_bytes": 190974139
+      },
+      "gif-stream": {
+        "pixels": 85970999,
+        "thread_cycles": 407854518,
+        "ns": 186093871,
+        "megapixels_per_second": 461.97652044112726,
+        "alloc_calls": 2581,
+        "requested_bytes": 45299175
+      },
+      "image-rgba": {
+        "pixels": 85970999,
+        "thread_cycles": 2020008712,
+        "ns": 921795061,
+        "megapixels_per_second": 93.26476419469554,
+        "alloc_calls": 5414,
+        "requested_bytes": 761753243
+      },
+      "native-retained": {
+        "pixels": 85970999,
+        "thread_cycles": 239047789,
+        "ns": 109085674,
+        "megapixels_per_second": 788.1053106936847,
+        "alloc_calls": 3201,
+        "requested_bytes": 90052156
+      },
+      "native-rgba": {
+        "pixels": 85970999,
+        "thread_cycles": 358158520,
+        "ns": 163506589,
+        "megapixels_per_second": 525.7953182547279,
+        "alloc_calls": 1514,
+        "requested_bytes": 171286632
+      },
+      "native-stream": {
+        "pixels": 85970999,
+        "thread_cycles": 163411710,
+        "ns": 74573007,
+        "megapixels_per_second": 1152.843400830008,
+        "alloc_calls": 1131,
+        "requested_bytes": 36481978
+      }
+    }
+  },
+  "final2-first": {
+    "groups": {
+      "all": {
+        "files": 176,
+        "comparisons": {
+          "native-first/native-copy-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.8213474083037884,
+              "native_total": 233954779,
+              "reference_total": 359319215,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 21221,
+                  "ratio": 1.0116865369209744
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-3x2-noise-i0-native.gif",
+                  "native": 2016,
+                  "reference": 1688,
+                  "ratio": 1.1943127962085307
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.821355197945876,
+              "native_total": 106758360,
+              "reference_total": 163994190,
+              "native_wins": 174,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 9682,
+                  "ratio": 1.0108448667630654
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-3x2-noise-i0-native.gif",
+                  "native": 920,
+                  "reference": 770,
+                  "ratio": 1.1948051948051948
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.8459156758413059,
+              "native_total": 1081,
+              "reference_total": 1257,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.6892848575922055,
+              "native_total": 167244964,
+              "reference_total": 298240888,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/gif-asset-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.6554357800116924,
+              "native_total": 233954779,
+              "reference_total": 296602361,
+              "native_wins": 160,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 10988,
+                  "ratio": 1.9538587550054605
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-native.gif",
+                  "native": 1935788,
+                  "reference": 1697318,
+                  "ratio": 1.1404981270451382
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif",
+                  "native": 2331712,
+                  "reference": 1703086,
+                  "ratio": 1.3691099568665352
+                },
+                {
+                  "file": "target/gif-generated-20261117/p16-768x512-flat-i0-native.gif",
+                  "native": 2459177,
+                  "reference": 2306697,
+                  "ratio": 1.0661031769668925
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-native.gif",
+                  "native": 2739771,
+                  "reference": 2664574,
+                  "ratio": 1.0282210214465801
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif",
+                  "native": 2331657,
+                  "reference": 2099115,
+                  "ratio": 1.110780971981049
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-native.gif",
+                  "native": 2299985,
+                  "reference": 2207383,
+                  "ratio": 1.041951034324356
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif",
+                  "native": 2477167,
+                  "reference": 2153450,
+                  "ratio": 1.1503248276022198
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-native.gif",
+                  "native": 2209733,
+                  "reference": 2073031,
+                  "ratio": 1.0659430563267023
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif",
+                  "native": 2543447,
+                  "reference": 2243363,
+                  "ratio": 1.1337652444120725
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-native.gif",
+                  "native": 3034134,
+                  "reference": 2118522,
+                  "ratio": 1.4321937652759802
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif",
+                  "native": 1930603,
+                  "reference": 1796662,
+                  "ratio": 1.0745499153430083
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-native.gif",
+                  "native": 1917744,
+                  "reference": 1754984,
+                  "ratio": 1.0927415862480798
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif",
+                  "native": 1900184,
+                  "reference": 1736587,
+                  "ratio": 1.0942060489914989
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-native.gif",
+                  "native": 2232150,
+                  "reference": 2073177,
+                  "ratio": 1.0766808622708046
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif",
+                  "native": 2326078,
+                  "reference": 2125281,
+                  "ratio": 1.0944802122636959
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.6554024105824474,
+              "native_total": 106758360,
+              "reference_total": 135347528,
+              "native_wins": 160,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 5014,
+                  "ratio": 1.951934583167132
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-native.gif",
+                  "native": 883379,
+                  "reference": 774559,
+                  "ratio": 1.140492848188453
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif",
+                  "native": 1064708,
+                  "reference": 776765,
+                  "ratio": 1.3706951265826859
+                },
+                {
+                  "file": "target/gif-generated-20261117/p16-768x512-flat-i0-native.gif",
+                  "native": 1122858,
+                  "reference": 1053758,
+                  "ratio": 1.0655748283761546
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-native.gif",
+                  "native": 1251812,
+                  "reference": 1216566,
+                  "ratio": 1.0289717121800215
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif",
+                  "native": 1064762,
+                  "reference": 958170,
+                  "ratio": 1.1112453948672991
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-native.gif",
+                  "native": 1049879,
+                  "reference": 1008554,
+                  "ratio": 1.040974504091997
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif",
+                  "native": 1131187,
+                  "reference": 983295,
+                  "ratio": 1.150404507294352
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-native.gif",
+                  "native": 1008129,
+                  "reference": 945808,
+                  "ratio": 1.065891808908362
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif",
+                  "native": 1160887,
+                  "reference": 1023858,
+                  "ratio": 1.1338359420935324
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-native.gif",
+                  "native": 1384012,
+                  "reference": 966820,
+                  "ratio": 1.4315094847024266
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif",
+                  "native": 880533,
+                  "reference": 819681,
+                  "ratio": 1.0742386367379504
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-native.gif",
+                  "native": 875445,
+                  "reference": 801284,
+                  "ratio": 1.0925527029118265
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif",
+                  "native": 868941,
+                  "reference": 793031,
+                  "ratio": 1.0957213526331253
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-native.gif",
+                  "native": 1019416,
+                  "reference": 946575,
+                  "ratio": 1.076952169664316
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif",
+                  "native": 1062175,
+                  "reference": 970316,
+                  "ratio": 1.0946691593254156
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.6227793034775362,
+              "native_total": 1081,
+              "reference_total": 1593,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 16,
+                  "ratio": 5.875
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.1785674976620694,
+              "native_total": 167244964,
+              "reference_total": 170341178,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/image-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.38296746568456097,
+              "native_total": 233954779,
+              "reference_total": 735260868,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 11796,
+                  "ratio": 1.8200237368599526
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.3829744704754381,
+              "native_total": 106758360,
+              "reference_total": 335535222,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 5380,
+                  "ratio": 1.8191449814126395
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.5098841120474847,
+              "native_total": 1081,
+              "reference_total": 1945,
+              "native_wins": 175,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 18,
+                  "ratio": 5.222222222222222
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.13124393046638413,
+              "native_total": 167244964,
+              "reference_total": 301106733,
+              "native_wins": 176,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "assets": {
+        "files": 35,
+        "comparisons": {
+          "native-first/native-copy-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.9504985574686593,
+              "native_total": 112284979,
+              "reference_total": 172376993,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.9504596478831343,
+              "native_total": 51218241,
+              "reference_total": 78635722,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.8737810956723254,
+              "native_total": 243,
+              "reference_total": 278,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.7917071063590339,
+              "native_total": 85305376,
+              "reference_total": 153472768,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/gif-asset-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.5074749503956354,
+              "native_total": 112284979,
+              "reference_total": 152653534,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.5073656514183142,
+              "native_total": 51218241,
+              "reference_total": 69634701,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.7703364428826018,
+              "native_total": 243,
+              "reference_total": 315,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.042294211198302234,
+              "native_total": 85305376,
+              "reference_total": 86516716,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/image-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.4150754598744616,
+              "native_total": 112284979,
+              "reference_total": 376038251,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.4149645473174421,
+              "native_total": 51218241,
+              "reference_total": 171565820,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.6302752714494015,
+              "native_total": 243,
+              "reference_total": 385,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.0402747368151878,
+              "native_total": 85305376,
+              "reference_total": 154703148,
+              "native_wins": 35,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "upstream": {
+        "files": 13,
+        "comparisons": {
+          "native-first/native-copy-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.6649001083573087,
+              "native_total": 3147247,
+              "reference_total": 6390432,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 21221,
+                  "ratio": 1.0116865369209744
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.6648101683776778,
+              "native_total": 1435732,
+              "reference_total": 2915104,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 9682,
+                  "ratio": 1.0108448667630654
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.859401892670055,
+              "native_total": 166,
+              "reference_total": 179,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.7151456544216337,
+              "native_total": 3202260,
+              "reference_total": 5572616,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/gif-asset-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.6858551756259728,
+              "native_total": 3147247,
+              "reference_total": 4607816,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 10988,
+                  "ratio": 1.9538587550054605
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.6858207190579886,
+              "native_total": 1435732,
+              "reference_total": 2101561,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 5014,
+                  "ratio": 1.951934583167132
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.7518214144044082,
+              "native_total": 166,
+              "reference_total": 126,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 16,
+                  "ratio": 5.875
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.13377742152207286,
+              "native_total": 3202260,
+              "reference_total": 3461566,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/image-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.35058643796458083,
+              "native_total": 3147247,
+              "reference_total": 13741689,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 21469,
+                  "reference": 11796,
+                  "ratio": 1.8200237368599526
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.35050990931944337,
+              "native_total": 1435732,
+              "reference_total": 6269455,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 9787,
+                  "reference": 5380,
+                  "ratio": 1.8191449814126395
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.6206640705724759,
+              "native_total": 166,
+              "reference_total": 152,
+              "native_wins": 12,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "crates/deadlib-image/gif/tests/fixtures/image-gif/samples/beacon_xmp.gif",
+                  "native": 94,
+                  "reference": 18,
+                  "ratio": 5.222222222222222
+                }
+              ]
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.10331181034121094,
+              "native_total": 3202260,
+              "reference_total": 5661345,
+              "native_wins": 13,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      },
+      "generated": {
+        "files": 128,
+        "comparisons": {
+          "native-first/native-copy-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.8063148811207368,
+              "native_total": 118522553,
+              "reference_total": 180551790,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p2-3x2-noise-i0-native.gif",
+                  "native": 2016,
+                  "reference": 1688,
+                  "ratio": 1.1943127962085307
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.8063455000559432,
+              "native_total": 54104387,
+              "reference_total": 82443364,
+              "native_wins": 127,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p2-3x2-noise-i0-native.gif",
+                  "native": 920,
+                  "reference": 770,
+                  "ratio": 1.1948051948051948
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.837106332977734,
+              "native_total": 672,
+              "reference_total": 800,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.6611843729739901,
+              "native_total": 78737328,
+              "reference_total": 139195504,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/gif-asset-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.699700666757196,
+              "native_total": 118522553,
+              "reference_total": 139341011,
+              "native_wins": 113,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-native.gif",
+                  "native": 1935788,
+                  "reference": 1697318,
+                  "ratio": 1.1404981270451382
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif",
+                  "native": 2331712,
+                  "reference": 1703086,
+                  "ratio": 1.3691099568665352
+                },
+                {
+                  "file": "target/gif-generated-20261117/p16-768x512-flat-i0-native.gif",
+                  "native": 2459177,
+                  "reference": 2306697,
+                  "ratio": 1.0661031769668925
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-native.gif",
+                  "native": 2739771,
+                  "reference": 2664574,
+                  "ratio": 1.0282210214465801
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif",
+                  "native": 2331657,
+                  "reference": 2099115,
+                  "ratio": 1.110780971981049
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-native.gif",
+                  "native": 2299985,
+                  "reference": 2207383,
+                  "ratio": 1.041951034324356
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif",
+                  "native": 2477167,
+                  "reference": 2153450,
+                  "ratio": 1.1503248276022198
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-native.gif",
+                  "native": 2209733,
+                  "reference": 2073031,
+                  "ratio": 1.0659430563267023
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif",
+                  "native": 2543447,
+                  "reference": 2243363,
+                  "ratio": 1.1337652444120725
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-native.gif",
+                  "native": 3034134,
+                  "reference": 2118522,
+                  "ratio": 1.4321937652759802
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif",
+                  "native": 1930603,
+                  "reference": 1796662,
+                  "ratio": 1.0745499153430083
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-native.gif",
+                  "native": 1917744,
+                  "reference": 1754984,
+                  "ratio": 1.0927415862480798
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif",
+                  "native": 1900184,
+                  "reference": 1736587,
+                  "ratio": 1.0942060489914989
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-native.gif",
+                  "native": 2232150,
+                  "reference": 2073177,
+                  "ratio": 1.0766808622708046
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif",
+                  "native": 2326078,
+                  "reference": 2125281,
+                  "ratio": 1.0944802122636959
+                }
+              ]
+            },
+            "ns": {
+              "geomean_ratio": 0.6996964655984486,
+              "native_total": 54104387,
+              "reference_total": 63611266,
+              "native_wins": 113,
+              "ties": 0,
+              "losses": [
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-native.gif",
+                  "native": 883379,
+                  "reference": 774559,
+                  "ratio": 1.140492848188453
+                },
+                {
+                  "file": "target/gif-generated-20261117/p128-768x512-flat-i0-reference.gif",
+                  "native": 1064708,
+                  "reference": 776765,
+                  "ratio": 1.3706951265826859
+                },
+                {
+                  "file": "target/gif-generated-20261117/p16-768x512-flat-i0-native.gif",
+                  "native": 1122858,
+                  "reference": 1053758,
+                  "ratio": 1.0655748283761546
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-native.gif",
+                  "native": 1251812,
+                  "reference": 1216566,
+                  "ratio": 1.0289717121800215
+                },
+                {
+                  "file": "target/gif-generated-20261117/p2-768x512-flat-i0-reference.gif",
+                  "native": 1064762,
+                  "reference": 958170,
+                  "ratio": 1.1112453948672991
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-native.gif",
+                  "native": 1049879,
+                  "reference": 1008554,
+                  "ratio": 1.040974504091997
+                },
+                {
+                  "file": "target/gif-generated-20261117/p256-768x512-flat-i0-reference.gif",
+                  "native": 1131187,
+                  "reference": 983295,
+                  "ratio": 1.150404507294352
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-native.gif",
+                  "native": 1008129,
+                  "reference": 945808,
+                  "ratio": 1.065891808908362
+                },
+                {
+                  "file": "target/gif-generated-20261117/p32-768x512-flat-i0-reference.gif",
+                  "native": 1160887,
+                  "reference": 1023858,
+                  "ratio": 1.1338359420935324
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-native.gif",
+                  "native": 1384012,
+                  "reference": 966820,
+                  "ratio": 1.4315094847024266
+                },
+                {
+                  "file": "target/gif-generated-20261117/p4-768x512-flat-i0-reference.gif",
+                  "native": 880533,
+                  "reference": 819681,
+                  "ratio": 1.0742386367379504
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-native.gif",
+                  "native": 875445,
+                  "reference": 801284,
+                  "ratio": 1.0925527029118265
+                },
+                {
+                  "file": "target/gif-generated-20261117/p64-768x512-flat-i0-reference.gif",
+                  "native": 868941,
+                  "reference": 793031,
+                  "ratio": 1.0957213526331253
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-native.gif",
+                  "native": 1019416,
+                  "reference": 946575,
+                  "ratio": 1.076952169664316
+                },
+                {
+                  "file": "target/gif-generated-20261117/p8-768x512-flat-i0-reference.gif",
+                  "native": 1062175,
+                  "reference": 970316,
+                  "ratio": 1.0946691593254156
+                }
+              ]
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.5764709189797341,
+              "native_total": 672,
+              "reference_total": 1152,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.27263485068568594,
+              "native_total": 78737328,
+              "reference_total": 80362896,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          },
+          "native-first/image-first": {
+            "thread_cycles": {
+              "geomean_ratio": 0.3780051486589564,
+              "native_total": 118522553,
+              "reference_total": 345480928,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "ns": {
+              "geomean_ratio": 0.3780506621070361,
+              "native_total": 54104387,
+              "reference_total": 157699947,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "alloc_calls": {
+              "geomean_ratio": 0.4716580246197825,
+              "native_total": 672,
+              "reference_total": 1408,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            },
+            "requested_bytes": {
+              "geomean_ratio": 0.18574652608859707,
+              "native_total": 78737328,
+              "reference_total": 140742240,
+              "native_wins": 128,
+              "ties": 0,
+              "losses": []
+            }
+          }
+        }
+      }
+    },
+    "aggregate_one_decode_per_file": {
+      "gif-asset-first": {
+        "pixels": 32748981,
+        "thread_cycles": 296602361,
+        "ns": 135347528,
+        "megapixels_per_second": 241.96216572200711,
+        "alloc_calls": 1593,
+        "requested_bytes": 170341178
+      },
+      "image-first": {
+        "pixels": 32748981,
+        "thread_cycles": 735260868,
+        "ns": 335535222,
+        "megapixels_per_second": 97.60221536444243,
+        "alloc_calls": 1945,
+        "requested_bytes": 301106733
+      },
+      "native-copy-first": {
+        "pixels": 32748981,
+        "thread_cycles": 359319215,
+        "ns": 163994190,
+        "megapixels_per_second": 199.69598313208536,
+        "alloc_calls": 1257,
+        "requested_bytes": 298240888
+      },
+      "native-first": {
+        "pixels": 32748981,
+        "thread_cycles": 233954779,
+        "ns": 106758360,
+        "megapixels_per_second": 306.7580000292249,
+        "alloc_calls": 1081,
+        "requested_bytes": 167244964
+      }
+    }
+  }
+}

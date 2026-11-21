@@ -7,7 +7,7 @@ use deadsync_gameplay::{
     ActiveComboMilestone, COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
     ComboMilestoneKind,
 };
-use deadsync_theme::ComboFeedbackStyle;
+use deadsync_core::hud_style::ComboFeedbackStyle;
 #[cfg(test)]
 use std::sync::Arc;
 

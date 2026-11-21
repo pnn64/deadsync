@@ -17,6 +17,11 @@ pub struct LaneInputUpdate {
 pub struct GameplayInputState {
     pub prev_inputs: [bool; MAX_COLS],
     pub lane_pressed_since_ns: [Option<SongTimeNs>; MAX_COLS],
+    /// InputFilter GetSecsHeld snapshot: age of the reported physical transition.
+    pub input_age_seconds: [f32; MAX_COLS],
+    /// Current InputFilter down state, including input held before Player load.
+    pub physical_pressed_lane_mask: Option<LaneMask>,
+    replay_input_ages: ReplayInputAgeState,
     active_slots: ActiveInputSlots,
     lane_counts: [u16; MAX_COLS],
     // Bit `i` is set exactly when `lane_counts[i] != 0`; `update_slot` owns both.
@@ -28,6 +33,9 @@ impl Default for GameplayInputState {
         Self {
             prev_inputs: [false; MAX_COLS],
             lane_pressed_since_ns: [None; MAX_COLS],
+            input_age_seconds: [0.0; MAX_COLS],
+            physical_pressed_lane_mask: None,
+            replay_input_ages: ReplayInputAgeState::default(),
             active_slots: ActiveInputSlots::default(),
             lane_counts: [0; MAX_COLS],
             pressed_lane_mask: 0,
@@ -127,6 +135,9 @@ impl GameplayInputState {
     pub fn reset_live_state(&mut self) {
         self.prev_inputs.fill(false);
         self.lane_pressed_since_ns.fill(None);
+        self.input_age_seconds.fill(0.0);
+        self.physical_pressed_lane_mask = None;
+        self.replay_input_ages.clear();
         self.active_slots.clear();
         self.lane_counts.fill(0);
         self.pressed_lane_mask = 0;

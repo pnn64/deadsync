@@ -1,0 +1,56 @@
+﻿[
+    {
+        "name":  "capture",
+        "expected_exit":  0,
+        "actual_exit":  0,
+        "passed":  true
+    },
+    {
+        "name":  "verify",
+        "expected_exit":  0,
+        "actual_exit":  0,
+        "passed":  true
+    },
+    {
+        "name":  "recapture-rejected",
+        "expected_exit":  1,
+        "actual_exit":  1,
+        "passed":  true
+    },
+    {
+        "name":  "corruption-rejected",
+        "expected_exit":  1,
+        "actual_exit":  1,
+        "passed":  true
+    },
+    {
+        "name":  "restored-verifies",
+        "expected_exit":  0,
+        "actual_exit":  0,
+        "passed":  true
+    },
+    {
+        "name":  "short-snapshot-rejected",
+        "expected_exit":  1,
+        "actual_exit":  1,
+        "passed":  true
+    },
+    {
+        "name":  "extra-snapshot-rejected",
+        "expected_exit":  1,
+        "actual_exit":  1,
+        "passed":  true
+    },
+    {
+        "name":  "changed-input-rejected",
+        "expected_exit":  1,
+        "actual_exit":  1,
+        "passed":  true
+    },
+    {
+        "name":  "final-restored-verifies",
+        "expected_exit":  0,
+        "actual_exit":  0,
+        "passed":  true
+    }
+]

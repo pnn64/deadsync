@@ -623,7 +623,7 @@ pub(crate) fn enter(
     sounds: &crate::gameplay_prewarm::GameplaySfx,
     music_clock: &mut deadsync_audio_stream::MusicClock,
 ) {
-    gameplay::on_enter(state);
+    deadsync_online::gameplay_lobby::on_enter(state);
     enter_smx_sensors(state, smx_input);
     drain(state, audio, sounds, music_clock);
 }
@@ -643,7 +643,7 @@ pub(crate) fn update(
 ) {
     let start_len = effects.len();
     crate::heart_rate::refresh_gameplay(state);
-    if !gameplay::prepare_update(state, effects) {
+    if !deadsync_online::gameplay_lobby::prepare_update(state, effects) {
         debug_assert!(effects.len() - start_len <= MAX_UPDATE_EFFECTS);
         return;
     }
@@ -655,12 +655,13 @@ pub(crate) fn update(
     // stream mapping on the same frame, matching the pre-boundary behavior.
     drain(state, audio, sounds, music_clock);
     let previous_song_lua_time = state.current_music_time_display();
-    gameplay::update(
+    deadsync_song_lua::gameplay_session::update(
         state,
         delta_time,
         snapshot(music_clock),
         deadlib_platform::host_time::now_nanos,
         effects,
+        |_| {},
     );
     let output = state.take_song_lua_output();
     for command in output.actor_sounds {
@@ -687,11 +688,11 @@ pub(crate) fn update(
     if let Some(request) = output.request {
         match request {
             deadsync_song_lua::SongLuaLiveRequest::Transition(message) if message == "SM_DoNextScreen" => {
-                // The owning theme screen advances the native SL out tween,
+                // The game session advances the native out clock,
                 // dispatches End and navigates after its completion frame.
             }
             deadsync_song_lua::SongLuaLiveRequest::NewScreen(screen) if screen == "ScreenGameplay" => {
-                // The owning theme emitted ReloadSongLua at the frame boundary.
+                // The game session emits ReloadSongLua at the next update boundary.
             }
             request => log::warn!("Unsupported live song Lua screen request: {request:?}"),
         }

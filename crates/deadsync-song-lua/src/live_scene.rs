@@ -47,6 +47,7 @@ pub struct SongLiveScene {
     context: SongLuaCompileContext,
     actors: Vec<Value>,
     wrapper_epoch: u64,
+    published_wrapper_epoch: u64,
     pending_wrappers: std::collections::VecDeque<(usize, usize)>,
     tracked: Vec<(SongLuaTrackedActorTarget, Value)>,
     states: Vec<SongLuaOverlayState>,
@@ -168,6 +169,7 @@ impl SongLiveScene {
             context: context.clone(),
             actors: b.actors,
             wrapper_epoch: 0,
+            published_wrapper_epoch: 0,
             pending_wrappers: Default::default(),
             tracked: b.tracked,
             states: Vec::new(),
@@ -488,11 +490,12 @@ impl SongLiveScene {
         if self.ended || !self.updated {
             return Ok(Default::default());
         }
-        if Self::custom_draw(runtime)? {
-            let root = self.root(runtime)?;
-            runtime
-                .actors
-                .compiler_read(&mut runtime.vm, root, Query::Draw)?;
+        let custom = Self::custom_draw(runtime)?;
+        let root = self.root(runtime)?;
+        runtime
+            .actors
+            .compiler_read(&mut runtime.vm, root, Query::Draw)?;
+        if custom {
             self.read_states(runtime)?;
         }
         self.take_output(runtime)

@@ -21,6 +21,7 @@ pub(crate) struct Reader<'a> {
     /// Trailing virtual zero bits included in `count`.
     virtual_bits: u32,
     overrun: bool,
+    strict: bool,
 }
 
 #[inline(always)]
@@ -40,7 +41,7 @@ fn extend(value: u32, size: u32) -> i32 {
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(input: &'a [u8]) -> Self {
+    pub fn new(input: &'a [u8], strict: bool) -> Self {
         Self {
             input,
             position: 0,
@@ -48,6 +49,7 @@ impl<'a> Reader<'a> {
             count: 0,
             virtual_bits: 0,
             overrun: false,
+            strict,
         }
     }
 
@@ -132,12 +134,15 @@ impl<'a> Reader<'a> {
     fn align(&mut self) -> Result<()> {
         self.check()?;
         let real = self.count - self.virtual_bits;
-        if real > 7 || (real > 0 && self.peek(real) != (1 << real) - 1) {
+        if self.strict && (real > 7 || (real > 0 && self.peek(real) != (1 << real) - 1)) {
             return Err(Error::Invalid("entropy padding"));
         }
         self.buffer = 0;
         self.count = 0;
         self.virtual_bits = 0;
+        if !self.strict {
+            crate::entropy::skip_padding(self.input, &mut self.position)?;
+        }
         Ok(())
     }
 

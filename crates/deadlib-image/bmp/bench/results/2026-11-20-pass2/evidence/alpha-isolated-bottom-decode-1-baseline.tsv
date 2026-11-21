@@ -1,0 +1,2 @@
+case	mode	pixels	image_equivalent	ns	thread_cycles	cycles_min	cycles_max	mpixels_sec	alloc_calls	requested_bytes
+target/bmp-decode-opt-20261120-pass2/alpha-controls/bgra32-first-511x257-bottom.bmp	native-decode	131327	false	314900.39	688081.92	680528.97	693680.02	417.043	0	0

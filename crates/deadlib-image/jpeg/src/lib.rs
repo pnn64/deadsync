@@ -12,8 +12,8 @@ mod decode;
 mod dnl;
 mod encode;
 mod entropy;
-mod fast;
 mod exif;
+mod fast;
 mod hierarchical;
 mod hierarchical_encode;
 mod huffman_encode;
@@ -38,7 +38,9 @@ mod transform;
 
 pub use abbreviated::{AbbreviatedEncoder, AbbreviatedImage};
 pub use arithmetic_encode::ArithmeticConditioning;
-pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
+pub use decode::{
+    CoefficientComponent, CoefficientImage, decode_coefficients, decode_coefficients_with_options,
+};
 pub use dnl::HeightDeclaration;
 pub use encode::{
     CodingOptions, EntropyCoding, IccWrite, MetadataOptions, encode_coefficients,
@@ -47,13 +49,13 @@ pub use encode::{
 pub use exif::{ByteOrder, Exif, ExifEntry, ExifIfd};
 pub use hierarchical::{
     Expansion, HierarchicalData, HierarchicalFrame, HierarchicalImage, HierarchyHeader,
-    decode_hierarchical,
+    decode_hierarchical, decode_hierarchical_with_options,
 };
 pub use hierarchical_encode::{
     HierarchicalFrameOptions, HierarchicalOptions, encode_hierarchical,
     encode_hierarchical_with_metadata,
 };
-pub use lossless::{LosslessCoding, LosslessImage, decode_lossless};
+pub use lossless::{LosslessCoding, LosslessImage, decode_lossless, decode_lossless_with_options};
 pub use lossless_encode::{
     LosslessOptions, LosslessScan, encode_lossless, encode_lossless_samples,
     encode_lossless_samples_with_metadata, encode_lossless_with_metadata,
@@ -71,7 +73,7 @@ pub use pyramid::{
     encode_hierarchical_planes, encode_hierarchical_planes_with_metadata,
     encode_hierarchical_samples, encode_hierarchical_samples_with_metadata,
 };
-pub use raster::{decode, decode_with_upsampling};
+pub use raster::{decode, decode_with_options, decode_with_upsampling};
 pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };
@@ -112,6 +114,29 @@ impl core::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+/// Input policy shared by pixel, coefficient, lossless and hierarchical decoding.
+#[derive(Clone, Copy, Debug)]
+pub struct DecodeOptions {
+    pub limits: Limits,
+    /// Require exact marker framing, EOI and all-ones Huffman padding.
+    /// With false, skip stray bytes between markers and discard surplus entropy
+    /// only after a complete scan or restart interval. A final EOI may be absent
+    /// for complete Huffman images (every progressive band must be fully refined).
+    /// Missing samples, invalid codes and incorrect restart markers remain errors.
+    /// Arithmetic and hierarchical images still require EOI; arithmetic coding
+    /// keeps its separate Annex-D termination rules.
+    pub strict: bool,
+}
+
+impl Default for DecodeOptions {
+    fn default() -> Self {
+        Self {
+            limits: Limits::default(),
+            strict: true,
+        }
+    }
+}
 
 /// Resource ceilings are checked before coefficient or sample allocation.
 #[derive(Clone, Copy, Debug)]

@@ -23,9 +23,39 @@ Build/test independently using `cargo test -p deadlib-image-png` or
 dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
 
-The separate [benchmark workspace](bench/README.md) measures decoder CPU cycles
-and allocation requests against Rust png and image, checking native samples
-and RGBA16 pixels before measurement.
+The separate [benchmark workspace](bench/README.md) measures decoding and encoding
+CPU cycles, throughput and allocation requests against Rust png and image.
+Decoder measurements check native samples and RGBA16 pixels first; encoder
+measurements verify opaque RGBA8 pixels and report the encoded file size.
+
+`encode` returns an owned PNG byte vector. `encode_writer` writes PNG/APNG to
+`std::io::Write` using bounded row, compression and chunk buffers. Select the
+optional zero-run compressor explicitly:
+
+```rust
+use deadlib_image_png::{EncodeOptions, Filter, Png, encode_writer};
+use deadlib_image_png::zlib::Compression;
+
+fn write_png(
+    png: &Png,
+    destination: impl std::io::Write,
+) -> Result<(), deadlib_image_png::Error> {
+    let options = EncodeOptions {
+        compression: Compression::Rle,
+        filter: Filter::Adaptive,
+        ..Default::default()
+    };
+    encode_writer(png, &options, destination)?;
+    Ok(())
+}
+```
+
+`Compression::Rle` encodes zero runs in filtered bytes with distance-one DEFLATE
+matches and an analytic Huffman tree. It keeps no match dictionary and selects
+stored blocks when smaller. The same options work with `encode`.
+`EncodeOptions::default()` remains `Compression::Fast`, `Filter::Adaptive`,
+noninterlaced output and a 64 KiB IDAT chunk size. All compression modes preserve
+the supplied samples; their encoded sizes and CPU costs depend on the input.
 
 For reference color samples with 1–16 significant bits per channel, use
 `Png::from_reference_samples(width, height, color_type, channel_depths, samples)`.
@@ -39,8 +69,25 @@ preserved. Palette indices retain the native `Png::new` contract and are never
 scaled as color values. The existing native encode/decode paths keep their
 stored-sample contract.
 
-`decode_with_options` exposes explicit input/output/metadata/chunk limits. CRC
-verification is mandatory. Out-of-range palette indices are retained, and
+`decode_with_options` exposes explicit input/output/metadata/chunk limits and
+`DecodeOptions::metadata_policy`. The default `MetadataPolicy::Recover` discards
+optional metadata with an invalid CRC, malformed payload, invalid placement or
+duplicate singleton/name. Singleton metadata keeps the first accepted value;
+the first CRC-valid iCCP in an accepted position reserves the profile slot
+even when its payload is malformed. A later valid profile cannot replace it.
+Exif after IDAT is accepted and retains its original `ChunkPosition::AfterData`.
+These rules cover the known Exif/ICC compatibility cases for arbitrary input
+files; they do not claim identical handling of every malformed PNG by other
+decoders.
+
+Set `DecodeOptions::metadata_policy` to `MetadataPolicy::Strict` to reject
+metadata CRC, ordering, duplicate and parsing errors. Both policies still check
+critical chunk CRCs, zlib checksums and image framing. Transparency (`tRNS`) and
+APNG validation keep their existing handling; `AnimationPolicy` independently
+controls animation recovery. Resource limits remain fatal under either metadata
+policy. Discarded metadata is omitted from the raw and typed metadata results.
+
+Out-of-range palette indices are retained, and
 `to_rgba16` / APNG rendering display them as opaque black (PNG Third Edition
 13.1). Set `DecodeOptions::palette_policy` to `PalettePolicy::Strict` to reject
 them while decoding. Both encoders always reject out-of-range indices. Other
@@ -52,13 +99,19 @@ including IHDR, IEND and empty data chunks. `max_output_bytes` bounds cumulative
 native sample storage across the default image and separately stored animation
 frames, and each image's filtered inflation. A default image reused as frame zero
 is counted once. Filter bytes can make the inflation bound larger than the final
-sample vector. The metadata budget counts retained ancillary payloads plus
-expanded compressed payloads; PLTE/tRNS and animation controls have their separate
-format bounds. Frame limits apply to declared and observed animation frames.
-Resource errors remain fatal under animation recovery. These caps describe data
+sample vector. The metadata budget counts raw ancillary payloads, including
+discarded metadata, plus expanded compressed payloads. Expansion produced before
+a metadata parsing or checksum failure also counts. PLTE/tRNS and animation
+controls have their separate format bounds. Frame limits apply to declared and
+observed animation frames. Resource errors remain fatal under metadata and
+animation recovery. These caps describe data
 budgets, not a process RSS limit. `tests/decoder_boundaries.rs` checks exact and
 adjacent boundaries through buffered, collecting-reader and push APIs.
 
+Both `encode` and `encode_writer` enforce strict metadata validation and ordering.
+To reencode a decoded PNG with late Exif, explicitly move its retained eXIf chunk
+from `ChunkPosition::AfterData` to `ChunkPosition::BeforeData`. Decoding preserves
+the original placement instead of silently rewriting the file's metadata.
 On reencoding, unrecognized ancillary chunks with the unsafe-to-copy flag are
 omitted because critical image chunks are rewritten (PNG Third Edition 14.2).
 PNG Third Edition's recommended tolerance for trailing bytes inside final IDAT
@@ -68,7 +121,9 @@ Typed metadata is available through `Png::metadata`; `Metadata::to_chunk` encode
 values. ICC container headers, tag bounds and PNG color-space compatibility,
 and Exif TIFF headers / first-directory framing are checked. Profile transforms,
 Exif tag meanings and thumbnails remain opaque. Unsupported containers decode as
-unknown raw ancillary metadata; encoders reject them. No color management is
+unknown raw ancillary metadata under both metadata policies; this is distinct
+from malformed chunk framing or compression. Encoders reject unsupported
+containers. No color management is
 applied implicitly. `color_description` skips unsupported ICC containers; the
 fallible `color_description_with_limits` preserves resource errors instead of
 silently selecting a lower-precedence description.
@@ -104,7 +159,8 @@ driving examples and zero-capacity boundary cases.
 controls and native sample rows. Plain rows use pass 0; Adam7 rows use passes 1–7
 and expose their x/y/step coordinates within the current image or frame rectangle.
 Only `ImageEnd` verifies the current zlib stream and its data-chunk CRCs; rows
-before it are provisional. `Done` verifies the complete PNG grammar. Push parsing
+before it are provisional. `Done` completes PNG validation under the selected
+metadata and animation policies. Push parsing
 leaves bytes after IEND untouched, while `decode_reader(reader, &options)` collects
 final images and rejects trailing bytes like `decode`. The row pipeline keeps a
 bounded number of rows and a 32 KiB history, without complete compressed or
@@ -112,9 +168,13 @@ filtered-image buffers. See `tests/png_stream.rs` for fragmented IO and events.
 
 `zlib::Deflater` is the matching bounded encoder: pass input/output fragments to
 `process`, mark final input with `finish=true`, and drain to `Done`. It retains
-32 KiB input blocks and cross-block LZ77 history. `encode_writer(&png, &options,
+a 32 KiB input block; `Fast` also retains cross-block LZ77 history and a match
+dictionary. `Stored` and `Rle` need neither. `encode_writer(&png, &options,
 writer)` filters native rows and emits PNG/APNG chunks directly to `Write`,
-handling partial and Interrupted writes. It returns byte and image-buffer
-statistics; the caller controls flushing. Compressed chunks are capped at
-64 KiB while honoring smaller `idat_chunk_size` values. Encoding retains the
-caller's images and metadata without whole filtered/compressed output buffers.
+handling partial and Interrupted writes. Filter scratch depends on row width;
+compression and chunk buffers are bounded independently of image height.
+Compressed chunks are capped at 64 KiB while honoring smaller
+`idat_chunk_size` values. `EncodeStats::peak_image_buffer_bytes` reports image
+pipeline storage, excluding the caller's images, metadata validation temporaries
+and the destination's buffers. A destination `Vec` accumulates the complete
+PNG. The caller controls flushing.

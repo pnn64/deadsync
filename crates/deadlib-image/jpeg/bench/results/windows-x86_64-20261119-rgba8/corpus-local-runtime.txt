@@ -1,0 +1,19 @@
+target/debug/Songs/Cringle Culmination/Dance with me tonight/bg.jpg
+target/debug/Songs/Cringle Culmination/Light Switch/PXL_20240118_234740355.jpg
+target/debug/Songs/Cringle Culmination/Million Dollar Baby/lua/2.jpg
+target/debug/Songs/Cringle Culmination/Pyro/bg.jpg
+target/debug/Songs/Cringle Culmination/Rock With You/The Rock.jpg
+target/debug/Songs/Cringle Culmination/Say something/bg3.jpg
+target/debug/Songs/Cringle Culmination/Say something/bg5.jpg
+target/debug/Songs/Cringle Culmination/Video Game Lover/bg.jpg
+target/debug/Songs/Mawaru Collection/mawaru7/lua/doors/texture0.jpg
+target/debug/Songs/New Year's Stepfile Feast 2022-23/PLAY (Initiate Remix)/nitg/core/jazz.jpg
+target/debug/Songs/UPS 3/op.31 ~lyricism~/op.31-bn.jpg
+target/debug/Songs/UPS5 SM5/Lower Times/lowertimesbn.jpg
+target/debug/Songs/UPS5 SM5/Mii Channel liquified/wscbn.jpg
+target/debug/Songs/lua-songs/After Dark/lua/Starfield.jpg
+target/debug/Songs/lua-songs/Cold/Banner.jpg
+target/debug/Songs/lua-songs/Goodbye/Goodbye_bn.jpg
+target/debug/Songs/lua-songs/U.N. Owen Was Who [Hyperhero2]/bg.jpg
+target/debug/Songs/lua-songs/What A Wonderful World/bg.jpg
+target/debug/Songs/lua-songs/What A Wonderful World/bg2.jpg

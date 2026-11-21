@@ -19,6 +19,10 @@ impl Actors {
         vm.store_ref().wrapper_epoch
     }
 
+    pub(crate) fn live_actor_exists(&self, vm: &Vm, value: Value) -> bool {
+        matches!(value, Value::Table(id) if vm.store_ref().actors.contains_key(&id))
+    }
+
     /// Discover wrappers through owned actor identities. The caller retains
     /// appended values before invoking Lua, and only calls this after wrapper
     /// attachment changes; ordinary frames do not scan the scene again. Scene
@@ -150,7 +154,14 @@ fn run(call: &mut HostCall<'_>) -> Result<(), Error> {
                     for i in 1..=len {
                         let actor =
                             table(call, call.raw_table_get(list, Value::Number(i as f64))?)?;
-                        output.push(initial_state::read_live(call, actor)?);
+                        let state = if call.store_ref().actors.contains_key(&actor) {
+                            initial_state::read_live(call, actor)?
+                        } else {
+                            // Published actor slots remain stable after native
+                            // wrapper deletion, but no longer contribute a pose.
+                            crate::SongLuaOverlayState { visible: false, ..Default::default() }
+                        };
+                        output.push(state);
                     }
                 }
                 Ok::<(), Error>(())

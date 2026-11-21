@@ -9,11 +9,18 @@ use deadlib_image_png::{
     EncodeOptions, Filter, Png, Samples, encode, encode_writer, zlib::Compression,
 };
 
+fn repeat_rows<T: Copy>(samples: &mut [T], stride: usize) {
+    for pair in samples.chunks_exact_mut(stride * 2) {
+        let (first, second) = pair.split_at_mut(stride);
+        second.copy_from_slice(first);
+    }
+}
+
 #[test]
 fn all_formats_filters_and_pass_tails_match_normative_bytes() {
     for (color, depth) in oracle::formats() {
         for width in [1, 2, 3, 7, 8, 9, 17, 33] {
-            for (height, pattern) in [(1, 0), (1, 2), (2, 2), (9, 0), (9, 1), (9, 2)] {
+            for (height, pattern) in [(1, 0), (1, 2), (2, 2), (9, 0), (9, 1), (9, 2), (9, 3)] {
                 let mut png = Png::new(oracle::image(width, height, color, depth, 71));
                 if pattern < 2 {
                     let value = if pattern == 0 {
@@ -24,6 +31,12 @@ fn all_formats_filters_and_pass_tails_match_normative_bytes() {
                     match &mut png.image.samples {
                         Samples::U8(v) => v.fill(value as u8),
                         Samples::U16(v) => v.fill(value),
+                    }
+                } else if pattern == 3 {
+                    let stride = width as usize * color.channels();
+                    match &mut png.image.samples {
+                        Samples::U8(v) => repeat_rows(v, stride),
+                        Samples::U16(v) => repeat_rows(v, stride),
                     }
                 }
                 if color == deadlib_image_png::ColorType::Indexed {

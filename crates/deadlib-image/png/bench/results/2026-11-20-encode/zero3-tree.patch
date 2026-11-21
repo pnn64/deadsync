@@ -1,0 +1,49 @@
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -1024,21 +1024,22 @@
+     Rle,
+ }
+ 
+-// Signed residual magnitudes determine the literal widths. Giving both signs
+-// of 32..=38 nine bits closes the Kraft sum without an input histogram.
++// Signed residual magnitudes determine the literal widths. A three-bit zero
++// frees 128/1024 Kraft slots: both signs of 39..=102 move from ten to nine bits.
++// The maximum-length match keeps five bits for long zero runs.
+ const fn rle_lengths() -> [u8; 286] {
+     let mut lengths = [0; 286];
+     let mut symbol = 0;
+     while symbol < 256 {
+         let magnitude = if symbol <= 128 { symbol } else { 256 - symbol };
+         lengths[symbol] = match magnitude {
+-            0 => 2,
++            0 => 3,
+             1 => 4,
+             2 => 5,
+             3 => 6,
+             4..=7 => 7,
+             8..=15 => 8,
+-            16..=38 => 9,
++            16..=102 => 9,
+             _ => 10,
+         };
+         symbol += 1;
+@@ -1107,7 +1108,7 @@
+ const fn rle_header() -> RleHeader {
+     // Values 10 and 16 get two bits; eight other used values get four.
+     // This complete code-length tree needs 18 entries in DEFLATE order.
+-    const META_LENGTHS: [u8; 19] = [0, 4, 4, 0, 4, 4, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 2, 0, 0];
++    const META_LENGTHS: [u8; 19] = [0, 4, 0, 4, 4, 4, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 2, 0, 0];
+     const META_CODES: [(u16, u8); 19] = rle_codes(META_LENGTHS);
+     const ORDER: [usize; 18] = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1];
+     let mut header = RleHeader {
+@@ -1329,8 +1330,8 @@
+             // data before this block and no retained dictionary is needed.
+             self.write(RLE_CODES[0].0 as u32, RLE_CODES[0].1);
+             let mut remaining = pos - start - 1;
+-            // A short match costs at least nine bits; up to four two-bit zeros
+-            // are cheaper as literals, including after a 258-byte match.
++            // After the seed, emit matches in chunks of 5..=258 bytes.
++            // Shorter tails remain literal symbols.
+             while remaining >= 5 {
+                 let length = remaining.min(258);
+                 let index = length_code(length);

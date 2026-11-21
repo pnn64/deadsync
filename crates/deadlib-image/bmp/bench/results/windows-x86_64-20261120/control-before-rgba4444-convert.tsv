@@ -1,0 +1,9 @@
+case	mode	pixels	image_equivalent	ns	thread_cycles	cycles_min	cycles_max	mpixels_sec	alloc_calls	requested_bytes
+rgba4444-1x1-bottom	native-convert	1	true	102.74	224.91	220.11	229.60	9.733	0	0
+rgba4444-1x1-top	native-convert	1	true	103.16	225.73	220.08	229.32	9.694	0	0
+rgba4444-17x9-bottom	native-convert	153	true	102.51	224.34	218.97	238.98	1492.569	0	0
+rgba4444-17x9-top	native-convert	153	true	101.40	221.86	219.47	229.24	1508.878	0	0
+rgba4444-511x257-bottom	native-convert	131327	true	40692.99	89011.26	88078.33	91707.33	3227.264	0	0
+rgba4444-511x257-top	native-convert	131327	true	42783.87	93630.82	90463.03	94884.55	3069.545	0	0
+rgba4444-1920x1080-bottom	native-convert	2073600	true	2832080.00	6192138.93	6111494.73	6396715.79	732.183	0	0
+rgba4444-1920x1080-top	native-convert	2073600	true	2870650.00	6278092.07	6165125.87	6471518.64	722.345	0	0

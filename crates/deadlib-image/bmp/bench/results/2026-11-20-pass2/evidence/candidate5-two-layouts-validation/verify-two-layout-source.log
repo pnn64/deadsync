@@ -1,0 +1,22 @@
+{
+  "captured_utc": "2026-11-20T23:22:53.430599+00:00",
+  "stage": "candidate5-two-layouts",
+  "production_base": "baseline",
+  "retained_origins": [
+    "candidate2-rgba4444",
+    "candidate3-direct-rgba"
+  ],
+  "discarded_transformations": [
+    "source alpha prescan",
+    "logical alpha prescan",
+    "opaque-alpha dispatch relocation"
+  ],
+  "exact_text_equivalence": true,
+  "decode_sha256": "be772c50798d8e90e196c75ee42434aca65a28135a65cf183b2eef5a887e599e",
+  "other_production_sources_unchanged": [
+    "crates/deadlib-image/bmp/src/encode.rs",
+    "crates/deadlib-image/bmp/src/lib.rs",
+    "crates/deadlib-image/bmp/src/model.rs"
+  ],
+  "regression_tests": "All three useful added regression tests are retained; no new performance path."
+}

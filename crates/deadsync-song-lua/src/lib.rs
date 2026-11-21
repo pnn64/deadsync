@@ -8,6 +8,7 @@
 )]
 mod actor_quaternion;
 pub mod gameplay;
+pub mod gameplay_session;
 #[cfg(feature = "test-support")]
 pub mod trace_capture;
 // Playback is tested with concrete asset fixtures by tests/playback.rs.
@@ -180,7 +181,7 @@ pub use random::RandomSnapshot;
 pub mod test_support;
 use std::sync::{
     Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 const FREEZE: &str = "__songlua_freeze";
@@ -239,6 +240,7 @@ pub struct SongRuntime {
     players: Vec<Root>,
     operations: [Root; 6],
     option_snapshots: live_frames::OptionSnapshots,
+    pad_stick_seconds: Arc<AtomicU32>,
 }
 
 impl SongRuntime {
@@ -306,9 +308,11 @@ impl SongRuntime {
         actors.install_sound_manager(&mut vm, &context.song_dir)?;
         let actor_file_loader = vm.rooted(loader)?;
         actors.bind_source_loader(&mut vm, actor_file_loader, &context.song_dir)?;
+        let pad_stick_seconds = Arc::new(AtomicU32::new(context.pad_stick_seconds.to_bits()));
         let catalog = managers::install(
             &mut vm,
             context,
+            pad_stick_seconds.clone(),
             #[cfg(feature = "test-support")]
             observations.clone(),
         )?;
@@ -479,7 +483,13 @@ impl SongRuntime {
             players,
             operations: roots.try_into().expect("six clock operations"),
             option_snapshots: Default::default(),
+            pad_stick_seconds,
         })
+    }
+
+    /// The typed native preference, including writes from retained Lua callbacks.
+    pub fn pad_stick_seconds(&self) -> f32 {
+        f32::from_bits(self.pad_stick_seconds.load(Ordering::Relaxed))
     }
 
     /// Register additional song bindings or execute scripts in this same VM.
@@ -1860,6 +1870,16 @@ pub fn theme_metric_number_for_screen(
     if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("ScreenHeight") {
         return Some(screen_height);
     }
+    if group.eq_ignore_ascii_case("ArrowEffects") {
+        // ITGmania Themes/_fallback/metrics.ini. Authored Lua uses these same
+        // constants as the native wave modifier when positioning its own notes.
+        if name.eq_ignore_ascii_case("WaveModHeight") {
+            return Some(38.0);
+        }
+        if name.eq_ignore_ascii_case("WaveModMagnitude") {
+            return Some(20.0);
+        }
+    }
     if group.eq_ignore_ascii_case("ScreenGameplay") {
         let side = if name.get(..8)?.eq_ignore_ascii_case("PlayerP1") {
             -1.0
@@ -2109,6 +2129,8 @@ pub fn theme_metric_names(group: &str) -> Vec<String> {
                 .into_iter()
                 .map(str::to_string),
         );
+    } else if group.eq_ignore_ascii_case("ArrowEffects") {
+        names.extend(["WaveModHeight", "WaveModMagnitude"].into_iter().map(str::to_string));
     } else if group.eq_ignore_ascii_case("Combo") {
         names.push("ShowComboAt".to_string());
     } else if group.eq_ignore_ascii_case("GraphDisplay") {
@@ -2485,6 +2507,9 @@ pub struct SongLuaCompileContext {
     pub layer_start_beats: Vec<f32>,
     /// Native background layer and complete activation schedule per cached owner.
     pub background_activations: Vec<(u8, Vec<deadsync_chart::song::SongBackgroundLuaActivation>)>,
+    /// Resolved image/movie activations that can transition an outgoing Lua owner.
+    /// These have no Lua actor; preparation excludes same-layer Lua beat collisions.
+    pub background_media_activations: Vec<(u8, deadsync_chart::song::SongBackgroundLuaActivation)>,
     /// Native UpperLeft effect colors for cached Lua background owners.
     pub background_upper_left_colors: Vec<Option<[f32; 4]>>,
     /// Authored foreground filenames, in foreground entry order. Empty when
@@ -2559,6 +2584,7 @@ pub struct SongLuaCompileContext {
     pub player_step_indices: [Option<usize>; LUA_PLAYERS],
     pub event_mode: bool,
     pub global_offset_seconds: f32,
+    pub pad_stick_seconds: f32,
     /// Theme coordinate space exposed through `SCREEN_WIDTH/SCREEN_HEIGHT`.
     pub screen_width: f32,
     pub screen_height: f32,
@@ -2599,6 +2625,7 @@ impl SongLuaCompileContext {
             bake_progress: None,
             layer_start_beats: Vec::new(),
             background_activations: Vec::new(),
+            background_media_activations: Vec::new(),
             background_upper_left_colors: Vec::new(),
             foreground_names: Vec::new(),
             live: false,
@@ -2643,6 +2670,7 @@ impl SongLuaCompileContext {
             // PrefsManager defaults EventMode to true in ITGmania.
             event_mode: true,
             global_offset_seconds: 0.0,
+            pad_stick_seconds: 0.0,
             screen_width: 640.0,
             screen_height: 480.0,
             display_width: 640.0,

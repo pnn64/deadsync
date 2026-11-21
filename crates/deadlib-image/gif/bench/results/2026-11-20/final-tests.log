@@ -1,0 +1,79 @@
+
+running 1 test
+test decode::tests::interlace_permutation_all_pass_tails_and_long_cycles ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+
+running 9 tests
+test consecutive_previous_first_previous_local_palette_clipping_and_timing ... ok
+test global_external_and_mutated_local_palettes_survive_reset ... ok
+test owned_canvas_reuses_pixels_and_keeps_the_current_display ... ok
+test offsets_transparency_background_and_previous ... ok
+test repeated_text_uses_active_palette_without_allocation_churn ... ok
+test missing_and_external_palette ... ok
+test extensions_roundtrip_scope_and_text_rendering ... ok
+test deterministic_animation_against_independent_full_canvas_model ... ok
+test uniform_and_mixed_rows_preserve_transparency_and_clipping ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test compatibility_keeps_structural_and_pixel_validation ... ok
+test missing_eoi_requires_complete_pixels_and_the_data_terminator ... ok
+test recovered_frame_recycling_cannot_supply_missing_pixels ... ok
+test recovered_inputs_still_obey_every_resource_limit ... ok
+test compatibility_rejects_underfilled_overfilled_and_undefined_lzw ... ok
+test trailing_bytes_are_charged_and_stream_errors_stay_failed ... ok
+test recovered_inputs_match_at_every_stream_split ... ok
+test unused_background_is_preserved_and_explicit_canvas_controls_disposal ... ok
+test one_bit_minimum_preserves_codes_and_width_transitions ... ok
+test one_bit_minimum_reaches_a_frozen_dictionary_and_resets ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 2 tests
+test upstream_malformed_and_regression_cases ... ok
+test established_image_gif_samples ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.49s
+
+
+running 1 test
+test giflib_native_indices_palettes_controls_and_encoder ... ignored, requires DEADLIB_GIFLIB_ORACLE; see tests/oracle/README.md
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 11 tests
+test lzw_existing_and_next_phrases_preserve_output_on_overflow ... ok
+test recycled_pixels_cannot_complete_an_underfilled_image ... ok
+test reject_invalid_syntax_dimensions_indices_and_controls ... ok
+test strict_and_compatibility_are_explicit ... ok
+test every_truncation_and_every_stream_split ... ok
+test cumulative_limits_and_encoder_validation ... ok
+test unknown_extension_scope_uses_specification_label_ranges ... ok
+test metadata_subblocks_preserve_boundaries_and_exact_budgets ... ok
+test lzw_clear_and_reset_preserve_an_existing_output_prefix ... ok
+test deferred_clear_frozen_dictionary_and_end_width_boundaries ... ok
+test longest_dictionary_chain_and_exact_output_limits ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 5 tests
+test lzw_hand_packed_kwkwk_and_clear ... ok
+test gif87a_and_shared_image ... ok
+test arbitrary_input_boundaries_and_recycling ... ok
+test reference_encoder_native_decoder_and_lzw_saturation ... ok
+test native_encoder_reference_decoder_all_palette_sizes_and_interlace ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

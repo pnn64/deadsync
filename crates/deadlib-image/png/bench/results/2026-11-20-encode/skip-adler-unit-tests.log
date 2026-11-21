@@ -1,0 +1,17 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 21.24s
+     Running unittests src\lib.rs (target\release\build\deadlib-image-png/242f985eac60e463\out\deadlib_image_png-242f985eac60e463.exe)
+
+running 9 tests
+test checksum::tests::adler_zero_advancement_matches_modular_addition ... ok
+test checksum::tests::known_checksums ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test checksum::tests::adler_zero_advancement_interleaves_with_nonzero_spans ... ok
+test checksum::tests::crc_every_byte_value_in_word_lanes_and_fragmented_tails ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test checksum::x86::polynomial_folding_matches_scalar_for_offsets_lengths_and_initial_states ... ok
+test checksum::x86::vector_adler_matches_byte_oracle_for_states_splits_and_modulus_boundaries ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.08s
+

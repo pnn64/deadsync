@@ -1,0 +1,341 @@
+[
+  {
+    "input": "crates\\deadlib-image\\png\\bench\\results\\windows-x86_64-20261117-pipelined\\timing-run1.tsv",
+    "sha256": "de4f496f41305c64d6aa46ddc573fa6e65a7f32ad3a30b7513558e4f98da5878",
+    "groups": {
+      "all": {
+        "cases": 89,
+        "totals": {
+          "native": {
+            "ns": 123627133,
+            "thread_cycles": 270334844,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 134636143,
+            "thread_cycles": 294453544,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 136334699,
+            "thread_cycles": 298168630,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 132625315,
+            "thread_cycles": 289999104,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "ns": {
+              "native_over_reference_geomean": 0.7979691658308803,
+              "native_over_reference_total": 0.9182313919970212,
+              "native_wins": 73
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7980414951019397,
+              "native_over_reference_total": 0.9180899653223397,
+              "native_wins": 73
+            }
+          },
+          "image": {
+            "ns": {
+              "native_over_reference_geomean": 0.7019756583075476,
+              "native_over_reference_total": 0.9067914031188787,
+              "native_wins": 72
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.702060766364593,
+              "native_over_reference_total": 0.9066508572682512,
+              "native_wins": 72
+            }
+          },
+          "png-packed": {
+            "ns": {
+              "native_over_reference_geomean": 0.983419172873276,
+              "native_over_reference_total": 0.9321533600127547,
+              "native_wins": 54
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9835578645597259,
+              "native_over_reference_total": 0.9321919973932057,
+              "native_wins": 54
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 123627133,
+            "after_total": 123627133,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          },
+          "thread_cycles": {
+            "before_total": 270334844,
+            "after_total": 270334844,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          }
+        }
+      },
+      "formats": {
+        "cases": 60,
+        "totals": {
+          "native": {
+            "ns": 6490269,
+            "thread_cycles": 14200266,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 8551401,
+            "thread_cycles": 18709352,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 9281380,
+            "thread_cycles": 20305769,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 7476436,
+            "thread_cycles": 16358715,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "ns": {
+              "native_over_reference_geomean": 0.7506891223541584,
+              "native_over_reference_total": 0.7589714246823416,
+              "native_wins": 55
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7507936420863578,
+              "native_over_reference_total": 0.7589929357254062,
+              "native_wins": 55
+            }
+          },
+          "image": {
+            "ns": {
+              "native_over_reference_geomean": 0.632518304706125,
+              "native_over_reference_total": 0.6992784478170272,
+              "native_wins": 55
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6326388791046131,
+              "native_over_reference_total": 0.6993217543250886,
+              "native_wins": 55
+            }
+          },
+          "png-packed": {
+            "ns": {
+              "native_over_reference_geomean": 0.9731244066975508,
+              "native_over_reference_total": 0.8680966439089427,
+              "native_wins": 38
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9732603414338321,
+              "native_over_reference_total": 0.8680551009049305,
+              "native_wins": 38
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 6490269,
+            "after_total": 6490269,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          },
+          "thread_cycles": {
+            "before_total": 14200266,
+            "after_total": 14200266,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          }
+        }
+      },
+      "photos": {
+        "cases": 24,
+        "totals": {
+          "native": {
+            "ns": 104716372,
+            "thread_cycles": 228986524,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 112365922,
+            "thread_cycles": 245748062,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 112750981,
+            "thread_cycles": 246599944,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 111864625,
+            "thread_cycles": 244598121,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "ns": {
+              "native_over_reference_geomean": 0.9264931918950827,
+              "native_over_reference_total": 0.931922865368381,
+              "native_wins": 15
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9263682320480408,
+              "native_over_reference_total": 0.9317938141054394,
+              "native_wins": 15
+            }
+          },
+          "image": {
+            "ns": {
+              "native_over_reference_geomean": 0.9230215879947654,
+              "native_over_reference_total": 0.9287402297634998,
+              "native_wins": 14
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9228502524377051,
+              "native_over_reference_total": 0.9285749229529427,
+              "native_wins": 14
+            }
+          },
+          "png-packed": {
+            "ns": {
+              "native_over_reference_geomean": 0.9307747462413016,
+              "native_over_reference_total": 0.9360990751097588,
+              "native_wins": 14
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.9308528882722933,
+              "native_over_reference_total": 0.9361745015203939,
+              "native_wins": 14
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 104716372,
+            "after_total": 104716372,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          },
+          "thread_cycles": {
+            "before_total": 228986524,
+            "after_total": 228986524,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          }
+        }
+      },
+      "assets": {
+        "cases": 5,
+        "totals": {
+          "native": {
+            "ns": 12420492,
+            "thread_cycles": 27148054,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png": {
+            "ns": 13718820,
+            "thread_cycles": 29996130,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "image": {
+            "ns": 14302338,
+            "thread_cycles": 31262917,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          },
+          "png-packed": {
+            "ns": 13284254,
+            "thread_cycles": 29042268,
+            "alloc_calls": 0,
+            "requested_bytes": 0
+          }
+        },
+        "native_vs": {
+          "png": {
+            "ns": {
+              "native_over_reference_geomean": 0.8109397172400079,
+              "native_over_reference_total": 0.9053615398408901,
+              "native_wins": 3
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.8114184130866879,
+              "native_over_reference_total": 0.9050518850265018,
+              "native_wins": 3
+            }
+          },
+          "image": {
+            "ns": {
+              "native_over_reference_geomean": 0.6586253458029249,
+              "native_over_reference_total": 0.8684238898563298,
+              "native_wins": 3
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.6591272397067443,
+              "native_over_reference_total": 0.8683787888379065,
+              "native_wins": 3
+            }
+          },
+          "png-packed": {
+            "ns": {
+              "native_over_reference_geomean": 1.45302780442359,
+              "native_over_reference_total": 0.9349785091432308,
+              "native_wins": 2
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.4536542625849125,
+              "native_over_reference_total": 0.9347773390149833,
+              "native_wins": 2
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 12420492,
+            "after_total": 12420492,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          },
+          "thread_cycles": {
+            "before_total": 27148054,
+            "after_total": 27148054,
+            "after_over_before_total": 1.0,
+            "after_over_before_geomean": 1.0,
+            "improved_cases": 0
+          }
+        }
+      }
+    },
+    "baseline": "crates\\deadlib-image\\png\\bench\\results\\windows-x86_64-20261117-pipelined\\timing-run1.tsv"
+  }
+]

@@ -1,4 +1,4 @@
-use crate::{Error, Limits, decode::validate_text, model::*, reserve};
+use crate::{ColorType, Error, Image, Limits, Samples, decode::validate_text, model::*, reserve};
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Background {
@@ -72,7 +72,13 @@ impl Compositor {
         Self::with_options(header, CompositeOptions::default())
     }
     pub fn with_options(header: &Header, options: CompositeOptions) -> Result<Self, Error> {
-        header.validate()?;
+        if options.background == Background::LogicalScreen {
+            header.validate()?;
+        } else {
+            // Transparent and caller-supplied backgrounds never use the stored
+            // background index, which compatibility decoding may retain intact.
+            header.validate_structure()?;
+        }
         if let Some(p) = &options.external_palette {
             validate_palette(p)?;
         }
@@ -114,6 +120,16 @@ impl Compositor {
     }
     pub fn pixels(&self) -> &[u8] {
         self.pixels.as_flattened()
+    }
+    /// Move the current composited RGBA8 canvas into a shared image without copying.
+    pub fn into_image(self) -> Image {
+        Image {
+            width: self.header.width.into(),
+            height: self.header.height.into(),
+            color_type: ColorType::Rgba,
+            bit_depth: 8,
+            samples: Samples::U8(self.pixels.into_flattened()),
+        }
     }
     /// Start another playback with the configured background.
     pub fn reset(&mut self) {
@@ -190,6 +206,20 @@ impl Compositor {
                 &frame.indices[row * frame.width as usize..row * frame.width as usize + r.w];
             let dest =
                 &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
+            // Short rows are cheaper to expand directly.
+            if indices.len() >= 32 {
+                let index = indices[0];
+                // Fixed-size equality lets the compiler compare whole vectors.
+                let (chunks, tail) = indices.as_chunks::<16>();
+                if chunks.iter().all(|chunk| *chunk == [index; 16])
+                    && tail.iter().all(|&value| value == index)
+                {
+                    if transparent != Some(index) {
+                        dest.fill(table[index as usize]);
+                    }
+                    continue;
+                }
+            }
             if let Some(t) = transparent {
                 for (pixel, &index) in dest.iter_mut().zip(indices) {
                     if index != t {

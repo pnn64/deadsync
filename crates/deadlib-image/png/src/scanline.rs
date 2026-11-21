@@ -1,4 +1,3 @@
-use crate::codec::Filter;
 use crate::{ColorType, Error, Image, Samples, reserve};
 
 #[cfg(target_arch = "x86_64")]
@@ -55,7 +54,18 @@ pub(crate) fn filtered_size(
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
-    paeth_wide(i16::from(a), i16::from(b), i16::from(c))
+    let low = a.min(b);
+    let high = a.max(b);
+    let to_low = c.saturating_sub(low);
+    let to_high = high.saturating_sub(c);
+    // Inside [low, high], 2*to_low <= to_high is exactly 3*c-a-b <= low;
+    // the other inequality selects low. Saturation also covers outside values.
+    let candidate = if to_high <= to_low / 2 { low } else { c };
+    if to_low <= to_high / 2 {
+        high
+    } else {
+        candidate
+    }
 }
 
 fn paeth_wide(a: i16, b: i16, c: i16) -> u8 {
@@ -98,14 +108,32 @@ fn unfilter_pixels<const N: usize, const PAETH: bool>(row: &mut [u8], prev: &[u8
     }
 }
 
+/// Unfilter two consecutive Paeth rows together where a vector kernel can.
+/// Returns false, with both rows untouched, where it cannot.
+fn unfilter_paeth_pair(row: &mut [u8], next: &mut [u8], prev: &[u8], bpp: usize) -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        match bpp {
+            3 => x86::unfilter::<3, true>(row, prev, Some(next)),
+            4 => x86::unfilter::<4, true>(row, prev, Some(next)),
+            _ => false,
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = (row, next, prev, bpp);
+        false
+    }
+}
+
 fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize) {
     #[cfg(target_arch = "x86_64")]
     {
         let handled = match bpp {
-            3 => x86::unfilter::<3, PAETH>(row, prev),
-            4 => x86::unfilter::<4, PAETH>(row, prev),
-            6 => x86::unfilter::<6, PAETH>(row, prev),
-            8 => x86::unfilter::<8, PAETH>(row, prev),
+            3 => x86::unfilter::<3, PAETH>(row, prev, None),
+            4 => x86::unfilter::<4, PAETH>(row, prev, None),
+            6 => x86::unfilter::<6, PAETH>(row, prev, None),
+            8 => x86::unfilter::<8, PAETH>(row, prev, None),
             _ => false,
         };
         if handled {
@@ -116,20 +144,7 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
     // preceding pixel in registers instead of indexing reconstructed bytes.
     match bpp {
         1 => unfilter_pixels::<1, PAETH>(row, prev),
-        2 => {
-            let prefix = 2.min(row.len());
-            for (value, &up) in row[..prefix].iter_mut().zip(prev) {
-                *value = value.wrapping_add(if PAETH { up } else { up / 2 });
-            }
-            for n in 2..row.len() {
-                let predictor = if PAETH {
-                    paeth(row[n - 2], prev[n], prev[n - 2])
-                } else {
-                    ((u16::from(row[n - 2]) + u16::from(prev[n])) / 2) as u8
-                };
-                row[n] = row[n].wrapping_add(predictor);
-            }
-        }
+        2 => unfilter_pixels::<2, PAETH>(row, prev),
         3 => unfilter_pixels::<3, PAETH>(row, prev),
         4 => unfilter_pixels::<4, PAETH>(row, prev),
         6 => unfilter_pixels::<6, PAETH>(row, prev),
@@ -161,11 +176,43 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
     Ok(())
 }
 
-pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
-    for (samples, &byte) in out.chunks_mut(8 / DEPTH as usize).zip(row) {
-        for (n, sample) in samples.iter_mut().enumerate() {
-            *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
+static ONE_BIT_SAMPLES: [[u8; 8]; 256] = {
+    let mut table = [[0; 8]; 256];
+    let mut byte = 0;
+    while byte < 256 {
+        let mut lane = 0;
+        while lane < 8 {
+            table[byte][lane] = ((byte >> (7 - lane)) & 1) as u8;
+            lane += 1;
         }
+        byte += 1;
+    }
+    table
+};
+
+pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+    match DEPTH {
+        1 => unpack_groups::<8>(row, out, |byte| ONE_BIT_SAMPLES[usize::from(byte)]),
+        2 => unpack_groups::<4>(row, out, |byte| {
+            [byte >> 6, (byte >> 4) & 3, (byte >> 2) & 3, byte & 3]
+        }),
+        4 => unpack_groups::<2>(row, out, |byte| [byte >> 4, byte & 15]),
+        _ => unreachable!("validated packed PNG depth"),
+    }
+}
+
+fn unpack_groups<const N: usize>(row: &[u8], out: &mut [u8], expand: impl Fn(u8) -> [u8; N]) {
+    // Complete bytes have a fixed number of independent output lanes. Keep the
+    // short final group out of this loop so its length cannot limit unrolling.
+    let (groups, tail) = out.as_chunks_mut::<N>();
+    for (samples, &byte) in groups.iter_mut().zip(row) {
+        *samples = expand(byte);
+    }
+    if !tail.is_empty()
+        && let Some(&byte) = row.get(groups.len())
+    {
+        let values = expand(byte);
+        tail.copy_from_slice(&values[..tail.len()]);
     }
 }
 
@@ -265,9 +312,34 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
+        let mut paired = false;
         for row_index in 0..h {
+            if paired {
+                // Unfiltered and compacted together with the previous row.
+                paired = false;
+                continue;
+            }
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
+            if reuse
+                && row_index != 0
+                && row_index + 1 < h
+                && filter == 4
+                && after.get(stride + 1) == Some(&4)
+                && after.len() >= 2 * (stride + 1)
+            {
+                let (row, next) = after.split_at_mut(stride + 1);
+                let previous = &before[(row_index - 1) * stride..row_index * stride];
+                if unfilter_paeth_pair(&mut row[1..], &mut next[1..1 + stride], previous, bpp) {
+                    for n in 0..2 {
+                        let start = position + 1;
+                        raw.copy_within(start..start + stride, (row_index + n) * stride);
+                        position += stride + 1;
+                    }
+                    paired = true;
+                    continue;
+                }
+            }
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
             if row_index == 0 {
                 unfilter_first(row, bpp, filter)?;
@@ -362,6 +434,8 @@ pub(crate) fn decode(
     })
 }
 
+/// With `SCORE`, returns the sum of signed-byte magnitudes, or stops at a
+/// partial sum of at least `limit` with `out` partly written.
 #[inline]
 pub(crate) fn filter_into<const SCORE: bool>(
     row: &[u8],
@@ -369,14 +443,76 @@ pub(crate) fn filter_into<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     match filter {
-        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
-        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
-        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
-        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
-        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
+        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out, limit),
+        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out, limit),
+        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out, limit),
+        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out, limit),
+        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out, limit),
     }
+}
+
+#[inline(always)]
+fn filter_chunk<const FILTER: u8>(
+    row: &[u8; 32],
+    left: &[u8; 32],
+    upper: &[u8; 32],
+    upper_left: &[u8; 32],
+    out: &mut [u8; 32],
+) {
+    for n in 0..32 {
+        let predictor = match FILTER {
+            0 => 0,
+            1 => left[n],
+            2 => upper[n],
+            3 => ((u16::from(left[n]) + u16::from(upper[n])) / 2) as u8,
+            4 => paeth(left[n], upper[n], upper_left[n]),
+            _ => left[n] / 2,
+        };
+        out[n] = row[n].wrapping_sub(predictor);
+    }
+}
+
+#[inline(always)]
+fn score_chunk(bytes: &[u8; 32]) -> u16 {
+    // Signed-byte magnitudes are at most 128: a chunk sums to at most 4096.
+    let mut sum = 0u16;
+    for &value in bytes {
+        sum += u16::from((value as i8).unsigned_abs());
+    }
+    sum
+}
+
+fn score_bytes(bytes: &[u8]) -> u64 {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    let mut score = 0u64;
+    for chunk in chunks {
+        score += u64::from(score_chunk(chunk));
+    }
+    for &value in tail {
+        score += u64::from((value as i8).unsigned_abs());
+    }
+    score
+}
+
+pub(crate) fn score_at_most(bytes: &[u8], limit: u64) -> bool {
+    let (chunks, tail) = bytes.as_chunks::<32>();
+    let mut score = 0u64;
+    for chunk in chunks {
+        score += u64::from(score_chunk(chunk));
+        if score > limit {
+            return false;
+        }
+    }
+    for &value in tail {
+        score += u64::from((value as i8).unsigned_abs());
+        if score > limit {
+            return false;
+        }
+    }
+    true
 }
 
 fn filter_bytes<const FILTER: u8, const SCORE: bool>(
@@ -384,6 +520,7 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
     prev: &[u8],
     bpp: usize,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     let prev = if FILTER >= 2 && FILTER <= 4 {
         &prev[..row.len()]
@@ -391,23 +528,79 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
         prev
     };
     let out = &mut out[..row.len()];
-    let mut score = 0u64;
-    for (n, (&value, out)) in row.iter().zip(out).enumerate() {
-        let left = if n >= bpp { row[n - bpp] } else { 0 };
+    let split = bpp.min(row.len());
+    for (n, (&value, out)) in row[..split].iter().zip(&mut out[..split]).enumerate() {
+        let predictor = match FILTER {
+            2 | 4 => prev[n],
+            3 => prev[n] / 2,
+            _ => 0,
+        };
+        *out = value.wrapping_sub(predictor);
+    }
+    // All remaining bytes have a left neighbor. Keeping the boundary out of
+    // this loop makes its byte lanes independent for compiler vectorization.
+    let (upper, upper_left) = if FILTER >= 2 && FILTER <= 4 {
+        (&prev[split..], &prev[..row.len() - split])
+    } else {
+        // These predictors are unused in this specialization. Equal-length
+        // slices avoid accessing the empty previous row of None/Sub.
+        (&row[split..], &row[..row.len() - split])
+    };
+    let mut score = if SCORE { score_bytes(&out[..split]) } else { 0 };
+    let (values, values_tail) = row[split..].as_chunks::<32>();
+    let (left, left_tail) = row[..row.len() - split].as_chunks::<32>();
+    let (upper, upper_tail) = upper.as_chunks::<32>();
+    let (upper_left, corner_tail) = upper_left.as_chunks::<32>();
+    let (output, output_tail) = out[split..].as_chunks_mut::<32>();
+    // Score each 256-byte segment after filtering it. Once the partial score
+    // reaches `limit`, the candidate cannot win and the rest is skipped.
+    for ((((values, left), upper), upper_left), output) in values
+        .chunks(8)
+        .zip(left.chunks(8))
+        .zip(upper.chunks(8))
+        .zip(upper_left.chunks(8))
+        .zip(output.chunks_mut(8))
+    {
+        for ((((values, left), upper), upper_left), output) in values
+            .iter()
+            .zip(left)
+            .zip(upper)
+            .zip(upper_left)
+            .zip(output.iter_mut())
+        {
+            filter_chunk::<FILTER>(values, left, upper, upper_left, output);
+        }
+        if SCORE {
+            for chunk in output.iter() {
+                score += u64::from(score_chunk(chunk));
+            }
+            if score >= limit {
+                return score;
+            }
+        }
+    }
+    for ((((&value, &left), &upper), &corner), out) in values_tail
+        .iter()
+        .zip(left_tail)
+        .zip(upper_tail)
+        .zip(corner_tail)
+        .zip(output_tail.iter_mut())
+    {
         let predictor = match FILTER {
             0 => 0,
             1 => left,
-            2 => prev[n],
-            3 => ((u16::from(left) + u16::from(prev[n])) / 2) as u8,
-            4 => paeth(left, prev[n], if n >= bpp { prev[n - bpp] } else { 0 }),
+            2 => upper,
+            3 => ((u16::from(left) + u16::from(upper)) / 2) as u8,
+            4 => paeth(left, upper, corner),
             _ => left / 2,
         };
         *out = value.wrapping_sub(predictor);
-        if SCORE {
-            score += u64::from((*out as i8).unsigned_abs());
-        }
     }
-    score
+    if SCORE {
+        score + score_bytes(output_tail)
+    } else {
+        0
+    }
 }
 
 pub(crate) fn filter_first<const SCORE: bool>(
@@ -415,13 +608,14 @@ pub(crate) fn filter_first<const SCORE: bool>(
     bpp: usize,
     filter: u8,
     out: &mut [u8],
+    limit: u64,
 ) -> u64 {
     // A pass starts with zero upper predictors: Up equals None, Paeth equals
     // Sub, and Average uses only half the left byte.
     match filter {
-        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out),
-        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out),
-        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out),
+        0 | 2 => filter_bytes::<0, SCORE>(row, &[], bpp, out, limit),
+        1 | 4 => filter_bytes::<1, SCORE>(row, &[], bpp, out, limit),
+        3 => filter_bytes::<5, SCORE>(row, &[], bpp, out, limit),
         _ => unreachable!("validated scanline filter"),
     }
 }
@@ -567,120 +761,117 @@ pub(crate) fn pack_row(
     }
 }
 
-pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<Vec<u8>, Error> {
-    let size = filtered_size(
-        image.width,
-        image.height,
-        image.color_type,
-        image.bit_depth,
-        interlaced,
-    )?;
-    let mut out = Vec::new();
-    reserve(&mut out, size)?;
-    let channels = image.color_type.channels();
-    let depth = image.bit_depth;
-    let bpp = (channels * depth as usize).div_ceil(8);
-    let capacity = if filter == Filter::None {
-        0
-    } else {
-        let width = passes(interlaced)
-            .iter()
-            .filter(|&&(_, y, _, _)| y < image.height)
-            .map(|&(x, _, dx, _)| extent(image.width, x, dx))
-            .max()
-            .unwrap_or(0);
-        row_bytes(width, channels, depth)?
-    };
-    let mut row = vec![0; capacity];
-    let uses_previous = !matches!(filter, Filter::None | Filter::Sub) && image.height > 1;
-    let mut previous = if uses_previous {
-        vec![0; capacity]
-    } else {
-        Vec::new()
-    };
-    let mut candidate = if filter == Filter::Adaptive {
-        vec![0; capacity]
-    } else {
-        Vec::new()
-    };
-    let mut best = vec![0; capacity];
-    for &(x, y, dx, dy) in passes(interlaced) {
-        let w = extent(image.width, x, dx);
-        let h = extent(image.height, y, dy);
-        if w == 0 || h == 0 {
-            continue;
-        }
-        let stride = row_bytes(w, channels, depth)?;
-        if filter == Filter::None {
-            for row_index in 0..h {
-                let src_y = y as usize + row_index * dy as usize;
-                out.push(0);
-                match &image.samples {
-                    Samples::U8(samples) if depth == 8 && dx == 1 => {
-                        let start = (src_y * image.width as usize + x as usize) * channels;
-                        out.extend_from_slice(&samples[start..start + w * channels]);
-                    }
-                    _ => {
-                        let start = out.len();
-                        out.resize(start + stride, 0);
-                        pack_row(image, src_y, x as usize, dx as usize, w, &mut out[start..]);
-                    }
-                }
-            }
-            continue;
-        }
-        row.resize(stride, 0);
-        if uses_previous {
-            previous.resize(stride, 0);
-        }
-        if filter == Filter::Adaptive {
-            candidate.resize(stride, 0);
-        }
-        best.resize(stride, 0);
-        for row_index in 0..h {
-            let src_y = y as usize + row_index * dy as usize;
-            pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
-            let mut selected = 0;
-            if filter == Filter::Adaptive {
-                let mut score = u64::MAX;
-                for kind in 0..5 {
-                    // Up/Paeth duplicate the earlier None/Sub candidates on
-                    // the first row, so neither can win a strict-score tie.
-                    if row_index == 0 && matches!(kind, 2 | 4) {
-                        continue;
-                    }
-                    let value = if row_index == 0 {
-                        filter_first::<true>(&row, bpp, kind, &mut candidate)
-                    } else {
-                        filter_into::<true>(&row, &previous, bpp, kind, &mut candidate)
-                    };
-                    if value < score {
-                        score = value;
-                        selected = kind;
-                        core::mem::swap(&mut candidate, &mut best);
-                    }
-                }
-            } else {
-                selected = filter as u8;
-                if row_index == 0 {
-                    filter_first::<false>(&row, bpp, selected, &mut best);
-                } else {
-                    filter_into::<false>(&row, &previous, bpp, selected, &mut best);
-                }
-            }
-            out.push(selected);
-            out.extend_from_slice(&best);
-            if uses_previous && row_index + 1 < h {
-                core::mem::swap(&mut row, &mut previous);
-            }
-        }
-    }
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Read the PNG bit stream one bit at a time, independently of byte-group
+    // expansion. Leave unmatched output unchanged, as the unpacker's zip does.
+    fn reference_unpack_bits(depth: u8, row: &[u8], out: &mut [u8]) {
+        let mut bits = row
+            .iter()
+            .flat_map(|&byte| (0..8).rev().map(move |bit| (byte >> bit) & 1));
+        for sample in out {
+            let mut value = 0;
+            for _ in 0..depth {
+                let Some(bit) = bits.next() else { return };
+                value = value * 2 + bit;
+            }
+            *sample = value;
+        }
+    }
+
+    fn unpack_depth(depth: u8, row: &[u8], out: &mut [u8]) {
+        match depth {
+            1 => unpack::<1>(row, out),
+            2 => unpack::<2>(row, out),
+            4 => unpack::<4>(row, out),
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn unpack_every_byte_and_partial_group() {
+        for depth in [1, 2, 4] {
+            for byte in 0..=u8::MAX {
+                for width in 0..=8 / usize::from(depth) {
+                    for offset in 0..8 {
+                        let mut actual = [0xa5; 32];
+                        let mut expected = actual;
+                        reference_unpack_bits(
+                            depth,
+                            &[byte],
+                            &mut expected[offset..offset + width],
+                        );
+                        unpack_depth(depth, &[byte], &mut actual[offset..offset + width]);
+                        assert_eq!(
+                            actual, expected,
+                            "depth={depth} byte={byte} width={width} offset={offset}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unpack_rows_keep_padding_and_slice_boundaries() {
+        for depth in [1, 2, 4] {
+            for width in [
+                0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256,
+                257, 2047, 2048, 2049,
+            ] {
+                let row_bytes = (width * usize::from(depth)).div_ceil(8);
+                for offset in [0, 1, 7, 15, 16, 31] {
+                    for pattern in 0..4 {
+                        let mut input = vec![0xa5; offset + 3 * row_bytes + 7];
+                        for y in 0..3 {
+                            for n in 0..row_bytes {
+                                input[offset + y * row_bytes + n] = match pattern {
+                                    0 => 0,
+                                    1 => u8::MAX,
+                                    2 => (n + y * 37) as u8,
+                                    _ => (n * 173 + n * n * 47 + y * 71) as u8,
+                                };
+                            }
+                        }
+                        let stride = width + 3;
+                        let mut actual = vec![0xa5; offset + 3 * stride + 7];
+                        let mut expected = actual.clone();
+                        for y in 0..3 {
+                            let row = &input[offset + y * row_bytes..offset + (y + 1) * row_bytes];
+                            let start = offset + y * stride;
+                            reference_unpack_bits(depth, row, &mut expected[start..start + width]);
+                            unpack_depth(depth, row, &mut actual[start..start + width]);
+                        }
+                        assert_eq!(
+                            actual, expected,
+                            "depth={depth} width={width} offset={offset} pattern={pattern}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn unpack_preserves_short_and_extra_input_behavior() {
+        let bytes = [0x96, 0x69, 0x37, 0xc8, 0xff];
+        for depth in [1, 2, 4] {
+            for input_len in 0..=bytes.len() {
+                for width in 0..=4 * 8 / usize::from(depth) + 1 {
+                    let mut actual = vec![0xa5; width + 3];
+                    let mut expected = actual.clone();
+                    reference_unpack_bits(depth, &bytes[..input_len], &mut expected[1..1 + width]);
+                    unpack_depth(depth, &bytes[..input_len], &mut actual[1..1 + width]);
+                    assert_eq!(
+                        actual, expected,
+                        "depth={depth} input_len={input_len} width={width}"
+                    );
+                }
+            }
+        }
+    }
 
     // PNG Third Edition 9.4, expressed independently of the optimized regions.
     fn reference_paeth(a: u8, b: u8, c: u8) -> u8 {
@@ -744,10 +935,89 @@ mod tests {
         }
     }
 
+    // PNG Third Edition 9.2 and 9.3, one byte at a time.
+    fn reference_unfilter(raw: &[u8], stride: usize, bpp: usize) -> Vec<u8> {
+        let mut out: Vec<u8> = Vec::new();
+        for (index, row) in raw.chunks(stride + 1).enumerate() {
+            let start = out.len();
+            for x in 0..stride {
+                let a = if x >= bpp { out[start + x - bpp] } else { 0 };
+                let b = if index > 0 {
+                    out[start + x - stride]
+                } else {
+                    0
+                };
+                let c = if index > 0 && x >= bpp {
+                    out[start + x - bpp - stride]
+                } else {
+                    0
+                };
+                let predictor = match row[0] {
+                    0 => 0,
+                    1 => a,
+                    2 => b,
+                    3 => ((u16::from(a) + u16::from(b)) / 2) as u8,
+                    _ => reference_paeth(a, b, c),
+                };
+                out.push(row[1 + x].wrapping_add(predictor));
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn paeth_row_runs_decode_like_the_specification() {
+        let mut state = 0x2545_f491u32;
+        // Runs of Paeth rows of odd and even lengths, at the start and end.
+        let filters = [4, 4, 4, 1, 4, 4, 3, 4, 4, 4, 4, 0, 2, 4, 4, 4];
+        for (color, bpp) in [
+            (ColorType::Rgb, 3),
+            (ColorType::Rgba, 4),
+            (ColorType::GrayscaleAlpha, 2),
+        ] {
+            for width in [21, 22, 23, 40, 64] {
+                for height in [filters.len() - 1, filters.len()] {
+                    let stride = width * bpp;
+                    let mut raw = Vec::new();
+                    for &filter in &filters[..height] {
+                        raw.push(filter);
+                        raw.extend((0..stride).map(|_| {
+                            state ^= state << 13;
+                            state ^= state >> 17;
+                            state ^= state << 5;
+                            state as u8
+                        }));
+                    }
+                    let expected = reference_unfilter(&raw, stride, bpp);
+                    let image = decode(
+                        raw,
+                        width as u32,
+                        height as u32,
+                        color,
+                        8,
+                        false,
+                        usize::MAX,
+                    )
+                    .unwrap();
+                    let Samples::U8(samples) = image.samples else {
+                        panic!("eight-bit samples")
+                    };
+                    assert!(
+                        samples == expected,
+                        "bpp={bpp} width={width} height={height}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn independent_filter_bytes_scores_and_short_row_boundaries() {
         for bpp in [1, 2, 3, 4, 6, 8] {
-            for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127] {
+            for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127]
+                .into_iter()
+                .chain([bpp + 31, bpp + 32, bpp + 33, bpp + 63, bpp + 64, bpp + 65])
+            {
                 for pattern in 0..5 {
                     let row: Vec<u8> = (0..len)
                         .map(|n| match pattern {
@@ -783,11 +1053,32 @@ mod tests {
                             .iter()
                             .map(|&v| u64::from((v as i8).unsigned_abs()))
                             .sum();
+                        for limit in [0, score.saturating_sub(1), score, score + 1, u64::MAX] {
+                            assert_eq!(score_at_most(&expected, limit), score <= limit);
+                        }
                         let mut actual = vec![0xa5; len];
                         let predictors: &[u8] = if filter < 2 { &[] } else { &prev };
+                        for limit in [0, score / 2, score, score + 1, u64::MAX] {
+                            // Below the limit the score is exact; otherwise the
+                            // candidate only has to lose.
+                            let partial = filter_into::<true>(
+                                &row,
+                                predictors,
+                                bpp,
+                                filter,
+                                &mut actual,
+                                limit,
+                            );
+                            assert_eq!(partial < limit, score < limit, "limit {limit}");
+                            if partial < limit {
+                                assert_eq!(partial, score);
+                                assert_eq!(actual, expected);
+                            }
+                        }
+                        actual.fill(0xa5);
                         assert_eq!(
-                            filter_into::<true>(&row, predictors, bpp, filter, &mut actual),
-                            score
+                            filter_into::<false>(&row, predictors, bpp, filter, &mut actual, 0),
+                            0
                         );
                         assert_eq!(actual, expected);
                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
@@ -795,12 +1086,19 @@ mod tests {
                         if prev.iter().all(|&v| v == 0) {
                             let mut first_filtered = vec![0xa5; len];
                             assert_eq!(
-                                filter_first::<true>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<true>(
+                                    &row,
+                                    bpp,
+                                    filter,
+                                    &mut first_filtered,
+                                    u64::MAX
+                                ),
                                 score
                             );
                             assert_eq!(first_filtered, expected);
+                            first_filtered.fill(0xa5);
                             assert_eq!(
-                                filter_first::<false>(&row, bpp, filter, &mut first_filtered),
+                                filter_first::<false>(&row, bpp, filter, &mut first_filtered, 0),
                                 0
                             );
                             assert_eq!(first_filtered, expected);

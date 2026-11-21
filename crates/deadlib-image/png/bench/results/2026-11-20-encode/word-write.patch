@@ -1,0 +1,21 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/zlib.rs
+@@
+     fn write(&mut self, value: u32, n: u8) {
+         self.word |= u64::from(value) << self.count;
+         self.count += n;
+-        while self.count >= 8 {
+-            self.bytes.push(self.word as u8);
+-            self.word >>= 8;
+-            self.count -= 8;
++        let complete = usize::from(self.count / 8);
++        if complete != 0 {
++            let start = self.bytes.len();
++            // At most 32 new bits plus seven pending bits fit in one word.
++            self.bytes.extend_from_slice(&self.word.to_le_bytes());
++            self.bytes.truncate(start + complete);
++            self.word >>= complete * 8;
++            self.count %= 8;
+         }
+     }
+*** End Patch

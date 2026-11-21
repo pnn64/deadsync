@@ -1,7 +1,7 @@
 #![no_main]
 use deadlib_image_png::{
     AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Image, ImageKind, Limits,
-    PalettePolicy, Row, RowSamples, Samples, StreamDecoder, decode_with_options,
+    MetadataPolicy, PalettePolicy, Row, RowSamples, Samples, StreamDecoder, decode_with_options,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -24,7 +24,12 @@ fn samples(image: &Image, row: Row<'_>) {
         }
     }
 }
-fn check(bytes: &[u8], repair_crc: bool, animation_policy: AnimationPolicy) {
+fn check(
+    bytes: &[u8],
+    repair_crc: bool,
+    animation_policy: AnimationPolicy,
+    metadata_policy: MetadataPolicy,
+) {
     if bytes.len() > 65536 {
         return;
     }
@@ -58,6 +63,7 @@ fn check(bytes: &[u8], repair_crc: bool, animation_policy: AnimationPolicy) {
             PalettePolicy::Strict
         },
         animation_policy,
+        metadata_policy,
     };
     let expected = decode_with_options(&fixed, &options);
     if options.animation_policy == AnimationPolicy::RecoverDefault {
@@ -142,7 +148,19 @@ fn check(bytes: &[u8], repair_crc: bool, animation_policy: AnimationPolicy) {
     }
 }
 fuzz_target!(|bytes: &[u8]| {
-    check(bytes, true, AnimationPolicy::Strict);
-    check(bytes, true, AnimationPolicy::RecoverDefault);
-    check(bytes, false, AnimationPolicy::RecoverDefault);
+    for metadata_policy in [MetadataPolicy::Recover, MetadataPolicy::Strict] {
+        check(bytes, true, AnimationPolicy::Strict, metadata_policy);
+        check(
+            bytes,
+            true,
+            AnimationPolicy::RecoverDefault,
+            metadata_policy,
+        );
+        check(
+            bytes,
+            false,
+            AnimationPolicy::RecoverDefault,
+            metadata_policy,
+        );
+    }
 });

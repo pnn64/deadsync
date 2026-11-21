@@ -1,0 +1,314 @@
+{
+  "external_files": [
+    {
+      "path": "save/screenshots/initials-mega-verified.png",
+      "group": "screenshots",
+      "sha256": "7752e0fb68e773f79633d196323351e36e7b0ea3c4346da3b2e1b0c54f97b82e",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 34231,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "save/screenshots/initials-wendy-verified.png",
+      "group": "screenshots",
+      "sha256": "1a26b1a6ccfe2ba41cba2d29b91e1ef8863d92fe20fc94ebc350e01e2d866a52",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 33644,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "tests/fixtures/interactive_song_lua/windows-before.png",
+      "group": "screenshots",
+      "sha256": "4683262ae0bd9f30956482b6cbbdae10c90dbf9c9ed588f023dbb8683c0aa1a5",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 1534249,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "tests/fixtures/interactive_song_lua/windows-after.png",
+      "group": "screenshots",
+      "sha256": "b157571ccde91424a6b2d33bb37bbd87b051d042fabe4ca7cb64c914a477fea2",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 194417,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png",
+      "group": "screenshots",
+      "sha256": "8d2d622fa0945a4b06ab9e5e85d473224135703e3297761990d018e396a8e0fb",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 88920,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png",
+      "group": "screenshots",
+      "sha256": "d37cfcc45f3fa1106c10ad212ba03a839795afddf084fbb4752e2d26405837e3",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 71391,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png",
+      "group": "screenshots",
+      "sha256": "57c76a7855eedee87b0bd1f758573a721a66c650f1b3a1b7d849755e3f417f11",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 1629623,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png",
+      "group": "screenshots",
+      "sha256": "b63f83efab7a33b781ab55e1f0c5613c2e2dc7b4bb2d0f17dcb48e3f9595ed3a",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 90207,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png",
+      "group": "screenshots",
+      "sha256": "fa3b0e0b56d6dffbfe3bdf0115e0d7a9ec08211279284a9fb57255a5b0ea7283",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 127414,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png",
+      "group": "screenshots",
+      "sha256": "03bf11e1222417eeba78cd912eef103062a3be6f590d17b591ecb31b64dc0525",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 211564,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png",
+      "group": "screenshots",
+      "sha256": "90da837c2dfe3a980ebce912977d3a0923a124d941e0cca9acfe7444e5e8e0d1",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 128232,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png",
+      "group": "screenshots",
+      "sha256": "48285396de50928261ba762c9cfd73c6fb21a00e28957490c9abb3c6cf682c27",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 74778,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png",
+      "group": "screenshots",
+      "sha256": "0a0fe37bc646704fe738c34975499a4eeb0a9c8d026e9476491d652c12b1d105",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 135002,
+      "width": 1600,
+      "height": 900,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png",
+      "group": "artwork",
+      "sha256": "89b7cb3bdf37c45966d030837979388650d71516d199c6c86e191b703ddd21b2",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 1058414,
+      "width": 1280,
+      "height": 720,
+      "bit_depth": 8,
+      "color_type": 2
+    },
+    {
+      "path": "target/parity-investigation-20261115/igaku/song/Igaku-jacket.png",
+      "group": "artwork",
+      "sha256": "de183b4cd5811902ed767c7c16734b86d20f36890cdc20c793076c0cfc144548",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 491419,
+      "width": 512,
+      "height": 512,
+      "bit_depth": 8,
+      "color_type": 6
+    },
+    {
+      "path": "target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png",
+      "group": "artwork",
+      "sha256": "0828322ed5d8b07465904aa769e9419d77ca278629bb9ddccbc291776cca004c",
+      "tracked_at_archive": false,
+      "available_locally_at_archive": true,
+      "included_in_archive": false,
+      "fresh_clone_availability": "requires separately supplied exact input",
+      "bytes": 717550,
+      "width": 1280,
+      "height": 720,
+      "bit_depth": 8,
+      "color_type": 6
+    }
+  ],
+  "external_total_bytes_available": 6621055,
+  "generated_cases": [
+    {
+      "file": "generated/flat-17x13",
+      "width": 17,
+      "height": 13
+    },
+    {
+      "file": "generated/flat-1920x1080",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "file": "generated/flat-3840x2160",
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "file": "generated/flat-640x360",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "file": "generated/gradient-17x13",
+      "width": 17,
+      "height": 13
+    },
+    {
+      "file": "generated/gradient-1920x1080",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "file": "generated/gradient-3840x2160",
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "file": "generated/gradient-640x360",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "file": "generated/noise-17x13",
+      "width": 17,
+      "height": 13
+    },
+    {
+      "file": "generated/noise-1920x1080",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "file": "generated/noise-3840x2160",
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "file": "generated/noise-640x360",
+      "width": 640,
+      "height": 360
+    },
+    {
+      "file": "generated/ui-17x13",
+      "width": 17,
+      "height": 13
+    },
+    {
+      "file": "generated/ui-1920x1080",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "file": "generated/ui-3840x2160",
+      "width": 3840,
+      "height": 2160
+    },
+    {
+      "file": "generated/ui-640x360",
+      "width": 640,
+      "height": 360
+    }
+  ],
+  "generated_identity": "Deterministic algorithms in the measured encode.rs source snapshots; source hashes are in run provenance.",
+  "preparation": "Decode external PNG to RGBA8; force every alpha byte to 255 outside timing.",
+  "images_archived": false
+}

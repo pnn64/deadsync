@@ -1,0 +1,74 @@
+Four-literal fastpath: score-cycles -> literals-cycles. Lower ratio is better.
+Selected modes have exact matching 32-file keysets/dimensions/encoded sizes/FNV fingerprints.
+all: n=32 writer=0.981473 buffered=0.979418 image-control=1.007274 writer-control-normalized=0.974385
+screenshots: n=13 writer=0.986497 buffered=0.963282 image-control=0.990106 writer-control-normalized=0.996355
+artwork: n=3 writer=0.825313 buffered=0.844366 image-control=1.044922 writer-control-normalized=0.789833
+generated: n=16 writer=1.009689 buffered=1.020733 image-control=1.014438 writer-control-normalized=0.995319
+generated-nontiny: n=12 writer=1.004112 buffered=1.084850 image-control=1.014624 writer-control-normalized=0.989639
+
+PER-INPUT CPU RATIOS
+group | file | writer after/before | buffered after/before | image control after/before | writer normalized | current writer/image
+screenshots | C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png | 1.035274 | 1.014547 | 1.030793 | 1.004347 | 1.390228
+screenshots | C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png | 1.072819 | 0.970353 | 1.093107 | 0.981440 | 1.408142
+screenshots | C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png | 1.002113 | 0.996528 | 1.010190 | 0.992005 | 1.723671
+screenshots | C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png | 1.009763 | 1.007580 | 0.981467 | 1.028831 | 1.298158
+screenshots | C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png | 0.968342 | 0.952265 | 0.966853 | 1.001539 | 1.283925
+screenshots | C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png | 0.987943 | 1.009165 | 0.996748 | 0.991166 | 1.264355
+screenshots | C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png | 0.977405 | 0.997401 | 1.010105 | 0.967627 | 1.372715
+screenshots | C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png | 1.024283 | 0.990333 | 1.052326 | 0.973352 | 1.298254
+screenshots | C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png | 1.014742 | 0.881825 | 0.814087 | 1.246478 | 1.332969
+screenshots | C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png | 0.936070 | 0.970974 | 0.974623 | 0.960443 | 1.264645
+screenshots | C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png | 0.999040 | 1.016310 | 0.996340 | 1.002711 | 1.227695
+artwork | C:/GitHub/deadsync/target/parity-batch2-20261115/Songs/The Great Divide - [Axis, PCBoyGames]/The Great Divide (Seven Lions Remix)-bg.png | 0.865914 | 0.879732 | 1.061489 | 0.815754 | 1.579602
+artwork | C:/GitHub/deadsync/target/parity-investigation-20261115/igaku/song/Igaku-jacket.png | 0.747295 | 0.756815 | 1.088264 | 0.686686 | 1.366541
+artwork | C:/GitHub/deadsync/target/parity-investigation-20261115/sharkmode/song/sharkmode-bg.png | 0.868740 | 0.904176 | 0.987646 | 0.879606 | 1.707725
+screenshots | C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png | 0.964762 | 0.909256 | 0.970469 | 0.994119 | 1.340661
+screenshots | C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png | 0.850366 | 0.828225 | 1.000893 | 0.849607 | 1.637394
+generated | generated/flat-17x13 | 1.189769 | 1.021722 | 1.005360 | 1.183427 | 5.319690
+generated | generated/flat-1920x1080 | 1.066651 | 1.080839 | 1.008927 | 1.057213 | 1.596317
+generated | generated/flat-3840x2160 | 1.117868 | 1.126191 | 0.996317 | 1.122000 | 1.480163
+generated | generated/flat-640x360 | 1.014087 | 1.732027 | 1.001107 | 1.012966 | 1.485803
+generated | generated/gradient-17x13 | 0.941259 | 0.673220 | 1.024848 | 0.918437 | 3.266130
+generated | generated/gradient-1920x1080 | 1.245564 | 1.508902 | 1.057572 | 1.177757 | 1.547288
+generated | generated/gradient-3840x2160 | 1.031225 | 1.019717 | 0.986802 | 1.045017 | 1.461421
+generated | generated/gradient-640x360 | 1.132850 | 1.116131 | 1.001186 | 1.131508 | 1.700532
+generated | generated/noise-17x13 | 0.972074 | 0.848801 | 1.024220 | 0.949087 | 2.164049
+generated | generated/noise-1920x1080 | 0.775378 | 0.776585 | 1.009117 | 0.768373 | 0.812112
+generated | generated/noise-3840x2160 | 0.758571 | 0.752919 | 1.009310 | 0.751574 | 0.821506
+generated | generated/noise-640x360 | 0.749753 | 0.747813 | 0.967805 | 0.774694 | 0.941686
+generated | generated/ui-17x13 | 1.020334 | 0.895074 | 1.001311 | 1.018998 | 3.144701
+generated | generated/ui-1920x1080 | 1.092997 | 1.146658 | 1.085625 | 1.006790 | 1.450601
+generated | generated/ui-3840x2160 | 1.210847 | 1.035204 | 1.028455 | 1.177346 | 1.701222
+generated | generated/ui-640x360 | 1.022989 | 1.414051 | 1.028611 | 0.994534 | 1.302747
+
+CURRENT SCREENSHOTS: worst writer/image cycle ratio first
+file | writer cycles | image cycles | cycles ratio | writer ms | image ms | writer bytes | image bytes | size ratio
+C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-46.png | 85144047 | 49396937 | 1.723671 | 38.861300 | 22.553000 | 3979294 | 1629623 | 2.441849
+C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-before.png | 73286882 | 44758246 | 1.637394 | 33.462100 | 20.435100 | 3497743 | 1534249 | 2.279775
+C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png | 5967656 | 4237966 | 1.408142 | 2.723925 | 1.934736 | 43816 | 33644 | 1.302342
+C:/GitHub/deadsync/save/screenshots/initials-mega-verified.png | 6671420 | 4798796 | 1.390228 | 3.044714 | 2.191810 | 44536 | 34231 | 1.301043
+C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-96.png | 9035542 | 6582240 | 1.372715 | 4.123400 | 3.004514 | 124773 | 71391 | 1.747741
+C:/GitHub/deadsync/tests/fixtures/interactive_song_lua/windows-after.png | 15540673 | 11591795 | 1.340661 | 7.095333 | 5.291225 | 354474 | 194417 | 1.823266
+C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png | 10800102 | 8102293 | 1.332969 | 4.928220 | 3.699583 | 130719 | 74778 | 1.748094
+C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-189.79071.png | 15724394 | 12111955 | 1.298254 | 7.180633 | 5.530050 | 251296 | 128232 | 1.959698
+C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-66.png | 12071896 | 9299248 | 1.298158 | 5.510800 | 4.245540 | 137740 | 90207 | 1.526932
+C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-production-beat-96.png | 14107594 | 10987862 | 1.283925 | 6.437525 | 5.015680 | 217332 | 127414 | 1.705715
+C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-351.25497.png | 15018848 | 11875938 | 1.264645 | 6.853000 | 5.421600 | 247078 | 135002 | 1.830180
+C:/GitHub/deadsync/target/dyscontrolled-parity-20261117-native110/dyscontrolled-single-production-beat-66.png | 11740067 | 9285420 | 1.264355 | 5.361575 | 4.237640 | 136351 | 88920 | 1.533412
+C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-97.710884.png | 17897444 | 14578092 | 1.227695 | 8.170200 | 6.656650 | 355514 | 211564 | 1.680409
+
+NON-TINY WRITER RAW REGRESSIONS >5%
+C:/GitHub/deadsync/save/screenshots/initials-wendy-verified.png: writer=1.072819; control=1.093107; normalized=0.981440
+generated/flat-1920x1080: writer=1.066651; control=1.008927; normalized=1.057213
+generated/flat-3840x2160: writer=1.117868; control=0.996317; normalized=1.122000
+generated/gradient-1920x1080: writer=1.245564; control=1.057572; normalized=1.177757
+generated/gradient-640x360: writer=1.132850; control=1.001186; normalized=1.131508
+generated/ui-1920x1080: writer=1.092997; control=1.085625; normalized=1.006790
+generated/ui-3840x2160: writer=1.210847; control=1.028455; normalized=1.177346
+NON-TINY WRITER CONTROL-NORMALIZED REGRESSIONS >5%
+C:/GitHub/deadsync/target/looping-rooms-parity/deadsync-captures/looping-rooms-native-clock-beat-225.721.png: writer=1.014742; control=0.814087; normalized=1.246478
+generated/flat-1920x1080: writer=1.066651; control=1.008927; normalized=1.057213
+generated/flat-3840x2160: writer=1.117868; control=0.996317; normalized=1.122000
+generated/gradient-1920x1080: writer=1.245564; control=1.057572; normalized=1.177757
+generated/gradient-640x360: writer=1.132850; control=1.001186; normalized=1.131508
+generated/ui-3840x2160: writer=1.210847; control=1.028455; normalized=1.177346

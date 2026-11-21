@@ -24,10 +24,19 @@ pub struct MarkerReader<'a> {
     input: &'a [u8],
     position: usize,
     ended: bool,
+    strict: bool,
+    pub(crate) missing_eoi: bool,
 }
 
 impl<'a> MarkerReader<'a> {
     pub fn new(input: &'a [u8]) -> Result<Self> {
+        Self::with_strict(input, true)
+    }
+
+    /// With false, skip stray bytes between markers and expose a final scan
+    /// ending at EOF. Image decoders must still verify complete image data;
+    /// marker framing alone cannot establish whether a missing EOI is harmless.
+    pub fn with_strict(input: &'a [u8], strict: bool) -> Result<Self> {
         if input.len() < 2 {
             return Err(Error::Truncated);
         }
@@ -38,6 +47,8 @@ impl<'a> MarkerReader<'a> {
             input,
             position: 2,
             ended: false,
+            strict,
+            missing_eoi: false,
         })
     }
     pub fn consumed(&self) -> usize {
@@ -48,6 +59,9 @@ impl<'a> MarkerReader<'a> {
     /// the next scan's entropy. Used for mandatory first-scan DNL adjacency.
     pub(crate) fn take_segment(&mut self, expected: u8) -> Result<Option<&'a [u8]>> {
         let mut position = self.position;
+        if !self.strict && position == self.input.len() {
+            return Ok(None);
+        }
         if self.input.get(position) != Some(&0xff) {
             return Err(if position == self.input.len() {
                 Error::Truncated
@@ -69,6 +83,30 @@ impl<'a> MarkerReader<'a> {
     }
 
     fn read_event(&mut self) -> Result<Event<'a>> {
+        if !self.strict {
+            // Recover only outside declared segments and scan data. Stop at
+            // the first actual marker, whose length and payload remain checked.
+            loop {
+                while self.input.get(self.position).is_some_and(|&b| b != 0xff) {
+                    self.position += 1;
+                }
+                if self.position == self.input.len() {
+                    self.ended = true;
+                    self.missing_eoi = true;
+                    return Ok(Event::End {
+                        offset: self.position,
+                    });
+                }
+                let mut next = self.position + 1;
+                while self.input.get(next) == Some(&0xff) {
+                    next += 1;
+                }
+                if self.input.get(next) != Some(&0) {
+                    break;
+                }
+                self.position = next + 1;
+            }
+        }
         let offset = self.position;
         if self.input.get(self.position) != Some(&0xff) {
             return Err(if self.position == self.input.len() {
@@ -126,15 +164,25 @@ impl<'a> MarkerReader<'a> {
             // lowest flagged byte is always a true match: borrows only carry up.
             while let Some(bytes) = self.input.get(self.position..self.position + 8) {
                 let inverted = !u64::from_le_bytes(bytes.try_into().unwrap());
-                let found =
-                    inverted.wrapping_sub(0x0101_0101_0101_0101) & !inverted & 0x8080_8080_8080_8080;
+                let found = inverted.wrapping_sub(0x0101_0101_0101_0101)
+                    & !inverted
+                    & 0x8080_8080_8080_8080;
                 if found != 0 {
                     self.position += (found.trailing_zeros() / 8) as usize;
                     break;
                 }
                 self.position += 8;
             }
-            let byte = *self.input.get(self.position).ok_or(Error::Truncated)?;
+            let Some(&byte) = self.input.get(self.position) else {
+                if self.strict {
+                    return Err(Error::Truncated);
+                }
+                return Ok(Event::Scan {
+                    header: data,
+                    entropy: &self.input[start..],
+                    offset,
+                });
+            };
             if byte != 0xff {
                 self.position += 1;
                 continue;

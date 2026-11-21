@@ -1,0 +1,178 @@
+[
+  {
+    "name": "candidate3-isolated-rgb333-decode-parent-a",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate2-rgba4444/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-decode-parent-a",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-decode-candidate-a",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-decode-candidate-a",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-decode-candidate-b",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-decode-candidate-b",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-decode-parent-b",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate2-rgba4444/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-decode-parent-b",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-owned-parent-a",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate2-rgba4444/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-owned-parent-a",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-owned-candidate-a",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-owned-candidate-a",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-owned-candidate-b",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate3-direct-rgba/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-owned-candidate-b",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate3-isolated-rgb333-owned-parent-b",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate2-rgba4444/bmp-timing.exe",
+      "-Label",
+      "candidate3-isolated-rgb333-owned-parent-b",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Filter",
+      "rgb333-511x257-bottom"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  }
+]

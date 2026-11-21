@@ -1,0 +1,17 @@
+{
+  "status": "source-only proposal; not applied, built, tested or timed",
+  "prepared_on_stage": "candidate2-rgba4444",
+  "source_files": [
+    {
+      "path": "crates/deadlib-image/bmp/src/decode.rs",
+      "sha256": "c2f9fe8e4d4d6ae48d71537dd5d4375937e609281f216c2fa7446f40e501ef25"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_optimized.rs",
+      "sha256": "9842785cef30fcafef56c5d0da38fdd677f3ff1e56575c20391415ae1bb508ba"
+    }
+  ],
+  "patch_sha256": "38ed1a7ef304082c3ef5aa07eba0f92451c6c858df4c5e957f03e49359fbc202",
+  "production_added_lines": 23,
+  "production_removed_lines": 3
+}

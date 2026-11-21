@@ -139,8 +139,14 @@ fn gif_stream(bytes: &[u8], rgba: bool) {
         }
     }
 }
-fn verify(bytes: &[u8]) -> Result<Stats, String> {
-    let actual = native::decode(bytes).map_err(|e| format!("native strict rejection: {e}"))?;
+fn verify(bytes: &[u8], options: &native::DecodeOptions) -> Result<Stats, String> {
+    let policy = if options.strict {
+        "strict"
+    } else {
+        "compatibility"
+    };
+    let actual = native::decode_with_options(bytes, options)
+        .map_err(|e| format!("native {policy} rejection: {e}"))?;
     if actual.frames().next().is_none() {
         return Err("no image frames".into());
     }
@@ -242,8 +248,8 @@ fn verify(bytes: &[u8]) -> Result<Stats, String> {
     assert!(image_frames.next().is_none());
     Ok(stats)
 }
-fn native_stream(bytes: &[u8], rgba: bool) {
-    let mut decoder = native::Decoder::default();
+fn native_stream(bytes: &[u8], rgba: bool, options: &native::DecodeOptions) {
+    let mut decoder = native::Decoder::new(options.clone());
     let mut at = 0;
     let mut render = None;
     loop {
@@ -268,6 +274,14 @@ fn native_stream(bytes: &[u8], rgba: bool) {
                 black_box(block);
             }
             Some(native::Event::End) => {
+                if at != bytes.len() {
+                    // Submit the suffix so compatibility mode accounts for every
+                    // input byte; strict mode rejects it through the same API.
+                    let tail = decoder.update(&bytes[at..]).unwrap();
+                    assert_eq!(tail.event, None);
+                    assert_eq!(tail.consumed, bytes.len() - at);
+                    at += tail.consumed;
+                }
                 assert_eq!(at, bytes.len());
                 decoder.finish().unwrap();
                 break;
@@ -276,10 +290,10 @@ fn native_stream(bytes: &[u8], rgba: bool) {
         }
     }
 }
-fn decode(codec: usize, bytes: &[u8]) {
+fn decode(codec: usize, bytes: &[u8], options: &native::DecodeOptions) {
     match codec {
         0 => {
-            black_box(native::decode(black_box(bytes)).unwrap());
+            black_box(native::decode_with_options(black_box(bytes), options).unwrap());
         }
         1 => {
             let reader = indexed(black_box(bytes));
@@ -290,9 +304,9 @@ fn decode(codec: usize, bytes: &[u8]) {
             }
             black_box((global, frames));
         }
-        2 => native_stream(black_box(bytes), false),
+        2 => native_stream(black_box(bytes), false, options),
         3 => gif_stream(black_box(bytes), false),
-        4 => native_stream(black_box(bytes), true),
+        4 => native_stream(black_box(bytes), true, options),
         5 => gif_stream(black_box(bytes), true),
         6 => {
             let decoder =
@@ -318,11 +332,49 @@ fn files(path: &Path, out: &mut Vec<PathBuf>) {
 }
 fn main() {
     let mut paths = Vec::new();
+    let mut options = native::DecodeOptions::default();
+    let mut verify_only = false;
     for arg in std::env::args_os().skip(1) {
-        files(Path::new(&arg), &mut paths);
+        if arg == "--compatibility" {
+            options.strict = false;
+        } else if arg == "--verify-only" {
+            verify_only = true;
+        } else {
+            assert!(
+                !arg.to_string_lossy().starts_with("--"),
+                "unknown option: {}",
+                arg.to_string_lossy()
+            );
+            files(Path::new(&arg), &mut paths);
+        }
     }
     paths.sort();
+    let mut seen = std::collections::HashSet::new();
+    paths.retain(|path| seen.insert(path.canonicalize().unwrap()));
     assert!(!paths.is_empty(), "supply GIF files or corpus directories");
+    if verify_only {
+        let mut frames = 0;
+        for path in &paths {
+            let bytes = std::fs::read(path).unwrap();
+            let stats = verify(&bytes, &options).unwrap_or_else(|error| {
+                panic!("verification failed for {}: {error}", path.display())
+            });
+            native_stream(&bytes, false, &options);
+            native_stream(&bytes, true, &options);
+            frames += stats.frames;
+            eprintln!(
+                "VERIFIED\t{}\t{}\t{}",
+                path.display(),
+                stats.frames,
+                stats.total_pixels
+            );
+        }
+        println!(
+            "Verified {} GIF files ({frames} frames) against gif, gif-dispose, image, and native streaming decoding.",
+            paths.len()
+        );
+        return;
+    }
     cycles::pin();
     #[cfg(feature = "allocations")]
     {
@@ -351,7 +403,7 @@ fn main() {
     println!("file\tcodec\tns\tthread_cycles\talloc_calls\trequested_bytes");
     for (file_index, path) in paths.into_iter().enumerate() {
         let bytes = std::fs::read(&path).unwrap();
-        let stats = match verify(&bytes) {
+        let stats = match verify(&bytes, &options) {
             Ok(stats) => stats,
             Err(error) => {
                 eprintln!("EXCLUDED\t{}\t{error}", path.display());
@@ -368,14 +420,14 @@ fn main() {
         let group_size = if stats.total_pixels > 4_000_000 { 1 } else { 8 };
         for offset in 0..CODECS.len() {
             let codec = (offset + file_index) % CODECS.len();
-            decode(codec, &bytes);
+            decode(codec, &bytes, &options);
             #[cfg(feature = "allocations")]
             {
                 use std::sync::atomic::Ordering::Relaxed;
                 allocations::CALLS.store(0, Relaxed);
                 allocations::BYTES.store(0, Relaxed);
                 allocations::ENABLED.store(true, Relaxed);
-                decode(codec, &bytes);
+                decode(codec, &bytes, &options);
                 allocations::ENABLED.store(false, Relaxed);
                 println!(
                     "{}\t{}\t0\t0\t{}\t{}",
@@ -394,7 +446,7 @@ fn main() {
                     let mut iterations = 0;
                     loop {
                         for _ in 0..group_size {
-                            decode(codec, &bytes);
+                            decode(codec, &bytes, &options);
                         }
                         iterations += group_size;
                         if start.elapsed().as_millis() >= sample_ms {

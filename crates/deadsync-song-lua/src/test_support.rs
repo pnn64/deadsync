@@ -96,6 +96,11 @@ pub fn seed_rust_transition(runtime: &super::SongRuntime, name: &str) {
     runtime.screen.state.lock().unwrap().transition = Some(name.into());
 }
 
+/// Drive the production gameplay out clock with recorded native frame deltas.
+pub fn song_lua_out_completion_frame(deltas: &[f32]) -> Option<usize> {
+    super::gameplay_session::out_clock_completion_frame(deltas)
+}
+
 pub use super::input::testing::{
     input_compiled_count, input_dispatch_state, input_functions, install_input_controls,
     seed_pending_input_removal,

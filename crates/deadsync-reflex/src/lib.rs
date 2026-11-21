@@ -19,7 +19,8 @@ mod io;
 use config::Config;
 pub use config::LightMode;
 use deadlib_input_native::{GpSystemEvent, uuid_from_bytes};
-use deadlib_platform::input::{PadEvent, REFLEX_PAD_ID_BASE};
+use deadlib_platform::input::PadEvent;
+use deadsync_input::REFLEX_PAD_ID_BASE;
 use deadsync_input::fsr::{BackendKind, HostPadAction, PadDeviceId, PadView};
 use detection::Detector;
 use std::{

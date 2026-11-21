@@ -10,7 +10,7 @@ use deadsync_gameplay::{
     HoldJudgmentRenderInfo, JudgmentRenderInfo, VisualEffects,
 };
 use deadsync_rules::note::HoldResult;
-use deadsync_theme::JudgmentFeedbackStyle;
+use deadsync_core::hud_style::JudgmentFeedbackStyle;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TapJudgmentAnimation {

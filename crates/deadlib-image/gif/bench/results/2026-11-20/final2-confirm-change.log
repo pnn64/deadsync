@@ -1,0 +1,15 @@
+all 9
+  gif-asset-first thread_cycles=1.0110, ns=1.0110
+  image-first thread_cycles=1.0098, ns=1.0097
+  native-copy-first thread_cycles=0.9836, ns=0.9833
+  native-first thread_cycles=0.9839, ns=0.9837
+assets 3
+  gif-asset-first thread_cycles=1.0020, ns=1.0019
+  image-first thread_cycles=1.0014, ns=1.0007
+  native-copy-first thread_cycles=1.0214, ns=1.0209
+  native-first thread_cycles=1.0225, ns=1.0221
+generated 6
+  gif-asset-first thread_cycles=1.0155, ns=1.0155
+  image-first thread_cycles=1.0140, ns=1.0142
+  native-copy-first thread_cycles=0.9653, ns=0.9650
+  native-first thread_cycles=0.9652, ns=0.9650

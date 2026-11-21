@@ -257,12 +257,21 @@ impl Replay {
             let mut applied = false;
             if slot.0 == group {
                 let state = local.get_mut(slot.1).ok_or("render random visual slot out of bounds")?;
-                if !state.vibrate { return Err("native vibration is inactive in the owned actor".into()); }
+                if !state.vibrate {
+                    return Err(format!(
+                        "native vibration is inactive in the owned actor: input {id}, scene {}, update {}, owner {}, owned path {owner_path:?}, source {:?}, source path {:?}, wrapper {}, slot {slot:?}, active owned scopes {expected:?}, sampled actor {}",
+                        input.scene, input.update, input.owner, input.source_actor,
+                        input.source_path, input.wrapper, sample["actor"]));
+                }
                 state.vibrate_input = Some(input.values);
                 applied = true;
             }
             if let Some((index, state)) = screen.as_mut() && slot == (0, *index) {
-                if !state.vibrate { return Err("native screen vibration is inactive in the owned actor".into()); }
+                if !state.vibrate {
+                    return Err(format!(
+                        "native screen vibration is inactive in the owned actor: input {id}, scene {}, update {}, owner {}, slot {slot:?}, active owned scopes {expected:?}, sampled actor {}",
+                        input.scene, input.update, input.owner, sample["actor"]));
+                }
                 state.vibrate_input = Some(input.values);
                 applied = true;
             }

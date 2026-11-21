@@ -7,7 +7,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, default_time_signature,
 };
-use deadsync_theme::NotefieldHudStyle;
+use deadsync_core::hud_style::NotefieldHudStyle;
 use std::ops::Range;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MeasureLineMode {
@@ -771,7 +771,7 @@ mod tests {
     use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
     use deadlib_present::actors::{FlatDraw, FlatSprite};
     use deadsync_rules::timing::{TimingData, TimingSegments};
-    use deadsync_theme::{
+    use deadsync_core::hud_style::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
         MiniIndicatorStyle,

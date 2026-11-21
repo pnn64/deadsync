@@ -1,0 +1,6 @@
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-410.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-411.jpg
+crates/deadlib-image/jpeg/tests/fixtures/progressive/8-multiscan.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-410.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-411.jpg
+crates/deadlib-image/jpeg/tests/fixtures/sequential/8-multiscan.jpg

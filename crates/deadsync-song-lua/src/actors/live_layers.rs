@@ -8,7 +8,8 @@ pub(crate) const CLOCK: usize = 4;
 pub(crate) const EXPIRE: usize = 5;
 #[derive(Default)]
 struct Layer {
-    changes: Vec<(usize, deadsync_chart::song::SongBackgroundLuaActivation)>,
+    // None is an ordinary-media activation, not a synthetic Lua actor.
+    changes: Vec<(Option<usize>, deadsync_chart::song::SongBackgroundLuaActivation)>,
     change_index: Option<usize>,
     current: Option<usize>,
     fading: Option<usize>,
@@ -187,7 +188,7 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                     .ok_or_else(|| call.error(b"invalid background layer"))?;
                 layer
                     .changes
-                    .extend(changes.into_iter().map(|change| (owner, change)));
+                    .extend(changes.into_iter().map(|change| (Some(owner), change)));
                 state.backgrounds.push(actor);
             }
             if let Some(start) = optional_number(call, actor, "__songlua_foreground_start_beat")? {
@@ -199,6 +200,11 @@ fn initialize(call: &mut HostCall<'_>) -> Result<(), Error> {
                     finished: false,
                 });
             }
+        }
+        for (layer, change) in &data.context.background_media_activations {
+            let layer = state.layers.get_mut(usize::from(*layer))
+                .ok_or_else(|| call.error(b"invalid background layer"))?;
+            layer.changes.push((None, change.clone()));
         }
         for layer in &mut state.layers {
             layer
@@ -315,19 +321,21 @@ fn backgrounds(call: &mut HostCall<'_>) -> Result<(), Error> {
             let mut delta = music - last;
             if let Some(next) = next.filter(|n| Some(*n) != layer.change_index) {
                 let (owner, change) = &layer.changes[next];
-                layer.fading = layer.current.filter(|current| current != owner);
+                layer.fading = layer.current.filter(|current| Some(*current) != *owner);
                 if let Some(fading) = layer.fading {
                     let actor = state.backgrounds[fading];
                     command(call, actor, "LoseFocus")?;
                     transition(call, actor, &change.transition)?;
                 }
-                layer.current = Some(*owner);
+                layer.current = *owner;
                 layer.change_index = Some(next);
-                let actor = state.backgrounds[*owner];
-                reset_actor(call, actor)?;
-                set(call, actor, "__songlua_defer_on", Value::Boolean(false))?;
-                song_activation::startup(call, actor)?;
-                command(call, actor, "GainFocus")?;
+                if let Some(owner) = *owner {
+                    let actor = state.backgrounds[owner];
+                    reset_actor(call, actor)?;
+                    set(call, actor, "__songlua_defer_on", Value::Boolean(false))?;
+                    song_activation::startup(call, actor)?;
+                    command(call, actor, "GainFocus")?;
+                }
                 let start = data.context.song_timing.as_ref().map_or_else(
                     || {
                         crate::song_elapsed_seconds_at(change.start_beat, &data.context)

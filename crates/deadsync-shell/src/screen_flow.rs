@@ -1,8 +1,6 @@
 use deadsync_config::app_config::Config;
 #[cfg(test)]
 use deadsync_profile::PlayerSide;
-#[cfg(test)]
-use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 pub(crate) use deadsync_theme_simply_love::screens::{
     LateJoinContext, ProfileSelectionContext, evaluation_summary_return_to, late_join_side,
@@ -14,10 +12,6 @@ use deadsync_theme_simply_love::screens::{
 };
 use deadsync_theme_simply_love::screens::{
     SimplyLoveNavigationPlan, SimplyLoveNavigationPolicy, resolve_navigation,
-};
-pub(crate) use deadsync_theme_simply_love::{
-    SimplyLoveEffectRouteContext as ThemeEffectRouteContext,
-    resolve_effect_route as theme_effect_route_plan,
 };
 
 const fn navigation_policy(config: &Config) -> SimplyLoveNavigationPolicy {
@@ -187,16 +181,6 @@ mod tests {
         );
     }
 
-    fn action_context() -> ThemeEffectRouteContext {
-        ThemeEffectRouteContext {
-            current_screen: Screen::Gameplay,
-            restart_pending: false,
-            course_active: false,
-            course_has_next_stage: false,
-            gameplay_failed: false,
-        }
-    }
-
     #[test]
     fn fast_profile_switch_refreshes_wheel_and_skips_redundant_navigation() {
         let plan = profile_selection_plan(ProfileSelectionContext {
@@ -245,99 +229,6 @@ mod tests {
             assert!(!plan.refresh_select_music);
             assert_eq!(plan.navigation_target, Some(expected));
         }
-    }
-
-    #[test]
-    fn restart_redirect_takes_priority_over_course_wheel_routing() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic),
-            ThemeEffectRouteContext {
-                restart_pending: true,
-                course_active: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::NavigateNoFade(Screen::Gameplay)
-        ));
-        assert!(plan.clear_restart_pending);
-    }
-
-    #[test]
-    fn restart_redirect_requires_gameplay_and_pending_restart() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic),
-            ThemeEffectRouteContext {
-                current_screen: Screen::Evaluation,
-                restart_pending: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::NavigateNoFade(Screen::SelectMusic)
-        ));
-        assert!(!plan.clear_restart_pending);
-    }
-
-    #[test]
-    fn passing_course_stage_chains_back_to_gameplay() {
-        let plan = theme_effect_route_plan(
-            ThemeEffect::Navigate(Screen::Evaluation),
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: true,
-                ..action_context()
-            },
-        );
-        assert!(matches!(
-            plan.action,
-            ThemeEffect::Navigate(Screen::Gameplay)
-        ));
-    }
-
-    #[test]
-    fn failed_or_final_course_stage_enters_evaluation() {
-        for context in [
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: true,
-                gameplay_failed: true,
-                ..action_context()
-            },
-            ThemeEffectRouteContext {
-                course_active: true,
-                course_has_next_stage: false,
-                ..action_context()
-            },
-        ] {
-            let plan = theme_effect_route_plan(ThemeEffect::Navigate(Screen::Evaluation), context);
-            assert!(matches!(
-                plan.action,
-                ThemeEffect::Navigate(Screen::Evaluation)
-            ));
-        }
-    }
-
-    #[test]
-    fn course_wheel_redirect_preserves_fade_mode() {
-        let context = ThemeEffectRouteContext {
-            course_active: true,
-            ..action_context()
-        };
-        let fade = theme_effect_route_plan(ThemeEffect::Navigate(Screen::SelectMusic), context);
-        assert!(matches!(
-            fade.action,
-            ThemeEffect::Navigate(Screen::SelectCourse)
-        ));
-
-        let no_fade =
-            theme_effect_route_plan(ThemeEffect::NavigateNoFade(Screen::SelectMusic), context);
-        assert!(matches!(
-            no_fade.action,
-            ThemeEffect::NavigateNoFade(Screen::SelectCourse)
-        ));
     }
 
     fn late_join_context(screen: Screen) -> LateJoinContext {

@@ -1,6 +1,7 @@
 use super::*;
 use crate::gameplay_regression_tests::tests::{build_compiled_test_state, with_session};
 use deadsync_chart::{SongPack, SyncPref};
+use deadsync_gameplay::course_progress::CourseProgress;
 use deadsync_gameplay::{GameplayInputPlayStyle, GameplaySession, GameplayViewport};
 use deadsync_simfile::{
     cache::build_song_meta,
@@ -141,7 +142,7 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
     // The previous cycle contains A. The fresh cycle must append A then B.
     plan.stages.truncate(1);
     let mut run = build_course_run_from_selection(plan, style.chart_type()).unwrap();
-    run.next_stage_index = 1;
+    run.progress = CourseProgress::new(1);
     app.state.session.begin_play_session(Instant::now());
     app.state.session.last_course_wheel_path = Some(course_path);
     app.state.session.course_run = Some(run);
@@ -195,7 +196,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                                 .course_run
                                 .as_mut()
                                 .unwrap()
-                                .next_stage_index = 2
+                                .progress = CourseProgress::new(2)
                         }
                         _ => unreachable!(),
                     }
@@ -270,7 +271,8 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                         .course_run
                         .as_ref()
                         .unwrap()
-                        .next_stage_index,
+                        .progress
+                        .next_stage_index(),
                     2
                 );
                 assert_eq!(
@@ -303,7 +305,8 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                             .course_run
                             .as_ref()
                             .unwrap()
-                            .next_stage_index,
+                            .progress
+                            .next_stage_index(),
                         expected_cursor
                     );
                 }
@@ -577,7 +580,15 @@ fn preparation_failure_without_completed_course_songs_keeps_existing_exit() {
                         ..
                     }
                 ));
-                assert!(!app.state.session.course_run.as_ref().unwrap().interrupted);
+                assert!(
+                    !app.state
+                        .session
+                        .course_run
+                        .as_ref()
+                        .unwrap()
+                        .progress
+                        .is_interrupted()
+                );
                 assert!(app.state.session.played_stages.is_empty());
             },
         );

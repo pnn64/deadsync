@@ -180,15 +180,20 @@ impl Spec {
             };
             (value, false)
         };
-        let mut digits = match self.conversion {
-            b'o' => Text::format(format_args!("{magnitude:o}")),
-            b'x' => Text::format(format_args!("{magnitude:x}")),
-            b'X' => Text::format(format_args!("{magnitude:X}")),
-            _ => Text::format(format_args!("{magnitude}")),
+        const LOWER: &[u8; 16] = b"0123456789abcdef";
+        const UPPER: &[u8; 16] = b"0123456789ABCDEF";
+        // Octal needs the most space: 22 digits for a u64.
+        let mut storage = [0; 22];
+        let digits = if magnitude == 0 && self.precision == Some(0) {
+            &[]
+        } else {
+            match self.conversion {
+                b'o' => integer_digits::<8>(magnitude, LOWER, &mut storage),
+                b'x' => integer_digits::<16>(magnitude, LOWER, &mut storage),
+                b'X' => integer_digits::<16>(magnitude, UPPER, &mut storage),
+                _ => integer_digits::<10>(magnitude, LOWER, &mut storage),
+            }
         };
-        if magnitude == 0 && self.precision == Some(0) {
-            digits.clear();
-        }
         let leading = self.precision.unwrap_or(0).saturating_sub(digits.len());
         let mut bytes = buffer(memory, leading + digits.len() + 3)?;
         if negative {
@@ -206,13 +211,13 @@ impl Spec {
                     b"0X"
                 });
             }
-            if self.conversion == b'o' && leading == 0 && digits.as_bytes().first() != Some(&b'0') {
+            if self.conversion == b'o' && leading == 0 && digits.first() != Some(&b'0') {
                 bytes.push(b'0');
             }
         }
         let prefix = bytes.len();
         bytes.resize(prefix + leading, b'0');
-        bytes.extend_from_slice(digits.as_bytes());
+        bytes.extend_from_slice(digits);
         self.pad(bytes, prefix, self.zero && self.precision.is_none(), memory)
     }
     pub fn float(&self, n: f64, memory: &mut Scratch) -> Result<Buffer<u8>, Error> {
@@ -230,53 +235,16 @@ impl Spec {
         } else if self.conversion == b'f' {
             let mut text = Text::format(format_args!("{value:.precision$}"));
             if precision == 0 && self.alternate {
-                text.push('.');
+                text.push(b'.');
             }
             text
         } else {
-            let general = matches!(self.conversion, b'g' | b'G');
-            let digits = if general {
-                precision.max(1)
-            } else {
-                precision + 1
-            };
-            let scientific = Text::format(format_args!("{value:.p$e}", p = digits - 1));
-            let (mantissa, exponent) = scientific
-                .split_once('e')
-                .expect("scientific format includes exponent");
-            let exponent: i32 = exponent.parse().expect("formatted exponent is an integer");
-            if !general || exponent < -4 || exponent >= digits as i32 {
-                let mut mantissa = if general && !self.alternate {
-                    Text::copy(mantissa.trim_end_matches('0').trim_end_matches('.'))
-                } else {
-                    Text::copy(mantissa)
-                };
-                if self.alternate && !mantissa.contains('.') {
-                    mantissa.push('.');
-                }
-                Text::format(format_args!(
-                    "{mantissa}e{}{e:02}",
-                    if exponent < 0 { '-' } else { '+' },
-                    e = exponent.unsigned_abs()
-                ))
-            } else {
-                let p = (digits as i32 - 1 - exponent).max(0) as usize;
-                let fixed = Text::format(format_args!("{value:.p$}"));
-                if !self.alternate && fixed.contains('.') {
-                    Text::copy(fixed.trim_end_matches('0').trim_end_matches('.'))
-                } else if self.alternate && !fixed.contains('.') {
-                    let mut fixed = fixed;
-                    fixed.push('.');
-                    fixed
-                } else {
-                    fixed
-                }
-            }
+            self.scientific(value, precision)
         };
         if upper {
             body.make_ascii_uppercase();
         }
-        let mut bytes = buffer(memory, body.len() + 1)?;
+        let mut bytes = buffer(memory, body.len + 1)?;
         if negative {
             bytes.push(b'-');
         } else if self.plus {
@@ -292,7 +260,139 @@ impl Spec {
         result?;
         self.pad(bytes, prefix, self.zero && value.is_finite(), memory)
     }
+
+    fn scientific(&self, value: f64, precision: usize) -> Text {
+        let general = matches!(self.conversion, b'g' | b'G');
+        let digits = if general {
+            precision.max(1)
+        } else {
+            precision + 1
+        };
+        let mut text = Text::format(format_args!("{value:.p$e}", p = digits - 1));
+        let marker = text
+            .as_bytes()
+            .iter()
+            .rposition(|&byte| byte == b'e')
+            .expect("scientific format includes exponent");
+        let (sign, exponent) = match &text.as_bytes()[marker + 1..] {
+            [sign @ (b'-' | b'+'), exponent @ ..] => (*sign, exponent),
+            exponent => (b'+', exponent),
+        };
+        if general {
+            let magnitude = exponent
+                .iter()
+                .fold(0, |n, &byte| n * 10 + i32::from(byte - b'0'));
+            let exponent = if sign == b'-' { -magnitude } else { magnitude };
+            if (-4..digits as i32).contains(&exponent) {
+                let p = (digits as i32 - 1 - exponent) as usize;
+                let mut fixed = Text::format(format_args!("{value:.p$}"));
+                if p == 0 && self.alternate {
+                    fixed.push(b'.');
+                } else if p != 0 && !self.alternate {
+                    fixed.len = trimmed_fraction(fixed.as_bytes());
+                }
+                return fixed;
+            }
+        }
+
+        // Keep the rounded mantissa and exponent digits in the original buffer.
+        let exponent_len = exponent.len();
+        let mantissa_len = if general && !self.alternate {
+            trimmed_fraction(&text.bytes[..marker])
+        } else {
+            marker
+        };
+        let point = self.alternate && digits == 1;
+        let suffix = mantissa_len + usize::from(point);
+        let leading_zero = exponent_len == 1;
+        let exponent_start = suffix + 2 + usize::from(leading_zero);
+        text.bytes
+            .copy_within(text.len - exponent_len..text.len, exponent_start);
+        if point {
+            text.bytes[mantissa_len] = b'.';
+        }
+        text.bytes[suffix..suffix + 2].copy_from_slice(&[b'e', sign]);
+        if leading_zero {
+            text.bytes[suffix + 2] = b'0';
+        }
+        text.len = exponent_start + exponent_len;
+        text
+    }
 }
+
+fn trimmed_fraction(bytes: &[u8]) -> usize {
+    let end = bytes
+        .iter()
+        .rposition(|&byte| byte != b'0')
+        .map_or(0, |i| i + 1);
+    end - usize::from(bytes[..end].last() == Some(&b'.'))
+}
+
+#[cfg(test)]
+#[test]
+fn scientific_suffix_preserves_rounded_digits_and_exponent_width() {
+    for (conversion, alternate, precision, value, expected) in [
+        (b'e', true, 0, 0.0, "0.e+00"),
+        (b'e', false, 6, 0.00125, "1.250000e-03"),
+        (b'e', false, 6, f64::from_bits(1), "4.940656e-324"),
+        (b'g', false, 6, 999999.5, "1e+06"),
+        (b'g', true, 1, 1e101, "1.e+101"),
+        (b'g', false, 5, 0.0001, "0.0001"),
+        (b'g', true, 6, 100000., "100000."),
+    ] {
+        let spec = Spec {
+            conversion,
+            alternate,
+            ..Spec::default()
+        };
+        assert_eq!(
+            spec.scientific(value, precision).as_bytes(),
+            expected.as_bytes()
+        );
+    }
+}
+
+fn integer_digits<'a, const RADIX: u64>(
+    mut magnitude: u64,
+    alphabet: &'static [u8; 16],
+    storage: &'a mut [u8; 22],
+) -> &'a [u8] {
+    for (start, digit) in storage.iter_mut().enumerate().rev() {
+        *digit = alphabet[(magnitude % RADIX) as usize];
+        magnitude /= RADIX;
+        if magnitude == 0 {
+            return &storage[start..];
+        }
+    }
+    unreachable!("u64 fits in 22 digits for the supported radices")
+}
+
+#[cfg(test)]
+#[test]
+fn integer_digits_cover_each_radix_and_full_width() {
+    let mut storage = [0; 22];
+    let lower = b"0123456789abcdef";
+    let upper = b"0123456789ABCDEF";
+    for n in [0, 7, 8, 9, 10, 15, 16, 99, 100, 1 << 63, u64::MAX] {
+        assert_eq!(
+            integer_digits::<8>(n, lower, &mut storage),
+            format!("{n:o}").as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<10>(n, lower, &mut storage),
+            n.to_string().as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<16>(n, lower, &mut storage),
+            format!("{n:x}").as_bytes()
+        );
+        assert_eq!(
+            integer_digits::<16>(n, upper, &mut storage),
+            format!("{n:X}").as_bytes()
+        );
+    }
+}
+
 pub(crate) fn nan_body(n: f64) -> &'static str {
     if cfg!(windows) && n.to_bits() == 0xfff8000000000000 {
         "nan(ind)"
@@ -321,27 +421,40 @@ fn fail(message: &'static str) -> Error {
 }
 
 pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) -> Result<(), Error> {
+    const BLOCK: usize = 1024;
     let unescaped = bytes.len().checked_add(2).ok_or_else(Error::memory)?;
+    // Record one bit per block when the entire input fits in the mask.
+    let track = bytes.len() > BLOCK && bytes.len() <= BLOCK * u64::BITS as usize;
+    let mut escaped_blocks = 0u64;
     // A 4 KiB block adds at most 12 KiB, which fits in the narrow sum.
-    let size = bytes
-        .chunks(4096)
-        .try_fold(unescaped, |size, block| {
-            let extra: u16 = block
-                .iter()
-                .map(|&byte| match byte {
-                    0 => 3,
-                    b'"' | b'\\' | b'\n' | b'\r' => 1,
-                    _ => 0,
-                })
-                .sum();
-            size.checked_add(usize::from(extra))
+    let extra_bytes = |block: &[u8]| -> u16 {
+        block
+            .iter()
+            .map(|&byte| match byte {
+                0 => 3,
+                b'"' | b'\\' | b'\n' | b'\r' => 1,
+                _ => 0,
+            })
+            .sum()
+    };
+    let size = if track {
+        bytes
+            .chunks(BLOCK)
+            .enumerate()
+            .try_fold(unescaped, |size, (index, block)| {
+                let extra = extra_bytes(block);
+                escaped_blocks |= u64::from(extra != 0) << index;
+                size.checked_add(usize::from(extra))
+            })
+    } else {
+        bytes.chunks(4096).try_fold(unescaped, |size, block| {
+            size.checked_add(usize::from(extra_bytes(block)))
         })
-        .ok_or_else(Error::memory)?;
+    }
+    .ok_or_else(Error::memory)?;
     memory.reserve(out, size)?;
     out.push(b'"');
-    if size == unescaped {
-        out.extend_from_slice(bytes);
-    } else {
+    let write_escaped = |bytes: &[u8], out: &mut Buffer<u8>| {
         for &c in bytes {
             match c {
                 b'"' | b'\\' | b'\n' => {
@@ -353,9 +466,48 @@ pub(crate) fn quote(bytes: &[u8], out: &mut Buffer<u8>, memory: &mut Scratch) ->
                 _ => out.push(c),
             }
         }
+    };
+    if size == unescaped {
+        out.extend_from_slice(bytes);
+    } else if track && (escaped_blocks.trailing_ones() as usize) < bytes.len().div_ceil(BLOCK) {
+        let mut copied = 0;
+        while escaped_blocks != 0 {
+            let start = escaped_blocks.trailing_zeros() as usize * BLOCK;
+            let end = (start + BLOCK).min(bytes.len());
+            out.extend_from_slice(&bytes[copied..start]);
+            write_escaped(&bytes[start..end], out);
+            copied = end;
+            escaped_blocks &= escaped_blocks - 1;
+        }
+        out.extend_from_slice(&bytes[copied..]);
+    } else {
+        write_escaped(bytes, out);
     }
     out.push(b'"');
     Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn quoted_byte_runs_preserve_escapes_at_block_boundaries() {
+    let mut scratch = Scratch::new(Memory::default());
+    let mut output = buffer(&mut scratch, 8).unwrap();
+    output.extend_from_slice(b"prefix");
+    let mut input = [0xff; 2051];
+    input[1023] = b'\n';
+    input[2048] = 0;
+    input[2050] = b'\r';
+    quote(&input, &mut output, &mut scratch).unwrap();
+    let expected = [
+        b"prefix\"".as_slice(),
+        &[255; 1023],
+        b"\\\n",
+        &[255; 1024],
+        b"\\000\xff",
+        b"\\r\"",
+    ]
+    .concat();
+    assert_eq!(&*output, &expected);
 }
 
 pub(crate) fn buffer(memory: &mut Scratch, capacity: usize) -> Result<Buffer<u8>, Error> {
@@ -391,11 +543,12 @@ impl Text {
         value.write_fmt(args).expect("bounded numeric format");
         value
     }
-    fn clear(&mut self) {
-        self.len = 0;
+    fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..self.len]
     }
-    fn push(&mut self, byte: char) {
-        self.write_char(byte).expect("bounded numeric suffix");
+    fn push(&mut self, byte: u8) {
+        self.bytes[self.len] = byte;
+        self.len += 1;
     }
     fn make_ascii_uppercase(&mut self) {
         self.bytes[..self.len].make_ascii_uppercase();
@@ -408,17 +561,6 @@ impl std::fmt::Write for Text {
         target.copy_from_slice(text.as_bytes());
         self.len = end;
         Ok(())
-    }
-}
-impl std::ops::Deref for Text {
-    type Target = str;
-    fn deref(&self) -> &str {
-        std::str::from_utf8(&self.bytes[..self.len]).expect("formatted UTF-8")
-    }
-}
-impl std::fmt::Display for Text {
-    fn fmt(&self, output: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        output.write_str(self)
     }
 }
 

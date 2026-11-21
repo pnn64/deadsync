@@ -14,22 +14,25 @@ PAIRS = [
     ('native-retained', 'gif-retained'), ('native-stream', 'gif-stream'),
     ('native-rgba', 'gif-rgba'), ('native-rgba', 'image-rgba'),
 ]
+FIRST_MODES = {'native-first', 'native-copy-first', 'gif-asset-first', 'image-first'}
+FIRST_PAIRS = [('native-first', 'native-copy-first'),
+               ('native-first', 'gif-asset-first'), ('native-first', 'image-first')]
 
 
-def read(path):
+def read(path, required_modes=MODES):
     raw = path.read_bytes()
     text = raw.decode('utf-16' if raw[:2] in (b'\xff\xfe', b'\xfe\xff') else 'utf-8-sig')
     files = {}
     for row in csv.DictReader(io.StringIO(text), delimiter='\t'):
         file = row['file'].replace('\\', '/')
         mode = row['codec']
-        assert mode in MODES and mode not in files.get(file, {}), (file, mode)
+        assert mode in required_modes and mode not in files.get(file, {}), (file, mode)
         files.setdefault(file, {})[mode] = {
             key: int(row[key]) for key in ('ns', 'thread_cycles', 'alloc_calls', 'requested_bytes')
         }
     assert files
     for file, modes in files.items():
-        assert modes.keys() == MODES, (file, modes.keys())
+        assert modes.keys() == required_modes, (file, modes.keys())
     return files
 
 
@@ -46,8 +49,11 @@ def main():
     parser.add_argument('timings', type=Path)
     parser.add_argument('allocations', type=Path)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--first-frame', action='store_true')
     args = parser.parse_args()
-    times, allocations = read(args.timings), read(args.allocations)
+    modes = FIRST_MODES if args.first_frame else MODES
+    pairs = FIRST_PAIRS if args.first_frame else PAIRS
+    times, allocations = read(args.timings, modes), read(args.allocations, modes)
     assert times.keys() == allocations.keys(), 'Mismatched measured input sets'
     groups = {'all': list(times)}
     for file in times:
@@ -55,9 +61,9 @@ def main():
     summaries = {}
     for group, files in groups.items():
         summary = {'files': len(files), 'comparisons': {}}
-        for native, reference in PAIRS:
+        for native, reference in pairs:
             metrics = {}
-            for metric, table in [('thread_cycles', times), ('alloc_calls', allocations),
+            for metric, table in [('thread_cycles', times), ('ns', times), ('alloc_calls', allocations),
                                   ('requested_bytes', allocations)]:
                 actual = [table[file][native][metric] for file in files]
                 expected = [table[file][reference][metric] for file in files]

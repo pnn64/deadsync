@@ -1,0 +1,172 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/scanline.rs
+@@
+     let bpp = (channels * depth as usize).div_ceil(8);
++    let pixels = match &image.samples {
++        Samples::U8(pixels) if depth == 8 && !interlaced => Some(pixels.as_slice()),
++        _ => None,
++    };
+     let capacity = if filter == Filter::None {
+@@
+-    let mut row = vec![0; capacity];
+-    let uses_previous = !matches!(filter, Filter::None | Filter::Sub) && image.height > 1;
++    let mut row = if pixels.is_some() {
++        Vec::new()
++    } else {
++        vec![0; capacity]
++    };
++    let uses_previous = pixels.is_none()
++        && !matches!(filter, Filter::None | Filter::Sub)
++        && image.height > 1;
+@@
+-        row.resize(stride, 0);
++        if pixels.is_none() {
++            row.resize(stride, 0);
++        }
+         if uses_previous {
+@@
+-            pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
+-            let mut selected = 0;
+-            if filter == Filter::Adaptive && row_index != 0 && row == previous {
+-                // Up is zero; None/Sub can tie it only for an all-zero row.
+-                selected = if row.iter().all(|&byte| byte == 0) {
++            let (current, prior) = if let Some(pixels) = pixels {
++                let start = src_y * stride;
++                (
++                    &pixels[start..start + stride],
++                    &pixels[start.saturating_sub(stride)..start],
++                )
++            } else {
++                pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
++                (row.as_slice(), previous.as_slice())
++            };
++            let mut selected = 0;
++            if filter == Filter::Adaptive && row_index != 0 && current == prior {
++                // Up is zero; None/Sub can tie it only for an all-zero row.
++                selected = if current.iter().all(|&byte| byte == 0) {
+@@
+                     let value = if row_index == 0 {
+-                        filter_first::<true>(&row, bpp, kind, &mut candidate)
+-                    } else {
+-                        filter_into::<true>(&row, &previous, bpp, kind, &mut candidate)
++                        filter_first::<true>(current, bpp, kind, &mut candidate)
++                    } else {
++                        filter_into::<true>(current, prior, bpp, kind, &mut candidate)
+                     };
+@@
+                 if row_index == 0 {
+-                    filter_first::<false>(&row, bpp, selected, &mut best);
+-                } else {
+-                    filter_into::<false>(&row, &previous, bpp, selected, &mut best);
++                    filter_first::<false>(current, bpp, selected, &mut best);
++                } else {
++                    filter_into::<false>(current, prior, bpp, selected, &mut best);
+                 }
+*** Update File: /github/deadsync/crates/deadlib-image/png/src/stream/encode_rows.rs
+@@
+-use crate::{Error, Filter, Image, reserve, scanline};
+-
+-pub(super) struct Rows<'a> {
+-    image: &'a Image,
++use crate::{Error, Filter, Image, Samples, reserve, scanline};
++
++pub(super) struct Rows<'a> {
++    image: &'a Image,
++    pixels: Option<&'a [u8]>,
+     interlaced: bool,
+@@
+-        Ok(Self {
+-            image,
++        let pixels = match &image.samples {
++            Samples::U8(pixels) if image.bit_depth == 8 && !interlaced => Some(pixels.as_slice()),
++            _ => None,
++        };
++        Ok(Self {
++            image,
++            pixels,
+             interlaced,
+@@
+                 if self.filter != Filter::None {
+-                    resize(&mut self.row, bytes)?;
+-                    if self.filter != Filter::Sub && self.height > 1 {
+-                        resize(&mut self.previous, bytes)?;
++                    if self.pixels.is_none() {
++                        resize(&mut self.row, bytes)?;
++                        if self.filter != Filter::Sub && self.height > 1 {
++                            resize(&mut self.previous, bytes)?;
++                        }
+                     }
+                     if self.filter == Filter::Adaptive {
+@@
+-        scanline::pack_row(
+-            self.image,
+-            y,
+-            self.x as usize,
+-            self.dx as usize,
+-            self.width,
+-            &mut self.row,
+-        );
+-        let bpp = (self.image.color_type.channels() * self.image.bit_depth as usize).div_ceil(8);
+-        let mut selected = self.filter as u8;
+-        if self.filter == Filter::Adaptive && self.index != 0 && self.row == self.previous {
+-            // Up is zero; None/Sub can tie it only for an all-zero row.
+-            selected = if self.row.iter().all(|&byte| byte == 0) {
++        let (row, previous) = if let Some(pixels) = self.pixels {
++            let stride = self.output.len() - 1;
++            let start = y * stride;
++            (
++                &pixels[start..start + stride],
++                &pixels[start.saturating_sub(stride)..start],
++            )
++        } else {
++            scanline::pack_row(
++                self.image,
++                y,
++                self.x as usize,
++                self.dx as usize,
++                self.width,
++                &mut self.row,
++            );
++            (self.row.as_slice(), self.previous.as_slice())
++        };
++        let bpp = (self.image.color_type.channels() * self.image.bit_depth as usize).div_ceil(8);
++        let mut selected = self.filter as u8;
++        if self.filter == Filter::Adaptive && self.index != 0 && row == previous {
++            // Up is zero; None/Sub can tie it only for an all-zero row.
++            selected = if row.iter().all(|&byte| byte == 0) {
+@@
+                 let score = if self.index == 0 {
+-                    scanline::filter_first::<true>(&self.row, bpp, kind, &mut self.candidate[1..])
+-                } else {
+-                    scanline::filter_into::<true>(
+-                        &self.row,
+-                        &self.previous,
+-                        bpp,
+-                        kind,
+-                        &mut self.candidate[1..],
+-                    )
++                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..])
++                } else {
++                    scanline::filter_into::<true>(row, previous, bpp, kind, &mut self.candidate[1..])
+                 };
+@@
+             if self.index == 0 {
+-                scanline::filter_first::<false>(&self.row, bpp, selected, &mut self.output[1..]);
+-            } else {
+-                scanline::filter_into::<false>(
+-                    &self.row,
+-                    &self.previous,
+-                    bpp,
+-                    selected,
+-                    &mut self.output[1..],
+-                );
++                scanline::filter_first::<false>(row, bpp, selected, &mut self.output[1..]);
++            } else {
++                scanline::filter_into::<false>(row, previous, bpp, selected, &mut self.output[1..]);
+             }
+@@
+-        if self.filter != Filter::Sub && self.index < self.height {
++        if self.pixels.is_none() && self.filter != Filter::Sub && self.index < self.height {
+             core::mem::swap(&mut self.row, &mut self.previous);
+         }
+*** End Patch

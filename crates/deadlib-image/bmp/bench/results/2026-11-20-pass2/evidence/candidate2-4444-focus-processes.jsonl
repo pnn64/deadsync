@@ -1,0 +1,88 @@
+{"utc": "2026-11-20T22:05:20.172128+00:00", "run": "candidate2-4444-focus-before-decode-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:20.217122+00:00", "run": "candidate2-4444-focus-before-decode-rgb555", "own_pids": [23460], "external": []}
+{"utc": "2026-11-20T22:05:22.245916+00:00", "run": "candidate2-4444-focus-before-decode-rgb555", "own_pids": [3088, 23460, 45364], "external": []}
+{"utc": "2026-11-20T22:05:24.278017+00:00", "run": "candidate2-4444-focus-before-decode-rgb555", "own_pids": [3088, 23460, 45364], "external": []}
+{"utc": "2026-11-20T22:05:25.099034+00:00", "run": "candidate2-4444-focus-before-decode-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:25.119103+00:00", "run": "candidate2-4444-focus-after-decode-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:25.160341+00:00", "run": "candidate2-4444-focus-after-decode-rgb555", "own_pids": [40616], "external": []}
+{"utc": "2026-11-20T22:05:27.194309+00:00", "run": "candidate2-4444-focus-after-decode-rgb555", "own_pids": [39860, 40616, 41908], "external": []}
+{"utc": "2026-11-20T22:05:29.224301+00:00", "run": "candidate2-4444-focus-after-decode-rgb555", "own_pids": [39860, 40616, 41908], "external": []}
+{"utc": "2026-11-20T22:05:30.134166+00:00", "run": "candidate2-4444-focus-after-decode-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:30.155882+00:00", "run": "candidate2-4444-focus-after-owned-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:30.226159+00:00", "run": "candidate2-4444-focus-after-owned-rgb555", "own_pids": [38020], "external": []}
+{"utc": "2026-11-20T22:05:32.260028+00:00", "run": "candidate2-4444-focus-after-owned-rgb555", "own_pids": [38020, 39292, 44264], "external": []}
+{"utc": "2026-11-20T22:05:34.290693+00:00", "run": "candidate2-4444-focus-after-owned-rgb555", "own_pids": [38020, 39292, 44264], "external": []}
+{"utc": "2026-11-20T22:05:35.164813+00:00", "run": "candidate2-4444-focus-after-owned-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:35.182745+00:00", "run": "candidate2-4444-focus-before-owned-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:35.223140+00:00", "run": "candidate2-4444-focus-before-owned-rgb555", "own_pids": [25508], "external": []}
+{"utc": "2026-11-20T22:05:37.250060+00:00", "run": "candidate2-4444-focus-before-owned-rgb555", "own_pids": [25508, 41300, 46184], "external": []}
+{"utc": "2026-11-20T22:05:39.276558+00:00", "run": "candidate2-4444-focus-before-owned-rgb555", "own_pids": [25508, 41300, 46184], "external": []}
+{"utc": "2026-11-20T22:05:40.147914+00:00", "run": "candidate2-4444-focus-before-owned-rgb555", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:40.169859+00:00", "run": "candidate2-4444-focus-before-decode-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:40.221935+00:00", "run": "candidate2-4444-focus-before-decode-rgb565", "own_pids": [7300], "external": []}
+{"utc": "2026-11-20T22:05:42.248961+00:00", "run": "candidate2-4444-focus-before-decode-rgb565", "own_pids": [7300, 32552, 40424], "external": []}
+{"utc": "2026-11-20T22:05:44.281035+00:00", "run": "candidate2-4444-focus-before-decode-rgb565", "own_pids": [7300, 32552, 40424], "external": []}
+{"utc": "2026-11-20T22:05:45.050291+00:00", "run": "candidate2-4444-focus-before-decode-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:45.071403+00:00", "run": "candidate2-4444-focus-after-decode-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:45.113426+00:00", "run": "candidate2-4444-focus-after-decode-rgb565", "own_pids": [30952], "external": []}
+{"utc": "2026-11-20T22:05:47.137419+00:00", "run": "candidate2-4444-focus-after-decode-rgb565", "own_pids": [10868, 17764, 30952], "external": []}
+{"utc": "2026-11-20T22:05:49.165690+00:00", "run": "candidate2-4444-focus-after-decode-rgb565", "own_pids": [10868, 17764, 30952], "external": []}
+{"utc": "2026-11-20T22:05:49.976921+00:00", "run": "candidate2-4444-focus-after-decode-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:49.999797+00:00", "run": "candidate2-4444-focus-after-owned-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:50.042772+00:00", "run": "candidate2-4444-focus-after-owned-rgb565", "own_pids": [31544], "external": []}
+{"utc": "2026-11-20T22:05:52.075143+00:00", "run": "candidate2-4444-focus-after-owned-rgb565", "own_pids": [12496, 31544, 44376], "external": []}
+{"utc": "2026-11-20T22:05:54.105981+00:00", "run": "candidate2-4444-focus-after-owned-rgb565", "own_pids": [12496, 31544, 44376], "external": []}
+{"utc": "2026-11-20T22:05:55.804280+00:00", "run": "candidate2-4444-focus-after-owned-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:55.826161+00:00", "run": "candidate2-4444-focus-before-owned-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:05:55.868530+00:00", "run": "candidate2-4444-focus-before-owned-rgb565", "own_pids": [31212], "external": []}
+{"utc": "2026-11-20T22:05:57.936167+00:00", "run": "candidate2-4444-focus-before-owned-rgb565", "own_pids": [24364, 30768, 31212], "external": []}
+{"utc": "2026-11-20T22:05:59.967566+00:00", "run": "candidate2-4444-focus-before-owned-rgb565", "own_pids": [24364, 30768, 31212], "external": []}
+{"utc": "2026-11-20T22:06:01.659891+00:00", "run": "candidate2-4444-focus-before-owned-rgb565", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:01.682053+00:00", "run": "candidate2-4444-focus-before-decode-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:01.735304+00:00", "run": "candidate2-4444-focus-before-decode-rgb333", "own_pids": [14148], "external": []}
+{"utc": "2026-11-20T22:06:03.770980+00:00", "run": "candidate2-4444-focus-before-decode-rgb333", "own_pids": [4600, 14148, 47140], "external": []}
+{"utc": "2026-11-20T22:06:05.809341+00:00", "run": "candidate2-4444-focus-before-decode-rgb333", "own_pids": [4600, 14148, 47140], "external": []}
+{"utc": "2026-11-20T22:06:06.636222+00:00", "run": "candidate2-4444-focus-before-decode-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:06.656610+00:00", "run": "candidate2-4444-focus-after-decode-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:06.708411+00:00", "run": "candidate2-4444-focus-after-decode-rgb333", "own_pids": [29956], "external": []}
+{"utc": "2026-11-20T22:06:08.745018+00:00", "run": "candidate2-4444-focus-after-decode-rgb333", "own_pids": [29956, 32624, 46104], "external": []}
+{"utc": "2026-11-20T22:06:10.768005+00:00", "run": "candidate2-4444-focus-after-decode-rgb333", "own_pids": [29956, 32624, 46104], "external": []}
+{"utc": "2026-11-20T22:06:11.608448+00:00", "run": "candidate2-4444-focus-after-decode-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:11.626879+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:11.676496+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [10196], "external": []}
+{"utc": "2026-11-20T22:06:13.707973+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [10196, 39056, 42484], "external": []}
+{"utc": "2026-11-20T22:06:15.732872+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [10196, 39056, 42484], "external": []}
+{"utc": "2026-11-20T22:06:17.753754+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [10196, 39056, 42484], "external": []}
+{"utc": "2026-11-20T22:06:19.789249+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [10196, 39056, 42484], "external": []}
+{"utc": "2026-11-20T22:06:20.193004+00:00", "run": "candidate2-4444-focus-after-owned-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:20.214950+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:20.258666+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [48736], "external": []}
+{"utc": "2026-11-20T22:06:22.295227+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [11928, 32404, 48736], "external": []}
+{"utc": "2026-11-20T22:06:24.325459+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [11928, 32404, 48736], "external": []}
+{"utc": "2026-11-20T22:06:26.349786+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [11928, 32404, 48736], "external": []}
+{"utc": "2026-11-20T22:06:28.372429+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [11928, 32404, 48736], "external": []}
+{"utc": "2026-11-20T22:06:28.649469+00:00", "run": "candidate2-4444-focus-before-owned-rgb333", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:28.668690+00:00", "run": "candidate2-4444-focus-before-decode-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:28.709642+00:00", "run": "candidate2-4444-focus-before-decode-rgba4444", "own_pids": [25116], "external": []}
+{"utc": "2026-11-20T22:06:30.733042+00:00", "run": "candidate2-4444-focus-before-decode-rgba4444", "own_pids": [25116, 45968, 46668], "external": []}
+{"utc": "2026-11-20T22:06:32.765673+00:00", "run": "candidate2-4444-focus-before-decode-rgba4444", "own_pids": [25116, 45968, 46668], "external": []}
+{"utc": "2026-11-20T22:06:33.780252+00:00", "run": "candidate2-4444-focus-before-decode-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:33.802901+00:00", "run": "candidate2-4444-focus-after-decode-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:33.846651+00:00", "run": "candidate2-4444-focus-after-decode-rgba4444", "own_pids": [31292], "external": []}
+{"utc": "2026-11-20T22:06:35.878163+00:00", "run": "candidate2-4444-focus-after-decode-rgba4444", "own_pids": [3564, 31292, 36720], "external": []}
+{"utc": "2026-11-20T22:06:37.914195+00:00", "run": "candidate2-4444-focus-after-decode-rgba4444", "own_pids": [3564, 31292, 36720], "external": []}
+{"utc": "2026-11-20T22:06:38.931241+00:00", "run": "candidate2-4444-focus-after-decode-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:38.953272+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:38.995167+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [30524], "external": []}
+{"utc": "2026-11-20T22:06:41.022154+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [30524, 43956, 48520], "external": []}
+{"utc": "2026-11-20T22:06:43.053360+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [30524, 43956, 48520], "external": []}
+{"utc": "2026-11-20T22:06:45.085563+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [30524, 43956, 48520], "external": []}
+{"utc": "2026-11-20T22:06:47.107528+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [30524, 43956, 48520], "external": []}
+{"utc": "2026-11-20T22:06:47.736088+00:00", "run": "candidate2-4444-focus-after-owned-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:47.758109+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:06:47.801775+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [10920], "external": []}
+{"utc": "2026-11-20T22:06:49.835030+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [4788, 10920, 16292], "external": []}
+{"utc": "2026-11-20T22:06:51.872727+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [4788, 10920, 16292], "external": []}
+{"utc": "2026-11-20T22:06:53.900014+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [4788, 10920, 16292], "external": []}
+{"utc": "2026-11-20T22:06:55.935207+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [4788, 10920, 16292], "external": []}
+{"utc": "2026-11-20T22:06:56.413200+00:00", "run": "candidate2-4444-focus-before-owned-rgba4444", "own_pids": [], "external": []}

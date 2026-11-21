@@ -22,7 +22,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{
     DelaySegment, ScrollSegment, StopSegment, TimeSignatureSegment, TimingData,
 };
-use deadsync_theme::NotefieldHudStyle;
+use deadsync_core::hud_style::NotefieldHudStyle;
 
 /// Screen and player geometry supplied by the gameplay presentation boundary.
 #[derive(Clone, Copy, Debug)]

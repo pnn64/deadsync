@@ -412,6 +412,30 @@ fn replacement_literals_preserve_escapes_at_output_buffer_boundaries() {
 }
 
 #[test]
+fn substitutions_skip_required_classes_across_buffer_flushes() {
+    let program = compile(
+        br#"
+        for _, length in ipairs{511,512,513,8191,8192,8193} do
+            local prefix = string.rep('\255', length)
+            local subject = prefix .. '42' .. prefix
+            local replaced, hits = string.gsub(subject, '[0-9]+', 'x')
+            assert(hits == 1 and replaced == prefix .. 'x' .. prefix)
+            local untouched, misses = string.gsub(prefix, '%d[', 'x')
+            assert(misses == 0 and untouched == prefix)
+            local ok, message = pcall(string.gsub, subject, '%d[', 'x')
+            assert(not ok and message:find("missing ']'", 1, true))
+        end
+        return true
+    "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
+#[test]
 fn formatted_strings_and_platform_integer_width() {
     for source in [
         "return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)",
@@ -448,6 +472,57 @@ fn table_operations_are_raw_and_callbacks_can_stop_or_mutate() {
         "return pcall(table.setn,{})",
     ] {
         compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn concat_array_ranges_preserve_separators_and_report_holes() {
+    let program = compile(
+        br#"
+        local t = {'a', 12, nil, 'b'; [0]='start'}
+        assert(table.concat(t, '\0', 1, 2) == 'a\0' .. '12')
+        local ok, err = pcall(table.concat, t, '/', 2, 4)
+        assert(not ok and err:find('invalid value (nil) at index 3', 1, true))
+        t[3] = ''
+        assert(table.concat(t, '|', 1, 4) == 'a|12||b')
+        assert(table.concat(t, '|', 0, 4) == 'start|a|12||b')
+        return table.concat(t, 'x', 4, 3)
+    "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        let [Value::String(empty)] = *vm.execute(&program).unwrap() else {
+            panic!("empty concatenation returns a string");
+        };
+        assert_eq!(vm.string_bytes(empty), Some(b"".as_slice()));
+    }
+}
+
+#[test]
+fn maxn_uses_only_live_numeric_keys_in_both_table_layouts() {
+    let program = compile(
+        br#"
+        local t = {true, false, nil, true; ['900']=true, [-10]=true}
+        t[4] = nil
+        setmetatable(t, {__index=function() error('raw lookup expected') end})
+        assert(table.maxn(t) == 2)
+        t[100.5] = false
+        assert(table.maxn(t) == 100.5)
+        t[101] = true
+        assert(table.maxn(t) == 101)
+        t[math.huge] = true
+        assert(table.maxn(t) == math.huge)
+        t[math.huge], t[101], t[100.5], t[2], t[1] = nil, nil, nil, nil, nil
+        assert(table.maxn(t) == 0)
+        return 1 / table.maxn({[-0.0]=true})
+    "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        assert_eq!(
+            vm.execute(&program).unwrap(),
+            &[Value::Number(f64::INFINITY)]
+        );
     }
 }
 

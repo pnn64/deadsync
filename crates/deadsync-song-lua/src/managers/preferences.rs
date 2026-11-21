@@ -1,6 +1,7 @@
 //! Preference defaults and the production manager's mutable Lua value store.
 use super::*;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 struct Defaults {
     offset: f32,
@@ -9,6 +10,7 @@ struct Defaults {
     height: i32,
     renderers: String,
     driver: String,
+    pad_stick_seconds: Arc<AtomicU32>,
 }
 
 #[derive(Clone, Copy)]
@@ -24,7 +26,11 @@ struct Binding {
     operation: Operation,
 }
 
-pub(super) fn install(vm: &mut Vm, context: &crate::SongLuaCompileContext) -> Result<(), Error> {
+pub(super) fn install(
+    vm: &mut Vm,
+    context: &crate::SongLuaCompileContext,
+    pad_stick_seconds: Arc<AtomicU32>,
+) -> Result<(), Error> {
     let manager = vm.try_new_table()?;
     let manager_root = vm.pin(Value::Table(manager))?;
     let store = vm.try_new_table()?;
@@ -44,6 +50,7 @@ pub(super) fn install(vm: &mut Vm, context: &crate::SongLuaCompileContext) -> Re
             height: context.display_height.max(0.).round() as i32,
             renderers: context.video_renderers.clone(),
             driver: context.last_seen_video_driver.clone(),
+            pad_stick_seconds,
         });
         let globals = vm.get_global(b"_G")?;
         let tonumber = vm.get_global(b"tonumber")?;
@@ -128,6 +135,31 @@ fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
             _ => manager,
         });
     };
+    if key.eq_ignore_ascii_case("PadStickSeconds") {
+        return match operation {
+            Operation::Get => call.push(Value::Number(f32::from_bits(
+                defaults.pad_stick_seconds.load(Ordering::Relaxed),
+            ) as f64)),
+            Operation::Exists => call.push(Value::Boolean(true)),
+            Operation::Set => {
+                let value = call.arguments().get(offset + 1).copied().unwrap_or(Value::Nil);
+                // Preference<float> uses lua_tonumber: numeric strings convert,
+                // while nonnumeric values overwrite the preference with zero.
+                let converted = call.call(call.captures()[3], &[value])?;
+                let seconds = match converted.first() {
+                    Some(Value::Number(value)) => *value as f32,
+                    _ => 0.0,
+                };
+                defaults.pad_stick_seconds.store(seconds.to_bits(), Ordering::Relaxed);
+                call.push(manager)
+            }
+            Operation::Reset => {
+                defaults.pad_stick_seconds.store(0.0_f32.to_bits(), Ordering::Relaxed);
+                call.push(manager)
+            }
+            Operation::Save => unreachable!(),
+        };
+    }
     let key_value = call.try_intern(key.as_bytes())?;
     match operation {
         Operation::Get => {

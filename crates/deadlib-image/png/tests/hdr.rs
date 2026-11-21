@@ -1,7 +1,7 @@
 use deadlib_image_png::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, DecodeEvent, DecodeOptions, DecodeStatus,
-    EncodeOptions, Error, Limits, Metadata, Png, StreamDecoder, decode, decode_reader,
-    decode_with_options, encode, encode_writer,
+    EncodeOptions, Error, Limits, Metadata, MetadataPolicy, Png, StreamDecoder, decode,
+    decode_reader, decode_with_options, encode, encode_writer,
 };
 use std::io::{self, Read};
 #[allow(dead_code)]
@@ -10,6 +10,13 @@ mod chunks;
 #[path = "support/hdr.rs"]
 mod hdr;
 use hdr::Hdr;
+
+fn strict() -> DecodeOptions {
+    DecodeOptions {
+        metadata_policy: MetadataPolicy::Strict,
+        ..Default::default()
+    }
+}
 
 struct Fragments<'a>(&'a [u8], usize);
 impl Read for Fragments<'_> {
@@ -80,7 +87,14 @@ fn reference(bytes: &[u8], h: &Hdr, color: u8, depth: u8) {
     reader.finish().unwrap();
 }
 fn push_metadata(bytes: &[u8]) -> Result<Vec<Metadata>, Error> {
-    let mut decoder = StreamDecoder::new(Default::default());
+    push_metadata_with_options(bytes, DecodeOptions::default())
+}
+
+fn push_metadata_with_options(
+    bytes: &[u8],
+    options: DecodeOptions,
+) -> Result<Vec<Metadata>, Error> {
+    let mut decoder = StreamDecoder::new(options);
     let (mut offset, mut result) = (0, Vec::new());
     loop {
         let end = bytes.len().min(offset + 1);
@@ -166,7 +180,7 @@ fn all_hdr_field_bytes_integer_boundaries_and_native_reference_values() {
     let (mut valid, mut invalid) = (0, 0);
     let recovery = DecodeOptions {
         animation_policy: AnimationPolicy::RecoverDefault,
-        ..Default::default()
+        ..strict()
     };
     for (label, h) in hdr::byte_cases().chain(hdr::boundary_cases()) {
         let bytes = h.fixture(2, 8, false);
@@ -187,10 +201,16 @@ fn all_hdr_field_bytes_integer_boundaries_and_native_reference_values() {
             reference(&bytes, &h, 2, 8);
             valid += 1;
         } else {
-            assert!(matches!(decode(&bytes), Err(Error::Invalid(_))), "{label}");
             assert!(
                 matches!(
-                    decode_reader(Fragments(&bytes, 1), &Default::default()),
+                    decode_with_options(&bytes, &strict()),
+                    Err(Error::Invalid(_))
+                ),
+                "{label}"
+            );
+            assert!(
+                matches!(
+                    decode_reader(Fragments(&bytes, 1), &strict()),
                     Err(Error::Invalid(_))
                 ),
                 "{label}"
@@ -203,7 +223,10 @@ fn all_hdr_field_bytes_integer_boundaries_and_native_reference_values() {
                 "{label}"
             );
             assert!(
-                matches!(push_metadata(&bytes), Err(Error::Invalid(_))),
+                matches!(
+                    push_metadata_with_options(&bytes, strict()),
+                    Err(Error::Invalid(_))
+                ),
                 "{label}"
             );
             let png = expected(&h, 2, 8, false);
@@ -228,9 +251,13 @@ fn hdr_chunk_lengths_dependency_order_duplicates_and_resource_budget() {
             let extra: Vec<_> = data.iter().map(|(k, d)| chunks::chunk(*k, d)).collect();
             let bytes = hdr::fixture(3, 2, false, &extra);
             let valid = len == payloads[target].1.len();
-            assert_eq!(decode(&bytes).is_ok(), valid, "{target}/{len}");
             assert_eq!(
-                decode_reader(Fragments(&bytes, 1), &Default::default()).is_ok(),
+                decode_with_options(&bytes, &strict()).is_ok(),
+                valid,
+                "{target}/{len}"
+            );
+            assert_eq!(
+                decode_reader(Fragments(&bytes, 1), &strict()).is_ok(),
                 valid
             );
             let mut png = expected(&h, 3, 2, false);
@@ -256,9 +283,13 @@ fn hdr_chunk_lengths_dependency_order_duplicates_and_resource_budget() {
         c.push(core[3].clone());
         let bytes = chunks::file(&c);
         let valid = order[3..] == [3, 4];
-        assert_eq!(decode(&bytes).is_ok(), valid, "{order:?}");
         assert_eq!(
-            decode_reader(Fragments(&bytes, 1), &Default::default()).is_ok(),
+            decode_with_options(&bytes, &strict()).is_ok(),
+            valid,
+            "{order:?}"
+        );
+        assert_eq!(
+            decode_reader(Fragments(&bytes, 1), &strict()).is_ok(),
             valid
         );
         total += 1;
@@ -269,8 +300,8 @@ fn hdr_chunk_lengths_dependency_order_duplicates_and_resource_budget() {
         let mut extra = extra.clone();
         extra.push(extra[target].clone());
         let bytes = hdr::fixture(2, 8, false, &extra);
-        assert!(decode(&bytes).is_err());
-        assert!(decode_reader(Fragments(&bytes, 1), &Default::default()).is_err());
+        assert!(decode_with_options(&bytes, &strict()).is_err());
+        assert!(decode_reader(Fragments(&bytes, 1), &strict()).is_err());
         let mut png = expected(&h, 2, 8, false);
         png.ancillary.push(png.ancillary[target].clone());
         assert!(encode(&png, &Default::default()).is_err());
@@ -281,9 +312,9 @@ fn hdr_chunk_lengths_dependency_order_duplicates_and_resource_budget() {
     for selected in [&extra[1..2], &extra[2..3]] {
         let bytes = hdr::fixture(2, 8, false, selected);
         let valid = selected[0][4..8] == *b"cLLI";
-        assert_eq!(decode(&bytes).is_ok(), valid);
+        assert_eq!(decode_with_options(&bytes, &strict()).is_ok(), valid);
         assert_eq!(
-            decode_reader(Fragments(&bytes, 1), &Default::default()).is_ok(),
+            decode_reader(Fragments(&bytes, 1), &strict()).is_ok(),
             valid
         );
     }

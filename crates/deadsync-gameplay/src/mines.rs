@@ -151,29 +151,6 @@ pub fn closest_lane_note_ns<I: Copy + Into<usize>>(
 
 #[inline(always)]
 #[must_use]
-pub fn crossed_mine_bounds_ns(
-    mine_times_ns: &[SongTimeNs],
-    prev_time_ns: SongTimeNs,
-    current_time_ns: SongTimeNs,
-) -> (usize, usize) {
-    (
-        mine_times_ns.partition_point(|&t| t <= prev_time_ns),
-        mine_times_ns.partition_point(|&t| t <= current_time_ns),
-    )
-}
-
-#[inline(always)]
-#[must_use]
-pub const fn crossed_held_mine_can_hit(note: &Note, column: usize) -> bool {
-    matches!(note.note_type, NoteType::Mine)
-        && note.can_be_judged
-        && note.mine_result.is_none()
-        && !note.is_fake
-        && note.column == column
-}
-
-#[inline(always)]
-#[must_use]
 pub fn mine_hit_offset_in_window(
     time_error_music_ns: SongTimeNs,
     mine_window_music_ns: SongTimeNs,
@@ -307,52 +284,6 @@ pub fn collect_pending_mine_hit_events<I: Copy + Into<usize>>(
         event_count,
         stopped: false,
     }
-}
-
-pub fn mark_crossed_held_mine_candidates<I: Copy + Into<usize>>(
-    notes: &mut [Note],
-    mine_note_ix: &[I],
-    mine_note_time_ns: &[SongTimeNs],
-    column: usize,
-    prev_time_ns: SongTimeNs,
-    current_time_ns: SongTimeNs,
-    mine_window_music_ns: SongTimeNs,
-    music_rate: f32,
-    mut on_mark: impl FnMut(usize, MineHitMark),
-) -> bool {
-    if song_time_ns_invalid(prev_time_ns)
-        || song_time_ns_invalid(current_time_ns)
-        || current_time_ns <= prev_time_ns
-    {
-        return false;
-    }
-
-    let (start_idx, end_idx) =
-        crossed_mine_bounds_ns(mine_note_time_ns, prev_time_ns, current_time_ns);
-    let mut hit_any = false;
-    for i in start_idx..end_idx {
-        let Some(&note_index) = mine_note_ix.get(i) else {
-            continue;
-        };
-        let note_index = note_index.into();
-        let Some(note) = notes.get_mut(note_index) else {
-            continue;
-        };
-        if !crossed_held_mine_can_hit(note, column) {
-            continue;
-        }
-        let Some(&note_time_ns) = mine_note_time_ns.get(i) else {
-            continue;
-        };
-        let Some(mark) =
-            mark_mine_hit_candidate(note, note_time_ns, 0, mine_window_music_ns, music_rate)
-        else {
-            continue;
-        };
-        on_mark(note_index, mark);
-        hit_any = true;
-    }
-    hit_any
 }
 
 #[inline(always)]
@@ -564,32 +495,6 @@ pub fn finalize_completed_mine_avoidance_for_players(
         players_finalized: active_players,
         mines_avoided,
     }
-}
-
-#[inline(always)]
-#[must_use]
-pub fn crossed_mine_held_start_time(
-    now_down: bool,
-    was_down: bool,
-    pressed_since_ns: Option<SongTimeNs>,
-    previous_music_time_ns: SongTimeNs,
-    current_music_time_ns: SongTimeNs,
-) -> Option<SongTimeNs> {
-    if !now_down
-        || song_time_ns_invalid(previous_music_time_ns)
-        || song_time_ns_invalid(current_music_time_ns)
-        || current_music_time_ns <= previous_music_time_ns
-    {
-        return None;
-    }
-    if was_down {
-        return Some(previous_music_time_ns);
-    }
-    let pressed_since_ns = pressed_since_ns?;
-    if song_time_ns_invalid(pressed_since_ns) || pressed_since_ns >= current_music_time_ns {
-        return None;
-    }
-    Some(pressed_since_ns.max(previous_music_time_ns))
 }
 
 #[inline(always)]

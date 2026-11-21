@@ -1,0 +1,3 @@
+    Checking deadlib-image-bmp v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\bmp)
+    Checking bmp-codec-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\bmp\bench)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.81s

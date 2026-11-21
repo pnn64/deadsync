@@ -780,6 +780,7 @@ fn make_course_song(meta: &CourseMeta) -> SongData {
         first_second: 0.0,
         total_length_seconds: meta.total_length_seconds.max(0),
         precise_last_second_seconds: meta.total_length_seconds.max(0) as f32,
+        precise_note_first_second_seconds: None,
         precise_note_last_second_seconds: Some(meta.total_length_seconds.max(0) as f32),
         last_second_hint: 0.0,
         charts: Vec::new(),
@@ -984,12 +985,7 @@ fn build_init_data(init_view: &SelectCourseInitView) -> InitData {
             total_length_seconds: meta_total_length_seconds,
             has_random_entries,
             has_most_played_entries,
-            course_type: match course_type {
-                course::CourseType::Nonstop => CourseTypeView::Nonstop,
-                course::CourseType::Oni => CourseTypeView::Oni,
-                course::CourseType::Endless => CourseTypeView::Endless,
-                course::CourseType::Survival => CourseTypeView::Survival,
-            },
+            course_type,
             lives: course.lives,
         });
 
@@ -3143,6 +3139,7 @@ mod song_lookup_tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: chart_hashes.iter().map(|hash| chart(hash)).collect(),

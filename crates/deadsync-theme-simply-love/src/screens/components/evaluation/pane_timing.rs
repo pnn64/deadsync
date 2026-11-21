@@ -351,6 +351,7 @@ fn timing_pane_actor(
             size: [SizeSpec::Px(pane_width), SizeSpec::Px(graph_area_height)],
             tint: [1.0; 4],
             vertices: mesh.clone(),
+            vertex_color_encoding: Default::default(),
             visible: true,
             blend: BlendMode::Alpha,
             z: 0,

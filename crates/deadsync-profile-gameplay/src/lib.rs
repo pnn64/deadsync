@@ -216,6 +216,8 @@ pub const fn gameplay_config_from_config(
         mine_hit_sound: cfg.mine_hit_sound,
         default_fail_type: gameplay_fail_type_from_config(cfg.default_fail_type),
         global_offset_seconds: cfg.global_offset_seconds,
+        pad_stick_seconds: cfg.pad_stick_seconds,
+        input_debounce_seconds: cfg.input_debounce_seconds,
         visual_delay_seconds: cfg.visual_delay_seconds,
         note_scroll_clock: gameplay_note_scroll_clock_from_config(cfg.note_scroll_clock),
         machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
@@ -447,10 +449,13 @@ fn song_lua_compile_player_screen_x(
 #[must_use]
 pub fn song_lua_catalog_note_bounds(song: &deadsync_chart::SongData, offset: f32, rate: f32, sync_offset: f32) -> [f32; 2] {
     let specified_last = if song.last_second_hint > 0.0 { song.last_second_hint } else { -1.0 };
-    let first = (song.precise_first_second() - sync_offset) - rate * offset;
+    let first = song.precise_note_first_second_seconds
+        .map(|seconds| (seconds - sync_offset) - rate * offset);
     let last = song.precise_note_last_second_seconds
         .map(|seconds| (seconds - sync_offset) - rate * offset).unwrap_or(-1.0).max(specified_last);
-    [if first < last { first } else { 0.0 }, last]
+    // Native applies catalog offsets to actual endpoints, then uses literal
+    // zero when first>=last. That fallback must never acquire another offset.
+    [first.filter(|first| *first < last).unwrap_or(0.0), last]
 }
 
 #[must_use]
@@ -636,6 +641,7 @@ pub fn song_lua_play_context(
         config.center_1player_notefield,
     );
     let (display_width, display_height) = display_size;
+    context.pad_stick_seconds = config.pad_stick_seconds;
     // These timings enter Lua before the core applies the cabinet/group offsets.
     // Match runtime_init's settings without substituting selected chart timing
     // for the global SongPosition maintained by ITGmania.
@@ -944,6 +950,37 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
 
     fn target_score(&self) -> deadsync_gameplay::GameplayTargetScoreSetting {
         gameplay_target_score_setting(self.target_score)
+    }
+
+    fn target_score_kind(&self) -> deadsync_gameplay::GameplayTargetScoreKind {
+        match self.mini_indicator_score_type {
+            deadsync_profile::MiniIndicatorScoreType::Itg => {
+                deadsync_gameplay::GameplayTargetScoreKind::Itg
+            }
+            deadsync_profile::MiniIndicatorScoreType::Ex => {
+                deadsync_gameplay::GameplayTargetScoreKind::Ex
+            }
+            deadsync_profile::MiniIndicatorScoreType::HardEx => {
+                deadsync_gameplay::GameplayTargetScoreKind::HardEx
+            }
+        }
+    }
+
+    fn target_score_miss_policy(&self) -> deadsync_gameplay::GameplayTargetScoreMissPolicy {
+        match self.target_score_miss_policy {
+            deadsync_profile::TargetScoreMissPolicy::Nothing => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::Nothing
+            }
+            deadsync_profile::TargetScoreMissPolicy::DimMiniIndicator => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::DimMiniIndicator
+            }
+            deadsync_profile::TargetScoreMissPolicy::Fail => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::Fail
+            }
+            deadsync_profile::TargetScoreMissPolicy::RestartSong => {
+                deadsync_gameplay::GameplayTargetScoreMissPolicy::RestartSong
+            }
+        }
     }
 
     fn timing_disabled_windows(&self) -> [bool; 5] {

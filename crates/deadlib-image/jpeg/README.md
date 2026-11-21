@@ -25,13 +25,33 @@ Higher-precision, lossless and hierarchical inputs use their native
 reconstruction paths. The coefficient and planar APIs below retain their
 precision, component, and metadata representations.
 
+`decode_with_options(jpeg, options, Upsampling::Linear)` accepts `DecodeOptions`
+with explicit `limits` and `strict` fields. The default and existing decoding
+entry points remain strict. Set `strict: false` for imported assets that contain
+stray bytes between markers, non-one Huffman padding, or surplus entropy after
+a complete scan/restart interval. A complete Huffman image can omit its final
+EOI; progressive images must have fully refined every coefficient band to Al=0.
+Arithmetic and hierarchical images still require EOI. Missing samples, invalid codes,
+incomplete marker payloads and wrong/missing restart markers remain errors.
+The coefficient, lossless and hierarchical decoders expose matching
+`*_with_options` functions. These policies do not change interpolation or IDCT.
+
+Empty DHT/DQT segments define no tables and are ignored in both modes. They
+cannot supply a missing destination or erase an existing definition. Known
+Adobe transforms with inconsistent component counts follow the `image`/zune
+replacement policy: three components with transform 2 decode as YCbCr; four
+with transform 1 decode as Adobe-inverted CMYK. Explicit transform 2 on four
+components remains YCCK. The last pre-scan Adobe marker determines both color
+and polarity; untagged CMYK retains conventional ink polarity. Original
+metadata bytes are preserved by the metadata-retaining APIs.
+
 Production code denies `unsafe` outside the `simd` dispatch module. Hot
 kernels are portable Rust shaped for vectorization (flat IDCT loops, 16-bit
 color arithmetic that LLVM lowers to `pmulhw`/`pmaddwd`); on x86-64 CPUs with
 AVX2 they run inside an AVX2-compiled wrapper, and the float IDCT has an
 explicit AVX2 kernel. Both builds produce identical samples. An eight-byte
-Huffman bit reader's acceptance matches the strict reader exactly. See the
-[benchmark results](bench/RESULTS.md).
+Huffman bit reader's acceptance matches the portable reader under either input
+policy. See the [benchmark results](bench/RESULTS.md).
 
 Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
@@ -148,7 +168,9 @@ scales 12-bit samples to the full 16-bit range. ICC profiles can be borrowed,
 assembled or replaced; their original bytes are exposed for caller color
 management. Metadata bytes are preserved without modification by default.
 
-Malformed tables, runs, scan layouts, padding and restart sequences are errors.
+Malformed table definitions, runs, scan layouts and restart sequences are errors.
+Strict decoding additionally validates padding and requires EOI; the bounded
+compatibility recoveries are described above.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark. The separate [benchmark workspace](bench/README.md)

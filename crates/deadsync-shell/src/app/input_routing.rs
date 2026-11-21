@@ -18,6 +18,7 @@ impl App {
     pub(super) fn flush_due_input_events(
         &mut self,
         event_loop: &ActiveEventLoop,
+        between_snapshots: bool,
     ) -> Result<bool, Box<dyn Error>> {
         let Some(plan) = queued_input_flush_plan(
             self.state.screens.current_screen,
@@ -32,8 +33,14 @@ impl App {
         }
         let mut batch = QueuedInputBatchState::new();
         let now = std::time::Instant::now();
-        while let Some(events) = self.input.next_due(now) {
-            self.dispatch_input_batch(event_loop, plan, &mut batch, events)?;
+        if between_snapshots {
+            while let Some(events) = self.input.next_due_between_snapshots(now) {
+                self.dispatch_input_batch(event_loop, plan, &mut batch, events)?;
+            }
+        } else {
+            while let Some(events) = self.input.next_due(now) {
+                self.dispatch_input_batch(event_loop, plan, &mut batch, events)?;
+            }
         }
         Ok(batch.flushed)
     }

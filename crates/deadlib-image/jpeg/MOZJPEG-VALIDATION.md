@@ -87,22 +87,32 @@ diagnostics. The valid-stream gate never accepts runtime C warnings.
 
 1. A 17x19 checker, quality 20, 4:2:2 progressive image with restart rows 1
    and mozjpeg's default scan optimization contains extraneous entropy bytes.
-   All three C clients warn; the native decoder rejects entropy padding.
-   The same source/options with `-fastcrush` decode warning-free and have exact
-   native/C coefficients. No entropy recovery is added to the native decoder.
+   All three C clients warn; strict native decoding rejects entropy padding.
+   Compatibility decoding can discard surplus padding but still rejects this
+   input for a missing restart marker: the nine-MCU Y AC scan declares DRI 2
+   and supplies only RST0/RST1. The same source/options with `-fastcrush` emit
+   DRI 3 for that scan, decode warning-free and have exact native/C coefficients.
+   Successful C recovery of the broken original does not establish pixel or
+   coefficient equivalence.
 2. An explicit DC/AC refinement script causes mozjpeg's combined-table writer
    to emit two `FF C4 00 02` segments during DC refinement. T.81 B.2.4.2 defines
    a DHT segment with at least one table specification; these contain none.
-   All C clients ignore them, while the native parser rejects `empty DHT`.
+   All C clients ignore them. Native decoding now also treats empty DHT/DQT
+   segments as no-ops in both strict and compatibility modes.
    A separately labeled copy removes exactly those eight marker bytes, leaving
    all entropy unchanged. Its native/C coefficients equal the original C
-   observations exactly. This is distinct from a real table whose sixteen Li
-   values are zero; that earlier supported case is unchanged.
+   observations exactly, and Cargo tests compare the original and removal
+   copy's native coefficients. This is distinct from a real table whose sixteen
+   Li values are zero; that earlier supported case is unchanged.
 
 See [T.81 Annex B](https://www.w3.org/Graphics/JPEG/itu-t81.pdf), the unmodified
 `emit_multi_dht` implementation in the pinned source. These findings describe the tested
 release/configuration and inputs; they do not imply that all optimized output
-or all progressive restart combinations fail. Native parser rules are unchanged.
+or all progressive restart combinations fail. The retained fixture manifest is
+the original observation, including the native rejection before compatibility
+support; it has not been rewritten to imply that the old executable accepted it.
+`tests/compatibility.rs` checks the current recovery rules independently with
+small known-sample streams and malformed boundary cases.
 
 ## Reproduction
 

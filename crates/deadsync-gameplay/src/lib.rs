@@ -44,6 +44,10 @@ use std::sync::{
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
+pub mod course_progress;
+pub mod exit_route;
+pub mod practice;
+
 // ITGmania ScreenGameplay MinSecondsToStep/MinSecondsToMusic defaults.
 const MIN_SECONDS_TO_STEP: f32 = 6.0;
 const MIN_SECONDS_TO_MUSIC: f32 = 2.0;
@@ -143,6 +147,7 @@ include!("mod_effects.rs");
 include!("score_validity.rs");
 include!("course_display.rs");
 include!("score_display.rs");
+include!("stage_policy.rs");
 include!("ghost.rs");
 include!("attacks.rs");
 include!("live_player_options.rs");
@@ -157,6 +162,7 @@ include!("rows.rs");
 include!("routine.rs");
 include!("chart_transforms.rs");
 include!("mines.rs");
+include!("pad_stick.rs");
 include!("replay.rs");
 include!("error_bar.rs");
 include!("runtime_state.rs");
@@ -169,3 +175,5 @@ include!("tests.rs");
 include!("runtime_regression_tests.rs");
 #[cfg(test)]
 mod calibration_tests;
+#[cfg(test)]
+mod course_life_config_tests;

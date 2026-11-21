@@ -547,13 +547,23 @@ fn speed_value(
         .unwrap_or(Value::Nil);
     Ok(read_float(call, v).filter(|n| n.is_finite() && *n > 0.))
 }
-fn speed_multiplier(call: &mut HostCall<'_>, args: &[Value]) -> Result<f32, Error> {
+// The flag retains the timed C/AMod fallback's separate rate adjustment.
+fn speed_multiplier(
+    call: &mut HostCall<'_>,
+    args: &[Value],
+    rate: f32,
+) -> Result<(f32, bool), Error> {
     let Some(options) = player_options(call, args)? else {
-        return Ok(1.);
+        return Ok((1., false));
     };
     call.with_roots(&[Value::Table(options)], |call| {
-        if let Some(x) = speed_value(call, options, "XMod")? {
-            return Ok(x);
+        // ITGmania leaves XMod() at 1 while MMod is active. MaxScrollBPM
+        // overrides ScrollSpeed in ArrowEffects::GetYOffset.
+        let max = speed_value(call, options, "MMod")?;
+        if max.is_none()
+            && let Some(x) = speed_value(call, options, "XMod")?
+        {
+            return Ok((x, false));
         }
         let v = field(
             call,
@@ -568,12 +578,15 @@ fn speed_multiplier(call: &mut HostCall<'_>, args: &[Value]) -> Result<f32, Erro
         }
         .filter(|n| n.is_finite() && *n > 0.)
         .unwrap_or(1.);
-        for name in ["CMod", "MMod", "AMod"] {
+        if let Some(max) = max {
+            return Ok((max / (reference * rate), false));
+        }
+        for name in ["CMod", "AMod"] {
             if let Some(v) = speed_value(call, options, name)? {
-                return Ok(v / reference);
+                return Ok((v / reference, true));
             }
         }
-        Ok(1.)
+        Ok((1., false))
     })
 }
 fn reverse_percent(call: &mut HostCall<'_>, args: &[Value]) -> Result<f32, Error> {
@@ -626,7 +639,7 @@ fn wave_offset(
     Ok(y * speed)
 }
 fn y_offset(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result<f32, Error> {
-    let speed = speed_multiplier(call, args)?;
+    let (speed, apply_rate) = speed_multiplier(call, args, b.rate)?;
     let note = loose(call, args, 2, 0.);
     if b.timing.iter().all(Option::is_none) {
         return wave_offset(call, args, 64. * note, speed);
@@ -668,11 +681,7 @@ fn y_offset(call: &mut HostCall<'_>, b: &Data, args: &[Value]) -> Result<f32, Er
                     1.,
                 );
             }
-            let speed = if speed_value(call, options, "XMod")?.is_some() {
-                speed
-            } else {
-                speed / b.rate
-            };
+            let speed = if apply_rate { speed / b.rate } else { speed };
             wave_offset(
                 call,
                 args,

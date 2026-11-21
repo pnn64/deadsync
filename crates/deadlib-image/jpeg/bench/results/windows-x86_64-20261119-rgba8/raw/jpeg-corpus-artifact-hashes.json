@@ -1,0 +1,52 @@
+﻿[
+    {
+        "file":  "jpeg-corpus-inventory.json",
+        "sha256":  "36f031c25d3a1dd2ff0684f7b63bef256e2acec99183eb9e39ef02d0561bd59b",
+        "bytes":  1611153
+    },
+    {
+        "file":  "jpeg-corpus-runtime-inventory.json",
+        "sha256":  "790f2597fee1b752be209cd92a53aabb7d04885da16466e18d2709643653349a",
+        "bytes":  1035262
+    },
+    {
+        "file":  "jpeg-corpus-selection.json",
+        "sha256":  "8b26a2ca566d12dcd3ccc0167b188ddb9f76785e6866146a79c8e6801bbc1d28",
+        "bytes":  1683056
+    },
+    {
+        "file":  "jpeg-corpus-speed.txt",
+        "sha256":  "fffeacebfd13783ee68f2e184d7e92e248db993e907341656584f8030b4b78ac",
+        "bytes":  2815
+    },
+    {
+        "file":  "jpeg-corpus-diagnostic.txt",
+        "sha256":  "2640fbc624962b383f1cd8ffc14a575328ec61ed0ad3ec0e7cc0b59effd579b0",
+        "bytes":  393
+    },
+    {
+        "file":  "jpeg-corpus-native-correctness.txt",
+        "sha256":  "6391edba4955b26afc2c1dc8885beedb7a83fc9ebd7870f7400e16ad616b2a66",
+        "bytes":  49649
+    },
+    {
+        "file":  "jpeg-corpus-kodak.json",
+        "sha256":  "36ea8e8b9d1d15e239d755cebb3e30889754521e7980042f04263dbad6e9579e",
+        "bytes":  131944
+    },
+    {
+        "file":  "jpeg-corpus-kodak.txt",
+        "sha256":  "766cac1d0f5ec61de05950174ac007d21a48270e79218f9dcc01d6e89814115f",
+        "bytes":  3892
+    },
+    {
+        "file":  "jpeg-corpus-kodak.py",
+        "sha256":  "fa51d5772cbf3970cdac7b487ebea6c3ef4eb26b0045757792d8f2d7b4f0ef2e",
+        "bytes":  8240
+    },
+    {
+        "file":  "jpeg-corpus-notes.md",
+        "sha256":  "1e8fba6c08a4ebc54cf66c03c84baae1f013802bc237470d27bbeb27db803b6e",
+        "bytes":  14250
+    }
+]

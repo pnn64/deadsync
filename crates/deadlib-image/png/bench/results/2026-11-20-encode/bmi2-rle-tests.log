@@ -1,0 +1,9 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 22.81s
+     Running unittests src\lib.rs (target\release\build\deadlib-image-png/242f985eac60e463\out\deadlib_image_png-242f985eac60e463.exe)
+
+running 1 test
+test zlib::x86::tests::rle_dispatch_matches_portable_bits_and_checksum ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 29 filtered out; finished in 0.00s
+

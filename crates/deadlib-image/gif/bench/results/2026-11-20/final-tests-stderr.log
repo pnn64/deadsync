@@ -1,0 +1,23 @@
+cargo :    Compiling deadlib-image-gif v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\gif)
+At line:4 char:348
++ ... EXITCODE }; cargo test -p deadlib-image-gif --locked --target-dir tar ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...dlib-image\gif):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.52s
+     Running unittests src\lib.rs (target/gif-verification-20261117\debug\build\deadlib-image-gif/041d408169c561fd\out\
+deadlib_image_gif-041d408169c561fd.exe)
+     Running tests\animation.rs 
+(target/gif-verification-20261117\debug\build\deadlib-image-gif/49a98222af278777\out\animation-49a98222af278777.exe)
+     Running tests\compatibility.rs (target/gif-verification-20261117\debug\build\deadlib-image-gif/b2179ef1a67f1b28\ou
+t\compatibility-b2179ef1a67f1b28.exe)
+     Running tests\corpus.rs 
+(target/gif-verification-20261117\debug\build\deadlib-image-gif/963810f8dacc0130\out\corpus-963810f8dacc0130.exe)
+     Running tests\giflib.rs 
+(target/gif-verification-20261117\debug\build\deadlib-image-gif/ad369f8d918597ea\out\giflib-ad369f8d918597ea.exe)
+     Running tests\malformed.rs 
+(target/gif-verification-20261117\debug\build\deadlib-image-gif/2542fc6252407e22\out\malformed-2542fc6252407e22.exe)
+     Running tests\native.rs 
+(target/gif-verification-20261117\debug\build\deadlib-image-gif/f45079322cd7cec0\out\native-f45079322cd7cec0.exe)
+   Doc-tests deadlib_image_gif

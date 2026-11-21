@@ -1,0 +1,18 @@
+{
+    "started_utc":  "2026-11-20T23:18:24.7306212Z",
+    "executable":  "C:\\GitHub\\deadsync\\target\\bmp-decode-opt-20261120-pass2\\candidate4-alpha-dispatch\\bmp-timing.exe",
+    "executable_sha256":  "fab8fef6e02991e32db9a20ce1204b3f78810fcd81072d344376707332a2ab57",
+    "arguments":  [
+                      "--mode",
+                      "owned-rgba",
+                      "--filter",
+                      "rgba4444"
+                  ],
+    "milliseconds":  40,
+    "samples":  5,
+    "cpu":  2,
+    "sizes":  "",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "completed_utc":  "2026-11-20T23:18:29.5460202Z",
+    "exit_code":  0
+}

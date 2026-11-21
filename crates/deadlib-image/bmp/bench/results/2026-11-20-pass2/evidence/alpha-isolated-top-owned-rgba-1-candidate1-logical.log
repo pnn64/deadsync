@@ -1,0 +1,3 @@
+Pinned benchmark thread to logical CPU 2
+NON_EQUIVALENT	target/bmp-decode-opt-20261120-pass2/alpha-controls/bgra32-first-511x257-top.bmp	external-corpus-policy	131327 differing samples	max 255
+Verified 1 BMP cases; synthetic expected pixels are generated independently of both codecs.

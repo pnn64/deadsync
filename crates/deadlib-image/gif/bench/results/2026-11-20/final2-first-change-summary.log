@@ -1,0 +1,20 @@
+all 176
+  gif-asset-first thread_cycles=1.0488, ns=1.0485
+  image-first thread_cycles=1.0373, ns=1.0369
+  native-copy-first thread_cycles=1.0693, ns=1.0690
+  native-first thread_cycles=1.0351, ns=1.0348
+assets 35
+  gif-asset-first thread_cycles=1.0059, ns=1.0053
+  image-first thread_cycles=0.9980, ns=0.9974
+  native-copy-first thread_cycles=1.0231, ns=1.0224
+  native-first thread_cycles=1.0184, ns=1.0175
+upstream 13
+  gif-asset-first thread_cycles=0.9605, ns=0.9599
+  image-first thread_cycles=1.0354, ns=1.0347
+  native-copy-first thread_cycles=1.1228, ns=1.1222
+  native-first thread_cycles=0.9540, ns=0.9533
+generated 128
+  gif-asset-first thread_cycles=1.0703, ns=1.0702
+  image-first thread_cycles=1.0484, ns=1.0482
+  native-copy-first thread_cycles=1.0769, ns=1.0768
+  native-first thread_cycles=1.0484, ns=1.0483

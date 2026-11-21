@@ -1,0 +1,42 @@
+*** Begin Patch
+*** Update File: /github/deadsync/crates/deadlib-image/png/tests/deflate_stream.rs
+@@
+-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 127, 128, 129, 255, 256, 257, 258, 259, 260, 261, 515, 516,
+-        517, 32767, 32768, 32769,
++        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 14, 15, 16, 17, 127, 128, 129, 255, 256, 257, 258, 259,
++        260, 261, 515, 516, 517, 32767, 32768, 32769,
+@@
+-    // Every literal code, including the widest codes, remains in compressed
++    // Exercise the 16-byte lookahead boundary with zero runs starting around
++    // both four-byte groups. A compressible prefix keeps the short tail in a
++    // dynamic block, so stored fallback cannot hide a literal/run error.
++    for tail_len in 14usize..=17 {
++        for leading in 1..8 {
++            for run in [4, 5, 6, 7, 8, 9] {
++                if leading + run > tail_len {
++                    continue;
++                }
++                let mut raw = vec![0; 1024];
++                raw.extend((0..tail_len).map(|n| {
++                    if (leading..leading + run).contains(&n) {
++                        0
++                    } else if n.is_multiple_of(2) {
++                        255
++                    } else {
++                        254
++                    }
++                }));
++                let expected = zlib::compress(&raw, Compression::Rle).unwrap();
++                assert_eq!((expected[2] >> 1) & 3, 2, "tail must stay compressed");
++                for (input, output) in [(raw.len(), 128), (1, 1), (17, 7)] {
++                    assert_eq!(
++                        encode(&raw, Compression::Rle, input, output),
++                        expected,
++                        "tail={tail_len} leading={leading} run={run} input={input} output={output}"
++                    );
++                }
++            }
++        }
++    }
++    // Every literal code, including the widest codes, remains in compressed
+*** End Patch

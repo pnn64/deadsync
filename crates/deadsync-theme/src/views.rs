@@ -221,14 +221,7 @@ pub struct CourseStageView {
     pub gain_lives: i32,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum CourseTypeView {
-    #[default]
-    Nonstop,
-    Oni,
-    Endless,
-    Survival,
-}
+pub use deadsync_rules::course::CourseType as CourseTypeView;
 
 /// A selected course prepared by a theme for runtime startup.
 #[derive(Clone, Debug)]

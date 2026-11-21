@@ -1,0 +1,90 @@
+[
+  {
+    "name": "candidate5-baseline-alpha-before-decode",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "candidate5-baseline-alpha-before-decode",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Files",
+      "target/bmp-decode-opt-20261120-pass2/alpha-controls"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate5-baseline-alpha-after-decode",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate5-two-layouts/bmp-timing.exe",
+      "-Label",
+      "candidate5-baseline-alpha-after-decode",
+      "-Mode",
+      "decode",
+      "-Milliseconds",
+      "80",
+      "-Files",
+      "target/bmp-decode-opt-20261120-pass2/alpha-controls"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate5-baseline-alpha-after-owned",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/candidate5-two-layouts/bmp-timing.exe",
+      "-Label",
+      "candidate5-baseline-alpha-after-owned",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Files",
+      "target/bmp-decode-opt-20261120-pass2/alpha-controls"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  },
+  {
+    "name": "candidate5-baseline-alpha-before-owned",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/measure.ps1",
+      "-Executable",
+      "target/bmp-decode-opt-20261120-pass2/baseline/bmp-timing.exe",
+      "-Label",
+      "candidate5-baseline-alpha-before-owned",
+      "-Mode",
+      "owned-rgba",
+      "-Milliseconds",
+      "80",
+      "-Files",
+      "target/bmp-decode-opt-20261120-pass2/alpha-controls"
+    ],
+    "cwd": "C:\\GitHub\\deadsync"
+  }
+]

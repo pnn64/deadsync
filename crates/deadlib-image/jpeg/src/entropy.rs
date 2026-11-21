@@ -89,15 +89,26 @@ impl Huffman {
 
     #[inline]
     pub fn decode(&self, bits: &mut Bits<'_>) -> Result<u8> {
-        if let Some(prefix) = bits.peek(LOOK_BITS)? {
+        let prefix = bits.peek(LOOK_BITS)?;
+        self.decode_prefix(bits, prefix)
+    }
+
+    /// Decode using the prefix already fetched by the caller.
+    #[inline]
+    pub(crate) fn decode_prefix(&self, bits: &mut Bits<'_>, prefix: Option<u32>) -> Result<u8> {
+        let (mut code, start) = if let Some(prefix) = prefix {
             let entry = self.lookup[prefix as usize];
             if entry != 0 {
                 bits.drop((entry >> 8) as u8);
                 return Ok(entry as u8);
             }
-        }
-        let mut code = 0i32;
-        for length in 1..=16 {
+            // A missed prefix cannot match any code up to LOOK_BITS.
+            bits.drop(LOOK_BITS);
+            (prefix as i32, LOOK_BITS as usize + 1)
+        } else {
+            (0, 1)
+        };
+        for length in start..=16 {
             code = (code << 1) | bits.read(1)? as i32;
             if self.max_code[length] >= code {
                 let index = code + self.offsets[length];
@@ -117,6 +128,7 @@ pub(crate) struct Bits<'a> {
     position: usize,
     buffer: u64,
     count: u8,
+    strict: bool,
 }
 
 impl<'a> Bits<'a> {
@@ -126,6 +138,14 @@ impl<'a> Bits<'a> {
             position: 0,
             buffer: 0,
             count: 0,
+            strict: true,
+        }
+    }
+
+    pub fn with_strict(input: &'a [u8], strict: bool) -> Self {
+        Self {
+            strict,
+            ..Self::new(input)
         }
     }
 
@@ -177,11 +197,16 @@ impl<'a> Bits<'a> {
     }
 
     fn align(&mut self) -> Result<()> {
-        if self.count > 7 || (self.buffer & ((1 << self.count) - 1)) != (1 << self.count) - 1 {
+        if self.strict
+            && (self.count > 7 || (self.buffer & ((1 << self.count) - 1)) != (1 << self.count) - 1)
+        {
             return Err(Error::Invalid("entropy padding"));
         }
         self.count = 0;
         self.buffer = 0;
+        if !self.strict {
+            skip_padding(self.input, &mut self.position)?;
+        }
         Ok(())
     }
 
@@ -207,6 +232,24 @@ impl<'a> Bits<'a> {
         }
         Ok(())
     }
+}
+
+/// Discard surplus entropy only after the caller has decoded a complete unit.
+/// Stop at the first marker: restart validation must never resynchronize past
+/// an unexpected marker. Stuffed FF bytes are data, not marker boundaries.
+pub(crate) fn skip_padding(input: &[u8], position: &mut usize) -> Result<()> {
+    while let Some(&byte) = input.get(*position) {
+        if byte == 0xff {
+            match input.get(*position + 1) {
+                Some(0) => *position += 2,
+                Some(_) => break,
+                None => return Err(Error::Truncated),
+            }
+        } else {
+            *position += 1;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

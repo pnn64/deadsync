@@ -1,7 +1,7 @@
 use super::{DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, rows::ImageRows};
 use crate::{
     AncillaryChunk, AnimationPolicy, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl,
-    Metadata, Transparency,
+    Metadata, MetadataPolicy, Transparency,
     checksum::Crc32,
     codec::{Header, SIGNATURE, be16, be32},
     metadata::Validator,
@@ -132,7 +132,7 @@ impl StreamDecoder {
             header: None,
             palette: Vec::new(),
             transparency: None,
-            validator: Validator::new(options.limits.max_metadata_bytes),
+            validator: Validator::new(options.limits.max_metadata_bytes, options.metadata_policy),
             ancillary: None,
             metadata: None,
             seen_data: false,
@@ -343,7 +343,8 @@ impl StreamDecoder {
                 if self.seen_data
                     || !self.palette.is_empty()
                     || self.transparency.is_some()
-                    || self.validator.has(b"bKGD")
+                    || (self.options.metadata_policy == MetadataPolicy::Strict
+                        && self.validator.has(b"bKGD"))
                 {
                     return Err(Error::Invalid("PLTE ordering or duplication"));
                 }
@@ -543,11 +544,15 @@ impl StreamDecoder {
                     data: core::mem::take(&mut self.data),
                     position,
                 };
-                let value = self.validator.check(
+                let Some(value) = self.validator.check(
                     &chunk,
                     h.ok_or(Error::Invalid("missing IHDR"))?,
                     self.palette.len(),
-                )?;
+                )?
+                else {
+                    self.data = chunk.data;
+                    return Ok(None);
+                };
                 self.ancillary = Some(chunk);
                 self.metadata = Some(value);
                 Some(Event::Metadata)
@@ -739,6 +744,13 @@ impl StreamDecoder {
                         break;
                     }
                     if be32(&self.prefix) != self.crc.finish() {
+                        if self.options.metadata_policy.discard_bad_crc(&self.kind) {
+                            self.validator.charge(self.length)?;
+                            self.have = 0;
+                            self.data.clear();
+                            self.state = State::ChunkHeader;
+                            continue;
+                        }
                         if animation_chunk(&self.kind) {
                             self.animation_fault = Some(AnimationFault::Complete);
                         }

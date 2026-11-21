@@ -1,0 +1,17 @@
+[
+  {
+    "path": "bmp-timing.exe",
+    "bytes": 438272,
+    "sha256": "fab8fef6e02991e32db9a20ce1204b3f78810fcd81072d344376707332a2ab57"
+  },
+  {
+    "path": "native_snapshot.exe",
+    "bytes": 288768,
+    "sha256": "9efbf46750c4b2ce707b46c5d4d694be16382a5334594cf881e04c34646fcb93"
+  },
+  {
+    "path": "bmp-allocations.exe",
+    "bytes": 405504,
+    "sha256": "09a68c79af0d0d90e4b395fa0c776ff7f3e659f976e6d04ad470cb30dec70ce6"
+  }
+]

@@ -550,9 +550,8 @@ fn song_lua_speedmod_multiplier(context: &SongLuaCompileContext, player: usize) 
     };
     let multiplier = match player.speedmod {
         SongLuaSpeedMod::X(value) => value,
-        SongLuaSpeedMod::C(value) | SongLuaSpeedMod::M(value) | SongLuaSpeedMod::A(value) => {
-            value / reference_bpm / music_rate
-        }
+        SongLuaSpeedMod::M(value) => value / (reference_bpm * music_rate),
+        SongLuaSpeedMod::C(value) | SongLuaSpeedMod::A(value) => value / reference_bpm / music_rate,
     };
     if multiplier.is_finite() && multiplier > 0.0 {
         multiplier

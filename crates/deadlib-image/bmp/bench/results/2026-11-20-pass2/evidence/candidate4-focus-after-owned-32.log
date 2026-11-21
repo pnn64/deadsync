@@ -1,0 +1,10 @@
+Pinned benchmark thread to logical CPU 2
+NON_EQUIVALENT	bgra32-1x1-bottom	implicit-alpha	1 differing samples	max 254
+NON_EQUIVALENT	bgra32-1x1-top	implicit-alpha	1 differing samples	max 254
+NON_EQUIVALENT	bgra32-17x9-bottom	implicit-alpha	153 differing samples	max 254
+NON_EQUIVALENT	bgra32-17x9-top	implicit-alpha	153 differing samples	max 254
+NON_EQUIVALENT	bgra32-511x257-bottom	implicit-alpha	130814 differing samples	max 255
+NON_EQUIVALENT	bgra32-511x257-top	implicit-alpha	130814 differing samples	max 255
+NON_EQUIVALENT	bgra32-1920x1080-bottom	implicit-alpha	2065500 differing samples	max 255
+NON_EQUIVALENT	bgra32-1920x1080-top	implicit-alpha	2065500 differing samples	max 255
+Verified 40 BMP cases; synthetic expected pixels are generated independently of both codecs.

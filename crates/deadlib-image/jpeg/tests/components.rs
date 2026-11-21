@@ -151,6 +151,56 @@ fn progressive_generated_dc_groups_obey_mcu_limits() {
 }
 
 #[test]
+fn noninterleaved_progressive_restarts_skip_block_padding() {
+    for precision in [8, 12] {
+        let image = support::model(3, precision, 2, 2);
+        let mut script = Vec::new();
+        for al in (0..=2).rev() {
+            let ah = if al == 2 { 0 } else { al + 1 };
+            for component in &image.frame.components {
+                script.push(ScanSpec::new(&[component.id], 0, 0, ah, al).unwrap());
+                script.push(ScanSpec::new(&[component.id], 1, 63, ah, al).unwrap());
+            }
+        }
+        for restart_interval in [3, 4, 7] {
+            let encoded = encode_coefficients(
+                &image,
+                CodingOptions {
+                    progressive: true,
+                    entropy_coding: EntropyCoding::Huffman,
+                    scan_script: &script,
+                    restart_interval,
+                    ..CodingOptions::default()
+                },
+            )
+            .unwrap();
+            let decoded = decode_coefficients(&encoded, Limits::default()).unwrap();
+            support::same(&image, &decoded);
+            assert_eq!(decoded.scans, script.len());
+            // DC also uses separate component scans, so no scan transmits
+            // the source model's nonzero right/bottom completion blocks.
+            let mut padding = 0;
+            for (component, c) in decoded.components.iter().enumerate() {
+                let width = c.width.div_ceil(8);
+                let height = c.height.div_ceil(8);
+                for (index, block) in c.blocks.iter().enumerate() {
+                    let x = index % c.blocks_wide;
+                    let y = index / c.blocks_wide;
+                    if x >= width || y >= height {
+                        assert_eq!(
+                            *block, [0; 64],
+                            "precision {precision}, restart {restart_interval}, component {component}, padding ({x}, {y})"
+                        );
+                        padding += 1;
+                    }
+                }
+            }
+            assert!(padding > 0, "the model must exercise padded block storage");
+        }
+    }
+}
+
+#[test]
 fn invalid_large_models_and_scan_limits_are_bounded() {
     let image = support::model(255, 8, 0, 2);
     assert!(

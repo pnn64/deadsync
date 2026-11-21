@@ -60,6 +60,28 @@ pub fn set_current_metrics(m: Metrics) {
     CURRENT_METRICS.with(|c| c.set(m));
 }
 
+/// Returns the exact logical bounds installed on the calling thread.
+#[inline(always)]
+#[must_use]
+pub fn current_metrics() -> Metrics {
+    CURRENT_METRICS.with(Cell::get)
+}
+
+/// Runs a presentation operation in temporary logical bounds, restoring the
+/// calling thread's exact previous bounds on return or unwind. Surface pixels
+/// and overscan remain independent of this logical camera scope.
+pub fn with_current_metrics<R>(metrics: Metrics, operation: impl FnOnce() -> R) -> R {
+    struct Restore(Metrics);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            set_current_metrics(self.0);
+        }
+    }
+    let previous = CURRENT_METRICS.with(|current| current.replace(metrics));
+    let _restore = Restore(previous);
+    operation()
+}
+
 /// Updates surface pixels without changing the current logical bounds.
 #[inline(always)]
 pub fn set_current_window_px(px_w: u32, px_h: u32) {
@@ -226,6 +248,37 @@ pub fn widescale(n43: f32, n169: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scoped_metrics_restore_exact_bounds_after_nested_return_and_unwind() {
+        fn bits(m: Metrics) -> [u32; 4] {
+            [m.left, m.right, m.top, m.bottom].map(f32::to_bits)
+        }
+        let original = Metrics {
+            left: -123.5,
+            right: 730.5,
+            top: 208.25,
+            bottom: -271.75,
+        };
+        let target = Metrics::centered(8.0, 6.0);
+        let pixels = current_window_px();
+        with_current_metrics(original, || {
+            let value = with_current_metrics(target, || {
+                assert_eq!(bits(current_metrics()), bits(target));
+                let panic = std::panic::catch_unwind(|| {
+                    with_current_metrics(Metrics::centered(3.0, 2.0), || {
+                        panic!("render callback failed");
+                    });
+                });
+                assert!(panic.is_err());
+                assert_eq!(bits(current_metrics()), bits(target));
+                assert_eq!(current_window_px(), pixels);
+                42
+            });
+            assert_eq!(value, 42);
+            assert_eq!(bits(current_metrics()), bits(original));
+        });
+    }
 
     #[test]
     fn centering_matrix_zero_is_identity() {

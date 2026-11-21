@@ -202,8 +202,11 @@ pub(crate) fn is_alnum(byte: u8) -> bool {
 pub(crate) fn is_digit(byte: u8) -> bool {
     byte.is_ascii_digit() || (byte >= 128 && mask(byte) & 4 != 0)
 }
+fn ascii_space(byte: u8) -> bool {
+    (byte == b' ') | (byte.wrapping_sub(b'\t') <= b'\r' - b'\t')
+}
 pub(crate) fn is_space(byte: u8) -> bool {
-    matches!(byte, b'\t'..=b'\r' | b' ') || (byte >= 128 && mask(byte) & 8 != 0)
+    ascii_space(byte) || (byte >= 128 && mask(byte) & 8 != 0)
 }
 pub(crate) fn is_control(byte: u8) -> bool {
     byte.is_ascii_control() || (byte >= 128 && mask(byte) & 32 != 0)
@@ -329,16 +332,26 @@ fn terminated(bytes: &[u8]) -> Result<Vec<u8>, Error> {
 }
 
 pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    let nul = if bytes.len() < 32 {
+        bytes.iter().position(|&byte| byte == 0)
+    } else {
+        crate::pattern::find_byte(bytes, 0)
+    };
+    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
     let start = bytes
         .iter()
         .position(|&b| !is_space(b))
         .unwrap_or(bytes.len());
-    let end = bytes
-        .iter()
-        .rposition(|&b| !is_space(b))
-        .map_or(start, |i| i + 1);
-    let bytes = &bytes[start..end];
+    let bytes = &bytes[start..];
+    let end = if bytes.len() >= 64 && bytes.last().is_some_and(|&byte| ascii_space(byte)) {
+        trailing_space_end(bytes)
+    } else {
+        bytes
+            .iter()
+            .rposition(|&byte| !is_space(byte))
+            .map_or(0, |i| i + 1)
+    };
+    let bytes = &bytes[..end];
     if DECIMAL_DOT.load(AtomicOrdering::Acquire) {
         return parse_normalized(bytes);
     }
@@ -351,6 +364,24 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
     }
     crate::numeric::localized_number(bytes, &point)
 }
+
+fn trailing_space_end(bytes: &[u8]) -> usize {
+    let (head, blocks) = bytes.as_rchunks::<32>();
+    for (index, block) in blocks.iter().enumerate().rev() {
+        // ASCII-only whitespace needs no locale-sensitive classification.
+        if block
+            .iter()
+            .fold(false, |found, &byte| found | !ascii_space(byte))
+            && let Some(offset) = block.iter().rposition(|&byte| !is_space(byte))
+        {
+            return head.len() + index * 32 + offset + 1;
+        }
+    }
+    head.iter()
+        .rposition(|&byte| !is_space(byte))
+        .map_or(0, |i| i + 1)
+}
+
 fn parse_normalized(bytes: &[u8]) -> Option<f64> {
     let (negative, unsigned) = match bytes.first() {
         Some(b'-') => (true, &bytes[1..]),

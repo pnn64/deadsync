@@ -1,6 +1,7 @@
 //! Table 7 ordering, multiplicity and cross-chunk constraints across all formats.
 use deadlib_image_png::{
-    DecodeEvent, DecodeOptions, DecodeStatus, StreamDecoder, decode, decode_reader,
+    DecodeEvent, DecodeOptions, DecodeStatus, MetadataPolicy, StreamDecoder, decode_reader,
+    decode_with_options,
 };
 use std::io::{self, Cursor, Read};
 #[allow(dead_code)]
@@ -11,6 +12,13 @@ mod order;
 use order::{
     Context, Entry, NAMES, PAIR_SLOTS, companion, contexts, entry, expected, fixture, valid,
 };
+
+fn strict() -> DecodeOptions {
+    DecodeOptions {
+        metadata_policy: MetadataPolicy::Strict,
+        ..Default::default()
+    }
+}
 
 struct Fragments<'a>(&'a [u8], usize);
 impl Read for Fragments<'_> {
@@ -43,9 +51,9 @@ fn check(c: Context, entries: &[Entry], split: usize) -> bool {
     let accepted = valid(c, entries);
     let bytes = fixture(c, entries, split);
     let results = [
-        decode(&bytes),
-        decode_reader(Fragments(&bytes, 1), &Default::default()),
-        decode_reader(Fragments(&bytes, 7), &Default::default()),
+        decode_with_options(&bytes, &strict()),
+        decode_reader(Fragments(&bytes, 1), &strict()),
+        decode_reader(Fragments(&bytes, 7), &strict()),
     ];
     for result in results {
         assert_eq!(
@@ -157,7 +165,7 @@ fn direct_events_retain_order_and_make_ordering_errors_terminal() {
                 let accepted = valid(c, &entries);
                 let bytes = fixture(c, &entries, 3);
                 for fragment in [1, 7, bytes.len()] {
-                    let mut decoder = StreamDecoder::new(DecodeOptions::default());
+                    let mut decoder = StreamDecoder::new(strict());
                     let mut offset = 0;
                     let mut observed = Vec::new();
                     loop {

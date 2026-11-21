@@ -36,7 +36,8 @@ pub use effects::{
     SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView,
     SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
     SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveTournamentConfigRequest,
-    SimplyLoveUpdaterRequest, resolve_effect_route,
+    SimplyLoveUpdaterRequest, effect_for_gameplay_exit, gameplay_action_for_effect,
+    resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;

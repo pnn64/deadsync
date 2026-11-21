@@ -5,7 +5,7 @@ use deadlib_present::actors::{
 use deadlib_render_core::BlendMode;
 use deadsync_gameplay::{ErrorBarText, ErrorBarTick, OffsetIndicatorText};
 use deadsync_rules::judgment::TimingWindow;
-use deadsync_theme::{ErrorBarLayers, ErrorBarPalette, ErrorBarStyle};
+use deadsync_core::hud_style::{ErrorBarLayers, ErrorBarPalette, ErrorBarStyle};
 
 pub const ERROR_BAR_TEXT_SLOTS_PER_PLAYER: u8 = 4;
 const OFFSET_TEXT_SLOT: u8 = 0;

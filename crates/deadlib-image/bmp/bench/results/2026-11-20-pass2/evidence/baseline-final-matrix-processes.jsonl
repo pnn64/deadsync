@@ -1,0 +1,115 @@
+{"utc": "2026-11-20T22:47:37.808368+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:47:37.849184+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [43084], "external": []}
+{"utc": "2026-11-20T22:47:39.875256+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:41.903438+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:43.929315+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:45.954313+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:47.977765+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:50.000154+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:52.033315+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:54.058283+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:56.088841+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:47:58.129029+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [3088, 28432, 43084], "external": []}
+{"utc": "2026-11-20T22:48:00.098128+00:00", "run": "baseline-final-matrix-before-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:00.117714+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:00.159193+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [33144], "external": []}
+{"utc": "2026-11-20T22:48:02.187082+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:04.215773+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:06.237847+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:08.261872+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:10.284557+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:12.306249+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:14.335877+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:16.365071+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:18.397046+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:20.416611+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [840, 33144, 41340], "external": []}
+{"utc": "2026-11-20T22:48:22.445456+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [33144], "external": []}
+{"utc": "2026-11-20T22:48:22.499489+00:00", "run": "baseline-final-matrix-after-decode", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:22.519042+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:22.560325+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [30080], "external": []}
+{"utc": "2026-11-20T22:48:24.593268+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:26.619387+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:28.649766+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:30.671915+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:32.698709+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:34.729708+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:36.759551+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:38.789927+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:40.809164+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:42.835546+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:44.857702+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:46.877584+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:48.898873+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:50.928900+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:52.958576+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:54.991030+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:57.017317+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [18068, 30080, 40732], "external": []}
+{"utc": "2026-11-20T22:48:57.917658+00:00", "run": "baseline-final-matrix-after-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:57.938841+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:48:57.979851+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404], "external": []}
+{"utc": "2026-11-20T22:49:00.016266+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:02.052755+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:04.079285+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:06.107426+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:08.134743+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:10.168578+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:12.200922+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:14.225283+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:16.252173+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:18.284413+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:20.306617+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:22.331631+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:24.356944+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:26.382334+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:28.407018+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:30.428982+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:32.458929+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [15404, 40124, 47460], "external": []}
+{"utc": "2026-11-20T22:49:33.143894+00:00", "run": "baseline-final-matrix-before-owned", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:49:33.163724+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:49:33.206427+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [42408], "external": []}
+{"utc": "2026-11-20T22:49:35.230775+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:37.260852+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:39.292867+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:41.317956+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:43.348544+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:45.373838+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:47.398658+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:49.429266+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:51.459904+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:53.491772+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:55.522676+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:57.549913+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:49:59.572264+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:50:01.593181+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:50:03.618531+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:50:05.650090+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:50:07.672841+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [16340, 42408, 43060], "external": []}
+{"utc": "2026-11-20T22:50:08.500967+00:00", "run": "baseline-final-matrix-before-rgba", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:08.520868+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:08.562394+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668], "external": []}
+{"utc": "2026-11-20T22:50:10.586709+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:12.608737+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:14.633628+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:16.654988+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:18.679157+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:20.706614+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:22.740014+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:24.772613+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:26.800931+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:28.823461+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:30.840609+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:32.869740+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:34.898035+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:36.921026+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:38.951091+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:40.983663+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:43.007516+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [4668, 9344, 36824], "external": []}
+{"utc": "2026-11-20T22:50:43.785398+00:00", "run": "baseline-final-matrix-after-rgba", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:43.802310+00:00", "run": "baseline-final-matrix-after-corpus", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:43.844008+00:00", "run": "baseline-final-matrix-after-corpus", "own_pids": [33576], "external": []}
+{"utc": "2026-11-20T22:50:45.870544+00:00", "run": "baseline-final-matrix-after-corpus", "own_pids": [31524, 33576, 34228], "external": []}
+{"utc": "2026-11-20T22:50:47.051682+00:00", "run": "baseline-final-matrix-after-corpus", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:47.068259+00:00", "run": "baseline-final-matrix-before-corpus", "own_pids": [], "external": []}
+{"utc": "2026-11-20T22:50:47.106736+00:00", "run": "baseline-final-matrix-before-corpus", "own_pids": [37572], "external": []}
+{"utc": "2026-11-20T22:50:49.138434+00:00", "run": "baseline-final-matrix-before-corpus", "own_pids": [24696, 37572, 46560], "external": []}
+{"utc": "2026-11-20T22:50:50.272377+00:00", "run": "baseline-final-matrix-before-corpus", "own_pids": [], "external": []}

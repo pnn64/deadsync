@@ -3,6 +3,7 @@ use deadsync_simfile::cache::{
     SerializableSongData, build_requested_gameplay_charts, build_song_meta,
 };
 use deadsync_simfile::song::{ParseSongOptions, parse_song_bytes};
+use deadsync_theme::views::CourseTypeView;
 use std::path::Path;
 
 /// Authored SM fixture: P1 has two rows including a hold and one mine;
@@ -83,8 +84,7 @@ fn empty_course(song: &Arc<SongData>) -> CourseRunState {
         song_stub: p.song_stub,
         stages: Vec::new(),
         course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
-        next_stage_index: 0,
-        interrupted: false,
+        progress: CourseProgress::default(),
         stage_summaries: Vec::new(),
     }
 }
@@ -152,7 +152,8 @@ fn endless_cycle_load_failure_rolls_back_stages_totals_and_cursor_then_can_retry
             build_requested_gameplay_charts(&parsed, indices, offset)
         };
         append_endless_cycle_with_loader(&mut course, plan(&song, 1), kind, &mut load).unwrap();
-        course.next_stage_index = 1;
+        course.progress = CourseProgress::new(1);
+        let original_progress = course.progress;
         let original_song = Arc::clone(&course.stages[0].song);
         let original_modifier = course.stages[0].modifiers.as_ptr();
         let mut calls = 0;
@@ -174,7 +175,7 @@ fn endless_cycle_load_failure_rolls_back_stages_totals_and_cursor_then_can_retry
         assert!(error.contains("tests/partner-course.sm") && error.contains(kind));
         assert!(error.contains("simfile removed during reroll"));
         assert_eq!(course.stages.len(), 1);
-        assert_eq!(course.next_stage_index, 1);
+        assert_eq!(course.progress, original_progress);
         assert!(Arc::ptr_eq(&course.stages[0].song, &original_song));
         assert_eq!(course.stages[0].modifiers.as_ptr(), original_modifier);
         assert_eq!(course.next_stage().unwrap().modifiers, "stage-0");
@@ -244,8 +245,8 @@ fn interrupted_endless_is_final_without_player_failure_and_cannot_resume() {
         &mut |_, indices, offset| build_requested_gameplay_charts(&parsed, indices, offset),
     )
     .unwrap();
-    course.next_stage_index = 1;
-    course.interrupted = true;
+    course.progress = CourseProgress::new(1);
+    course.progress.interrupt();
     assert!(course.is_finished(false));
     assert!(!course.has_next_stage());
     assert!(course.next_stage().is_none());

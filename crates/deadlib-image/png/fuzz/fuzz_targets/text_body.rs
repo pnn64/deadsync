@@ -1,7 +1,7 @@
 #![no_main]
 use deadlib_image_png::{
-    ColorType, DecodeOptions, EncodeOptions, Image, Limits, Metadata, Png, Samples, decode,
-    decode_reader, encode, encode_writer, zlib::Compression,
+    ColorType, DecodeOptions, EncodeOptions, Image, Limits, Metadata, MetadataPolicy, Png, Samples,
+    decode, decode_reader, decode_with_options, encode, encode_writer, zlib::Compression,
 };
 use libfuzzer_sys::fuzz_target;
 use std::io::Cursor;
@@ -56,6 +56,7 @@ fuzz_target!(|input: &[u8]| {
             max_chunks: 32,
             max_frames: 1,
         },
+        metadata_policy: MetadataPolicy::Strict,
         ..Default::default()
     };
     let expected = Metadata::Text {
@@ -63,7 +64,10 @@ fuzz_target!(|input: &[u8]| {
         text: text.to_vec(),
         compressed,
     };
-    for result in [decode(&wire), decode_reader(wire.as_slice(), &options)] {
+    for result in [
+        decode_with_options(&wire, &options),
+        decode_reader(wire.as_slice(), &options),
+    ] {
         assert_eq!(result.is_ok(), decodable);
         if let Ok(png) = result {
             assert_eq!(png.ancillary.as_slice(), std::slice::from_ref(&raw));

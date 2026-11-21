@@ -152,6 +152,7 @@ fn check(case: &fields::Case) {
             },
             animation_policy: policy,
             palette_policy: PalettePolicy::Strict,
+            metadata_policy: deadlib_image_png::MetadataPolicy::Strict,
         };
         let result = decode_with_options(&bytes, &options);
         if case.valid {

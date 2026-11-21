@@ -444,6 +444,12 @@ impl Table {
         };
         self.get_key(key)
     }
+    /// Return the inclusive range of one-based indices when it fits in the array.
+    pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
+        let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
+        let end = u32::try_from(last).ok()? as usize;
+        self.array.get(start..end)
+    }
     /// String keys are already interned; field access need not classify them
     /// as a possible array index or reconstruct a generic Lua table key.
     #[inline]
@@ -719,6 +725,21 @@ impl Table {
             }
         }
         hi
+    }
+    pub(crate) fn max_numeric_key(&self) -> f64 {
+        let mut maximum = self
+            .array
+            .iter()
+            .rposition(|value| *value != Value::Nil)
+            .map_or(0.0, |index| (index + 1) as f64);
+        for entry in &self.entries {
+            if let Key::Number(bits) = entry.key
+                && entry.value != Value::Nil
+            {
+                maximum = maximum.max(f64::from_bits(bits));
+            }
+        }
+        maximum
     }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)

@@ -530,7 +530,7 @@ pub(super) fn advance_queue(
     // A meter stream hidden by an already initialized duplicate-name group
     // has never subscribed. Its stored queue/getters remain observable, but
     // production does not advance that queue without native registration.
-    if !call.store().actors[&actor].registered {
+    if !call.store_ref().actors.get(&actor).is_some_and(|actor| actor.registered) {
         return Ok(());
     }
     if song_pose::mode(&call.store(), actor) {
@@ -544,7 +544,9 @@ pub(super) fn advance_queue(
             let store = call.store();
             let sync = !store.clock.live.load(std::sync::atomic::Ordering::Relaxed);
             let time = store.replay_frame.map_or(0., |(_, time)| time as f32);
-            let actor = store.actors.get_mut(&actor).unwrap();
+            let Some(actor) = store.actors.get_mut(&actor) else {
+                break;
+            };
             let Some(step) = actor.queue.front_mut() else {
                 break;
             };
@@ -792,6 +794,11 @@ fn advance_node(
     span: f32,
 ) -> Result<(), Error> {
     let actor = node.actor;
+    if node.owned && !call.store_ref().actors.contains_key(&actor) {
+        // Plans retain Lua identities until the current traversal returns, even
+        // when an earlier callback has deleted one of their wrapper actors.
+        return Ok(());
+    }
     let material_delta = delta;
     let material_span = span;
     let delta = if !node.owned {
@@ -834,12 +841,21 @@ fn advance_node(
     for wrapper in &node.wrappers {
         advance_node(call, wrapper, delta, span)?;
     }
+    if node.owned && !call.store_ref().actors.contains_key(&actor) {
+        return Ok(());
+    }
     let delta = if node.owned {
         let delta = delta * call.store().actors[&actor].update_rate;
         enter_phase(call.store(), actor, node.order, delta);
         effects::advance(call, actor, delta)?;
         advance_queue(call, actor, delta, span)?;
+        if !call.store_ref().actors.contains_key(&actor) {
+            return Ok(());
+        }
         capture::advance_ready(call, actor)?;
+        if !call.store_ref().actors.contains_key(&actor) {
+            return Ok(());
+        }
         enter_phase(call.store(), actor, node.order, delta);
         let consumed = call
             .store()
@@ -853,6 +869,9 @@ fn advance_node(
     } else {
         delta
     };
+    if node.owned && !call.store_ref().actors.contains_key(&actor) {
+        return Ok(());
+    }
     // Transition::UpdateInternal follows the owner's base queue, gates its
     // children and update callback, and tests completion before the final child
     // update. A cached plan retains whether this actor has a transition job.
@@ -876,6 +895,9 @@ fn advance_node(
         for child in &node.children {
             advance_node(call, child, delta, span)?;
         }
+    }
+    if node.owned && !call.store_ref().actors.contains_key(&actor) {
+        return Ok(());
     }
     sprite_animation::advance(call, actor, material_delta)?;
     models::advance_materials(call.store(), actor, material_delta);

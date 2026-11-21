@@ -82,6 +82,52 @@ impl SongLiveScene {
         Ok(target)
     }
 
+    /// Remove deleted wrappers from the visual ancestry without moving slots.
+    fn detach_wrapper_visuals<N, M>(
+        &mut self,
+        runtime: &mut SongRuntime,
+        visuals: &mut Visuals<N, M>,
+    ) -> Result<(), String> {
+        if self.published_wrapper_epoch == self.wrapper_epoch {
+            return Ok(());
+        }
+        for &(global, target) in &self.targets {
+            let value = self.actors[global];
+            if runtime.actors.live_actor_exists(&runtime.vm, value) {
+                continue;
+            }
+            let (overlays, local) = match target {
+                Target::Root(local) => (&mut visuals.overlays, local),
+                Target::Background(layer, local) => (
+                    &mut visuals.background_visual_layers.get_mut(layer)
+                        .ok_or("removed wrapper background layer is missing")?.overlays,
+                    local,
+                ),
+                Target::Foreground(layer, local) => (
+                    &mut visuals.foreground_visual_layers.get_mut(layer)
+                        .ok_or("removed wrapper foreground layer is missing")?.overlays,
+                    local,
+                ),
+            };
+            let wrapper = overlays.get_mut(local)
+                .ok_or("removed wrapper visual slot is missing")?;
+            if !matches!(wrapper.kind, Kind::WrapperState) {
+                return Err("removed live actor is not a wrapper state".into());
+            }
+            let parent = wrapper.parent_index.take();
+            for overlay in overlays {
+                if overlay.parent_index == Some(local) {
+                    overlay.parent_index = parent;
+                }
+            }
+            if let Some(identity) = runtime.vm.object_pointer(value) {
+                self.visual_targets.remove(&identity);
+            }
+        }
+        self.published_wrapper_epoch = self.wrapper_epoch;
+        Ok(())
+    }
+
     /// Insert newly owned wrapper states around their existing visual owners.
     /// As in finite compilation's append_update_wrapper_rows, each new wrapper
     /// surrounds the previous outermost wrapper belonging to that same owner.
@@ -92,6 +138,10 @@ impl SongLiveScene {
         visuals: &mut Visuals<N, M>,
     ) -> Result<(), String> {
         while let Some(&(owner, global)) = self.pending_wrappers.front() {
+            if !runtime.actors.live_actor_exists(&runtime.vm, self.actors[global]) {
+                self.pending_wrappers.pop_front();
+                continue;
+            }
             let target = self.targets.iter().find_map(|&(index, target)|
                 (index == owner).then_some(target))
                 .ok_or("live wrapper owner has no prepared visual slot")?;
@@ -162,6 +212,7 @@ impl SongLiveScene {
     pub fn write_visuals<N, M>(&mut self, visuals: &mut Visuals<N, M>) -> Result<(), String> {
         let owner = self.runtime.clone();
         let mut runtime = owner.access();
+        self.detach_wrapper_visuals(&mut runtime, visuals)?;
         self.append_wrapper_visuals(&mut runtime, visuals)?;
         for &(global, target) in &self.targets {
             let actor = match target {
@@ -178,6 +229,9 @@ impl SongLiveScene {
             .ok_or_else(|| "live Lua actor has no prepared visual slot".to_owned())?;
             actor.initial_state = self.states[global];
             let owned = self.actors[global];
+            if !runtime.actors.live_actor_exists(&runtime.vm, owned) {
+                continue;
+            }
             let SongRuntime { actors, vm, .. } = &mut *runtime;
             actors.publish_visual_content(vm, owned, &mut actor.kind)?;
             if let Kind::ActorProxy { target: proxy } = &mut actor.kind {
@@ -229,18 +283,23 @@ impl SongLiveScene {
     }
 
     #[cfg(feature = "test-support")]
+    pub fn visual_binding_epoch(&self) -> u64 {
+        self.wrapper_epoch
+    }
+
+    #[cfg(feature = "test-support")]
     pub fn visual_bindings(&self) -> Result<Vec<(String, Target)>, String> {
         let mut runtime = self.runtime.access();
-        self.targets
-            .iter()
-            .map(|&(global, target)| {
-                let SongRuntime { actors, vm, .. } = &mut *runtime;
-                actors
-                    .visual_path(vm, self.actors[global])
-                    .map(|path| (path, target))
-                    .map_err(|e| e.to_string())
-            })
-            .collect()
+        let mut bindings = Vec::with_capacity(self.targets.len());
+        for &(global, target) in &self.targets {
+            let owned = self.actors[global];
+            let SongRuntime { actors, vm, .. } = &mut *runtime;
+            if actors.live_actor_exists(vm, owned) {
+                let path = actors.visual_path(vm, owned).map_err(|e| e.to_string())?;
+                bindings.push((path, target));
+            }
+        }
+        Ok(bindings)
     }
 
     #[cfg(feature = "test-support")]

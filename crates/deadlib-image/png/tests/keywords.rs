@@ -1,8 +1,8 @@
 //! PNG Third Edition named ancillary fields and suggested palette boundaries.
 use deadlib_image_png::{
     AncillaryChunk, ChunkPosition, DecodeEvent, DecodeOptions, DecodeStatus, Error, Limits,
-    Metadata, Png, Samples, StreamDecoder, decode, decode_reader, encode, encode_writer,
-    zlib::Compression,
+    Metadata, MetadataPolicy, Png, Samples, StreamDecoder, decode, decode_reader,
+    decode_with_options, encode, encode_writer, zlib::Compression,
 };
 use std::io::{self, Cursor, Read};
 #[allow(dead_code)]
@@ -22,11 +22,21 @@ impl Read for Fragmented<'_> {
         Ok(n)
     }
 }
-fn parsers(bytes: &[u8]) -> [Result<Png, Error>; 3] {
+fn conformance_options(valid: bool) -> DecodeOptions {
+    let mut options = DecodeOptions::default();
+    // Invalid field fixtures exercise strict rejection; valid fixtures keep
+    // the default metadata recovery policy and must retain their exact values.
+    if !valid {
+        options.metadata_policy = MetadataPolicy::Strict;
+    }
+    options
+}
+fn parsers(bytes: &[u8], valid: bool) -> [Result<Png, Error>; 3] {
+    let options = conformance_options(valid);
     [
-        decode(bytes),
-        decode_reader(Fragmented(bytes, 1), &DecodeOptions::default()),
-        decode_reader(Fragmented(bytes, 17), &DecodeOptions::default()),
+        decode_with_options(bytes, &options),
+        decode_reader(Fragmented(bytes, 1), &options),
+        decode_reader(Fragmented(bytes, 17), &options),
     ]
 }
 fn base() -> Png {
@@ -79,7 +89,7 @@ fn all_keyword_bytes_lengths_and_spacing_in_every_named_wire_form() {
             let raw = form.raw(&case.bytes, position);
             let expected = form.value(&case.bytes);
             let bytes = form.fixture(&case.bytes, position);
-            for result in parsers(&bytes) {
+            for result in parsers(&bytes, case.valid) {
                 assert_eq!(
                     result.is_ok(),
                     case.valid,
@@ -141,7 +151,7 @@ fn named_stream_events_and_legal_text_positions() {
             let bytes = form.fixture(&[byte], ChunkPosition::BeforePalette);
             let expected = form.value(&[byte]);
             for fragment in [1, bytes.len()] {
-                let mut decoder = StreamDecoder::new(DecodeOptions::default());
+                let mut decoder = StreamDecoder::new(conformance_options(valid));
                 let (mut offset, mut seen) = (0, 0);
                 loop {
                     let end = bytes.len().min(offset + fragment);
@@ -177,7 +187,7 @@ fn named_stream_events_and_legal_text_positions() {
     for form in [Form::Text, Form::ZText, Form::IText, Form::IZText] {
         for position in wire::POSITIONS {
             let expected = form.value(b"A \xa1\xff B");
-            for result in parsers(&form.fixture(b"A \xa1\xff B", position)) {
+            for result in parsers(&form.fixture(b"A \xa1\xff B", position), true) {
                 let png = result.unwrap();
                 assert_eq!(
                     png.metadata(Limits::default()).unwrap().as_slice(),
@@ -197,7 +207,7 @@ fn file_with(chunks: &[AncillaryChunk]) -> Vec<u8> {
     wire::file(&all)
 }
 fn check_chunks(chunks: Vec<AncillaryChunk>, valid: bool) {
-    for result in parsers(&file_with(&chunks)) {
+    for result in parsers(&file_with(&chunks), valid) {
         assert_eq!(result.is_ok(), valid, "{chunks:?}: {result:?}");
     }
     let mut png = base();
@@ -379,7 +389,7 @@ fn suggested_palette_depth_entry_shape_sample_and_frequency_boundaries() {
                     &wire::stored(&vec![0; 1 + (channels * usize::from(depth)).div_ceil(8)]),
                 ));
                 chunks.push(wire::chunk(*b"IEND", &[]));
-                for result in parsers(&wire::file(&chunks)) {
+                for result in parsers(&wire::file(&chunks), true) {
                     let png = result.unwrap();
                     assert_eq!(
                         png.metadata(Limits::default()).unwrap(),

@@ -1,0 +1,177 @@
+{
+  "parent": "candidate2-rgba4444",
+  "candidate": "candidate3-direct-rgba",
+  "case": "rgb333-511x257-bottom",
+  "order": "ABBA in separate processes per mode",
+  "batches": 5,
+  "milliseconds": 80,
+  "cpu": 2,
+  "modes": {
+    "native-decode": {
+      "parent_cycles": [
+        1165374.61,
+        1125836.07
+      ],
+      "candidate_cycles": [
+        1143135.4,
+        1164482.17
+      ],
+      "candidate_over_parent": 1.007267689878556,
+      "parent_spread": 1.0351192691845448,
+      "candidate_spread": 1.0186738771277664
+    },
+    "native-owned-rgba": {
+      "parent_cycles": [
+        1582988.96,
+        1572911.54
+      ],
+      "candidate_cycles": [
+        1587923.76,
+        1603445.53
+      ],
+      "candidate_over_parent": 1.0112320758381566,
+      "parent_spread": 1.0064068574384037,
+      "candidate_spread": 1.0097748836505853
+    },
+    "image-rgba": {
+      "parent_cycles": [
+        2770432.97,
+        2794368.81
+      ],
+      "candidate_cycles": [
+        2814013.98,
+        2742155.19
+      ],
+      "candidate_over_parent": 0.9983744406185016,
+      "parent_spread": 1.008639747021203,
+      "candidate_spread": 1.0262052236365222
+    }
+  },
+  "rows": [
+    {
+      "label": "candidate3-isolated-rgb333-decode-parent-a",
+      "binary": "parent",
+      "mode": "native-decode",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1165374.61,
+      "ns": 532819.74,
+      "min": 1129725.34,
+      "max": 1202724.26
+    },
+    {
+      "label": "candidate3-isolated-rgb333-decode-candidate-a",
+      "binary": "candidate",
+      "mode": "native-decode",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1143135.4,
+      "ns": 522424.38,
+      "min": 1134555.7,
+      "max": 1171708.36
+    },
+    {
+      "label": "candidate3-isolated-rgb333-decode-candidate-b",
+      "binary": "candidate",
+      "mode": "native-decode",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1164482.17,
+      "ns": 532786.84,
+      "min": 1106827.37,
+      "max": 1168795.62
+    },
+    {
+      "label": "candidate3-isolated-rgb333-decode-parent-b",
+      "binary": "parent",
+      "mode": "native-decode",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1125836.07,
+      "ns": 514265.62,
+      "min": 1085648.29,
+      "max": 1151377.64
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-parent-a",
+      "binary": "parent",
+      "mode": "native-owned-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1582988.96,
+      "ns": 727285.71,
+      "min": 1526234.7,
+      "max": 1604850.73
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-parent-a",
+      "binary": "parent",
+      "mode": "image-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 2770432.97,
+      "ns": 1265620.31,
+      "min": 2631231.82,
+      "max": 3326373.61
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-candidate-a",
+      "binary": "candidate",
+      "mode": "native-owned-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1587923.76,
+      "ns": 725410.71,
+      "min": 1563736.29,
+      "max": 1608317.68
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-candidate-a",
+      "binary": "candidate",
+      "mode": "image-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 2814013.98,
+      "ns": 1285485.94,
+      "min": 2352425.42,
+      "max": 2885732.19
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-candidate-b",
+      "binary": "candidate",
+      "mode": "native-owned-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1603445.53,
+      "ns": 732891.07,
+      "min": 1548307.25,
+      "max": 1628205.92
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-candidate-b",
+      "binary": "candidate",
+      "mode": "image-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 2742155.19,
+      "ns": 1252840.62,
+      "min": 2438348.58,
+      "max": 2845803.8
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-parent-b",
+      "binary": "parent",
+      "mode": "native-owned-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 1572911.54,
+      "ns": 718422.32,
+      "min": 1527365.17,
+      "max": 1589707.21
+    },
+    {
+      "label": "candidate3-isolated-rgb333-owned-parent-b",
+      "binary": "parent",
+      "mode": "image-rgba",
+      "case": "rgb333-511x257-bottom",
+      "cycles": 2794368.81,
+      "ns": 1276487.5,
+      "min": 2754639.3,
+      "max": 3207298.7
+    }
+  ],
+  "process_checks": {
+    "records": 24,
+    "external": []
+  },
+  "conclusion": "The 50% RGB333 decode regression from the multi-case screen did not repeat in isolated ABBA processes. Both binaries entered the same roughly 1.15M-cycle decode regime. Candidate/parent is 1.00727 decode and 1.01123 consuming; image control is 0.99837. All medians are retained. Full original-baseline/candidate matrix is authorized to proceed, without treating other collateral losses as resolved."
+}

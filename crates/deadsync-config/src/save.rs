@@ -506,6 +506,7 @@ const fn system_options(cfg: &Config) -> SystemOptions {
         smx_judge_gifs_pack: cfg.smx_judge_gifs_pack,
         gfx_debug: cfg.gfx_debug,
         global_offset_seconds: cfg.global_offset_seconds,
+        pad_stick_seconds: cfg.pad_stick_seconds,
         language_flag: cfg.language_flag,
         log_level: cfg.log_level,
         log_to_file: cfg.log_to_file,
@@ -691,6 +692,38 @@ mod tests {
     use super::*;
     use crate::ini::SimpleIni;
     use deadlib_render_core::BackendType;
+
+    #[test]
+    fn pad_stick_defaults_zero_and_preserves_float_seconds_on_round_trip() {
+        assert_eq!(Config::default().pad_stick_seconds, 0.0);
+        let mut ini = SimpleIni::new();
+        ini.load_str(&build_default_app_config_file());
+        assert_eq!(ini.get("Options", "PadStickSeconds"), Some("0"));
+
+        for (value, expected) in [
+            ("", 0.0_f32),
+            ("PadStickSeconds=invalid", 0.0),
+            ("PadStickSeconds=NaN", 0.0),
+            ("PadStickSeconds=inf", 0.0),
+            ("PadStickSeconds=0.05", 0.05),
+            ("PadStickSeconds=0.050123457", 0.050123457),
+            ("PadStickSeconds=-0.012345678", -0.012345678),
+            ("PadStickSeconds=1.25", 1.25),
+        ] {
+            let mut ini = SimpleIni::new();
+            ini.load_str(&format!("[Options]\n{value}\nInputDebounceTime=0.031\n"));
+            let cfg = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(cfg.pad_stick_seconds.to_bits(), expected.to_bits(), "{value}");
+            assert_eq!(cfg.input_debounce_seconds, 0.031);
+
+            let content =
+                build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+            ini.load_str(&content);
+            let loaded = crate::load::load_app_config(&ini, Config::default());
+            assert_eq!(loaded.pad_stick_seconds.to_bits(), expected.to_bits(), "{value}");
+            assert_eq!(loaded.input_debounce_seconds, 0.031);
+        }
+    }
 
     #[test]
     fn axis_fix_defaults_off_and_round_trips_through_app_config() {

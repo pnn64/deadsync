@@ -1,0 +1,160 @@
+[
+  {
+    "path": "target/png-perf-20261119/assets/asset-07.png",
+    "width": 668,
+    "height": 566,
+    "color_type": 3,
+    "bit_depth": 1,
+    "byte_stride": 1,
+    "filtered_bytes": 48110,
+    "idat_chunks": 1,
+    "filters": {
+      "None": 566
+    },
+    "zero_residual_rows": {},
+    "zero_alpha_residual_rows": {},
+    "provably_zero_neighbor_rows": {},
+    "zero_residual_byte_fraction": 0.2788364462392731,
+    "metadata": [
+      {
+        "kind": "tRNS",
+        "bytes": 1
+      }
+    ]
+  },
+  {
+    "path": "target/png-perf-20261119/assets/asset-22.png",
+    "width": 384,
+    "height": 512,
+    "color_type": 6,
+    "bit_depth": 8,
+    "byte_stride": 4,
+    "filtered_bytes": 786944,
+    "idat_chunks": 17,
+    "filters": {
+      "None": 80,
+      "Sub": 185,
+      "Paeth": 125,
+      "Up": 122
+    },
+    "zero_residual_rows": {
+      "None": 80
+    },
+    "zero_alpha_residual_rows": {
+      "None": 80,
+      "Paeth": 125,
+      "Up": 122
+    },
+    "provably_zero_neighbor_rows": {},
+    "zero_residual_byte_fraction": 0.7977256774902344,
+    "metadata": [
+      {
+        "kind": "zTXt",
+        "bytes": 19732,
+        "compressed_bytes": 19709,
+        "first_deflate_block_type": 2
+      },
+      {
+        "kind": "iCCP",
+        "bytes": 2618,
+        "compressed_bytes": 2595,
+        "first_deflate_block_type": 2
+      },
+      {
+        "kind": "iTXt",
+        "bytes": 3996
+      },
+      {
+        "kind": "bKGD",
+        "bytes": 6
+      },
+      {
+        "kind": "pHYs",
+        "bytes": 9
+      },
+      {
+        "kind": "tIME",
+        "bytes": 7
+      }
+    ]
+  },
+  {
+    "path": "target/png-perf-20261119/assets/asset-23.png",
+    "width": 2596,
+    "height": 2660,
+    "color_type": 6,
+    "bit_depth": 8,
+    "byte_stride": 4,
+    "filtered_bytes": 27624100,
+    "idat_chunks": 202,
+    "filters": {
+      "Sub": 255,
+      "Paeth": 443,
+      "Up": 1899,
+      "Average": 63
+    },
+    "zero_residual_rows": {},
+    "zero_alpha_residual_rows": {
+      "Up": 48,
+      "Paeth": 3
+    },
+    "provably_zero_neighbor_rows": {},
+    "zero_residual_byte_fraction": 0.6721451162575159,
+    "metadata": [
+      {
+        "kind": "gAMA",
+        "bytes": 4
+      },
+      {
+        "kind": "cHRM",
+        "bytes": 32
+      },
+      {
+        "kind": "bKGD",
+        "bytes": 6
+      },
+      {
+        "kind": "tEXt",
+        "bytes": 45
+      },
+      {
+        "kind": "tEXt",
+        "bytes": 18
+      }
+    ]
+  },
+  {
+    "path": "target/png-kodak-20261117/kodim18.png",
+    "width": 512,
+    "height": 768,
+    "color_type": 2,
+    "bit_depth": 8,
+    "byte_stride": 3,
+    "filtered_bytes": 1180416,
+    "idat_chunks": 2,
+    "filters": {
+      "Sub": 1,
+      "Paeth": 102,
+      "Average": 653,
+      "Up": 12
+    },
+    "zero_residual_rows": {},
+    "zero_alpha_residual_rows": {},
+    "provably_zero_neighbor_rows": {},
+    "zero_residual_byte_fraction": 0.07253180609809028,
+    "metadata": [
+      {
+        "kind": "gAMA",
+        "bytes": 4
+      },
+      {
+        "kind": "sRGB",
+        "bytes": 1
+      },
+      {
+        "kind": "tEXt",
+        "bytes": 20
+      }
+    ]
+  }
+]

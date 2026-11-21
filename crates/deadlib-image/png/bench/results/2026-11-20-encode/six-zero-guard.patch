@@ -1,0 +1,26 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -1275,15 +1275,20 @@ impl Writer {
+         let mut pos = 0;
+         while pos < input.len() {
+             // Emit four literals together unless a compressible zero run can
+-            // start in them. Single, double and triple zeros are also literals.
++            // start in them. Runs shorter than six bytes remain literals.
+             while let Some(bytes) = input[pos..].first_chunk::<8>() {
+                 let word = u64::from_le_bytes(*bytes);
+                 // Each low-seven-bit sum is at most 254, so there is no
+                 // interbyte carry. Unlike subtract-and-borrow detection, this
+                 // marks only zero bytes, preserving the fast path for 0/1 data.
+                 let low = 0x7f7f_7f7f_7f7f_7f7f;
+                 let zeros = !((word & low).wrapping_add(low) | word | low);
+-                if zeros & (zeros >> 8) & (zeros >> 16) & (zeros >> 24) & 0x8080_8080 != 0 {
++                let five = zeros & (zeros >> 8) & (zeros >> 16) & (zeros >> 24) & (zeros >> 32);
++                // Six-byte runs starting at 0..=2 fit in the word; a run at
++                // offset 3 needs one further byte beyond this eight-byte load.
++                if five & (zeros >> 40) & 0x0080_8080 != 0
++                    || (five & 0x8000_0000 != 0 && input.get(pos + 8) == Some(&0))
++                {
+                     break;
+                 }
+                 self.rle_literals(&input[pos..pos + 4]);

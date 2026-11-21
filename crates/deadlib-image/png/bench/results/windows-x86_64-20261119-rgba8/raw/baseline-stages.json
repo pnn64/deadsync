@@ -1,0 +1,50 @@
+﻿[
+    {
+        "path":  "target/png-perf-20261119/assets/asset-23.png",
+        "stages":  [
+                       "compressed=6619008 filtered=27624100 samples=27621440",
+                       "whole PNG\t75944750 ns",
+                       "CRC\t418264 ns",
+                       "Adler\t4633800 ns",
+                       "inflate contiguous\t65882700 ns",
+                       "inflate IDAT\t65200300 ns",
+                       "unfilter and samples\t20990620 ns"
+                   ]
+    },
+    {
+        "path":  "target/png-perf-20261119/assets/asset-22.png",
+        "stages":  [
+                       "compressed=134173 filtered=786944 samples=786432",
+                       "whole PNG\t2191352 ns",
+                       "CRC\t8366 ns",
+                       "Adler\t72577 ns",
+                       "inflate contiguous\t1135589 ns",
+                       "inflate IDAT\t1260163 ns",
+                       "unfilter and samples\t452827 ns"
+                   ]
+    },
+    {
+        "path":  "target/png-kodak-20261117/kodim18.png",
+        "stages":  [
+                       "compressed=780817 filtered=1180416 samples=1179648",
+                       "whole PNG\t5840094 ns",
+                       "CRC\t48656 ns",
+                       "Adler\t109033 ns",
+                       "inflate contiguous\t4946100 ns",
+                       "inflate IDAT\t4964785 ns",
+                       "unfilter and samples\t1346560 ns"
+                   ]
+    },
+    {
+        "path":  "target/png-decode-corpus-20261117/color-0-depth-16-adam7-0-noise-1.png",
+        "stages":  [
+                       "compressed=66466 filtered=66435 samples=33153",
+                       "whole PNG\t384093 ns",
+                       "CRC\t4123 ns",
+                       "Adler\t6172 ns",
+                       "inflate contiguous\t12570 ns",
+                       "inflate IDAT\t12930 ns",
+                       "unfilter and samples\t266860 ns"
+                   ]
+    }
+]

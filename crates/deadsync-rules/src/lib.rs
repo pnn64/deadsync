@@ -1,4 +1,5 @@
 pub mod combo;
+pub mod course;
 pub mod golf;
 pub mod judgment;
 pub mod life;

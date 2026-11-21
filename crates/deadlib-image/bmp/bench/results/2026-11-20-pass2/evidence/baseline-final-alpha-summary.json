@@ -1,0 +1,1080 @@
+{
+  "parent": "original baseline 945da378a907bb7c4fec1f432d02d320c9d2a462",
+  "candidate": "candidate3-direct-rgba including logical alpha and RGBA4444",
+  "cpu": 2,
+  "batches": 5,
+  "ratio_convention": "after/before; less than one is fewer cycles",
+  "status": "Measured, provisional source selection; material non-target losses remain unresolved",
+  "milliseconds": 80,
+  "modes": {
+    "decode": {
+      "rows": 18,
+      "native_count": 18,
+      "reference_count": 0,
+      "native_geomean": 0.9513018459097569,
+      "native_ns_geomean": 0.9523804891631203,
+      "native_sum_cycle_ratio": 0.9402612531323873,
+      "non_target_native_geomean": 0.9513018459097569,
+      "reference_geomean": null,
+      "native_loss_cases": [
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-top.bmp"
+      ],
+      "groups": {
+        "bgra32-first-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.6511106710114282,
+          "native_ns_geomean": 0.6514235169977581,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp"
+          ]
+        },
+        "bgra32-first-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 1.3103613222544557,
+          "native_ns_geomean": 1.3127293285575172,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-top.bmp"
+          ]
+        },
+        "bgra32-last-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 1.117798112930504,
+          "native_ns_geomean": 1.1200119008995875,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-bottom.bmp"
+          ]
+        },
+        "bgra32-last-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 1.054441160615406,
+          "native_ns_geomean": 1.0554421389328568,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-top.bmp"
+          ]
+        },
+        "bgra32-zero-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.8597564292274236,
+          "native_ns_geomean": 0.8604841614250437,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": []
+        },
+        "bgra32-zero-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.8572411364628115,
+          "native_ns_geomean": 0.8578757058586425,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": []
+        }
+      },
+      "reference_comparisons": {
+        "before": {
+          "count": 0,
+          "wins": 0,
+          "cycle_geomean": null,
+          "ns_geomean": null,
+          "losses": [],
+          "worst": null
+        },
+        "after": {
+          "count": 0,
+          "wins": 0,
+          "cycle_geomean": null,
+          "ns_geomean": null,
+          "losses": [],
+          "worst": null
+        }
+      },
+      "native_cases": [
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 625.96,
+          "after_cycles": 654.61,
+          "after_over_before": 1.0457696977442648,
+          "ns_after_over_before": 1.0464896631335923,
+          "before_ns": 285.87,
+          "after_ns": 299.16,
+          "before_range": [
+            621.19,
+            633.09
+          ],
+          "after_range": [
+            631.44,
+            662.45
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 617.89,
+          "after_cycles": 654.18,
+          "after_over_before": 1.0587321367881013,
+          "ns_after_over_before": 1.0594887793810048,
+          "before_ns": 282.07,
+          "after_ns": 298.85,
+          "before_range": [
+            609.77,
+            620.82
+          ],
+          "after_range": [
+            637.27,
+            785.41
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 7687205.13,
+          "after_cycles": 7740562.26,
+          "after_over_before": 1.0069410311156872,
+          "ns_after_over_before": 1.0075748860195952,
+          "before_ns": 3512178.26,
+          "after_ns": 3538782.61,
+          "before_range": [
+            7552885.08,
+            8004895.41
+          ],
+          "after_range": [
+            7660750.61,
+            7925057.09
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 7614747.79,
+          "after_cycles": 7889364.61,
+          "after_over_before": 1.0360638103287727,
+          "ns_after_over_before": 1.037334993711272,
+          "before_ns": 3478533.33,
+          "after_ns": 3608404.35,
+          "before_range": [
+            7509570.58,
+            8908572
+          ],
+          "after_range": [
+            7784586.65,
+            7899642.87
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 689521.53,
+          "after_cycles": 180747.45,
+          "after_over_before": 0.2621345993358612,
+          "ns_after_over_before": 0.2621669984554109,
+          "before_ns": 315145.31,
+          "after_ns": 82620.7,
+          "before_range": [
+            680452.5,
+            703877.34
+          ],
+          "after_range": [
+            179095.93,
+            181937.15
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-top.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 333437.13,
+          "after_cycles": 683934.57,
+          "after_over_before": 2.051164997731356,
+          "ns_after_over_before": 2.058307110175556,
+          "before_ns": 152508.33,
+          "after_ns": 313908.98,
+          "before_range": [
+            226135.11,
+            345011.57
+          ],
+          "after_range": [
+            365320.7,
+            704528.98
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 847.71,
+          "after_cycles": 947.34,
+          "after_over_before": 1.1175284000424675,
+          "ns_after_over_before": 1.1187824604015402,
+          "before_ns": 387.01,
+          "after_ns": 432.98,
+          "before_range": [
+            837.52,
+            863.82
+          ],
+          "after_range": [
+            938.28,
+            963.51
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 855.17,
+          "after_cycles": 896.22,
+          "after_over_before": 1.0480021516189764,
+          "ns_after_over_before": 1.0495683582242488,
+          "before_ns": 390.37,
+          "after_ns": 409.72,
+          "before_range": [
+            827.96,
+            884.87
+          ],
+          "after_range": [
+            882.52,
+            898.89
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 10349347.65,
+          "after_cycles": 10690553.71,
+          "after_over_before": 1.0329688470751102,
+          "ns_after_over_before": 1.033370069280978,
+          "before_ns": 4728964.71,
+          "after_ns": 4886770.59,
+          "before_range": [
+            9997176.17,
+            11257688.5
+          ],
+          "after_range": [
+            10542120.41,
+            10738701.82
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-top.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 10616621.06,
+          "after_cycles": 10393350.88,
+          "after_over_before": 0.9789697514173121,
+          "ns_after_over_before": 0.9798651931040816,
+          "before_ns": 4850541.18,
+          "after_ns": 4752876.47,
+          "before_range": [
+            10171069.22,
+            13025396.79
+          ],
+          "after_range": [
+            10229163.44,
+            10411995.47
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 448972.68,
+          "after_cycles": 543205.6,
+          "after_over_before": 1.2098856438213568,
+          "ns_after_over_before": 1.215252112154484,
+          "before_ns": 205067.86,
+          "after_ns": 249209.15,
+          "before_range": [
+            416680.38,
+            451166.02
+          ],
+          "after_range": [
+            539608.5,
+            545042.58
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-top.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 402676.26,
+          "after_cycles": 460141.74,
+          "after_over_before": 1.1427088847999134,
+          "ns_after_over_before": 1.1432105626115472,
+          "before_ns": 184087.05,
+          "after_ns": 210450.26,
+          "before_range": [
+            374938.09,
+            403891.97
+          ],
+          "after_range": [
+            448626.08,
+            476091.91
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 955.26,
+          "after_cycles": 894.99,
+          "after_over_before": 0.9369072294453866,
+          "ns_after_over_before": 0.9378524597680069,
+          "before_ns": 436.22,
+          "after_ns": 409.11,
+          "before_range": [
+            936.29,
+            964.74
+          ],
+          "after_range": [
+            869.65,
+            903.7
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-top.bmp",
+          "mode": "native-decode",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 961.22,
+          "after_cycles": 899.48,
+          "after_over_before": 0.9357691267347745,
+          "ns_after_over_before": 0.9379970377122022,
+          "before_ns": 438.85,
+          "after_ns": 411.64,
+          "before_range": [
+            957.03,
+            987.09
+          ],
+          "after_range": [
+            845.35,
+            1139.06
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 12823048.71,
+          "after_cycles": 10517575.12,
+          "after_over_before": 0.8202086226029783,
+          "ns_after_over_before": 0.8212584394146066,
+          "before_ns": 5856521.43,
+          "after_ns": 4809717.65,
+          "before_range": [
+            12350664.8,
+            13222335.14
+          ],
+          "after_range": [
+            10425217.06,
+            10896832.18
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-top.bmp",
+          "mode": "native-decode",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 12188966.73,
+          "after_cycles": 10410859.18,
+          "after_over_before": 0.8541215519422457,
+          "ns_after_over_before": 0.8533849381881542,
+          "before_ns": 5580193.33,
+          "after_ns": 4762052.94,
+          "before_range": [
+            11987612.07,
+            12703406
+          ],
+          "after_range": [
+            10255357.17,
+            10985769.5
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-bottom.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 498639.15,
+          "after_cycles": 412374.45,
+          "after_over_before": 0.8269997452065286,
+          "ns_after_over_before": 0.8272071417672796,
+          "before_ns": 227813.64,
+          "after_ns": 188449.07,
+          "before_range": [
+            480764.63,
+            509771.29
+          ],
+          "after_range": [
+            407658.75,
+            416131.62
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-top.bmp",
+          "mode": "native-decode",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 476174.24,
+          "after_cycles": 375306.87,
+          "after_over_before": 0.7881713004886615,
+          "ns_after_over_before": 0.7887269261650612,
+          "before_ns": 217544.57,
+          "after_ns": 171583.26,
+          "before_range": [
+            461746.26,
+            479701.76
+          ],
+          "after_range": [
+            364767.61,
+            378687.64
+          ]
+        }
+      ],
+      "reference_cases": []
+    },
+    "owned": {
+      "rows": 24,
+      "native_count": 18,
+      "reference_count": 6,
+      "native_geomean": 0.9877751871236223,
+      "native_ns_geomean": 0.98752302452154,
+      "native_sum_cycle_ratio": 0.951958742874947,
+      "non_target_native_geomean": 0.9877751871236223,
+      "reference_geomean": 1.0087696922270257,
+      "native_loss_cases": [
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp",
+        "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-top.bmp"
+      ],
+      "groups": {
+        "bgra32-first-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 1.5960455963875702,
+          "native_ns_geomean": 1.5949317127601095,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-bottom.bmp"
+          ]
+        },
+        "bgra32-first-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.8399089975953542,
+          "native_ns_geomean": 0.8388063462199391,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp"
+          ]
+        },
+        "bgra32-last-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 1.0100790202360355,
+          "native_ns_geomean": 1.0104200135511001,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp"
+          ]
+        },
+        "bgra32-last-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.9899643326341877,
+          "native_ns_geomean": 0.98974994140494,
+          "reference_count": 0,
+          "reference_geomean": null,
+          "native_loss_cases": [
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+            "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-top.bmp"
+          ]
+        },
+        "bgra32-zero-bottom.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.8493648153910196,
+          "native_ns_geomean": 0.8496123129835199,
+          "reference_count": 3,
+          "reference_geomean": 1.0073121965190013,
+          "native_loss_cases": []
+        },
+        "bgra32-zero-top.bmp": {
+          "native_count": 3,
+          "native_geomean": 0.8158343407928526,
+          "native_ns_geomean": 0.8158895258312711,
+          "reference_count": 3,
+          "reference_geomean": 1.0102292968082933,
+          "native_loss_cases": []
+        }
+      },
+      "reference_comparisons": {
+        "before": {
+          "count": 6,
+          "wins": 6,
+          "cycle_geomean": 2.9025156569413446,
+          "ns_geomean": 2.9027159526834354,
+          "losses": [],
+          "worst": {
+            "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-top.bmp",
+            "native_cycles": 12427197.8,
+            "image_cycles": 30750888.67,
+            "image_over_native": 2.4744829176212195,
+            "ns_image_over_native": 2.471929873930662
+          }
+        },
+        "after": {
+          "count": 6,
+          "wins": 6,
+          "cycle_geomean": 3.5173733803707288,
+          "ns_geomean": 3.5162092219309673,
+          "losses": [],
+          "worst": {
+            "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-top.bmp",
+            "native_cycles": 10568705.41,
+            "image_cycles": 31104687.17,
+            "image_over_native": 2.943093402960127,
+            "ns_image_over_native": 2.939843222114297
+          }
+        }
+      },
+      "native_cases": [
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 637.95,
+          "after_cycles": 654.23,
+          "after_over_before": 1.0255192413198526,
+          "ns_after_over_before": 1.024056749254652,
+          "before_ns": 291.81,
+          "after_ns": 298.83,
+          "before_range": [
+            631.94,
+            647.57
+          ],
+          "after_range": [
+            643.78,
+            685.62
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-17x9-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 642.51,
+          "after_cycles": 664.89,
+          "after_over_before": 1.0348321426903861,
+          "ns_after_over_before": 1.035258048032703,
+          "before_ns": 293.55,
+          "after_ns": 303.9,
+          "before_range": [
+            636.25,
+            646.52
+          ],
+          "after_range": [
+            645.03,
+            671.11
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 7550525.79,
+          "after_cycles": 7958112,
+          "after_over_before": 1.0539811691710015,
+          "ns_after_over_before": 1.052969233083395,
+          "before_ns": 3455708.33,
+          "after_ns": 3638754.55,
+          "before_range": [
+            7484446.88,
+            8057226.23
+          ],
+          "after_range": [
+            7718183.09,
+            8073230.05
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-1920x1080-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 7616545,
+          "after_cycles": 7774279.61,
+          "after_over_before": 1.0207094699762163,
+          "ns_after_over_before": 1.0172305026136212,
+          "before_ns": 3494056.52,
+          "after_ns": 3554260.87,
+          "before_range": [
+            7518359.62,
+            7850235.83
+          ],
+          "after_range": [
+            7721714,
+            8045433.27
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 178603.4,
+          "after_cycles": 671813.83,
+          "after_over_before": 3.761483991906089,
+          "ns_after_over_before": 3.762587205526207,
+          "before_ns": 81679.17,
+          "after_ns": 307325,
+          "before_range": [
+            173515.4,
+            183519.15
+          ],
+          "after_range": [
+            652900.33,
+            673055.18
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-first-511x257-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 659214.99,
+          "after_cycles": 369787.07,
+          "after_over_before": 0.5609506391837358,
+          "ns_after_over_before": 0.5604245257128857,
+          "before_ns": 301711.76,
+          "after_ns": 169086.67,
+          "before_range": [
+            344145.13,
+            667329.89
+          ],
+          "after_range": [
+            244163.6,
+            372336.19
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 880.37,
+          "after_cycles": 944.91,
+          "after_over_before": 1.0733100855322193,
+          "ns_after_over_before": 1.0739064481635292,
+          "before_ns": 402.13,
+          "after_ns": 431.85,
+          "before_range": [
+            860.38,
+            892.29
+          ],
+          "after_range": [
+            921.45,
+            961.02
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-17x9-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": false,
+          "before_cycles": 876.02,
+          "after_cycles": 907.24,
+          "after_over_before": 1.0356384557430196,
+          "ns_after_over_before": 1.0356785928442933,
+          "before_ns": 400.24,
+          "after_ns": 414.52,
+          "before_range": [
+            872.41,
+            887.52
+          ],
+          "after_range": [
+            895.61,
+            912.12
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 10249979.5,
+          "after_cycles": 10422686.18,
+          "after_over_before": 1.0168494658940537,
+          "ns_after_over_before": 1.0176896461360103,
+          "before_ns": 4687133.33,
+          "after_ns": 4770047.06,
+          "before_range": [
+            10230273.44,
+            10325641.35
+          ],
+          "after_range": [
+            10317997.76,
+            10463616.59
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-1920x1080-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": false,
+          "before_cycles": 10484946.71,
+          "after_cycles": 10652296.24,
+          "after_over_before": 1.0159609328143167,
+          "ns_after_over_before": 1.0150403865055688,
+          "before_ns": 4797670.59,
+          "after_ns": 4869829.41,
+          "before_range": [
+            10097121.94,
+            10613393.18
+          ],
+          "after_range": [
+            10449052.29,
+            11358397.62
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 501226.38,
+          "after_cycles": 473279.94,
+          "after_over_before": 0.9442438763897463,
+          "ns_after_over_before": 0.9438957120674669,
+          "before_ns": 229241.48,
+          "after_ns": 216380.05,
+          "before_range": [
+            456796.65,
+            513266.93
+          ],
+          "after_range": [
+            472479.59,
+            479515.65
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-last-511x257-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": false,
+          "before_cycles": 448465.37,
+          "after_cycles": 413525.58,
+          "after_over_before": 0.9220903277325516,
+          "ns_after_over_before": 0.9222913430084011,
+          "before_ns": 205064.54,
+          "after_ns": 189129.25,
+          "before_range": [
+            413875.02,
+            457235.06
+          ],
+          "after_range": [
+            409220.15,
+            424003.82
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 1012.09,
+          "after_cycles": 936.19,
+          "after_over_before": 0.9250066693673488,
+          "ns_after_over_before": 0.9246816698013274,
+          "before_ns": 462.57,
+          "after_ns": 427.73,
+          "before_range": [
+            972.32,
+            1023.13
+          ],
+          "after_range": [
+            924.74,
+            945.53
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 996.31,
+          "after_cycles": 854.19,
+          "after_over_before": 0.8573536349128285,
+          "ns_after_over_before": 0.8574283957125286,
+          "before_ns": 455.28,
+          "after_ns": 390.37,
+          "before_range": [
+            980.48,
+            1023.09
+          ],
+          "after_range": [
+            841.9,
+            865.74
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 12352699.4,
+          "after_cycles": 10339366.59,
+          "after_over_before": 0.8370127253319222,
+          "ns_after_over_before": 0.8375717938893548,
+          "before_ns": 5649173.33,
+          "after_ns": 4731588.24,
+          "before_range": [
+            12100581.27,
+            12376990.67
+          ],
+          "after_range": [
+            10139778.22,
+            10566330
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 12427197.8,
+          "after_cycles": 10568705.41,
+          "after_over_before": 0.8504496009550921,
+          "ns_after_over_before": 0.8505759282839936,
+          "before_ns": 5685760,
+          "after_ns": 4836170.59,
+          "before_range": [
+            12151022.47,
+            12740767.14
+          ],
+          "after_range": [
+            10199518.89,
+            10682910.06
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-bottom.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 488489.93,
+          "after_cycles": 386599.68,
+          "after_over_before": 0.791417911112313,
+          "ns_after_over_before": 0.7918594449740467,
+          "before_ns": 223270.28,
+          "after_ns": 176798.68,
+          "before_range": [
+            467725.89,
+            492085.46
+          ],
+          "after_range": [
+            372423.61,
+            387893.57
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-top.bmp",
+          "mode": "native-owned-rgba",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 469490.07,
+          "after_cycles": 349642.15,
+          "after_over_before": 0.7447274656948549,
+          "ns_after_over_before": 0.7447030345892811,
+          "before_ns": 214583.24,
+          "after_ns": 159800.79,
+          "before_range": [
+            457808.42,
+            485507.16
+          ],
+          "after_range": [
+            342009.28,
+            357163.67
+          ]
+        }
+      ],
+      "reference_cases": [
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-bottom.bmp",
+          "mode": "image-rgba",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 2898.09,
+          "after_cycles": 2879.97,
+          "after_over_before": 0.9937476061820025,
+          "ns_after_over_before": 0.9932719172392963,
+          "before_ns": 1324.3,
+          "after_ns": 1315.39,
+          "before_range": [
+            2882.49,
+            2927.45
+          ],
+          "after_range": [
+            2811.79,
+            2979.63
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-17x9-top.bmp",
+          "mode": "image-rgba",
+          "pixels": 153,
+          "image_equivalent": true,
+          "before_cycles": 2709.48,
+          "after_cycles": 2796,
+          "after_over_before": 1.0319323264980733,
+          "ns_after_over_before": 1.0325736583158966,
+          "before_ns": 1237.81,
+          "after_ns": 1278.13,
+          "before_range": [
+            2680.04,
+            2770.65
+          ],
+          "after_range": [
+            2667.08,
+            2805.78
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-bottom.bmp",
+          "mode": "image-rgba",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 35128472.8,
+          "after_cycles": 35758130.8,
+          "after_over_before": 1.0179244342213476,
+          "ns_after_over_before": 1.0172973699337817,
+          "before_ns": 16074120,
+          "after_ns": 16352160,
+          "before_range": [
+            34591517.33,
+            35550571.6
+          ],
+          "after_range": [
+            35043759.83,
+            36674806.4
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-1920x1080-top.bmp",
+          "mode": "image-rgba",
+          "pixels": 2073600,
+          "image_equivalent": true,
+          "before_cycles": 30750888.67,
+          "after_cycles": 31104687.17,
+          "after_over_before": 1.011505309774841,
+          "ns_after_over_before": 1.0115820452799045,
+          "before_ns": 14054800,
+          "after_ns": 14217583.33,
+          "before_range": [
+            29804697.83,
+            31620182.67
+          ],
+          "after_range": [
+            30952097,
+            32741389.17
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-bottom.bmp",
+          "mode": "image-rgba",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 1610453.84,
+          "after_cycles": 1627229.93,
+          "after_over_before": 1.0104169952489914,
+          "ns_after_over_before": 1.0106883804952929,
+          "before_ns": 736113.39,
+          "after_ns": 743981.25,
+          "before_range": [
+            1532938.57,
+            1638785.06
+          ],
+          "after_range": [
+            1571318.19,
+            1705521.33
+          ]
+        },
+        {
+          "case": "target/bmp-decode-opt-20261120-pass2/alpha-controls\\bgra32-zero-511x257-top.bmp",
+          "mode": "image-rgba",
+          "pixels": 131327,
+          "image_equivalent": true,
+          "before_cycles": 1553871.57,
+          "after_cycles": 1534813.51,
+          "after_over_before": 0.9877351124971029,
+          "ns_after_over_before": 0.9865565282588596,
+          "before_ns": 711125.83,
+          "after_ns": 701565.83,
+          "before_range": [
+            1524339.68,
+            1584989.9
+          ],
+          "after_range": [
+            1519080.83,
+            1572917.4
+          ]
+        }
+      ]
+    }
+  },
+  "process_checks": {
+    "records": 30,
+    "external": []
+  }
+}

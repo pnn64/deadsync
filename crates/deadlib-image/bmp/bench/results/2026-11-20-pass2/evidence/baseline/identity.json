@@ -1,0 +1,211 @@
+{
+    "captured_utc":  "2026-11-20T20:30:13.0298400Z",
+    "root":  "C:\\GitHub\\deadsync",
+    "head":  "945da378a907bb7c4fec1f432d02d320c9d2a462",
+    "bmp_status":  [
+
+                   ],
+    "rustc":  [
+                  "rustc 1.100.0 (0ef1bc386 2026-11-09)",
+                  "binary: rustc",
+                  "commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a",
+                  "commit-date: 2026-11-09",
+                  "host: x86_64-pc-windows-msvc",
+                  "release: 1.100.0",
+                  "LLVM version: 23.1.5"
+              ],
+    "cargo":  "cargo 1.100.0 (3acc79c0c 2026-11-05)",
+    "environment":  {
+                        "RUSTFLAGS":  null,
+                        "CARGO_ENCODED_RUSTFLAGS":  null,
+                        "CARGO_TARGET_DIR":  null,
+                        "RUSTC_WRAPPER":  null
+                    },
+    "cpu":  [
+                {
+                    "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                    "NumberOfCores":  22,
+                    "NumberOfLogicalProcessors":  44
+                }
+            ],
+    "os":  "Microsoft Windows NT 10.0.26100.0",
+    "sources":  [
+                    {
+                        "path":  ".cargo/config.toml",
+                        "bytes":  1439,
+                        "sha256":  "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+                    },
+                    {
+                        "path":  "Cargo.lock",
+                        "bytes":  167590,
+                        "sha256":  "5195e19d12611787a718fbbe7b9476de073441f90449163a9ba82a0714408cfb"
+                    },
+                    {
+                        "path":  "Cargo.toml",
+                        "bytes":  7103,
+                        "sha256":  "36a3a01b644c3a29cbc1b8cea099a21bf3044eae13b7e4fe721882d388190664"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/analyze.py",
+                        "bytes":  12347,
+                        "sha256":  "eaf3cc2981942c9a7b2e68c64f97e3fd3e444325c322f3012d5ddc3ed6abd73c"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/Cargo.lock",
+                        "bytes":  1766,
+                        "sha256":  "1365893765b127023b88749d5410241a208dcabe99d6e93179bd67c5482a13d4"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/Cargo.toml",
+                        "bytes":  347,
+                        "sha256":  "8d248695a4820f914f46c881998c2ca18126e01171ba4da7dbba7b6ce63f745f"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/README.md",
+                        "bytes":  9915,
+                        "sha256":  "6a84ccdf864612841f7e0dac9321278b6d557c24a7f01cfc8385e7cb54aa057f"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/src/bin/native_snapshot.rs",
+                        "bytes":  10071,
+                        "sha256":  "2ad4bfbdbad386525155d0b44beb5009c77b0572be71a897b3e162e4b528d282"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/src/fixtures.rs",
+                        "bytes":  9229,
+                        "sha256":  "1797f2b521e18f031311b698a6fa5a4084af4a404b222b15362150fe2174fc6b"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/bench/src/main.rs",
+                        "bytes":  19086,
+                        "sha256":  "82a8834e2644162cbd925c4e96ca35eca9c7846c4dd58700af71f1b4fd9ea8b9"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/Cargo.toml",
+                        "bytes":  281,
+                        "sha256":  "c365bd4297892aa54a821f08ff5ea8e1506a3966ca215e26889154fde0653669"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/README.md",
+                        "bytes":  7687,
+                        "sha256":  "074f829b02b906a1f71a753f817c3fc7830c0cca2a63c84c3e77df4fddbf6728"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/src/decode.rs",
+                        "bytes":  19937,
+                        "sha256":  "84591b2faaf4455f788ad7b475693fa93d7b4aa2793dda43b901cd66a463454e"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/src/encode.rs",
+                        "bytes":  5190,
+                        "sha256":  "a9cb5eaa16c6f816cd39bd217463a5b25ef3bbaf871db295c65d26fe4de4bf51"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/src/lib.rs",
+                        "bytes":  2281,
+                        "sha256":  "fd77ac85b9fa26a02cc7f49c3b94215b66f6c91ffe30c209ea8f0ba2933cb4c0"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/src/model.rs",
+                        "bytes":  7790,
+                        "sha256":  "02b7095ae208426daa8ccd1af24453129045d0ed82567f47d6a72d13ef7ae271"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/tests/bmp_decode.rs",
+                        "bytes":  24562,
+                        "sha256":  "492673a747542ff04c2d33414a903cdac2b3774b8a7dd65d47a3c55832ae8d14"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/tests/bmp_encode.rs",
+                        "bytes":  6632,
+                        "sha256":  "3deb0f1254168a647faec331c89aa475feb978e3d1bfa16a033340bad5728851"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/tests/bmp_model.rs",
+                        "bytes":  5450,
+                        "sha256":  "8b3f126adb8f3d0cdb23751a2002573a5785e0ba8ef0aace0affa7e8d1435176"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/tests/bmp_optimized.rs",
+                        "bytes":  17440,
+                        "sha256":  "c865d6892746b02197fbad6c4441b141c25d96b18c0d9b0491541a5c454f5efa"
+                    },
+                    {
+                        "path":  "crates/deadlib-image/bmp/tests/bmp_owned.rs",
+                        "bytes":  8050,
+                        "sha256":  "eecd8db088aa3b6cd7d253bde63aa414865af100bbb355fb7e1fbe433a4eca1f"
+                    },
+                    {
+                        "path":  "rust-performance.md",
+                        "bytes":  139730,
+                        "sha256":  "614478d1ac205783f0841e0079ff0c4da20988554f7f38ff9d6cd6f00e0a276b"
+                    }
+                ],
+    "inputs":  [
+                   {
+                       "path":  "tests/fixtures/itgmania-primary-bitmaps/os2-1-padded.bmp",
+                       "bytes":  76,
+                       "sha256":  "978a72fd91977b01bfcc5c828451d48f3f45fc0b71c2ad1f484c8001ab6f7bf8"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-primary-bitmaps/win8-full-table.bmp",
+                       "bytes":  1142,
+                       "sha256":  "5a7a0fa4609f2fd4710480f6c01bc419bc2191693e3ebabf4e20aa628ec937b8"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/misnamed.png",
+                       "bytes":  134,
+                       "sha256":  "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-1.bmp",
+                       "bytes":  64,
+                       "sha256":  "f188bfabd947cfb55f8a43ec2459486501323fad0067203204d1da719cd55050"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-4.bmp",
+                       "bytes":  106,
+                       "sha256":  "06698c405d38bfc17c8f62069a172fc0a6da7a37bbd78d8a37c21f6fd706f0d8"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/os2-8.bmp",
+                       "bytes":  858,
+                       "sha256":  "a97e5ee484f654cc9a97e418eab808858aa0e4be87988c55ec8e5bdb54ba1047"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win1.bmp",
+                       "bytes":  94,
+                       "sha256":  "35458a0c27d81729ab04aea06f19647a880168c0d0e0cd9503c1118cbed38f3b"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4.bmp",
+                       "bytes":  102,
+                       "sha256":  "a7e424ad09f99ad97e2d5a995faccd8ae757e91d3253baf88671265a0e0dde13"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win4-odd.bmp",
+                       "bytes":  82,
+                       "sha256":  "d862a5d59b25a69fa1c36334ab101f8cb82a53c2f9f36714f61493a7d1f226c7"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8.bmp",
+                       "bytes":  134,
+                       "sha256":  "2f44c91ecd69db5f1ff1de0f71462e7afc1f9d042715cd4d6dc92c757a10cc34"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-both-pinks.bmp",
+                       "bytes":  134,
+                       "sha256":  "0f23968f01efb79d514c65682098dc4bec97f2b06e54bf06b796b3040710e391"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-odd.bmp",
+                       "bytes":  142,
+                       "sha256":  "4cc93d946ee60abd85d36fb219fff12dd652ba0f143f9793f7ba343ebcafa5e6"
+                   },
+                   {
+                       "path":  "tests/fixtures/itgmania-song-lua-micro/indexed-bitmap-files/win8-unused-entry.bmp",
+                       "bytes":  134,
+                       "sha256":  "1e22a2786e86aaef1b0c7a1468840459082f0eecc7bc4aa3b10a07d264cd2447"
+                   }
+               ]
+}

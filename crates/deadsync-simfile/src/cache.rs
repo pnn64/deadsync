@@ -26,8 +26,8 @@ use crate::song::{
     ParseSongOptions, SongAnalyzer, SongParseScratch, parse_song_data_file, parse_song_data_file_in,
 };
 
-// Retain native Lua background effect definitions independently of media layers.
-pub const SONG_CACHE_VERSION: u8 = 74;
+// Preserve nonempty short note rows and their native measure subdivisions.
+pub const SONG_CACHE_VERSION: u8 = 76;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -962,12 +962,14 @@ pub struct SerializableSongData {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub precise_note_first_second_seconds: Option<f32>,
     pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
     pub charts: Vec<SerializableChartData>,
 }
 
-pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset_seconds: f32) {
+/// Cache note endpoints before catalog preferences; fallback zero is not a note.
+pub fn update_precise_song_bounds(song: &mut SerializableSongData) {
     let has_non_edit = song
         .charts
         .iter()
@@ -1009,8 +1011,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         let timing_segments = chart.timing_segments.elapsed_time_segments();
         // Only the two resolved beats are queried; this temporary timing does
         // not need its own copy of the chart's full row table.
-        let timing =
-            TimingData::from_segments(-chart.offset, global_offset_seconds, &timing_segments, &[]);
+        let timing = TimingData::from_segments(-chart.offset, 0.0, &timing_segments, &[]);
         let first_sec = timing.get_time_for_beat(first_beat);
         if first_sec.is_finite() {
             first = first.min(first_sec);
@@ -1022,6 +1023,7 @@ pub fn update_precise_song_bounds(song: &mut SerializableSongData, global_offset
         }
     }
 
+    song.precise_note_first_second_seconds = first.is_finite().then_some(first);
     song.first_second = if first.is_finite() && first < last {
         first
     } else {
@@ -1111,6 +1113,7 @@ pub struct CachedSongMeta {
     pub first_second: f32,
     pub total_length_seconds: i32,
     pub precise_last_second_seconds: f32,
+    pub precise_note_first_second_seconds: Option<f32>,
     pub precise_note_last_second_seconds: Option<f32>,
     pub last_second_hint: f32,
     pub charts: Vec<CachedChartMeta>,
@@ -1217,6 +1220,7 @@ struct BorrowedCachedSongMeta<'a> {
     first_second: f32,
     total_length_seconds: i32,
     precise_last_second_seconds: f32,
+    precise_note_first_second_seconds: Option<f32>,
     precise_note_last_second_seconds: Option<f32>,
     last_second_hint: f32,
     charts: BorrowedCachedCharts<'a>,
@@ -1769,6 +1773,7 @@ pub fn build_song_meta(song: SerializableSongData, global_offset_seconds: f32) -
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_first_second_seconds: song.precise_note_first_second_seconds,
         precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
@@ -1815,6 +1820,7 @@ pub fn build_cached_song_meta(
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_first_second_seconds: song.precise_note_first_second_seconds,
         precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
@@ -1858,6 +1864,7 @@ impl<'a> BorrowedCachedSongMeta<'a> {
             first_second: song.first_second,
             total_length_seconds: song.total_length_seconds,
             precise_last_second_seconds: song.precise_last_second_seconds,
+            precise_note_first_second_seconds: song.precise_note_first_second_seconds,
             precise_note_last_second_seconds: song.precise_note_last_second_seconds,
             last_second_hint: song.last_second_hint,
             charts: BorrowedCachedCharts {
@@ -1922,6 +1929,7 @@ pub fn build_song_meta_from_cache(song: CachedSongMeta) -> SongData {
         first_second: song.first_second,
         total_length_seconds: song.total_length_seconds,
         precise_last_second_seconds: song.precise_last_second_seconds,
+        precise_note_first_second_seconds: song.precise_note_first_second_seconds,
         precise_note_last_second_seconds: song.precise_note_last_second_seconds,
         last_second_hint: song.last_second_hint,
         charts: song
@@ -3391,6 +3399,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 2,
             precise_last_second_seconds: 2.0,
+            precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: Some(2.0),
             last_second_hint: 0.0,
             charts: vec![
@@ -3400,7 +3409,7 @@ mod tests {
             ],
         };
 
-        update_precise_song_bounds(&mut song, 0.0);
+        update_precise_song_bounds(&mut song);
 
         assert_eq!(song.first_second, 2.5);
         assert_eq!(song.precise_last_second_seconds, 6.5);
@@ -3421,9 +3430,7 @@ mod tests {
             4,
             Some(8),
         )];
-        update_precise_song_bounds(&mut data, 0.0);
-        assert_eq!(data.precise_last_second_seconds, 12.75);
-        update_precise_song_bounds(&mut data, 0.125);
+        update_precise_song_bounds(&mut data);
         assert_eq!(data.precise_last_second_seconds, 12.75);
 
         write_song_cache_file(&cache_path, &data, 0.125).unwrap();
@@ -3432,6 +3439,42 @@ mod tests {
         assert_eq!(song.last_second_hint, 12.75);
         assert_eq!(song.precise_last_second(), 12.75);
         assert_eq!(song.total_length_seconds, 12);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn raw_first_note_bounds_survive_song_cache_round_trip() {
+        let root = test_dir("raw-first-note-round-trip");
+        for (name, head, tail, first, last) in [
+            ("real-zero", Some(0), Some(4), Some(0.0), Some(4.0)),
+            ("singleton", Some(4), None, Some(4.0), Some(4.0)),
+            ("row-zero-only", Some(0), None, None, None),
+            ("empty", None, None, None, None),
+        ] {
+            let simfile = root.join(format!("{name}.ssc"));
+            let cache_path = root.join(format!("{name}.bin"));
+            fs::write(&simfile, b"#TITLE:Raw first note;").unwrap();
+            let mut data = cached_song(&simfile);
+            if let Some(head) = head {
+                data.charts.push(test_serializable_chart(
+                    "dance-single", "Challenge", head, tail,
+                ));
+            }
+            update_precise_song_bounds(&mut data);
+            assert_eq!(data.first_second, 0.0, "{name}");
+            assert_eq!(data.precise_note_first_second_seconds, first, "{name}");
+            assert_eq!(data.precise_note_last_second_seconds, last, "{name}");
+
+            let uncached = build_song_meta(data.clone(), 0.125);
+            write_song_cache_file(&cache_path, &data, 0.125).unwrap();
+            let cached = load_cached_song(&simfile, &cache_path, false).unwrap();
+            let restored = build_song_meta_from_cache(cached.data);
+            for song in [uncached, restored] {
+                assert_eq!(song.precise_first_second(), 0.0, "{name}");
+                assert_eq!(song.precise_note_first_second_seconds, first, "{name}");
+                assert_eq!(song.precise_note_last_second_seconds, last, "{name}");
+            }
+        }
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -3560,6 +3603,8 @@ mod tests {
             max: 180.0,
         });
         data.charts = vec![chart];
+        update_precise_song_bounds(&mut data);
+        assert_eq!(data.precise_note_first_second_seconds, Some(4.0));
         let chart_payloads = vec![CachedChartPayloadIndex { offset: 7, len: 41 }];
         let directory_hash = 0x1234_5678_90ab_cdef;
 
@@ -3833,6 +3878,7 @@ mod tests {
             first_second: 0.0,
             total_length_seconds: 0,
             precise_last_second_seconds: 0.0,
+            precise_note_first_second_seconds: None,
             precise_note_last_second_seconds: None,
             last_second_hint: 0.0,
             charts: Vec::new(),

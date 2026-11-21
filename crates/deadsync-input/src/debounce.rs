@@ -11,6 +11,7 @@ struct DebounceState {
     held_raw: bool,
     held_reported: bool,
     last_raw_change_time: Instant,
+    last_reported_change_time: Instant,
     last_raw_change_host_nanos: u64,
     last_raw_store_time: Instant,
     last_report_time: Instant,
@@ -19,8 +20,18 @@ struct DebounceState {
 const NOT_SCHEDULED: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct RetiredInputTime {
+    action_mask: u32,
+    timestamp: Instant,
+    // A raw or between-frame cleanup can precede the next Player update.
+    // Native keeps the released input in that update's pre-prune snapshot.
+    pending_update: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SlotState {
     state: Option<DebounceState>,
+    retired_input: Option<RetiredInputTime>,
     due_at: Option<Instant>,
     scheduled_ix: u32,
     epoch: u32,
@@ -30,6 +41,7 @@ impl Default for SlotState {
     fn default() -> Self {
         Self {
             state: None,
+            retired_input: None,
             due_at: None,
             scheduled_ix: NOT_SCHEDULED,
             epoch: 0,
@@ -40,6 +52,9 @@ impl Default for SlotState {
 #[derive(Debug, Default)]
 pub struct DebounceStore {
     slots: Vec<SlotState>,
+    // At most one retired timestamp per physical slot. Preallocated with slots;
+    // native's input snapshot remains readable for the update that prunes it.
+    retired_slots: Vec<usize>,
     // Indexed min-heap: each slot occurs at most once, so input chatter updates
     // bounded storage instead of appending stale records until the next drain.
     due_slots: Vec<usize>,
@@ -53,6 +68,7 @@ impl DebounceStore {
     pub const fn new() -> Self {
         Self {
             slots: Vec::new(),
+            retired_slots: Vec::new(),
             due_slots: Vec::new(),
             active_len: 0,
             epoch: 0,
@@ -62,6 +78,7 @@ impl DebounceStore {
     #[inline(always)]
     pub fn clear_and_reserve(&mut self, cap: usize) {
         self.due_slots.clear();
+        self.retired_slots.clear();
         self.active_len = 0;
         self.epoch = self.epoch.wrapping_add(1);
         if self.epoch == 0 {
@@ -72,6 +89,7 @@ impl DebounceStore {
             self.slots.reserve(cap.saturating_sub(self.slots.len()));
         }
         self.due_slots.reserve(cap);
+        self.retired_slots.reserve(cap);
     }
 
     #[inline(always)]
@@ -94,6 +112,69 @@ impl DebounceStore {
             .filter(|slot| slot.epoch == self.epoch)
             .and_then(|slot| slot.state)
             .is_some_and(|state| state.held_reported)
+    }
+
+    pub(crate) fn pressed_action_mask(&self) -> u32 {
+        if self.active_len == 0 {
+            return 0;
+        }
+        let mut mask = 0;
+        for slot in &self.slots {
+            if slot.epoch == self.epoch
+                && let Some(state) = slot.state
+                && state.held_reported
+            {
+                mask |= state.action_mask;
+            }
+        }
+        mask
+    }
+
+    pub(crate) fn accumulate_input_ages(&self, now: Instant, ages: &mut [f32; 32]) {
+        if self.active_len != 0 {
+            for slot in &self.slots {
+                if slot.epoch != self.epoch {
+                    continue;
+                }
+                if let Some(state) = slot.state {
+                    accumulate_input_age(
+                        ages, state.action_mask, state.last_reported_change_time, now,
+                    );
+                }
+            }
+        }
+        for &slot in &self.retired_slots {
+            let slot = &self.slots[slot];
+            // A physical re-press replaces its old released timestamp even
+            // before the snapshot reaches its next update boundary.
+            if slot.state.is_none()
+                && let Some(retired) = slot.retired_input
+            {
+                accumulate_input_age(ages, retired.action_mask, retired.timestamp, now);
+            }
+        }
+    }
+
+    pub(crate) fn begin_input_snapshot(&mut self) {
+        self.rebuild_input_snapshot(true);
+    }
+
+    pub(crate) fn rebuild_input_snapshot(&mut self, is_update: bool) {
+        let mut index = 0;
+        while index < self.retired_slots.len() {
+            let slot = &mut self.slots[self.retired_slots[index]];
+            if let Some(retired) = slot.retired_input.as_mut()
+                && retired.pending_update
+            {
+                if is_update {
+                    retired.pending_update = false;
+                }
+                index += 1;
+            } else {
+                slot.retired_input = None;
+                self.retired_slots.swap_remove(index);
+            }
+        }
     }
 
     #[inline(always)]
@@ -272,6 +353,22 @@ impl DebounceStore {
     }
 }
 
+fn accumulate_input_age(
+    ages: &mut [f32; 32],
+    mut actions: u32,
+    timestamp: Instant,
+    now: Instant,
+) {
+    // GetSecsHeld measures the original timestamp of a reported transition,
+    // including releases. InputMapper takes the maximum over physical bindings.
+    let seconds = now.saturating_duration_since(timestamp).as_secs_f32();
+    while actions != 0 {
+        let action = actions.trailing_zeros() as usize;
+        actions &= actions - 1;
+        ages[action] = ages[action].max(seconds);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DebouncedEdge {
     pub action_mask: u32,
@@ -360,6 +457,7 @@ fn debounce_emit_if_due(
     }
     state.last_report_time = now;
     state.held_reported = state.held_raw;
+    state.last_reported_change_time = state.last_raw_change_time;
     Some(debounced_edge(*state, input_slot, state.held_reported, now))
 }
 
@@ -499,14 +597,27 @@ fn resolve_due_slot(
         );
     }
     if !state.held_raw && !state.held_reported {
+        slot_state.retired_input = Some(RetiredInputTime {
+            action_mask: state.action_mask,
+            timestamp: state.last_reported_change_time,
+            // Native cleanup uses `>` rather than `>=`. At equality the
+            // released map entry survives until the next input update as well.
+            pending_update: now.duration_since(state.last_report_time) == windows.window,
+        });
         slot_state.state = None;
         return (None, true, None);
     }
 
     state.last_report_time = now;
     state.held_reported = state.held_raw;
+    state.last_reported_change_time = state.last_raw_change_time;
     let edge = debounced_edge(state, input_slot, state.held_reported, now);
     if !state.held_raw && windows.window.is_zero() {
+        slot_state.retired_input = Some(RetiredInputTime {
+            action_mask: state.action_mask,
+            timestamp: state.last_reported_change_time,
+            pending_update: true,
+        });
         slot_state.state = None;
         return (Some(edge), true, None);
     }
@@ -586,6 +697,7 @@ pub fn debounce_input_edge_in_store_mut(
     }
     let input_slot = slot.min(u32::MAX as usize) as u32;
     let was_empty = states.slots[slot].state.is_none();
+    let had_retired_input = states.slots[slot].retired_input.is_some();
     let old_due_at = states.slots[slot].due_at;
     let before_state = if debug_log {
         states.slots[slot].state
@@ -601,6 +713,7 @@ pub fn debounce_input_edge_in_store_mut(
             held_raw: false,
             held_reported: false,
             last_raw_change_time: timestamp,
+            last_reported_change_time: timestamp,
             last_raw_change_host_nanos: timestamp_host_nanos,
             last_raw_store_time: now,
             last_report_time: now.checked_sub(windows.prune_window()).unwrap_or(now),
@@ -618,6 +731,13 @@ pub fn debounce_input_edge_in_store_mut(
         );
         let prune = should_prune_debounce_state(*state, now, windows);
         let new_due_at = if prune {
+            if !was_empty || edges.first.is_some() || edges.second.is_some() {
+                slot_state.retired_input = Some(RetiredInputTime {
+                    action_mask: state.action_mask,
+                    timestamp: state.last_reported_change_time,
+                    pending_update: true,
+                });
+            }
             slot_state.state = None;
             None
         } else {
@@ -626,6 +746,9 @@ pub fn debounce_input_edge_in_store_mut(
         (edges, prune, new_due_at)
     };
 
+    if prune && !had_retired_input && states.slots[slot].retired_input.is_some() {
+        states.retired_slots.push(slot);
+    }
     if was_empty {
         if !prune {
             states.active_len += 1;
@@ -676,7 +799,25 @@ pub(crate) fn next_due_edge(
     now: Instant,
     windows: DebounceWindows,
 ) -> Option<DebouncedEdge> {
+    next_due_edge_for_snapshot(states, now, windows, false)
+}
+
+pub(crate) fn next_due_edge_between_snapshots(
+    states: &mut DebounceStore,
+    now: Instant,
+    windows: DebounceWindows,
+) -> Option<DebouncedEdge> {
+    next_due_edge_for_snapshot(states, now, windows, true)
+}
+
+fn next_due_edge_for_snapshot(
+    states: &mut DebounceStore,
+    now: Instant,
+    windows: DebounceWindows,
+    between_snapshots: bool,
+) -> Option<DebouncedEdge> {
     while let Some((next_slot, old_due_at)) = states.next_due_slot(now) {
+        let had_retired_input = states.slots[next_slot].retired_input.is_some();
         let (edge, remove, new_due_at, after_state) = {
             let slot_state = &mut states.slots[next_slot];
             let input_slot = next_slot.min(u32::MAX as usize) as u32;
@@ -686,6 +827,14 @@ pub(crate) fn next_due_edge(
 
         if remove {
             states.active_len = states.active_len.saturating_sub(1);
+            if between_snapshots
+                && let Some(retired) = states.slots[next_slot].retired_input.as_mut()
+            {
+                retired.pending_update = true;
+            }
+            if !had_retired_input {
+                states.retired_slots.push(next_slot);
+            }
         }
         // A delayed release keeps its slot for cleanup. Update its deadline
         // directly instead of removing and reinserting the same heap entry.
@@ -724,6 +873,7 @@ mod tests {
             held_raw: false,
             held_reported: false,
             last_raw_change_time: now,
+            last_reported_change_time: now,
             last_raw_change_host_nanos: 0,
             last_raw_store_time: now,
             last_report_time: now.checked_sub(window).unwrap_or(now),

@@ -1,0 +1,116 @@
+{
+  "phase": "before",
+  "captured_utc": "2026-11-20T23:40:02.876685+00:00",
+  "sources": [
+    {
+      "path": ".cargo/config.toml",
+      "bytes": 1439,
+      "sha256": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+    },
+    {
+      "path": "Cargo.lock",
+      "bytes": 167590,
+      "sha256": "5195e19d12611787a718fbbe7b9476de073441f90449163a9ba82a0714408cfb"
+    },
+    {
+      "path": "Cargo.toml",
+      "bytes": 7103,
+      "sha256": "36a3a01b644c3a29cbc1b8cea099a21bf3044eae13b7e4fe721882d388190664"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/analyze.py",
+      "bytes": 12347,
+      "sha256": "eaf3cc2981942c9a7b2e68c64f97e3fd3e444325c322f3012d5ddc3ed6abd73c"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/Cargo.lock",
+      "bytes": 1766,
+      "sha256": "1365893765b127023b88749d5410241a208dcabe99d6e93179bd67c5482a13d4"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/Cargo.toml",
+      "bytes": 347,
+      "sha256": "8d248695a4820f914f46c881998c2ca18126e01171ba4da7dbba7b6ce63f745f"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/README.md",
+      "bytes": 9915,
+      "sha256": "6a84ccdf864612841f7e0dac9321278b6d557c24a7f01cfc8385e7cb54aa057f"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/src/bin/native_snapshot.rs",
+      "bytes": 10071,
+      "sha256": "2ad4bfbdbad386525155d0b44beb5009c77b0572be71a897b3e162e4b528d282"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/src/fixtures.rs",
+      "bytes": 9229,
+      "sha256": "1797f2b521e18f031311b698a6fa5a4084af4a404b222b15362150fe2174fc6b"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/bench/src/main.rs",
+      "bytes": 19086,
+      "sha256": "82a8834e2644162cbd925c4e96ca35eca9c7846c4dd58700af71f1b4fd9ea8b9"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/Cargo.toml",
+      "bytes": 281,
+      "sha256": "c365bd4297892aa54a821f08ff5ea8e1506a3966ca215e26889154fde0653669"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/README.md",
+      "bytes": 7687,
+      "sha256": "074f829b02b906a1f71a753f817c3fc7830c0cca2a63c84c3e77df4fddbf6728"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/decode.rs",
+      "bytes": 19937,
+      "sha256": "84591b2faaf4455f788ad7b475693fa93d7b4aa2793dda43b901cd66a463454e"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/encode.rs",
+      "bytes": 5190,
+      "sha256": "a9cb5eaa16c6f816cd39bd217463a5b25ef3bbaf871db295c65d26fe4de4bf51"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/lib.rs",
+      "bytes": 2281,
+      "sha256": "fd77ac85b9fa26a02cc7f49c3b94215b66f6c91ffe30c209ea8f0ba2933cb4c0"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/src/model.rs",
+      "bytes": 7790,
+      "sha256": "02b7095ae208426daa8ccd1af24453129045d0ed82567f47d6a72d13ef7ae271"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_decode.rs",
+      "bytes": 24562,
+      "sha256": "492673a747542ff04c2d33414a903cdac2b3774b8a7dd65d47a3c55832ae8d14"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_encode.rs",
+      "bytes": 6632,
+      "sha256": "3deb0f1254168a647faec331c89aa475feb978e3d1bfa16a033340bad5728851"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_model.rs",
+      "bytes": 5450,
+      "sha256": "8b3f126adb8f3d0cdb23751a2002573a5785e0ba8ef0aace0affa7e8d1435176"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_optimized.rs",
+      "bytes": 23171,
+      "sha256": "13d5fce0ab1eee26505dd5dabd32004bd0f93b4a5b32bc4390c840863cb1de7d"
+    },
+    {
+      "path": "crates/deadlib-image/bmp/tests/bmp_owned.rs",
+      "bytes": 8050,
+      "sha256": "eecd8db088aa3b6cd7d253bde63aa414865af100bbb355fb7e1fbe433a4eca1f"
+    },
+    {
+      "path": "rust-performance.md",
+      "bytes": 139730,
+      "sha256": "614478d1ac205783f0841e0079ff0c4da20988554f7f38ff9d6cd6f00e0a276b"
+    }
+  ]
+}

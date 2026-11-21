@@ -1,0 +1,11 @@
+    Checking png-decode-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\png\bench)
+error[E0433]: cannot find module or crate `flate2` in this scope
+    --> src\bin\..\..\..\src\zlib.rs:1640:26
+     |
+1640 |                     &mut flate2::read::ZlibDecoder::new(bytes.as_slice()),
+     |                          ^^^^^^ use of unresolved module or unlinked crate `flate2`
+     |
+     = help: if you wanted to use a crate named `flate2`, use `cargo add flate2` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `png-decode-bench` (bin "stages" test) due to 1 previous error

@@ -1,7 +1,6 @@
 use super::BUTTON_CODE_BASE;
-use deadlib_platform::input::REFLEX_PAD_ID_BASE;
 use deadsync_input::{
-    ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, InputBinding, Keymap, VirtualAction,
+    ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, InputBinding, Keymap, REFLEX_PAD_ID_BASE, VirtualAction,
 };
 
 /// First-use defaults are ordinary editable mappings. Existing RE:Flex mappings
@@ -68,9 +67,11 @@ mod tests {
         assert!(!install_default_bindings(0, &mut km));
         let mut state = deadsync_input::keymap::InputState::new(&km, 0.0);
         let now = std::time::Instant::now();
-        for (player, expected) in [(0, VirtualAction::p1_left), (1, VirtualAction::p2_left)] {
+        // Persisted bindings identify the two players as devices 65 and 66.
+        // Exercise those historical IDs independently of the namespace constants.
+        for (device, expected) in [(65, VirtualAction::p1_left), (66, VirtualAction::p2_left)] {
             let event = PadEvent::RawButton {
-                id: PadId((REFLEX_PAD_ID_BASE + player) as u32),
+                id: PadId(device),
                 code: PadCode(BUTTON_CODE_BASE),
                 uuid: [1; 16],
                 pressed: true,

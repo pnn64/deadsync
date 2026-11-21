@@ -206,6 +206,8 @@ impl GameplayRowIndexState {
 
 #[derive(Clone, Debug)]
 pub struct GameplayMineScanState {
+    /// Forward-only Player::CrossedRows iterator, including already judged notes.
+    pub crossed_note_cursor: [usize; MAX_PLAYERS],
     pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
     pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
     pub mine_note_ix: [Vec<ChartNoteIndex>; MAX_PLAYERS],
@@ -220,6 +222,7 @@ pub struct GameplayMineScanState {
 impl Default for GameplayMineScanState {
     fn default() -> Self {
         Self {
+            crossed_note_cursor: [0; MAX_PLAYERS],
             next_tap_miss_cursor: [0; MAX_PLAYERS],
             next_mine_avoid_cursor: [0; MAX_PLAYERS],
             mine_note_ix: std::array::from_fn(|_| Vec::new()),
@@ -239,6 +242,7 @@ impl GameplayMineScanState {
     ) -> Self {
         let mine_count = mine_note_ix.iter().map(Vec::len).sum();
         Self {
+            crossed_note_cursor: note_range_start,
             next_tap_miss_cursor: note_range_start,
             next_mine_avoid_cursor: note_range_start,
             mine_note_ix,
@@ -258,6 +262,7 @@ impl GameplayMineScanState {
 
     #[inline(always)]
     pub fn clear_for_test(&mut self) {
+        self.crossed_note_cursor.fill(0);
         self.next_tap_miss_cursor.fill(0);
         self.next_mine_avoid_cursor.fill(0);
         self.next_mine_ix_cursor.fill(0);
@@ -959,6 +964,7 @@ pub enum GameplayAction {
     None,
     Navigate(GameplayExit),
     NavigateNoFade(GameplayExit),
+    Restart,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1052,6 +1058,7 @@ impl GameplayExitInputState {
 #[derive(Clone, Debug)]
 pub struct GameplayControlRuntimeState {
     pub paused: bool,
+    pub(crate) missed_target_handled: [bool; MAX_PLAYERS],
     pub exit_input: GameplayExitInputState,
     pub offset_adjust_hold: GameplayOffsetAdjustHoldState,
     pub input_state: GameplayInputState,

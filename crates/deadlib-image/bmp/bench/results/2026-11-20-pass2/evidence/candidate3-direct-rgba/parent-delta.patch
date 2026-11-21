@@ -1,0 +1,106 @@
+--- a/crates/deadlib-image/bmp/src/decode.rs
++++ b/crates/deadlib-image/bmp/src/decode.rs
+@@ -93,6 +93,29 @@
+                 indices,
+                 palette,
+             }
++        }
++        Format::Masked {
++            red,
++            green,
++            blue,
++            alpha: Some(alpha),
++            opaque_if_zero: false,
++        } if header.info.bit_depth == 32
++            && [red.mask, green.mask, blue.mask, alpha.mask]
++                == [0xff, 0xff00, 0xff0000, 0xff000000] =>
++        {
++            let mut samples = Vec::new();
++            reserve(&mut samples, header.decoded_bytes)?;
++            // These explicit 32-bit pixels already have RGBA byte order and
++            // no row padding. Append initialized bytes once in logical order.
++            if header.info.top_down {
++                samples.extend_from_slice(source);
++            } else {
++                for row in source.chunks_exact(header.row_pitch).rev() {
++                    samples.extend_from_slice(row);
++                }
++            }
++            Pixels::Rgba(samples)
+         }
+         Format::Rgb24 | Format::Masked { .. } => {
+             let channels = header.format.channels();
+@@ -270,9 +293,6 @@
+             [0xff0000, 0xff00, 0xff, 0xff000000] => {
+                 map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]]);
+             }
+-            [0xff, 0xff00, 0xff0000, 0xff000000] => {
+-                output.copy_from_slice(&row[..output.len()]);
+-            }
+             _ => map_row::<4, 4>(row, output, |packed| {
+                 let word = u32::from_le_bytes(packed);
+                 [
+--- a/crates/deadlib-image/bmp/tests/bmp_optimized.rs
++++ b/crates/deadlib-image/bmp/tests/bmp_optimized.rs
+@@ -367,6 +367,61 @@
+ }
+ 
+ #[test]
++fn rgba_byte_order_copy_preserves_explicit_alpha_and_source_extent() {
++    for header in [56, 108, 124] {
++        let format = Format {
++            bits: 32,
++            header,
++            compression: 3,
++            masks: [0xff, 0xff00, 0xff0000, 0xff000000],
++        };
++        for width in [1usize, 3, 17, 257] {
++            for zero_alpha in [false, true] {
++                let mut expected = Vec::new();
++                for i in 0..width * 3 {
++                    expected.extend([
++                        i as u8,
++                        (i * 71 + 19) as u8,
++                        (i * 139 + 41) as u8,
++                        if zero_alpha { 0 } else { (i * 43) as u8 },
++                    ]);
++                }
++                for top_down in [false, true] {
++                    let original = wire(format, width, 3, top_down, &[], &expected);
++                    let offset = u32::from_le_bytes(original[10..14].try_into().unwrap()) as usize;
++                    for gap in [0, 1, 7] {
++                        let mut bytes = original[..offset].to_vec();
++                        bytes.resize(offset + gap, 0xff);
++                        bytes.extend_from_slice(&original[offset..]);
++                        let source_end = bytes.len();
++                        bytes.extend_from_slice(&[0xa5; 9]);
++                        bytes[10..14].copy_from_slice(&((offset + gap) as u32).to_le_bytes());
++                        let limits = Limits {
++                            max_decoded_bytes: expected.len(),
++                            ..Limits::default()
++                        };
++                        let bitmap = deadlib_image_bmp::decode_with_limits(&bytes, limits).unwrap();
++                        assert_eq!((bitmap.width, bitmap.height), (width as u32, 3));
++                        assert_eq!(bitmap.pixels, Pixels::Rgba(expected.clone()));
++                        assert_eq!(decode(&bytes[..source_end - 1]), Err(Error::Truncated));
++                        assert_eq!(
++                            deadlib_image_bmp::decode_with_limits(
++                                &bytes,
++                                Limits {
++                                    max_decoded_bytes: expected.len() - 1,
++                                    ..limits
++                                }
++                            ),
++                            Err(Error::LimitExceeded)
++                        );
++                    }
++                }
++            }
++        }
++    }
++}
++
++#[test]
+ fn bgra_zero_alpha_repair_covers_row_boundaries_and_final_pixels() {
+     for width in [1usize, 3, 4, 7, 8, 15, 16, 17, 31, 32, 33, 257] {
+         let count = width * 3;

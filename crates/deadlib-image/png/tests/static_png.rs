@@ -122,7 +122,9 @@ fn complete_native_format_filter_and_adam7_matrix() {
                     Filter::Adaptive,
                 ] {
                     for interlaced in [false, true] {
-                        for compression in [Compression::Stored, Compression::Fast] {
+                        for compression in
+                            [Compression::Stored, Compression::Fast, Compression::Rle]
+                        {
                             let options = EncodeOptions {
                                 interlaced,
                                 filter,
@@ -163,7 +165,7 @@ fn complete_native_format_filter_and_adam7_matrix() {
             }
         }
     }
-    assert_eq!(cases, 3240);
+    assert_eq!(cases, 4860);
 }
 
 #[test]

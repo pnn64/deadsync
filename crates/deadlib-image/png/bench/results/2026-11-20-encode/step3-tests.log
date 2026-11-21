@@ -1,0 +1,9 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 19.44s
+     Running tests\encoder_filter_bytes.rs (target\release\build\deadlib-image-png/c807a6ab250126b2\out\encoder_filter_bytes-c807a6ab250126b2.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+

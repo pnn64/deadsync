@@ -62,10 +62,11 @@ fn string_method(
 }
 
 pub(super) fn normalize(call: &mut HostCall<'_>, params: TableId) -> Result<(), Error> {
+    // Native tap Judgment messages omit HoldNoteScore. Theme listeners use
+    // its presence/truthiness to distinguish a tap from a hold judgment.
     for (key, default) in [
         (b"Player".as_slice(), b"PlayerNumber_P1".as_slice()),
         (b"TapNoteScore", b"TapNoteScore_W3"),
-        (b"HoldNoteScore", b"HoldNoteScore_None"),
     ] {
         if field(call, params, key)? == Value::Nil {
             let default = call.try_intern(default)?;

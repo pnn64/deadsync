@@ -107,22 +107,13 @@ impl Vm {
             None
         };
         let table = self.table_argument(base, count)?;
-        let len = self.tables[slot_index(table.0)].len() as i64;
+        let storage = &self.tables[slot_index(table.0)];
         let value = match id {
-            TAB_GETN => Value::Number(len as f64),
+            TAB_GETN => Value::Number(storage.len() as f64),
             TAB_SETN => return Err(failure("'setn' is obsolete")),
-            TAB_MAXN => {
-                let mut maximum = 0.0f64;
-                let mut current = Value::Nil;
-                while let Some((k, _)) = self.tables[slot_index(table.0)].next(current)? {
-                    if let Value::Number(n) = k {
-                        maximum = maximum.max(n);
-                    }
-                    current = k;
-                }
-                Value::Number(maximum)
-            }
+            TAB_MAXN => Value::Number(storage.max_numeric_key()),
             TAB_INSERT => {
+                let len = storage.len() as i64;
                 let position = match count {
                     2 => len + 1,
                     3 => self.integer_argument(base, count, 1, None)? as i32 as i64,
@@ -138,6 +129,7 @@ impl Vm {
                 return Ok(0);
             }
             TAB_REMOVE => {
+                let len = storage.len() as i64;
                 let position = self.integer_argument(base, count, 1, Some(len))? as i32 as i64;
                 if position < 1 || position > len {
                     return Ok(0);
@@ -151,36 +143,18 @@ impl Vm {
                 value
             }
             TAB_CONCAT => {
+                let len = storage.len() as i64;
                 let first = self.integer_argument(base, count, 2, Some(1))? as i32 as i64;
                 let last = self.integer_argument(base, count, 3, Some(len))? as i32 as i64;
                 let separator = separator.expect("concat has a separator");
                 let mut output = self.try_take_buffer(0)?;
-                for index in first..=last {
-                    if index != first {
-                        output
-                            .try_extend_from_slice(&self.strings.bytes[slot_index(separator.0)])?;
-                    }
-                    let v = self.raw_index(table, index);
-                    match v {
-                        Value::String(id) => {
-                            output.try_extend_from_slice(&self.strings.bytes[slot_index(id.0)])?
-                        }
-                        Value::Number(n) => {
-                            let start = output.len();
-                            output.try_extend_from_slice(native::number_text(n).as_bytes())?;
-                            crate::locale::try_localize_owned_from(&mut output, start)?;
-                        }
-                        _ => {
-                            return Err(fallible::diagnostic(
-                                ErrorKind::Runtime,
-                                0,
-                                format_args!(
-                                    "invalid value ({}) at index {index} in table for 'concat'",
-                                    v.type_name()
-                                ),
-                            ));
-                        }
-                    }
+                let separator = &self.strings.bytes[slot_index(separator.0)];
+                let storage = &self.tables[slot_index(table.0)];
+                if let Some(array) = storage.array_slice(first, last) {
+                    self.concat_values(&mut output, separator, first, array.iter().copied())?;
+                } else {
+                    let values = (first..=last).map(|index| storage.get(key(index)));
+                    self.concat_values(&mut output, separator, first, values)?;
                 }
                 self.try_finish_buffer(output)?
             }
@@ -188,6 +162,40 @@ impl Vm {
         };
         self.registers[base] = value;
         Ok(1)
+    }
+    fn concat_values(
+        &self,
+        output: &mut Buffer<u8>,
+        separator: &[u8],
+        first: i64,
+        values: impl Iterator<Item = Value>,
+    ) -> Result<(), Error> {
+        for (index, value) in (first..).zip(values) {
+            if index != first && !separator.is_empty() {
+                output.try_extend_from_slice(separator)?;
+            }
+            match value {
+                Value::String(id) => {
+                    output.try_extend_from_slice(&self.strings.bytes[slot_index(id.0)])?;
+                }
+                Value::Number(n) => {
+                    let start = output.len();
+                    output.try_extend_from_slice(native::number_text(n).as_bytes())?;
+                    crate::locale::try_localize_owned_from(output, start)?;
+                }
+                _ => {
+                    return Err(fallible::diagnostic(
+                        ErrorKind::Runtime,
+                        0,
+                        format_args!(
+                            "invalid value ({}) at index {index} in table for 'concat'",
+                            value.type_name()
+                        ),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
     pub(super) fn foreach_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;

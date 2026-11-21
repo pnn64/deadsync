@@ -1,0 +1,17 @@
+{
+  "stage": "candidate3-direct-rgba",
+  "executable_matches_frozen_parent": true,
+  "captured_utc": "2026-11-20T23:08:05.536119+00:00",
+  "files": [
+    {
+      "path": "bmp-codec-bench.exe",
+      "bytes": 438272,
+      "sha256": "762925d31da68079aca897395e08faa913f56884021b62633c7887fb44ad9fc4"
+    },
+    {
+      "path": "bmp_codec_bench.pdb",
+      "bytes": 4771840,
+      "sha256": "50f80d10196debf6266df8c48d8790d1604366f1b1c1acd6c19c8b5ac0a775ea"
+    }
+  ]
+}

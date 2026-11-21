@@ -14,6 +14,9 @@ deadlib-image-png = { path = ".." }
 png = "=0.18.1"
 image = { version = "=0.25.10", default-features = false, features = ["png"] }
 
+[dev-dependencies]
+flate2 = "=1.1.11"
+
 [profile.release]
 opt-level = 3
 lto = true

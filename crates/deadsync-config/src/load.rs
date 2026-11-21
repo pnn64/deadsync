@@ -300,6 +300,7 @@ const fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.smx_underglow_grb = loaded.smx_underglow_grb;
     cfg.gfx_debug = loaded.gfx_debug;
     cfg.global_offset_seconds = loaded.global_offset_seconds;
+    cfg.pad_stick_seconds = loaded.pad_stick_seconds;
     cfg.language_flag = loaded.language_flag;
     cfg.log_level = loaded.log_level;
     cfg.log_to_file = loaded.log_to_file;

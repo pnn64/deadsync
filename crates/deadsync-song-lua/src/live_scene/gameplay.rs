@@ -43,6 +43,7 @@ impl Callbacks {
             let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
             (runtime.take_player_writes(), pauses)
         };
+        game.set_pad_stick_seconds(self.owner.pad_stick_seconds());
         crate::live::apply_player_writes(writes, game);
         for paused in pauses { game.set_gameplay_paused(paused); }
     }
@@ -71,6 +72,9 @@ impl SongLiveScene {
     }
     pub fn context(&self) -> &SongLuaCompileContext {
         &self.context
+    }
+    pub fn pad_stick_seconds(&self) -> f32 {
+        self.runtime.pad_stick_seconds()
     }
     pub fn install_step_callback<P: GameplayProfileData, O, C, D>(
         &self,
@@ -241,6 +245,7 @@ impl SongLiveScene {
             let writes = runtime.take_player_writes();
             let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
             drop(guard);
+            game.set_pad_stick_seconds(c.owner.pad_stick_seconds());
             crate::live::apply_player_writes(writes, game);
             for paused in pauses { game.set_gameplay_paused(paused); }
             result
@@ -255,6 +260,7 @@ impl SongLiveScene {
         let writes = runtime.take_player_writes();
         let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);
         drop(runtime);
+        game.set_pad_stick_seconds(self.pad_stick_seconds());
         crate::live::apply_player_writes(writes, game);
         for paused in pauses { game.set_gameplay_paused(paused); }
     }
@@ -263,6 +269,7 @@ impl SongLiveScene {
         output: &SongLuaLiveOutput,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) {
+        game.set_pad_stick_seconds(self.pad_stick_seconds());
         crate::live::apply_player_writes(output.player_writes.iter().copied(), game);
         for &paused in &output.gameplay_pauses { game.set_gameplay_paused(paused); }
     }
@@ -320,6 +327,7 @@ impl SongLiveScene {
         &self,
         game: &mut GameplayRuntimeState<P, O, C, D>,
     ) -> Result<(), Error> {
+        game.set_pad_stick_seconds(self.pad_stick_seconds());
         let mut runtime = self.runtime.access();
         runtime.publish_gameplay_life_records(game);
         let pauses = std::mem::take(&mut runtime.screen.state.lock().unwrap().gameplay_pauses);

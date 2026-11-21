@@ -1,0 +1,3 @@
+case	mode	pixels	image_equivalent	ns	thread_cycles	cycles_min	cycles_max	mpixels_sec	alloc_calls	requested_bytes
+rgb333-511x257-bottom	native-owned-rgba	131327	true	732891.07	1603445.53	1548307.25	1628205.92	179.190	0	0
+rgb333-511x257-bottom	image-rgba	131327	true	1252840.62	2742155.19	2438348.58	2845803.80	104.823	0	0

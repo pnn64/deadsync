@@ -1,0 +1,41 @@
+cargo :    Compiling autocfg v1.5.1
+At line:4 char:881
++ ... EXITCODE }; cargo clippy --manifest-path crates/deadlib-image/gif/ben ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling autocfg v1.5.1:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    Checking color_quant v1.1.0
+    Checking weezl v0.1.12
+    Checking bytemuck v1.25.2
+    Checking pxfm v0.1.30
+    Checking imgref v1.12.3
+    Checking byteorder-lite v0.1.0
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking deadlib-image-gif v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\gif)
+    Checking rgb v0.8.53
+    Checking gif v0.14.2
+   Compiling num-traits v0.2.19
+    Checking gif-dispose v6.0.0
+    Checking moxcms v0.8.1
+    Checking image v0.25.10
+    Checking gif-decode-bench v0.0.0 (C:\GitHub\deadsync\crates\deadlib-image\gif\bench)
+error: using `chunks_exact` with a constant chunk size
+   --> src\bin\first_frame.rs:169:55
+    |
+169 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    |
+help: consider using `as_chunks::<3>()` instead
+   --> src\bin\first_frame.rs:169:55
+    |
+169 |     for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
+    |                                                       ^^^^^^^^^^^^^^^
+    = help: for further information visit 
+https://rust-lang.github.io/rust-clippy/rust-1.100.0/index.html#chunks_exact_to_as_chunks
+    = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`
+
+error: could not compile `gif-decode-bench` (bin "first_frame") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `gif-decode-bench` (bin "first_frame" test) due to 1 previous error

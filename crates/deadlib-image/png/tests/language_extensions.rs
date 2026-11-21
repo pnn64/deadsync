@@ -6,8 +6,8 @@ mod chunks;
 #[path = "support/language_extensions.rs"]
 mod fields;
 use deadlib_image_png::{
-    AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Error, ImageKind, Metadata, Png,
-    RowSamples, Samples, StreamDecoder, decode_reader, decode_with_options,
+    AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Error, ImageKind, Metadata,
+    MetadataPolicy, Png, RowSamples, Samples, StreamDecoder, decode_reader, decode_with_options,
 };
 use fields::{Case, Outcome};
 use std::io::{self, Read};
@@ -174,10 +174,15 @@ fn extension_singletons_payload_bounds_uniqueness_and_raw_preservation() {
             for position in chunks::POSITIONS {
                 let bytes = c.bytes(compressed, position);
                 for policy in [AnimationPolicy::Strict, AnimationPolicy::RecoverDefault] {
-                    let options = DecodeOptions {
+                    let mut options = DecodeOptions {
                         animation_policy: policy,
                         ..Default::default()
                     };
+                    // This branch verifies malformed-tag rejection. Typed and
+                    // opaque tags continue to use the default recovery policy.
+                    if c.outcome == Outcome::Malformed {
+                        options.metadata_policy = MetadataPolicy::Strict;
+                    }
                     known(
                         decode_with_options(&bytes, &options),
                         &c,

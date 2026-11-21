@@ -9,10 +9,12 @@ test-support = []
 [dependencies]
 deadlib-lua = { path = "../deadlib-lua", default-features = false }
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
+deadlib-platform = { path = "../deadlib-platform" }
 deadlib-render-core = { path = "../deadlib-render-core" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
+deadsync-input = { path = "../deadsync-input" }
 deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 glam = "0.34.3"
@@ -56,7 +58,15 @@ name = "live_gameplay"
 required-features = ["test-support"]
 
 [[test]]
+name = "gameplay_session"
+required-features = ["test-support"]
+
+[[test]]
 name = "arrows"
+required-features = ["test-support"]
+
+[[test]]
+name = "native_note_field"
 required-features = ["test-support"]
 
 [[test]]

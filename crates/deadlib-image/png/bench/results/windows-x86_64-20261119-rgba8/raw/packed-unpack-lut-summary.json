@@ -1,0 +1,231 @@
+[
+  {
+    "input": "target\\png-perf-20261119\\packed-unpack-lut.tsv",
+    "sha256": "c74c366abd70b44c0d4272310a14be7a6c9731e5149b2157c77eb8c2a677ca5d",
+    "groups": {
+      "all": {
+        "cases": 10,
+        "totals": {
+          "native-rgba8": {
+            "ns": 2231091,
+            "thread_cycles": 4886381,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1120080,
+            "cycles_per_pixel": 4.362528569387901,
+            "megapixels_per_second": 502.03241373839074
+          },
+          "png-assets-rgba8": {
+            "ns": 2750532,
+            "thread_cycles": 6023954,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1120080,
+            "cycles_per_pixel": 5.378146203842583,
+            "megapixels_per_second": 407.22303903390326
+          },
+          "image-rgba8": {
+            "ns": 6038675,
+            "thread_cycles": 13227175,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 1120080,
+            "cycles_per_pixel": 11.80913416898793,
+            "megapixels_per_second": 185.48439848145495
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.5641494211187023,
+              "native_over_reference_total": 0.8111488977405098,
+              "native_wins": 8
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.5641698035621163,
+              "native_over_reference_total": 0.8111584185403806,
+              "native_wins": 8
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.2076255245992276,
+              "native_over_reference_total": 0.3694669774412433,
+              "native_wins": 10
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.2076231861248539,
+              "native_over_reference_total": 0.36941984966555597,
+              "native_wins": 10
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 2483558,
+            "after_total": 2231091,
+            "after_over_before_total": 0.8983446329821974,
+            "after_over_before_geomean": 0.8682051168192823,
+            "improved_cases": 10
+          },
+          "thread_cycles": {
+            "before_total": 5438497,
+            "after_total": 4886381,
+            "after_over_before_total": 0.898480039613886,
+            "after_over_before_geomean": 0.8682142846701467,
+            "improved_cases": 10
+          }
+        }
+      },
+      "formats": {
+        "cases": 8,
+        "totals": {
+          "native-rgba8": {
+            "ns": 500954,
+            "thread_cycles": 1097386,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 265224,
+            "cycles_per_pixel": 4.1375818176333965,
+            "megapixels_per_second": 529.4378326153699
+          },
+          "png-assets-rgba8": {
+            "ns": 1052508,
+            "thread_cycles": 2305753,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 265224,
+            "cycles_per_pixel": 8.693606159321932,
+            "megapixels_per_second": 251.99238390587055
+          },
+          "image-rgba8": {
+            "ns": 3607780,
+            "thread_cycles": 7903920,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 265224,
+            "cycles_per_pixel": 29.800922993394263,
+            "megapixels_per_second": 73.51446041610076
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.48665765077154316,
+              "native_over_reference_total": 0.4759621779596925,
+              "native_wins": 8
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.48666262103148106,
+              "native_over_reference_total": 0.47593389231196925,
+              "native_wins": 8
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.15258223035326843,
+              "native_over_reference_total": 0.1388538103764642,
+              "native_wins": 8
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.152577062460982,
+              "native_over_reference_total": 0.13884072713286572,
+              "native_wins": 8
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 556864,
+            "after_total": 500954,
+            "after_over_before_total": 0.8995984656935985,
+            "after_over_before_geomean": 0.8609902676004411,
+            "improved_cases": 8
+          },
+          "thread_cycles": {
+            "before_total": 1220021,
+            "after_total": 1097386,
+            "after_over_before_total": 0.899481238437699,
+            "after_over_before_geomean": 0.8609513075701849,
+            "improved_cases": 8
+          }
+        }
+      },
+      "assets": {
+        "cases": 2,
+        "totals": {
+          "native-rgba8": {
+            "ns": 1730137,
+            "thread_cycles": 3788995,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 854856,
+            "cycles_per_pixel": 4.432319595347052,
+            "megapixels_per_second": 494.09728824942766
+          },
+          "png-assets-rgba8": {
+            "ns": 1698024,
+            "thread_cycles": 3718201,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 854856,
+            "cycles_per_pixel": 4.349505647734823,
+            "megapixels_per_second": 503.44164746788033
+          },
+          "image-rgba8": {
+            "ns": 2430895,
+            "thread_cycles": 5323255,
+            "alloc_calls": 0,
+            "requested_bytes": 0,
+            "pixels": 854856,
+            "cycles_per_pixel": 6.22707801079948,
+            "megapixels_per_second": 351.66307059745486
+          }
+        },
+        "native_vs": {
+          "png-assets-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 1.0187708566743412,
+              "native_over_reference_total": 1.0189119823983641,
+              "native_wins": 0
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 1.0189132829485086,
+              "native_over_reference_total": 1.0190398528750866,
+              "native_wins": 0
+            }
+          },
+          "image-rgba8": {
+            "ns": {
+              "native_over_reference_geomean": 0.711848998647752,
+              "native_over_reference_total": 0.7117283963313924,
+              "native_wins": 2
+            },
+            "thread_cycles": {
+              "native_over_reference_geomean": 0.7119053547497889,
+              "native_over_reference_total": 0.7117816073060561,
+              "native_wins": 2
+            }
+          }
+        },
+        "native_change": {
+          "ns": {
+            "before_total": 1926694,
+            "after_total": 1730137,
+            "after_over_before_total": 0.8979822431584881,
+            "after_over_before_geomean": 0.8976741846718913,
+            "improved_cases": 2
+          },
+          "thread_cycles": {
+            "before_total": 4218476,
+            "after_total": 3788995,
+            "after_over_before_total": 0.8981904839567655,
+            "after_over_before_geomean": 0.8978840877365382,
+            "improved_cases": 2
+          }
+        }
+      }
+    },
+    "baseline": "target\\png-perf-20261119\\packed-unpack-lut-before.tsv"
+  }
+]

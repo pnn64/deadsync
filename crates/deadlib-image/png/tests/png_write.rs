@@ -109,7 +109,7 @@ fn all_formats_fragmented_writes_and_chunks() {
             }
             let png = fixture(color, depth, 13);
             for interlaced in [false, true] {
-                for compression in [Compression::Stored, Compression::Fast] {
+                for compression in [Compression::Stored, Compression::Fast, Compression::Rle] {
                     for idat_chunk_size in [1, 7, 65536] {
                         for size in [1, 3, 31] {
                             let mut writer = Fragmented {
@@ -184,7 +184,7 @@ fn write_failures_and_input_validation() {
 
 #[test]
 fn bounded_encoder_scratch_and_maximum_chunk_size() {
-    for compression in [Compression::Stored, Compression::Fast] {
+    for compression in [Compression::Stored, Compression::Fast, Compression::Rle] {
         let mut capacities = Vec::new();
         for height in [2, 4096] {
             let png = fixture(ColorType::Rgba, 16, height);

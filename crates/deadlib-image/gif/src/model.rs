@@ -43,6 +43,15 @@ impl Header {
         (self.pixel_aspect_ratio != 0).then(|| (f64::from(self.pixel_aspect_ratio) + 15.0) / 64.0)
     }
     pub(crate) fn validate(&self) -> Result<(), Error> {
+        self.validate_structure()?;
+        if let Some(p) = &self.global_palette
+            && usize::from(self.background_index) >= p.len()
+        {
+            return Err(Error::Invalid("background index outside global palette"));
+        }
+        Ok(())
+    }
+    pub(crate) fn validate_structure(&self) -> Result<(), Error> {
         if self.width == 0 || self.height == 0 || !(1..=8).contains(&self.color_resolution) {
             return Err(Error::Invalid(
                 "logical screen dimensions or color resolution",
@@ -50,9 +59,6 @@ impl Header {
         }
         if let Some(p) = &self.global_palette {
             validate_palette(p)?;
-            if usize::from(self.background_index) >= p.len() {
-                return Err(Error::Invalid("background index outside global palette"));
-            }
         }
         Ok(())
     }

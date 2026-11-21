@@ -1,0 +1,43 @@
+--- a/crates/deadlib-image/bmp/src/decode.rs
++++ b/crates/deadlib-image/bmp/src/decode.rs
+@@ -147,9 +147,6 @@
+                     Format::Rgb24 => {
+                         map_row::<3, 3>(row, output, |bgr| [bgr[2], bgr[1], bgr[0]]);
+                     }
+-                    Format::Masked { .. } if opaque => {
+-                        map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], 255]);
+-                    }
+                     Format::Masked {
+                         red,
+                         green,
+@@ -163,6 +160,7 @@
+                             header.info.bit_depth,
+                             [red, green, blue],
+                             alpha,
++                            opaque,
+                         );
+                     }
+                     Format::Indexed { .. } => unreachable!("truecolor format"),
+@@ -245,6 +243,7 @@
+     bit_depth: u16,
+     rgb: [Channel; 3],
+     alpha: Option<Channel>,
++    opaque: bool,
+ ) {
+     let [red, green, blue] = rgb;
+     match (bit_depth, alpha) {
+@@ -291,7 +290,13 @@
+         },
+         (32, Some(alpha)) => match [red.mask, green.mask, blue.mask, alpha.mask] {
+             [0xff0000, 0xff00, 0xff, 0xff000000] => {
+-                map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]]);
++                // Only implicit BGRA can request opaque alpha. Keep this
++                // selection inside that layout's row conversion.
++                if opaque {
++                    map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], 255]);
++                } else {
++                    map_row::<4, 4>(row, output, |bgra| [bgra[2], bgra[1], bgra[0], bgra[3]]);
++                }
+             }
+             _ => map_row::<4, 4>(row, output, |packed| {
+                 let word = u32::from_le_bytes(packed);

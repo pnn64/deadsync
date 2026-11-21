@@ -1,0 +1,18 @@
+[
+  {
+    "name": "candidate1-logical-alpha-controls",
+    "command": [
+      "powershell.exe",
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "target/bmp-decode-opt-20261120-pass2/time-candidate1-controls.ps1",
+      "-Stage",
+      "candidate1-logical",
+      "-Label",
+      "candidate1-logical-controls"
+    ],
+    "cwd": "C:/GitHub/deadsync"
+  }
+]

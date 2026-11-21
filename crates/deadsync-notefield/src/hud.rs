@@ -8,7 +8,7 @@ use deadlib_present::actors::{
 use deadlib_present::dsl::TextBuilder;
 use deadlib_render_core::BlendMode;
 use deadsync_rules::stream::StreamSegment;
-use deadsync_theme::{CounterHudStyle, MiniIndicatorStyle};
+use deadsync_core::hud_style::{CounterHudStyle, MiniIndicatorStyle};
 
 pub const MEASURE_COUNTER_LOOKAHEAD_MAX: u8 = 4;
 pub const COUNTER_TEXT_SLOTS_PER_PLAYER: u8 = MEASURE_COUNTER_LOOKAHEAD_MAX + 3;

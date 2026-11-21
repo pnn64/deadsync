@@ -1,8 +1,6 @@
-use deadlib_platform::input::{
-    KeyCode, PAD_ID_COUNT_CAP, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent,
-};
+use deadlib_platform::input::{KeyCode, PadCode, PadDir, PadEvent, PadId, RawKeyboardEvent};
 use deadsync_input::keymap::InputState;
-use deadsync_input::{GamepadCodeBinding, InputBinding, Keymap, VirtualAction};
+use deadsync_input::{GamepadCodeBinding, InputBinding, Keymap, PAD_ID_COUNT_CAP, VirtualAction};
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::hint::black_box;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -204,6 +202,9 @@ fn configured_input_pipeline_is_allocation_free() {
         .map_pad(&dir_press, || timestamp)
         .for_each(|_| emitted += 1);
     for _ in 0..10_000 {
+        input.begin_input_snapshot();
+        black_box(input.input_age_by_action(timestamp));
+        black_box(input.pressed_action_mask());
         input
             .map_key(input.key_event(black_box(key_release)), || timestamp)
             .for_each(|_| emitted += 1);
@@ -265,12 +266,17 @@ fn configured_input_pipeline_is_allocation_free() {
     let now = timestamp + std::time::Duration::from_millis(210);
     let before = ALLOC.begin();
     let mut flushed = false;
-    while let Some(events) = input.next_due(now) {
+    while let Some(events) = input.next_due_between_snapshots(now) {
         flushed = true;
         events.for_each(|event| {
             black_box(event);
         });
     }
+    input.begin_input_snapshot();
+    black_box(input.input_age_by_action(now));
+    black_box(input.pressed_action_mask());
+    input.begin_input_snapshot();
+    black_box(input.input_age_by_action(now));
     let allocated = ALLOC.finish(before);
     assert!(flushed, "the measured drain path must flush due edges");
     assert_eq!(allocated.0, 0, "allocation operations while draining input");

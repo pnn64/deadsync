@@ -303,7 +303,8 @@ pub struct SongLuaLiveOutput {
     /// Missing observational inputs, separate from callback execution errors.
     pub coverage_gaps: Vec<String>,
     pub player_writes: Vec<SongLuaLivePlayerWrite>,
-    /// Frozen command/update Draw submissions, in their execution order.
+    /// Frozen immediate Draw calls and normal draw callbacks, in execution order.
+    /// Each frame retains whether it supplements or replaces automatic drawing.
     pub draw_frames: Vec<crate::SongLuaDrawFrame>,
 }
 
