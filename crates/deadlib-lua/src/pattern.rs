@@ -238,6 +238,10 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         .filter(|&(_, bits)| bits != 0);
     let (index, bits) = words.next()?;
     if words.next().is_some() {
+        let [ascii_low, ascii_high] = const { crate::locale::ascii_class_bits(b'w') };
+        if *set == [ascii_low, ascii_high, 0, 0] {
+            return Some(scan_boundary(bytes, |byte| !byte.is_ascii_alphanumeric()));
+        }
         return excluded_set_run(bytes, set);
     }
     let offset = bits.trailing_zeros();
@@ -1129,6 +1133,25 @@ mod byte_search_tests {
         }
         assert_eq!(range_set_run(&[0; 64], &[0b101, 0, 0, 0]), None);
         assert_eq!(range_set_run(&[63; 64], &[1 << 63, 1, 0, 0]), None);
+    }
+
+    #[test]
+    fn ascii_alphanumeric_runs_match_bitmap_membership() {
+        let [low, high] = const { crate::locale::ascii_class_bits(b'w') };
+        let set = [low, high, 0, 0];
+        let mut bytes = [b'x'; 129];
+        for index in [0, 1, 31, 32, 63, 64, 128] {
+            for byte in 0..=u8::MAX {
+                bytes[index] = byte;
+                let expected = if set_has(&set, byte) {
+                    bytes.len()
+                } else {
+                    index
+                };
+                assert_eq!(range_set_run(&bytes, &set), Some(expected));
+            }
+            bytes[index] = b'x';
+        }
     }
 
     #[test]

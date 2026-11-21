@@ -211,7 +211,7 @@ pub(crate) fn is_control(byte: u8) -> bool {
     byte.is_ascii_control() || (byte >= 128 && mask(byte) & 32 != 0)
 }
 
-const fn ascii_class_bits(class: u8) -> [u64; 2] {
+pub(crate) const fn ascii_class_bits(class: u8) -> [u64; 2] {
     let mut bits = [0; 2];
     let mut byte = 0u8;
     while byte < 128 {
