@@ -278,7 +278,7 @@ impl Scanner {
         let Some(&c) = input.get(start) else {
             return Ok(false);
         };
-        let word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+        let word = |b: u8| b.is_ascii_alphanumeric() | (b == b'_');
         let mut text = Text::default();
         let mut number = 0.0;
         let next = input.get(start + 1).copied();
@@ -297,22 +297,17 @@ impl Scanner {
                 (kind, end)
             }
             b'0'..=b'9' => {
-                let mut end = start + 1;
-                while input
-                    .get(end)
-                    .is_some_and(|&b| b.is_ascii_digit() || b == b'.')
-                {
-                    end += 1;
-                }
+                let tail = &input[start + 1..];
+                let mut end = start
+                    + 1
+                    + scan_token_boundary(tail, |byte| !(byte.is_ascii_digit() | (byte == b'.')));
                 if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
                     end += 1;
                     if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
                         end += 1;
                     }
                 }
-                while input.get(end).copied().is_some_and(word) {
-                    end += 1;
-                }
+                end += scan_token_boundary(&input[end..], |byte| !word(byte));
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -907,6 +902,26 @@ mod tests {
             assert_eq!(tokens(&source, &[source.len()]), Ok(expected.clone()));
             let ends = (0..=source.len()).collect::<Vec<_>>();
             assert_eq!(tokens(&source, &ends), Ok(expected));
+        }
+    }
+
+    #[test]
+    fn long_numerals_match_streamed_tokens_and_diagnostics() {
+        for len in [7, 8, 9, 31, 32, 33, 39, 40, 41, 63, 64, 65] {
+            let zeroes = vec![b'0'; len];
+            for (prefix, suffix) in [
+                (b"".as_slice(), b"42.25".as_slice()),
+                (b"42e+", b"1"),
+                (b"0x", b"2a"),
+                (b"0x", b"z"),
+                (b"", b"42\0+1"),
+                (b"", b"42\xff"),
+            ] {
+                let source = [prefix, &zeroes, suffix, b"; return"].concat();
+                let closed = tokens(&source, &[source.len()]);
+                let ends = (0..=source.len()).collect::<Vec<_>>();
+                assert_eq!(tokens(&source, &ends), closed, "{source:?}");
+            }
         }
     }
 

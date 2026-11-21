@@ -175,7 +175,12 @@ pub(crate) fn parse_number(bytes: &[u8]) -> Option<f64> {
     if let Some(integer) = short_decimal_integer(bytes) {
         return Some(integer);
     }
-    let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
+    let nul = if bytes.len() < 32 {
+        bytes.iter().position(|&b| b == 0)
+    } else {
+        crate::pattern::find_byte(bytes, 0)
+    };
+    let bytes = &bytes[..nul.unwrap_or(bytes.len())];
     let text = std::str::from_utf8(bytes)
         .ok()?
         .trim_matches(|c: char| matches!(c, '\t'..='\r' | ' '));
