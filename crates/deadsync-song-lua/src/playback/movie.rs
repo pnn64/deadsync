@@ -90,7 +90,6 @@ impl Layer {
                 tracks,
                 movie.updates.clone(),
                 &mut self.cursors,
-                None,
                 &mut movie.messages,
             );
             let SongLuaOverlayKind::Sprite {

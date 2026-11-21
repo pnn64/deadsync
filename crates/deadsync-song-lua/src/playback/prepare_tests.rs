@@ -282,7 +282,6 @@ fn captured_screen_and_draw_clocks_rebase_only_the_calibration_difference() {
                 tracks,
                 0..tracks.len(),
                 &mut cursors,
-                None,
                 &mut current,
             );
             assert_eq!(

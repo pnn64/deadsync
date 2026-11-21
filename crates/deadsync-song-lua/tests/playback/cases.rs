@@ -2172,7 +2172,6 @@ fn song_lua_tween_playback_matches_native() {
                     &updates,
                     0..updates.len(),
                     &mut cursors,
-                    None,
                     &mut state,
                 );
                 let visible = state.sprite_texture && state.visible && state.diffuse[3] > 0.000_001;
@@ -2268,7 +2267,6 @@ fn song_lua_tween_playback_matches_native() {
                         &updates,
                         0..updates.len(),
                         &mut cursors,
-                        None,
                         &mut initial,
                     );
                     assert!(!initial.sprite_texture, "texture appears before Bind");
@@ -2390,7 +2388,6 @@ fn song_lua_static_overlay_state_skips_runtime_caches() {
             &[],
             0..0,
             &mut dynamic_cursors,
-            None,
             &mut dynamic_cache,
         );
         let actual = song_lua_overlay_render_state_from(
@@ -2403,7 +2400,6 @@ fn song_lua_static_overlay_state_skips_runtime_caches() {
             &[],
             0..0,
             &mut static_cursors,
-            None,
             &mut static_cache,
         );
         assert_eq!(actual, expected, "now={now}");
@@ -2438,7 +2434,7 @@ fn song_lua_overlay_update_track_restores_cropped_state() {
     }];
     let mut cursors = vec![0; tracks.len()];
     let mut active = SongLuaOverlayState::default();
-    apply_song_lua_overlay_runtime_updates_for(1.5, &tracks, 0..1, &mut cursors, None, &mut active);
+    apply_song_lua_overlay_runtime_updates_for(1.5, &tracks, 0..1, &mut cursors, &mut active);
     assert!((active.croptop - 0.4).abs() <= f32::EPSILON);
 
     let mut restored = SongLuaOverlayState {
@@ -2450,14 +2446,13 @@ fn song_lua_overlay_update_track_restores_cropped_state() {
         &tracks,
         0..1,
         &mut cursors,
-        None,
         &mut restored,
     );
     assert_eq!(restored.croptop, 0.0);
 }
 
 #[test]
-fn song_lua_overlay_visibility_and_slice_geometry_change_atomically() {
+fn song_lua_overlay_visibility_keeps_unrelated_slice_interpolation() {
     use deadsync_song_lua::{
         SongLuaOverlayRuntimeUpdateSample as Sample, SongLuaOverlayRuntimeUpdateTrack as Track,
         SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value,
@@ -2501,36 +2496,22 @@ fn song_lua_overlay_visibility_and_slice_geometry_change_atomically() {
         },
     ];
 
-    let mut crop = SongLuaOverlayState::default();
-    let mut visible = SongLuaOverlayState::default();
     let mut cursors = vec![0; tracks.len()];
-    let snap = song_lua_overlay_update_snap(0.05, &tracks, &[1], &mut cursors);
-    apply_song_lua_overlay_runtime_updates_for(0.05, &tracks, 0..1, &mut cursors, snap, &mut crop);
-    apply_song_lua_overlay_runtime_updates_for(
-        0.05,
-        &tracks,
-        1..2,
-        &mut cursors,
-        snap,
-        &mut visible,
-    );
-    assert_eq!(crop.cropbottom, 0.8);
-    assert!(visible.visible);
-
-    let mut crop = SongLuaOverlayState::default();
-    let mut visible = SongLuaOverlayState::default();
-    let snap = song_lua_overlay_update_snap(0.15, &tracks, &[1], &mut cursors);
-    apply_song_lua_overlay_runtime_updates_for(0.15, &tracks, 0..1, &mut cursors, snap, &mut crop);
-    apply_song_lua_overlay_runtime_updates_for(
-        0.15,
-        &tracks,
-        1..2,
-        &mut cursors,
-        snap,
-        &mut visible,
-    );
-    assert_eq!(crop.cropbottom, 0.8);
-    assert!(visible.visible);
+    for (now, expected_crop, expected_visible) in [
+        (0.05, 0.4, false),
+        (0.1, 0.8, true),
+        (0.15, 0.4, true),
+        (0.2, 0.0, false),
+    ] {
+        let mut crop = SongLuaOverlayState::default();
+        let mut visible = SongLuaOverlayState::default();
+        apply_song_lua_overlay_runtime_updates_for(now, &tracks, 0..1, &mut cursors, &mut crop);
+        apply_song_lua_overlay_runtime_updates_for(
+            now, &tracks, 1..2, &mut cursors, &mut visible,
+        );
+        assert!((crop.cropbottom - expected_crop).abs() < 0.000_001);
+        assert_eq!(visible.visible, expected_visible, "visibility at {now}");
+    }
 }
 
 #[test]
@@ -2554,14 +2535,11 @@ fn song_lua_dormant_visibility_track_stays_hidden_until_trigger() {
         ],
     }];
     let mut cursors = vec![0];
-    let snap = song_lua_overlay_update_snap(1.0, &tracks, &[0], &mut cursors);
     let mut state = SongLuaOverlayState {
         visible: false,
         ..SongLuaOverlayState::default()
     };
-    apply_song_lua_overlay_runtime_updates_for(1.0, &tracks, 0..1, &mut cursors, snap, &mut state);
-
-    assert!(snap.is_none());
+    apply_song_lua_overlay_runtime_updates_for(1.0, &tracks, 0..1, &mut cursors, &mut state);
     assert!(!state.visible);
 }
 
@@ -8659,7 +8637,7 @@ fn check_native_model_textures(name: &str, native: &str, explicit_updates: bool,
                 let end = runtime_updates.partition_point(|track| track.overlay_index <= index);
                 song_lua_overlay_render_state_from(
                     second, index, overlay, &[], &[], &[], &runtime_updates, start..end,
-                    &mut update_cursors, None, &mut message_caches[index],
+                    &mut update_cursors, &mut message_caches[index],
                 )
             }).collect::<Vec<_>>();
             let states = actor_conformance::compose_overlay_states(
@@ -9919,7 +9897,6 @@ fn song_lua_effect_clock_advances_and_seeks_across_wraps() {
                 &tracks,
                 0..1,
                 &mut cursors,
-                None,
                 &mut state,
             );
             let clock = match effect_clock {
@@ -11006,11 +10983,11 @@ fn song_lua_update_setstate_records_animation_epoch() {
     }];
     let mut cursors = [0];
     let mut state = SongLuaOverlayState::default();
-    apply_song_lua_overlay_runtime_updates_for(1.1, &tracks, 0..1, &mut cursors, None, &mut state);
+    apply_song_lua_overlay_runtime_updates_for(1.1, &tracks, 0..1, &mut cursors, &mut state);
     assert_eq!(state.sprite_state_index, Some(0));
     assert_eq!(state.sprite_animation_epoch, Some(1.0));
 
-    apply_song_lua_overlay_runtime_updates_for(2.0, &tracks, 0..1, &mut cursors, None, &mut state);
+    apply_song_lua_overlay_runtime_updates_for(2.0, &tracks, 0..1, &mut cursors, &mut state);
     assert_eq!(state.sprite_state_index, Some(2));
     assert_eq!(state.sprite_animation_epoch, Some(2.0));
 }

@@ -107,7 +107,6 @@ struct SongLuaOverlayOrderCache {
     // fallback through `partition_point_from_hint`.
     update_actor_index: SongLuaOverlayIndex,
     update_ranges: Box<[std::ops::Range<usize>]>,
-    visible_update_indices: SmallVec<[usize; 8]>,
     update_cursors: Vec<usize>,
     sort_modes: Vec<u8>,
     // Dynamic-capable lists usually keep the same keys for many frames. Remember
@@ -1242,15 +1241,7 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
             .position(|overlay| matches!(overlay.kind, SongLuaOverlayKind::UpdateTracks { .. })),
     );
     let overlay_updates = song_lua_overlay_runtime_updates_at(overlays, update_actor_index);
-    let mut visible_update_indices = SmallVec::new();
-    for (track_index, track) in overlay_updates.iter().enumerate() {
-        if matches!(
-            track.target,
-            crate::SongLuaOverlayUpdateTarget::Visible
-                | crate::SongLuaOverlayUpdateTarget::Hibernating
-        ) {
-            visible_update_indices.push(track_index);
-        }
+    for track in overlay_updates {
         if track.overlay_index >= dynamic_local.len() {
             continue;
         }
@@ -1357,7 +1348,6 @@ fn song_lua_overlay_order_cache_from<S: NoteskinSlot + Clone>(
         static_root_order,
         update_actor_index,
         update_ranges: update_ranges.into_boxed_slice(),
-        visible_update_indices,
         update_cursors: vec![0; overlay_updates.len()],
         sort_modes,
         last_draw_orders: vec![0; overlays.len()],
@@ -2127,14 +2117,11 @@ fn song_lua_overlay_local_states_into<S: NoteskinSlot + Clone>(
     dynamic_indices: &[usize],
     update_actor_index: SongLuaOverlayIndex,
     update_ranges: &[std::ops::Range<usize>],
-    visible_update_indices: &[usize],
     update_cursors: &mut [usize],
     message_caches: &mut Vec<SongLuaMessageStateCache>,
     out: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
     let overlay_updates = song_lua_overlay_runtime_updates_at(overlays, update_actor_index);
-    let update_snap =
-        song_lua_overlay_update_snap(now, overlay_updates, visible_update_indices, update_cursors);
     let mut changed = false;
     if out.len() != overlays.len() {
         out.clear();
@@ -2156,7 +2143,6 @@ fn song_lua_overlay_local_states_into<S: NoteskinSlot + Clone>(
             overlay_updates,
             update_ranges.get(idx).cloned().unwrap_or(0..0),
             update_cursors,
-            update_snap,
             &mut message_caches[idx],
         );
         changed |= out[idx] != next;
@@ -2396,7 +2382,6 @@ fn song_lua_overlay_state_sets_active_into<S: NoteskinSlot + Clone>(
         effect_composed_indices,
         update_actor_index,
         update_ranges,
-        visible_update_indices,
         update_cursors,
         ..
     } = order_cache;
@@ -2409,7 +2394,6 @@ fn song_lua_overlay_state_sets_active_into<S: NoteskinSlot + Clone>(
         dynamic_local_indices,
         *update_actor_index,
         update_ranges,
-        visible_update_indices,
         update_cursors,
         message_caches,
         local_out,
@@ -5546,7 +5530,18 @@ fn song_lua_build_proxy_actor_in_space_with_scratch(
         overlay_space_width,
         overlay_space_height,
     );
-    let transform = (song_lua_proxy_needs_transform(state) || source.model.is_some()).then(|| {
+    // Projected song text must receive proxy translation outside its own model.
+    // Prepared Player sources declare their root camera and retain their existing
+    // layout translation semantics, including generic HUD text under that camera.
+    let needs_transform = song_lua_proxy_needs_transform(state)
+        || source.model.is_some()
+        || (offset != [0.0, 0.0]
+            && source.source_view_proj.is_none()
+            && song_lua_proxy_actors_have_camera_text(
+                source.segments.iter().flat_map(|segment| segment.iter()),
+                false,
+            ));
+    let transform = needs_transform.then(|| {
         song_lua_proxy_transform(
             state,
             source.offset,
@@ -5603,6 +5598,51 @@ fn song_lua_proxy_needs_transform(state: SongLuaOverlayState) -> bool {
         || state.rot_z_deg.abs() > f32::EPSILON
         || state.skew_x.abs() > f32::EPSILON
         || state.skew_y.abs() > f32::EPSILON
+}
+
+fn song_lua_proxy_actors_have_camera_text<'a>(
+    actors: impl IntoIterator<Item = &'a Actor>,
+    inherited_camera: bool,
+) -> bool {
+    let mut camera_depth = 0usize;
+    for actor in actors {
+        let in_camera = inherited_camera || camera_depth > 0;
+        let found = match actor {
+            Actor::CameraPush { .. } => {
+                camera_depth += 1;
+                false
+            }
+            Actor::CameraPop => {
+                camera_depth = camera_depth.saturating_sub(1);
+                false
+            }
+            Actor::Text { .. } => in_camera,
+            Actor::Camera { children, .. } => {
+                song_lua_proxy_actors_have_camera_text(children.iter(), true)
+            }
+            Actor::SharedCamera { children, .. } => {
+                song_lua_proxy_actors_have_camera_text(children.iter(), true)
+            }
+            Actor::Frame { children, .. } => {
+                song_lua_proxy_actors_have_camera_text(children.iter(), in_camera)
+            }
+            Actor::SharedFrame { children, .. } | Actor::SharedTransform { children, .. } => {
+                song_lua_proxy_actors_have_camera_text(children.iter(), in_camera)
+            }
+            Actor::RetainedFrame { frame, .. } => {
+                song_lua_proxy_actors_have_camera_text(frame.children().iter(), in_camera)
+            }
+            Actor::Shadow { child, .. } => song_lua_proxy_actors_have_camera_text(
+                std::iter::once(child.as_ref()),
+                in_camera,
+            ),
+            _ => false,
+        };
+        if found {
+            return true;
+        }
+    }
+    false
 }
 
 fn song_lua_proxy_wrapper(
@@ -6833,68 +6873,6 @@ fn song_lua_overlay_apply_blocks_cached(
     *block_state
 }
 
-#[derive(Clone, Copy)]
-struct SongLuaOverlayUpdateSnap {
-    start_second: f32,
-    end_second: f32,
-    t: f32,
-}
-
-// UpdateFunction state is sampled at 10 Hz. A visibility edge can bracket a
-// short geometry update, but a longer span is a dormant actor waiting for a
-// future command and must not be snapped active across that whole span.
-const SONG_LUA_UPDATE_SNAP_MAX_SECONDS: f32 = 0.25;
-
-fn song_lua_overlay_update_snap(
-    now: f32,
-    tracks: &[crate::SongLuaOverlayRuntimeUpdateTrack],
-    visible_track_indices: &[usize],
-    track_cursors: &mut [usize],
-) -> Option<SongLuaOverlayUpdateSnap> {
-    use crate::SongLuaOverlayUpdateValue as Value;
-    for &track_index in visible_track_indices {
-        let track = tracks.get(track_index)?;
-        let cursor = track_cursors.get_mut(track_index)?;
-        let next =
-            deadsync_gameplay::partition_point_from_hint(&track.samples, *cursor, |sample| {
-                sample.second <= now
-            });
-        *cursor = next;
-        let Some(from) = track.samples.get(next.wrapping_sub(1)) else {
-            continue;
-        };
-        let Some(to) = track.samples.get(next) else {
-            continue;
-        };
-        if to.second - from.second > SONG_LUA_UPDATE_SNAP_MAX_SECONDS {
-            continue;
-        }
-        let t = match (&from.value, &to.value) {
-            (Value::Bool(false), Value::Bool(true)) => {
-                if track.target == crate::SongLuaOverlayUpdateTarget::Hibernating {
-                    0.0
-                } else {
-                    1.0
-                }
-            }
-            (Value::Bool(true), Value::Bool(false)) => {
-                if track.target == crate::SongLuaOverlayUpdateTarget::Hibernating {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            _ => continue,
-        };
-        return Some(SongLuaOverlayUpdateSnap {
-            start_second: from.second,
-            end_second: to.second,
-            t,
-        });
-    }
-    None
-}
-
 /// Apply a captured actor property using gameplay's playback rules.
 pub fn apply_overlay_update(
     state: &mut SongLuaOverlayState,
@@ -7058,9 +7036,40 @@ fn apply_song_lua_overlay_runtime_updates_for(
     tracks: &[crate::SongLuaOverlayRuntimeUpdateTrack],
     track_range: std::ops::Range<usize>,
     track_cursors: &mut [usize],
-    update_snap: Option<SongLuaOverlayUpdateSnap>,
     current: &mut SongLuaOverlayState,
 ) {
+    use crate::{SongLuaOverlayUpdateTarget as Target, SongLuaOverlayUpdateValue as Value};
+
+    // A hidden-frame reset must not pull this actor's visible pose toward its
+    // dormant geometry. Keep that last pose until its own hide/hibernate frame;
+    // other actors and properties with different sample intervals still move.
+    let mut closing_intervals = [None; 2];
+    for track_index in track_range.clone() {
+        let Some(track) = tracks.get(track_index) else {
+            continue;
+        };
+        let (slot, closed) = match track.target {
+            Target::Visible => (0, false),
+            Target::Hibernating => (1, true),
+            _ => continue,
+        };
+        let Some(cursor) = track_cursors.get_mut(track_index) else {
+            continue;
+        };
+        let next =
+            deadsync_gameplay::partition_point_from_hint(&track.samples, *cursor, |sample| {
+                sample.second <= now
+            });
+        *cursor = next;
+        if let (Some(from), Some(to)) = (
+            track.samples.get(next.wrapping_sub(1)),
+            track.samples.get(next),
+        ) && matches!((&from.value, &to.value), (Value::Bool(before), Value::Bool(after))
+            if before != after && *after == closed)
+        {
+            closing_intervals[slot] = Some((from.second, to.second));
+        }
+    }
     for track_index in track_range {
         let Some(track) = tracks.get(track_index) else {
             continue;
@@ -7078,26 +7087,30 @@ fn apply_song_lua_overlay_runtime_updates_for(
         }
         let from = &samples[next - 1];
         let to = samples.get(next).unwrap_or(from);
-        let mut t = if to.second <= from.second + f32::EPSILON {
+        let t = if closing_intervals
+            .iter()
+            .flatten()
+            .any(|&(start, end)| from.second == start && to.second == end)
+        {
+            0.0
+        } else if to.second <= from.second + f32::EPSILON {
             1.0
         } else {
             (now - from.second) / (to.second - from.second)
         };
-        if let Some(snap) = update_snap
-            && (from.second - snap.start_second).abs() <= 0.000_1
-            && (to.second - snap.end_second).abs() <= 0.000_1
-        {
-            t = snap.t;
-        }
-        // Native clocks and base rotations take effect on their recorded frame.
+        // Visibility, native clocks and base rotations take effect on their
+        // recorded frame. Revealing earlier can expose the default pose before
+        // the actor's first position and rotation samples have started.
         // In particular, interpolating toward a future movie seek would show
         // its frames early, before SetSecondsIntoAnimation actually ran.
         let value = if matches!(
             track.target,
-            crate::SongLuaOverlayUpdateTarget::EffectTime
-                | crate::SongLuaOverlayUpdateTarget::MoviePositionSeconds
-                | crate::SongLuaOverlayUpdateTarget::BaseRotation
-                | crate::SongLuaOverlayUpdateTarget::BaseAlpha
+            Target::Visible
+                | Target::Hibernating
+                | Target::EffectTime
+                | Target::MoviePositionSeconds
+                | Target::BaseRotation
+                | Target::BaseAlpha
         ) {
             from.value.clone()
         } else {
@@ -7216,7 +7229,6 @@ fn song_lua_overlay_render_state_from<S: NoteskinSlot + Clone>(
     overlay_updates: &[crate::SongLuaOverlayRuntimeUpdateTrack],
     update_range: std::ops::Range<usize>,
     update_cursors: &mut [usize],
-    update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let events = overlay_events.get(overlay_index).map(Vec::as_slice);
@@ -7238,7 +7250,6 @@ fn song_lua_overlay_render_state_from<S: NoteskinSlot + Clone>(
         overlay_updates,
         update_range,
         update_cursors,
-        update_snap,
         message_cache,
     )
 }
@@ -7253,7 +7264,6 @@ fn song_lua_overlay_render_state_dynamic<S: NoteskinSlot + Clone>(
     overlay_updates: &[crate::SongLuaOverlayRuntimeUpdateTrack],
     update_range: std::ops::Range<usize>,
     update_cursors: &mut [usize],
-    update_snap: Option<SongLuaOverlayUpdateSnap>,
     message_cache: &mut SongLuaMessageStateCache,
 ) -> SongLuaOverlayState {
     let mut current = song_lua_message_state_cached(
@@ -7275,7 +7285,6 @@ fn song_lua_overlay_render_state_dynamic<S: NoteskinSlot + Clone>(
         overlay_updates,
         update_range,
         update_cursors,
-        update_snap,
         &mut current,
     );
     // Exact function eases and sampled UpdateFunction tracks can describe the
@@ -10636,7 +10645,8 @@ fn song_lua_projected_overlay_actor(
     ))
 }
 
-type SongLuaActorList = SmallVec<[Actor; 2]>;
+// Projected text uses CameraPush, its fill and optional glow, then CameraPop.
+type SongLuaActorList = SmallVec<[Actor; 4]>;
 
 #[derive(Clone, Copy)]
 struct SongLuaDrawTime {
@@ -10899,8 +10909,7 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
     let elapsed = elapsed.into();
     let start = out.len();
     let flat_camera = camera.world != Matrix4::IDENTITY
-        && (matches!(overlay.kind, SongLuaOverlayKind::BitmapText { .. })
-            || texture.is_none()
+        && (texture.is_none()
                 && matches!(overlay.kind, SongLuaOverlayKind::ActorMultiVertex { texture_key: None, .. })
             || matches!(overlay.kind, SongLuaOverlayKind::Sprite { .. } | SongLuaOverlayKind::Quad)
                 && camera.uses_generic_mask(state, size));
@@ -10931,6 +10940,10 @@ fn append_song_lua_overlay_output<S: NoteskinSlot + Clone>(
         }
     }
 }
+
+#[cfg(test)]
+#[path = "playback/bitmap_text_projection_tests.rs"]
+mod bitmap_text_projection_tests;
 
 /// Emits compiled multi-output overlays directly into the caller's reused
 /// frame buffer. Returning `None` means the overlay is a single-output kind and
@@ -11511,17 +11524,50 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 // Stroke and shadow precede the native rainbow diffuse pass.
                 text_state.shadow_color[3] *= diffuse_alpha;
             }
+            let text_offset = [
+                effect_offset[0].mul_add(x_scale, state.x * x_scale),
+                effect_offset[1].mul_add(y_scale, state.y * y_scale),
+            ];
+            let text_scale = [
+                size_scale_x * x_scale * effect_scale[0],
+                size_scale_y * y_scale * effect_scale[1],
+            ];
+            let native_text = camera_state.is_active()
+                || state.z + effect_offset[2] != 0.0
+                || effect_rot[0].abs() > f32::EPSILON
+                || effect_rot[1].abs() > f32::EPSILON
+                || state.quaternion != crate::actor_quaternion::IDENTITY;
+            if native_text && text_scale.iter().any(|v| !v.is_finite() || v.abs() <= f32::EPSILON) {
+                return None;
+            }
+            let text_camera = native_text.then(|| {
+                let [projection, view, space] = song_lua_model_camera(camera_state, x_scale, y_scale);
+                let model = Matrix4::from_scale(Vector3::new(x_scale, y_scale, 1.0))
+                    * song_lua_overlay_sprite_matrix(
+                        state,
+                        [0.0; 2],
+                        [state.x + effect_offset[0], state.y + effect_offset[1], state.z + effect_offset[2]],
+                        effect_rot,
+                        effect_scale,
+                    );
+                // Text composition already applies its 2D offset and zoom.
+                // Remove only that placement, leaving glyph alignment, fit/max
+                // sizing, and cached geometry intact. Native Actor::BeginDraw
+                // then supplies XYZ and rotation-before-scale under the active
+                // camera; raw X/Y rotation under the UI's +/-1 depth clips text.
+                let undo_placement = Matrix4::from_scale(Vector3::new(
+                    text_scale[0].recip(), text_scale[1].recip(), 1.0,
+                )) * Matrix4::from_translation(Vector3::new(-text_offset[0], -text_offset[1], 0.0));
+                song_lua_depth_range(state) * projection * view * model * undo_placement * space
+            });
             let actor = Actor::Text {
                 align: [state.halign, state.valign],
-                offset: [
-                    effect_offset[0].mul_add(x_scale, state.x * x_scale),
-                    effect_offset[1].mul_add(y_scale, state.y * y_scale),
-                ],
-                local_transform: song_lua_overlay_local_transform(
-                    effect_rot,
-                    state.skew_x,
-                    state.skew_y,
-                ),
+                offset: text_offset,
+                local_transform: if text_camera.is_some() {
+                    Matrix4::IDENTITY
+                } else {
+                    song_lua_overlay_local_transform(effect_rot, state.skew_x, state.skew_y)
+                },
                 color,
                 stroke_color,
                 glow,
@@ -11530,10 +11576,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 attributes: text_attributes,
                 align_text: state.text_align,
                 z,
-                scale: [
-                    size_scale_x * x_scale * effect_scale[0],
-                    size_scale_y * y_scale * effect_scale[1],
-                ],
+                scale: text_scale,
                 fit_width: state.size.map(|size| size[0] * x_scale),
                 fit_height: state.size.map(|size| size[1] * y_scale),
                 line_spacing: state
@@ -11555,14 +11598,21 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 shadow_color: [0.0, 0.0, 0.0, 0.5],
                 effect: deadlib_present::anim::EffectState::default(),
             };
-            Some(song_lua_finalize_overlay_actor(
+            let mut actors = song_lua_finalize_overlay_actor(
                 text_state,
                 actor,
                 glow,
                 x_scale,
                 y_scale,
                 projected_mesh_scratch.as_deref_mut(),
-            ))
+            );
+            if let Some(view_proj) = text_camera {
+                // Flat camera scopes preserve this leaf's draw order when an
+                // ActorProxy normalizes the surrounding captured actor stream.
+                actors.insert(0, Actor::CameraPush { view_proj });
+                actors.push(Actor::CameraPop);
+            }
+            Some(actors)
         }
         SongLuaOverlayKind::ActorMultiVertex {
             vertices,
@@ -16643,6 +16693,10 @@ pub mod actor_conformance;
 #[cfg(test)]
 #[path = "playback/screen_projection_tests.rs"]
 mod screen_projection_tests;
+
+#[cfg(test)]
+#[path = "playback/visibility_boundary_tests.rs"]
+mod visibility_boundary_tests;
 
 fn player_scratch<T>(active_players: usize, capacity: usize) -> [Vec<T>; MAX_PLAYERS] {
     std::array::from_fn(|player| {
