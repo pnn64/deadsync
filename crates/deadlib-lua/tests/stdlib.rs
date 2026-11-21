@@ -476,6 +476,35 @@ fn table_operations_are_raw_and_callbacks_can_stop_or_mutate() {
 }
 
 #[test]
+fn table_shifts_preserve_holes_and_collectable_values_in_both_layouts() {
+    let program = compile(
+        br#"
+        local t = {}
+        for i = 1,128 do t[i] = i end
+        t[0],t[40],t[128] = 'hash',nil,nil
+
+        table.insert(t,17,false)
+        assert(t[16]==16 and t[17]==false and t[18]==17)
+        assert(t[40]==39 and t[41]==nil and t[42]==41 and t[128]==127)
+        assert(table.remove(t,17)==false)
+        assert(t[17]==17 and t[40]==nil and t[41]==41 and t[127]==127 and t[128]==nil)
+
+        t[40] = {42}
+        table.insert(t,17,nil)
+        collectgarbage()
+        assert(t[17]==nil and t[41][1]==42)
+        assert(table.remove(t,17)==nil)
+        collectgarbage()
+        assert(t[17]==17 and t[40][1]==42 and t[0]=='hash')
+    "#,
+    )
+    .unwrap();
+    for mut vm in [Vm::new(), Vm::try_new_with_lua51_table_order().unwrap()] {
+        vm.execute(&program).unwrap();
+    }
+}
+
+#[test]
 fn concat_array_ranges_preserve_separators_and_report_holes() {
     let program = compile(
         br#"

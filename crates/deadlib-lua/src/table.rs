@@ -150,6 +150,19 @@ fn array_index(value: Value) -> Option<usize> {
     (index != 0 && f64::from(index) == n).then_some(index.wrapping_sub(1) as usize)
 }
 
+fn array_range(first: i64, last: i64) -> Option<std::ops::Range<usize>> {
+    let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
+    let end = u32::try_from(last).ok()? as usize;
+    Some(start..end)
+}
+
+fn array_scalar(value: Value) -> bool {
+    matches!(
+        value,
+        Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
+    )
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Entry {
     key: Key,
@@ -442,9 +455,32 @@ impl Table {
     }
     /// Return the inclusive range of one-based indices when it fits in the array.
     pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
-        let start = u32::try_from(first).ok()?.checked_sub(1)? as usize;
-        let end = u32::try_from(last).ok()? as usize;
-        self.array.get(start..end)
+        self.array.get(array_range(first, last)?)
+    }
+    /// Insert at the start of a scalar array range or remove its first value.
+    /// Existing scalar slots can be overwritten without allocation or GC work.
+    pub(crate) fn shift_scalar_array(
+        &mut self,
+        first: i64,
+        last: i64,
+        insert: Option<Value>,
+    ) -> Option<Value> {
+        let array = self.array.get_mut(array_range(first, last)?)?;
+        let previous = *array.first()?;
+        if insert.is_some_and(|value| !array_scalar(value))
+            || !array.iter().copied().all(array_scalar)
+        {
+            return None;
+        }
+        let end = array.len() - 1;
+        if let Some(value) = insert {
+            array.copy_within(..end, 1);
+            array[0] = value;
+        } else {
+            array.copy_within(1.., 0);
+            array[end] = Value::Nil;
+        }
+        Some(previous)
     }
     /// String keys are already interned; field access need not classify them
     /// as a possible array index or reconstruct a generic Lua table key.
@@ -495,10 +531,7 @@ impl Table {
     /// tracing. This cannot grow storage or change table traversal positions.
     #[inline]
     pub(crate) fn set_existing_array_scalar(&mut self, key: Value, value: Value) -> bool {
-        if !matches!(
-            value,
-            Value::Nil | Value::Boolean(_) | Value::Number(_) | Value::LightUserdata(_)
-        ) {
+        if !array_scalar(value) {
             return false;
         }
         if let Some(index) = array_index(key)

@@ -120,11 +120,18 @@ impl Vm {
                     _ => return Err(failure("wrong number of arguments to 'insert'")),
                 };
                 let end = (len + 1).max(position);
-                for index in (position + 1..=end).rev() {
-                    let v = self.raw_index(table, index - 1);
-                    self.set_index(table, index, v)?;
-                }
                 let v = self.argument(base, count, count - 1);
+                if end - position >= 32
+                    && self.tables[slot_index(table.0)]
+                        .shift_scalar_array(position, end, Some(v))
+                        .is_some()
+                {
+                    return Ok(0);
+                }
+                for index in (position + 1..=end).rev() {
+                    let moved = self.raw_index(table, index - 1);
+                    self.set_index(table, index, moved)?;
+                }
                 self.set_index(table, position, v)?;
                 return Ok(0);
             }
@@ -134,13 +141,20 @@ impl Vm {
                 if position < 1 || position > len {
                     return Ok(0);
                 }
-                let value = self.raw_index(table, position);
-                for index in position..len {
-                    let v = self.raw_index(table, index + 1);
-                    self.set_index(table, index, v)?;
+                if len - position >= 32
+                    && let Some(value) =
+                        self.tables[slot_index(table.0)].shift_scalar_array(position, len, None)
+                {
+                    value
+                } else {
+                    let value = self.raw_index(table, position);
+                    for index in position..len {
+                        let v = self.raw_index(table, index + 1);
+                        self.set_index(table, index, v)?;
+                    }
+                    self.set_index(table, len, Value::Nil)?;
+                    value
                 }
-                self.set_index(table, len, Value::Nil)?;
-                value
             }
             TAB_CONCAT => {
                 let len = storage.len() as i64;
