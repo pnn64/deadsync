@@ -317,6 +317,37 @@ impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
     }
 }
 
+impl Huffman<32> {
+    /// Pack code length, extra-bit count and distance base in a single lookup.
+    /// Longer primary misses retain the canonical decoder. Reserved codes have
+    /// a zero base, which no valid distance uses. Repeat the shortest prefix to
+    /// avoid translating all 512 entries for common small distance trees.
+    fn distance_primary(&self) -> [u32; 512] {
+        let mut distance_fast = [0u32; 512];
+        let prefix = 1usize << self.max.min(9);
+        for (index, value) in distance_fast[..prefix].iter_mut().enumerate() {
+            let entry = self.fast[index];
+            let symbol = usize::from(entry >> 4);
+            *value = if entry == 0 {
+                0
+            } else if symbol >= 30 {
+                u32::from(entry & 15)
+            } else {
+                ((DIST_BASE[symbol] as u32) << 8)
+                    | (u32::from(DIST_EXTRA[symbol]) << 4)
+                    | u32::from(entry & 15)
+            };
+        }
+        let mut initialized = prefix;
+        while initialized < 512 {
+            let (prefix, rest) = distance_fast.split_at_mut(initialized);
+            rest[..initialized].copy_from_slice(prefix);
+            initialized *= 2;
+        }
+        distance_fast
+    }
+}
+
 const fn fixed_lengths() -> [u8; 288] {
     let mut lengths = [8; 288];
     let mut n = 144;
@@ -338,6 +369,10 @@ const FIXED: (Huffman, Huffman<32>) = {
     };
     (literals, distances)
 };
+
+/// The fixed codes' sized-inflate lookups, built once on first use.
+static FIXED_PRIMARY: std::sync::LazyLock<([u16; 4096], [u32; 512])> =
+    std::sync::LazyLock::new(|| (FIXED.0.wide_primary(), FIXED.1.distance_primary()));
 
 fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman<32>), Error> {
     let nl = bits.read(5)? as usize + 257;
@@ -663,42 +698,20 @@ fn inflate_sized_codes(
     fixed_codes: bool,
     window: usize,
 ) -> Result<(), Error> {
-    let dynamic_tables;
-    let (lit, dist) = if fixed_codes {
-        (&FIXED.0, &FIXED.1)
+    let (dynamic_tables, primary);
+    let (lit, dist, (fast, distance_fast)) = if fixed_codes {
+        (&FIXED.0, &FIXED.1, &*FIXED_PRIMARY)
     } else {
         dynamic_tables = dynamic(bits)?;
-        (&dynamic_tables.0, &dynamic_tables.1)
+        primary = (
+            dynamic_tables.0.wide_primary(),
+            dynamic_tables.1.distance_primary(),
+        );
+        (&dynamic_tables.0, &dynamic_tables.1, &primary)
     };
-    let fast = lit.wide_primary();
-    // Pack code length, extra-bit count and distance base in a single lookup.
-    // Longer primary misses retain the canonical decoder. Reserved codes have
-    // a zero base, which no valid distance uses. Repeat the shortest prefix to
-    // avoid translating all 512 entries for common small distance trees.
-    let mut distance_fast = [0u32; 512];
-    let prefix = 1usize << dist.max.min(9);
-    for (index, value) in distance_fast[..prefix].iter_mut().enumerate() {
-        let entry = dist.fast[index];
-        let symbol = usize::from(entry >> 4);
-        *value = if entry == 0 {
-            0
-        } else if symbol >= 30 {
-            u32::from(entry & 15)
-        } else {
-            ((DIST_BASE[symbol] as u32) << 8)
-                | (u32::from(DIST_EXTRA[symbol]) << 4)
-                | u32::from(entry & 15)
-        };
-    }
-    let mut initialized = prefix;
-    while initialized < 512 {
-        let (prefix, rest) = distance_fast.split_at_mut(initialized);
-        rest[..initialized].copy_from_slice(prefix);
-        initialized *= 2;
-    }
     let mut pos = *written;
     loop {
-        if inflate_sized_fast(bits, output, &mut pos, dist, &fast, &distance_fast, window)? {
+        if inflate_sized_fast(bits, output, &mut pos, dist, fast, distance_fast, window)? {
             break;
         }
         bits.fill_wide();
