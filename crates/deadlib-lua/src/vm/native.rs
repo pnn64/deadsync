@@ -1229,6 +1229,34 @@ impl NumberText {
     pub(super) fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len]
     }
+    fn integer(&mut self, value: f64) {
+        const PAIRS: [[u8; 2]; 100] = {
+            let mut pairs = [[0; 2]; 100];
+            let mut i = 0;
+            while i < pairs.len() {
+                pairs[i] = [b'0' + (i / 10) as u8, b'0' + (i % 10) as u8];
+                i += 1;
+            }
+            pairs
+        };
+        let sign = usize::from(value.is_sign_negative());
+        let mut magnitude = value.abs() as u64;
+        self.bytes[0] = b'-';
+        if magnitude < 10 {
+            self.bytes[sign] = b'0' + magnitude as u8;
+            self.len = sign + 1;
+            return;
+        }
+        self.len = sign + magnitude.ilog10() as usize + 1;
+        let (first, pairs) = self.bytes[sign..self.len].as_rchunks_mut::<2>();
+        for pair in pairs.iter_mut().rev() {
+            *pair = PAIRS[(magnitude % 100) as usize];
+            magnitude /= 100;
+        }
+        if let [digit] = first {
+            *digit = b'0' + magnitude as u8;
+        }
+    }
     pub(super) fn try_into_localized(self) -> Result<Vec<u8>, Error> {
         let mut bytes = Vec::new();
         bytes
@@ -1300,12 +1328,7 @@ pub(super) fn number_text(n: f64) -> NumberText {
         }
     } else if n.abs() < 100_000_000_000_000.0 && n.fract() == 0.0 {
         // Integers with at most fourteen digits need no decimal rounding.
-        // Keep the sign of zero, which an integer cast would discard.
-        if n == 0.0 && n.is_sign_negative() {
-            output.write_str("-0").unwrap();
-        } else {
-            write!(output, "{}", n as i64).unwrap();
-        }
+        output.integer(n);
     } else if let Some((scaled, factor, width)) = short_decimal(n) {
         if n.is_sign_negative() {
             output.write_str("-").unwrap();
