@@ -157,7 +157,14 @@ pub fn unix_raw_keyboard_backend_active() -> bool {
     crate::backend::evdev::keyboard_backend_active()
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+#[cfg(target_os = "macos")]
+#[inline(always)]
+#[must_use]
+pub fn unix_raw_keyboard_backend_active() -> bool {
+    crate::backend::iohid::keyboard_backend_active()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "macos")))]
 #[inline(always)]
 #[must_use]
 pub const fn unix_raw_keyboard_backend_active() -> bool {

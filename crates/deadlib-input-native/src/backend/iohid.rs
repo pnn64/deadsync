@@ -56,6 +56,8 @@ unsafe extern "C" {
 // SAFETY: These are direct IOKit HID FFI declarations. Callers must pass live manager/device/
 // value handles and callback pointers that remain valid for the duration required by IOKit.
 unsafe extern "C" {
+    // IOHIDLib.h: ListenEvent = 1; Granted = 0 (macOS 10.15+).
+    fn IOHIDCheckAccess(request_type: u32) -> u32;
     fn IOHIDManagerCreate(alloc: CFAllocatorRef, options: u32) -> IOHIDManagerRef;
     fn IOHIDManagerSetDeviceMatching(manager: IOHIDManagerRef, matching: CFTypeRef);
     fn IOHIDManagerRegisterDeviceMatchingCallback(
@@ -239,6 +241,15 @@ struct Ctx {
 
 static KEYBOARD_WINDOW_FOCUSED: AtomicBool = AtomicBool::new(false);
 static KEYBOARD_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(true);
+static KEYBOARD_MANAGER_OPEN: AtomicBool = AtomicBool::new(false);
+
+/// Never let the raw and window routes dispatch the same keystroke. This
+/// read-only permission check also enables the fallback after access is revoked.
+pub fn keyboard_backend_active() -> bool {
+    KEYBOARD_MANAGER_OPEN.load(Ordering::Acquire)
+        // SAFETY: read-only IOKit permission query; no pointers or permission prompt.
+        && unsafe { IOHIDCheckAccess(1) == 0 }
+}
 
 #[inline(always)]
 pub fn set_keyboard_window_focused(focused: bool) {
@@ -674,6 +685,10 @@ extern "C" fn on_input(
         }
 
         let capture_active = keyboard_capture_active();
+        if !capture_active || !keyboard_backend_active() {
+            // Do not record background keyboard activity even in Debug logs.
+            return;
+        }
         let key_code = if usage_page == 0x07 && capture_active {
             hid_key_code(usage)
         } else {
@@ -743,7 +758,13 @@ pub fn run(
 
         let rl = CFRunLoopGetCurrent();
         IOHIDManagerScheduleWithRunLoop(manager, rl, kCFRunLoopDefaultMode);
-        let _ = IOHIDManagerOpen(manager, 0);
+        let opened = IOHIDManagerOpen(manager, 0) == 0;
+        KEYBOARD_MANAGER_OPEN.store(opened, Ordering::Release);
+        if !keyboard_backend_active() {
+            log::warn!(
+                "Raw keyboard input unavailable; using focused window keyboard events. Input Monitoring permission is optional."
+            );
+        }
 
         let set = IOHIDManagerCopyDevices(manager);
         if !set.is_null() {

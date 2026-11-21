@@ -536,7 +536,12 @@ fn asset_name_matches(name: &str, version_tag: &str, target: HostTarget) -> bool
 /// Linux, FreeBSD, and macOS use tar archives.
 #[inline]
 #[must_use]
-pub const fn apply_supported_for_host() -> bool {
+pub fn apply_supported_for_host() -> bool {
+    // The existing tar updater replaces loose files and would invalidate an
+    // application's signature. Bundle updates require a whole-app installer.
+    if deadlib_platform::runtime_dir::app_bundle_resources().is_some() {
+        return false;
+    }
     cfg!(any(
         target_os = "windows",
         target_os = "linux",
