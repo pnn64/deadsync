@@ -85,7 +85,7 @@ impl Vm {
         }
     }
     fn raw_index(&self, table: TableId, index: i64) -> Value {
-        self.tables[slot_index(table.0)].get(key(index))
+        self.tables[slot_index(table.0)].get_integer(index)
     }
     fn set_index(&mut self, table: TableId, index: i64, value: Value) -> Result<(), Error> {
         self.raw_set(table, key(index), value)

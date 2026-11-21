@@ -452,6 +452,17 @@ impl Table {
         };
         self.get_key(key)
     }
+    #[inline]
+    pub(crate) fn get_integer(&self, index: i64) -> Value {
+        // Array keys use the same one-based u32 range as array_index.
+        let offset = (index as u64).wrapping_sub(1);
+        if offset < u64::from(u32::MAX)
+            && let Some(value) = self.array.get(offset as usize)
+        {
+            return *value;
+        }
+        self.get_key(Key::Number((index as f64).to_bits()))
+    }
     /// Return the inclusive range of one-based indices when it fits in the array.
     pub(crate) fn array_slice(&self, first: i64, last: i64) -> Option<&[Value]> {
         self.array.get(array_range(first, last)?)
@@ -934,6 +945,36 @@ mod allocation_tests {
         }
         assert_eq!(array_index(Value::Nil), None);
         assert_eq!(array_index(Value::Boolean(true)), None);
+    }
+    #[test]
+    fn integer_lookup_preserves_array_and_hash_keys() {
+        let mut table = Table::with_capacity(3, 16).unwrap();
+        table
+            .set(Value::Number(-0.0), Value::Boolean(true))
+            .unwrap();
+        for (ordinal, index) in [
+            i64::MIN,
+            -i64::from(u32::MAX),
+            -1,
+            1,
+            3,
+            4,
+            i64::from(u32::MAX),
+            1 << 32,
+            (1 << 32) + 1,
+            (1 << 53) + 1,
+            i64::MAX,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let value = Value::Number(ordinal as f64);
+            table.set(Value::Number(index as f64), value).unwrap();
+            assert_eq!(table.get_integer(index), value);
+        }
+        assert_eq!(table.get_integer(0), Value::Boolean(true));
+        assert_eq!(table.get_integer(2), Value::Nil);
+        assert_eq!(table.get_integer(5), Value::Nil);
     }
     #[test]
     fn numeric_hash_keys_and_array_keys_preserve_next_order() {
