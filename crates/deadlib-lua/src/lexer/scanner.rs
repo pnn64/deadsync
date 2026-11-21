@@ -87,6 +87,30 @@ fn scan_token_boundary(bytes: &[u8], boundary: impl Fn(u8) -> bool) -> usize {
         .unwrap_or_else(|| prefix.len() + scan_boundary(rest, boundary))
 }
 
+fn word_boundary(byte: u8) -> bool {
+    !(byte.is_ascii_alphanumeric() | (byte == b'_'))
+}
+
+fn number_boundary(byte: u8) -> bool {
+    !(byte.is_ascii_digit() | (byte == b'.'))
+}
+
+fn locale_token_end(
+    bytes: &[u8],
+    ascii_boundary: impl Fn(u8) -> bool,
+    non_ascii: impl Fn(u8) -> bool,
+) -> usize {
+    let mut end = scan_token_boundary(bytes, &ascii_boundary);
+    while bytes
+        .get(end)
+        .is_some_and(|&byte| byte >= 128 && non_ascii(byte))
+    {
+        end += 1;
+        end += scan_token_boundary(&bytes[end..], &ascii_boundary);
+    }
+    end
+}
+
 fn quoted_boundary(bytes: &[u8], quote: u8) -> usize {
     scan_token_boundary(bytes, |byte| {
         (byte == quote) | (byte == b'\\') | (byte == b'\n') | (byte == b'\r')
@@ -278,14 +302,13 @@ impl Scanner {
         let Some(&c) = input.get(start) else {
             return Ok(false);
         };
-        let word = |b: u8| b.is_ascii_alphanumeric() | (b == b'_');
         let mut text = Text::default();
         let mut number = 0.0;
         let next = input.get(start + 1).copied();
         let (kind, end) = match c {
             b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
                 let tail = &input[start + 1..];
-                let end = start + 1 + scan_token_boundary(tail, |byte| !word(byte));
+                let end = start + 1 + scan_token_boundary(tail, word_boundary);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -298,16 +321,14 @@ impl Scanner {
             }
             b'0'..=b'9' => {
                 let tail = &input[start + 1..];
-                let mut end = start
-                    + 1
-                    + scan_token_boundary(tail, |byte| !(byte.is_ascii_digit() | (byte == b'.')));
+                let mut end = start + 1 + scan_token_boundary(tail, number_boundary);
                 if matches!(input.get(end), Some(b'e' | b'E' | 0)) {
                     end += 1;
                     if matches!(input.get(end), Some(b'+' | b'-' | 0)) {
                         end += 1;
                     }
                 }
-                end += scan_token_boundary(&input[end..], |byte| !word(byte));
+                end += scan_token_boundary(&input[end..], word_boundary);
                 if input.get(end).is_some_and(|&b| b >= 128) {
                     return Ok(false);
                 }
@@ -567,12 +588,11 @@ impl Scanner {
                     }
                 }
                 State::Word => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        word_boundary,
+                        crate::locale::is_alnum,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
@@ -584,12 +604,11 @@ impl Scanner {
                     self.emit(kind);
                 }
                 State::Number => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_digit(*c) || *c == b'.')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        number_boundary,
+                        crate::locale::is_digit,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
@@ -607,12 +626,11 @@ impl Scanner {
                     self.state = State::NumberTail;
                 }
                 State::NumberTail => {
-                    while input
-                        .get(self.pos)
-                        .is_some_and(|c| crate::locale::is_alnum(*c) || *c == b'_')
-                    {
-                        self.pos += 1;
-                    }
+                    self.pos += locale_token_end(
+                        &input[self.pos..],
+                        word_boundary,
+                        crate::locale::is_alnum,
+                    );
                     if self.pos == input.len() && !closed {
                         return Ok(None);
                     }
