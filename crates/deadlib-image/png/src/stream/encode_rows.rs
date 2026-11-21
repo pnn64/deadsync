@@ -50,6 +50,8 @@ pub(super) struct Rows<'a> {
     output: Vec<u8>,
     /// `output` holds only zeros after its filter type.
     zeroed: bool,
+    /// The filter the previous adaptive row chose, tried first.
+    last_kind: u8,
 }
 fn resize(bytes: &mut Vec<u8>, length: usize) -> Result<(), Error> {
     let additional = length.saturating_sub(bytes.len());
@@ -89,6 +91,7 @@ impl<'a> Rows<'a> {
             candidate: Vec::new(),
             output: Vec::new(),
             zeroed: false,
+            last_kind: 1,
         })
     }
     fn start_pass(&mut self) -> Result<bool, Error> {
@@ -186,13 +189,27 @@ impl<'a> Rows<'a> {
                 self.output[1..].fill(0);
             }
         } else if self.filter == Filter::Adaptive {
+            // The lowest score wins and ties keep the earlier filter. Trying
+            // the previous row's choice first usually sets a tight limit, so
+            // the other candidates stop early. A candidate before the current
+            // best also wins a tie, so its limit is one higher.
             let mut best = u64::MAX;
-            for kind in 1..5 {
+            let mut best_kind = 5;
+            let first = self.last_kind;
+            for kind in core::iter::once(first).chain((1..5).filter(|&kind| kind != first)) {
                 if self.index == 0 && matches!(kind, 2 | 4) {
                     continue;
                 }
+                let limit = if kind < best_kind {
+                    best.saturating_add(1)
+                } else {
+                    best
+                };
+                if limit == 0 {
+                    continue;
+                }
                 let score = if self.index == 0 {
-                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..], best)
+                    scanline::filter_first::<true>(row, bpp, kind, &mut self.candidate[1..], limit)
                 } else {
                     scanline::filter_into::<true>(
                         row,
@@ -200,18 +217,17 @@ impl<'a> Rows<'a> {
                         bpp,
                         kind,
                         &mut self.candidate[1..],
-                        best,
+                        limit,
                     )
                 };
-                if score < best {
+                if score < limit {
                     best = score;
-                    selected = kind;
+                    best_kind = kind;
                     core::mem::swap(&mut self.candidate, &mut self.output);
-                    if best == 0 {
-                        break;
-                    }
                 }
             }
+            selected = best_kind;
+            self.last_kind = best_kind;
             if scanline::score_at_most(row, best) {
                 selected = 0;
                 self.output[1..].copy_from_slice(row);
@@ -246,5 +262,102 @@ impl<'a> Rows<'a> {
             + self.previous.capacity()
             + self.candidate.capacity()
             + self.output.capacity()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ColorType;
+
+    /// Adaptive rows chosen by scoring every filter in full, in order.
+    fn reference(pixels: &[u8], stride: usize) -> Vec<Vec<u8>> {
+        let mut rows = Vec::new();
+        for (index, row) in pixels.chunks(stride).enumerate() {
+            let previous = &pixels[index.saturating_sub(1) * stride..][..stride];
+            let mut out = vec![0; stride + 1];
+            if index != 0 && row == previous {
+                out[0] = if row.iter().all(|&byte| byte == 0) {
+                    0
+                } else {
+                    2
+                };
+                rows.push(out);
+                continue;
+            }
+            let (mut best, mut selected) = (u64::MAX, 0);
+            let mut candidate = vec![0; stride];
+            for kind in 1..5 {
+                if index == 0 && matches!(kind, 2 | 4) {
+                    continue;
+                }
+                let score = if index == 0 {
+                    scanline::filter_first::<true>(row, 4, kind, &mut candidate, u64::MAX)
+                } else {
+                    scanline::filter_into::<true>(row, previous, 4, kind, &mut candidate, u64::MAX)
+                };
+                if score < best {
+                    (best, selected) = (score, kind);
+                    out[1..].copy_from_slice(&candidate);
+                }
+            }
+            if scanline::score_at_most(row, best) {
+                selected = 0;
+                out[1..].copy_from_slice(row);
+            }
+            out[0] = selected;
+            rows.push(out);
+        }
+        rows
+    }
+
+    #[test]
+    fn adaptive_choices_match_full_in_order_scoring() {
+        let (width, height) = (301, 64);
+        let stride = width * 4;
+        let mut state = 0x2545_f491_u32;
+        let mut pixels: Vec<u8> = Vec::new();
+        for y in 0..height {
+            let start = pixels.len();
+            for x in 0..stride {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                let above = if y == 0 {
+                    0
+                } else {
+                    pixels[start - stride + x]
+                };
+                pixels.push(match y % 8 {
+                    0 => state as u8,
+                    // Up wins: small residuals against the row above.
+                    1 if x < 4 => 0,
+                    1 => above.wrapping_add((x % 4) as u8),
+                    // The row above shifted one pixel left makes every filter
+                    // produce the same bytes, so Sub must win the tie even
+                    // when the previous row's choice is tried first.
+                    2 => pixels.get(start - stride + x + 4).copied().unwrap_or(7),
+                    // Constant and zero rows tie Sub with Up and None.
+                    3 => 0,
+                    4 => 9,
+                    5 => above,
+                    6 => (x / 4 * 3) as u8,
+                    _ => (state as u8) & 3,
+                });
+            }
+        }
+        let image = Image {
+            width: width as u32,
+            height: height as u32,
+            color_type: ColorType::Rgba,
+            bit_depth: 8,
+            samples: Samples::U8(pixels.clone()),
+        };
+        let mut rows = Rows::new(&image, false, Filter::Adaptive).unwrap();
+        for (index, expected) in reference(&pixels, stride).iter().enumerate() {
+            let row = rows.next_row().unwrap().unwrap();
+            assert_eq!(row.bytes, &expected[..], "row {index}");
+        }
+        assert!(rows.next_row().unwrap().is_none());
     }
 }
