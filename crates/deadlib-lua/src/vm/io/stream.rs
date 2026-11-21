@@ -1,5 +1,8 @@
 //! Buffered native streams. Lua values never contain operating-system handles.
-use crate::{memory::bytes::ByteOutput, pattern::find_byte};
+use crate::{
+    memory::bytes::ByteOutput,
+    pattern::{find_byte, scan_boundary},
+};
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom, Write},
@@ -63,7 +66,7 @@ pub(in crate::vm) struct Stream {
     pub text: bool,
     read: Vec<u8>,
     position: usize,
-    peek: Option<(u8, u8)>,
+    peek: Option<u8>,
     control_eof: bool,
     eof: bool,
     raw_len: usize,
@@ -141,15 +144,17 @@ impl Stream {
                 while source < count {
                     let byte = self.read[source];
                     source += 1;
-                    if byte == 26 {
-                        self.control_eof = true;
-                        break;
-                    }
                     if byte == b'\r' {
                         if source < count && self.read[source] == b'\n' {
-                            source += 1;
-                            self.read[destination] = b'\n';
-                            destination += 1;
+                            let pairs = 1 + self.read[source + 1..]
+                                .as_chunks::<2>()
+                                .0
+                                .iter()
+                                .take_while(|&&bytes| bytes == *b"\r\n")
+                                .count();
+                            source += pairs * 2 - 1;
+                            self.read[destination..destination + pairs].fill(b'\n');
+                            destination += pairs;
                             continue;
                         }
                         if source == count {
@@ -168,6 +173,17 @@ impl Stream {
                                 }
                             }
                         }
+                    } else if byte == 26 {
+                        self.control_eof = true;
+                        break;
+                    } else if source < count && !matches!(self.read[source], b'\r' | 26) {
+                        let start = source - 1;
+                        source += scan_boundary(&self.read[source..], |b| (b == b'\r') | (b == 26));
+                        if destination != start {
+                            self.read.copy_within(start..source, destination);
+                        }
+                        destination += source - start;
+                        continue;
                     }
                     self.read[destination] = byte;
                     destination += 1;
@@ -182,20 +198,17 @@ impl Stream {
         self.position += 1;
         Ok(Some(byte))
     }
-    fn decoded(&mut self) -> Result<Option<(u8, u8)>, i32> {
-        Ok(self.raw()?.map(|byte| (byte, 1)))
-    }
     pub fn peek(&mut self) -> Result<Option<u8>, i32> {
         if self.peek.is_none() {
-            self.peek = self.decoded()?;
+            self.peek = self.raw()?;
         }
-        Ok(self.peek.map(|p| p.0))
+        Ok(self.peek)
     }
     pub fn get(&mut self) -> Result<Option<u8>, i32> {
-        Ok(match self.peek.take() {
-            Some(p) => Some(p.0),
-            None => self.decoded()?.map(|p| p.0),
-        })
+        match self.peek.take() {
+            byte @ Some(_) => Ok(byte),
+            None => self.raw(),
+        }
     }
     pub fn clear_eof(&mut self) {
         self.eof = false;
@@ -204,7 +217,7 @@ impl Stream {
     pub fn discard_number_sentinel(&mut self) {
         // UCRT's floating-input adapter cannot put back NUL or signed EOF.
         // Only drop existing lookahead; some NaN paths never fetch a suffix.
-        if matches!(self.peek, Some((0 | 255, _))) {
+        if matches!(self.peek, Some(0 | 255)) {
             self.peek = None;
         }
     }

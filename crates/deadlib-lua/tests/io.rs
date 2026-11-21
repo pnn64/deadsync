@@ -57,6 +57,35 @@ fn windows_text_translation_control_z_and_seek_positions_match_reference() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn windows_text_reads_translate_across_scan_and_refill_boundaries() {
+    let program = compile(
+        br#"
+        local path=os.tmpname()
+        for _,len in ipairs{30,31,32,33,4094,4095,4096,4097} do
+            local prefix=string.rep('x',len)
+            for _,case in ipairs{
+                {'\r\nA\rB\r\nC\026ignored','\nA\rB\nC'},
+                {'\rA\0\255\r\nB','\rA\0\255\nB'},
+                {string.rep('\r\n',4100)..'\rX',string.rep('\n',4100)..'\rX'},
+                {'\r','\r'}
+            } do
+                local f=assert(io.open(path,'wb'));assert(f:write(prefix,case[1]));f:close()
+                f=assert(io.open(path,'r'));assert(f:read(0)=='')
+                assert(f:read('*a')==prefix..case[2]);f:close()
+            end
+        end
+        return assert(os.remove(path))
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
 #[test]
 fn access_errors_and_open_failures_preserve_result_tuples() {
     compare_file(
