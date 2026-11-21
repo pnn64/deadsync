@@ -913,6 +913,10 @@ fn decompress_bits_into<const DISPATCH: bool>(
     }
     let window = 1usize << ((cmf >> 4) + 8);
     let mut written = 0;
+    // Checksum each block's output while it is still cached, rather than
+    // rereading the whole output afterwards.
+    let mut checksum = Adler32::new();
+    let mut checked = 0;
     // Stored blocks append into the reservation until a coded block needs
     // the initialized output slice. The produced prefix remains its history.
     let mut sized_initialized = false;
@@ -1004,6 +1008,9 @@ fn decompress_bits_into<const DISPATCH: bool>(
         } else {
             return Err(Error::Invalid("reserved block type"));
         }
+        let produced = if sized { written } else { output.len() };
+        checksum.update(&output[checked..produced]);
+        checked = produced;
         if last {
             break;
         }
@@ -1012,8 +1019,7 @@ fn decompress_bits_into<const DISPATCH: bool>(
         output.truncate(written);
     }
     bits.align();
-    let checksum = bits.read(32)?.swap_bytes();
-    if checksum != adler32(output) {
+    if bits.read(32)?.swap_bytes() != checksum.finish() {
         return Err(Error::Checksum);
     }
     Ok(bits.consumed())
