@@ -336,16 +336,14 @@ impl Stream {
         if matches!(self.resource, Some(Resource::Output)) {
             return super::stdout_write(bytes).map_err(errno);
         }
-        let additional = bytes
-            .len()
-            .checked_add(if cfg!(windows) && self.text {
-                bytes.iter().filter(|&&byte| byte == b'\n').count()
-            } else {
-                0
-            })
-            .ok_or(12)?;
+        let newlines = if cfg!(windows) && self.text {
+            bytes.iter().filter(|&&byte| byte == b'\n').count()
+        } else {
+            0
+        };
+        let additional = bytes.len().checked_add(newlines).ok_or(12)?;
         self.write.try_reserve(additional).map_err(|_| 12)?;
-        if cfg!(windows) && self.text {
+        if newlines > bytes.len() / 8 {
             for &byte in bytes {
                 if byte == b'\n' {
                     self.write.push(b'\r');
@@ -353,15 +351,17 @@ impl Stream {
                 self.write.push(byte);
             }
         } else {
-            self.write.extend_from_slice(bytes);
-        }
-        // Standard stdout has already used the shared Lua buffer above.
-        if matches!(self.resource, Some(Resource::Output | Resource::Error)) {
-            match self.resource {
-                Some(Resource::Output) => super::stdio::write_all(1, &self.write),
-                _ => super::stdio::write_all(2, &self.write),
+            let mut remaining = bytes;
+            for _ in 0..newlines {
+                let at = find_byte(remaining, b'\n').expect("counted newline in remaining text");
+                self.write.extend_from_slice(&remaining[..at]);
+                self.write.extend_from_slice(b"\r\n");
+                remaining = &remaining[at + 1..];
             }
-            .map_err(errno)?;
+            self.write.extend_from_slice(remaining);
+        }
+        if matches!(self.resource, Some(Resource::Error)) {
+            super::stdio::write_all(2, &self.write).map_err(errno)?;
             self.write.clear();
             if self.buffering == 0 {
                 self.flush()?;

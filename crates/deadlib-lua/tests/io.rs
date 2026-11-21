@@ -86,6 +86,34 @@ fn windows_text_reads_translate_across_scan_and_refill_boundaries() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn windows_text_writes_preserve_sparse_and_dense_newlines() {
+    let program = compile(
+        br#"
+        local path=os.tmpname()
+        local prefix=string.rep('x',4095)
+        local sparse=prefix..'\0\255\n'..prefix
+        local dense=string.rep('\r\n\n',128)
+        local expected='plain'..prefix..'\0\255\r\n'..prefix..
+                       string.rep('\r\r\n\r\n',128)..'tail'
+        for _,mode in ipairs{'no','full','line'} do
+            local f=assert(io.open(path,'w'));assert(f:setvbuf(mode,32))
+            assert(f:write('plain',sparse,dense,'tail'))
+            assert(f:seek()==#expected);assert(f:close())
+            f=assert(io.open(path,'rb'))
+            assert(f:read('*a')==expected);assert(f:close())
+        end
+        return assert(os.remove(path))
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        Vm::new().execute(&program).unwrap(),
+        &[Value::Boolean(true)]
+    );
+}
+
 #[test]
 fn access_errors_and_open_failures_preserve_result_tuples() {
     compare_file(
