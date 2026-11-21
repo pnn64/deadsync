@@ -72,6 +72,7 @@ enum Kind {
     Reference,
     End,
     Error,
+    Literal,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -87,7 +88,7 @@ enum Repeat {
 struct Instruction {
     kind: Kind,
     repeat: Repeat,
-    padding: u16,
+    width: u16,
     arg: u32,
 }
 #[derive(Debug)]
@@ -446,7 +447,7 @@ impl Pattern {
         let pattern = &pattern[..find_byte(pattern, 0).unwrap_or(pattern.len())];
         let anchored = anchor && pattern.first() == Some(&b'^');
         let mut p = usize::from(anchored);
-        let mut code = Buffer::new_in(memory.clone());
+        let mut code = Buffer::<Instruction>::new_in(memory.clone());
         code.try_reserve_exact(pattern.len())
             .map_err(|_| Error::memory())?;
         let mut sets = Buffer::new_in(memory);
@@ -571,12 +572,25 @@ impl Pattern {
             if repeat != Repeat::One {
                 p += 1;
             }
-            code.push(Instruction {
-                kind,
-                repeat,
-                padding: 0,
-                arg,
-            });
+            if kind == Kind::Byte
+                && repeat == Repeat::One
+                && let Some(last) = code.last_mut()
+                && matches!(last.kind, Kind::Byte | Kind::Literal)
+                && last.repeat == Repeat::One
+                && last.width < 4
+            {
+                // The low byte remains the leading literal for unanchored search.
+                last.arg |= arg << (last.width * 8);
+                last.width += 1;
+                last.kind = Kind::Literal;
+            } else {
+                code.push(Instruction {
+                    kind,
+                    repeat,
+                    width: 1,
+                    arg,
+                });
+            }
             if kind == Kind::Error {
                 break;
             }
@@ -604,7 +618,7 @@ impl Pattern {
             return None;
         }
         match first.kind {
-            Kind::Byte => Some(LeadingByte::Literal(first.arg as u8)),
+            Kind::Byte | Kind::Literal => Some(LeadingByte::Literal(first.arg as u8)),
             Kind::Set => Some(LeadingByte::Class(&self.sets[first.arg as usize])),
             _ => None,
         }
@@ -659,6 +673,20 @@ impl Pattern {
             let i = self.code[pc];
             let mut matched = true;
             match i.kind {
+                Kind::Literal => {
+                    let width = usize::from(i.width);
+                    let bytes = i.arg.to_le_bytes();
+                    matched = source.get(pos..).is_some_and(|tail| {
+                        if width == 4 {
+                            tail.starts_with(&bytes)
+                        } else {
+                            tail.starts_with(&bytes[..width])
+                        }
+                    });
+                    if matched {
+                        pos += width;
+                    }
+                }
                 Kind::Byte | Kind::Any | Kind::Set => {
                     let one = || source.get(pos).is_some_and(|&b| self.atom(pc, b));
                     match i.repeat {
@@ -836,6 +864,26 @@ mod byte_search_tests {
         Memory, Pattern, Work, balance_end, byte_run, find_byte, find_dense_literal, range_set_run,
         set_has,
     };
+
+    #[test]
+    fn packed_literals_preserve_backtracking_and_deferred_errors() {
+        let mut work = Work::default();
+        let memory = Memory::default();
+        let pattern = Pattern::compile(b"^.*(abcd\xff)z?END$", true, memory.clone()).unwrap();
+        let source = b"headabcd\xffzEND";
+        let found = pattern.find(source, 0, &mut work).unwrap().unwrap();
+        assert_eq!((found.start, found.end), (0, source.len()));
+        assert_eq!(found.capture(0).unwrap().range().unwrap(), 4..9);
+        assert!(
+            pattern
+                .find(b"headabcX\xffzEND", 0, &mut work)
+                .unwrap()
+                .is_none()
+        );
+        let deferred = Pattern::compile(b"^abcdef%", true, memory).unwrap();
+        assert!(deferred.find(b"abcde", 0, &mut work).unwrap().is_none());
+        assert!(deferred.find(b"abcdef", 0, &mut work).is_err());
+    }
 
     #[test]
     fn required_class_skips_only_positions_that_cannot_match() {
