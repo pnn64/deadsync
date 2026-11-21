@@ -13,9 +13,21 @@ pub(crate) fn compress_image(image: &Image, options: &EncodeOptions) -> Result<V
     let mut rows = Rows::new(image, options.interlaced, options.filter)?;
     let mut compressor = zlib::Compressor::new(options.compression, size)?;
     while let Some(row) = rows.next_row()? {
-        compressor.push(row);
+        if row.zero {
+            compressor.push(&row.bytes[..1]);
+            compressor.push_zeros(row.bytes.len() - 1);
+        } else {
+            compressor.push(row.bytes);
+        }
     }
     Ok(compressor.finish())
+}
+
+/// A filter type followed by its filtered row.
+pub(super) struct FilteredRow<'a> {
+    pub(super) bytes: &'a [u8],
+    /// Every byte after the filter type is known to be zero.
+    pub(super) zero: bool,
 }
 
 pub(super) struct Rows<'a> {
@@ -36,6 +48,8 @@ pub(super) struct Rows<'a> {
     previous: Vec<u8>,
     candidate: Vec<u8>,
     output: Vec<u8>,
+    /// `output` holds only zeros after its filter type.
+    zeroed: bool,
 }
 fn resize(bytes: &mut Vec<u8>, length: usize) -> Result<(), Error> {
     let additional = length.saturating_sub(bytes.len());
@@ -74,6 +88,7 @@ impl<'a> Rows<'a> {
             previous: Vec::new(),
             candidate: Vec::new(),
             output: Vec::new(),
+            zeroed: false,
         })
     }
     fn start_pass(&mut self) -> Result<bool, Error> {
@@ -106,13 +121,14 @@ impl<'a> Rows<'a> {
                     }
                 }
                 resize(&mut self.output, bytes + 1)?;
+                self.zeroed = false;
                 return Ok(true);
             }
             self.pass += 1;
         }
         Ok(false)
     }
-    pub(super) fn next_row(&mut self) -> Result<Option<&[u8]>, Error> {
+    pub(super) fn next_row(&mut self) -> Result<Option<FilteredRow<'_>>, Error> {
         if self.initialized && self.index == self.height {
             self.pass += 1;
             self.initialized = false;
@@ -132,7 +148,11 @@ impl<'a> Rows<'a> {
             );
             self.output[0] = 0;
             self.index += 1;
-            return Ok(Some(&self.output));
+            self.zeroed = false;
+            return Ok(Some(FilteredRow {
+                bytes: &self.output,
+                zero: false,
+            }));
         }
         let (row, previous) = if let Some(pixels) = self.pixels {
             let stride = self.output.len() - 1;
@@ -154,14 +174,17 @@ impl<'a> Rows<'a> {
         };
         let bpp = (self.image.color_type.channels() * self.image.bit_depth as usize).div_ceil(8);
         let mut selected = self.filter as u8;
-        if self.filter == Filter::Adaptive && self.index != 0 && row == previous {
+        let zero = self.filter == Filter::Adaptive && self.index != 0 && row == previous;
+        if zero {
             // Up is zero; None/Sub can tie it only for an all-zero row.
             selected = if row.iter().all(|&byte| byte == 0) {
                 0
             } else {
                 2
             };
-            self.output[1..].fill(0);
+            if !self.zeroed {
+                self.output[1..].fill(0);
+            }
         } else if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
             for kind in 1..5 {
@@ -200,11 +223,15 @@ impl<'a> Rows<'a> {
             }
         }
         self.output[0] = selected;
+        self.zeroed = zero;
         self.index += 1;
         if self.pixels.is_none() && self.filter != Filter::Sub && self.index < self.height {
             core::mem::swap(&mut self.row, &mut self.previous);
         }
-        Ok(Some(&self.output))
+        Ok(Some(FilteredRow {
+            bytes: &self.output,
+            zero,
+        }))
     }
     pub(super) fn memory_bytes(&self) -> usize {
         self.row.capacity()

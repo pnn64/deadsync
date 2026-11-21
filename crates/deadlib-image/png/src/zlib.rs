@@ -1564,15 +1564,33 @@ impl Compressor {
             matcher::WINDOW
         }
     }
-    pub(crate) fn push(&mut self, mut input: &[u8]) {
-        while !input.is_empty() {
+    pub(crate) fn push(&mut self, input: &[u8]) {
+        self.append(Some(input), input.len());
+    }
+    /// `push` for `len` zero bytes, whose checksum needs no byte reads.
+    pub(crate) fn push_zeros(&mut self, len: usize) {
+        self.append(None, len);
+    }
+    fn append(&mut self, mut input: Option<&[u8]>, mut len: usize) {
+        while len != 0 {
             let full = self.history + Self::block(self.mode) + Self::LOOKAHEAD;
-            let n = (full - self.window.len()).min(input.len());
-            self.window.extend_from_slice(&input[..n]);
-            if self.mode != Compression::Rle {
-                self.checksum.update(&input[..n]);
+            let n = (full - self.window.len()).min(len);
+            match &mut input {
+                Some(bytes) => {
+                    self.window.extend_from_slice(&bytes[..n]);
+                    if self.mode != Compression::Rle {
+                        self.checksum.update(&bytes[..n]);
+                    }
+                    *bytes = &bytes[n..];
+                }
+                None => {
+                    self.window.resize(self.window.len() + n, 0);
+                    if self.mode != Compression::Rle {
+                        self.checksum.update_zeros(n);
+                    }
+                }
             }
-            input = &input[n..];
+            len -= n;
             if self.window.len() == full {
                 self.encode(Self::block(self.mode), false);
             }

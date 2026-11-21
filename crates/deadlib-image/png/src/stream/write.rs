@@ -143,7 +143,7 @@ fn image<W: Write>(
     let mut compressed = Compressed::new(writer, sequence, options)?;
     let mut peak = compressed.memory_bytes();
     while let Some(row) = rows.next_row()? {
-        compressed.pump(row, false)?;
+        compressed.pump(row.bytes, false)?;
         peak = peak.max(
             compressed
                 .memory_bytes()
