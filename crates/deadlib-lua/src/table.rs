@@ -755,11 +755,18 @@ impl Table {
         hi
     }
     pub(crate) fn max_numeric_key(&self) -> f64 {
-        let mut maximum = self
-            .array
-            .iter()
-            .rposition(|value| *value != Value::Nil)
-            .map_or(0.0, |index| (index + 1) as f64);
+        let mut maximum = if let Some((Value::Nil, rest)) = self.array.split_last() {
+            let live = |value: &Value| !matches!(value, Value::Nil);
+            if rest.len() >= 63 && !rest[rest.len() - 7..].iter().any(live) {
+                Self::last_array_key(&rest[..rest.len() - 7]) as f64
+            } else {
+                rest.iter()
+                    .rposition(live)
+                    .map_or(0.0, |index| (index + 1) as f64)
+            }
+        } else {
+            self.array.len() as f64
+        };
         for entry in &self.entries {
             if let Key::Number(bits) = entry.key
                 && entry.value != Value::Nil
@@ -768,6 +775,24 @@ impl Table {
             }
         }
         maximum
+    }
+
+    #[inline(never)]
+    fn last_array_key(array: &[Value]) -> usize {
+        let live = |value: &Value| !matches!(value, Value::Nil);
+        let (head, blocks) = array.as_rchunks::<16>();
+        // Check every tag in a block before finding its last live slot.
+        let (start, values) = match blocks
+            .iter()
+            .rposition(|block| block.iter().fold(false, |found, value| found | live(value)))
+        {
+            Some(index) => (head.len() + index * 16, blocks[index].as_slice()),
+            None => (0, head),
+        };
+        values
+            .iter()
+            .rposition(live)
+            .map_or(0, |index| start + index + 1)
     }
     pub fn next(&self, key: Value) -> Result<Option<(Value, Value)>, Error> {
         self.next_entry(key)
@@ -830,6 +855,18 @@ mod allocation_tests {
     use crate::allocation_probe::probe;
     fn hash_key(n: i32) -> Value {
         Value::Number(-f64::from(n))
+    }
+    #[test]
+    fn max_numeric_key_keeps_live_values_across_block_edges() {
+        let mut table = Table::with_capacity(129, 0).unwrap();
+        for index in [1, 9, 10, 25, 26, 64, 65, 121, 128, 129] {
+            let index = f64::from(index);
+            let key = Value::Number(index);
+            table.set(key, Value::Boolean(false)).unwrap();
+            assert_eq!(table.max_numeric_key(), index);
+            table.set(key, Value::Nil).unwrap();
+            assert_eq!(table.max_numeric_key(), 0.0);
+        }
     }
     #[test]
     fn key_equality_preserves_each_variant_and_numeric_signed_zero() {
