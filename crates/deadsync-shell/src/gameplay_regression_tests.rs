@@ -1257,7 +1257,7 @@ end }
                     noteskin: profile_data::NoteSkin::new("cel"), ..Default::default()
                 }), "Vulkan (wgpu)");
             assert!(state.song_lua.is_none(), "Vulkan must render compiled Lua");
-            state.background_texture_key = deadlib_assets::media_path_key(
+            state.presentation.background_texture_key = deadlib_assets::media_path_key(
                 state.song().background_path.as_deref().expect("Sharkmode background"));
             set_fixture_time(&mut state, 0.0);
             let mut gpu = SongLuaNotePixelCapture::new(&state, &metrics,
@@ -1268,6 +1268,72 @@ end }
                 assert!(gpu.capture_named(&mut state, &metrics, beat, "sharkmode") > 100,
                     "Sharkmode tap notes must reach the framebuffer at beat {beat}");
             }
+        });
+    }
+
+    #[test]
+    fn gameplay_stage_survives_replacing_presentation() {
+        with_session(profile_data::PlayStyle::Single, profile_data::PlayerSide::P1,
+            true, false, || {
+            let simfile = write_fixture("presentation-swap", "+#TITLE:Presentation swap;
+#MUSIC:music.wav;
+#BPMS:0=120;
+#NOTEDATA:;
+#STEPSTYPE:dance-single;
+#DIFFICULTY:Easy;
+#METER:1;
+#NOTES:
+1000
+0000
+0010
+0000
+;
+");
+            space::set_current_metrics(space::Metrics::centered(854.0, 480.0));
+            space::set_current_window_px(1280, 720);
+            let mut state = build_test_state(
+                &simfile,
+                GameplayViewport::design(),
+                GameplaySession::default(),
+                std::array::from_fn(|_| profile_data::Profile::default()),
+            );
+            set_fixture_time(&mut state, 0.25);
+            let time = state.stage.current_music_time_ns();
+            let chart = std::ptr::from_ref(state.stage.charts()[0].as_ref());
+            let scratch = std::ptr::from_ref(state.stage.song_frame());
+            let life = state.stage.players()[0].life;
+            let pack_group = Arc::clone(&state.pack_group);
+            let assets = fixture_assets();
+            let mut actors = Vec::new();
+            let mut render = |state: &mut screen_gameplay::State| {
+                actors.clear();
+                let segments = crate::gameplay_runtime::push_actors(
+                    &mut actors, state, &assets, Default::default(), 1.0, Default::default(),
+                );
+                assert!(segments.segments(state.song_frame(), &actors).count() > 0);
+            };
+            render(&mut state);
+            let (replacement, _) = screen_gameplay::GameplayPresentation::from_stage(
+                &state.stage,
+                deadsync_assets::gameplay_stage::GameplayStageAssets {
+                    hide_song_intro: false,
+                    pack_group: Arc::from("Presentation-only pack"),
+                    pack_banner_path: None,
+                },
+                Arc::from("REPLACEMENT"),
+                None,
+                None,
+                None,
+                Default::default(),
+            );
+            state.presentation = replacement;
+            render(&mut state);
+            assert_eq!(&*state.presentation.stage_intro_text, "REPLACEMENT");
+            assert_eq!(state.stage.current_music_time_ns(), time);
+            assert_eq!(state.stage.players()[0].life, life);
+            assert_eq!(state.pack_group, pack_group);
+            assert_eq!(std::ptr::from_ref(state.stage.charts()[0].as_ref()), chart);
+            assert_eq!(std::ptr::from_ref(state.stage.song_frame()), scratch);
         });
     }
 
@@ -1582,11 +1648,11 @@ end
                 let policy =
                     deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView::default();
                 for restart in [false, true] {
-                    state.hide_song_intro = false;
+                    state.presentation.hide_song_intro = false;
                     let (visible, duration) =
                         screen_gameplay::in_transition(Some(&state), &assets, restart, policy);
                     assert!(!visible.is_empty());
-                    state.hide_song_intro = true;
+                    state.presentation.hide_song_intro = true;
                     let (hidden, hidden_duration) =
                         screen_gameplay::in_transition(Some(&state), &assets, restart, policy);
                     assert!(hidden.is_empty());

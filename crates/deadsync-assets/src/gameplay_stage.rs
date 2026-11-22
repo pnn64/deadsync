@@ -71,6 +71,12 @@ pub struct GameplayStageAssets {
     pub pack_banner_path: Option<PathBuf>,
 }
 
+impl GameplayStageAssets {
+    pub fn score_pack_group(&self, course_name: Option<&Arc<str>>) -> Arc<str> {
+        Arc::clone(course_name.unwrap_or(&self.pack_group))
+    }
+}
+
 impl PreparedGameplayStage {
     /// Select authored and random cues against the master chart installed in
     /// the prepared simulation, after any Lua chart replacement or side mapping.

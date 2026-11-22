@@ -141,6 +141,14 @@ impl<G, N> GameplayStage<G, N> {
             .expect("song frame restored after composition")
     }
 
+    /// Lend the frame buffer alongside a shared stage and restore it for playback consumers.
+    pub fn with_frame_scratch<R>(&mut self, compose: impl FnOnce(&Self, &mut FrameScratch) -> R) -> R {
+        let mut scratch = self.song_scratch.take().expect("stage frame scratch");
+        let result = compose(self, &mut scratch);
+        self.song_scratch = Some(scratch);
+        result
+    }
+
     pub fn render_targets(&self) -> &[deadlib_present::actors::RenderTarget] {
         self.song_scratch
             .as_deref()

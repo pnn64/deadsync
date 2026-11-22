@@ -930,8 +930,8 @@ fn prewarm_gameplay_banners(
 
 fn gameplay_background_video_path(state: &gameplay::State) -> Option<&Path> {
     state
-        .background_allow_video
-        .then_some(state.current_background_path.as_deref())
+        .presentation.background_allow_video
+        .then_some(state.presentation.current_background_path.as_deref())
         .flatten()
         .filter(|path| deadlib_assets::dynamic::is_dynamic_video_path(path))
 }
@@ -3135,12 +3135,12 @@ impl App {
             );
         }
         let commands = vec![
-            Command::SetPackBanner(gs.pack_banner_path.clone()),
+            Command::SetPackBanner(gs.presentation.pack_banner_path.clone()),
             Command::SetDynamicBackground(background_path),
         ];
         // Reconcile chart timing and any video fallback once after the deferred
         // command installs the initial media.
-        gs.background_path_dirty = true;
+        gs.presentation.background_path_dirty = true;
         let song_start_sfx = if finish.lua_reload { None } else {
             gameplay::start_sfx(self.state.session.gameplay_restart_count)
         }
@@ -7425,10 +7425,10 @@ impl App {
             .song_backgrounds()
             .active_path(state.song(), show_video_backgrounds)
             .cloned();
-        state.current_background_key = path.as_deref().map(deadlib_assets::media_path_key);
-        state.current_background_path.clone_from(&path);
-        state.background_allow_video = show_video_backgrounds;
-        state.background_path_dirty = false;
+        state.presentation.current_background_key = path.as_deref().map(deadlib_assets::media_path_key);
+        state.presentation.current_background_path.clone_from(&path);
+        state.presentation.background_allow_video = show_video_backgrounds;
+        state.presentation.background_path_dirty = false;
         path
     }
 
@@ -7474,23 +7474,23 @@ impl App {
                 return;
             };
             let foreground_videos_changed = gs.stage.refresh_song_foreground();
-            let had_pending_background_change = gs.background_path_dirty;
-            let video_mode_changed = gs.background_allow_video != show_video_backgrounds;
+            let had_pending_background_change = gs.presentation.background_path_dirty;
+            let video_mode_changed = gs.presentation.background_allow_video != show_video_backgrounds;
             let background_changed = gs.stage.gameplay.advance_song_background();
             if background_changed {
-                gs.background_path_dirty = true;
+                gs.presentation.background_path_dirty = true;
             }
             let should_track_transition = background_changed || had_pending_background_change;
-            let old_path_key = should_track_transition.then(|| gs.current_background_key.clone());
+            let old_path_key = should_track_transition.then(|| gs.presentation.current_background_key.clone());
             let old_texture_key =
-                should_track_transition.then(|| gs.background_texture_key.clone());
-            if gs.background_path_dirty || video_mode_changed {
+                should_track_transition.then(|| gs.presentation.background_texture_key.clone());
+            if gs.presentation.background_path_dirty || video_mode_changed {
                 Self::refresh_gameplay_background_path(gs, show_video_backgrounds);
             }
             if should_track_transition
                 && old_path_key
                     .as_ref()
-                    .is_some_and(|key| key != &gs.current_background_key)
+                    .is_some_and(|key| key != &gs.presentation.current_background_key)
             {
                 let transition = gs
                     .song_backgrounds()
@@ -7507,7 +7507,7 @@ impl App {
                 || video_mode_changed
                 || background_worker_pending;
             if background_sync_due && !background_backend_ready {
-                gs.background_path_dirty = true;
+                gs.presentation.background_path_dirty = true;
             }
             (
                 (background_sync_due && background_backend_ready).then(|| {
@@ -7517,7 +7517,7 @@ impl App {
                             gs.current_music_time_ns(),
                         ),
                         start_sec: backgrounds
-                            .video_start_second(gs.current_background_path.as_deref()),
+                            .video_start_second(gs.presentation.current_background_path.as_deref()),
                         rate: backgrounds.active_change().map_or(1.0, |change| change.rate),
                     }
                 }),
@@ -7543,8 +7543,8 @@ impl App {
             (Some(timing), Some(gs), Some(backend)) => self.dynamic_media.sync_gameplay_background(
                 &mut self.asset_manager,
                 backend,
-                gs.current_background_path.as_deref(),
-                gs.current_background_key.as_deref(),
+                gs.presentation.current_background_path.as_deref(),
+                gs.presentation.current_background_key.as_deref(),
                 show_video_backgrounds,
                 timing,
             ),
@@ -7555,12 +7555,12 @@ impl App {
             match self.state.screens.current_screen {
                 CurrentScreen::Gameplay => {
                     if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                        gs.background_texture_key = key;
+                        gs.presentation.background_texture_key = key;
                     }
                 }
                 CurrentScreen::Practice => {
                     if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                        ps.gameplay.background_texture_key = key;
+                        ps.gameplay.presentation.background_texture_key = key;
                     }
                 }
                 _ => {}
@@ -7762,7 +7762,7 @@ impl App {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     let smx_overlay_alpha = gameplay_smx_overlay_alpha(
-                        gs.hide_song_intro,
+                        gs.presentation.hide_song_intro,
                         &self.state.shell.transition,
                     );
                     gameplay_segments = Some(crate::gameplay_runtime::push_actors(

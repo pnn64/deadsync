@@ -215,7 +215,7 @@ mod tests {
                     let state = app.state.screens.gameplay_state.as_mut().unwrap();
                     assert!(Arc::ptr_eq(&state.song_arc(), &song));
                     assert_eq!(
-                        state.replay_status_text.as_deref(),
+                        state.presentation.replay_status_text.as_deref(),
                         Some("Autoplay - AAA 98.76%")
                     );
                     assert!(state.progress.replay.mode);

@@ -345,8 +345,11 @@ pub(crate) fn present_stage(
     view: GameplayInitView,
 ) -> gameplay::State {
     let (stage, assets) = prepared.into_parts();
-    let mut state = gameplay::State::from_stage(
-        stage,
+    let pack_group = assets.score_pack_group(
+        course_display_info.as_ref().map(|course| &course.name),
+    );
+    let (presentation, lobby_session) = gameplay::GameplayPresentation::from_stage(
+        &stage,
         assets,
         stage_intro_text,
         replay_status_text,
@@ -354,6 +357,12 @@ pub(crate) fn present_stage(
         course_banner_path,
         view,
     );
+    let mut state = gameplay::State {
+        stage,
+        lobby_session,
+        pack_group,
+        presentation,
+    };
     let (gameplay, session, warm_dynamic_scene) = state.stage.song_lua_attachment_parts();
     attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
     state
@@ -889,7 +898,8 @@ pub(crate) fn push_actors(
     uptime_seconds: f64,
     policy: deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
 ) -> deadsync_song_lua::playback::GameplayActorSegments {
-    state.compose_frame(
+    compose_actors(
+        state,
         actors,
         FramePresentationContext {
             assets,
@@ -899,6 +909,30 @@ pub(crate) fn push_actors(
         },
         SongFrameContent::PLAYBACK,
     )
+}
+
+fn compose_actors(
+    state: &mut gameplay::State,
+    actors: &mut Vec<deadlib_present::actors::Actor>,
+    context: FramePresentationContext<
+        '_,
+        gameplay::ActorViewOverride,
+        deadsync_theme_simply_love::views::SimplyLoveVisualPolicyView,
+    >,
+    content: SongFrameContent,
+) -> deadsync_song_lua::playback::GameplayActorSegments {
+    let segments = state.stage.with_frame_scratch(|stage, song| {
+        state.presentation.compose_frame(
+            stage,
+            &state.lobby_session,
+            song,
+            actors,
+            context,
+            content,
+        )
+    });
+    gameplay::push_song_lua_out(actors, &state.stage);
+    segments
 }
 
 pub(crate) fn push_practice_actors(
@@ -912,7 +946,8 @@ pub(crate) fn push_practice_actors(
     actors.reserve(128);
     let view = practice::practice_view(state);
     let (gameplay, session) = state.frame_parts();
-    let segments = gameplay.compose_frame(
+    let segments = compose_actors(
+        gameplay,
         actors,
         FramePresentationContext {
             assets,

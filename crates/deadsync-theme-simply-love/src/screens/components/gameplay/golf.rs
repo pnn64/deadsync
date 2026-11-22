@@ -1,7 +1,7 @@
 use crate::act;
 use crate::fonts::machine_font_key;
 use crate::i18n::tr;
-use crate::screens::gameplay::State;
+use crate::screens::gameplay::GameplayScreenView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text, text_cache_with_capacity};
 use deadsync_config::theme::MachineFont;
@@ -59,7 +59,7 @@ pub(crate) fn push_par_badge(
     );
 }
 
-pub(crate) fn score(state: &State, player: usize) -> Option<(GolfScore, Option<f64>)> {
+pub(crate) fn score(state: &impl GameplayScreenView, player: usize) -> Option<(GolfScore, Option<f64>)> {
     let profile = state.profiles().get(player)?;
     if !profile.show_golf_score {
         return None;
@@ -74,7 +74,7 @@ pub(crate) fn score(state: &State, player: usize) -> Option<(GolfScore, Option<f
 
 pub(crate) fn push_details(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     player: usize,
     position: [f32; 2],
     zoom: f32,

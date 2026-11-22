@@ -9,7 +9,7 @@ use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::density;
 use crate::screens::components::shared::heart_rate;
 use crate::screens::gameplay::GameplayCoreState;
-use crate::screens::gameplay::{self as gameplay_screen, State};
+use crate::screens::gameplay::{self as gameplay_screen, GameplayScreenView, State};
 use crate::step_stats as step_stats_theme;
 use crate::step_stats::{
     STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
@@ -164,8 +164,8 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
 });
 
 #[inline(always)]
-const fn gameplay_font_key(state: &State, role: FontRole) -> &'static str {
-    machine_font_key(state.machine_font(), role)
+fn gameplay_font_key(state: &impl GameplayScreenView, role: FontRole) -> &'static str {
+    machine_font_key(state.presentation().machine_font(), role)
 }
 
 const JUDGMENT_LABELS: [LookupKey; 6] = [
@@ -217,12 +217,12 @@ const HOLDS_MINES_ROLLS_LABELS: [LookupKey; 3] = [
 ];
 
 #[inline(always)]
-fn time_remaining_text(state: &State) -> Arc<str> {
-    Arc::clone(&state.gameplay_stats_text.time_remaining)
+fn time_remaining_text(state: &impl GameplayScreenView) -> Arc<str> {
+    Arc::clone(&state.presentation().gameplay_stats_text.time_remaining)
 }
 
-fn time_total_text(state: &State) -> Arc<str> {
-    Arc::clone(&state.gameplay_stats_text.time_total)
+fn time_total_text(state: &impl GameplayScreenView) -> Arc<str> {
+    Arc::clone(&state.presentation().gameplay_stats_text.time_total)
 }
 
 /// Song-lifetime text identities used by Step Statistics composition.
@@ -414,7 +414,7 @@ mod gameplay_stats_text_plan_tests {
 }
 
 #[inline(always)]
-fn step_stats_player_idx(state: &State, player_side: profile_data::PlayerSide) -> usize {
+fn step_stats_player_idx(state: &impl GameplayScreenView, player_side: profile_data::PlayerSide) -> usize {
     match (state.num_players(), player_side) {
         (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
@@ -423,7 +423,7 @@ fn step_stats_player_idx(state: &State, player_side: profile_data::PlayerSide) -
 
 #[inline(always)]
 fn step_stats_mask(
-    state: &State,
+    state: &impl GameplayScreenView,
     player_side: profile_data::PlayerSide,
 ) -> profile_data::StepStatisticsMask {
     let player_idx = step_stats_player_idx(state, player_side);
@@ -436,7 +436,7 @@ fn step_stats_mask(
 }
 
 #[inline(always)]
-fn any_step_stats_enabled(state: &State, bit: profile_data::StepStatisticsMask) -> bool {
+fn any_step_stats_enabled(state: &impl GameplayScreenView, bit: profile_data::StepStatisticsMask) -> bool {
     state
         .profiles()
         .iter()
@@ -451,7 +451,7 @@ struct StepStatsTimeDisplay {
 }
 
 #[inline(always)]
-fn step_stats_music_rate(state: &State) -> f32 {
+fn step_stats_music_rate(state: &impl GameplayScreenView) -> f32 {
     let music_rate = state.music_rate();
     if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
@@ -460,7 +460,7 @@ fn step_stats_music_rate(state: &State) -> f32 {
     }
 }
 
-fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDisplay {
+fn step_stats_time_display(state: &impl GameplayScreenView, player_idx: usize) -> StepStatsTimeDisplay {
     let rate = step_stats_music_rate(state);
     let (base_elapsed, total) = state.course_display_timing().map_or_else(
         || (0.0, state.song().precise_last_second().max(0.0)),
@@ -486,7 +486,7 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
     }
 }
 
-fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, u32); 3] {
+fn step_stats_hmr_categories(state: &impl GameplayScreenView, player_idx: usize) -> [(usize, u32, u32); 3] {
     if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
         return [(0, 0, 0), (1, 0, 0), (2, 0, 0)];
     }
@@ -640,7 +640,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
     let game = &mut state.stage.gameplay;
     let graph = game.density_graph_view();
     let num_players = game.num_players();
-    let render = &mut state.density_graph;
+    let render = &mut state.presentation.density_graph;
     let graph_w = graph.graph_w;
     let graph_h = graph.graph_h;
     let scaled_width = graph.scaled_width;
@@ -712,7 +712,7 @@ pub fn refresh_density_graph_meshes(state: &mut State) {
 
 fn push_density_graph_at(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     player_idx: usize,
     x0: f32,
     y0: f32,
@@ -747,7 +747,7 @@ fn push_density_graph_at(
         z(59)
     ));
 
-    if let Some(mesh) = &state.density_graph.mesh[player_idx]
+    if let Some(mesh) = &state.presentation().density_graph.mesh[player_idx]
         && !mesh.is_empty()
     {
         actors.push(Actor::ReusableMesh {
@@ -763,7 +763,7 @@ fn push_density_graph_at(
         });
     }
 
-    if let Some(mesh) = &state.density_graph.life_mesh[player_idx]
+    if let Some(mesh) = &state.presentation().density_graph.life_mesh[player_idx]
         && !mesh.is_empty()
     {
         actors.push(Actor::ReusableMesh {
@@ -1179,7 +1179,7 @@ fn glyph_width_scaled(
 #[inline(always)]
 fn push_versus_count_texts(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     is_p1: bool,
     anchor_x: f32,
     y: f32,
@@ -1289,13 +1289,13 @@ fn digit_text(digit: u8) -> Arc<str> {
 }
 
 #[inline(always)]
-fn step_info_label_text(state: &State, index: usize) -> Arc<str> {
-    state.gameplay_stats_text.step_info(index)
+fn step_info_label_text(state: &impl GameplayScreenView, index: usize) -> Arc<str> {
+    state.presentation().gameplay_stats_text.step_info(index)
 }
 
 #[inline(always)]
-fn holds_mines_rolls_label_text(state: &State, index: usize) -> Arc<str> {
-    state.gameplay_stats_text.holds_mines_rolls(index)
+fn holds_mines_rolls_label_text(state: &impl GameplayScreenView, index: usize) -> Arc<str> {
+    state.presentation().gameplay_stats_text.holds_mines_rolls(index)
 }
 
 fn prewarm_count_static_text(
@@ -1316,7 +1316,7 @@ pub fn prewarm_text_layout(
     cache: &mut TextLayoutCache,
     fonts: &font::FontMap,
     asset_manager: &AssetManager,
-    state: &State,
+    state: &impl GameplayScreenView,
 ) {
     prewarm_score_counter_layout(cache, fonts, gameplay_font_key(state, FontRole::Numbers));
     let mut max_count = 0u32;
@@ -1373,28 +1373,28 @@ pub fn prewarm_text_layout(
     for label in LIVE_TIMING_LABELS.iter() {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in &state.gameplay_stats_text.step_info {
+    for label in &state.presentation().gameplay_stats_text.step_info {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in &state.gameplay_stats_text.holds_mines_rolls {
+    for label in &state.presentation().gameplay_stats_text.holds_mines_rolls {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for label in &state.gameplay_stats_text.judgments {
+    for label in &state.presentation().gameplay_stats_text.judgments {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
     for player in 0..state.num_players() {
-        cache.prewarm_text(fonts, "miso", state.song_full_title.as_ref(), None);
+        cache.prewarm_text(fonts, "miso", state.presentation().song_full_title.as_ref(), None);
         cache.prewarm_text(
             fonts,
             "miso",
-            state.gameplay_stats_text.song_artist.as_ref(),
+            state.presentation().gameplay_stats_text.song_artist.as_ref(),
             None,
         );
-        cache.prewarm_text(fonts, "miso", state.pack_group.as_ref(), None);
-        for description in &state.gameplay_stats_text.descriptions[player] {
+        cache.prewarm_text(fonts, "miso", state.presentation().pack_label.as_ref(), None);
+        for description in &state.presentation().gameplay_stats_text.descriptions[player] {
             cache.prewarm_text(fonts, "miso", description.as_ref(), None);
         }
-        let peak = state.gameplay_stats_text.peak_nps(player);
+        let peak = state.presentation().gameplay_stats_text.peak_nps(player);
         cache.prewarm_text(fonts, "miso", peak.as_ref(), None);
     }
 }
@@ -1480,7 +1480,7 @@ pub fn prewarm_frame_text_scratch(
     cache: &mut TextLayoutCache,
     scratch: &mut ComposeScratch,
     fonts: &font::FontMap,
-    state: &State,
+    state: &impl GameplayScreenView,
 ) {
     prewarm_clock_slots(cache, scratch, fonts);
     prewarm_count_slots(
@@ -1525,7 +1525,7 @@ pub fn prewarm_frame_text_scratch(
 
 pub fn push_step_stats(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
@@ -1559,7 +1559,7 @@ pub fn push_step_stats(
         live_timing_rows,
         graph.y,
     );
-    let extra_actor_count = state.step_stats_extra_resolved[player_idx].actor_count();
+    let extra_actor_count = state.presentation().step_stats_extra_resolved[player_idx].actor_count();
     let mut pane_actors = Vec::with_capacity(48 + extra_actor_count);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER) {
         build_banner(&mut pane_actors, state, layout, wide, player_side);
@@ -1633,7 +1633,7 @@ pub fn push_step_stats(
 }
 
 fn step_stats_pane_layout(
-    state: &State,
+    state: &impl GameplayScreenView,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
 ) -> StepStatsPaneLayout {
@@ -1661,12 +1661,12 @@ fn push_step_stats_pane_background(actors: &mut Vec<Actor>, layout: StepStatsPan
     ));
 }
 
-pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center_x: f32) {
+pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &impl GameplayScreenView, playfield_center_x: f32) {
     let elapsed = state.gameplay.total_elapsed_in_screen();
     for player_idx in 0..state.num_players() {
         let side = gameplay_screen::runtime_profile_side(state, player_idx);
         let side_idx = profile_data::player_side_index(side);
-        let reading = state.heart_rate_view.players[side_idx];
+        let reading = state.presentation().heart_rate_view.players[side_idx];
         if !reading.configured {
             continue;
         }
@@ -1687,7 +1687,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
         heart_rate::push(
             &mut heart_rate_actors,
             reading,
-            state.heart_rate_text.get(side_idx),
+            state.presentation().heart_rate_text.get(side_idx),
             elapsed,
             x,
             y,
@@ -1702,7 +1702,7 @@ pub fn push_heart_rates(actors: &mut Vec<Actor>, state: &State, playfield_center
 }
 
 fn centered_single_split_geometry(
-    state: &State,
+    state: &impl GameplayScreenView,
     playfield_center_x: f32,
     notefield_width: Option<f32>,
 ) -> Option<step_stats_theme::CenteredSingleSplitLayout> {
@@ -1724,13 +1724,13 @@ fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
     step_stats_theme::song_info_text_zoom(layout)
 }
 
-fn step_stats_density_graph_rect(state: &State, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
+fn step_stats_density_graph_rect(state: &impl GameplayScreenView, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
     step_stats_theme::density_graph_rect(state.gameplay.density_graph_view().graph_w, layout)
 }
 
 fn push_peak_nps_on_graph(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     player_idx: usize,
     player_side: profile_data::PlayerSide,
     graph: StepStatsGraphRect,
@@ -1740,7 +1740,7 @@ fn push_peak_nps_on_graph(
         return;
     }
 
-    let peak_nps_text = state.gameplay_stats_text.peak_nps(player_idx);
+    let peak_nps_text = state.presentation().gameplay_stats_text.peak_nps(player_idx);
     let align_left = player_side == profile_data::PlayerSide::P2;
     let x = if align_left {
         graph.x + PEAK_NPS_GRAPH_PAD
@@ -1779,7 +1779,7 @@ fn push_peak_nps_on_graph(
 
 pub fn push_versus_step_stats(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
 ) {
     if !is_wide() {
@@ -1901,14 +1901,14 @@ pub fn push_versus_step_stats(
 
                     let (start, end) = state.note_range_for_player(player_idx);
                     if show_fa_split && end > start {
-                        let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
+                        let blue_window_ms = state.presentation().gameplay_stats_text.blue_window_ms(player_idx);
                         let wc = state.display_window_counts(
                             player_idx,
                             Some(blue_window_ms),
                             blue_window_ms,
                         );
                         let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                        let palette = state.judgment_palette(player_idx);
+                        let palette = state.presentation().judgment_palette(player_idx);
                         let bright_colors = palette.colors;
                         let dim_colors = palette.gameplay_dim;
                         for (row_i, count) in counts.iter().copied().enumerate() {
@@ -1966,14 +1966,14 @@ pub fn push_versus_step_stats(
                                 DISABLED_WINDOW_RGBA
                             } else {
                                 standard_judgment_dim_color(
-                                    state.judgment_palette(player_idx),
+                                    state.presentation().judgment_palette(player_idx),
                                     row_i,
                                 )
                             };
                             let bright_color = if disabled {
                                 DISABLED_WINDOW_RGBA
                             } else {
-                                standard_judgment_color(state.judgment_palette(player_idx), row_i)
+                                standard_judgment_color(state.presentation().judgment_palette(player_idx), row_i)
                             };
                             push_versus_count_texts(
                                 actors,
@@ -2012,14 +2012,14 @@ pub fn push_versus_step_stats(
         let ex_score = player_profile.show_ex_score.then(|| {
             state.display_scored_ex_score_data(
                 player_idx,
-                state.gameplay_stats_text.blue_window_ms(player_idx),
+                state.presentation().gameplay_stats_text.blue_window_ms(player_idx),
             )
         });
         let (score_value, mut score_color) = if let Some(ex_score) = &ex_score {
             (
                 deadsync_gameplay::display_ex_score_percent_for_mode(ex_score, score_mode).max(0.0),
                 state
-                    .judgment_palette(player_idx)
+                    .presentation().judgment_palette(player_idx)
                     .color(JudgmentColorRole::FantasticBlue),
             )
         } else {
@@ -2090,7 +2090,7 @@ pub fn push_versus_step_stats(
         }
     }
 
-    if show_song_banner && let Some(key) = &state.song_banner_key {
+    if show_song_banner && let Some(key) = &state.presentation().song_banner_key {
         actors.push(act!(sprite(key):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y() + 70.0):
@@ -2103,7 +2103,7 @@ pub fn push_versus_step_stats(
 
 pub fn push_double_step_stats(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
 ) {
@@ -2112,7 +2112,7 @@ pub fn push_double_step_stats(
 
 pub fn push_centered_single_split_step_stats(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
 ) {
@@ -2121,7 +2121,7 @@ pub fn push_centered_single_split_step_stats(
 
 fn push_split_step_stats(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     playfield_center_x: f32,
     centered_single_split: bool,
@@ -2206,7 +2206,7 @@ fn push_split_step_stats(
         |split| split.song_banner(),
     );
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER)
-        && let Some(banner_key) = &state.song_banner_key
+        && let Some(banner_key) = &state.presentation().song_banner_key
     {
         actors.push(act!(sprite(banner_key):
             align(0.5, 0.5): xy(song_banner.x, song_banner.y):
@@ -2219,7 +2219,7 @@ fn push_split_step_stats(
     // Banner2.lua (zmod pack banner): static (no animation) at the final position.
     if !centered_single_split
         && mask.pack_info_enabled()
-        && let Some(pack_key) = state.pack_banner_key.as_ref()
+        && let Some(pack_key) = state.presentation().pack_banner_key.as_ref()
     {
         let pack_banner = split_layout.map_or_else(
             || step_stats_theme::double_pack_banner_placement(layout, notefield_width),
@@ -2302,8 +2302,8 @@ fn push_split_step_stats(
         let show_blue_ms_label = player_profile.custom_fantastic_window
             || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
         let disabled_windows = player_profile.timing_windows.disabled_windows();
-        let blue_window_ms = state.gameplay_stats_text.blue_window_ms(0);
-        let blue_window_label = state.gameplay_stats_text.blue_window(0);
+        let blue_window_ms = state.presentation().gameplay_stats_text.blue_window_ms(0);
+        let blue_window_label = state.presentation().gameplay_stats_text.blue_window(0);
         let row_height = if show_fa_split { 29.0 } else { 35.0 };
         let y_base = -280.0;
 
@@ -2331,7 +2331,7 @@ fn push_split_step_stats(
                         state.display_judgment_count(0, JudgeGrade::Miss),
                     ];
                     for (row_i, count) in counts.into_iter().enumerate() {
-                        let label = state.gameplay_stats_text.judgment(row_i);
+                        let label = state.presentation().gameplay_stats_text.judgment(row_i);
                         let disabled = standard_row_disabled(disabled_windows, row_i);
                         let local_y = (row_i as f32).mul_add(row_height, y_base);
                         let y_numbers = origin_y + (local_y * base_zoom);
@@ -2339,12 +2339,12 @@ fn push_split_step_stats(
                         let bright = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
-                            standard_judgment_color(state.judgment_palette(0), row_i)
+                            standard_judgment_color(state.presentation().judgment_palette(0), row_i)
                         };
                         let dim = if disabled {
                             DISABLED_WINDOW_RGBA
                         } else {
-                            standard_judgment_dim_color(state.judgment_palette(0), row_i)
+                            standard_judgment_dim_color(state.presentation().judgment_palette(0), row_i)
                         };
                         let slot = count_text_slot(0, row_i, false);
                         let (dim_text, bright_text) =
@@ -2398,19 +2398,19 @@ fn push_split_step_stats(
                 } else {
                     let wc = state.display_window_counts(0, Some(blue_window_ms), blue_window_ms);
                     let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
-                    let palette = state.judgment_palette(0);
+                    let palette = state.presentation().judgment_palette(0);
                     let bright_colors = palette.colors;
                     let dim_colors = palette.gameplay_dim;
 
-                    let fa_label = state.gameplay_stats_text.judgment(0);
+                    let fa_label = state.presentation().gameplay_stats_text.judgment(0);
                     let labels = [
                         fa_label.clone(),
                         fa_label,
-                        state.gameplay_stats_text.judgment(1),
-                        state.gameplay_stats_text.judgment(2),
-                        state.gameplay_stats_text.judgment(3),
-                        state.gameplay_stats_text.judgment(4),
-                        state.gameplay_stats_text.judgment(5),
+                        state.presentation().gameplay_stats_text.judgment(1),
+                        state.presentation().gameplay_stats_text.judgment(2),
+                        state.presentation().gameplay_stats_text.judgment(3),
+                        state.presentation().gameplay_stats_text.judgment(4),
+                        state.presentation().gameplay_stats_text.judgment(5),
                     ];
                     for row_i in 0..labels.len() {
                         let disabled = split_row_disabled(disabled_windows, row_i);
@@ -2644,21 +2644,21 @@ static JUDGMENT_ORDER: [JudgeGrade; 6] = [
     JudgeGrade::Miss,
 ];
 
-fn judgment_color(state: &State, player: usize, grade: JudgeGrade) -> [f32; 4] {
+fn judgment_color(state: &impl GameplayScreenView, player: usize, grade: JudgeGrade) -> [f32; 4] {
     standard_judgment_color(
-        state.judgment_palette(player),
+        state.presentation().judgment_palette(player),
         judgment::judge_grade_ix(grade),
     )
 }
 
 fn build_banner(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     layout: StepStatsPaneLayout,
     wide: bool,
     player_side: profile_data::PlayerSide,
 ) {
-    if let Some(banner_key) = &state.song_banner_key {
+    if let Some(banner_key) = &state.presentation().song_banner_key {
         let placement =
             step_stats_theme::song_banner_placement(layout, wide, player_side, state.num_players());
         actors.push(act!(sprite(banner_key):
@@ -2671,10 +2671,10 @@ fn build_banner(
 
 fn build_pack_banner(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     slide: step_stats_theme::StepStatsSongInfoSlide,
 ) {
-    let Some(pack_key) = state.pack_banner_key.as_ref() else {
+    let Some(pack_key) = state.presentation().pack_banner_key.as_ref() else {
         return;
     };
 
@@ -2691,7 +2691,7 @@ fn build_pack_banner(
 
 fn build_steps_info(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
@@ -2709,7 +2709,7 @@ fn build_steps_info(
         _ => 0,
     };
     let desc_text = state
-        .gameplay_stats_text
+        .presentation().gameplay_stats_text
         .description(player_idx, state.gameplay.total_elapsed_in_screen());
 
     let group_zoom = song_info_text_zoom(layout);
@@ -2718,9 +2718,9 @@ fn build_steps_info(
     let fitted_values = fit_song_info_values(
         asset_manager,
         [
-            state.song_full_title.as_ref(),
-            state.gameplay_stats_text.song_artist.as_ref(),
-            state.pack_group.as_ref(),
+            state.presentation().song_full_title.as_ref(),
+            state.presentation().gameplay_stats_text.song_artist.as_ref(),
+            state.presentation().pack_label.as_ref(),
             desc_text.as_ref(),
         ],
         group_zoom,
@@ -2838,7 +2838,7 @@ mod song_info_text_fit_tests {
 
 fn push_holds_mines_rolls_pane_at(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     frame_cx: f32,
     frame_cy: f32,
@@ -2937,7 +2937,7 @@ fn push_holds_mines_rolls_pane_at(
     });
 }
 
-fn notefield_width(state: &State) -> Option<f32> {
+fn notefield_width(state: &impl GameplayScreenView) -> Option<f32> {
     if state.cols_per_player() == 0 {
         return None;
     }
@@ -2949,7 +2949,7 @@ fn notefield_width(state: &State) -> Option<f32> {
 
 fn build_holds_mines_rolls_pane(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     player_side: profile_data::PlayerSide,
@@ -3056,7 +3056,7 @@ fn build_holds_mines_rolls_pane(
 
 fn build_scorebox_pane(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     layout: StepStatsPaneLayout,
     wide: bool,
     player_side: profile_data::PlayerSide,
@@ -3076,7 +3076,7 @@ fn build_scorebox_pane(
 #[allow(clippy::too_many_arguments)]
 fn push_live_timing_stats_at(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     player_idx: usize,
     timing: step_stats_theme::StepStatsLiveTimingPlacement,
     zoom: f32,
@@ -3146,7 +3146,7 @@ fn push_live_timing_stats_at(
 
 fn build_side_pane(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     asset_manager: &AssetManager,
     layout: StepStatsPaneLayout,
     wide: bool,
@@ -3182,8 +3182,8 @@ fn build_side_pane(
     let show_blue_ms_label = player_profile.custom_fantastic_window
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
     let disabled_windows = player_profile.timing_windows.disabled_windows();
-    let blue_window_ms = state.gameplay_stats_text.blue_window_ms(player_idx);
-    let blue_window_label = state.gameplay_stats_text.blue_window(player_idx);
+    let blue_window_ms = state.presentation().gameplay_stats_text.blue_window_ms(player_idx);
+    let blue_window_label = state.presentation().gameplay_stats_text.blue_window(player_idx);
     actors.reserve(if show_fa_split {
         22 + usize::from(show_blue_ms_label)
     } else {
@@ -3228,7 +3228,7 @@ fn build_side_pane(
                 let dim = if disabled {
                     DISABLED_WINDOW_RGBA
                 } else {
-                    standard_judgment_dim_color(state.judgment_palette(player_idx), index)
+                    standard_judgment_dim_color(state.presentation().judgment_palette(player_idx), index)
                 };
                 let slot = count_text_slot(player_idx, index, false);
                 let (dim_text, bright_text) =
@@ -3274,7 +3274,7 @@ fn build_side_pane(
 
                 let label_world_y = 1.0f32.mul_add(final_text_base_zoom, world_y);
                 let label_zoom = final_text_base_zoom * 0.833;
-                let label = state.gameplay_stats_text.judgment(index);
+                let label = state.presentation().gameplay_stats_text.judgment(index);
 
                 if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:
@@ -3307,7 +3307,7 @@ fn build_side_pane(
 
             // Dim palette for FA+ side pane: reuse gameplay dim colors for Fantastic..Miss,
             // and a dedicated dim color for the white FA+ row.
-            let palette = state.judgment_palette(player_idx);
+            let palette = state.presentation().judgment_palette(player_idx);
             let dim_fantastic = palette.gameplay_dim_color(JudgmentColorRole::FantasticBlue);
             let dim_excellent = palette.gameplay_dim_color(JudgmentColorRole::Excellent);
             let dim_great = palette.gameplay_dim_color(JudgmentColorRole::Great);
@@ -3389,7 +3389,7 @@ fn build_side_pane(
                 let label_zoom = final_text_base_zoom * 0.833;
                 let sublabel_y = 12.0f32.mul_add(final_text_base_zoom, label_world_y);
                 let sublabel_zoom = final_text_base_zoom * 0.6;
-                let label = state.gameplay_stats_text.judgment(*label_index);
+                let label = state.presentation().gameplay_stats_text.judgment(*label_index);
 
                 if player_side == profile_data::PlayerSide::P1 {
                     actors.push(act!(text:

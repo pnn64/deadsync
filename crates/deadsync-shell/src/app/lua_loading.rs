@@ -384,11 +384,11 @@ impl App {
             "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
             song.title
         );
-        commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
+        commands.push(Command::SetPackBanner(gs.presentation.pack_banner_path.clone()));
         commands.push(Command::SetDynamicBackground(background_path));
         // Reconcile chart timing and any video fallback once after the
         // deferred command installs the initial media.
-        gs.background_path_dirty = true;
+        gs.presentation.background_path_dirty = true;
         let mut practice_state = crate::gameplay_runtime::prepare_practice(gs, finish.runtime);
         if let Some(snapshot) = finish.edit_snapshot {
             practice::restore_edit_snapshot(&mut practice_state, snapshot);

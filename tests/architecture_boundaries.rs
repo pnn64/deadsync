@@ -365,7 +365,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         .find("prepared.into_parts()")
         .expect("separate stage from prepared assets");
     let present = adapter
-        .find("gameplay::State::from_stage(")
+        .find("gameplay::GameplayPresentation::from_stage(")
         .expect("present stage");
     let attach = adapter
         .find("attach_prepared_song_lua(gameplay,")
@@ -418,11 +418,17 @@ fn chart_lua_playback_has_no_theme_dependency() {
     let practice = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/practice.rs"),
     );
-    assert!(theme.contains("impl GameplayFramePresenter for State"));
-    assert!(contains_rust(&shell, "state.compose_frame(actors, FramePresentationContext"));
+    assert!(theme.contains("impl GameplayFramePresenter for GameplayPresenter<'_>"));
+    let theme_storage = theme.split_once("pub struct GameplayPresentation {").unwrap()
+        .1.split_once("\n}").unwrap().0;
+    assert!(!theme_storage.contains("ActiveGameplayStage"));
+    assert!(!theme_storage.contains("GameplayLobbySession"));
+    assert!(!theme_storage.contains("pack_group"));
+    assert!(contains_rust(&shell, "let pack_group = assets.score_pack_group("));
+    assert!(contains_rust(&shell, "compose_actors(state, actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
     assert!(contains_rust(&shell, "let (gameplay, session) = state.frame_parts()"));
-    assert!(contains_rust(&shell, "gameplay.compose_frame(actors, FramePresentationContext"));
+    assert!(contains_rust(&shell, "compose_actors(gameplay, actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::for_practice(session)"));
     assert!(!shell.contains("gameplay::frame_layers(") && !shell.contains("gameplay::draw_field("));
     for former_override in ["apply_attacks:", "show_song_visuals:"] {
@@ -450,11 +456,14 @@ fn chart_lua_playback_has_no_theme_dependency() {
     for former_owner in ["presenter.stage(", "frame_storage(", "stage.song_scratch"] {
         assert!(!presentation.contains(former_owner));
     }
-    assert!(contains_rust(&theme, "compose_stage_frame(actors, &self.stage, self,"));
+    assert!(contains_rust(&theme, "compose_stage_frame(actors, stage, &GameplayPresenter {"));
     assert!(contains_rust(
-        &theme,
-        "self.stage.song_scratch = Some(song); self.frame_scratch = Some(presentation); push_song_lua_out(actors, self);",
+        &shell,
+        "state.stage.with_frame_scratch(|stage, song| { state.presentation.compose_frame(",
     ));
+    let controller =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_session.rs"));
+    assert!(contains_rust(&controller, "let result = compose(self, &mut scratch); self.song_scratch = Some(scratch);"));
     assert!(!theme.contains("replace_song_background_changes("));
     assert!(!presentation.contains("deadsync_theme"));
     for forbidden in [
@@ -883,7 +892,7 @@ fn gameplay_lobby_start_readiness_and_input_routing_stay_below_the_theme() {
         "lobby_session: GameplayLobbySession",
         "impl GameplayLobbyHost for State",
         "state.lobby_session.route_input_with_sides(",
-        "state.lobby_session.waiting(",
+        "state.lobby().waiting(",
     ] {
         assert!(
             contains_rust(&theme, delegation),
@@ -6307,10 +6316,10 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "runtime_view.policy.translated_titles",
         "scores.mini_indicator",
         "scores.scorebox_profiles",
-        "self.itl_cmod_warning[player]",
+        "self.presentation.itl_cmod_warning[player]",
         "pub fn sync_score_runtime_view",
-        "self.runtime_view.policy.center_single_notefield",
-        "state.runtime_view.policy.scorebox_pane_filter",
+        "self.presentation.runtime_view.policy.center_single_notefield",
+        "state.presentation.runtime_view.policy.scorebox_pane_filter",
         "self.runtime_view.policy.machine_font",
         "policy.background_brightness",
         "policy.background_color",
@@ -6318,7 +6327,7 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "policy.zmod_rating_box_text",
         "policy.show_bpm_decimal",
         "policy.bpm_position",
-        "machine_font_key(state.machine_font(),",
+        "machine_font_key(state.presentation().machine_font(),",
     ] {
         assert!(
             gameplay.contains(contract),

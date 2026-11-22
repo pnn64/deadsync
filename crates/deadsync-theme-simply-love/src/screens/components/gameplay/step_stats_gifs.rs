@@ -1,5 +1,5 @@
 use crate::act;
-use crate::screens::gameplay::State;
+use crate::screens::gameplay::GameplayScreenView;
 use crate::step_stats_gifs::{
     GifRenderParams, ResolvedStepStatsExtra, gif_render_layout, resolve_extra,
 };
@@ -17,11 +17,11 @@ pub fn resolve_random_extras(
 
 pub fn push_step_stats_extra(
     actors: &mut Vec<Actor>,
-    state: &State,
+    state: &impl GameplayScreenView,
     player_idx: usize,
     params: GifRenderParams,
 ) {
-    let Some(extra) = state.step_stats_extra_resolved.get(player_idx).copied() else {
+    let Some(extra) = state.presentation().step_stats_extra_resolved.get(player_idx).copied() else {
         return;
     };
     let Some(layout) = gif_render_layout(extra, params) else {
