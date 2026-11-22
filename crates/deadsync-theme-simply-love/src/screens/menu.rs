@@ -3,6 +3,8 @@ use crate::fonts::machine_font_key;
 use crate::i18n;
 use crate::i18n::{tr, tr_fmt};
 use deadsync_theme::FontRole;
+use deadsync_theme::{ThemeInputResult, TransitionState};
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
 // Screen navigation is handled in app
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::color;
@@ -225,6 +227,86 @@ pub struct State {
     menu_lr_undo: [i8; 2],
     row_anims: [RowAnim; MAX_OPTION_COUNT],
     idle_elapsed: f32,
+}
+
+impl ThemeMainMenu for crate::SimplyLoveTheme {
+    type MenuState = State;
+    type MenuRuntimeView = MainMenuRuntimeView;
+    type MenuInput = InputEvent;
+    type MenuRawKey = RawKeyboardEvent;
+    type MenuVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
+
+    fn init_menu(color_index: i32) -> State {
+        let mut state = init();
+        state.active_color_index = color_index;
+        state
+    }
+
+    fn menu_color_index(state: &State) -> i32 {
+        state.active_color_index
+    }
+
+    fn set_menu_color_index(state: &mut State, color_index: i32) {
+        state.active_color_index = color_index;
+    }
+
+    fn sync_menu_runtime(state: &mut State, view: MainMenuRuntimeView) {
+        sync_runtime_view(state, view);
+    }
+
+    fn update_menu(state: &mut State, delta_time: f32, phase: MainMenuPhase) -> ThemeEffect {
+        match phase {
+            MainMenuPhase::Active => update(state, delta_time),
+            MainMenuPhase::Entering => update_attract(state, delta_time),
+        }
+    }
+
+    fn handle_menu_input(state: &mut State, input: &InputEvent) -> ThemeEffect {
+        handle_input(state, input)
+    }
+
+    fn handle_menu_raw_key(
+        state: &mut State,
+        key: &RawKeyboardEvent,
+    ) -> ThemeInputResult<Self::Screen, Self::RuntimeRequest> {
+        match handle_raw_key_event(state, key) {
+            ThemeEffect::None => ThemeInputResult::ignored(),
+            effect => ThemeInputResult::consumed(effect),
+        }
+    }
+
+    fn push_menu_actors(
+        actors: &mut Vec<Actor>,
+        state: &State,
+        frame: MainMenuFrame<'_, Self::Screen, Self::MenuVisualPolicy>,
+    ) {
+        let fade = super::transitions::screen_fade_view(Screen::Menu, frame.transition);
+        push_actors(
+            actors,
+            state,
+            frame.update_banner_tag,
+            frame.alpha_multiplier,
+            fade.menu_entry_elapsed,
+            fade.menu_exit_elapsed,
+            frame.visual_policy,
+        );
+    }
+
+    fn push_menu_exit_overlay(
+        actors: &mut Vec<Actor>,
+        state: &State,
+        transition: &TransitionState<Self::Screen>,
+        visual_policy: Self::MenuVisualPolicy,
+    ) {
+        let fade = super::transitions::screen_fade_view(Screen::Menu, transition);
+        if let Some(elapsed) = fade.menu_exit_elapsed {
+            actors.extend(crate::screens::components::menu::menu_splash::build(
+                state.active_color_index,
+                &visual_policy.assets.effects,
+                elapsed,
+            ));
+        }
+    }
 }
 
 #[must_use]

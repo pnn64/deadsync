@@ -569,6 +569,10 @@ The game resolves session startup and post-play routes from the optional screen
 roles supplied by each theme. The shell records the side that pressed Start at
 the menu and uses it for profile selection and machine defaults.
 
+The title menu mounts through the selected theme's presentation interface. The
+shell prepares credit and service status, and the theme owns menu state, input
+feedback, animation, and actor composition.
+
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the
 transition interface.

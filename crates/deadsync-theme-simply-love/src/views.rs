@@ -1434,103 +1434,14 @@ pub struct SimplyLoveUpdaterCapabilities {
     pub ffmpeg_install: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuGrooveError {
-    Disabled,
-    MachineOffline,
-    CannotConnect,
-    TimedOut,
-    InvalidResponse,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuGrooveStatus {
-    Pending {
-        boogie: bool,
-    },
-    Error {
-        boogie: bool,
-        kind: MainMenuGrooveError,
-    },
-    Connected {
-        boogie: bool,
-        get_scores: bool,
-        leaderboard: bool,
-        auto_submit: bool,
-    },
-}
-
-impl Default for MainMenuGrooveStatus {
-    fn default() -> Self {
-        Self::Pending { boogie: false }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuArrowCloudError {
-    Disabled,
-    TimedOut,
-    HostBlocked,
-    CannotConnect,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MainMenuArrowCloudStatus {
-    Pending,
-    Connected,
-    Error(MainMenuArrowCloudError),
-}
-
-impl Default for MainMenuArrowCloudStatus {
-    fn default() -> Self {
-        Self::Pending
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MainMenuSmxConflictView {
-    pub color_rgb: [f32; 3],
-}
-
-/// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
-#[derive(Clone, Debug, PartialEq)]
-pub struct MainMenuRuntimeView {
-    pub game: deadsync_config::theme::GameFlag,
-    pub coin_mode: deadsync_config::coin::CoinMode,
-    pub event_mode: bool,
-    pub credits: u32,
-    pub can_start: bool,
-    pub allow_shutdown_host: bool,
-    pub dedicated_three_key_nav: bool,
-    pub song_count: usize,
-    pub pack_count: usize,
-    pub course_count: usize,
-    pub local_ip: Option<Arc<str>>,
-    pub groovestats: MainMenuGrooveStatus,
-    pub arrowcloud: MainMenuArrowCloudStatus,
-    pub smx_conflict: Option<MainMenuSmxConflictView>,
-}
-
-impl Default for MainMenuRuntimeView {
-    fn default() -> Self {
-        Self {
-            game: deadsync_config::theme::GameFlag::default(),
-            coin_mode: deadsync_config::coin::CoinMode::Home,
-            event_mode: true,
-            credits: 0,
-            can_start: true,
-            allow_shutdown_host: false,
-            dedicated_three_key_nav: false,
-            song_count: 0,
-            pack_count: 0,
-            course_count: 0,
-            local_ip: None,
-            groovestats: MainMenuGrooveStatus::default(),
-            arrowcloud: MainMenuArrowCloudStatus::default(),
-            smx_conflict: None,
-        }
-    }
-}
+pub use deadsync_theme::main_menu::{
+    MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
+    MainMenuSmxConflictView,
+};
+pub type MainMenuRuntimeView = deadsync_theme::main_menu::MainMenuRuntimeView<
+    deadsync_config::theme::GameFlag,
+    deadsync_config::coin::CoinMode,
+>;
 
 /// Coarse updater failure category used by Simply Love's localized overlays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

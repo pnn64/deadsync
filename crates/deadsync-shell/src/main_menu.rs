@@ -1,13 +1,30 @@
+use crate::SessionState;
+use deadsync_input::InputEvent;
 use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudStatus,
 };
 use deadsync_online::groovestats::{
     ConnectionError as GrooveError, ConnectionStatus as GrooveStatus,
 };
-use deadsync_theme_simply_love::views::{
+use deadsync_theme::ThemeEffect;
+use deadsync_theme::main_menu::{
     MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
-    MainMenuRuntimeView, MainMenuSmxConflictView,
+    MainMenuRuntimeView as SharedMainMenuRuntimeView, MainMenuSmxConflictView, ThemeMainMenu,
 };
+
+pub(crate) type MainMenuRuntimeView = SharedMainMenuRuntimeView<
+    deadsync_config::theme::GameFlag,
+    deadsync_config::coin::CoinMode,
+>;
+
+pub(crate) fn handle_input<T: ThemeMainMenu<MenuInput = InputEvent>>(
+    state: &mut T::MenuState,
+    session: &mut SessionState,
+    input: &InputEvent,
+) -> ThemeEffect<T::Screen, T::RuntimeRequest> {
+    session.remember_menu_start(input);
+    T::handle_menu_input(state, input)
+}
 
 const fn arrowcloud_status(status: ArrowCloudStatus) -> MainMenuArrowCloudStatus {
     match status {

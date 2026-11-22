@@ -63,10 +63,15 @@ pub(crate) fn preferred_play_style_for_joined(
 mod tests {
     use super::*;
     use crate::ActiveTheme;
+    use crate::main_menu::MainMenuRuntimeView;
+    use deadlib_platform::input::RawKeyboardEvent;
+    use deadlib_present::actors::Actor;
+    use deadsync_core::input::InputSource;
     use deadsync_core::session_flow::SessionScreens;
-    use deadsync_input::VirtualAction;
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_profile::PlayStyle;
-    use deadsync_theme::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens};
+    use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+    use deadsync_theme::{Theme, ThemeEffect, ThemeScreenFlow, ThemeScreenId, ThemeScreens, ThemeTransitions, TransitionKind};
 
     struct AlternateTheme;
 
@@ -107,14 +112,114 @@ mod tests {
         };
     }
 
+    impl ThemeTransitions for AlternateTheme {
+        type Actor = Actor;
+        type EntryContext<'a> = ();
+
+        fn transition_kind(_: Self::Screen, _: Self::Screen) -> TransitionKind {
+            TransitionKind::Direct
+        }
+
+        fn actor_entry_duration(_: Self::Screen) -> Option<f32> { None }
+
+        fn actor_exit_duration(_: Self::Screen) -> f32 { 0.0 }
+
+        fn skip_global_entry_fade(_: Self::Screen, _: Self::Screen) -> bool { true }
+
+        fn out_transition(_: Self::Screen, _: Self::Screen) -> (Vec<Actor>, f32) {
+            (Vec::new(), 0.0)
+        }
+
+        fn in_transition(_: Self::Screen, _: ()) -> (Vec<Actor>, f32) {
+            (Vec::new(), 0.0)
+        }
+    }
+
+    struct AlternateMenu {
+        color_index: i32,
+        credits: u32,
+        active_time: f32,
+    }
+
+    impl ThemeMainMenu for AlternateTheme {
+        type MenuState = AlternateMenu;
+        type MenuRuntimeView = MainMenuRuntimeView;
+        type MenuInput = InputEvent;
+        type MenuRawKey = RawKeyboardEvent;
+        type MenuVisualPolicy = ();
+
+        fn init_menu(color_index: i32) -> AlternateMenu {
+            AlternateMenu { color_index, credits: 0, active_time: 0.0 }
+        }
+
+        fn menu_color_index(state: &AlternateMenu) -> i32 {
+            state.color_index
+        }
+
+        fn set_menu_color_index(state: &mut AlternateMenu, color_index: i32) {
+            state.color_index = color_index;
+        }
+
+        fn sync_menu_runtime(state: &mut AlternateMenu, view: MainMenuRuntimeView) {
+            state.credits = view.credits;
+        }
+
+        fn update_menu(
+            state: &mut AlternateMenu, delta_time: f32, phase: MainMenuPhase,
+        ) -> ThemeEffect<Self::Screen, ()> {
+            if phase == MainMenuPhase::Active {
+                state.active_time += delta_time;
+            }
+            ThemeEffect::None
+        }
+
+        fn handle_menu_input(_: &mut AlternateMenu, input: &InputEvent) -> ThemeEffect<Self::Screen, ()> {
+            if input.pressed && matches!(input.action, VirtualAction::p2_start) {
+                ThemeEffect::Navigate("mode")
+            } else {
+                ThemeEffect::None
+            }
+        }
+
+        fn push_menu_actors(
+            actors: &mut Vec<Actor>, state: &AlternateMenu, frame: MainMenuFrame<'_, Self::Screen, ()>,
+        ) {
+            actors.push(deadlib_present::__act_from_builder!(
+                (xy(8.0, 8.0): setsize(12.0, 12.0): diffuse(1.0, 1.0, 1.0, frame.alpha_multiplier): z(state.credits as i16))
+                deadlib_assets::present_dsl::SpriteBuilder::solid()
+            ));
+        }
+    }
+
     #[test]
-    fn session_navigation_applies_game_defaults_for_an_alternate_theme() {
+    fn alternate_title_menu_uses_game_session_flow() {
         let config = Config {
             machine_show_select_play_mode: false,
             machine_show_eval_summary: true,
             ..Config::default()
         };
-        let plan = navigation_route_plan::<AlternateTheme>(&config, "home", "mode", false);
+        let mut menu = AlternateTheme::init_menu(0);
+        AlternateTheme::set_menu_color_index(&mut menu, 7);
+        AlternateTheme::sync_menu_runtime(&mut menu, MainMenuRuntimeView { credits: 3, ..Default::default() });
+        AlternateTheme::update_menu(&mut menu, 0.5, MainMenuPhase::Entering);
+        AlternateTheme::update_menu(&mut menu, 0.25, MainMenuPhase::Active);
+        assert_eq!(menu.active_time, 0.25);
+        let mut actors = Vec::new();
+        AlternateTheme::push_menu_actors(&mut actors, &menu, MainMenuFrame {
+            update_banner_tag: None,
+            alpha_multiplier: 0.75,
+            transition: &deadsync_theme::TransitionState::Idle,
+            visual_policy: (),
+        });
+        assert!(matches!(actors.as_slice(), [Actor::Sprite { z: 3, tint, .. }] if tint[3] == 0.75));
+
+        let mut session = crate::SessionState::new(0, [0; 2]);
+        let now = std::time::Instant::now();
+        let start = InputEvent::new(VirtualAction::p2_start, 0, true, InputSource::Keyboard, now, 0, now, now);
+        let action = crate::main_menu::handle_input::<AlternateTheme>(&mut menu, &mut session, &start);
+        let ThemeEffect::Navigate(target) = action else { panic!("menu should request a startup screen") };
+        assert_eq!(session.menu_start_side, PlayerSide::P2);
+        let plan = navigation_route_plan::<AlternateTheme>(&config, "home", target, false);
         assert_eq!(plan.target, "prepare");
         assert!(plan.initialize_session_side);
         assert!(plan.apply_preferred_style);
@@ -125,6 +230,9 @@ mod tests {
         assert_eq!(plan.pending_post_select_summary_exit, Some(true));
         assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", false), "courses");
         assert_eq!(evaluation_summary_return_to::<AlternateTheme>("courses", true), "finished");
+        AlternateTheme::reset_menu(&mut menu);
+        assert_eq!(AlternateTheme::menu_color_index(&menu), 7);
+        assert_eq!(menu.active_time, 0.0);
     }
 
     #[test]

@@ -237,7 +237,7 @@ impl App {
             Arc::clone(&song),
             chart_steps_index,
             chart_steps_index,
-            self.state.screens.menu_state.active_color_index,
+            ActiveTheme::menu_color_index(&self.state.screens.menu_state),
             CurrentScreen::SelectMusic,
             profile::get_session_snapshot(),
             &default_profiles,

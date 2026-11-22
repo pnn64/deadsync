@@ -1,4 +1,5 @@
 use super::App;
+use crate::ActiveTheme;
 use crate::input::{
     GameplayQueuedEvent, GameplayRawKeyEvent, GameplayRawKeyRouteContext, PreScreenInputContext,
     PreScreenInputRoute, QueuedInputBatchState, QueuedInputEventRoute, QueuedInputFlushPlan,
@@ -434,8 +435,11 @@ impl App {
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
-                self.state.session.remember_menu_start(&ev);
-                screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
+                crate::main_menu::handle_input::<ActiveTheme>(
+                    &mut self.state.screens.menu_state,
+                    &mut self.state.session,
+                    &ev,
+                )
             }
             CurrentScreen::SelectProfile => unreachable!("Select Profile uses the flat buffer"),
             CurrentScreen::SelectColor => {

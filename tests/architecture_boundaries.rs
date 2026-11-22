@@ -7078,8 +7078,8 @@ fn qr_login_workers_and_persistence_are_shell_owned() {
 #[test]
 fn simply_love_main_menu_uses_prepared_runtime_view() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
-        .expect("Simply Love views should be readable");
+    let views = read_source(root.join("crates/deadsync-theme/src/main_menu.rs"))
+        .expect("shared main-menu contract should be readable");
     for field in [
         "pub struct MainMenuRuntimeView",
         "pub allow_shutdown_host: bool",
@@ -7099,6 +7099,8 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
             .expect("Simply Love menu should be readable");
     assert!(menu.contains("runtime_view: MainMenuRuntimeView"));
     assert!(menu.contains("pub fn sync_runtime_view"));
+    assert!(menu.contains("impl ThemeMainMenu for crate::SimplyLoveTheme"));
+    assert!(menu.contains("menu_splash::build("));
     for runtime_read in [
         "deadsync_config::runtime::get",
         "deadsync_simfile::runtime_cache",
@@ -7116,6 +7118,7 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
 
     let shell = read_source(root.join("crates/deadsync-shell/src/main_menu.rs"))
         .expect("shell main-menu bridge should be readable");
+    assert!(!shell.contains("deadsync_theme_simply_love"));
     for runtime_read in [
         "runtime_view(credits: u32) -> MainMenuRuntimeView",
         "deadsync_config::runtime::get()",
@@ -7134,7 +7137,21 @@ fn simply_love_main_menu_uses_prepared_runtime_view() {
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(app.contains("crate::main_menu::runtime_view(self.state.coin.credits(coin))"));
-    assert!(app.contains("menu::sync_runtime_view"));
+    for hook in [
+        "menu_state: <ActiveTheme as ThemeMainMenu>::MenuState",
+        "ActiveTheme::init_menu(",
+        "ActiveTheme::sync_menu_runtime(",
+        "ActiveTheme::update_menu(",
+        "MainMenuPhase::Entering",
+        "ActiveTheme::handle_menu_raw_key(",
+        "ActiveTheme::push_menu_actors(",
+        "ActiveTheme::push_menu_exit_overlay(",
+    ] {
+        assert!(app.contains(hook), "shell main menu is missing {hook}");
+    }
+    for concrete in ["screens::menu::", "menu_state.active_color_index", "menu_splash::build(", "fade.menu_exit_elapsed"] {
+        assert!(!app.contains(concrete), "shell still applies menu presentation through {concrete}");
+    }
 }
 
 #[test]
@@ -7409,7 +7426,9 @@ fn simply_love_navigation_flow_uses_narrow_shell_prepared_inputs() {
     let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs")).unwrap();
-    assert!(input.contains("self.state.session.remember_menu_start(&ev)"));
+    let menu_runtime = production_source(&root.join("crates/deadsync-shell/src/main_menu.rs"));
+    assert!(input.contains("crate::main_menu::handle_input::<ActiveTheme>("));
+    assert!(contains_rust(&menu_runtime, "session.remember_menu_start(input); T::handle_menu_input(state, input)"));
     for entry in [&app, &navigation] {
         assert!(entry.contains("self.state.session.menu_start_side"));
         assert!(!entry.contains("menu_state.started_by_p2"));
@@ -13406,7 +13425,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     let advance = app.find(".advance_frame(transition_dt)")
         .expect("advance transition clock");
     assert!(tick_policy < advance);
-    assert!(app.contains("let fade = screen_fade_view("));
+    assert!(contains_rust(&app, "screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)"));
     assert!(app.contains("let smx_overlay_alpha = gameplay_smx_overlay_alpha("));
 }
 

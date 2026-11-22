@@ -137,7 +137,7 @@ use deadsync_theme_simply_love::views::{
 use deadsync_theme_simply_love::{
     screens::{
         self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
-        initials, input as input_screen, manage_local_profiles, mappings, menu, options,
+        initials, input as input_screen, manage_local_profiles, mappings, options,
         overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_profile, select_style, test_lights,
     },
@@ -205,6 +205,7 @@ use deadsync_theme::views::{
     GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
     SmxAssignmentView,
 };
+use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
     TransitionCompletion, UiCue,
@@ -611,7 +612,7 @@ const fn saturating_u32(value: usize) -> u32 {
 /// Active screen data bundle.
 pub struct ScreensState {
     current_screen: CurrentScreen,
-    menu_state: menu::State,
+    menu_state: <ActiveTheme as ThemeMainMenu>::MenuState,
     gameplay_state: Option<GameplayState>,
     practice_state: Option<PracticeState>,
     gameplay_score_cursor: crate::gameplay_runtime::ScoreRuntimeCursor,
@@ -1211,8 +1212,7 @@ impl ScreensState {
         audio_options: AudioOptionsView,
         bookkeeping: crate::coin::Bookkeeping,
     ) -> Self {
-        let mut menu_state = menu::init();
-        menu_state.active_color_index = color_index;
+        let menu_state = ActiveTheme::init_menu(color_index);
 
         let mut select_profile_state = select_profile::init(crate::local_profiles::picker_view());
         select_profile_state.active_color_index = color_index;
@@ -1553,7 +1553,10 @@ impl ScreensState {
                 select_course::update(&mut self.select_course_state, delta_time, effects);
                 (None, false)
             }
-            CurrentScreen::Menu => (Some(menu::update(&mut self.menu_state, delta_time)), false),
+            CurrentScreen::Menu => (
+                Some(ActiveTheme::update_menu(&mut self.menu_state, delta_time, MainMenuPhase::Active)),
+                false,
+            ),
         };
         if let Some(effect) = effect {
             effect.append_to(effects);
@@ -4023,7 +4026,7 @@ impl App {
     fn sync_main_menu_runtime_view(&mut self) {
         let coin = config::runtime::get().coin;
         let view = crate::main_menu::runtime_view(self.state.coin.credits(coin));
-        menu::sync_runtime_view(&mut self.state.screens.menu_state, view);
+        ActiveTheme::sync_menu_runtime(&mut self.state.screens.menu_state, view);
     }
 
     fn coin_select_music_init_view(&self, mut view: SelectMusicInitView) -> SelectMusicInitView {
@@ -4784,8 +4787,9 @@ impl App {
             self.step_gameplay(delta_time, true, event_loop);
         }
         if tick_menu_attract {
-            menu::update_attract(&mut self.state.screens.menu_state, logic_dt)
-                .append_to(&mut self.theme_effect_scratch);
+            ActiveTheme::update_menu(
+                &mut self.state.screens.menu_state, logic_dt, MainMenuPhase::Entering,
+            ).append_to(&mut self.theme_effect_scratch);
         }
         if !self.theme_effect_scratch.is_empty() {
             let _ = self.drain_theme_effects(event_loop);
@@ -6507,7 +6511,7 @@ impl App {
         match target {
             CurrentScreen::ArrowCloudLogin => {
                 self.state.screens.arrowcloud_login_state.active_color_index =
-                    self.state.screens.menu_state.active_color_index;
+                    ActiveTheme::menu_color_index(&self.state.screens.menu_state);
                 self.state.screens.arrowcloud_login_state.target_profile =
                     Some(screens::arrowcloud_login::ProfileTarget {
                         id: profile_id,
@@ -6518,7 +6522,7 @@ impl App {
                 self.state
                     .screens
                     .groovestats_login_state
-                    .active_color_index = self.state.screens.menu_state.active_color_index;
+                    .active_color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
                 self.state.screens.groovestats_login_state.target_profile =
                     Some(screens::groovestats_login::ProfileTarget {
                         id: profile_id,
@@ -7757,11 +7761,12 @@ impl App {
         Option<deadsync_song_lua::playback::GameplayActorSegments>,
     ) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
-        let fade = screen_fade_view(
-            self.state.screens.current_screen,
-            &self.state.shell.transition,
-        );
-        let screen_alpha_multiplier = fade.screen_alpha;
+        let screen_alpha_multiplier = if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
+            1.0
+        } else {
+            screen_fade_view(self.state.screens.current_screen, &self.state.shell.transition)
+                .screen_alpha
+        };
 
         let mut actors = std::mem::take(&mut self.actor_scratch);
         actors.clear();
@@ -7782,14 +7787,15 @@ impl App {
             CurrentScreen::Menu => {
                 self.sync_main_menu_runtime_view();
                 let update_tag = deadsync_updater::state::available_tag();
-                menu::push_actors(
+                ActiveTheme::push_menu_actors(
                     &mut actors,
                     &self.state.screens.menu_state,
-                    update_tag.as_deref(),
-                    screen_alpha_multiplier,
-                    fade.menu_entry_elapsed,
-                    fade.menu_exit_elapsed,
-                    visual_policy,
+                    MainMenuFrame {
+                        update_banner_tag: update_tag.as_deref(),
+                        alpha_multiplier: screen_alpha_multiplier,
+                        transition: &self.state.shell.transition,
+                        visual_policy,
+                    },
                 );
             }
             CurrentScreen::Gameplay => {
@@ -8098,12 +8104,13 @@ impl App {
             _ => {}
         }
 
-        if let Some(elapsed) = fade.menu_exit_elapsed {
-            actors.extend(screens::components::menu::menu_splash::build(
-                self.state.screens.menu_state.active_color_index,
-                &visual_policy.assets.effects,
-                elapsed,
-            ));
+        if self.state.screens.current_screen == ActiveTheme::SCREENS.menu {
+            ActiveTheme::push_menu_exit_overlay(
+                &mut actors,
+                &self.state.screens.menu_state,
+                &self.state.shell.transition,
+                visual_policy,
+            );
         }
 
         self.append_screenshot_overlay_actors(&mut actors, Instant::now());
@@ -8458,14 +8465,11 @@ impl App {
             }
             RawKeyScreenRoute::Menu => {
                 self.sync_main_menu_runtime_view();
-                let action = screens::menu::handle_raw_key_event(
+                let action = ActiveTheme::handle_menu_raw_key(
                     &mut self.state.screens.menu_state,
                     &raw_key,
                 );
-                if !matches!(action, ThemeEffect::None) {
-                    if let Err(e) = self.handle_action(action, event_loop) {
-                        log::error!("Failed to handle Menu raw key action: {e}");
-                    }
+                if self.handle_theme_input_result(event_loop, action, "Menu") {
                     return true;
                 }
             }
@@ -9065,9 +9069,9 @@ impl App {
         if target == CurrentScreen::Menu {
             self.state.session.reset_for_menu(profile::combo_carry());
             self.state.screens.course_evaluation.reset();
-            menu::reset_for_entry(&mut self.state.screens.menu_state);
+            ActiveTheme::reset_menu(&mut self.state.screens.menu_state);
         } else if target == CurrentScreen::Init {
-            let active_color_index = self.state.screens.menu_state.active_color_index;
+            let active_color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
             init::replay_intro(&mut self.state.screens.init_state);
             self.state.screens.init_state.active_color_index = active_color_index;
         } else if target == CurrentScreen::Options {
@@ -9079,7 +9083,7 @@ impl App {
             self.browser_skin
                 .want(browser_skin::preview_noteskin_name());
             self.state.screens.content_browser_state.active_color_index =
-                self.state.screens.menu_state.active_color_index;
+                ActiveTheme::menu_color_index(&self.state.screens.menu_state);
         } else if target == CurrentScreen::Credits {
             self.state.screens.credits_state = credits::init();
             self.state.screens.credits_state.active_color_index =
@@ -9169,7 +9173,7 @@ impl App {
                 CurrentScreen::SelectProfile => {
                     self.state.screens.select_profile_state.active_color_index
                 }
-                CurrentScreen::Menu => self.state.screens.menu_state.active_color_index,
+                CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
                 _ => self.state.screens.select_play_mode_state.active_color_index,
             };
             self.state.screens.select_play_mode_state =
@@ -9190,7 +9194,7 @@ impl App {
                 CurrentScreen::SelectProfile => {
                     self.state.screens.select_profile_state.active_color_index
                 }
-                CurrentScreen::Menu => self.state.screens.menu_state.active_color_index,
+                CurrentScreen::Menu => ActiveTheme::menu_color_index(&self.state.screens.menu_state),
                 _ => self.state.screens.profile_load_state.active_color_index,
             };
             self.state.screens.profile_load_state = profile_load::init();
@@ -9288,7 +9292,7 @@ impl App {
     }
 
     fn sync_screen_color_index(&mut self, idx: i32) {
-        self.state.screens.menu_state.active_color_index = idx;
+        ActiveTheme::set_menu_color_index(&mut self.state.screens.menu_state, idx);
         self.state.screens.select_profile_state.active_color_index = idx;
         self.state.screens.select_style_state.active_color_index = idx;
         self.state.screens.select_play_mode_state.active_color_index = idx;

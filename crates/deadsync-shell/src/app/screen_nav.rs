@@ -1,5 +1,5 @@
 use super::stage_start::{StageSelection, stage_launch_target};
-use super::{App, Command, CurrentScreen, menu, select_color, select_course};
+use super::{App, Command, CurrentScreen, select_color, select_course};
 use crate::ActiveTheme;
 use crate::interaction::ProcessExitRequest;
 use crate::navigation::{
@@ -19,6 +19,7 @@ use deadsync_profile::compat as profile;
 use deadsync_theme::{
     Theme, ThemeScreenFlow, ThemeTransitionAudio, ThemeTransitions, TransitionKind,
 };
+use deadsync_theme::main_menu::ThemeMainMenu;
 use deadsync_theme_simply_love::screens::transition_audio::TransitionAudioContext;
 use deadsync_theme_simply_love::screens::transitions::PlayEntryTransition;
 use deadsync_theme_simply_love::views::OverscanAdjustmentView;
@@ -118,7 +119,7 @@ impl App {
 
     fn enter_arrowcloud_login(&mut self) {
         let config = config::runtime::get();
-        let color_index = self.state.screens.menu_state.active_color_index;
+        let color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
         let state = &mut self.state.screens.arrowcloud_login_state;
         state.active_color_index = color_index;
         let target = state
@@ -135,7 +136,7 @@ impl App {
 
     fn enter_groovestats_login(&mut self) {
         let config = config::runtime::get();
-        let color_index = self.state.screens.menu_state.active_color_index;
+        let color_index = ActiveTheme::menu_color_index(&self.state.screens.menu_state);
         let state = &mut self.state.screens.groovestats_login_state;
         state.active_color_index = color_index;
         let target = state
@@ -355,7 +356,7 @@ impl App {
                 if from == CurrentScreen::Init && target == CurrentScreen::Menu {
                     debug!("Instant navigation Init?Menu (out-transition handled by Init screen)");
                     self.state.session.menu_start_side = profile_data::PlayerSide::P1;
-                    menu::reset_for_entry(&mut self.state.screens.menu_state);
+                    ActiveTheme::reset_menu(&mut self.state.screens.menu_state);
                 }
                 self.commit_screen_change(target);
                 apply_actor_entry_transition(&mut self.state.shell, target);
