@@ -40,7 +40,7 @@ use crate::course::{
 #[cfg(test)]
 use crate::course::score_info_from_stage;
 use deadsync_gameplay::course_run::CourseEntry;
-use deadsync_profile_gameplay::results::{RestartPayload, course_summary_records};
+use deadsync_profile_gameplay::results::{EvaluationStage, course_summary_records};
 #[cfg(test)]
 use deadsync_gameplay::course_run::{CourseRun, CourseStageRuntime};
 use crate::diagnostics::timing_health;
@@ -646,7 +646,7 @@ pub struct ScreensState {
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
-    evaluation_restart: Option<RestartPayload>,
+    evaluation_stage: Option<EvaluationStage>,
     course_evaluation: evaluation_views::CourseEvaluationPages,
     evaluation_summary_state: evaluation_summary::State,
     initials_state: initials::State,
@@ -868,9 +868,11 @@ fn build_course_summary_eval_state(
         config.auto_populate_gs_scores,
     );
     let profiles = course_summary_profiles(stage, profile.scorebox.play_style, profile.scorebox.player_side);
-    let restart = RestartPayload::from_stage_result(
+    let evaluation_stage = EvaluationStage::from_stage_result(
         stage,
-        profiles.each_ref().map(|profile| profile.as_ref().map(|profile| profile.scroll_speed)),
+        profiles.each_ref().map(|profile| {
+            profile.as_ref().map(|(side, profile)| (*side, profile.scroll_speed))
+        }),
     );
     let score_info = build_course_summary_score_info(
         stage,
@@ -892,7 +894,7 @@ fn build_course_summary_eval_state(
     evaluation::sync_elapsed(&mut state, session_elapsed, gameplay_elapsed);
     state.return_to_course = true;
     state.allow_online_panes = false;
-    CourseEvaluationPage { view: state, restart }
+    CourseEvaluationPage { view: state, stage: evaluation_stage }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1333,7 +1335,7 @@ impl ScreensState {
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
-            evaluation_restart: None,
+            evaluation_stage: None,
             course_evaluation: Default::default(),
             evaluation_summary_state,
             initials_state,
@@ -3466,12 +3468,12 @@ impl App {
         scores::submit_arrowcloud_payloads_from_gameplay(gameplay, pack_group);
     }
 
-    fn retry_evaluation_submissions(state: &evaluation::State) -> bool {
+    fn retry_evaluation_submissions(&self) -> bool {
         let mut retried = false;
-        for score_info in state.score_info.iter().flatten() {
-            let chart_hash = score_info.chart.short_hash.as_str();
-            retried |= scores::retry_groovestats_submit(chart_hash, score_info.side);
-            retried |= scores::retry_arrowcloud_submit(chart_hash, score_info.side);
+        let queries = evaluation_views::chart_queries(self.state.screens.evaluation_stage.as_ref());
+        for (side, chart_hash) in queries.into_iter().flatten() {
+            retried |= scores::retry_groovestats_submit(chart_hash, side);
+            retried |= scores::retry_arrowcloud_submit(chart_hash, side);
         }
         retried
     }
@@ -3500,14 +3502,11 @@ impl App {
             return;
         }
 
+        let queries = evaluation_views::chart_queries(self.state.screens.evaluation_stage.as_ref());
         let state = &mut self.state.screens.evaluation_state;
         for ready in self.arrowcloud_result_ready_scratch.drain(..) {
-            let current_chart_matches = state.score_info.iter().flatten().any(|score| {
-                score.side == ready.side
-                    && score
-                        .chart
-                        .short_hash
-                        .eq_ignore_ascii_case(ready.chart_hash.as_ref())
+            let current_chart_matches = queries.iter().flatten().any(|(side, chart_hash)| {
+                *side == ready.side && chart_hash.eq_ignore_ascii_case(ready.chart_hash.as_ref())
             });
             if !current_chart_matches
                 || !deadsync_score::arrowcloud_submit_ui_token_matches(
@@ -6820,7 +6819,7 @@ impl App {
         match gameplay_restart_prepare_source::<ActiveTheme>(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
-            self.state.screens.evaluation_restart.is_some(),
+            self.state.screens.evaluation_stage.is_some(),
         ) {
             RestartPrepareSource::Gameplay => {
                 let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
@@ -6844,7 +6843,7 @@ impl App {
                 )
             }
             RestartPrepareSource::Evaluation => {
-                let Some(payload) = self.state.screens.evaluation_restart.clone() else {
+                let Some(payload) = self.state.screens.evaluation_stage.clone() else {
                     return false;
                 };
                 let active_color_index = self.state.screens.evaluation_state.active_color_index;
@@ -6864,10 +6863,10 @@ impl App {
     fn prepare_practice_from_eval(&mut self) -> bool {
         match practice_restart_prepare_source::<ActiveTheme>(
             self.state.screens.current_screen,
-            self.state.screens.evaluation_restart.is_some(),
+            self.state.screens.evaluation_stage.is_some(),
         ) {
             RestartPrepareSource::Evaluation => {
-                let Some(payload) = self.state.screens.evaluation_restart.clone() else {
+                let Some(payload) = self.state.screens.evaluation_stage.clone() else {
                     return false;
                 };
                 let active_color_index = self.state.screens.evaluation_state.active_color_index;
@@ -6933,7 +6932,7 @@ impl App {
     }
 
     fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        let eval_payload = self.state.screens.evaluation_restart.as_ref();
+        let eval_payload = self.state.screens.evaluation_stage.as_ref();
         let simfile_path = match gameplay_reload_source::<ActiveTheme>(
             self.state.screens.current_screen,
             self.state.screens.gameplay_state.is_some(),
@@ -6989,7 +6988,7 @@ impl App {
     /// `CurrentScreen::Practice` and does not touch
     /// `gameplay_restart_count` / `restart_pending` (those are gameplay-only).
     fn try_practice_from_eval(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        let eval_payload_available = self.state.screens.evaluation_restart.is_some();
+        let eval_payload_available = self.state.screens.evaluation_stage.is_some();
         if !practice_from_eval_allowed::<ActiveTheme>(self.state.screens.current_screen, eval_payload_available) {
             return false;
         }
@@ -7211,7 +7210,7 @@ impl App {
             course_page.view.screen_elapsed = screen_elapsed;
             course_page.view.sfx_paths = sfx_paths.clone();
             self.state.screens.evaluation_state = course_page.view.clone();
-            self.state.screens.evaluation_restart = course_page.restart.clone();
+            self.state.screens.evaluation_stage = course_page.stage.clone();
 
             let mut pages = Vec::with_capacity(per_song_pages.len().saturating_add(1));
             pages.push(course_page);
@@ -7296,7 +7295,7 @@ impl App {
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
-        let Some(CourseEvaluationPage { view: mut page, restart }) = self.state.screens.course_evaluation.step(delta) else {
+        let Some(CourseEvaluationPage { view: mut page, stage }) = self.state.screens.course_evaluation.step(delta) else {
             return;
         };
         page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
@@ -7306,7 +7305,7 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
-        self.state.screens.evaluation_restart = restart;
+        self.state.screens.evaluation_stage = stage;
         self.mark_evaluation_runtime_dirty();
         self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
         self.ui_sfx.play_cue(&mut self.audio, UiCue::Change);
@@ -8668,9 +8667,7 @@ impl App {
                     self.input_route_policy(CurrentScreen::Evaluation)
                         .keyboard_features,
                     self.state.session.course_run.is_some(),
-                    screens::evaluation::submission_retry_available(
-                        &self.state.screens.evaluation_state,
-                    ),
+                    self.evaluation_submission_retry_available(),
                     !self.state.screens.course_evaluation.pages.is_empty(),
                 );
                 match shortcut {
@@ -8688,7 +8685,7 @@ impl App {
                         }
                     }
                     Some(EvaluationRawKeyShortcut::RetrySubmissions) => {
-                        Self::retry_evaluation_submissions(&self.state.screens.evaluation_state);
+                        self.retry_evaluation_submissions();
                         return true;
                     }
                     Some(EvaluationRawKeyShortcut::StepCourseEvalPage(delta)) => {
@@ -9651,7 +9648,7 @@ impl App {
                 Self::execute_evaluation_score_runtime(&gameplay_results.stage, &gameplay_results.pack_group);
                 let config = config::runtime::get();
                 let stage = Self::gameplay_stage_result(&gameplay_results.stage);
-                let restart = RestartPayload::from_gameplay_result(&gameplay_results.stage.gameplay, &stage);
+                let evaluation_stage = EvaluationStage::from_gameplay_result(&gameplay_results.stage.gameplay, &stage);
                 let failed = stage_stats::all_players_failed(
                     &stage,
                     gameplay_results.setup.session.joined_sides,
@@ -9664,7 +9661,7 @@ impl App {
                 eval_state.auto_advance_seconds = None;
                 self.state.screens.course_evaluation.stages.push(CourseEvaluationPage {
                     view: eval_state,
-                    restart,
+                    stage: evaluation_stage,
                 });
             }
 
@@ -10054,7 +10051,7 @@ impl App {
                 Self::execute_evaluation_score_runtime(&gameplay.stage, &gameplay.pack_group);
             }
             let in_course_run = self.state.session.course_run.is_some();
-            let (init_view, restart, failed, completed_course) = if let Some(gameplay) =
+            let (init_view, evaluation_stage, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
                 let stage = Self::gameplay_stage_result(&gameplay.stage);
@@ -10063,7 +10060,7 @@ impl App {
                 let completed = self.record_stage_result(stage.clone(), failed, &config, true);
                 (
                     Self::evaluation_init_view(gameplay, &stage, &config),
-                    RestartPayload::from_gameplay_result(&gameplay.stage.gameplay, &stage),
+                    EvaluationStage::from_gameplay_result(&gameplay.stage.gameplay, &stage),
                     failed,
                     completed,
                 )
@@ -10075,7 +10072,7 @@ impl App {
                 (EvaluationInitView::default(), None, false, completed)
             };
             self.state.screens.evaluation_state = evaluation::init(init_view);
-            self.state.screens.evaluation_restart = restart;
+            self.state.screens.evaluation_stage = evaluation_stage;
             self.state.screens.evaluation_state.active_color_index = color_idx;
             self.state.screens.evaluation_state.return_to_course = in_course_run;
             self.state.screens.evaluation_state.auto_advance_seconds = None;
@@ -10096,7 +10093,7 @@ impl App {
                     .stages
                     .push(CourseEvaluationPage {
                         view: self.state.screens.evaluation_state.clone(),
-                        restart: self.state.screens.evaluation_restart.clone(),
+                        stage: self.state.screens.evaluation_stage.clone(),
                     });
             }
             self.finalize_entered_evaluation(&config, failed, completed_course);
@@ -12205,14 +12202,19 @@ mod tests {
             music_rate: 1.5,
             duration_seconds: 60.0,
         };
-        let payload = RestartPayload::from_stage_result(&stage, [None, Some(ScrollSpeedSetting::MMod(777.0))])
+        let player = Some((profile_data::PlayerSide::P2, ScrollSpeedSetting::MMod(777.0)));
+        let payload = EvaluationStage::from_stage_result(&stage, [player, None])
             .expect("stage result should restart");
 
         assert!(Arc::ptr_eq(&payload.song, &song));
         assert_eq!(payload.chart_hashes(), ["", "p2hash"]);
+        assert_eq!(payload.player_chart_queries(), [Some((profile_data::PlayerSide::P2, "p2hash")), None]);
         assert!((payload.music_rate - 1.5).abs() < f32::EPSILON);
         assert_eq!(payload.scroll_speed[0], ScrollSpeedSetting::default());
         assert_eq!(payload.scroll_speed[1], ScrollSpeedSetting::MMod(777.0));
+
+        let versus = EvaluationStage::from_stage_result(&stage, [None, player]).unwrap();
+        assert_eq!(versus.player_chart_queries(), [None, Some((profile_data::PlayerSide::P2, "p2hash"))]);
     }
 
     #[test]

@@ -67,6 +67,15 @@ impl App {
             ProfileRequest::ToggleFavorite { side, chart_hash } => {
                 profile::toggle_favorite(side, &chart_hash);
             }
+            ProfileRequest::ToggleEvaluationFavorite { side } => {
+                if self.state.screens.current_screen == CurrentScreen::Evaluation
+                    && let Some(stage) = self.state.screens.evaluation_stage.as_ref()
+                    && let Some((_, chart_hash)) = stage.player_chart_queries().into_iter().flatten()
+                        .find(|(played_side, _)| *played_side == side)
+                {
+                    profile::toggle_favorite(side, chart_hash);
+                }
+            }
             ProfileRequest::TogglePackFavorite { side, pack_name } => {
                 profile::toggle_pack_favorite(side, &pack_name);
             }

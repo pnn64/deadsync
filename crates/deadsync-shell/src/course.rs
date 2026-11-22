@@ -200,12 +200,19 @@ pub fn course_summary_profiles(
     stage: &stage_stats::StageSummary,
     play_style: PlayStyle,
     active_side: PlayerSide,
-) -> [Option<profile_data::Profile>; MAX_PLAYERS] {
+) -> [Option<(PlayerSide, profile_data::Profile)>; MAX_PLAYERS] {
     let profiles = profile_data::runtime_lock_profiles();
-    std::array::from_fn(|idx| {
-        (stage.players[idx].is_some()
-            && (play_style.player_count() > 1 || idx == profile_data::player_side_index(active_side)))
-            .then(|| profiles[idx].clone())
+    std::array::from_fn(|slot| {
+        if slot >= play_style.player_count() {
+            return None;
+        }
+        let side = if play_style.player_count() > 1 {
+            profile_data::player_side_for_index(slot)
+        } else {
+            active_side
+        };
+        let idx = profile_data::player_side_index(side);
+        stage.players[idx].as_ref().map(|_| (side, profiles[idx].clone()))
     })
 }
 
@@ -214,16 +221,16 @@ pub fn build_course_summary_score_info(
     routine_shared: Option<&stage_stats::PlayerStageSummary>,
     course_graph_stages: &[Vec<CourseGraphStage>; MAX_PLAYERS],
     play_style: PlayStyle,
-    profiles: &[Option<profile_data::Profile>; MAX_PLAYERS],
+    profiles: &[Option<(PlayerSide, profile_data::Profile)>; MAX_PLAYERS],
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     let records = course_summary_records(stage, routine_shared);
     let solo = play_style.player_count() == 1;
-    for (idx, profile) in profiles.iter().enumerate() {
-        let Some(profile) = profile else { continue };
-        let (slot, record) = if solo { (0, stage.players[idx].as_ref()) } else { (idx, records[idx]) };
-        let side = profile_data::player_side_for_index(idx);
-        score_info[slot] = score_info_from_stage_with_record(stage, side, record, profile);
+    for (slot, profile) in profiles.iter().enumerate() {
+        let Some((side, profile)) = profile else { continue };
+        let idx = profile_data::player_side_index(*side);
+        let record = if solo { stage.players[idx].as_ref() } else { records[idx] };
+        score_info[slot] = score_info_from_stage_with_record(stage, *side, record, profile);
         if let Some(score) = score_info[slot].as_mut() {
             score.course_graph_stages.clone_from(&course_graph_stages[idx]);
         }

@@ -4857,14 +4857,13 @@ fn prepend_sfx(path_opt: Option<&'static str>, effect: ThemeEffect) -> ThemeEffe
 
 fn favorite_toggle_effect(
     side: profile_data::PlayerSide,
-    chart_hash: String,
     is_now_favorite: bool,
 ) -> ThemeEffect {
     let sound = crate::screens::favorite_code::toggle_sfx(is_now_favorite);
     ThemeEffect::sequence(
         crate::effects::sfx(sound),
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-            crate::SimplyLoveProfileRequest::ToggleFavorite { side, chart_hash },
+            crate::SimplyLoveProfileRequest::ToggleEvaluationFavorite { side },
         )),
     )
 }
@@ -4996,8 +4995,7 @@ mod input_audio_effect_tests {
 
     #[test]
     fn favorite_sound_precedes_typed_persistence() {
-        let effect =
-            favorite_toggle_effect(profile_data::PlayerSide::P2, "chart".to_string(), true);
+        let effect = favorite_toggle_effect(profile_data::PlayerSide::P2, true);
         let ThemeEffect::Batch(effects) = effect else {
             panic!("favorite sound and persistence should remain ordered");
         };
@@ -5011,8 +5009,8 @@ mod input_audio_effect_tests {
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::ToggleFavorite { side, chart_hash }
-            )) if *side == profile_data::PlayerSide::P2 && chart_hash == "chart"
+                crate::SimplyLoveProfileRequest::ToggleEvaluationFavorite { side }
+            )) if *side == profile_data::PlayerSide::P2
         ));
     }
 }
@@ -5060,7 +5058,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 state.favorites[player_idx] = !state.favorites[player_idx];
                 favorite_effect = favorite_toggle_effect(
                     side,
-                    si.chart.short_hash.clone(),
                     state.favorites[player_idx],
                 );
                 break;

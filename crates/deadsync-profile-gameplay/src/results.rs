@@ -13,41 +13,44 @@ use deadsync_score::{self as score_data, GrooveStatsEvalState, ItlEvalState};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// The song and resolved player settings retained after a stage ends.
+/// Played chart identities and resolved settings retained for Evaluation.
 #[derive(Clone)]
-pub struct RestartPayload {
+pub struct EvaluationStage {
     pub song: Arc<SongData>,
-    charts: [Option<Arc<ChartData>>; MAX_PLAYERS],
+    charts: [Option<(profile_data::PlayerSide, Arc<ChartData>)>; MAX_PLAYERS],
     pub music_rate: f32,
     pub scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
 }
 
-impl RestartPayload {
+impl EvaluationStage {
     pub fn from_gameplay_result<A, C, D>(
         game: &GameplayRuntimeState<GameplayProfile, A, C, D>,
         result: &StageSummary,
     ) -> Option<Self> {
-        let mut speeds = [None; MAX_PLAYERS];
-        for player in 0..game.num_players().min(MAX_PLAYERS) {
-            let side = crate::profile_side_from_gameplay(game.setup.session.runtime_player_side(player));
-            speeds[profile_data::player_side_index(side)] = Some(game.scroll_speed_for_player(player));
-        }
-        Self::from_stage_result(result, speeds)
+        let players = std::array::from_fn(|player| {
+            (player < game.num_players()).then(|| {
+                let side = crate::profile_side_from_gameplay(
+                    game.setup.session.runtime_player_side(player),
+                );
+                (side, game.scroll_speed_for_player(player))
+            })
+        });
+        Self::from_stage_result(result, players)
     }
 
-    /// The requested sides have their scroll settings in physical-side order.
+    /// Players are in result slot order. Restart settings use physical-side order.
     pub fn from_stage_result(
         result: &StageSummary,
-        speeds: [Option<ScrollSpeedSetting>; MAX_PLAYERS],
+        players: [Option<(profile_data::PlayerSide, ScrollSpeedSetting)>; MAX_PLAYERS],
     ) -> Option<Self> {
-        let mut charts = [None, None];
         let mut scroll_speed = [ScrollSpeedSetting::default(); MAX_PLAYERS];
-        for (side, speed) in speeds.into_iter().enumerate() {
-            if let (Some(player), Some(speed)) = (&result.players[side], speed) {
-                charts[side] = Some(Arc::clone(&player.chart));
-                scroll_speed[side] = speed;
-            }
-        }
+        let charts = players.map(|player| {
+            let (side, speed) = player?;
+            let index = profile_data::player_side_index(side);
+            let result = result.players[index].as_ref()?;
+            scroll_speed[index] = speed;
+            Some((side, Arc::clone(&result.chart)))
+        });
         charts.iter().any(Option::is_some).then(|| Self {
             song: Arc::clone(&result.song),
             charts,
@@ -61,8 +64,16 @@ impl RestartPayload {
     }
 
     pub fn chart_hashes(&self) -> [&str; MAX_PLAYERS] {
-        self.charts.each_ref().map(|chart| {
-            chart.as_ref().map_or("", |chart| chart.short_hash.as_str())
+        let mut hashes = [""; MAX_PLAYERS];
+        for (side, chart_hash) in self.player_chart_queries().into_iter().flatten() {
+            hashes[profile_data::player_side_index(side)] = chart_hash;
+        }
+        hashes
+    }
+
+    pub fn player_chart_queries(&self) -> [Option<(profile_data::PlayerSide, &str)>; MAX_PLAYERS] {
+        self.charts.each_ref().map(|entry| {
+            entry.as_ref().map(|(side, chart)| (*side, chart.short_hash.as_str()))
         })
     }
 }

@@ -45,6 +45,7 @@ pub enum ProfileRequest {
         side: PlayerSide,
         chart_hash: String,
     },
+    ToggleEvaluationFavorite { side: PlayerSide },
     TogglePackFavorite {
         side: PlayerSide,
         pack_name: String,

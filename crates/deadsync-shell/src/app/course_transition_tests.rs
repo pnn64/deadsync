@@ -341,6 +341,25 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                     );
                     let completed_song = Arc::clone(&app.state.session.played_stages[0].song);
                     app.state.screens.evaluation_state.score_info = [None, None];
+                    let side = profile_data::PlayerSide::P2;
+                    let chart_hash = app.state.session.played_stages[0].players[1]
+                        .as_ref().unwrap().chart.short_hash.clone();
+                    score_data::groovestats_set_submit_ui_status(
+                        1, &chart_hash, 1, score_data::GrooveStatsSubmitUiStatus::TimedOut,
+                    );
+                    app.sync_evaluation_runtime_view(app.evaluation_policy, Instant::now());
+                    let retry_available = app.evaluation_submission_retry_available();
+                    score_data::groovestats_reset_submit_ui_status(1, &chart_hash);
+                    assert!(retry_available);
+
+                    let _profiles = ScoreProfiles::new();
+                    let was_favorite = profile_data::runtime_profile_has_favorite_for_side(side, &chart_hash);
+                    let favorite = profile_data::requests::ProfileRequest::ToggleEvaluationFavorite { side };
+                    app.handle_profile_request(favorite.clone());
+                    let is_favorite = profile_data::runtime_profile_has_favorite_for_side(side, &chart_hash);
+                    app.handle_profile_request(favorite);
+                    assert_ne!(is_favorite, was_favorite);
+
                     assert!(app.prepare_gameplay_restart());
                     let restart = app.state.pending_stage.take().expect("restart selection");
                     assert!(Arc::ptr_eq(&restart.song, &completed_song));
@@ -356,7 +375,7 @@ fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
                         "PR845 transition",
                     );
                     assert_eq!(
-                        app.state.screens.evaluation_restart.as_ref().unwrap().song.title,
+                        app.state.screens.evaluation_stage.as_ref().unwrap().song.title,
                         "PR845 transition",
                     );
                     app.state.clear_course_runtime();

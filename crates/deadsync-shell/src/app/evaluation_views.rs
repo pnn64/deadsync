@@ -6,16 +6,20 @@ use super::{
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
-use deadsync_profile_gameplay::results::RestartPayload;
+use deadsync_profile_gameplay::results::EvaluationStage;
 use deadsync_theme_simply_love::screens::{SimplyLoveScreen as CurrentScreen, evaluation};
 use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];
 
+pub(super) fn chart_queries(stage: Option<&EvaluationStage>) -> PlayerQueries<'_> {
+    stage.map_or([None; MAX_PLAYERS], EvaluationStage::player_chart_queries)
+}
+
 #[derive(Clone)]
 pub(super) struct CourseEvaluationPage {
     pub(super) view: evaluation::State,
-    pub(super) restart: Option<RestartPayload>,
+    pub(super) stage: Option<EvaluationStage>,
 }
 
 /// Retains Evaluation screens during a course and supports paging through the results.
@@ -152,16 +156,25 @@ pub(super) struct EvaluationFavoriteKey {
 pub(super) struct EvaluationSubmissionKey {
     query: EvaluationQueryKey,
     generation: scores::EvaluationSubmissionGeneration,
+    pub(super) retry_available: bool,
 }
 
 impl EvaluationSubmissionKey {
     fn new(
         queries: &PlayerQueries<'_>,
-        generation: scores::EvaluationSubmissionGeneration,
+        refresh: &scores::EvaluationSubmissionRefresh<MAX_PLAYERS>,
     ) -> Self {
         Self {
             query: EvaluationQueryKey::new(queries),
-            generation,
+            generation: refresh.generation,
+            retry_available: refresh.snapshots.iter().any(|snapshot| {
+                snapshot
+                    .groovestats_status
+                    .is_some_and(deadsync_score::GrooveStatsSubmitUiStatus::can_retry)
+                    || snapshot
+                        .arrowcloud_status
+                        .is_some_and(deadsync_score::ArrowCloudSubmitUiStatus::can_retry)
+            }),
         }
     }
 
@@ -345,6 +358,11 @@ fn refresh_submissions(
 }
 
 impl App {
+    pub(super) fn evaluation_submission_retry_available(&self) -> bool {
+        !self.evaluation_submissions_rebuild
+            && self.evaluation_submission_key.as_ref().is_some_and(|key| key.retry_available)
+    }
+
     pub(super) const fn mark_evaluation_runtime_dirty(&mut self) {
         self.evaluation_context_rebuild = true;
         self.evaluation_lobby.force_refresh();
@@ -380,13 +398,7 @@ impl App {
         self.evaluation_context_rebuild = false;
 
         let state = &self.state.screens.evaluation_state;
-        let player_queries = std::array::from_fn(|player_idx| {
-            state
-                .score_info
-                .get(player_idx)
-                .and_then(Option::as_ref)
-                .map(|score_info| (score_info.side, score_info.chart.short_hash.as_str()))
-        });
+        let player_queries = chart_queries(self.state.screens.evaluation_stage.as_ref());
         let leaderboard_requests = evaluation::leaderboard_requests(state);
         let allow_online_panes = state.allow_online_panes;
 
@@ -414,7 +426,7 @@ impl App {
             let refresh = refresh_submissions(policy, &player_queries, now);
             self.evaluation_submission_key = Some(EvaluationSubmissionKey::new(
                 &player_queries,
-                refresh.generation,
+                &refresh,
             ));
             self.evaluation_submission_refresh_at = refresh.next_refresh_at;
             self.evaluation_submission_auto_retry_at = auto_retry_at(policy, &refresh);

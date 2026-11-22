@@ -6823,10 +6823,17 @@ fn evaluation_submission_runtime_is_shell_owned() {
 
     let mut shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    shell.push_str(
-        &read_source(root.join("crates/deadsync-shell/src/app/evaluation_views.rs"))
-            .expect("shell Evaluation view owner should be readable"),
+    let evaluation_views = production_source(
+        &root.join("crates/deadsync-shell/src/app/evaluation_views.rs"),
     );
+    assert!(contains_rust(&evaluation_views, "chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(!evaluation_views.contains(".score_info"));
+    let retry = shell.split_once("fn retry_evaluation_submissions(").unwrap().1;
+    let retry = retry.split_once("fn sync_active_online_runtime_view(").unwrap().0;
+    assert!(contains_rust(retry, "chart_queries(self.state.screens.evaluation_stage.as_ref())"));
+    assert!(!retry.contains(".score_info"));
+    assert!(!shell.contains("screens::evaluation::submission_retry_available("));
+    shell.push_str(&evaluation_views);
     for shell_owner in [
         "fn submission_views",
         "fn execute_evaluation_score_runtime",
@@ -6946,7 +6953,7 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
             && evaluation.contains("state.context = context")
             && evaluation.contains("if let Some(favorites) = view.favorites")
             && evaluation.contains("state.favorites = favorites")
-            && evaluation.contains("SimplyLoveProfileRequest::ToggleFavorite")
+            && evaluation.contains("SimplyLoveProfileRequest::ToggleEvaluationFavorite { side }")
             && evaluation.contains("policy.machine_font")
             && evaluation.contains("machine_font_key(policy.machine_font")
     );
@@ -6981,8 +6988,8 @@ fn evaluation_config_and_profile_runtime_is_shell_prepared() {
         "fn evaluation_context_view(",
         "crate::session_results::evaluation_view(",
         "profile_data::runtime_evaluation_favorite_membership",
-        "ProfileRequest::ToggleFavorite {",
-        "profile::toggle_favorite(side, &chart_hash)",
+        "ProfileRequest::ToggleEvaluationFavorite { side }",
+        "profile::toggle_favorite(side, chart_hash)",
     ] {
         assert!(
             contains_rust(&shell, shell_owner),
@@ -13763,17 +13770,17 @@ fn stage_results_are_independent_of_evaluation() {
     for presentation in ["deadsync_theme_simply_love", "ScoreInfo", "SimplyLoveScreen"] {
         assert!(!restart.contains(presentation), "restart policy depends on {presentation}");
     }
-    assert!(contains_rust(&results, "pub struct RestartPayload {"));
-    assert!(contains_rust(&results, "Self::from_stage_result(result, speeds)"));
+    assert!(contains_rust(&results, "pub struct EvaluationStage {"));
+    assert!(contains_rust(&results, "Self::from_stage_result(result, players)"));
     let actions = shell
         .split_once("fn prepare_gameplay_restart(")
         .and_then(|(_, rest)| rest.split_once("fn try_practice_reload("))
         .expect("restart, reload and Practice entry should be available")
         .0;
-    assert!(actions.contains("evaluation_restart"));
+    assert!(actions.contains("evaluation_stage"));
     assert!(!actions.contains("score_info"));
-    assert!(contains_rust(&shell, "RestartPayload::from_gameplay_result(&gameplay.stage.gameplay, &stage)"));
-    assert!(contains_rust(&shell, "self.state.screens.evaluation_restart = restart"));
+    assert!(contains_rust(&shell, "EvaluationStage::from_gameplay_result(&gameplay.stage.gameplay, &stage)"));
+    assert!(contains_rust(&shell, "self.state.screens.evaluation_stage = evaluation_stage"));
     let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));

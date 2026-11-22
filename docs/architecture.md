@@ -552,7 +552,9 @@ stage preparation, and course score aggregation now have game owners.
 alongside the game run. The app keeps Evaluation pages and their cursor with
 screen state. Course completion uses the stage results in the session. Evaluation
 restart, reload, and Practice use the song, charts, rate, and scroll speeds
-retained with the game result for the selected page.
+retained with the game result for the selected page. Submission refresh and
+retry, leaderboard queries, and favorite actions use the recorded player sides
+and charts for that page.
 
 `deadsync-profile` decides whether a second player can join a one-player session
 and which Versus style applies. The shell handles the credit and session update.
