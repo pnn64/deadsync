@@ -9,8 +9,11 @@ pub use deadsync_song_lua::*;
 mod actor_quaternion;
 #[path = "../src/runtime_fallback.rs"]
 mod runtime_fallback;
-#[path = "support/paths.rs"]
-mod tests;
+// The playback test target owns the shared renderer's fixture declarations.
+macro_rules! playback_fixture_tests {
+    ($($fixture:item)*) => {};
+}
+
 #[allow(dead_code)]
 #[expect(
     unused_imports,
