@@ -1,6 +1,8 @@
 pub mod results;
 
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::{CrossoverRow, build_crossover_rows};
+use deadsync_rules::{note::Note, timing::TimingSegments};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -150,6 +152,48 @@ pub fn gameplay_runtime_profile_data(
         player_profiles[first_player].clone(),
         player_profiles[1].clone(),
     ]
+}
+
+/// Use simfile timing to classify the transformed chart's crossover rows.
+pub fn gameplay_crossover_annotations_for_player(
+    notes: &[Note],
+    note_range: (usize, usize),
+    timing_segments: &TimingSegments,
+    cols_per_player: usize,
+    col_start: usize,
+) -> Vec<CrossoverRow> {
+    let (start, end) = note_range;
+    if start >= end {
+        return Vec::new();
+    }
+    let annotations = match cols_per_player {
+        4 => {
+            let (rows, row_to_beat, _) = build_crossover_rows::<4>(notes, note_range, col_start);
+            deadsync_simfile::timing::crossover_annotations::<4>(
+                &rows,
+                &row_to_beat,
+                timing_segments,
+            )
+        }
+        8 => {
+            let (rows, row_to_beat, _) = build_crossover_rows::<8>(notes, note_range, col_start);
+            deadsync_simfile::timing::crossover_annotations::<8>(
+                &rows,
+                &row_to_beat,
+                timing_segments,
+            )
+        }
+        _ => return Vec::new(),
+    };
+    annotations
+        .iter()
+        .map(|annotation| CrossoverRow {
+            beat: annotation.beat,
+            column_mask: annotation.column_mask,
+            crossover: annotation.crossover,
+            bracket: annotation.bracket,
+        })
+        .collect()
 }
 
 #[must_use]

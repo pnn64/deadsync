@@ -253,6 +253,71 @@ fn gameplay_noteskin_preparation_stays_below_the_theme() {
 }
 
 #[test]
+fn gameplay_stage_bootstrap_is_game_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let stage = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    for startup in [
+        "gameplay_noteskin_assets(",
+        "noteskin_assets.gameplay_data(",
+        "startup.min_seconds_to_music",
+        "gameplay_pack_data(&song, None, None)",
+        "init_gameplay_runtime(",
+        "gameplay_crossover_annotations_for_player,",
+        "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
+        "session.attach(gameplay, scene, warm_dynamic_scene)",
+    ] {
+        assert!(contains_rust(&stage, startup), "missing game startup {startup}");
+    }
+    for presentation in ["deadsync_theme", "GameplayInitView", "CourseDisplayInfo"] {
+        assert!(!stage.contains(presentation), "game startup depends on {presentation}");
+    }
+    let theme =
+        read_source(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("theme gameplay source");
+    for implementation in [
+        "init_gameplay_runtime(",
+        "fn gameplay_crossover_annotations_for_player(",
+        "SongLuaGameplaySession::for_gameplay(",
+        "song_lua_data.take_live_scene(",
+    ] {
+        assert!(!theme.contains(implementation), "theme owns {implementation}");
+    }
+    assert!(theme.contains("pub fn present_stage("));
+    assert!(theme.contains("pub fn init(") && theme.contains("prepare_gameplay_stage("));
+
+    let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell gameplay entry source");
+    assert!(!app.contains("gameplay::init("));
+    let entry = |from: &str, to: &str| {
+        app.split_once(from)
+            .and_then(|(_, rest)| rest.split_once(to))
+            .map(|(entry, _)| entry)
+            .expect("gameplay or practice screen entry")
+    };
+    let gameplay = "if target == CurrentScreen::Gameplay {";
+    let gameplay_entry = entry(gameplay, "if target == CurrentScreen::Evaluation {");
+    for entry in [
+        entry("if target == CurrentScreen::Practice {", gameplay),
+        gameplay_entry,
+    ] {
+        let reload = entry.find("apply_song_lua_reload(").expect("select Lua charts");
+        let prepare = entry.find("prepare_gameplay_stage(GameplayStageInput {")
+            .expect("prepare game");
+        let present = entry.find("crate::gameplay_runtime::present_stage(")
+            .expect("present game");
+        assert!(reload < prepare && prepare < present);
+    }
+    let present = gameplay_entry.find("crate::gameplay_runtime::present_stage(").unwrap();
+    let restore = gameplay_entry.find("state.song_lua.restore_held_inputs(held_inputs)")
+        .expect("restore held inputs");
+    assert!(present < restore);
+    let adapter = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
+    let present = adapter.find("gameplay::State::present_stage(").expect("present stage");
+    let attach = adapter.find("attach_prepared_song_lua(gameplay,").expect("attach callbacks");
+    assert!(present < attach, "startup callbacks follow presentation cache setup");
+}
+
+#[test]
 fn chart_lua_playback_has_no_theme_dependency() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let manifest = read_source(root.join("crates/deadsync-song-lua/Cargo.toml"))
@@ -4228,20 +4293,24 @@ fn audio_control_and_hot_sfx_are_application_owned() {
 }
 
 #[test]
-fn simply_love_crossover_parity_stays_behind_simfile() {
+fn gameplay_crossover_parity_stays_behind_simfile() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
     let manifest = read_source(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
     let gameplay = read_source(theme.join("src/screens/gameplay.rs"))
         .expect("Simply Love gameplay should be readable");
+    let adapter = read_source(root.join("crates/deadsync-profile-gameplay/src/lib.rs"))
+        .expect("gameplay startup adapter should be readable");
     let timing = read_source(root.join("crates/deadsync-simfile/src/timing.rs"))
         .expect("simfile timing adapter should be readable");
 
     assert!(!manifest.contains("\nrssp ="));
     assert!(!gameplay.contains("rssp::"));
-    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<4>"));
-    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<8>"));
+    assert!(!gameplay.contains("crossover_annotations::<"));
+    assert!(!adapter.contains("rssp::"));
+    assert!(adapter.contains("deadsync_simfile::timing::crossover_annotations::<4>"));
+    assert!(adapter.contains("deadsync_simfile::timing::crossover_annotations::<8>"));
     assert!(timing.contains("pub fn crossover_annotations<const LANES: usize>"));
     assert!(timing.contains("rssp::step_parity::annotate_timing_rows"));
     assert!(!timing.contains("pub fn rssp_timing_segments_from_deadsync"));

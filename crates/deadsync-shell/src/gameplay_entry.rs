@@ -152,8 +152,7 @@ pub(crate) fn gameplay_last_played_commands(
     commands
 }
 
-pub type PreparedGameplaySongLua =
-    deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
+pub use deadsync_assets::gameplay_stage::PreparedGameplaySongLua;
 
 fn reload_chart_indices(
     song: &SongData,

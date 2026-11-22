@@ -1,4 +1,5 @@
 use deadlib_platform::input::RawKeyboardEvent;
+use deadsync_assets::gameplay_stage::{PreparedGameplayStage, attach_prepared_song_lua};
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
 use deadsync_config as config;
 use deadsync_gameplay::{
@@ -359,6 +360,28 @@ pub(crate) fn refresh_chart_view(
 ) {
     view.scores = score_init_view(charts, profiles, session);
     view.background_changes = background_changes(config, song, gameplay_charts, session);
+}
+
+pub(crate) fn present_stage(
+    prepared: PreparedGameplayStage,
+    scene: Option<deadsync_song_lua::SongLuaLiveScene>,
+    stage_intro_text: Arc<str>,
+    replay_status_text: Option<Arc<str>>,
+    course_display_info: Option<gameplay::CourseDisplayInfo>,
+    course_banner_path: Option<std::path::PathBuf>,
+    view: GameplayInitView,
+) -> gameplay::State {
+    let mut state = gameplay::State::present_stage(
+        prepared,
+        stage_intro_text,
+        replay_status_text,
+        course_display_info,
+        course_banner_path,
+        view,
+    );
+    let (gameplay, session, warm_dynamic_scene) = state.song_lua_attachment_parts();
+    attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
+    state
 }
 
 pub(crate) fn score_runtime_view(state: &gameplay::State) -> GameplayScoreRuntimeView {

@@ -37,6 +37,11 @@ use deadlib_present::space::{
 };
 use deadlib_render_core::{BlendMode, MeshVertex};
 pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
+pub use deadsync_assets::gameplay_stage::GameplayCoreState;
+use deadsync_assets::gameplay_stage::{
+    GameplayStageInput, PreparedGameplaySongLua, PreparedGameplayStage, attach_prepared_song_lua,
+    prepare_gameplay_stage,
+};
 use deadsync_assets::noteskin;
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
@@ -45,12 +50,12 @@ use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
-    CourseDisplayTotals, CourseLifeConfig, CrossoverRow, ExitTransitionKind,
+    CourseDisplayTotals, CourseLifeConfig, ExitTransitionKind,
     FantasticWindowOptions, GameplayAction, GameplayAudioSnapshot, GameplayConfig,
     GameplaySession, GameplayViewport, HoldToExitKey, LeadInTiming, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     autosync_mode_status_line, blue_fantastic_window_ms,
-    build_crossover_rows, exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
+    exit_transition_alpha, scroll_receptor_y, spacing_multiplier_for_percent,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
@@ -63,23 +68,15 @@ use deadsync_online::gameplay_lobby::{
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::{
-    GameplayProfile, gameplay_pack_data, gameplay_runtime_profile_data, profile_side_from_gameplay,
+    GameplayProfile, profile_side_from_gameplay,
     score_display_mode_from_profile, scroll_effects_from_option,
 };
-use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_session::{
     self, SongLuaGameplayHost, SongLuaGameplaySession,
 };
-use deadsync_song_lua::playback::{song_lua_sound_paths, song_meter_progress};
-pub type GameplayCoreState = deadsync_song_lua::playback::GameplayCoreState<
-    deadsync_profile_gameplay::GameplayProfile,
-    deadsync_assets::noteskin::SpriteSlot,
->;
-type PreparedGameplaySongLua =
-    deadsync_song_lua::playback::PreparedGameplaySongLua<deadsync_assets::noteskin::SpriteSlot>;
+use deadsync_song_lua::playback::song_meter_progress;
 use deadsync_song_lua::playback::{
     NOTEFIELD_ACTOR_SCRATCH_CAPACITY, NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
     PLAYER_ACTOR_SCRATCH_CAPACITY,
@@ -848,8 +845,16 @@ impl State {
         &mut self,
         scene: deadsync_song_lua::SongLuaLiveScene,
     ) -> Result<(), String> {
+        let (gameplay, session, warm_dynamic_scene) = self.song_lua_attachment_parts();
+        session.attach(gameplay, scene, warm_dynamic_scene)
+    }
+
+    /// Supply the core, its controller, and the render scratch warmup to the shell.
+    pub fn song_lua_attachment_parts(
+        &mut self,
+    ) -> (&mut GameplayCoreState, &mut SongLuaGameplaySession, impl FnOnce() + '_) {
         let song_scratch = &mut self.song_scratch;
-        self.song_lua.attach(&mut self.gameplay, scene, || {
+        (&mut self.gameplay, &mut self.song_lua, move || {
             if let Some(scratch) = song_scratch {
                 scratch.enable_dynamic_scene();
             }
@@ -902,53 +907,52 @@ impl State {
         gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
     ) -> Self {
-        let GameplayInitView {
-            runtime,
-            hud,
-            judgment_palettes,
-            scores,
-            background_changes,
-        } = GameplayInitView::default();
-        Self::from_gameplay_with_screen_data(
-            gameplay,
-            noteskin_assets,
-            Vec::new(),
-            background_changes,
+        Self::present_stage(
+            PreparedGameplayStage::from_gameplay(gameplay, noteskin_assets),
             Arc::from("EVENT"),
             None,
             None,
-            Arc::from(""),
             None,
-            scores.scorebox_profiles,
-            scores.scorebox_snapshots,
-            scores.rival_score_types,
-            runtime,
-            hud,
-            judgment_palettes,
+            GameplayInitView::default(),
         )
     }
 
-    fn from_gameplay_with_screen_data(
-        mut gameplay: GameplayCoreState,
-        noteskin_assets: GameplayNoteskinAssets,
-        song_lua_sound_paths: Vec<PathBuf>,
-        background_changes: Vec<SongBackgroundChange>,
+    /// Construct the theme's HUD, field, and media caches for a prepared stage.
+    pub fn present_stage(
+        prepared: PreparedGameplayStage,
         stage_intro_text: Arc<str>,
         replay_status_text: Option<Arc<str>>,
         course_display_info: Option<CourseDisplayInfo>,
-        pack_group: Arc<str>,
-        pack_banner_path: Option<PathBuf>,
-        scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
-        scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
-        rival_score_types: [Option<profile_data::MiniIndicatorScoreType>; MAX_PLAYERS],
-        runtime_view: GameplayRuntimeView,
-        hud_snapshot: profile_data::GameplayHudSnapshot,
-        judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
+        course_banner_path: Option<PathBuf>,
+        init_view: GameplayInitView,
     ) -> Self {
+        let PreparedGameplayStage {
+            gameplay,
+            noteskin_assets,
+            song_lua,
+            song_lua_sound_paths,
+            hide_song_intro,
+            pack_group,
+            pack_banner_path,
+        } = prepared;
+        let (pack_group, pack_banner_path) = if let Some(course) = &course_display_info {
+            (Arc::clone(&course.name), course_banner_path)
+        } else {
+            (pack_group, pack_banner_path)
+        };
+        let GameplayInitView {
+            runtime: runtime_view,
+            hud: hud_snapshot,
+            judgment_palettes,
+            scores,
+            background_changes,
+        } = init_view;
+        let scorebox_profile_snapshot = scores.scorebox_profiles;
+        let scorebox_side_snapshot = scores.scorebox_snapshots;
+        let rival_score_types = scores.rival_score_types;
         let (runtime_view, lobby) = GameplayPresentationView::split(runtime_view);
         let lobby_session =
             GameplayLobbySession::new(lobby, runtime_view.joined, runtime_view.player_side);
-        let song_lua = SongLuaGameplaySession::for_gameplay(&mut gameplay);
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_profiles =
             std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
@@ -1081,7 +1085,7 @@ impl State {
             step_stats_extra_resolved,
             song_full_title,
             stage_intro_text,
-            hide_song_intro: false,
+            hide_song_intro,
             replay_status_text,
             course_display_info,
             gameplay_stats_text,
@@ -1385,47 +1389,6 @@ pub fn visible_banner_paths(state: &State) -> [Option<&Path>; 2] {
     ]
 }
 
-pub(crate) fn gameplay_crossover_annotations_for_player(
-    notes: &[Note],
-    note_range: (usize, usize),
-    timing_segments: &TimingSegments,
-    cols_per_player: usize,
-    col_start: usize,
-) -> Vec<CrossoverRow> {
-    let (start, end) = note_range;
-    if start >= end {
-        return Vec::new();
-    }
-    let annotations = match cols_per_player {
-        4 => {
-            let (rows, row_to_beat, _) = build_crossover_rows::<4>(notes, note_range, col_start);
-            deadsync_simfile::timing::crossover_annotations::<4>(
-                &rows,
-                &row_to_beat,
-                timing_segments,
-            )
-        }
-        8 => {
-            let (rows, row_to_beat, _) = build_crossover_rows::<8>(notes, note_range, col_start);
-            deadsync_simfile::timing::crossover_annotations::<8>(
-                &rows,
-                &row_to_beat,
-                timing_segments,
-            )
-        }
-        _ => return Vec::new(),
-    };
-    annotations
-        .iter()
-        .map(|annotation| CrossoverRow {
-            beat: annotation.beat,
-            column_mask: annotation.column_mask,
-            crossover: annotation.crossover,
-            bracket: annotation.bracket,
-        })
-        .collect()
-}
-
 fn prewarm_notefield_model_cache_slots(
     cache: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     assets: &GameplayNoteskinAssets,
@@ -1491,6 +1454,7 @@ pub fn notefield_model_cache_from_assets(
     cache
 }
 
+/// Compatibility constructor for callers that initialize and present a stage together.
 pub fn init(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
@@ -1516,105 +1480,43 @@ pub fn init(
     course_display_info: Option<CourseDisplayInfo>,
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
-    mut song_lua_data: PreparedGameplaySongLua,
-    init_view: GameplayInitView,
+    song_lua_data: PreparedGameplaySongLua,
+    mut init_view: GameplayInitView,
 ) -> State {
-    let GameplayInitView {
-        runtime,
-        hud,
-        judgment_palettes,
-        scores,
-        background_changes,
-    } = init_view;
-    let cols_per_player = session.play_style.cols_per_player();
-    let num_players = session.play_style.player_count();
-    let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
-    let startup = song_lua_data.startup();
-    let live_scene = song_lua_data.take_live_scene().unwrap_or_else(|error| {
-        log::warn!("Cannot attach song Lua for '{}': {error}", song.title);
-        None
+    let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+        song,
+        charts,
+        gameplay_charts,
+        viewport,
+        session,
+        config,
+        active_color_index,
+        music_rate,
+        scroll_speed,
+        player_profiles,
+        replay_edges,
+        replay_offsets,
+        lead_in_timing,
+        course_display_carry,
+        course_display_totals,
+        course_display_timing,
+        course_modifiers,
+        course_life_config,
+        include_post_fail_passes,
+        combo_carry,
+        song_lua_data,
+        mini_indicator: std::mem::take(&mut init_view.scores.mini_indicator),
     });
-    let noteskin_assets = gameplay_noteskin_assets(
-        cols_per_player,
-        num_players,
-        &runtime_profile_data,
-        song.simfile_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new(".")),
-        &startup.noteskins,
-        gameplay_charts[0]
-            .timing
-            .get_beat_for_time(song.first_second),
-    );
-    let lead_in_timing = startup
-        .min_seconds_to_music
-        .map_or(lead_in_timing, |seconds| {
-            let mut timing = lead_in_timing.unwrap_or_default();
-            timing.min_seconds_to_music = timing.min_seconds_to_music.max(seconds);
-            Some(timing)
-        });
-    let noteskin_data =
-        noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profile_data);
-    let player_profiles = player_profiles.map(GameplayProfile::from);
-    let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
-    let pack_data = gameplay_pack_data(
-        &song,
-        course_display_info.as_ref().map(|info| &info.name),
-        course_banner_path.as_ref(),
-    );
-    let pack_group = pack_data.pack_group;
-    let pack_banner_path = pack_data.pack_banner_path;
-    let pack_sync_pref = pack_data.sync_pref;
-    let mut state = State::from_gameplay_with_screen_data(
-        deadsync_gameplay::init_gameplay_runtime(
-            song,
-            charts,
-            gameplay_charts,
-            viewport,
-            session,
-            config,
-            pack_sync_pref,
-            scores.mini_indicator,
-            noteskin_data,
-            song_lua_data,
-            gameplay_crossover_annotations_for_player,
-            active_color_index,
-            music_rate,
-            scroll_speed,
-            player_profiles,
-            replay_edges,
-            replay_offsets,
-            lead_in_timing,
-            course_display_carry,
-            course_display_totals,
-            course_display_timing,
-            course_modifiers,
-            course_life_config,
-            include_post_fail_passes,
-            combo_carry,
-        ),
-        noteskin_assets,
-        song_lua_sound_paths,
-        background_changes,
+    let mut state = State::present_stage(
+        prepared,
         stage_intro_text,
         replay_status_text,
         course_display_info,
-        pack_group,
-        pack_banner_path,
-        scores.scorebox_profiles,
-        scores.scorebox_snapshots,
-        scores.rival_score_types,
-        runtime,
-        hud,
-        judgment_palettes,
+        course_banner_path,
+        init_view,
     );
-    state.hide_song_intro = startup.hide_in;
-    if let Some(scene) = live_scene {
-        if let Err(error) = state.attach_song_lua(scene) {
-            state.gameplay.mods.song_lua_compile_succeeded = false;
-            log::warn!("Cannot attach prepared song Lua: {error}");
-        }
-    }
+    let (gameplay, session, warm_dynamic_scene) = state.song_lua_attachment_parts();
+    attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
     state
 }
 

@@ -153,6 +153,16 @@ active-player limits, and copy-on-write changes to cached skins retain their
 existing behavior. Preparation still runs once during song loading; themes retain
 their render caches and HUD appearance.
 
+`deadsync-assets::gameplay_stage` prepares the simulation for both Gameplay and
+Practice. It resolves the game profile's noteskin feedback, pack sync preference,
+canonical crossover annotations, Lua lead-in and lifecycle, and the existing
+score targets before the shell constructs the screen. Course banner and title
+overrides are applied during presentation. The shell installs live Lua callbacks
+after the theme builds its initial caches, then restores held inputs for a
+replacement stage. Render scratch warms at the same callback-install boundary.
+Simply Love's public combined constructor delegates to the shared preparation
+and presentation paths for existing callers.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter
@@ -405,7 +415,8 @@ cargo test -p deadsync-song-lua --features test-support --test gameplay_session
 
 ## Remaining separation
 
-The production crate graph follows these directions. Normal song-Lua lifecycle,
+The production crate graph follows these directions. Gameplay and Practice
+startup, normal song-Lua lifecycle,
 callback input sequencing, practice playback/editor behavior, and gameplay lobby
 coordination now have game owners, as do Evaluation and Select Music lobby input
 barriers, disconnect handling, and remote song-selection synchronization. Simply

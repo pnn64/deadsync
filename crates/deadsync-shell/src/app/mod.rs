@@ -173,6 +173,7 @@ compile_error!(
 use deadlib_platform::input::PadEvent;
 use deadlib_platform::input::RawKeyboardEvent;
 use deadlib_present::actors::Actor;
+use deadsync_assets::gameplay_stage::{GameplayStageInput, prepare_gameplay_stage};
 use deadsync_chart::{GameplayChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 #[cfg(test)]
@@ -10037,35 +10038,40 @@ impl App {
                             &gameplay_charts, &player_profiles, &gameplay_session,
                         );
                     }
-                    let gs = gameplay::init(
-                        song_arc,
+                    let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+                        song: song_arc,
                         charts,
                         gameplay_charts,
                         viewport,
-                        gameplay_session,
-                        gameplay_config_from_config(&init_config),
-                        color_index,
+                        session: gameplay_session,
+                        config: gameplay_config_from_config(&init_config),
+                        active_color_index: color_index,
                         music_rate,
-                        scroll_speeds,
+                        scroll_speed: scroll_speeds,
                         player_profiles,
-                        None,
-                        None,
-                        Some(Arc::from("Practice Mode")),
-                        Arc::from("PRACTICE MODE"),
-                        Some(LeadInTiming {
+                        replay_edges: None,
+                        replay_offsets: None,
+                        lead_in_timing: Some(LeadInTiming {
                             min_seconds_to_step: 0.0,
                             min_seconds_to_music: 0.0,
                         }),
+                        course_display_carry: None,
+                        course_display_totals: None,
+                        course_display_timing: None,
+                        course_modifiers: None,
+                        course_life_config: [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+                        include_post_fail_passes: false,
+                        combo_carry: [0; MAX_PLAYERS],
+                        song_lua_data: prepared_song_lua,
+                        mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
+                    });
+                    let gs = crate::gameplay_runtime::present_stage(
+                        prepared,
+                        scene,
+                        Arc::from("PRACTICE MODE"),
+                        Some(Arc::from("Practice Mode")),
                         None,
                         None,
-                        None,
-                        None,
-                        [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
-                        false,
-                        None,
-                        None,
-                        [0; MAX_PLAYERS],
-                        prepared_song_lua,
                         gameplay_init_view,
                     );
                     Ok(gs)
@@ -10515,21 +10521,19 @@ impl App {
                             &gameplay_charts, &player_profiles, &gameplay_session,
                         );
                     }
-                    let mut state = gameplay::init(
-                        song_arc,
+                    let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
+                        song: song_arc,
                         charts,
                         gameplay_charts,
                         viewport,
-                        gameplay_session,
-                        gameplay_config,
-                        color_index,
+                        session: gameplay_session,
+                        config: gameplay_config,
+                        active_color_index: color_index,
                         music_rate,
-                        scroll_speeds,
+                        scroll_speed: scroll_speeds,
                         player_profiles,
                         replay_edges,
                         replay_offsets,
-                        replay_status_text,
-                        stage_intro_text,
                         lead_in_timing,
                         course_display_carry,
                         course_display_totals,
@@ -10537,13 +10541,20 @@ impl App {
                         course_modifiers,
                         course_life_config,
                         include_post_fail_passes,
+                        combo_carry,
+                        song_lua_data: prepared_song_lua,
+                        mini_indicator: std::mem::take(&mut gameplay_init_view.scores.mini_indicator),
+                    });
+                    let mut state = crate::gameplay_runtime::present_stage(
+                        prepared,
+                        scene,
+                        stage_intro_text,
+                        replay_status_text,
                         course_display_info,
                         course_banner_path,
-                        combo_carry,
-                        prepared_song_lua,
                         gameplay_init_view,
                     );
-                    state.restore_song_lua_held_inputs(held_inputs);
+                    state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)
                 };
                 if lua_reload || (has_song_lua && !song_lua_prepared) {

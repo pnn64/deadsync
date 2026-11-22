@@ -14,7 +14,7 @@ mod song_fixture;
 
 use deadsync_profile_gameplay::GameplayProfile;
 
-type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
+type State = deadsync_assets::gameplay_stage::GameplayCoreState;
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -31,6 +31,7 @@ pub(crate) mod tests {
         frame_compare::{compare_render_frames, compare_render_frames_semantic},
     };
     use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
+    use deadsync_assets::gameplay_stage::{GameplayStageInput, prepare_gameplay_stage};
     use deadsync_assets::noteskin;
     use deadsync_assets::song_lua::compile_song_lua;
     use deadsync_chart::SongData;
@@ -536,7 +537,7 @@ pub(crate) mod tests {
             .clone_from(&player_profiles[1].display_name);
         hud.p2.guest = false;
         hud.p2.hide_username = false;
-        let init_view = deadsync_theme_simply_love::views::GameplayInitView {
+        let mut init_view = deadsync_theme_simply_love::views::GameplayInitView {
             hud,
             ..Default::default()
         };
@@ -602,32 +603,37 @@ pub(crate) mod tests {
                 )
             }
         };
-        screen_gameplay::init(
+        let (prepared, scene) = prepare_gameplay_stage(GameplayStageInput {
             song,
             charts,
             gameplay_charts,
             viewport,
             session,
             config,
-            5,
-            1.0,
+            active_color_index: 5,
+            music_rate: 1.0,
             scroll_speed,
             player_profiles,
-            None,
-            None,
-            None,
+            replay_edges: None,
+            replay_offsets: None,
+            lead_in_timing: None,
+            course_display_carry: None,
+            course_display_totals: None,
+            course_display_timing: None,
+            course_modifiers: None,
+            course_life_config: [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
+            include_post_fail_passes: false,
+            combo_carry: [0; MAX_PLAYERS],
+            song_lua_data: prepared,
+            mini_indicator: std::mem::take(&mut init_view.scores.mini_indicator),
+        });
+        crate::gameplay_runtime::present_stage(
+            prepared,
+            scene,
             Arc::from("EVENT"),
             None,
             None,
             None,
-            None,
-            None,
-            [deadsync_gameplay::CourseLifeConfig::Bar; MAX_PLAYERS],
-            false,
-            None,
-            None,
-            [0; MAX_PLAYERS],
-            prepared,
             init_view,
         )
     }
