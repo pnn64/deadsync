@@ -4073,25 +4073,29 @@ fn player_options_runtime_reads_are_shell_prepared() {
 
     let views = read_source(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
+    let stage_options =
+        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_options.rs"));
     for contract in [
         "pub struct PlayerOptionsPolicyView",
         "pub struct PlayerOptionsPlayerView",
-        "pub struct PlayerOptionsInitView",
-        "pub options: deadsync_profile::PlayerOptionsData",
+        "pub struct PlayerOptionsView",
+        "pub options: PlayerOptionsData",
         "pub heart_rate_device_id: Option<String>",
-        "pub players: [PlayerOptionsPlayerView; 2]",
+        "pub players: [PlayerOptionsPlayerView; MAX_PLAYERS]",
         "pub scorebox_available: bool",
     ] {
         assert!(
-            views.contains(contract),
+            stage_options.contains(contract),
             "missing Player Options contract {contract}"
         );
     }
+    assert!(views.contains("impl Default for PlayerOptionsInitView"));
+    assert!(views.contains("impl From<PlayerOptionsInitView> for "));
 
     let adapter = read_source(root.join("crates/deadsync-shell/src/player_options.rs"))
         .expect("shell Player Options adapter should be readable");
     for runtime_owner in [
-        "pub(crate) fn init_view() -> PlayerOptionsInitView",
+        "pub(crate) fn init_view() -> PlayerOptionsView",
         "profile::get_session_snapshot()",
         "profile::get_for_side",
         "profile.current_player_options()",
@@ -4102,13 +4106,12 @@ fn player_options_runtime_reads_are_shell_prepared() {
             "shell Player Options adapter is missing {runtime_owner}"
         );
     }
+    assert!(!adapter.contains("deadsync_theme_simply_love"));
 
     let screen = read_source(player_options.join("mod.rs"))
         .expect("Player Options screen should be readable");
     let state = read_source(player_options.join("state.rs"))
         .expect("Player Options state should be readable");
-    let stage_options =
-        production_source(&root.join("crates/deadsync-profile-gameplay/src/stage_options.rs"));
     let theme_profile = production_source(&player_options.join("profile.rs"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
@@ -4174,6 +4177,25 @@ fn player_options_runtime_reads_are_shell_prepared() {
     assert!(!input.contains("screens::player_options::"));
     assert!(!previews.contains("screens::player_options::"));
     assert!(stage_start.contains("scroll_speeds: Some(scroll_speeds)"));
+}
+
+#[test]
+fn shell_judgment_palettes_use_the_installed_theme() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    for path in ["app/mod.rs", "player_options.rs", "post_song.rs"] {
+        let source = read_source(shell.join(path)).expect("shell palette consumer source");
+        assert!(
+            contains_rust(&source, "runtime_catalog(ActiveTheme::JUDGMENT_PRESET"),
+            "{path} must use the selected theme's judgment palette"
+        );
+        assert!(!source.contains("color::JUDGMENT_PRESET"), "{path}");
+    }
+    let app = read_source(shell.join("app/mod.rs")).unwrap();
+    assert!(contains_rust(
+        &app,
+        "update_runtime_catalog(ActiveTheme::JUDGMENT_PRESET",
+    ));
 }
 
 #[test]

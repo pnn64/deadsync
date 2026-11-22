@@ -24,6 +24,8 @@ theme to describe an input or store a setting:
   their values; canonical receptor geometry and note ordering stay in the game.
 - `deadsync-core::color` defines saved color-setting names, judgment roles, and
   palette data. Concrete palette values remain supplied by themes.
+  The shell uses the installed theme's judgment preset for Player Options,
+  gameplay, Evaluation, post-song screens, and palette editing.
 - `deadlib-assets::AssetManifest` describes fonts, textures, and texture sampling
   requirements. The game resolves its catalog and paths before engine loading.
 - `deadsync-theme` reexports the original public style/color names and
@@ -594,8 +596,9 @@ Player Options mounts through the selected theme for song and course entry,
 input, updates, and actor composition. The shell supplies device and asset
 views, manages preview work and uploads, and reads the submitted game settings
 through the interface. Recovery restores the submitted scroll speeds through
-the same entry path. The installed Player Options view still uses Simply Love's
-palette and machine presentation settings.
+the same entry path. `deadsync-profile-gameplay` defines the session and settings
+view used for startup and recovery. Simply Love's standalone initializer keeps
+its existing defaults and converts them to that shared view.
 
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the

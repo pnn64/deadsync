@@ -205,6 +205,7 @@ use deadsync_theme::views::{
     GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
     SmxAssignmentView,
 };
+use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
 use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
@@ -581,7 +582,7 @@ fn gameplay_presentation_init(
         }),
     };
     let hud = profile::gameplay_hud_snapshot();
-    let catalog = config::judgment_palettes::runtime_catalog(color::JUDGMENT_PRESET);
+    let catalog = config::judgment_palettes::runtime_catalog(ActiveTheme::JUDGMENT_PRESET);
     let judgment_palettes =
         std::array::from_fn(|player| catalog.resolve(profiles[player].judgment_palette_id.as_deref()));
     GameplayInitView { runtime, hud, judgment_palettes, scores: Default::default() }
@@ -770,7 +771,7 @@ fn evaluation_context_view(
 ) -> EvaluationContextView {
     let profiles = &profile.scorebox;
     let judgment_palettes = deadsync_config::judgment_palettes::runtime_catalog(
-        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+        ActiveTheme::JUDGMENT_PRESET,
     );
     EvaluationContextView {
         policy,
@@ -1187,7 +1188,7 @@ fn options_init_view(
     OptionsInitView {
         config: config::runtime::get(),
         judgment_palettes: (*deadsync_config::judgment_palettes::runtime_catalog(
-            deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+            ActiveTheme::JUDGMENT_PRESET,
         ))
         .clone(),
         updater_capabilities: updater::capabilities(),
@@ -6178,7 +6179,7 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::JudgmentPalettes(catalog) => {
                     if let Err(error) = deadsync_config::judgment_palettes::update_runtime_catalog(
-                        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
+                        ActiveTheme::JUDGMENT_PRESET,
                         |current| {
                             *current = catalog;
                             Ok(())

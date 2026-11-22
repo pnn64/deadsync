@@ -6,15 +6,15 @@ use deadsync_theme::player_options::{
 
 impl ThemePlayerOptions for crate::SimplyLoveTheme {
     type PlayerOptionsState = State;
-    type PlayerOptionsView = PlayerOptionsInitView;
+    type PlayerOptionsView = PlayerOptionsView;
     type PlayerOptionsStage = StageOptions;
     type PlayerOptionsInput = InputEvent;
     type PlayerOptionsRawKey = deadlib_platform::input::RawKeyboardEvent;
     type PlayerOptionsVisualPolicy = crate::views::SimplyLoveVisualPolicyView;
     type PlayerOptionsNoteskin = Noteskin;
 
-    fn init_player_options(entry: PlayerOptionsEntry<Screen, PlayerOptionsInitView>) -> State {
-        let mut state = init(
+    fn init_player_options(entry: PlayerOptionsEntry<Screen, PlayerOptionsView>) -> State {
+        let mut state = init_state(
             entry.song,
             entry.steps,
             entry.preferred,

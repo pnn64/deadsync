@@ -246,62 +246,11 @@ impl Default for PracticeRuntimeView {
     }
 }
 
-/// Shell-owned machine/runtime policy consumed by Player Options.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PlayerOptionsPolicyView {
-    pub allow_per_player_global_offsets: bool,
-    pub heart_rate_monitors: bool,
-    pub arcade_navigation: bool,
-    pub machine_font: deadsync_config::theme::MachineFont,
-    pub smx_input: bool,
-    pub smx_panel_lights: bool,
-    pub scorebox_available: bool,
-    pub golf_enabled: bool,
-    pub keyboard_features: bool,
-    pub tournament_mode: bool,
-}
+pub use deadsync_profile_gameplay::stage_options::{
+    JudgmentPaletteChoiceView, PlayerOptionsPlayerView, PlayerOptionsPolicyView,
+};
 
-impl Default for PlayerOptionsPolicyView {
-    fn default() -> Self {
-        let config = deadsync_config::app_config::Config::default();
-        Self {
-            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
-            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
-            arcade_navigation: config.arcade_options_navigation,
-            machine_font: config.machine_font,
-            smx_input: config.smx_input,
-            smx_panel_lights: config.smx_panel_lights,
-            scorebox_available: false,
-            golf_enabled: config.enable_golf,
-            keyboard_features: config.keyboard_features,
-            tournament_mode: config.tournament.enabled,
-        }
-    }
-}
-
-/// One player's shell-prepared editable options and HRM selection.
-#[derive(Clone, Debug, PartialEq)]
-pub struct PlayerOptionsPlayerView {
-    pub options: deadsync_profile::PlayerOptionsData,
-    pub judgment_palette_id: Option<String>,
-    pub heart_rate_device_id: Option<String>,
-    pub max_heart_rate: u16,
-}
-
-impl Default for PlayerOptionsPlayerView {
-    fn default() -> Self {
-        Self {
-            options: deadsync_profile::PlayerOptionsData::default(),
-            judgment_palette_id: None,
-            heart_rate_device_id: None,
-            max_heart_rate: deadsync_profile::MAX_HEART_RATE_DEFAULT,
-        }
-    }
-}
-
-/// Shell-prepared session and option snapshot used for one Player Options
-/// state. Option edits remain local to the screen and use typed persistence
-/// requests without retaining profile identity, stats, or credentials.
+/// Standalone Simply Love initializer with the theme's legacy defaults.
 #[derive(Clone, Debug)]
 pub struct PlayerOptionsInitView {
     pub policy: PlayerOptionsPolicyView,
@@ -311,13 +260,6 @@ pub struct PlayerOptionsInitView {
     pub music_rate: f32,
     pub players: [PlayerOptionsPlayerView; 2],
     pub judgment_palettes: Vec<JudgmentPaletteChoiceView>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct JudgmentPaletteChoiceView {
-    pub id: String,
-    pub name: String,
-    pub palette: deadsync_theme::color::JudgmentPalette,
 }
 
 impl Default for PlayerOptionsInitView {
@@ -334,6 +276,20 @@ impl Default for PlayerOptionsInitView {
                 name: crate::color::JUDGMENT_PRESET.name.to_owned(),
                 palette: crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
             }],
+        }
+    }
+}
+
+impl From<PlayerOptionsInitView> for deadsync_profile_gameplay::stage_options::PlayerOptionsView {
+    fn from(view: PlayerOptionsInitView) -> Self {
+        Self {
+            policy: view.policy,
+            play_style: view.play_style,
+            player_side: view.player_side,
+            joined: view.joined,
+            music_rate: view.music_rate,
+            players: view.players,
+            judgment_palettes: view.judgment_palettes,
         }
     }
 }

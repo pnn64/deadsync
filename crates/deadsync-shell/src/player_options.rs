@@ -1,37 +1,28 @@
+use crate::ActiveTheme;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_profile_gameplay::stage_options::{StageOptions, StageScrollMode};
-use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme::player_options::ThemePlayerOptions;
-use deadsync_theme_simply_love::views::{
-    JudgmentPaletteChoiceView, PlayerOptionsInitView, PlayerOptionsPlayerView,
-    PlayerOptionsPolicyView,
+use deadsync_profile_gameplay::stage_options::{
+    JudgmentPaletteChoiceView, PlayerOptionsPlayerView, PlayerOptionsPolicyView, PlayerOptionsView,
+    StageOptions, StageScrollMode,
 };
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_theme::color::ThemeJudgmentPalette;
+use deadsync_theme::player_options::ThemePlayerOptions;
 
-pub(crate) type PlayerOptionsState =
-    <crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
+pub(crate) type PlayerOptionsState = <crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
 
-pub(crate) fn init_view() -> PlayerOptionsInitView {
+pub(crate) fn init_view() -> PlayerOptionsView {
     let config = deadsync_config::runtime::get();
     let session = profile::get_session_snapshot();
-    let palette_catalog = deadsync_config::judgment_palettes::runtime_catalog(
-        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
-    );
-    PlayerOptionsInitView {
-        policy: PlayerOptionsPolicyView {
-            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
-            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
-            arcade_navigation: config.arcade_options_navigation,
-            machine_font: config.machine_font,
-            smx_input: config.smx_input,
-            smx_panel_lights: config.smx_panel_lights,
-            scorebox_available: deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
-            golf_enabled: config.enable_golf,
-            keyboard_features: config.keyboard_features,
-            tournament_mode: config.tournament.enabled,
-        },
+    let palette_catalog =
+        deadsync_config::judgment_palettes::runtime_catalog(ActiveTheme::JUDGMENT_PRESET);
+    PlayerOptionsView {
+        policy: PlayerOptionsPolicyView::from_config(
+            &config,
+            deadsync_online::score_compat::is_gs_get_scores_service_allowed(),
+        ),
         play_style: session.play_style,
         player_side: session.player_side,
         joined: std::array::from_fn(|idx| {

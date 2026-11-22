@@ -17,6 +17,7 @@ use deadlib_present::space::{
 use deadsync_assets::noteskin::{self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot};
 use deadsync_chart::{ChartData, SongData};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
+use deadsync_profile_gameplay::stage_options::PlayerOptionsView;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
@@ -205,7 +206,7 @@ pub fn init(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
-        init_view,
+        init_view.into(),
     )
 }
 
@@ -232,7 +233,7 @@ pub fn init_for_gameplay(
         noteskin_catalog,
         smx_gif_catalog,
         heart_rate_devices,
-        init_view,
+        init_view.into(),
     )
 }
 
@@ -328,9 +329,9 @@ fn init_state(
     noteskin_catalog: NoteskinCatalogView,
     smx_gif_catalog: SmxGifCatalogView,
     heart_rate_devices: HeartRateDevicesView,
-    init_view: PlayerOptionsInitView,
+    init_view: PlayerOptionsView,
 ) -> State {
-    let PlayerOptionsInitView {
+    let PlayerOptionsView {
         policy,
         play_style,
         player_side,

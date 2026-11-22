@@ -1,9 +1,12 @@
 //! Scroll speed and shared options for a prepared gameplay stage.
 
 use deadsync_chart::{ChartData, SongData};
+use deadsync_config::{app_config::Config, theme::MachineFont};
+use deadsync_core::color::JudgmentPalette;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{
-    NoCmodAlternative, PlayStyle, PlayerOptionsData, Profile, migrate_noteskin_parts,
+    MAX_HEART_RATE_DEFAULT, NoCmodAlternative, PlayStyle, PlayerOptionsData, PlayerSide, Profile,
+    migrate_noteskin_parts,
 };
 use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
 
@@ -11,6 +14,84 @@ use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
 pub enum StageScrollMode {
     Live { enforce_tournament_mmod: bool },
     Replay,
+}
+
+/// Machine settings and service availability for the options editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PlayerOptionsPolicyView {
+    pub allow_per_player_global_offsets: bool,
+    pub heart_rate_monitors: bool,
+    pub arcade_navigation: bool,
+    pub machine_font: MachineFont,
+    pub smx_input: bool,
+    pub smx_panel_lights: bool,
+    pub scorebox_available: bool,
+    pub golf_enabled: bool,
+    pub keyboard_features: bool,
+    pub tournament_mode: bool,
+}
+
+impl PlayerOptionsPolicyView {
+    #[must_use]
+    pub const fn from_config(config: &Config, scorebox_available: bool) -> Self {
+        Self {
+            allow_per_player_global_offsets: config.machine_allow_per_player_global_offsets,
+            heart_rate_monitors: config.machine_enable_heart_rate_monitors,
+            arcade_navigation: config.arcade_options_navigation,
+            machine_font: config.machine_font,
+            smx_input: config.smx_input,
+            smx_panel_lights: config.smx_panel_lights,
+            scorebox_available,
+            golf_enabled: config.enable_golf,
+            keyboard_features: config.keyboard_features,
+            tournament_mode: config.tournament.enabled,
+        }
+    }
+}
+
+impl Default for PlayerOptionsPolicyView {
+    fn default() -> Self {
+        Self::from_config(&Config::default(), false)
+    }
+}
+
+/// Editable profile settings without identity, stats, or credentials.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayerOptionsPlayerView {
+    pub options: PlayerOptionsData,
+    pub judgment_palette_id: Option<String>,
+    pub heart_rate_device_id: Option<String>,
+    pub max_heart_rate: u16,
+}
+
+impl Default for PlayerOptionsPlayerView {
+    fn default() -> Self {
+        Self {
+            options: PlayerOptionsData::default(),
+            judgment_palette_id: None,
+            heart_rate_device_id: None,
+            max_heart_rate: MAX_HEART_RATE_DEFAULT,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct JudgmentPaletteChoiceView {
+    pub id: String,
+    pub name: String,
+    pub palette: JudgmentPalette,
+}
+
+/// Session, settings, and the selected theme's palette choices for Player Options.
+#[derive(Clone, Debug)]
+pub struct PlayerOptionsView {
+    pub policy: PlayerOptionsPolicyView,
+    pub play_style: PlayStyle,
+    pub player_side: PlayerSide,
+    pub joined: [bool; MAX_PLAYERS],
+    pub music_rate: f32,
+    pub players: [PlayerOptionsPlayerView; MAX_PLAYERS],
+    pub judgment_palettes: Vec<JudgmentPaletteChoiceView>,
 }
 
 /// The settings submitted to start a stage, including options edited for this play.

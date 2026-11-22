@@ -141,6 +141,10 @@ impl deadsync_theme::ThemeSessionFlow for SimplyLoveTheme {
         };
 }
 
+impl deadsync_theme::color::ThemeJudgmentPalette for SimplyLoveTheme {
+    const JUDGMENT_PRESET: deadsync_theme::color::JudgmentPalettePreset = color::JUDGMENT_PRESET;
+}
+
 impl deadsync_theme::ThemeResources for SimplyLoveTheme {
     const SOUNDS: deadsync_theme::ThemeSounds = deadsync_theme::ThemeSounds {
         effects: SFX_PATHS,

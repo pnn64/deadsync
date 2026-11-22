@@ -1,15 +1,16 @@
+use crate::ActiveTheme;
 use deadsync_config as config;
 use deadsync_online::score_compat as scores;
 use deadsync_profile::{PlayerSide, compat as profile};
 use deadsync_score::stage_stats::StageSummary;
+use deadsync_theme::color::ThemeJudgmentPalette;
 use deadsync_theme_simply_love::views::{PostSongPlayerView, PostSongRuntimeView};
 
 fn player_view(side: PlayerSide) -> PostSongPlayerView {
     let player = profile::get_for_side(side);
-    let judgment_palette = deadsync_config::judgment_palettes::runtime_catalog(
-        deadsync_theme_simply_love::color::JUDGMENT_PRESET,
-    )
-    .resolve(player.judgment_palette_id.as_deref());
+    let judgment_palette =
+        deadsync_config::judgment_palettes::runtime_catalog(ActiveTheme::JUDGMENT_PRESET)
+            .resolve(player.judgment_palette_id.as_deref());
     PostSongPlayerView {
         joined: profile::is_session_side_joined(side),
         guest: profile::is_session_side_guest(side),
