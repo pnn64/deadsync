@@ -1,10 +1,8 @@
 use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::actors::{InlineText, TextContent};
 use deadlib_present::cache::{TextCache, cached_text};
-use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, PerspectiveEffects, ScrollEffects, VisualEffects,
-    perspective_effects_from_profile, scroll_effects_from_flags, spacing_multiplier_for_percent,
+    AccelEffects, AppearanceEffects, VisualEffects, scroll_effects_from_flags,
 };
 use deadsync_notefield::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
@@ -216,98 +214,6 @@ const fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data
     } else {
         profile.error_bar_active_mask
     }
-}
-
-#[inline(always)]
-pub(super) fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return AccelEffects::default();
-    }
-    state.effective_accel_effects_for_player_with_mask(
-        player_idx,
-        state.profiles()[player_idx]
-            .accel_effects_active_mask
-            .bits(),
-    )
-}
-
-#[inline(always)]
-pub(super) fn effective_visual_effects_for_player(
-    state: &State,
-    player_idx: usize,
-) -> VisualEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return VisualEffects::default();
-    }
-    state.effective_visual_effects_for_player_with_mask(
-        player_idx,
-        state.profiles()[player_idx]
-            .visual_effects_active_mask
-            .bits(),
-    )
-}
-
-#[inline(always)]
-pub(super) fn effective_scroll_effects_for_player(
-    state: &State,
-    player_idx: usize,
-) -> ScrollEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return ScrollEffects::default();
-    }
-    state.effective_scroll_effects_for_player_with_base(
-        player_idx,
-        scroll_effects_from_flags(
-            state.profiles()[player_idx]
-                .scroll_option
-                .contains(profile_data::ScrollOption::Reverse),
-            state.profiles()[player_idx]
-                .scroll_option
-                .contains(profile_data::ScrollOption::Split),
-            state.profiles()[player_idx]
-                .scroll_option
-                .contains(profile_data::ScrollOption::Alternate),
-            state.profiles()[player_idx]
-                .scroll_option
-                .contains(profile_data::ScrollOption::Cross),
-            state.profiles()[player_idx]
-                .scroll_option
-                .contains(profile_data::ScrollOption::Centered),
-        ),
-    )
-}
-
-#[inline(always)]
-pub(super) fn effective_perspective_effects_for_player(
-    state: &State,
-    player_idx: usize,
-) -> PerspectiveEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return PerspectiveEffects::default();
-    }
-    state.effective_perspective_effects_for_player_with_base(
-        player_idx,
-        perspective_effects_from_profile(&state.profiles()[player_idx]),
-    )
-}
-
-#[inline(always)]
-pub(super) fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return 0.0;
-    }
-    state.effective_mini_percent_for_player_with_base(
-        player_idx,
-        state.profiles()[player_idx].mini_percent as f32,
-    )
-}
-
-#[inline(always)]
-pub(super) fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players() {
-        return 1.0;
-    }
-    spacing_multiplier_for_percent(state.profiles()[player_idx].spacing_percent)
 }
 
 #[inline(always)]

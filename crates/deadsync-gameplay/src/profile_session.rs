@@ -229,6 +229,9 @@ pub trait GameplayProfileData: Clone {
     fn note_field_offset_x(&self) -> f32;
     fn noteskin_name(&self) -> String;
     fn mini_percent(&self) -> f32;
+    fn spacing_percent(&self) -> i32 {
+        0
+    }
     fn global_offset_shift_ms(&self) -> i32;
     fn visual_delay_ms(&self) -> i32;
     fn reverse_scroll(&self) -> bool;
@@ -264,6 +267,11 @@ pub trait GameplayProfileData: Clone {
     #[inline(always)]
     fn appearance_effects(&self) -> AppearanceEffects {
         AppearanceEffects::from_mask_bits(self.appearance_mask_bits())
+    }
+
+    #[inline(always)]
+    fn dynamic_sudden(&self) -> bool {
+        self.appearance_mask_bits() & APPEARANCE_MASK_BIT_DYNAMIC_SUDDEN != 0
     }
 
     #[inline(always)]

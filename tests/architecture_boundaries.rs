@@ -11739,6 +11739,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "ProxyCaptureRequests",
         "quantize_centi_i32",
         "quantize_centi_u32",
+        "resolve_notefield_motion",
         "ScrollTravel",
         "song_lua_note_model_draw",
         "song_lua_player_skew_x_matrix",
@@ -12257,6 +12258,26 @@ fn field_metrics_are_shared() {
 
     assert!(contract.contains("pub struct NotefieldHudStyle"));
     assert!(compose.contains("pub hud_style: NotefieldHudStyle"));
+    for handoff in [
+        "resolve_notefield_motion(",
+        "NotefieldChartView::from_gameplay(state, player_idx)",
+    ] {
+        assert!(contains_rust(&theme, handoff), "missing notefield handoff {handoff}");
+    }
+    for former_input_owner in [
+        "NotefieldVisualState {",
+        "NotefieldGeometry {",
+        ".effective_scroll_speed_for_player(",
+        ".notefield_column_scroll_dir(",
+        ".gameplay_chart(player_idx)",
+        "note_row_entry_indices",
+    ] {
+        assert!(
+            !contains_rust(&theme, former_input_owner),
+            "theme still reconstructs notefield input through {former_input_owner}"
+        );
+    }
+    assert!(contains_rust(&compose, "let play_style = game.setup.session.play_style"));
     for removed in [
         "NotefieldStyle",
         "ReceptorStyle",

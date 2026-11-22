@@ -4781,7 +4781,6 @@ pub fn draw_field(
     hud_scratch: &mut Vec<Actor>,
     hud_flat_draw_scratch: &mut Vec<deadlib_present::actors::FlatDraw>,
 ) -> deadsync_notefield::BuiltNotefield {
-    let play_style = state.hud_snapshot.play_style;
     let notefield_view = view.notefield;
     let center_1player_notefield =
         state.runtime_view.policy.center_single_notefield || notefield_view.force_center_1player;
@@ -4820,7 +4819,6 @@ pub fn draw_field(
         &state.notefield_stream_progress_lookup[player_idx],
         profile,
         placement,
-        play_style,
         center_1player_notefield,
         judgment_visible,
         combo_visible,

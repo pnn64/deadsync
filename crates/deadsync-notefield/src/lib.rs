@@ -36,6 +36,7 @@ pub use compose::{
     MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
     NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
     PreparedNotefield, PreparedNotefieldNotes, SongLuaPlayerPosition, prepare_notefield,
+    resolve_notefield_motion,
 };
 pub use display_mods::{
     DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,

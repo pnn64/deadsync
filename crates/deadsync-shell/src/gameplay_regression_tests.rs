@@ -3215,6 +3215,9 @@ M000
                     profile_data::Profile::default(),
                 ];
                 profiles[0].noteskin = profile_data::NoteSkin::new("vivid");
+                profiles[0].spacing_percent = 25;
+                profiles[0].appearance_effects_active_mask =
+                    profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN;
                 let mut state = build_test_state(
                     &simfile,
                     GameplayViewport::new(1280.0, 720.0),
@@ -3265,18 +3268,36 @@ M000
                 // Native attacks approach their targets over elapsed time.
                 refresh_active_attack_masks(&mut state.gameplay, 1.0);
                 state.refresh_live_notefield_options(120.0);
-                assert_eq!(
-                    deadsync_gameplay::effective_visual_effects_for_player(&state.gameplay, 0)
-                        .drunk,
-                    1.0
+                let (live_geometry, live_visual) = deadsync_notefield::resolve_notefield_motion(
+                    &state.gameplay,
+                    0,
+                    false,
+                    [854.0, 480.0],
+                    None,
+                    true,
                 );
-                assert_eq!(
-                    state
-                        .gameplay
-                        .effective_visibility_effects_for_player(0)
-                        .cover,
-                    1.0
+                let (edit_geometry, edit_visual) = deadsync_notefield::resolve_notefield_motion(
+                    &state.gameplay,
+                    0,
+                    true,
+                    [854.0, 480.0],
+                    Some(Default::default()),
+                    false,
                 );
+                assert_eq!(live_visual.visual.drunk, 1.0);
+                assert_eq!(live_visual.visibility.cover, 1.0);
+                assert!(live_geometry.reverse_scroll);
+                assert_eq!(live_geometry.column_dirs[0], -1.0);
+                assert_eq!(live_geometry.field_zoom, state.field_zoom_for_player(0));
+                assert_eq!(edit_visual.visual.drunk, 0.0);
+                assert_eq!(edit_visual.visibility.cover, 0.0);
+                assert!(!edit_geometry.reverse_scroll);
+                assert_eq!(edit_geometry.column_dirs, [1.0; deadsync_core::input::MAX_COLS]);
+                assert_eq!(edit_geometry.field_zoom, 1.0);
+                for visual in [live_visual, edit_visual] {
+                    assert_eq!(visual.spacing_multiplier, 1.25);
+                    assert!(visual.dynamic_sudden);
+                }
                 let suppressed_frame =
                     assert_repeatable_composition(&mut compose_scratch, |scratch| {
                         compose_fixture_frame_with_view(

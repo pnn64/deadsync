@@ -6,12 +6,8 @@ use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
-    TapExplosionOptions, VisibilityEffects, VisualEffects, blue_fantastic_window_ms,
-    draw_distance_after_targets, draw_distance_before_targets,
-    effective_mini_value_with_visual_mask, gameplay_error_bar_trim_max_window_ix,
-    hold_explosion_enabled_for_options, perspective_effects_from_profile,
-    scroll_effects_from_flags,
+    FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions, blue_fantastic_window_ms,
+    gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, CapturedActorScratch, ComboHudFrame, ComboMilestoneAssets,
@@ -19,10 +15,10 @@ use deadsync_notefield::{
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
     MeasureLineMode, MiniHudFrame, ModelMeshCache, NotefieldCameraCache, NotefieldChartView,
     NotefieldComposeRequest, NotefieldFeedbackFrameView, NotefieldFieldFrameView,
-    NotefieldFrameFeatures, NotefieldGeometry, NotefieldHudFrameView, NotefieldLaneFeedback,
-    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
+    NotefieldFrameFeatures, NotefieldHudFrameView, NotefieldLaneFeedback,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
-    compose_notefield_field, compose_notefield_hud, prepare_notefield,
+    compose_notefield_field, compose_notefield_hud, prepare_notefield, resolve_notefield_motion,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
@@ -38,9 +34,6 @@ mod zmod;
 pub use prewarm::{prewarm_frame_text_scratch, prewarm_text_layout};
 pub use text::preferred_mods_text;
 use text::{
-    effective_accel_effects_for_player, effective_mini_percent_for_player,
-    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
-    effective_spacing_multiplier_for_player, effective_visual_effects_for_player,
     error_bar_text_label, offset_ms_text, zmod_measure_counter_text, zmod_run_timer_fmt,
 };
 use zmod::{
@@ -624,7 +617,6 @@ pub(crate) fn compose_frame(
     stream_progress_lookup: &StreamProgressLookup,
     profile: &profile_data::Profile,
     placement: FieldPlacement,
-    play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
     song_lua_judgment_visible: bool,
     song_lua_combo_visible: bool,
@@ -654,111 +646,16 @@ pub(crate) fn compose_frame(
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
-    // Collect concrete profile/runtime inputs here; canonical placement stays
-    // independent of Profile, gameplay state, config, and theme globals.
     let style = notefield_plan.hud_style;
     let judgment_texture = judgment_assets.judgment();
-    let elapsed_screen = state.total_elapsed_in_screen();
-    let base_accel = AccelEffects::from_mask_bits(profile.accel_effects_active_mask.bits());
-    let base_scroll = scroll_effects_from_flags(
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Reverse),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Split),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Alternate),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Cross),
-        profile
-            .scroll_option
-            .contains(profile_data::ScrollOption::Centered),
+    let (geometry, visual) = resolve_notefield_motion(
+        state,
+        player_idx,
+        center_1player_notefield,
+        [screen_width(), screen_height()],
+        view.scroll,
+        apply_attacks,
     );
-    let base_perspective = perspective_effects_from_profile(&state.profiles()[player_idx]);
-    let base_visual = VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits());
-    let base_appearance =
-        AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits());
-    let accel = if apply_attacks {
-        effective_accel_effects_for_player(state, player_idx)
-    } else {
-        base_accel
-    };
-    let scroll = if let Some(scroll) = view.scroll {
-        scroll
-    } else if apply_attacks {
-        effective_scroll_effects_for_player(state, player_idx)
-    } else {
-        base_scroll
-    };
-    let perspective = if apply_attacks {
-        effective_perspective_effects_for_player(state, player_idx)
-    } else {
-        base_perspective
-    };
-    let visual = if apply_attacks {
-        effective_visual_effects_for_player(state, player_idx)
-    } else {
-        base_visual
-    };
-    let appearance = if apply_attacks {
-        state.effective_appearance_effects_for_player(player_idx)
-    } else {
-        base_appearance
-    };
-    let visibility = if apply_attacks {
-        state.effective_visibility_effects_for_player(player_idx)
-    } else {
-        VisibilityEffects::default()
-    };
-    let mini_percent = if apply_attacks {
-        effective_mini_percent_for_player(state, player_idx)
-    } else {
-        profile.mini_percent as f32
-    };
-    let field_zoom = if apply_attacks {
-        state.field_zoom_for_player(player_idx)
-    } else {
-        let visual_mask = profile.visual_effects_active_mask.bits();
-        let runtime_profile = &state.profiles()[player_idx];
-        let mini =
-            effective_mini_value_with_visual_mask(runtime_profile, visual_mask, mini_percent);
-        mini.mul_add(-0.5, 1.0)
-    };
-    // Canonical composition applies current DrawSize, Tilt, Mini, and the
-    // Centered/Boomerang extension to these unscaled theme metrics.
-    let viewport_height = state.setup.viewport.height();
-    let draw_distance_before = draw_distance_before_targets(viewport_height, 1.0);
-    let draw_distance_after = draw_distance_after_targets(viewport_height, 1.0, 0.0);
-    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
-    let player_col_start = player_idx.saturating_mul(state.cols_per_player());
-    let column_dirs = from_fn(|local_col| {
-        let col = player_col_start + local_col;
-        if local_col >= state.cols_per_player() || col >= state.num_cols() {
-            1.0
-        } else {
-            if apply_attacks && view.scroll.is_none() {
-                state.notefield_column_scroll_dir(col)
-            } else {
-                scroll.reverse_scale_for_column(local_col, state.cols_per_player())
-            }
-        }
-    });
-    let (time_signatures, bpms, stops, delays, scrolls) = state
-        .gameplay_chart(player_idx)
-        .map(|chart| {
-            let timing = &chart.timing_segments;
-            (
-                timing.time_signatures.as_slice(),
-                timing.bpms.as_slice(),
-                timing.stops.as_slice(),
-                timing.delays.as_slice(),
-                timing.scrolls.as_slice(),
-            )
-        })
-        .unwrap_or((&[], &[], &[], &[], &[]));
     let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
     let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
     let tap_explosion_noteskin = if notefield_plan.tap_explosion_noteskin_visible {
@@ -774,77 +671,9 @@ pub(crate) fn compose_frame(
         hud_style: style,
         placement,
         view,
-        geometry: NotefieldGeometry {
-            player_idx,
-            stage_seed: state.setup.song_seed as u32,
-            num_players: state.num_players(),
-            cols_per_player: state.cols_per_player(),
-            total_cols: state.num_cols(),
-            single_style: play_style.is_single(),
-            double_style: play_style.is_double(),
-            shared_sides: play_style.is_routine(),
-            center_one_player: center_1player_notefield,
-            screen_width: screen_width(),
-            screen_height: screen_height(),
-            screen_center_x: screen_center_x(),
-            screen_center_y: screen_center_y(),
-            field_zoom,
-            scroll_speed: if apply_attacks {
-                state.effective_scroll_speed_for_player(player_idx)
-            } else {
-                state.scroll_speed_for_player(player_idx)
-            },
-            draw_distance_before_targets: draw_distance_before,
-            draw_distance_after_targets: draw_distance_after,
-            column_dirs,
-            reverse_scroll: if apply_attacks && view.scroll.is_none() {
-                state.notefield_reverse_scroll(player_idx)
-            } else {
-                scroll.reverse_percent_for_column(0, state.cols_per_player()) > 0.5
-            },
-        },
-        visual: NotefieldVisualState {
-            elapsed_screen_s: elapsed_screen,
-            expand_seconds: state.mods.expand_seconds[player_idx],
-            current_display_beat: state.current_beat_display(),
-            accel,
-            scroll,
-            perspective,
-            visual,
-            appearance,
-            dynamic_sudden: profile
-                .appearance_effects_active_mask
-                .contains(profile_data::AppearanceEffectsMask::DYNAMIC_SUDDEN),
-            visibility,
-            mini_percent,
-            spacing_multiplier: spacing_mult,
-        },
-        chart: NotefieldChartView {
-            timing: state.timing_for_player(player_idx),
-            notes: state.notes(),
-            note_range: state.note_range_for_player(player_idx),
-            lane_note_row_indices: state.lane_note_row_index_lists(),
-            lane_hold_indices: state.lane_hold_index_lists(),
-            note_itg_rows: state.note_itg_rows(),
-            note_time_cache_ns: state.note_time_cache_ns(),
-            hold_end_time_cache_ns: state.hold_end_time_cache_ns(),
-            note_displayed_beat_cache: state.note_displayed_beat_cache(),
-            decaying_hold_indices: state.decaying_hold_indices(),
-            note_row_metadata: &state.chart_runtime.row_indices.note_row_entry_indices,
-            visible_music_time_ns: state.visible_music_time_ns(player_idx),
-            visible_beat: state.visible_beat(player_idx),
-            is_in_delay: state.is_in_delay(),
-            search_beat: state.notefield_search_beat(player_idx),
-            scroll_reference_bpm: state.scroll_reference_bpm(),
-            music_rate: state.music_rate(),
-            note_count_stats: state.note_count_stats(player_idx),
-            time_signatures,
-            bpms,
-            stops,
-            delays,
-            scrolls,
-            displayed_beat_monotonic: state.displayed_beat_monotonic(player_idx),
-        },
+        geometry,
+        visual,
+        chart: NotefieldChartView::from_gameplay(state, player_idx),
         noteskin: NotefieldNoteskinView {
             base: base_noteskin,
             mine: mine_noteskin,

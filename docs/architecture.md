@@ -180,6 +180,12 @@ presenter receives that decision with each notefield draw request and supplies
 layout and HUD options. Both modes share capture order and restore the stage and
 theme buffers before final overlays.
 
+`deadsync-notefield` resolves per-player motion from the live stage and borrows
+the chart's timing and lane caches. It selects the cached reverse directions
+and live attack effects for gameplay. Practice editing uses base options and
+its explicit scroll override. The presenter supplies screen dimensions, HUD
+assets, and layout.
+
 `deadsync-gameplay::stage_charts` resolves chart fallback and assigns charts to
 solo, Versus, and partner players. Preload, Player Options entry, and direct
 stage entry read the wheel through one adapter. The game validates Lua's

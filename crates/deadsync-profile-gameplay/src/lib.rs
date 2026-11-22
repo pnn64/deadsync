@@ -1144,6 +1144,10 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
         self.mini_percent as f32
     }
 
+    fn spacing_percent(&self) -> i32 {
+        self.spacing_percent
+    }
+
     fn global_offset_shift_ms(&self) -> i32 {
         self.global_offset_shift_ms
     }
