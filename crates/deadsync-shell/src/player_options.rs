@@ -4,10 +4,14 @@ use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::stage_options::{StageOptions, StageScrollMode};
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_theme::player_options::ThemePlayerOptions;
 use deadsync_theme_simply_love::views::{
     JudgmentPaletteChoiceView, PlayerOptionsInitView, PlayerOptionsPlayerView,
     PlayerOptionsPolicyView,
 };
+
+pub(crate) type PlayerOptionsState =
+    <crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState;
 
 pub(crate) fn init_view() -> PlayerOptionsInitView {
     let config = deadsync_config::runtime::get();

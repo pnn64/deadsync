@@ -32,6 +32,7 @@ mod constants;
 mod inline_nav;
 mod input;
 mod layout;
+mod mount;
 mod noteskins;
 mod pack_options;
 mod pane;
@@ -85,6 +86,10 @@ pub use profile::{
 pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
+pub use deadsync_theme::player_options::{
+    HeartRateDeviceView, HeartRateDevicesView, HeartRateReadingView, NoteskinPreviewPriority,
+    NoteskinPreviewRequest,
+};
 
 pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_row_titles(state);
@@ -92,28 +97,6 @@ pub fn prepare_presentation(state: &mut State, asset_manager: &AssetManager) {
     prepare_speed_headers(state, asset_manager);
     prepare_music_rate_text(state);
     prepare_choice_layouts(state, asset_manager);
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HeartRateDeviceView {
-    pub id: String,
-    pub label: String,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateReadingView {
-    pub configured: bool,
-    pub connected: bool,
-    pub bpm: Option<u16>,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct HeartRateDevicesView {
-    pub supported: bool,
-    pub scanning: bool,
-    pub devices: Vec<HeartRateDeviceView>,
-    pub error: Option<String>,
-    pub readings: [HeartRateReadingView; PLAYER_SLOTS],
 }
 
 const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
@@ -264,22 +247,6 @@ pub fn stage_options(state: &State) -> deadsync_profile_gameplay::stage_options:
         judgment_palette_ids: state.judgment_palette_ids.clone(),
         heart_rate_device_ids: state.heart_rate_device_ids.clone(),
     }
-}
-
-/// Prepare the focused selection before other visible icons and nearby choices.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum NoteskinPreviewPriority {
-    Focused,
-    Visible,
-    Nearby,
-}
-
-/// A preview's runtime identity and required component bits.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NoteskinPreviewRequest {
-    pub name: Arc<str>,
-    pub parts: u16,
-    pub priority: NoteskinPreviewPriority,
 }
 
 /// Reuse the shell's scratch buffer for the demand recorded by the last frame.

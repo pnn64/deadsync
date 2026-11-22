@@ -1,14 +1,16 @@
 use super::{
     ActiveTheme, App, Arc, CurrentScreen, MAX_PLAYERS, SongData, StageOptions, TransitionState,
-    gameplay_play_style_from_profile, noteskin_catalog_view, player_options, profile, profile_data,
-    select_course, select_music,
+    gameplay_play_style_from_profile, noteskin_catalog_view, profile, profile_data, select_course,
+    select_music,
 };
+use crate::player_options::PlayerOptionsState;
 use deadsync_gameplay::song_launch::{SongSelection, resolve_song_chart_slots};
 use deadsync_gameplay::stage_launch::{StageLaunchRequest, StageLaunchTarget};
 use deadsync_profile_gameplay::stage_charts::stage_difficulty_indices;
 use deadsync_profile_gameplay::stage_replay::StageReplayRequest;
 use deadsync_simfile::course_selection::ConfirmedCourse;
 use deadsync_theme::ThemeScreenFlow;
+use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
 
 pub(super) enum StageSelection {
     Song(SongSelection),
@@ -80,25 +82,23 @@ impl StageStart {
         )
     }
 
-    fn from_player_options(state: &player_options::State) -> Self {
-        let mut options = player_options::stage_options(state);
+    fn from_player_options(state: &PlayerOptionsState) -> Self {
+        let selection = ActiveTheme::player_options_selection(state);
+        let mut options = ActiveTheme::player_options_stage(state);
         let (steps, chart_difficulty_index) = resolve_song_chart_slots(
-            &state.song,
+            selection.song,
             gameplay_play_style_from_profile(options.play_style),
             options.chart_steps_index,
-            state.chart_difficulty_index,
+            selection.preferred,
         );
         options.chart_steps_index = steps;
         Self {
-            song: Arc::clone(&state.song),
+            song: Arc::clone(selection.song),
             chart_difficulty_index,
             options,
-            color_index: state.active_color_index,
-            return_screen: state.return_screen,
-            fixed_stepchart_label: state
-                .fixed_stepchart
-                .as_ref()
-                .map(|chart| chart.label.clone()),
+            color_index: selection.color_index,
+            return_screen: selection.return_screen,
+            fixed_stepchart_label: selection.fixed_stepchart_label.map(str::to_owned),
             replay: None,
         }
     }
@@ -205,9 +205,7 @@ impl App {
         true
     }
 
-    pub(super) fn take_stage_start(
-        &mut self,
-    ) -> Option<(StageStart, Option<player_options::State>)> {
+    pub(super) fn take_stage_start(&mut self) -> Option<(StageStart, Option<PlayerOptionsState>)> {
         let screen = self.state.screens.player_options_state.take();
         if let Some(start) = self.state.pending_stage.take() {
             return Some((start, None));
@@ -219,7 +217,7 @@ impl App {
     pub(super) fn recover_player_options(
         &mut self,
         start: StageStart,
-        screen: Option<player_options::State>,
+        screen: Option<PlayerOptionsState>,
     ) {
         let mut screen = screen.unwrap_or_else(|| {
             let mut view = crate::player_options::init_view();
@@ -244,26 +242,22 @@ impl App {
                 player.judgment_palette_id = palette;
                 player.heart_rate_device_id = monitor;
             }
-            let mut state = player_options::init(
-                start.song,
-                chart_steps_index,
-                start.chart_difficulty_index,
-                start.color_index,
-                start.return_screen,
-                start
-                    .fixed_stepchart_label
-                    .map(|label| player_options::FixedStepchart { label }),
-                noteskin_catalog_view(&self.dirs),
-                crate::smx_config::smx_gif_catalog_view(),
-                crate::heart_rate::devices_view(),
+            ActiveTheme::init_player_options(PlayerOptionsEntry {
+                song: start.song,
+                steps: chart_steps_index,
+                preferred: start.chart_difficulty_index,
+                color_index: start.color_index,
+                return_screen: start.return_screen,
+                fixed_stepchart_label: start.fixed_stepchart_label,
+                noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                heart_rate_devices: crate::heart_rate::devices_view(),
                 view,
-            );
-            state.speed_mod = scroll_speeds.map(player_options::SpeedMod::from);
-            player_options::sync_speed_mod_type_rows(&mut state);
-            state
+                scroll_speeds: Some(scroll_speeds),
+            })
         });
-        player_options::prepare_presentation(&mut screen, &self.asset_manager);
-        self.commit_screen_change(CurrentScreen::PlayerOptions);
+        ActiveTheme::prepare_player_options(&mut screen, &self.asset_manager);
+        self.commit_screen_change(ActiveTheme::SCREENS.player_options);
         self.state.screens.player_options_state = Some(screen);
     }
 }

@@ -4119,6 +4119,9 @@ fn player_options_runtime_reads_are_shell_prepared() {
         .expect("shell gameplay preload should be readable");
     let stage_start = production_source(&root.join("crates/deadsync-shell/src/app/stage_start.rs"));
     let live_case = production_source(&root.join("crates/deadsync-shell/src/app/live_case.rs"));
+    let input = production_source(&root.join("crates/deadsync-shell/src/app/input_routing.rs"));
+    let previews = production_source(&root.join("crates/deadsync-shell/src/app/option_previews.rs"));
+    let heart_rate = production_source(&root.join("crates/deadsync-shell/src/heart_rate.rs"));
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
     let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
@@ -4142,7 +4145,7 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !preload.contains("heart_rate::devices_view(")
             && shell.matches("self.take_stage_start()").count() == 2
             && shell.matches("self.recover_player_options(start, options_screen)").count() == 2
-            && contains_rust(&stage_start, "player_options::stage_options(state)")
+            && contains_rust(&stage_start, "ActiveTheme::player_options_stage(state)")
             && contains_rust(&stage_start, "StageOptions::from_profiles(")
             && !shell.contains("player_options::init_for_gameplay")
             && !live_case.contains("player_options::init_for_gameplay")
@@ -4159,6 +4162,18 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && profile_executor.contains("profile::update_player_options_for_side")
             && profile_update.contains("pub fn update_player_options_for_side")
     );
+    assert!(adapter.contains("<crate::ActiveTheme as ThemePlayerOptions>::PlayerOptionsState"));
+    assert!(shell.contains("ActiveTheme::init_player_options(PlayerOptionsEntry"));
+    assert!(shell.contains("ActiveTheme::push_player_options_actors("));
+    assert!(shell.contains("ActiveTheme::update_player_options("));
+    assert!(shell.contains("ActiveTheme::handle_player_options_raw_key("));
+    assert!(input.contains("ActiveTheme::handle_player_options_input("));
+    assert!(previews.contains("ActiveTheme::take_player_options_noteskin_requests("));
+    assert!(heart_rate.contains("ActiveTheme::sync_player_options_heart_rate("));
+    assert!(!shell.contains("screens::player_options::"));
+    assert!(!input.contains("screens::player_options::"));
+    assert!(!previews.contains("screens::player_options::"));
+    assert!(stage_start.contains("scroll_speeds: Some(scroll_speeds)"));
 }
 
 #[test]

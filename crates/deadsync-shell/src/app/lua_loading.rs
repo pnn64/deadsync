@@ -256,19 +256,14 @@ mod tests {
                     assert!(app.state.pending_stage.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     let recovered = app.state.screens.player_options_state.as_ref().unwrap();
-                    assert!(Arc::ptr_eq(&recovered.song, &song));
+                    let recovered = ActiveTheme::player_options_selection(recovered);
+                    assert!(Arc::ptr_eq(recovered.song, &song));
                     assert_eq!(recovered.return_screen, CurrentScreen::Practice);
-                    assert_eq!(recovered.active_color_index, 5);
+                    assert_eq!(recovered.color_index, 5);
                     assert_eq!(recovered.music_rate, 1.25);
-                    assert_eq!(recovered.chart_steps_index, expected_steps);
-                    assert_eq!(recovered.chart_difficulty_index, expected_difficulty);
-                    assert_eq!(
-                        recovered
-                            .speed_mod
-                            .each_ref()
-                            .map(player_options::scroll_speed_for_mod),
-                        speeds
-                    );
+                    assert_eq!(recovered.steps, expected_steps);
+                    assert_eq!(recovered.preferred, expected_difficulty);
+                    assert_eq!(recovered.scroll_speeds, speeds);
                 },
             )
         });

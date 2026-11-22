@@ -590,6 +590,13 @@ The title menu mounts through the selected theme's presentation interface. The
 shell prepares credit and service status, and the theme owns menu state, input
 feedback, animation, and actor composition.
 
+Player Options mounts through the selected theme for song and course entry,
+input, updates, and actor composition. The shell supplies device and asset
+views, manages preview work and uploads, and reads the submitted game settings
+through the interface. Recovery restores the submitted scroll speeds through
+the same entry path. The installed Player Options view still uses Simply Love's
+palette and machine presentation settings.
+
 The shell still stores concrete screen state and routes concrete runtime
 requests. A replaceable theme needs those integration points as well as the
 transition interface.

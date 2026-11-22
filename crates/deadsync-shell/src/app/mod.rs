@@ -138,7 +138,7 @@ use deadsync_theme_simply_love::{
     screens::{
         self, content_browser, credits, evaluation, evaluation_summary, gameover, gameplay, init,
         initials, input as input_screen, manage_local_profiles, mappings, options,
-        overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
+        overscan_adjustment, practice, profile_load, sandbox, select_color,
         select_course, select_mode, select_music, select_style, test_lights,
     },
     visual_styles,
@@ -206,6 +206,7 @@ use deadsync_theme::views::{
     SmxAssignmentView,
 };
 use deadsync_theme::main_menu::{MainMenuFrame, MainMenuPhase, ThemeMainMenu};
+use deadsync_theme::player_options::{PlayerOptionsEntry, ThemePlayerOptions};
 use deadsync_theme::profile_picker::{ProfilePickerContext, ThemeProfilePicker};
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
@@ -634,7 +635,7 @@ pub struct ScreensState {
     smx_autoprompt_latched: bool,
     smx_options_light_preview: deadsync_smx::OptionsLightPreview,
     smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
-    player_options_state: Option<player_options::State>,
+    player_options_state: Option<crate::player_options::PlayerOptionsState>,
     init_state: init::State,
     select_profile_state: <ActiveTheme as ThemeProfilePicker>::ProfilePickerState,
     select_color_state: select_color::State,
@@ -1438,7 +1439,7 @@ impl ScreensState {
             }
             CurrentScreen::PlayerOptions => {
                 if let Some(state) = self.player_options_state.as_mut() {
-                    player_options::update(state, delta_time, asset_manager, effects);
+                    ActiveTheme::update_player_options(state, delta_time, asset_manager, effects);
                 }
                 (None, false)
             }
@@ -6556,7 +6557,7 @@ impl App {
                     .screens
                     .player_options_state
                     .as_mut()
-                    .map(|state| &mut state.song);
+                    .map(ActiveTheme::player_options_song_mut);
                 let pending_song = self.state.pending_stage.as_mut().map(|stage| &mut stage.song);
                 for song in [screen_song, pending_song].into_iter().flatten() {
                     let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
@@ -6763,18 +6764,20 @@ impl App {
             course_run.run.course_meter,
         );
         if show_player_options {
-            self.state.screens.player_options_state = Some(player_options::init(
-                stage.song.clone(),
-                stage.steps_index,
-                stage.preferred_difficulty_index,
-                color_index,
-                CurrentScreen::SelectCourse,
-                Some(player_options::FixedStepchart { label }),
-                noteskin_catalog_view(&self.dirs),
-                crate::smx_config::smx_gif_catalog_view(),
-                crate::heart_rate::devices_view(),
-                crate::player_options::init_view(),
-            ));
+            self.state.screens.player_options_state =
+                Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
+                    song: Arc::clone(&stage.song),
+                    steps: stage.steps_index,
+                    preferred: stage.preferred_difficulty_index,
+                    color_index,
+                    return_screen: ActiveTheme::SCREENS.course_selection,
+                    fixed_stepchart_label: Some(label),
+                    noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                    smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                    heart_rate_devices: crate::heart_rate::devices_view(),
+                    view: crate::player_options::init_view(),
+                    scroll_speeds: None,
+                }));
         } else {
             let mut start = StageStart::from_current_profiles(
                 stage.song.clone(),
@@ -7916,7 +7919,7 @@ impl App {
             ),
             CurrentScreen::PlayerOptions => {
                 if let Some(pos) = &self.state.screens.player_options_state {
-                    player_options::push_actors(
+                    ActiveTheme::push_player_options_actors(
                         &mut actors,
                         pos,
                         &self.asset_manager,
@@ -8411,7 +8414,7 @@ impl App {
                     return;
                 };
                 debug_assert!(self.theme_effect_scratch.is_empty());
-                screens::player_options::handle_raw_key_event(
+                ActiveTheme::handle_player_options_raw_key(
                     po_state,
                     None,
                     Some(text),
@@ -8595,7 +8598,7 @@ impl App {
                 // open, then Backspace/Enter/Escape/arrows/Tab while open.
                 if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
                     debug_assert!(self.theme_effect_scratch.is_empty());
-                    let consumed = screens::player_options::handle_raw_key_event(
+                    let consumed = ActiveTheme::handle_player_options_raw_key(
                         po_state,
                         Some(&raw_key),
                         None,
@@ -8615,7 +8618,10 @@ impl App {
                     .screens
                     .player_options_state
                     .as_ref()
-                    .is_some_and(|state| state.return_screen == CurrentScreen::SelectMusic);
+                    .is_some_and(|state| {
+                        ActiveTheme::player_options_selection(state).return_screen
+                            == ActiveTheme::SCREENS.song_selection
+                    });
                 if returns_to_select_music {
                     debug_assert!(self.theme_effect_scratch.is_empty());
                     let consumed = screens::select_music::handle_player_options_mute_hotkey(
@@ -8939,14 +8945,8 @@ impl App {
                 .player_options_state
                 .as_ref()
                 .map(|state| {
-                    (
-                        state
-                            .speed_mod
-                            .each_ref()
-                            .map(player_options::scroll_speed_for_mod),
-                        state.chart_difficulty_index,
-                        state.music_rate,
-                    )
+                    let selection = ActiveTheme::player_options_selection(state);
+                    (selection.scroll_speeds, selection.preferred, selection.music_rate)
                 })
                 .or_else(|| {
                     self.state.pending_stage.as_ref().map(|start| {
@@ -9235,23 +9235,25 @@ impl App {
                 );
 
                 let color_index = self.state.screens.select_music_state.active_color_index;
-                let return_screen = if prev == CurrentScreen::Practice {
-                    CurrentScreen::Practice
+                let return_screen = if prev == ActiveTheme::SCREENS.practice {
+                    ActiveTheme::SCREENS.practice
                 } else {
-                    CurrentScreen::SelectMusic
+                    ActiveTheme::SCREENS.song_selection
                 };
-                self.state.screens.player_options_state = Some(player_options::init(
-                    selection.song,
-                    chart_steps_index,
-                    preferred_difficulty_index,
-                    color_index,
-                    return_screen,
-                    None,
-                    noteskin_catalog_view(&self.dirs),
-                    crate::smx_config::smx_gif_catalog_view(),
-                    crate::heart_rate::devices_view(),
-                    crate::player_options::init_view(),
-                ));
+                self.state.screens.player_options_state =
+                    Some(ActiveTheme::init_player_options(PlayerOptionsEntry {
+                        song: selection.song,
+                        steps: chart_steps_index,
+                        preferred: preferred_difficulty_index,
+                        color_index,
+                        return_screen,
+                        fixed_stepchart_label: None,
+                        noteskin_catalog: noteskin_catalog_view(&self.dirs),
+                        smx_gif_catalog: crate::smx_config::smx_gif_catalog_view(),
+                        heart_rate_devices: crate::heart_rate::devices_view(),
+                        view: crate::player_options::init_view(),
+                        scroll_speeds: None,
+                    }));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
             if self.state.session.course_run.is_some() && self.pending_song_lua_reload.is_none() {
@@ -9292,7 +9294,7 @@ impl App {
         if target == CurrentScreen::PlayerOptions
             && let Some(state) = self.state.screens.player_options_state.as_mut()
         {
-            player_options::prepare_presentation(state, &self.asset_manager);
+            ActiveTheme::prepare_player_options(state, &self.asset_manager);
         }
     }
 
@@ -10232,6 +10234,7 @@ impl App {
                         .preferred_difficulty_index = preferred;
 
                     if let Some(po) = self.state.screens.player_options_state.as_ref() {
+                        let po = ActiveTheme::player_options_selection(po);
                         match profile_session.play_style {
                             profile_data::PlayStyle::Versus
                             | profile_data::PlayStyle::PumpVersus
@@ -10240,19 +10243,19 @@ impl App {
                             | profile_data::PlayStyle::Routine
                             | profile_data::PlayStyle::PumpRoutine => {
                                 self.state.screens.select_music_state.selected_steps_index =
-                                    po.chart_steps_index[0];
+                                    po.steps[0];
                                 self.state
                                     .screens
                                     .select_music_state
-                                    .p2_selected_steps_index = po.chart_steps_index[1];
+                                    .p2_selected_steps_index = po.steps[1];
                                 self.state
                                     .screens
                                     .select_music_state
-                                    .preferred_difficulty_index = po.chart_difficulty_index[0];
+                                    .preferred_difficulty_index = po.preferred[0];
                                 self.state
                                     .screens
                                     .select_music_state
-                                    .p2_preferred_difficulty_index = po.chart_difficulty_index[1];
+                                    .p2_preferred_difficulty_index = po.preferred[1];
                             }
                             profile_data::PlayStyle::Single
                             | profile_data::PlayStyle::Double
@@ -10261,11 +10264,11 @@ impl App {
                                 let idx =
                                     profile_data::player_side_index(profile_session.player_side);
                                 self.state.screens.select_music_state.selected_steps_index =
-                                    po.chart_steps_index[idx];
+                                    po.steps[idx];
                                 self.state
                                     .screens
                                     .select_music_state
-                                    .preferred_difficulty_index = po.chart_difficulty_index[idx];
+                                    .preferred_difficulty_index = po.preferred[idx];
                             }
                         }
                     }
