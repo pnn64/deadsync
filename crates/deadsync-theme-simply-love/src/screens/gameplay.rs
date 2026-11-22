@@ -38,8 +38,8 @@ use deadlib_render_core::{BlendMode, MeshVertex};
 pub use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
 pub use deadsync_assets::gameplay_stage::GameplayCoreState;
 use deadsync_assets::gameplay_stage::{
-    GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua, PreparedGameplayStage,
-    attach_prepared_song_lua, prepare_gameplay_stage,
+    ActiveGameplayStage, GameplayStageAssets, GameplayStageInput, PreparedGameplaySongLua,
+    PreparedGameplayStage, attach_prepared_song_lua, prepare_gameplay_stage,
 };
 use deadsync_assets::noteskin;
 use deadsync_chart::{ChartData, GameplayChartData, SongBackgroundChange, SongData};
@@ -71,9 +71,7 @@ use deadsync_score as score_data;
 use deadsync_song_lua::gameplay_presentation::{
     FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
 };
-use deadsync_song_lua::gameplay_session::{
-    self, GameplayStage, SongLuaGameplayHost, SongLuaGameplaySession,
-};
+use deadsync_song_lua::gameplay_session::{self, SongLuaGameplayHost, SongLuaGameplaySession};
 use deadsync_song_lua::playback::song_meter_progress;
 use deadsync_song_lua::playback::{
     NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY, PLAYER_ACTOR_SCRATCH_CAPACITY,
@@ -644,7 +642,7 @@ impl GameplayPresentationView {
 }
 
 pub struct State {
-    pub stage: GameplayStage<GameplayCoreState>,
+    pub stage: ActiveGameplayStage,
     #[cfg(feature = "test-support")]
     pub(crate) arrow_tipsy_clock_inputs: [Option<f64>; MAX_PLAYERS],
     judgment_palettes: [deadsync_theme::color::JudgmentPalette; MAX_PLAYERS],
@@ -653,7 +651,6 @@ pub struct State {
     /// screen; there are no misses, eviction, synchronization, allocations, or
     /// per-frame maintenance.
     hud_snapshot: profile_data::GameplayHudSnapshot,
-    pub noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [crate::step_stats_gifs::ResolvedStepStatsExtra; MAX_PLAYERS],
     pub song_full_title: Arc<str>,
@@ -840,7 +837,7 @@ impl State {
     pub fn stage_for_update(
         &mut self,
     ) -> (
-        &mut GameplayStage<GameplayCoreState>,
+        &mut ActiveGameplayStage,
         impl FnOnce(&GameplayCoreState, f32) + '_,
     ) {
         let visuals = &mut self.life_meter_visuals;
@@ -852,7 +849,7 @@ impl State {
     pub fn stage_and_lobby(
         &mut self,
     ) -> (
-        &mut GameplayStage<GameplayCoreState>,
+        &mut ActiveGameplayStage,
         &mut GameplayLobbySession,
     ) {
         (&mut self.stage, &mut self.lobby_session)
@@ -931,7 +928,7 @@ impl State {
 
     /// Prepare presentation for an independently constructed game stage.
     pub fn from_stage(
-        mut stage: GameplayStage<GameplayCoreState>,
+        mut stage: ActiveGameplayStage,
         assets: GameplayStageAssets,
         stage_intro_text: Arc<str>,
         replay_status_text: Option<Arc<str>>,
@@ -940,7 +937,6 @@ impl State {
         init_view: GameplayInitView,
     ) -> Self {
         let GameplayStageAssets {
-            noteskin_assets,
             hide_song_intro,
             pack_group,
             pack_banner_path,
@@ -961,6 +957,7 @@ impl State {
             stage.gameplay.replace_song_background_changes(background_changes);
         }
         let gameplay = &stage.gameplay;
+        let noteskin_assets = &stage.noteskin_assets;
         let scorebox_profile_snapshot = scores.scorebox_profiles;
         let scorebox_side_snapshot = scores.scorebox_snapshots;
         let rival_score_types = scores.rival_score_types;
@@ -1021,7 +1018,7 @@ impl State {
         let notefield_stream_progress_lookup = std::array::from_fn(|player| {
             StreamProgressLookup::new(gameplay.mini_indicator_stream_segments(player))
         });
-        let notefield_widths = gameplay_notefield_widths(gameplay, &noteskin_assets);
+        let notefield_widths = gameplay_notefield_widths(gameplay, noteskin_assets);
         let display_mods_text =
             std::array::from_fn(|player| notefield::preferred_mods_text(gameplay, player));
         let rate_text = cached_rate_text(gameplay.music_rate());
@@ -1037,7 +1034,7 @@ impl State {
         let actor_resources = ActorResourceArena::default();
         notefield::prewarm_actor_resources(
             &actor_resources,
-            &noteskin_assets,
+            noteskin_assets,
             &step_stats_profiles,
             gameplay.num_players(),
         );
@@ -1066,7 +1063,6 @@ impl State {
             arrow_tipsy_clock_inputs: [None; MAX_PLAYERS],
             judgment_palettes,
             hud_snapshot,
-            noteskin_assets,
             density_graph,
             step_stats_extra_resolved,
             song_full_title,
@@ -1206,18 +1202,19 @@ impl State {
 impl GameplayFramePresenter for State {
     type Profile = GameplayProfile;
     type Slot = noteskin::SpriteSlot;
+    type NoteskinAssets = GameplayNoteskinAssets;
     type View = ActorViewOverride;
     type Policy = crate::views::SimplyLoveVisualPolicyView;
     type Scratch = Box<GameplayFrameScratch>;
 
-    fn stage(&self) -> &GameplayStage<GameplayCoreState> {
+    fn stage(&self) -> &ActiveGameplayStage {
         &self.stage
     }
 
     fn frame_storage(
         &mut self,
     ) -> (
-        &mut GameplayStage<GameplayCoreState>,
+        &mut ActiveGameplayStage,
         &mut Option<Self::Scratch>,
     ) {
         (&mut self.stage, &mut self.frame_scratch)
@@ -1239,7 +1236,7 @@ impl GameplayFramePresenter for State {
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
         request: &deadsync_song_lua::playback::FieldFrame<'_>,
-        buffers: FieldRenderBuffers<'_>,
+        buffers: FieldRenderBuffers<'_, noteskin::SpriteSlot>,
     ) -> deadsync_notefield::BuiltNotefield {
         draw_field(
             self,
@@ -1335,7 +1332,7 @@ impl SongLuaGameplayHost for State {
 }
 
 impl Deref for State {
-    type Target = GameplayStage<GameplayCoreState>;
+    type Target = ActiveGameplayStage;
 
     fn deref(&self) -> &Self::Target {
         &self.stage
@@ -4689,7 +4686,7 @@ pub fn draw_field(
     arrow_effect_time_s: f64,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
     request: &deadsync_song_lua::playback::FieldFrame<'_>,
-    buffers: FieldRenderBuffers<'_>,
+    buffers: FieldRenderBuffers<'_, noteskin::SpriteSlot>,
 ) -> deadsync_notefield::BuiltNotefield {
     let player_idx = request.player;
     notefield::compose_frame(
@@ -4709,7 +4706,7 @@ pub fn draw_field(
                 None
             }
         },
-        &state.noteskin_assets,
+        buffers.noteskins,
         &visual_policy.assets.effects,
         state.actor_resources(),
         asset_manager.texture_context(),

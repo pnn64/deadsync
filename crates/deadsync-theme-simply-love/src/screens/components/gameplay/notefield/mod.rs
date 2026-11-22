@@ -415,7 +415,6 @@ const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
 pub(crate) struct GameplayNotefieldPlan {
     hud_style: NotefieldHudStyle,
     options: NotefieldOptions,
-    tap_explosion_noteskin_visible: bool,
     small_combo_font: &'static str,
     combo_font: Option<&'static str>,
 }
@@ -557,7 +556,6 @@ pub(crate) fn gameplay_notefield_plan(
     GameplayNotefieldPlan {
         hud_style: style,
         options,
-        tap_explosion_noteskin_visible: !profile.tap_explosion_noteskin_hidden(),
         small_combo_font: zmod_small_combo_font(profile.combo_font),
         combo_font: zmod_combo_font_name(profile.combo_font),
     }
@@ -601,7 +599,7 @@ pub(crate) fn compose_frame(
     frame: &FieldFrame<'_>,
     arrow_effect_time_s: f64,
     arrow_tipsy_time_s: Option<f64>,
-    noteskin_assets: &GameplayNoteskinAssets,
+    noteskin: NotefieldNoteskinView<'_, SpriteSlot>,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
@@ -634,15 +632,6 @@ pub(crate) fn compose_frame(
     let judgment_texture = judgment_assets.judgment();
     let mut geometry = frame.geometry;
     geometry.center_one_player |= center_1player_notefield;
-    let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
-    let mine_noteskin = noteskin_assets.mine_noteskin[player_idx].as_deref();
-    let tap_explosion_noteskin = if notefield_plan.tap_explosion_noteskin_visible {
-        noteskin_assets.tap_explosion_noteskin[player_idx]
-            .as_deref()
-            .or(base_noteskin)
-    } else {
-        None
-    };
     let request = NotefieldComposeRequest {
         timing_labels,
         hud_style: style,
@@ -651,12 +640,7 @@ pub(crate) fn compose_frame(
         geometry,
         visual: frame.visual,
         chart: frame.chart,
-        noteskin: NotefieldNoteskinView {
-            base: base_noteskin,
-            mine: mine_noteskin,
-            receptor: noteskin_assets.receptor_noteskin[player_idx].as_deref(),
-            tap_explosion: tap_explosion_noteskin,
-        },
+        noteskin,
         song_lua: frame.song_lua,
         options: notefield_plan.options,
         capture_requests,

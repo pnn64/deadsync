@@ -13871,17 +13871,19 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         assert_eq!(target_sizes(&scratches[0]), target_sizes(&scratches[1]));
     }
 
+    use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
+    use deadsync_assets::gameplay_stage::ActiveGameplayStage;
     use deadsync_gameplay::practice::editor::{PracticeEditorCommand, PracticePlayRange};
     use deadsync_gameplay::practice::{PracticeSession, PracticeViewRequest};
     use deadsync_song_lua::gameplay_presentation::{
         FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
         compose_gameplay_frame, compose_practice_frame,
     };
-    use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession};
+    use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession, StageNoteskins};
     use deadsync_song_lua::playback as shared;
 
     struct FixturePresenter {
-        stage: GameplayStage<GameplayCoreState>,
+        stage: ActiveGameplayStage,
         hud_count: Option<usize>,
         expect_song_content: bool,
         field_storage: std::cell::Cell<Option<*const deadsync_notefield::NotefieldFieldScratch>>,
@@ -13890,17 +13892,18 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     impl GameplayFramePresenter for FixturePresenter {
         type Profile = deadsync_profile_gameplay::GameplayProfile;
         type Slot = SpriteSlot;
+        type NoteskinAssets = GameplayNoteskinAssets;
         type View = GameplayFrameView;
         type Policy = [f32; 4];
         type Scratch = usize;
 
-        fn stage(&self) -> &GameplayStage<GameplayCoreState> {
+        fn stage(&self) -> &ActiveGameplayStage {
             &self.stage
         }
 
         fn frame_storage(
             &mut self,
-        ) -> (&mut GameplayStage<GameplayCoreState>, &mut Option<usize>) {
+        ) -> (&mut ActiveGameplayStage, &mut Option<usize>) {
             (&mut self.stage, &mut self.hud_count)
         }
 
@@ -13927,7 +13930,7 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             &self,
             _: FramePresentationContext<'_, Self::View, Self::Policy>,
             request: &shared::FieldFrame<'_>,
-            buffers: FieldRenderBuffers<'_>,
+            buffers: FieldRenderBuffers<'_, Self::Slot>,
         ) -> deadsync_notefield::BuiltNotefield {
             let field_storage = std::ptr::from_ref(&*buffers.notefield);
             if let Some(previous) = self.field_storage.replace(Some(field_storage)) {
@@ -13936,8 +13939,15 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
             assert_eq!(request.music_time_s, self.stage.current_music_time_seconds());
             assert_eq!(request.geometry.player_idx, request.player);
-            let visuals = self.stage.song_lua_visuals();
+            let noteskins = &self.stage.noteskin_assets;
             let player = request.player;
+            let base = noteskins.noteskin[player].as_deref().unwrap();
+            let receptor = noteskins.receptor_noteskin[player].as_deref().unwrap();
+            assert!(std::ptr::eq(buffers.noteskins.base.unwrap(), base));
+            assert!(std::ptr::eq(buffers.noteskins.mine.unwrap(), base));
+            assert!(std::ptr::eq(buffers.noteskins.receptor.unwrap(), receptor));
+            assert!(std::ptr::eq(buffers.noteskins.tap_explosion.unwrap(), base));
+            let visuals = self.stage.song_lua_visuals();
             if self.expect_song_content {
                 assert_eq!(request.visual.visual.drunk, 1.0);
                 assert!(std::ptr::eq(
@@ -13980,16 +13990,40 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         }
     }
 
+    let style = deadsync_noteskin::Style {
+        num_cols: state.cols_per_player(),
+        num_players: state.num_players(),
+    };
+    let load_skin = |name| Arc::new(deadsync_assets::noteskin::load_itg_skin(&style, name).unwrap());
+    let noteskin_assets = GameplayNoteskinAssets {
+        noteskin: [Some(load_skin("cel")), None],
+        receptor_noteskin: [Some(load_skin("metal")), None],
+        ..Default::default()
+    };
+    let hide_tap_explosions = state
+        .profiles()
+        .each_ref()
+        .map(|profile| profile.tap_explosion_noteskin_hidden());
     let mut presenter = FixturePresenter {
-        stage: GameplayStage::with_song_playback(
+        stage: GameplayStage::with_song_playback_and_noteskins(
             state,
             SongLuaGameplaySession::new(),
             media.sound_paths,
+            noteskin_assets,
+            hide_tap_explosions,
         ),
         hud_count: Some(0),
         expect_song_content: true,
         field_storage: std::cell::Cell::new(None),
     };
+    presenter.stage.gameplay.update_profile(0, |profile| {
+        profile.tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
+    });
+    let hide_tap_explosion = presenter.stage.profiles()[0].tap_explosion_noteskin_hidden();
+    assert!(
+        presenter.stage.noteskin_assets.selected_components_for_player(0, hide_tap_explosion)[3]
+            .is_none()
+    );
     let song_frame = std::ptr::from_ref(presenter.stage.song_frame());
     let song_time = presenter.stage.current_music_time_ns();
     deadsync_gameplay::refresh_active_attack_masks(&mut presenter.stage.gameplay, 1.0);

@@ -20,7 +20,7 @@ use deadsync_gameplay::{
 use deadsync_input::{
     CallbackInputState, HeldCallbackInputs, InputEvent, PhysicalInput, VirtualAction,
 };
-use deadsync_notefield::NotefieldFieldScratch;
+use deadsync_notefield::{NotefieldFieldScratch, NotefieldNoteskinView};
 use deadsync_noteskin::{NoteskinRuntime, NoteskinSlot};
 use std::cell::{RefCell, RefMut};
 use std::ops::{Deref, DerefMut};
@@ -46,12 +46,41 @@ pub enum SongLuaGameplayEffect<S> {
     Navigate(S),
 }
 
+/// Noteskin components resolved by the game for the lifetime of a stage.
+pub trait StageNoteskins<S: NoteskinSlot> {
+    /// Base, mine, receptor, and tap explosion components for cache warmup.
+    fn components_for_player(&self, player: usize) -> [Option<&NoteskinRuntime<S>>; 4];
+
+    /// Components used for drawing after applying profile settings and fallbacks.
+    fn selected_components_for_player(
+        &self,
+        player: usize,
+        hide_tap_explosion: bool,
+    ) -> [Option<&NoteskinRuntime<S>>; 4] {
+        let [base, mine, receptor, tap_explosion] = self.components_for_player(player);
+        let tap_explosion = if hide_tap_explosion {
+            None
+        } else {
+            tap_explosion.or(base)
+        };
+        [base, mine.or(base), receptor.or(base), tap_explosion]
+    }
+}
+
+impl<S: NoteskinSlot> StageNoteskins<S> for () {
+    fn components_for_player(&self, _player: usize) -> [Option<&NoteskinRuntime<S>>; 4] {
+        [None; 4]
+    }
+}
+
 /// The live simulation, authored callbacks, and playback state for a stage.
-pub struct GameplayStage<G> {
+pub struct GameplayStage<G, N = ()> {
     pub gameplay: G,
     pub song_lua: SongLuaGameplaySession,
     pub song_media: SongMedia,
     pub song_scratch: Option<Box<FrameScratch>>,
+    pub noteskin_assets: N,
+    hide_tap_explosions: [bool; MAX_PLAYERS],
     // These caches also survive replacing the authored compositor storage.
     notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>,
 }
@@ -64,10 +93,14 @@ impl<G> GameplayStage<G> {
             song_lua,
             song_media: SongMedia::default(),
             song_scratch: None,
+            noteskin_assets: (),
+            hide_tap_explosions: [false; MAX_PLAYERS],
             notefield_scratch: None,
         }
     }
+}
 
+impl<G, N> GameplayStage<G, N> {
     /// Warm dynamic render storage after successful callback installation.
     pub fn song_lua_attachment_parts(
         &mut self,
@@ -108,16 +141,25 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCore
         sound_paths: Vec<PathBuf>,
     ) -> Self {
         Self::with_song_playback_and_noteskins(
-            gameplay, song_lua, sound_paths, [[None; 4]; MAX_PLAYERS],
+            gameplay,
+            song_lua,
+            sound_paths,
+            (),
+            [false; MAX_PLAYERS],
         )
     }
+}
 
+impl<P: GameplayProfileData, S: NoteskinSlot + Clone, N: StageNoteskins<S>>
+    GameplayStage<GameplayCoreState<P, S>, N>
+{
     /// Prepare player field caches from the noteskins selected for the stage.
     pub fn with_song_playback_and_noteskins(
         gameplay: GameplayCoreState<P, S>,
         song_lua: SongLuaGameplaySession,
         sound_paths: Vec<PathBuf>,
-        skins: [[Option<&NoteskinRuntime<S>>; 4]; MAX_PLAYERS],
+        noteskin_assets: N,
+        hide_tap_explosions: [bool; MAX_PLAYERS],
     ) -> Self {
         let song_scratch = Some(Box::new(FrameScratch::new(&gameplay)));
         let song_media = SongMedia::new(&gameplay, sound_paths);
@@ -129,7 +171,7 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCore
                     active * NOTEFIELD_ACTOR_SCRATCH_CAPACITY,
                     active * NOTEFIELD_HUD_ACTOR_SCRATCH_CAPACITY,
                 ],
-                skins[player],
+                noteskin_assets.components_for_player(player),
             ))
         }));
         Self {
@@ -137,7 +179,21 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCore
             song_lua,
             song_media,
             song_scratch,
+            noteskin_assets,
+            hide_tap_explosions,
             notefield_scratch,
+        }
+    }
+
+    pub(crate) fn notefield_noteskins(&self, player: usize) -> NotefieldNoteskinView<'_, S> {
+        let [base, mine, receptor, tap_explosion] = self
+            .noteskin_assets
+            .selected_components_for_player(player, self.hide_tap_explosions[player]);
+        NotefieldNoteskinView {
+            base,
+            mine,
+            receptor,
+            tap_explosion,
         }
     }
 
@@ -162,7 +218,7 @@ impl<P: GameplayProfileData, S: NoteskinSlot + Clone> GameplayStage<GameplayCore
     }
 }
 
-impl<G> Deref for GameplayStage<G> {
+impl<G, N> Deref for GameplayStage<G, N> {
     type Target = G;
 
     #[inline]
@@ -171,14 +227,14 @@ impl<G> Deref for GameplayStage<G> {
     }
 }
 
-impl<G> DerefMut for GameplayStage<G> {
+impl<G, N> DerefMut for GameplayStage<G, N> {
     #[inline]
     fn deref_mut(&mut self) -> &mut G {
         &mut self.gameplay
     }
 }
 
-impl<P: GameplayProfileData, O, C, D> GameplayStage<GameplayRuntimeState<P, O, C, D>>
+impl<P: GameplayProfileData, O, C, D, N> GameplayStage<GameplayRuntimeState<P, O, C, D>, N>
 where
     GameplayRuntimeState<P, O, C, D>: SongLuaGameplayVisualState,
 {

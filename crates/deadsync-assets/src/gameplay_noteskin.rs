@@ -1,6 +1,6 @@
 //! Game-owned noteskin selection, component composition, and feedback timing.
 
-use crate::noteskin::{self, Noteskin};
+use crate::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
@@ -9,6 +9,7 @@ use deadsync_gameplay::{
 };
 use deadsync_noteskin::{ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType};
 use deadsync_profile as profile_data;
+use deadsync_song_lua::gameplay_session::StageNoteskins;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -53,6 +54,12 @@ impl GameplayNoteskinAssets {
     }
 }
 
+impl StageNoteskins<SpriteSlot> for GameplayNoteskinAssets {
+    fn components_for_player(&self, player: usize) -> [Option<&Noteskin>; 4] {
+        self.components_for_player(player)
+    }
+}
+
 impl Default for GameplayNoteskinAssets {
     fn default() -> Self {
         Self {
@@ -72,10 +79,9 @@ fn noteskin_effects_from_assets(
 ) -> GameplayNoteskinEffects {
     let mut effects = GameplayNoteskinEffects::default();
     let cols = cols_per_player.min(deadsync_core::input::MAX_COLS);
-    for player in 0..num_players.min(MAX_PLAYERS) {
-        let receptor_ns = assets.receptor_noteskin[player]
-            .as_deref()
-            .or_else(|| assets.noteskin[player].as_deref());
+    for (player, profile) in runtime_profiles.iter().take(num_players).enumerate() {
+        let [_, mine_ns, receptor_ns, tap_ns] = assets
+            .selected_components_for_player(player, profile.tap_explosion_noteskin_hidden());
         if let Some(ns) = receptor_ns {
             effects.set_receptor_glow_behavior(
                 player,
@@ -95,13 +101,6 @@ fn noteskin_effects_from_assets(
             }
         }
 
-        let tap_ns = if runtime_profiles[player].tap_explosion_noteskin_hidden() {
-            None
-        } else {
-            assets.tap_explosion_noteskin[player]
-                .as_deref()
-                .or_else(|| assets.noteskin[player].as_deref())
-        };
         if let Some(ns) = tap_ns {
             for col in 0..cols {
                 for window in TAP_EXPLOSION_WINDOWS {
@@ -119,9 +118,7 @@ fn noteskin_effects_from_assets(
             }
         }
 
-        let mine_duration = assets.mine_noteskin[player]
-            .as_deref()
-            .or_else(|| assets.noteskin[player].as_deref())
+        let mine_duration = mine_ns
             .and_then(|ns| ns.mine_hit_explosion.as_ref())
             .map_or(
                 MINE_EXPLOSION_DURATION,

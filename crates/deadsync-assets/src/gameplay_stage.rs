@@ -25,6 +25,7 @@ use crate::noteskin::SpriteSlot;
 
 pub type GameplayCoreState =
     deadsync_song_lua::playback::GameplayCoreState<GameplayProfile, SpriteSlot>;
+pub type ActiveGameplayStage = GameplayStage<GameplayCoreState, GameplayNoteskinAssets>;
 pub type PreparedGameplaySongLua = deadsync_song_lua::playback::PreparedGameplaySongLua<SpriteSlot>;
 
 pub struct GameplayStageInput {
@@ -62,9 +63,8 @@ pub struct PreparedGameplayStage {
     pub pack_banner_path: Option<PathBuf>,
 }
 
-/// Resolved assets and metadata used to construct a stage's presentation.
+/// Song intro and pack details used to construct a stage's presentation.
 pub struct GameplayStageAssets {
-    pub noteskin_assets: GameplayNoteskinAssets,
     pub hide_song_intro: bool,
     pub pack_group: Arc<str>,
     pub pack_banner_path: Option<PathBuf>,
@@ -87,16 +87,21 @@ impl PreparedGameplayStage {
         self.gameplay.replace_song_background_changes(changes);
     }
 
-    pub fn into_parts(self) -> (GameplayStage<GameplayCoreState>, GameplayStageAssets) {
+    pub fn into_parts(self) -> (ActiveGameplayStage, GameplayStageAssets) {
+        let hide_tap_explosions = self
+            .gameplay
+            .profiles()
+            .each_ref()
+            .map(|profile| profile.tap_explosion_noteskin_hidden());
         (
             GameplayStage::with_song_playback_and_noteskins(
                 self.gameplay,
                 self.song_lua,
                 self.song_lua_sound_paths,
-                std::array::from_fn(|player| self.noteskin_assets.components_for_player(player)),
+                self.noteskin_assets,
+                hide_tap_explosions,
             ),
             GameplayStageAssets {
-                noteskin_assets: self.noteskin_assets,
                 hide_song_intro: self.hide_song_intro,
                 pack_group: self.pack_group,
                 pack_banner_path: self.pack_banner_path,

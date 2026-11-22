@@ -225,9 +225,10 @@ fn gameplay_noteskin_preparation_stays_below_the_theme() {
         "pub struct GameplayNoteskinAssets",
         "pub fn gameplay_noteskin_assets(",
         "pub fn gameplay_data(",
+        "assets.selected_components_for_player(player, profile.tap_explosion_noteskin_hidden())",
     ] {
         assert!(
-            owner.contains(contract),
+            contains_rust(&owner, contract),
             "game noteskin owner is missing {contract}"
         );
     }
@@ -247,6 +248,7 @@ fn gameplay_noteskin_preparation_stays_below_the_theme() {
             "fn noteskin_effects_from_assets(",
             "fn gameplay_receptor_glow_behavior(",
             "fn gameplay_receptor_step_behavior(",
+            "tap_explosion_noteskin_visible",
         ] {
             assert!(
                 !source.contains(implementation),
@@ -255,6 +257,14 @@ fn gameplay_noteskin_preparation_stays_below_the_theme() {
             );
         }
     }
+    assert!(!theme.contains("pub noteskin_assets: GameplayNoteskinAssets"));
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
+    assert!(contains_rust(
+        &compositor,
+        "noteskins: stage.notefield_noteskins(request.player)",
+    ));
+    assert!(contains_rust(&theme, "buffers.noteskins,"));
 }
 
 #[test]
@@ -271,7 +281,7 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "gameplay_crossover_annotations_for_player,",
         "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
         "GameplayStage::with_song_playback_and_noteskins(",
-        "self.noteskin_assets.components_for_player(player)",
+        "self.song_lua_sound_paths, self.noteskin_assets, hide_tap_explosions,",
         "session.attach(gameplay, scene, warm_dynamic_scene)",
     ] {
         assert!(contains_rust(&stage, startup), "missing game startup {startup}");
@@ -469,7 +479,8 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
 
     for contract in [
         "pub struct SongLuaGameplaySession",
-        "pub struct GameplayStage<G>",
+        "pub struct GameplayStage<G, N = ()>",
+        "pub noteskin_assets: N",
         "pub song_media: SongMedia",
         "pub song_scratch: Option<Box<FrameScratch>>",
         "notefield_scratch: Option<[RefCell<NotefieldFieldScratch>; MAX_PLAYERS]>",
@@ -545,7 +556,7 @@ fn normal_gameplay_lifecycle_and_callbacks_stay_below_the_theme() {
         );
     }
     for delegation in [
-        "stage: GameplayStage<GameplayCoreState>",
+        "stage: ActiveGameplayStage",
         "impl SongLuaGameplayHost for State",
         "gameplay_session::update(",
         "gameplay_session::handle_input(",

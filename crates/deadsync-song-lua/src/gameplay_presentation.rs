@@ -1,6 +1,6 @@
 //! Compose a game stage with screen and notefield actors supplied by a presenter.
 
-use crate::gameplay_session::GameplayStage;
+use crate::gameplay_session::{GameplayStage, StageNoteskins};
 use crate::playback::{
     FieldFrame, FieldLayout, FrameOptions, GameplayActorSegments, GameplayCoreState, ScreenLayer,
     compose_frame,
@@ -11,7 +11,8 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::GameplayProfileData;
 use deadsync_gameplay::practice::PracticeSession;
 use deadsync_notefield::{
-    BuiltNotefield, NotefieldCameraCache, NotefieldFieldScratch, ViewOverride,
+    BuiltNotefield, NotefieldCameraCache, NotefieldFieldScratch, NotefieldNoteskinView,
+    ViewOverride,
 };
 use deadsync_noteskin::NoteskinSlot;
 
@@ -48,9 +49,10 @@ pub struct FramePresentationContext<'a, View, Policy> {
     pub policy: Policy,
 }
 
-pub struct FieldRenderBuffers<'a> {
+pub struct FieldRenderBuffers<'a, S> {
     pub cameras: &'a mut [NotefieldCameraCache; MAX_PLAYERS],
     pub notefield: &'a mut NotefieldFieldScratch,
+    pub noteskins: NotefieldNoteskinView<'a, S>,
     pub field: &'a mut Vec<Actor>,
     pub field_flat: &'a mut Vec<FlatDraw>,
     pub hud: &'a mut Vec<Actor>,
@@ -62,16 +64,19 @@ pub struct FieldRenderBuffers<'a> {
 pub trait GameplayFramePresenter {
     type Profile: GameplayProfileData;
     type Slot: NoteskinSlot + Clone;
+    type NoteskinAssets: StageNoteskins<Self::Slot>;
     type View: Copy + Into<GameplayFrameView>;
     type Policy: Copy;
     type Scratch;
 
-    fn stage(&self) -> &GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>>;
+    fn stage(
+        &self,
+    ) -> &GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>, Self::NoteskinAssets>;
 
     fn frame_storage(
         &mut self,
     ) -> (
-        &mut GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>>,
+        &mut GameplayStage<GameplayCoreState<Self::Profile, Self::Slot>, Self::NoteskinAssets>,
         &mut Option<Self::Scratch>,
     );
 
@@ -85,7 +90,7 @@ pub trait GameplayFramePresenter {
         &self,
         context: FramePresentationContext<'_, Self::View, Self::Policy>,
         request: &FieldFrame<'_>,
-        buffers: FieldRenderBuffers<'_>,
+        buffers: FieldRenderBuffers<'_, Self::Slot>,
     ) -> BuiltNotefield;
 
     fn finish_frame(&self, _actors: &mut Vec<Actor>) {}
@@ -201,6 +206,7 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
                 FieldRenderBuffers {
                     cameras,
                     notefield: &mut stage.notefield_scratch(request.player),
+                    noteskins: stage.notefield_noteskins(request.player),
                     field,
                     field_flat,
                     hud,
