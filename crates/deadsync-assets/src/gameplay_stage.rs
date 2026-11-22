@@ -7,7 +7,7 @@ use std::sync::Arc;
 use deadlib_present::actors::Actor;
 use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::practice::PracticeSession;
+use deadsync_gameplay::practice::{PracticeHost, PracticeSession, editor::PracticeEditorConfig};
 use deadsync_gameplay::{
     CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, GameplayConfig,
     GameplayMiniIndicatorData, GameplayProfileData, GameplaySession, GameplayViewport, LeadInTiming,
@@ -76,6 +76,21 @@ pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>> {
 impl<L, P> GameplayHost<L, P> {
     pub fn stage_and_lobby(&mut self) -> (&mut ActiveGameplayStage, &mut L) {
         (&mut self.stage, &mut self.lobby_session)
+    }
+
+    pub fn into_practice<Q>(
+        mut self,
+        editor: PracticeEditorConfig,
+        present: impl FnOnce(&ActiveGameplayStage, &mut P) -> Q,
+    ) -> PracticeHost<Self, Q> {
+        let mut session = PracticeSession::new(&mut self.stage.gameplay, editor);
+        let presentation = present(&self.stage, &mut self.presentation);
+        session.snap_display_to_cursor(&mut self.stage.gameplay);
+        PracticeHost {
+            gameplay: self,
+            session,
+            presentation,
+        }
     }
 }
 
@@ -166,6 +181,34 @@ impl GameplayStageAssets {
 }
 
 impl PreparedGameplayStage {
+    /// Present the prepared stage, then attach its live callbacks before returning the host.
+    pub fn into_host<L, P>(
+        self,
+        scene: Option<SongLuaLiveScene>,
+        lobby_session: L,
+        score_refresh: GameplayScoreRefresh,
+        course_name: Option<&str>,
+        present: impl FnOnce(&ActiveGameplayStage, GameplayStageAssets) -> P,
+    ) -> GameplayHost<L, P> {
+        let (stage, assets) = self.into_parts();
+        let pack_group = match course_name {
+            Some("") => Arc::from("Untitled Course"),
+            Some(name) => Arc::from(name),
+            None => Arc::clone(&assets.pack_group),
+        };
+        let presentation = present(&stage, assets);
+        let mut host = GameplayHost {
+            stage,
+            lobby_session,
+            pack_group,
+            score_refresh,
+            presentation,
+        };
+        let (gameplay, session, warm_dynamic_scene) = host.stage.song_lua_attachment_parts();
+        attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
+        host
+    }
+
     /// Select authored and random cues against the master chart installed in
     /// the prepared simulation, after any Lua chart replacement or side mapping.
     pub fn resolve_song_backgrounds(&mut self, mode: deadsync_config::theme::RandomBackgroundMode) {

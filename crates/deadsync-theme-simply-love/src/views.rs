@@ -166,12 +166,7 @@ impl Default for GameplayPolicyView {
     }
 }
 
-/// Initial scorebox visibility and boards for the gameplay HUD.
-#[derive(Clone, Debug, Default)]
-pub struct GameplayScoreInitView {
-    pub scorebox_visible: [bool; 2],
-    pub scorebox_snapshots: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
-}
+pub use deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots as GameplayScoreInitView;
 
 /// Shell-prepared presentation policy and local HUD identity.
 #[derive(Clone, Debug)]

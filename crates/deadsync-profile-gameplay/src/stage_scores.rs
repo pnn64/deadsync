@@ -7,6 +7,13 @@ use deadsync_score::{
 
 use crate::profile_side_from_gameplay;
 
+/// Initial leaderboard displays by physical player side.
+#[derive(Clone, Debug, Default)]
+pub struct GameplayScoreSnapshots {
+    pub scorebox_visible: [bool; MAX_PLAYERS],
+    pub scorebox_snapshots: [Option<CachedPlayerLeaderboardData>; MAX_PLAYERS],
+}
+
 /// Pending leaderboard requests retained with the stage that started them.
 /// Completion clears a bit. The request profiles are released with the stage.
 #[derive(Default)]

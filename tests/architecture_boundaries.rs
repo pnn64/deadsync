@@ -149,7 +149,7 @@ fn course_startup_and_renewal_use_game_contracts() {
     assert!(app.contains("Some(StageSelection::Course(selection)) => selection.start()"));
     assert!(app.contains("select_course::selected_course_choice(selection)"));
     assert!(app.contains("select_course::course_catalog(selection).start(choice)"));
-    assert!(app.contains("Arc::from(course.song.title.as_str())"));
+    assert!(app.contains(".map(|course| Arc::clone(&course.song))"));
     assert!(!app.contains("select_course::selected_course_start_with_cycles("));
     assert!(!app.contains("select_course::selected_course_plan("));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
@@ -450,33 +450,36 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         .expect("restore held inputs");
     assert!(present < restore);
     let adapter = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
-    let split = adapter
-        .find("prepared.into_parts()")
+    let host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    let split = host
+        .find("let (stage, assets) = self.into_parts()")
         .expect("separate stage from prepared assets");
-    let present = adapter
-        .find("gameplay::GameplayPresentation::from_stage(")
+    let present = host
+        .find("let presentation = present(&stage, assets)")
         .expect("present stage");
     let lobby = adapter
         .find("let lobby_session = GameplayLobbySession::new(")
         .expect("initialize the lobby in the shell");
-    let attach = adapter
+    let host_call = adapter.find("prepared.into_host(").expect("use shared host constructor");
+    let attach = host
         .find("attach_prepared_song_lua(gameplay,")
         .expect("attach callbacks");
-    assert!(
-        lobby < split && split < present && present < attach,
-        "the shell captures the lobby before presenting the prepared stage and attaching callbacks"
-    );
-    assert!(contains_rust(&adapter, "state.stage.song_lua_attachment_parts()"));
-    let owner = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    assert!(lobby < host_call && split < present && present < attach);
+    assert!(contains_rust(&host, "host.stage.song_lua_attachment_parts()"));
     let theme = production_source(
         &root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"),
     );
-    assert!(contains_rust(&owner, "pub struct GameplayHost<L, P>"));
-    assert!(contains_rust(&owner, "pub stage: ActiveGameplayStage"));
-    assert!(contains_rust(&owner, "pub lobby_session: L"));
-    assert!(contains_rust(&owner, "pub score_refresh: GameplayScoreRefresh"));
-    assert!(contains_rust(&owner, "pub presentation: P"));
+    assert!(contains_rust(&host, "pub struct GameplayHost<L, P>"));
+    assert!(contains_rust(&host, "pub stage: ActiveGameplayStage"));
+    assert!(contains_rust(&host, "pub lobby_session: L"));
+    assert!(contains_rust(&host, "pub score_refresh: GameplayScoreRefresh"));
+    assert!(contains_rust(&host, "pub presentation: P"));
     assert!(contains_rust(&adapter, "type GameplayState = GameplayHost<"));
+    assert!(app.contains("ActiveTheme::gameplay_presenter(presentation_init)"));
+    for label in ["STAGE {number}", "RESTART {count}", "PRACTICE MODE", "song_event_name(stage.song())"] {
+        assert!(theme.contains(label), "the selected theme formats {label}");
+        assert!(!app.contains(label));
+    }
     assert!(!contains_rust(&theme, "pub struct State"));
     assert!(contains_rust(&theme, "struct GameplayEffects<'a>(&'a mut State)"));
 }
@@ -528,7 +531,6 @@ fn chart_lua_playback_has_no_theme_dependency() {
     assert!(!theme_storage.contains("ActiveGameplayStage"));
     assert!(!theme_storage.contains("GameplayLobbySession"));
     assert!(!theme_storage.contains("pack_group"));
-    assert!(contains_rust(&shell, "name => assets.score_pack_group(name)"));
     assert!(contains_rust(&shell, "state.compose_gameplay_frame(actors, FramePresentationContext"));
     assert!(contains_rust(&shell, "SongFrameContent::PLAYBACK"));
     assert!(contains_rust(&shell, "state.gameplay.compose_gameplay_frame(actors, FramePresentationContext"));
@@ -562,6 +564,7 @@ fn chart_lua_playback_has_no_theme_dependency() {
     }
     assert!(contains_rust(&theme, "compose_stage_frame(actors, stage, &GameplayPresenter {"));
     let host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
+    assert!(host.contains("None => Arc::clone(&assets.pack_group)"));
     assert!(contains_rust(&host, "pub trait GameplayStagePresenter<L>"));
     assert!(contains_rust(&host, "pub trait PracticeStagePresenter<L, P: GameplayStagePresenter<L>>"));
     assert!(contains_rust(&host, "self.stage.with_frame_scratch(|stage, song| { self.presentation.compose_stage_frame("));
@@ -3010,6 +3013,7 @@ fn practice_runtime_is_shell_prepared() {
         .expect("shell Lua loading completion should be readable");
     let editor = production_source(&root.join("crates/deadsync-gameplay/src/practice/editor.rs"));
     let session = production_source(&root.join("crates/deadsync-gameplay/src/practice/session.rs"));
+    let stage_host = production_source(&root.join("crates/deadsync-assets/src/gameplay_stage.rs"));
 
     for runtime in [
         "deadsync_profile::compat",
@@ -3033,11 +3037,13 @@ fn practice_runtime_is_shell_prepared() {
             && shell.contains("pub(crate) fn practice_init(")
             && shell.contains("editor: PracticeEditorConfig")
             && !shell.contains("PracticeRuntimeView")
-            && shell.contains("hud: gameplay.hud.clone()")
+            && shell.contains("hud: hud.clone()")
             && shell_app.contains("init: practice_init")
             && loading.contains("crate::gameplay_runtime::prepare_practice(gs, finish.init)")
-            && shell.contains("let mut session = PracticeSession::new(")
-            && shell.contains("let presentation = practice::PracticePresentation::new("),
+            && stage_host.contains("let mut session = PracticeSession::new(")
+            && stage_host.contains("session.snap_display_to_cursor(")
+            && shell.contains("gameplay.into_practice(init.editor,")
+            && shell.contains("practice::PracticePresentation::new("),
         "shell must prepare Practice policy/HUD state and execute game-decided rate persistence"
     );
     for handoff in [
@@ -5489,13 +5495,17 @@ fn select_music_replay_cache_is_shell_owned() {
     assert!(shell.contains("select_music::sync_machine_replays("));
     for path in rust_files(&root.join("crates/deadsync-theme-simply-love/src")) {
         let source = read_source(&path).expect("Simply Love source should be readable");
-        for runtime_access in ["deadsync_online::score_compat", "scores::"] {
-            assert!(
-                !source.contains(runtime_access),
-                "{} still reads score runtime through {runtime_access}",
-                path.display()
-            );
-        }
+        let score_alias = source.match_indices("scores::").any(|(index, _)| {
+            source[..index]
+                .chars()
+                .next_back()
+                .is_none_or(|ch| ch != '_' && !ch.is_alphanumeric())
+        });
+        assert!(
+            !source.contains("deadsync_online::score_compat") && !score_alias,
+            "{} still reads score runtime",
+            path.display()
+        );
     }
 }
 
@@ -6472,9 +6482,8 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
         "pub struct GameplayPolicyView",
         "pub struct GameplayRuntimeView",
         "pub struct GameplayInitView",
-        "pub struct GameplayScoreInitView",
+        "GameplayScoreSnapshots as GameplayScoreInitView",
         "pub hud: deadsync_profile::GameplayHudSnapshot",
-        "pub scorebox_visible: [bool; 2]",
         "pub machine_font: deadsync_config::theme::MachineFont",
         "pub background_brightness: f32",
         "pub background_color: deadlib_present::color::Color",
@@ -6531,6 +6540,12 @@ fn gameplay_config_and_profile_runtime_is_shell_prepared() {
     let stage_scores = production_source(
         &root.join("crates/deadsync-profile-gameplay/src/stage_scores.rs"),
     );
+    assert!(stage_scores.contains("pub struct GameplayScoreSnapshots"));
+    assert!(stage_scores.contains("pub scorebox_visible: [bool; MAX_PLAYERS]"));
+    let startup = adapter.split_once("pub(crate) struct GameplayStartup").unwrap().1;
+    let startup = startup.split_once("pub(crate) fn presentation_init").unwrap().0;
+    assert!(startup.contains("pub scores: GameplayScoreSnapshots"));
+    assert!(!startup.contains("GameplayInitView"));
     assert!(contains_rust(&stage_scores, "gameplay.set_mini_indicator_rival_score_percent(player, score)"));
     assert!(!stage_scores.contains("deadsync_theme"));
     for game_update in [

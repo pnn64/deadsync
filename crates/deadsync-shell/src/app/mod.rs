@@ -196,7 +196,8 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
-    NoteskinCatalogView, SmxAssignmentView,
+    GameplayReplayView, GameplayStageIntro, GameplayStageView, NoteskinCatalogView,
+    SmxAssignmentView,
 };
 use deadsync_theme::{
     AudioRequest, PlatformRequest, RevealPathKind, ThemeResources, ThemeScreenFlow,
@@ -9440,8 +9441,9 @@ impl App {
                 );
 
                 let mut gameplay_session = gameplay_session();
+                let presentation_init =
+                    crate::gameplay_runtime::presentation_init(&cfg, &player_profiles);
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
-                    &cfg,
                     lobby_views::refresh(),
                     &charts,
                     &player_profiles,
@@ -9449,7 +9451,7 @@ impl App {
                     &mut self.state.screens.gameplay_score_cursor,
                 );
                 let practice_init =
-                    crate::gameplay_runtime::practice_init(&cfg, &gameplay_startup.presentation);
+                    crate::gameplay_runtime::practice_init(&cfg, &presentation_init.hud);
                 let init_started = Instant::now();
                 let metrics = self.state.shell.metrics;
                 let viewport = gameplay_viewport(metrics);
@@ -9520,11 +9522,13 @@ impl App {
                     let gs = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
-                        Arc::from("PRACTICE MODE"),
-                        Some(Arc::from("Practice Mode")),
-                        None,
-                        None,
+                        GameplayStageView {
+                            intro: GameplayStageIntro::Practice,
+                            replay: None,
+                            course: None,
+                        },
                         gameplay_startup,
+                        ActiveTheme::gameplay_presenter(presentation_init),
                     );
                     Ok(gs)
                 };
@@ -9623,11 +9627,14 @@ impl App {
             }
 
             if let Some((mut start, options_screen)) = self.take_stage_start() {
-                let (replay_edges, replay_offsets, replay_status_text) =
-                    if let Some(replay) = start.replay.take() {
-                        let status = gameplay::replay_status_text(&replay.name, replay.score);
+                let (replay_edges, replay_offsets, replay) =
+                    if let Some(mut replay) = start.replay.take() {
+                        let view = GameplayReplayView {
+                            name: std::mem::take(&mut replay.name),
+                            score_10000: replay.score,
+                        };
                         let (edges, offsets) = replay.into_playback();
-                        (Some(edges), Some(offsets), Some(status))
+                        (Some(edges), Some(offsets), Some(view))
                     } else {
                         (None, None, None)
                     };
@@ -9809,32 +9816,20 @@ impl App {
                 commands.extend(last_played_commands);
 
                 let color_index = start.color_index;
-                let (course_name, course_banner_path) = self
+                let course = self
                     .state
                     .session
                     .course_run
                     .as_ref()
-                    .map_or((None, None), |course| {
-                        (
-                            Some(Arc::from(course.song.title.as_str())),
-                            course.song.banner_path.clone(),
-                        )
-                    });
-                let stage_intro_text: Arc<str> = if let Some((stage_num, total)) = course_intro {
-                    if let Some(total) = total {
-                        let total = total.max(1);
-                        Arc::from(format!("STAGE {stage_num} / {total}"))
-                    } else {
-                        Arc::from(format!("STAGE {stage_num}"))
-                    }
+                    .map(|course| Arc::clone(&course.song));
+                let intro = if let Some((number, total)) = course_intro {
+                    GameplayStageIntro::Course { number, total }
                 } else if cfg.keyboard_features && self.state.session.gameplay_restart_count > 0 {
-                    Arc::from(format!(
-                        "RESTART {}",
-                        self.state.session.gameplay_restart_count
-                    ))
+                    GameplayStageIntro::Restart(self.state.session.gameplay_restart_count)
                 } else {
-                    deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
+                    GameplayStageIntro::Song
                 };
+                let stage_view = GameplayStageView { intro, replay, course };
                 let combo_carry = self.state.session.combo_carry;
                 let stage_options = start.options;
                 let music_rate = stage_options.music_rate;
@@ -9847,8 +9842,9 @@ impl App {
                     replay_offsets.is_some(),
                 );
                 let mut gameplay_session = gameplay_session();
+                let presentation_init =
+                    crate::gameplay_runtime::presentation_init(&cfg, &player_profiles);
                 let mut gameplay_startup = crate::gameplay_runtime::prepare_startup(
-                    &cfg,
                     self.gameplay_lobby.refresh_now(),
                     &charts,
                     &player_profiles,
@@ -9953,11 +9949,9 @@ impl App {
                     let mut state = crate::gameplay_runtime::present_stage(
                         prepared,
                         scene,
-                        stage_intro_text,
-                        replay_status_text,
-                        course_name,
-                        course_banner_path,
+                        stage_view,
                         gameplay_startup,
+                        ActiveTheme::gameplay_presenter(presentation_init),
                     );
                     state.song_lua.restore_held_inputs(held_inputs);
                     Ok(state)

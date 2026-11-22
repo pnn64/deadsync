@@ -215,6 +215,26 @@ pub struct SmxGifCatalogView {
 pub use deadsync_chart::course::CourseStagePlan as CourseStageView;
 pub use deadsync_rules::course::CourseType as CourseTypeView;
 
+/// Stage facts supplied before the presenter chooses the intro and labels.
+pub struct GameplayStageView {
+    pub intro: GameplayStageIntro,
+    pub replay: Option<GameplayReplayView>,
+    pub course: Option<Arc<SongData>>,
+}
+
+#[derive(Clone, Copy)]
+pub enum GameplayStageIntro {
+    Song,
+    Course { number: usize, total: Option<usize> },
+    Restart(u32),
+    Practice,
+}
+
+pub struct GameplayReplayView {
+    pub name: String,
+    pub score_10000: f64,
+}
+
 /// Theme-prepared course labels and summary metadata, separate from game startup.
 #[derive(Clone, Debug)]
 pub struct CoursePresentationView {

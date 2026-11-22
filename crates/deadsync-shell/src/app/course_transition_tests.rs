@@ -265,6 +265,7 @@ fn course_launch_uses_confirmed_rating_after_wheel_replacement() {
                         finish_pending_stage(&mut app);
                         let gameplay = app.state.screens.gameplay_state.as_ref().unwrap();
                         assert!(Arc::ptr_eq(&gameplay.song_arc(), &first_song));
+                        assert_eq!(gameplay.presentation.stage_intro_text.as_ref(), "STAGE 1");
                     }
                 }
             },

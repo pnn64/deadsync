@@ -1,8 +1,8 @@
 use crate::{ActiveTheme, ThemeScreen};
 use deadlib_platform::input::RawKeyboardEvent;
 use deadsync_assets::gameplay_stage::{
-    GameplayHost, GameplayStagePresenter, PracticeStagePresenter, PreparedGameplayStage,
-    attach_prepared_song_lua,
+    ActiveGameplayStage, GameplayHost, GameplayStageAssets, GameplayStagePresenter,
+    PracticeStagePresenter, PreparedGameplayStage,
 };
 use deadsync_chart::ChartData;
 use deadsync_config as config;
@@ -11,7 +11,7 @@ use deadsync_gameplay::{
     GameplaySession, GameplaySessionCommand, GameplayStreamClockSnapshot, gameplay_runtime_charts,
 };
 use deadsync_gameplay::practice::{
-    PracticeDestination, PracticeHost, PracticeSession, PracticeViewRequest,
+    PracticeDestination, PracticeHost, PracticeViewRequest,
     editor::{PracticeEditorConfig, PracticeEditorSnapshot},
 };
 use deadsync_input::InputEvent;
@@ -25,14 +25,17 @@ use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
-use deadsync_profile_gameplay::stage_scores::{GameplayScoreRefresh, mini_indicator_rival_score};
+use deadsync_profile_gameplay::stage_scores::{
+    GameplayScoreRefresh, GameplayScoreSnapshots, mini_indicator_rival_score,
+};
 use deadsync_song_lua::gameplay_presentation::{FramePresentationContext, SongFrameContent};
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
 use deadsync_theme::ThemeScreenFlow;
+use deadsync_theme::views::GameplayStageView;
 use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens::{gameplay, practice};
 use deadsync_theme_simply_love::views::{
-    GameplayInitView, GameplayPolicyView, GameplayRuntimeView, GameplayScoreInitView,
+    GameplayInitView, GameplayPolicyView, GameplayRuntimeView,
 };
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -241,7 +244,7 @@ fn prepare_scores(
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
-) -> (GameplayMiniIndicatorData, GameplayScoreRefresh, GameplayScoreInitView) {
+) -> (GameplayMiniIndicatorData, GameplayScoreRefresh, GameplayScoreSnapshots) {
     let runtime_charts = gameplay_runtime_charts(charts, session);
     let runtime_profiles = gameplay_runtime_profile_data(profiles, session);
     let scorebox_profiles = scorebox_profiles(&runtime_profiles, session);
@@ -284,7 +287,7 @@ fn prepare_scores(
     (
         mini_indicator,
         score_refresh,
-        GameplayScoreInitView { scorebox_visible, scorebox_snapshots },
+        GameplayScoreSnapshots { scorebox_visible, scorebox_snapshots },
     )
 }
 
@@ -292,11 +295,10 @@ pub(crate) struct GameplayStartup {
     pub mini_indicator: GameplayMiniIndicatorData,
     pub lobby_session: GameplayLobbySession,
     pub score_refresh: GameplayScoreRefresh,
-    pub presentation: GameplayInitView,
+    pub scores: GameplayScoreSnapshots,
 }
 
 pub(crate) fn prepare_startup(
-    config: &config::app_config::Config,
     lobby: LobbyRuntimeView,
     charts: &[Arc<ChartData>; 2],
     profiles: &[profile_data::Profile; 2],
@@ -311,6 +313,14 @@ pub(crate) fn prepare_startup(
         session.joined_sides,
         profile_side_from_gameplay(session.player_side),
     );
+    let (mini_indicator, score_refresh, scores) = prepare_scores(charts, profiles, session);
+    GameplayStartup { mini_indicator, lobby_session, score_refresh, scores }
+}
+
+pub(crate) fn presentation_init(
+    config: &config::app_config::Config,
+    profiles: &[profile_data::Profile; 2],
+) -> GameplayInitView {
     let hud_session = profile::get_session_snapshot();
     let runtime = GameplayRuntimeView {
         policy: policy_view(config),
@@ -327,13 +337,7 @@ pub(crate) fn prepare_startup(
         );
         std::array::from_fn(|player| catalog.resolve(profiles[player].judgment_palette_id.as_deref()))
     };
-    let (mini_indicator, score_refresh, scores) = prepare_scores(charts, profiles, session);
-    GameplayStartup {
-        mini_indicator,
-        lobby_session,
-        score_refresh,
-        presentation: GameplayInitView { runtime, hud, judgment_palettes, scores },
-    }
+    GameplayInitView { runtime, hud, judgment_palettes, scores: Default::default() }
 }
 
 pub(crate) fn refresh_chart_scores(
@@ -342,49 +346,30 @@ pub(crate) fn refresh_chart_scores(
     profiles: &[profile_data::Profile; 2],
     session: &GameplaySession,
 ) {
-    (startup.mini_indicator, startup.score_refresh, startup.presentation.scores) =
+    (startup.mini_indicator, startup.score_refresh, startup.scores) =
         prepare_scores(charts, profiles, session);
 }
 
-pub(crate) fn present_stage(
+pub(crate) fn present_stage<P>(
     prepared: PreparedGameplayStage,
     scene: Option<deadsync_song_lua::SongLuaLiveScene>,
-    stage_intro_text: Arc<str>,
-    replay_status_text: Option<Arc<str>>,
-    course_name: Option<Arc<str>>,
-    course_banner_path: Option<std::path::PathBuf>,
+    view: GameplayStageView,
     startup: GameplayStartup,
-) -> GameplayState {
-    let (stage, assets) = prepared.into_parts();
-    let pack_group = match course_name.as_ref() {
-        Some(name) if name.is_empty() => Arc::from("Untitled Course"),
-        name => assets.score_pack_group(name),
-    };
-    let presentation = gameplay::GameplayPresentation::from_stage(
-        &stage,
-        assets,
-        stage_intro_text,
-        replay_status_text,
-        course_name.map(|name| gameplay::CourseDisplayInfo {
-            name: if name.is_empty() {
-                Arc::from(deadsync_theme_simply_love::screens::select_course::course_title(&name))
-            } else {
-                name
-            },
-        }),
-        course_banner_path,
-        startup.presentation,
-    );
-    let mut state = GameplayState {
-        stage,
-        lobby_session: startup.lobby_session,
-        pack_group,
-        score_refresh: startup.score_refresh,
-        presentation,
-    };
-    let (gameplay, session, warm_dynamic_scene) = state.stage.song_lua_attachment_parts();
-    attach_prepared_song_lua(gameplay, session, scene, warm_dynamic_scene);
-    state
+    present: impl FnOnce(
+        &ActiveGameplayStage,
+        GameplayStageAssets,
+        &GameplayStageView,
+        GameplayScoreSnapshots,
+    ) -> P,
+) -> GameplayHost<GameplayLobbySession, P> {
+    let course_name = view.course.as_ref().map(|course| course.title.as_str());
+    prepared.into_host(
+        scene,
+        startup.lobby_session,
+        startup.score_refresh,
+        course_name,
+        |stage, assets| present(stage, assets, &view, startup.scores),
+    )
 }
 
 /// Prepare song-invariant score state once, before gameplay begins. In
@@ -405,7 +390,7 @@ pub(crate) struct PracticeInit {
 
 pub(crate) fn practice_init(
     config: &config::app_config::Config,
-    gameplay: &GameplayInitView,
+    hud: &profile_data::GameplayHudSnapshot,
 ) -> PracticeInit {
     PracticeInit {
         editor: PracticeEditorConfig {
@@ -413,23 +398,14 @@ pub(crate) fn practice_init(
             three_key_navigation: config.three_key_navigation,
             tab_acceleration: config.tab_acceleration,
         },
-        hud: gameplay.hud.clone(),
+        hud: hud.clone(),
     }
 }
 
-pub(crate) fn prepare_practice(mut gameplay: GameplayState, init: PracticeInit) -> PracticeState {
-    let mut session = PracticeSession::new(&mut gameplay.stage.gameplay, init.editor);
-    let presentation = practice::PracticePresentation::new(
-        &gameplay.stage,
-        &mut gameplay.presentation,
-        init.hud,
-    );
-    session.snap_display_to_cursor(&mut gameplay.stage.gameplay);
-    PracticeState {
-        gameplay,
-        session,
-        presentation,
-    }
+pub(crate) fn prepare_practice(gameplay: GameplayState, init: PracticeInit) -> PracticeState {
+    gameplay.into_practice(init.editor, |stage, presentation| {
+        practice::PracticePresentation::new(stage, presentation, init.hud)
+    })
 }
 
 fn smx_sensor_value(data: &deadsync_smx::SensorTestData, panel: usize, fsr: bool) -> Option<u16> {

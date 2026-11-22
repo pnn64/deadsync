@@ -85,9 +85,13 @@ fn event_intro_name(pack_group: &str) -> Option<&str> {
     itl_event_intro_name(name)
 }
 
+#[must_use]
+pub fn song_event_name(song: &SongData) -> Option<&str> {
+    song_pack_group(song).and_then(event_intro_name)
+}
+
 pub fn gameplay_event_intro_text(song: &SongData) -> Arc<str> {
-    song_pack_group(song)
-        .and_then(event_intro_name)
+    song_event_name(song)
         .map(Arc::from)
         .unwrap_or_else(|| Arc::from("EVENT"))
 }

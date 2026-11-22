@@ -33,7 +33,7 @@ pub(crate) mod tests {
     use deadsync_assets::gameplay_noteskin::{GameplayNoteskinAssets, gameplay_noteskin_assets};
     use deadsync_assets::gameplay_stage::{
         ActiveGameplayStage, GameplayHost, GameplayStageInput, GameplayStagePresenter,
-        PracticeStagePresenter, prepare_gameplay_stage,
+        PracticeStagePresenter, PreparedGameplayStage, prepare_gameplay_stage,
     };
     use deadsync_assets::noteskin;
     use deadsync_assets::song_lua::compile_song_lua;
@@ -51,7 +51,9 @@ pub(crate) mod tests {
     use deadsync_song_lua::playback::{
         FieldFrame, FieldLayout, FrameScratch, GameplayActorSegments, ScreenLayer,
     };
+    use deadsync_theme::views::{GameplayReplayView, GameplayStageIntro, GameplayStageView};
     use deadsync_theme_simply_love::screens::gameplay as screen_gameplay;
+    use deadsync_theme_simply_love::views::GameplayInitView;
 
 
     use std::sync::{Arc, LazyLock, Mutex};
@@ -507,6 +509,46 @@ pub(crate) mod tests {
         config_override: Option<GameplayConfig>,
         runtime_fallback: bool,
     ) -> screen_gameplay::State {
+        let (prepared, scene, mut init) = prepare_stage_fixture(
+            simfile, viewport, session, player_profiles, renderer, until_beat,
+            live_diagnostic, configure_compile_clocks, config_override, runtime_fallback,
+        );
+        let scores = std::mem::take(&mut init.scores);
+        crate::gameplay_runtime::present_stage(
+            prepared,
+            scene,
+            GameplayStageView { intro: GameplayStageIntro::Song, replay: None, course: None },
+            crate::gameplay_runtime::GameplayStartup {
+                mini_indicator: Default::default(),
+                lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
+                    Default::default(),
+                    init.runtime.joined,
+                    init.runtime.player_side,
+                ),
+                score_refresh: Default::default(),
+                scores,
+            },
+            move |stage, assets, _, scores| {
+                init.scores = scores;
+                screen_gameplay::GameplayPresentation::from_stage(
+                    stage, assets, Arc::from("EVENT"), None, None, None, init,
+                )
+            },
+        )
+    }
+
+    fn prepare_stage_fixture(
+        simfile: &Path,
+        viewport: GameplayViewport,
+        session: GameplaySession,
+        player_profiles: [profile_data::Profile; MAX_PLAYERS],
+        renderer: &str,
+        until_beat: Option<f32>,
+        live_diagnostic: bool,
+        configure_compile_clocks: Option<&dyn Fn(&mut deadsync_song_lua::SongLuaCompileContext)>,
+        config_override: Option<GameplayConfig>,
+        runtime_fallback: bool,
+    ) -> (PreparedGameplayStage, Option<deadsync_song_lua::SongLuaLiveScene>, GameplayInitView) {
         // Ordinary fixtures use zero global offset. Native-oracle fixtures can
         // supply recorded preferences consistently to parsing and playback.
         let config = config_override.unwrap_or(GameplayConfig {
@@ -547,7 +589,7 @@ pub(crate) mod tests {
             .clone_from(&player_profiles[1].display_name);
         hud.p2.guest = false;
         hud.p2.hide_username = false;
-        let init_view = deadsync_theme_simply_love::views::GameplayInitView {
+        let init_view = GameplayInitView {
             hud,
             ..Default::default()
         };
@@ -637,24 +679,7 @@ pub(crate) mod tests {
             song_lua_data: prepared,
             mini_indicator: Default::default(),
         });
-        crate::gameplay_runtime::present_stage(
-            prepared,
-            scene,
-            Arc::from("EVENT"),
-            None,
-            None,
-            None,
-            crate::gameplay_runtime::GameplayStartup {
-                mini_indicator: Default::default(),
-                lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
-                    Default::default(),
-                    init_view.runtime.joined,
-                    init_view.runtime.player_side,
-                ),
-                score_refresh: Default::default(),
-                presentation: init_view,
-            },
-        )
+        (prepared, scene, init_view)
     }
 
     #[test]
@@ -4480,6 +4505,78 @@ return Def.ActorFrame{
         ) {
             actors.push(alternate_marker(ALTERNATE_PRACTICE_MARKER));
         }
+    }
+
+    #[test]
+    fn alternate_presenter_receives_stage_facts_before_live_lua_attachment() {
+        std::thread::Builder::new()
+            .stack_size(16 * 1024 * 1024)
+            .spawn(|| {
+                with_session(
+                    profile_data::PlayStyle::Single,
+                    profile_data::PlayerSide::P1,
+                    true,
+                    false,
+                    || {
+                        let root = tempfile::tempdir().unwrap();
+                        let song = root.path().join("startup.ssc");
+                        fs::write(&song, "#TITLE:Alternate startup;\n#BPMS:0=120;\n#FGCHANGES:0=default.lua=1=0=0=1;\n#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DIFFICULTY:Challenge;\n#METER:1;\n#NOTES:\n1000\n0100\n0010\n0001\n;\n").unwrap();
+                        fs::write(root.path().join("default.lua"), "return Def.ActorFrame {}").unwrap();
+                        let (prepared, scene, init) = prepare_stage_fixture(
+                            &song,
+                            GameplayViewport::new(640.0, 480.0),
+                            GameplaySession::default(),
+                            std::array::from_fn(|_| profile_data::Profile::default()),
+                            "Software",
+                            None,
+                            true,
+                            None,
+                            None,
+                            false,
+                        );
+                        assert!(scene.is_some());
+                        let host = crate::gameplay_runtime::present_stage(
+                            prepared,
+                            scene,
+                            GameplayStageView {
+                                intro: GameplayStageIntro::Restart(2),
+                                replay: Some(GameplayReplayView { name: "AAA".into(), score_10000: 9876.0 }),
+                                course: None,
+                            },
+                            crate::gameplay_runtime::GameplayStartup {
+                                mini_indicator: Default::default(),
+                                lobby_session: deadsync_online::gameplay_lobby::GameplayLobbySession::new(
+                                    Default::default(), init.runtime.joined, init.runtime.player_side,
+                                ),
+                                score_refresh: Default::default(),
+                                scores: deadsync_profile_gameplay::stage_scores::GameplayScoreSnapshots {
+                                    scorebox_visible: [true, false],
+                                    ..Default::default()
+                                },
+                            },
+                            |stage, _, view, scores| {
+                                assert_eq!(stage.song().title, "Alternate startup");
+                                assert!(stage.song_lua.is_none());
+                                assert!(matches!(view.intro, GameplayStageIntro::Restart(2)));
+                                let replay = view.replay.as_ref().unwrap();
+                                assert_eq!(replay.name, "AAA");
+                                assert_eq!(replay.score_10000, 9876.0);
+                                assert_eq!(scores.scorebox_visible, [true, false]);
+                                AlternateGameplay
+                            },
+                        );
+                        assert!(host.song_lua.is_some());
+                        let practice = host.into_practice(Default::default(), |stage, _| {
+                            assert!(stage.song_lua.is_some());
+                            AlternatePractice
+                        });
+                        assert!(!practice.session.is_playing());
+                    },
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
     }
 
     fn assert_alternate_stage_presentation(
