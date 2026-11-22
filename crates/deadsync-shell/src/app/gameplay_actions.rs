@@ -1,13 +1,13 @@
-use super::{App, CurrentScreen};
+use super::App;
 use crate::gameplay_runtime::{self, GameplayFrameEffect, GameplayFrameEffects};
+use crate::navigation::gameplay_exit_screen;
 use crate::{ActiveTheme, TransitionState};
-use deadsync_gameplay::exit_route::{
-    GameplayExitDestination, GameplayExitRouteContext, resolve_gameplay_exit_route,
-};
+use deadsync_gameplay::exit_route::{GameplayExitRouteContext, resolve_gameplay_exit_route};
 use deadsync_gameplay::{GameplayAction, GameplayExit};
 use deadsync_online::gameplay_lobby::{GAMEPLAY_SCREEN_NAME, GameplayLobbyAction};
 use deadsync_online::lobbies;
 use deadsync_song_lua::gameplay_session::SongLuaGameplayEffect;
+use deadsync_theme::ThemeScreenFlow;
 use log::warn;
 use winit::event_loop::ActiveEventLoop;
 
@@ -90,7 +90,7 @@ impl App {
             }
             GameplayAction::Navigate(_) | GameplayAction::NavigateNoFade(_) => {}
         }
-        let from_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
+        let from_gameplay = self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay;
         let course = self.state.session.course_run.as_ref();
         let all_joined_players_failed =
             matches!(action, GameplayAction::Navigate(GameplayExit::Complete))
@@ -110,12 +110,7 @@ impl App {
         if route.consume_restart_pending {
             self.state.session.restart_pending = false;
         }
-        let target = match route.destination {
-            GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-                CurrentScreen::Gameplay
-            }
-            destination => ActiveTheme::gameplay_exit_screen(destination),
-        };
+        let target = gameplay_exit_screen::<ActiveTheme>(route.destination);
         if route.immediate {
             self.handle_immediate_navigation(target, event_loop);
         } else {
@@ -124,7 +119,7 @@ impl App {
     }
 
     pub(super) fn handle_song_lua_reload(&mut self, event_loop: &ActiveEventLoop) {
-        if self.state.screens.current_screen != CurrentScreen::Gameplay
+        if self.state.screens.current_screen != ActiveTheme::SCREENS.gameplay
             || self.pending_gameplay_init.is_some()
             || !self
                 .state
@@ -151,7 +146,7 @@ impl App {
         self.state.shell.transition = TransitionState::Idle;
         self.state.session.restart_pending = false;
         self.state.gameplay_offset_save_prompt = None;
-        self.on_fade_complete(CurrentScreen::Gameplay, event_loop);
+        self.on_fade_complete(ActiveTheme::SCREENS.gameplay, event_loop);
     }
 }
 

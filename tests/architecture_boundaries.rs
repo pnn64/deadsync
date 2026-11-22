@@ -12631,6 +12631,7 @@ fn gameplay_exit_routing_stays_below_the_theme() {
     let shell_runtime = production_source(&root.join("crates/deadsync-shell/src/gameplay_runtime.rs"));
     let shell_flow = production_source(&root.join("crates/deadsync-shell/src/screen_flow.rs"));
     let navigation = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
+    let stage_screens = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
 
     for contract in [
         "pub struct GameplayExitRouteContext",
@@ -12754,20 +12755,27 @@ fn gameplay_exit_routing_stays_below_the_theme() {
         "action: GameplayAction",
         "GameplayAction::None => return",
         "GameplayAction::Restart => { self.try_gameplay_restart(event_loop,",
-        "self.state.screens.current_screen == CurrentScreen::Gameplay",
+        "self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay",
         "self.state.session.course_run.as_ref()",
         "restart_pending: self.state.session.restart_pending",
         "course_active: course.is_some()",
         "course_has_next_stage: course.is_some_and(|course| course.run.has_next_stage())",
         "resolve_gameplay_exit_route(",
-        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { CurrentScreen::Gameplay }",
-        "destination => ActiveTheme::gameplay_exit_screen(destination)",
+        "gameplay_exit_screen::<ActiveTheme>(route.destination)",
         "route.consume_restart_pending",
     ] {
         assert!(
             contains_rust(routing, live_fact),
             "each individual effect must use current game facts through {live_fact}"
         );
+    }
+    for destination in [
+        "GameplayExitDestination::Results => T::SCREENS.results",
+        "GameplayExitDestination::SongSelection => T::SCREENS.song_selection",
+        "GameplayExitDestination::CourseSelection => T::SCREENS.course_selection",
+        "GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => { T::SCREENS.gameplay }",
+    ] {
+        assert!(contains_rust(&stage_screens, destination), "missing game route {destination}");
     }
     assert!(
         contains_rust(
@@ -12825,16 +12833,23 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
         assert!(owner.contains(presentation), "missing theme transition {presentation}");
     }
     let navigation = production_source(&root.join("crates/deadsync-shell/src/navigation.rs"));
-    assert!(navigation.contains("if is_play_screen(from) || is_play_screen(target)"));
-    assert!(navigation.contains("ActiveTheme::transition_kind(from, target)"));
+    for policy in [
+        "if is_play_screen::<T>(from) || is_play_screen::<T>(target)",
+        "T::transition_kind(from, target)",
+        "screen == T::SCREENS.gameplay || screen == T::SCREENS.practice",
+        "then_some(deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS)",
+        "Some(deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS)",
+        "then_some(deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS)",
+    ] {
+        assert!(contains_rust(&navigation, policy), "missing shared stage policy {policy}");
+    }
     let adapter = production_source(&root.join("crates/deadsync-shell/src/app/screen_nav.rs"));
     for handoff in [
         "ActiveTheme::current_screen_file_name(target)",
         "ActiveTheme::out_transition(screen, target)",
         "ActiveTheme::in_transition(screen, context)",
-        "if is_play_screen(screen) { deadsync_song_lua::gameplay_session::GAMEPLAY_EXIT_TRANSITION_SECONDS",
-        "Some((_, true)) => deadsync_gameplay::GAMEPLAY_RESTART_TRANSITION_SECONDS",
-        "Some((_, false)) => deadsync_gameplay::GAMEPLAY_ENTRY_TRANSITION_SECONDS",
+        "stage_exit_duration::<ActiveTheme>(screen).unwrap_or(duration)",
+        "stage_entry_duration::<ActiveTheme>(screen, restarting).unwrap_or(duration)",
     ] {
         assert!(contains_rust(&adapter, handoff), "missing shell transition handoff {handoff}");
     }
@@ -12842,7 +12857,7 @@ fn transition_presentation_and_playback_timing_have_separate_owners() {
     // The endpoint still receives the final tick on the completion frame.
     let app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell frame loop");
-    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition(")
+    let tick_policy = app.find("let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(")
         .expect("shell gameplay tick policy");
     let advance = app.find(".advance_frame(transition_dt)")
         .expect("advance transition clock");
@@ -12861,7 +12876,12 @@ fn theme_screen_contract_has_explicit_owners() {
     let simply_love_flow =
         read_source(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
             .expect("Simply Love flow should be readable");
-    for token in ["pub struct ThemeScreenId", "pub trait Theme"] {
+    for token in [
+        "pub struct ThemeScreenId",
+        "pub trait Theme",
+        "pub struct ThemeScreens<S>",
+        "pub trait ThemeScreenFlow: Theme",
+    ] {
         assert!(
             generic_screen.contains(token),
             "deadsync-theme is missing generic screen contract token {token}"
@@ -12883,6 +12903,9 @@ fn theme_screen_contract_has_explicit_owners() {
             "Simply Love is missing concrete flow token {token}"
         );
     }
+    let simply_love = read_source(root.join("crates/deadsync-theme-simply-love/src/lib.rs"))
+        .expect("Simply Love theme should be readable");
+    assert!(simply_love.contains("impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme"));
     let shell_app = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(

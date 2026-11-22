@@ -11,7 +11,7 @@ pub use runtime::{
     FullscreenChoice, GraphicsRequest, PlatformRequest, PresentPolicyChoice, RendererChoice,
     RevealPathKind, thread_choice_index, thread_count_from_choice,
 };
-pub use screen::{Theme, ThemeScreenId};
+pub use screen::{Theme, ThemeScreenFlow, ThemeScreenId, ThemeScreens};
 pub use transition::{
     ThemeTransitions, TransitionCompletion, TransitionFrame, TransitionKind, TransitionState,
 };

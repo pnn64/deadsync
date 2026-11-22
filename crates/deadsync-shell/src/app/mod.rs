@@ -27,6 +27,7 @@ mod updater;
 
 use self::lua_loading::SongLuaLoading;
 use self::screenshot::auto_screenshot_eval_results;
+use crate::{ActiveTheme, ThemeScreen as CurrentScreen, TransitionState};
 use crate::command::Command;
 use crate::course::{
     CourseRunState, append_endless_cycle, build_course_graph_stages,
@@ -66,7 +67,6 @@ use crate::lighting::{
     lighting_frame_plan, lights_test_view, load_cabinet_light_chart, operator_menu_button_route,
     smx_pad_blackout, smx_pad_gif_frame_plan,
 };
-use crate::TransitionState;
 use crate::navigation::{TransitionMusicPaths, tick_gameplay_during_transition};
 use crate::offset_prompt::{
     GameplayOffsetSavePrompt, GameplayOffsetSnapshot, OffsetPromptInput,
@@ -195,9 +195,12 @@ use deadsync_theme::views::{
     AppPathView, AppPathsView, AudioOptionsView, DensityGraphView as DensityGraphSource,
     NoteskinCatalogView, SmxAssignmentView,
 };
-use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind, TransitionCompletion};
-use crate::ThemeScreen as CurrentScreen;
-use deadsync_theme_simply_love::screens::transitions::{gameplay_smx_overlay_alpha, screen_fade_view};
+use deadsync_theme::{
+    AudioRequest, PlatformRequest, RevealPathKind, ThemeScreenFlow, TransitionCompletion,
+};
+use deadsync_theme_simply_love::screens::transitions::{
+    gameplay_smx_overlay_alpha, screen_fade_view,
+};
 use deadsync_theme_simply_love::views::{
     EvaluationContextView, EvaluationInitView, EvaluationPlayerView, EvaluationPolicyView,
     EvaluationRuntimeView, EvaluationSubmissionView, MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource,
@@ -4752,7 +4755,7 @@ impl App {
         } else {
             logic_dt
         };
-        let tick_gameplay = tick_gameplay_during_transition(
+        let tick_gameplay = tick_gameplay_during_transition::<ActiveTheme>(
             self.state.screens.current_screen,
             &self.state.shell.transition,
         );
@@ -4778,7 +4781,9 @@ impl App {
             gameplay_offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),
         });
         if transition_plan.step_screen && !self.gameplay_preload_holds_frame() {
-            if step_plan.step_screen && self.state.screens.current_screen == CurrentScreen::Gameplay {
+            if step_plan.step_screen
+                && self.state.screens.current_screen == ActiveTheme::SCREENS.gameplay
+            {
                 self.step_gameplay(logic_dt, false, event_loop);
             } else if step_plan.step_screen {
                 let smx_assignment = matches!(

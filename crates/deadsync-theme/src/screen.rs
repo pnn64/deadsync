@@ -31,6 +31,24 @@ pub trait Theme {
     }
 }
 
+/// The screens that connect a theme's flow to the application's game sessions.
+/// A theme can supply additional screens and choose its own presentation and IDs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ThemeScreens<S> {
+    pub menu: S,
+    pub gameplay: S,
+    pub practice: S,
+    pub results: S,
+    pub song_selection: S,
+    pub course_selection: S,
+    pub player_options: S,
+}
+
+/// Supplies the distinct screens used by the shared game flow.
+pub trait ThemeScreenFlow: Theme {
+    const SCREENS: ThemeScreens<Self::Screen>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::ThemeScreenId;

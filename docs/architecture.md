@@ -420,6 +420,11 @@ type. `ThemeTransitions` supplies transition actors, actor-fade timing, and
 presentation routing for non-play screens. Simply Love owns menu fades, overlay
 opacity, and its compatibility names for `current_screen.txt`.
 
+`ThemeScreenFlow` identifies the theme's screens for play, results, selection,
+and player options. The shell uses those IDs for stage transitions, course
+continuation, and keeping the temporary Practice rate across player options.
+Themes can choose other IDs and add screens while using the same stage routing.
+
 Gameplay and Practice use the full stage lifecycle for transitions. Their faded
 routes use game-owned entry, restart, and exit durations. The shell evaluates
 the gameplay tick condition before advancing the transition. Pending

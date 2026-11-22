@@ -47,14 +47,14 @@ impl SimplyLoveTheme {
         destination: deadsync_gameplay::exit_route::GameplayExitDestination,
     ) -> screens::SimplyLoveScreen {
         use deadsync_gameplay::exit_route::GameplayExitDestination;
-        use screens::SimplyLoveScreen;
+        use deadsync_theme::ThemeScreenFlow;
 
         match destination {
-            GameplayExitDestination::Results => SimplyLoveScreen::Evaluation,
-            GameplayExitDestination::SongSelection => SimplyLoveScreen::SelectMusic,
-            GameplayExitDestination::CourseSelection => SimplyLoveScreen::SelectCourse,
+            GameplayExitDestination::Results => Self::SCREENS.results,
+            GameplayExitDestination::SongSelection => Self::SCREENS.song_selection,
+            GameplayExitDestination::CourseSelection => Self::SCREENS.course_selection,
             GameplayExitDestination::NextCourseStage | GameplayExitDestination::RestartStage => {
-                SimplyLoveScreen::Gameplay
+                Self::SCREENS.gameplay
             }
         }
     }
@@ -97,6 +97,18 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     fn current_screen_file_name(screen: Self::Screen) -> &'static str {
         screen.current_screen_file_name()
     }
+}
+
+impl deadsync_theme::ThemeScreenFlow for SimplyLoveTheme {
+    const SCREENS: deadsync_theme::ThemeScreens<Self::Screen> = deadsync_theme::ThemeScreens {
+        menu: screens::SimplyLoveScreen::Menu,
+        gameplay: screens::SimplyLoveScreen::Gameplay,
+        practice: screens::SimplyLoveScreen::Practice,
+        results: screens::SimplyLoveScreen::Evaluation,
+        song_selection: screens::SimplyLoveScreen::SelectMusic,
+        course_selection: screens::SimplyLoveScreen::SelectCourse,
+        player_options: screens::SimplyLoveScreen::PlayerOptions,
+    };
 }
 
 mod act_macro {
