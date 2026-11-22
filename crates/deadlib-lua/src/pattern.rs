@@ -254,6 +254,9 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         if *set == [ascii_low, ascii_high, 0, 0] {
             return Some(scan_boundary(bytes, |byte| !byte.is_ascii_alphanumeric()));
         }
+        if *set == [!ascii_low, !ascii_high, u64::MAX, u64::MAX] {
+            return Some(ascii_word_boundary(bytes));
+        }
         let [hex_low, hex_high] = const { crate::locale::ascii_class_bits(b'x') };
         let hex_digit =
             |byte: u8| (byte.wrapping_sub(b'0') <= 9) | ((byte | 0x20).wrapping_sub(b'a') <= 5);
@@ -290,6 +293,31 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
     } else {
         scan_boundary(bytes, |byte| byte.wrapping_sub(first) > width)
     })
+}
+
+fn ascii_word_boundary(bytes: &[u8]) -> usize {
+    const LANES: u64 = 0x0101_0101_0101_0101;
+    const HIGH: u64 = LANES * 0x80;
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (index, &word) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(word);
+        // Setting the high bit prevents borrows between byte lanes.
+        let padded = word | HIGH;
+        let lower = padded | (LANES * 0x20);
+        let digits = padded.wrapping_sub(LANES * u64::from(b'0'))
+            & !padded.wrapping_sub(LANES * u64::from(b'9' + 1));
+        let letters = lower.wrapping_sub(LANES * u64::from(b'a'))
+            & !lower.wrapping_sub(LANES * u64::from(b'z' + 1));
+        let hits = (digits | letters) & !word & HIGH;
+        if hits != 0 {
+            return index * 8 + (hits.trailing_zeros() / 8) as usize;
+        }
+    }
+    bytes.len() - tail.len()
+        + tail
+            .iter()
+            .position(u8::is_ascii_alphanumeric)
+            .unwrap_or(tail.len())
 }
 
 #[inline(never)]
@@ -1201,16 +1229,25 @@ mod byte_search_tests {
     }
 
     #[test]
-    fn ascii_space_and_hex_runs_match_bitmap_membership() {
-        for (class, member) in [(b's', b' '), (b'x', b'A')] {
+    fn ascii_class_runs_match_bitmap_membership() {
+        for (class, member, nonmember) in
+            [(b's', b' ', b'x'), (b'x', b'A', b'x'), (b'w', b'A', b'~')]
+        {
             let [low, high] = crate::locale::ascii_class_bits(class);
             let set = [low, high, 0, 0];
-            for (set, fill) in [(set, member), (set.map(|word| !word), b'x')] {
+            for (set, fill) in [(set, member), (set.map(|word| !word), nonmember)] {
                 let mut bytes = [fill; 65];
-                for byte in 0..=u8::MAX {
-                    bytes[32] = byte;
-                    let end = if set_has(&set, byte) { bytes.len() } else { 32 };
-                    assert_eq!(range_set_run(&bytes, &set), Some(end));
+                for index in 24..=34 {
+                    for byte in 0..=u8::MAX {
+                        bytes[index] = byte;
+                        let end = if set_has(&set, byte) {
+                            bytes.len()
+                        } else {
+                            index
+                        };
+                        assert_eq!(range_set_run(&bytes, &set), Some(end));
+                    }
+                    bytes[index] = fill;
                 }
             }
         }
