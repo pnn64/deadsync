@@ -7,10 +7,11 @@ use deadsync_chart::{ChartData, GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, GameplayConfig,
-    GameplayMiniIndicatorData, GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
-    ReplayOffsetSnapshot, init_gameplay_runtime,
+    GameplayMiniIndicatorData, GameplayProfileData, GameplaySession, GameplayViewport, LeadInTiming,
+    ReplayInputEdge, ReplayOffsetSnapshot, hold_explosion_enabled_for_options, init_gameplay_runtime,
 };
-use deadsync_profile::Profile;
+use deadsync_notefield::{MeasureLineMode, NotefieldSettings};
+use deadsync_profile::{MeasureLines, Profile};
 use deadsync_profile_gameplay::{
     GameplayProfile, gameplay_crossover_annotations_for_player, gameplay_pack_data,
     gameplay_runtime_profile_data,
@@ -88,18 +89,14 @@ impl PreparedGameplayStage {
     }
 
     pub fn into_parts(self) -> (ActiveGameplayStage, GameplayStageAssets) {
-        let hide_tap_explosions = self
-            .gameplay
-            .profiles()
-            .each_ref()
-            .map(|profile| profile.tap_explosion_noteskin_hidden());
+        let notefield_settings = self.gameplay.profiles().each_ref().map(notefield_settings);
         (
             GameplayStage::with_song_playback_and_noteskins(
                 self.gameplay,
                 self.song_lua,
                 self.song_lua_sound_paths,
                 self.noteskin_assets,
-                hide_tap_explosions,
+                notefield_settings,
             ),
             GameplayStageAssets {
                 hide_song_intro: self.hide_song_intro,
@@ -124,6 +121,31 @@ impl PreparedGameplayStage {
             pack_group: Arc::from(""),
             pack_banner_path: None,
         }
+    }
+}
+
+fn notefield_settings(profile: &GameplayProfile) -> NotefieldSettings {
+    NotefieldSettings {
+        mine_size_scale: profile.mine_size_percent.clamp(10, 200) as f32 / 100.0,
+        measure_line_mode: match profile.measure_lines {
+            MeasureLines::Off => MeasureLineMode::Off,
+            MeasureLines::Measure => MeasureLineMode::Measure,
+            MeasureLines::Quarter => MeasureLineMode::Quarter,
+            MeasureLines::Eighth => MeasureLineMode::Eighth,
+        },
+        measure_cues: profile.measure_cues,
+        column_cues: profile.column_cues,
+        crossover_cues: profile.crossover_cues,
+        crossover_countdown: profile.column_countdown,
+        column_flash: profile.column_flash_options().enabled,
+        notefield_offset: [
+            profile.note_field_offset_x.clamp(0, 50) as f32,
+            profile.note_field_offset_y.clamp(-50, 50) as f32,
+        ],
+        fallback_mini_percent: profile.mini_percent(),
+        hide_targets: profile.hide_targets,
+        hold_explosion_enabled: hold_explosion_enabled_for_options(profile.tap_explosion_options()),
+        hide_tap_explosion_noteskin: profile.tap_explosion_noteskin_hidden(),
     }
 }
 
@@ -240,5 +262,30 @@ pub fn attach_prepared_song_lua(
     {
         gameplay.mods.song_lua_compile_succeeded = false;
         log::warn!("Cannot attach prepared song Lua: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GameplayProfile, Profile, notefield_settings};
+    use deadsync_profile::TapExplosionMask;
+
+    #[test]
+    fn hold_explosion_option_uses_holding_mask() {
+        let mut profile = GameplayProfile(Profile::default());
+        assert!(notefield_settings(&profile).hold_explosion_enabled);
+
+        profile
+            .tap_explosion_active_mask
+            .remove(TapExplosionMask::HOLDING);
+        assert!(!notefield_settings(&profile).hold_explosion_enabled);
+
+        profile
+            .tap_explosion_active_mask
+            .insert(TapExplosionMask::HOLDING);
+        profile
+            .tap_explosion_active_mask
+            .remove(TapExplosionMask::HELD);
+        assert!(notefield_settings(&profile).hold_explosion_enabled);
     }
 }

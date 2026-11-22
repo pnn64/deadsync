@@ -281,7 +281,8 @@ fn gameplay_stage_bootstrap_is_game_owned() {
         "gameplay_crossover_annotations_for_player,",
         "SongLuaGameplaySession::for_gameplay(&mut gameplay)",
         "GameplayStage::with_song_playback_and_noteskins(",
-        "self.song_lua_sound_paths, self.noteskin_assets, hide_tap_explosions,",
+        "self.song_lua_sound_paths, self.noteskin_assets, notefield_settings,",
+        "self.gameplay.profiles().each_ref().map(notefield_settings)",
         "session.attach(gameplay, scene, warm_dynamic_scene)",
     ] {
         assert!(contains_rust(&stage, startup), "missing game startup {startup}");
@@ -11038,6 +11039,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "pub notes: &'a [Note]",
         "pub noteskin: NotefieldNoteskinView",
         "pub song_lua: NotefieldSongLuaView",
+        "pub settings: NotefieldSettings",
         "pub options: NotefieldOptions",
         "pub arrow_effect_time_s: f64",
         "pub hold_explosion_enabled: bool",
@@ -11056,14 +11058,35 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let actor_emission = &source[delegation..];
     for profile_field in [
         "profile.hide_targets",
-        "profile.hide_combo",
-        "profile.hide_combo_explosions",
-        "profile.judgment_back",
+        "profile.measure_lines",
         "profile.measure_cues",
         "profile.column_cues",
         "profile.crossover_cues",
         "profile.column_flash_on_miss",
         "profile.column_countdown",
+        "profile.mine_size_percent",
+        "profile.note_field_offset_x",
+        "profile.note_field_offset_y",
+        "profile.tap_explosion_active_mask",
+    ] {
+        assert!(
+            !source.contains(profile_field),
+            "Simply Love bypasses stage notefield settings via {profile_field}"
+        );
+    }
+    let compositor =
+        production_source(&root.join("crates/deadsync-song-lua/src/gameplay_presentation.rs"));
+    assert!(contains_rust(
+        &compositor,
+        "settings: stage.notefield_settings(request.player)",
+    ));
+    let presenter =
+        production_source(&root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"));
+    assert!(contains_rust(&presenter, "buffers.noteskins, buffers.settings,"));
+    for profile_field in [
+        "profile.hide_combo",
+        "profile.hide_combo_explosions",
+        "profile.judgment_back",
         "profile.error_bar_trim",
         "profile.error_bar_multi_tick",
         "profile.short_average_error_bar_enabled",
@@ -11730,7 +11753,6 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldFieldFrameView",
         "NotefieldFieldResult",
         "NotefieldFieldScratch",
-        "NotefieldFrameFeatures",
         "NotefieldFramePlan",
         "NotefieldGeometry",
         "NotefieldHudComposeResult",
@@ -11739,6 +11761,7 @@ fn canonical_notefield_public_symbols_match_allowlist() {
         "NotefieldLaneFeedback",
         "NotefieldNoteskinView",
         "NotefieldOptions",
+        "NotefieldSettings",
         "NotefieldSongLuaView",
         "NotefieldVisualState",
         "NoteskinFrameCacheStats",

@@ -13872,14 +13872,15 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
     }
 
     use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
-    use deadsync_assets::gameplay_stage::ActiveGameplayStage;
+    use deadsync_assets::gameplay_stage::{ActiveGameplayStage, PreparedGameplayStage};
     use deadsync_gameplay::practice::editor::{PracticeEditorCommand, PracticePlayRange};
     use deadsync_gameplay::practice::{PracticeSession, PracticeViewRequest};
+    use deadsync_notefield::{MeasureLineMode, NotefieldSettings};
     use deadsync_song_lua::gameplay_presentation::{
         FieldRenderBuffers, FramePresentationContext, GameplayFramePresenter, GameplayFrameView,
         compose_gameplay_frame, compose_practice_frame,
     };
-    use deadsync_song_lua::gameplay_session::{GameplayStage, SongLuaGameplaySession, StageNoteskins};
+    use deadsync_song_lua::gameplay_session::StageNoteskins;
     use deadsync_song_lua::playback as shared;
 
     struct FixturePresenter {
@@ -13939,6 +13940,23 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
             assert!(std::ptr::eq(request.chart.notes, self.stage.notes()));
             assert_eq!(request.music_time_s, self.stage.current_music_time_seconds());
             assert_eq!(request.geometry.player_idx, request.player);
+            assert_eq!(
+                buffers.settings,
+                NotefieldSettings {
+                    mine_size_scale: 2.0,
+                    measure_line_mode: MeasureLineMode::Eighth,
+                    measure_cues: true,
+                    column_cues: true,
+                    crossover_cues: true,
+                    crossover_countdown: true,
+                    column_flash: true,
+                    notefield_offset: [50.0, -50.0],
+                    fallback_mini_percent: 20.0,
+                    hide_targets: true,
+                    hold_explosion_enabled: false,
+                    hide_tap_explosion_noteskin: false,
+                },
+            );
             let noteskins = &self.stage.noteskin_assets;
             let player = request.player;
             let base = noteskins.noteskin[player].as_deref().unwrap();
@@ -14000,23 +14018,34 @@ fn compositor_runs_without_a_theme_and_preserves_lua_across_hud_styles() {
         receptor_noteskin: [Some(load_skin("metal")), None],
         ..Default::default()
     };
-    let hide_tap_explosions = state
-        .profiles()
-        .each_ref()
-        .map(|profile| profile.tap_explosion_noteskin_hidden());
+    state.update_profile(0, |profile| {
+        profile.mine_size_percent = 250;
+        profile.measure_lines = profile_data::MeasureLines::Eighth;
+        profile.measure_cues = true;
+        profile.column_cues = true;
+        profile.crossover_cues = true;
+        profile.column_countdown = true;
+        profile.column_flash_on_miss = true;
+        profile.note_field_offset_x = 99;
+        profile.note_field_offset_y = -99;
+        profile.mini_percent = 20;
+        profile.hide_targets = true;
+        profile
+            .tap_explosion_active_mask
+            .remove(profile_data::TapExplosionMask::HOLDING);
+    });
+    let mut prepared = PreparedGameplayStage::from_gameplay(state, noteskin_assets);
+    prepared.song_lua_sound_paths = media.sound_paths;
+    let (stage, _) = prepared.into_parts();
     let mut presenter = FixturePresenter {
-        stage: GameplayStage::with_song_playback_and_noteskins(
-            state,
-            SongLuaGameplaySession::new(),
-            media.sound_paths,
-            noteskin_assets,
-            hide_tap_explosions,
-        ),
+        stage,
         hud_count: Some(0),
         expect_song_content: true,
         field_storage: std::cell::Cell::new(None),
     };
     presenter.stage.gameplay.update_profile(0, |profile| {
+        profile.hide_targets = false;
+        profile.measure_lines = profile_data::MeasureLines::Off;
         profile.tap_explosion_noteskin = Some(profile_data::NoteSkin::none_choice());
     });
     let hide_tap_explosion = presenter.stage.profiles()[0].tap_explosion_noteskin_hidden();

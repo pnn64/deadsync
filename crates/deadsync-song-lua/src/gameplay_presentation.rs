@@ -12,7 +12,7 @@ use deadsync_gameplay::GameplayProfileData;
 use deadsync_gameplay::practice::PracticeSession;
 use deadsync_notefield::{
     BuiltNotefield, NotefieldCameraCache, NotefieldFieldScratch, NotefieldNoteskinView,
-    ViewOverride,
+    NotefieldSettings, ViewOverride,
 };
 use deadsync_noteskin::NoteskinSlot;
 
@@ -53,6 +53,7 @@ pub struct FieldRenderBuffers<'a, S> {
     pub cameras: &'a mut [NotefieldCameraCache; MAX_PLAYERS],
     pub notefield: &'a mut NotefieldFieldScratch,
     pub noteskins: NotefieldNoteskinView<'a, S>,
+    pub settings: NotefieldSettings,
     pub field: &'a mut Vec<Actor>,
     pub field_flat: &'a mut Vec<FlatDraw>,
     pub hud: &'a mut Vec<Actor>,
@@ -207,6 +208,7 @@ fn compose_stage_frame<P: GameplayFramePresenter>(
                     cameras,
                     notefield: &mut stage.notefield_scratch(request.player),
                     noteskins: stage.notefield_noteskins(request.player),
+                    settings: stage.notefield_settings(request.player),
                     field,
                     field_flat,
                     hud,

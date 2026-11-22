@@ -1,29 +1,18 @@
-use crate::{FieldPlacement, MeasureLineMode};
+use crate::{FieldPlacement, MeasureLineMode, NotefieldSettings, ViewOverride};
 use deadlib_present::actors::{Actor, SharedActorFrameScratch, SizeSpec};
 use deadsync_core::input::MAX_COLS;
 use std::ops::Range;
 use std::sync::Arc;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotefieldFrameFeatures {
-    pub measure_line_mode: MeasureLineMode,
-    pub measure_cues: bool,
-    pub column_cues: bool,
-    pub crossover_cues: bool,
-    pub crossover_countdown: bool,
-    pub column_flash: bool,
-    pub error_bar: bool,
-    pub error_bar_text: bool,
-    pub combo_visible: bool,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub(crate) struct NotefieldFramePlanRequest {
     pub placement: FieldPlacement,
     pub num_players: usize,
     pub cols_per_player: usize,
     pub total_cols: usize,
-    pub features: NotefieldFrameFeatures,
+    pub settings: NotefieldSettings,
+    pub view: ViewOverride,
+    pub combo_visible: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -31,6 +20,7 @@ pub struct NotefieldFramePlan {
     pub player_idx: usize,
     pub col_start: usize,
     pub num_cols: usize,
+    pub(crate) measure_line_mode: MeasureLineMode,
     pub field_actor_reserve: usize,
     pub hud_actor_reserve: usize,
 }
@@ -61,8 +51,13 @@ pub(crate) fn notefield_frame_plan(
         return None;
     }
 
-    let features = request.features;
-    let measure_line_extra = match features.measure_line_mode {
+    let settings = request.settings;
+    let measure_line_mode = if request.view.edit_beat_bars {
+        MeasureLineMode::Edit
+    } else {
+        settings.measure_line_mode
+    };
+    let measure_line_extra = match measure_line_mode {
         MeasureLineMode::Off => 0,
         MeasureLineMode::Measure => 18,
         MeasureLineMode::Quarter => 30,
@@ -71,16 +66,17 @@ pub(crate) fn notefield_frame_plan(
     };
     let field_actor_reserve = (num_cols * 10).max(28)
         + measure_line_extra
-        + usize::from(features.measure_cues) * 32
-        + usize::from(features.column_cues) * (num_cols + 4)
-        + usize::from(features.crossover_cues) * (num_cols + 4)
-        + usize::from(features.column_flash) * num_cols;
-    let hud_actor_reserve = 8 + usize::from(features.combo_visible);
+        + usize::from(settings.measure_cues) * 32
+        + usize::from(settings.column_cues) * (num_cols + 4)
+        + usize::from(settings.crossover_cues) * (num_cols + 4)
+        + usize::from(settings.column_flash) * num_cols;
+    let hud_actor_reserve = 8 + usize::from(request.combo_visible && !request.view.hide_combo);
 
     Some(NotefieldFramePlan {
         player_idx,
         col_start,
         num_cols,
+        measure_line_mode,
         field_actor_reserve,
         hud_actor_reserve,
     })
@@ -190,20 +186,6 @@ pub(crate) fn share_actor_range(
 mod tests {
     use super::*;
 
-    fn features(measure_line_mode: MeasureLineMode) -> NotefieldFrameFeatures {
-        NotefieldFrameFeatures {
-            measure_line_mode,
-            measure_cues: false,
-            column_cues: false,
-            crossover_cues: false,
-            crossover_countdown: false,
-            column_flash: false,
-            error_bar: false,
-            error_bar_text: false,
-            combo_visible: false,
-        }
-    }
-
     fn request(
         placement: FieldPlacement,
         measure_line_mode: MeasureLineMode,
@@ -213,7 +195,12 @@ mod tests {
             num_players: 1,
             cols_per_player: 4,
             total_cols: 4,
-            features: features(measure_line_mode),
+            settings: NotefieldSettings {
+                measure_line_mode,
+                ..Default::default()
+            },
+            view: ViewOverride::default(),
+            combo_visible: false,
         }
     }
 
@@ -280,6 +267,7 @@ mod tests {
         ] {
             let plan = notefield_frame_plan(request(FieldPlacement::P1, mode))
                 .expect("four-column field should resolve");
+            assert_eq!(plan.measure_line_mode, mode);
             assert_eq!(plan.field_actor_reserve, expected);
             assert_eq!(plan.hud_actor_reserve, 8);
         }
@@ -287,31 +275,31 @@ mod tests {
 
     #[test]
     fn enabled_features_preserve_current_reserve_totals() {
-        let mut request = request(FieldPlacement::P1, MeasureLineMode::Edit);
-        request.features = NotefieldFrameFeatures {
-            measure_line_mode: MeasureLineMode::Edit,
+        let mut request = request(FieldPlacement::P1, MeasureLineMode::Quarter);
+        request.settings = NotefieldSettings {
             measure_cues: true,
             column_cues: true,
             crossover_cues: true,
             crossover_countdown: true,
             column_flash: true,
-            error_bar: true,
-            error_bar_text: true,
-            combo_visible: true,
+            ..request.settings
         };
+        request.combo_visible = true;
+        request.view.edit_beat_bars = true;
         let plan = notefield_frame_plan(request).expect("feature-rich field should resolve");
+        assert_eq!(plan.measure_line_mode, MeasureLineMode::Edit);
         assert_eq!(plan.field_actor_reserve, 164);
         assert_eq!(plan.hud_actor_reserve, 9);
 
-        request.features.crossover_cues = false;
+        request.settings.crossover_cues = false;
         let no_crossover = notefield_frame_plan(request).expect("field should resolve");
         assert_eq!(no_crossover.hud_actor_reserve, 9);
 
-        request.features.crossover_countdown = false;
+        request.settings.crossover_countdown = false;
         let no_countdown = notefield_frame_plan(request).expect("field should resolve");
         assert_eq!(no_countdown.hud_actor_reserve, 9);
 
-        request.features.combo_visible = false;
+        request.view.hide_combo = true;
         let reduced = notefield_frame_plan(request).expect("field should resolve");
         assert_eq!(reduced.hud_actor_reserve, 8);
     }

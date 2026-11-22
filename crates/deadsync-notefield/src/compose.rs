@@ -1,7 +1,7 @@
 use crate::{
     ErrorBarModes, FieldLayout, FieldLayoutRequest, FieldPlacement, HudLayoutOffsets,
-    HudLayoutParams, LayoutMiniIndicatorPosition, NoteDepthFrameCache, NotePartPhaseCache,
-    NotefieldFrameFeatures, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
+    HudLayoutParams, LayoutMiniIndicatorPosition, MeasureLineMode, NoteDepthFrameCache,
+    NotePartPhaseCache, NotefieldFramePlan, NotefieldFramePlanRequest, ProxyCaptureRequests,
     ScrollTravel, ScrollTravelRequest, TornadoBounds, TornadoLaneCache, ViewOverride,
     ZmodLayoutParams, beat_factor, compute_active_note_geometry, compute_tornado_lane_caches,
     effective_mini_value, field_effect_height, field_layout, fill_lane_col_offsets,
@@ -353,23 +353,56 @@ pub struct SongLuaPlayerPosition {
     pub y: f32,
 }
 
-/// Profile-derived behavior and resolved asset availability in canonical terms.
+/// The player's lane settings captured at the start of the stage.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NotefieldSettings {
+    pub mine_size_scale: f32,
+    pub measure_line_mode: MeasureLineMode,
+    pub measure_cues: bool,
+    pub column_cues: bool,
+    pub crossover_cues: bool,
+    pub crossover_countdown: bool,
+    pub column_flash: bool,
+    pub notefield_offset: [f32; 2],
+    pub fallback_mini_percent: f32,
+    pub hide_targets: bool,
+    pub hold_explosion_enabled: bool,
+    pub hide_tap_explosion_noteskin: bool,
+}
+
+impl Default for NotefieldSettings {
+    fn default() -> Self {
+        Self {
+            mine_size_scale: 1.0,
+            measure_line_mode: MeasureLineMode::Off,
+            measure_cues: false,
+            column_cues: false,
+            crossover_cues: false,
+            crossover_countdown: false,
+            column_flash: false,
+            notefield_offset: [0.0; 2],
+            fallback_mini_percent: 0.0,
+            hide_targets: false,
+            hold_explosion_enabled: false,
+            hide_tap_explosion_noteskin: false,
+        }
+    }
+}
+
+/// HUD presentation preferences and resolved asset availability.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NotefieldOptions {
-    pub mine_size_scale: f32,
-    pub frame_features: NotefieldFrameFeatures,
-    pub notefield_offset: [f32; 2],
+    pub combo_visible: bool,
+    pub error_bar: bool,
+    pub error_bar_text: bool,
     pub judgment_offset: [f32; 2],
     pub combo_offset: [f32; 2],
     pub error_bar_offset: [f32; 2],
     pub zmod_layout: ZmodLayoutParams,
     pub has_judgment_texture: bool,
     pub error_bar_up: bool,
-    pub fallback_mini_percent: f32,
     pub column_flash_compact: bool,
     pub column_flash_dimmed: bool,
-    pub hide_targets: bool,
-    pub hold_explosion_enabled: bool,
     pub hide_combo_explosions: bool,
     pub judgment_back: bool,
     pub show_fa_plus_window: bool,
@@ -420,6 +453,7 @@ pub struct NotefieldComposeRequest<'a, S> {
     pub chart: NotefieldChartView<'a>,
     pub noteskin: NotefieldNoteskinView<'a, S>,
     pub song_lua: NotefieldSongLuaView<'a>,
+    pub settings: NotefieldSettings,
     pub options: NotefieldOptions,
     pub capture_requests: ProxyCaptureRequests,
     pub edit_measure_text_slot_base: u8,
@@ -700,13 +734,14 @@ impl<S> PreparedNotefield<'_, S> {
 pub fn prepare_notefield<'a, S>(
     request: &'a NotefieldComposeRequest<'a, S>,
 ) -> Option<PreparedNotefield<'a, S>> {
-    let features = resolved_frame_features(request.options.frame_features, request.view);
     let frame_plan = notefield_frame_plan(NotefieldFramePlanRequest {
         placement: request.placement,
         num_players: request.geometry.num_players,
         cols_per_player: request.geometry.cols_per_player,
         total_cols: request.geometry.total_cols,
-        features,
+        settings: request.settings,
+        view: request.view,
+        combo_visible: request.options.combo_visible,
     })?;
     if frame_plan.player_idx != request.geometry.player_idx {
         return None;
@@ -862,7 +897,7 @@ pub fn prepare_notefield<'a, S>(
     }
     let mini = effective_mini_value(
         request.visual.mini_percent,
-        request.options.fallback_mini_percent,
+        request.settings.fallback_mini_percent,
         request.visual.visual.big,
     );
     let effect_height = field_effect_height(
@@ -958,8 +993,8 @@ fn prepare_field<S>(
         screen_center_y: request.geometry.screen_center_y,
         num_cols,
         field_zoom,
-        notefield_offset_x: request.options.notefield_offset[0],
-        notefield_offset_y: request.options.notefield_offset[1],
+        notefield_offset_x: request.settings.notefield_offset[0],
+        notefield_offset_y: request.settings.notefield_offset[1],
         receptor_y_override: request.view.receptor_y,
         center_receptors_y: request.view.center_receptors_y,
         centered_scroll: request.visual.scroll.centered,
@@ -1145,21 +1180,9 @@ fn column_reverse_percents(scroll: ScrollEffects, num_cols: usize) -> [f32; MAX_
     out
 }
 
-const fn resolved_frame_features(
-    mut features: NotefieldFrameFeatures,
-    view: ViewOverride,
-) -> NotefieldFrameFeatures {
-    if view.edit_beat_bars {
-        features.measure_line_mode = crate::MeasureLineMode::Edit;
-    }
-    features.combo_visible &= !view.hide_combo;
-    features
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MeasureLineMode;
 
     #[test]
     fn mod_timer_matches_native_get_time_bits() {
@@ -1267,20 +1290,6 @@ mod tests {
         }
     }
 
-    fn features() -> NotefieldFrameFeatures {
-        NotefieldFrameFeatures {
-            measure_line_mode: MeasureLineMode::Quarter,
-            measure_cues: true,
-            column_cues: true,
-            crossover_cues: true,
-            crossover_countdown: true,
-            column_flash: true,
-            error_bar: true,
-            error_bar_text: true,
-            combo_visible: true,
-        }
-    }
-
     #[test]
     fn borrowed_lane_storage_preserves_lane_views() {
         let index = |value| ChartNoteIndex::try_from_usize(value).expect("test index fits u32");
@@ -1318,31 +1327,6 @@ mod tests {
         assert!(view.lane_note_rows(3).is_empty());
         assert_eq!(view.lane_holds(1), &[7, 11]);
         assert!(view.lane_holds(2).is_empty());
-    }
-
-    #[test]
-    fn view_overrides_resolve_inside_canonical_preparation() {
-        let resolved = resolved_frame_features(
-            features(),
-            ViewOverride {
-                edit_beat_bars: true,
-                hide_combo: true,
-                ..ViewOverride::default()
-            },
-        );
-
-        assert_eq!(resolved.measure_line_mode, MeasureLineMode::Edit);
-        assert!(!resolved.combo_visible);
-        assert!(resolved.measure_cues);
-        assert!(resolved.column_cues);
-    }
-
-    #[test]
-    fn default_view_preserves_profile_derived_features() {
-        assert_eq!(
-            resolved_frame_features(features(), ViewOverride::default()),
-            features()
-        );
     }
 
     #[test]

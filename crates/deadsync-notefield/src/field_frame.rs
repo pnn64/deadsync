@@ -6,7 +6,7 @@ use crate::transforms::{
 use crate::{
     CapturedActorScratch, CapturedActorSource, HoldBodyCapRequest, HoldEntryPlanRequest,
     HoldEmitterState, HoldMeshScratch, HoldPathSample, LaneNoteTransformCache, MeasureComposeRequest,
-    MeasureLineMode, MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
+    MineLayerRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest,
     NoteXParams, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFeedbackFrameView,
     PreparedNotefield, PreparedNotefieldNotes, VisualEffectParams,
     appearance_note_alpha_glow_cached, compose_flat_mine_layers, compose_flat_note_layer,
@@ -283,7 +283,7 @@ fn compose_field_contents<S, F>(
     F: Fn(&S) -> SpriteSource,
 {
     let style = request.hud_style;
-    let options = &request.options;
+    let settings = &request.settings;
     let elapsed_screen = request.visual.elapsed_screen_s;
     let visual = request.visual.visual;
     let appearance = resolved_appearance(request, prepared);
@@ -468,7 +468,7 @@ fn compose_field_contents<S, F>(
         None
     };
     let cue_visible_row_range = measure_cue_range_search_enabled(
-        options.frame_features.measure_cues,
+        settings.measure_cues,
         scroll_speed,
         request.chart.displayed_beat_monotonic,
     )
@@ -479,17 +479,12 @@ fn compose_field_contents<S, F>(
     })
     .flatten();
 
-    let measure_line_mode = if request.view.edit_beat_bars {
-        MeasureLineMode::Edit
-    } else {
-        options.frame_features.measure_line_mode
-    };
     compose_measure_lines(
         actors,
         flat_draws,
         MeasureComposeRequest {
-            mode: measure_line_mode,
-            show_cues: options.frame_features.measure_cues,
+            mode: prepared.frame_plan.measure_line_mode,
+            show_cues: settings.measure_cues,
             hud_style: style,
             column_xs: &note_inputs.measure_column_xs,
             column_dirs: &column_dirs,
@@ -1345,7 +1340,7 @@ fn compose_visible_notes<S, F>(
                 let target_arrow_px = notes.target_arrow_px * effect_zoom;
                 let scale_mine_for_note = |slot: &S| -> [f32; 2] {
                     let size = scale_mine_slot(slot);
-                    let scale = field_zoom * effect_zoom * request.options.mine_size_scale;
+                    let scale = field_zoom * effect_zoom * request.settings.mine_size_scale;
                     [size[0] * scale, size[1] * scale]
                 };
                 let note_rotation_x = transform_cache.confusion_rotation_x_deg

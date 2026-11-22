@@ -4707,6 +4707,7 @@ pub fn draw_field(
             }
         },
         buffers.noteskins,
+        buffers.settings,
         &visual_policy.assets.effects,
         state.actor_resources(),
         asset_manager.texture_context(),

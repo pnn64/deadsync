@@ -5,16 +5,15 @@ use deadsync_assets::gameplay_noteskin::GameplayNoteskinAssets;
 use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions, blue_fantastic_window_ms,
-    gameplay_error_bar_trim_max_window_ix, hold_explosion_enabled_for_options,
+    FantasticWindowOptions, GameplayErrorBarTrim, blue_fantastic_window_ms,
+    gameplay_error_bar_trim_max_window_ix,
 };
 use deadsync_notefield::{
     BrokenRunLookup, BuiltNotefield, ComboHudFrame, ComboMilestoneAssets, ComboMilestoneSprite,
     CounterHudFrame, ErrorBarHudFrame, ErrorBarModes,
     IndicatorSprite, JudgmentHudFrame, LayoutMiniIndicatorPosition, MeasureCounterOptions,
-    MeasureLineMode, MiniHudFrame, NotefieldCameraCache, NotefieldComposeRequest,
-    NotefieldFieldScratch, NotefieldFrameFeatures, NotefieldHudFrameView,
-    NotefieldNoteskinView, NotefieldOptions,
+    MiniHudFrame, NotefieldCameraCache, NotefieldComposeRequest, NotefieldFieldScratch,
+    NotefieldHudFrameView, NotefieldNoteskinView, NotefieldOptions, NotefieldSettings,
     StreamProgressLookup, TapJudgmentHudFrame, TapJudgmentSprite, ZmodLayoutParams,
     compose_notefield_hud, prepare_notefield,
 };
@@ -389,22 +388,7 @@ fn zmod_layout_params(
     }
 }
 
-#[inline(always)]
-const fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
-    let mask = profile.tap_explosion_active_mask;
-    hold_explosion_enabled_for_options(TapExplosionOptions {
-        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
-        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
-        great: mask.contains(profile_data::TapExplosionMask::GREAT),
-        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
-        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
-        miss: mask.contains(profile_data::TapExplosionMask::MISS),
-        held: mask.contains(profile_data::TapExplosionMask::HELD),
-        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
-    })
-}
-
-/// Immutable profile-derived notefield inputs for one player and song.
+/// Immutable HUD presentation inputs for one player and song.
 ///
 /// The gameplay/render thread owns this fixed two-slot screen cache. It is
 /// populated at gameplay entry from the immutable profile and resolved assets,
@@ -426,12 +410,6 @@ pub(crate) fn gameplay_notefield_plan(
     judgment_palette: deadsync_theme::color::JudgmentPalette,
 ) -> GameplayNotefieldPlan {
     let style = crate::notefield_style::notefield_style_with_palette(judgment_palette);
-    let measure_line_mode = match profile.measure_lines {
-        profile_data::MeasureLines::Off => MeasureLineMode::Off,
-        profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
-        profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
-        profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
-    };
     let error_bar_mask = {
         let mut mask = profile.error_bar_active_mask;
         if mask.is_empty() {
@@ -448,22 +426,9 @@ pub(crate) fn gameplay_notefield_plan(
         }
     };
     let options = NotefieldOptions {
-        mine_size_scale: profile.mine_size_percent.clamp(10, 200) as f32 / 100.0,
-        frame_features: NotefieldFrameFeatures {
-            measure_line_mode,
-            measure_cues: profile.measure_cues,
-            column_cues: profile.column_cues,
-            crossover_cues: profile.crossover_cues,
-            crossover_countdown: profile.column_countdown,
-            column_flash: profile.column_flash_on_miss,
-            error_bar: !error_bar_mask.is_empty(),
-            error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
-            combo_visible: !profile.hide_combo,
-        },
-        notefield_offset: [
-            profile.note_field_offset_x.clamp(0, 50) as f32,
-            profile.note_field_offset_y.clamp(-50, 50) as f32,
-        ],
+        error_bar: !error_bar_mask.is_empty(),
+        error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
+        combo_visible: !profile.hide_combo,
         judgment_offset: [
             profile
                 .judgment_offset_x
@@ -497,11 +462,8 @@ pub(crate) fn gameplay_notefield_plan(
         zmod_layout: zmod_layout_params(profile, style, has_judgment_texture),
         has_judgment_texture,
         error_bar_up: profile.error_bar_up,
-        fallback_mini_percent: profile.mini_percent as f32,
         column_flash_compact: profile.column_flash_size == profile_data::ColumnFlashSize::Compact,
         column_flash_dimmed: column_flash_dimmed(profile.column_flash_brightness),
-        hide_targets: profile.hide_targets,
-        hold_explosion_enabled: hold_explosion_enabled(profile),
         hide_combo_explosions: profile.hide_combo_explosions,
         judgment_back: profile.judgment_back,
         show_fa_plus_window: profile.show_fa_plus_window,
@@ -600,6 +562,7 @@ pub(crate) fn compose_frame(
     arrow_effect_time_s: f64,
     arrow_tipsy_time_s: Option<f64>,
     noteskin: NotefieldNoteskinView<'_, SpriteSlot>,
+    settings: NotefieldSettings,
     visual_effects: &'static crate::visual_styles::EffectAssets,
     actor_resources: &ActorResourceArena,
     textures: &impl deadlib_present::texture::TextureContext,
@@ -642,6 +605,7 @@ pub(crate) fn compose_frame(
         chart: frame.chart,
         noteskin,
         song_lua: frame.song_lua,
+        settings,
         options: notefield_plan.options,
         capture_requests,
         edit_measure_text_slot_base: super::FRAME_TEXT_EDIT_MEASURE_BASE
@@ -699,7 +663,7 @@ pub(crate) fn compose_frame(
         && NotefieldHudFrameView::combo_active(
             request.view.hide_combo,
             blind_active,
-            options.frame_features.combo_visible,
+            options.combo_visible,
         );
     let combo_milestone_assets =
         (combo_active && !options.hide_combo_explosions && !p.combo_milestones.is_empty())
@@ -739,7 +703,7 @@ pub(crate) fn compose_frame(
         );
     let error_bar_frame = NotefieldHudFrameView::error_active(
         blind_active,
-        options.frame_features.error_bar,
+        options.error_bar,
         offset_indicator_active,
     )
     .then(|| ErrorBarHudFrame {
