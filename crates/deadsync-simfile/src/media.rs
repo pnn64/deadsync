@@ -216,11 +216,22 @@ pub fn path_uses_lua_like_itg(path: &Path) -> bool {
     {
         return true;
     }
-    path.is_dir() && (resolve_dir_default_lua_like_itg(path).is_some() || resolve_dir_default_xml(path).is_some())
+    path.is_dir()
+        && (resolve_dir_default_lua_like_itg(path).is_some()
+            || resolve_dir_default_xml(path).is_some()
+            || resolve_dir_bganimation_ini_like_itg(path).is_some())
 }
 
 fn resolve_dir_default_xml(dir: &Path) -> Option<PathBuf> {
     resolve_song_path_like_itg(dir, "default.xml").filter(|path| path.is_file())
+}
+
+/// ITG 3.95-era animation folders declare their layers in `BGAnimation.ini`.
+/// The song Lua runtime translates that file into an actor definition, so
+/// such a folder loads as a scripted layer rather than as one static image.
+#[must_use]
+pub fn resolve_dir_bganimation_ini_like_itg(dir: &Path) -> Option<PathBuf> {
+    resolve_song_dir_entry_ci(dir, "BGAnimation.ini").filter(|path| path.is_file())
 }
 
 #[must_use]
@@ -228,6 +239,7 @@ pub fn song_lua_entry_path_like_itg(path: PathBuf) -> PathBuf {
     if path.is_dir() {
         resolve_dir_default_lua_like_itg(&path)
             .or_else(|| resolve_dir_default_xml(&path))
+            .or_else(|| resolve_dir_bganimation_ini_like_itg(&path))
             .unwrap_or_else(|| path.join("default.lua"))
     } else {
         path

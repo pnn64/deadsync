@@ -261,6 +261,12 @@ fn load_file(
     call.with_roots(&[env], |call| {
         let source = if matches!(kind, Kind::Entry) && crate::legacy_xml::is_xml(&path) {
             crate::legacy_xml::load(&path).map_err(|error| call.error(error.as_bytes()))?
+        } else if crate::bganimation_ini::is_ini(&path) {
+            let bytes = fs::read(&path).map_err(|error| call.error(error.to_string().as_bytes()))?;
+            crate::bganimation_ini::lua_source(
+                &String::from_utf8_lossy(&bytes),
+                path.parent().unwrap_or(song_dir),
+            )
         } else {
             fs::read_to_string(&path).map_err(|error| call.error(error.to_string().as_bytes()))?
         };

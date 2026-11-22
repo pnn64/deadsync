@@ -38,6 +38,7 @@ mod compiled_layers;
 
 mod compile_timing;
 
+mod bganimation_ini;
 mod bitmap_font;
 mod blank_texture;
 mod draw_commands;

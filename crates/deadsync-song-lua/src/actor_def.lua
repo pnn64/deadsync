@@ -164,6 +164,14 @@ function LoadActorFunc( path, level )
 		return chunk
 	end
 
+	if Type == "FileType_Ini" then
+		-- DeadSync: an ITG 3.95-style BGAnimation.ini. loadfile translates
+		-- its layers into an actor definition chunk.
+		local chunk, errmsg = loadfile( path )
+		if not chunk then error(errmsg) end
+		return chunk
+	end
+
 	if Type == "FileType_Bitmap" or Type == "FileType_Movie" then
 		return function()
 			return Def.Sprite {
