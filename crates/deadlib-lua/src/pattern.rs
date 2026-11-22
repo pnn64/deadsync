@@ -254,6 +254,15 @@ fn range_set_run(bytes: &[u8], set: &[u64; 4]) -> Option<usize> {
         if *set == [ascii_low, ascii_high, 0, 0] {
             return Some(scan_boundary(bytes, |byte| !byte.is_ascii_alphanumeric()));
         }
+        let [hex_low, hex_high] = const { crate::locale::ascii_class_bits(b'x') };
+        let hex_digit =
+            |byte: u8| (byte.wrapping_sub(b'0') <= 9) | ((byte | 0x20).wrapping_sub(b'a') <= 5);
+        if *set == [hex_low, hex_high, 0, 0] {
+            return Some(scan_boundary(bytes, |byte| !hex_digit(byte)));
+        }
+        if *set == [!hex_low, !hex_high, u64::MAX, u64::MAX] {
+            return Some(scan_boundary(bytes, hex_digit));
+        }
         return excluded_set_run(bytes, set);
     }
     if index == 0 && bits == ASCII_SPACE_BITS {
@@ -1192,14 +1201,17 @@ mod byte_search_tests {
     }
 
     #[test]
-    fn ascii_whitespace_runs_match_bitmap_membership() {
-        let spaces = [super::ASCII_SPACE_BITS, 0, 0, 0];
-        for (set, fill) in [(spaces, b' '), (spaces.map(|word| !word), b'x')] {
-            let mut bytes = [fill; 65];
-            for byte in 0..=u8::MAX {
-                bytes[32] = byte;
-                let end = if set_has(&set, byte) { bytes.len() } else { 32 };
-                assert_eq!(range_set_run(&bytes, &set), Some(end));
+    fn ascii_space_and_hex_runs_match_bitmap_membership() {
+        for (class, member) in [(b's', b' '), (b'x', b'A')] {
+            let [low, high] = crate::locale::ascii_class_bits(class);
+            let set = [low, high, 0, 0];
+            for (set, fill) in [(set, member), (set.map(|word| !word), b'x')] {
+                let mut bytes = [fill; 65];
+                for byte in 0..=u8::MAX {
+                    bytes[32] = byte;
+                    let end = if set_has(&set, byte) { bytes.len() } else { 32 };
+                    assert_eq!(range_set_run(&bytes, &set), Some(end));
+                }
             }
         }
     }
