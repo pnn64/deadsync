@@ -18810,6 +18810,66 @@ mod tests {
     }
 
     #[test]
+    fn turn_column_mapping_follows_the_transformed_notes() {
+        for cols in [4, 5, 8, 10] {
+            for turn in [
+                GameplayTurnOption::None,
+                GameplayTurnOption::Mirror,
+                GameplayTurnOption::LRMirror,
+                GameplayTurnOption::UDMirror,
+                GameplayTurnOption::Left,
+                GameplayTurnOption::Right,
+                GameplayTurnOption::Shuffle,
+            ] {
+                for seed in [0, 1, 29, u64::MAX] {
+                    let mut notes: Vec<_> = (0..cols)
+                        .map(|column| {
+                            let mut note = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+                            note.column = column;
+                            note
+                        })
+                        .collect();
+                    apply_turn_options(
+                        &mut notes,
+                        [(0, cols), (0, 0)],
+                        cols,
+                        1,
+                        [turn, GameplayTurnOption::None],
+                        seed,
+                    );
+                    let mapping = turn_column_mapping(turn, cols, seed);
+                    for (source, note) in notes.iter().enumerate() {
+                        assert_eq!(
+                            mapping[note.column], source,
+                            "turn={turn:?}, cols={cols}, seed={seed}"
+                        );
+                    }
+                    assert!(mapping[cols..].iter().copied().eq(cols..MAX_COLS));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn turn_column_mapping_keeps_nonstatic_and_unsupported_turns_local() {
+        let identity: [usize; MAX_COLS] = std::array::from_fn(|column| column);
+        for cols in [0, 4, 5, 8, 10, MAX_COLS + 1] {
+            for turn in [
+                GameplayTurnOption::None,
+                GameplayTurnOption::Blender,
+                GameplayTurnOption::Random,
+            ] {
+                assert_eq!(turn_column_mapping(turn, cols, 29), identity);
+            }
+        }
+        assert_eq!(turn_column_mapping(GameplayTurnOption::Left, 3, 29), identity);
+        assert_eq!(
+            turn_column_mapping(GameplayTurnOption::Mirror, MAX_COLS + 1, 29),
+            identity
+        );
+    }
+
+    #[test]
     fn shuffle_turn_retries_an_identity_permutation() {
         let mut first = [0, 1, 2, 3];
         TurnRng::new(29).shuffle(&mut first);

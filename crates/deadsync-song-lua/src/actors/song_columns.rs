@@ -146,7 +146,7 @@ fn uniform(
     component: usize,
     baseline: f32,
 ) -> Result<Option<f32>, Error> {
-    let handler = field(call, column, key)?;
+    let handler = notefields::active_handler(call, column, key)?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(None);
@@ -211,7 +211,7 @@ fn uniform(
     })
 }
 fn x_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Error> {
-    let handler = field(call, column, POS)?;
+    let handler = notefields::active_handler(call, column, POS)?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(None);
@@ -228,7 +228,7 @@ fn x_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Err
     })
 }
 fn y_offset(call: &mut HostCall<'_>, column: TableId) -> Result<Option<f32>, Error> {
-    let handler = field(call, column, POS)?;
+    let handler = notefields::active_handler(call, column, POS)?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(None);
@@ -272,7 +272,7 @@ fn position(
     call: &mut HostCall<'_>,
     column: TableId,
 ) -> Result<Option<[(Target, f32); 10]>, Error> {
-    let handler = field(call, column, POS)?;
+    let handler = notefields::active_handler(call, column, POS)?;
     with_table(call, handler, |call, handler| {
         let Some(handler) = handler else {
             return Ok(None);
@@ -361,7 +361,7 @@ fn read_field(
                     }
                 };
                 let position = position(call, id)?;
-                let handler = field(call, id, POS)?;
+                let handler = notefields::active_handler(call, id, POS)?;
                 let absolute = with_table(call, handler, |call, handler| {
                     Ok(handler.is_some_and(|h| {
                         mode(call, h, false).is_ok_and(|m| m.eq_ignore_ascii_case(POSITION))

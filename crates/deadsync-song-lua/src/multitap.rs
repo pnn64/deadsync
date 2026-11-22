@@ -575,7 +575,10 @@ fn multitap_arrow_state(
     }
     let mut state = baseline;
     state.visible = true;
-    state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
+    // The factory sets baserotationz, then copies neutral ArrowEffects rotation.
+    // Retaining the captured base and also adding the lane angle rotates twice.
+    state.base_rotation[2] = MULTITAP_LANE_ROTATION[lane - 1];
+    state.rot_z_deg = 0.0;
     state.diffuse = [0.4, 0.4, 0.4, 1.0];
     state.texcoord_offset = Some(multitap_qtzn_texcoord_offset(
         noteskin_resolver,
@@ -668,7 +671,7 @@ pub fn multitap_explosion_state(
     state.x = song_lua_style_column_x(&context.style_name, lane - 1);
     state.y = (THEME_RECEPTOR_Y_STD - THEME_RECEPTOR_Y_REV) * 0.5;
     state.z = 0.0;
-    state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
+    state.base_rotation[2] = MULTITAP_LANE_ROTATION[lane - 1];
     state
 }
 
@@ -883,6 +886,7 @@ macro_rules! overlay_value_fields {
         $visit!(rot_x_deg);
         $visit!(rot_y_deg);
         $visit!(rot_z_deg);
+        $visit!(base_rotation);
         $visit!(skew_x);
         $visit!(skew_y);
         $visit!(blend);

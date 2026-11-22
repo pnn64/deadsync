@@ -542,9 +542,24 @@ pub fn song_lua_compile_context(
             player_side, false,
         )
     }));
+    let turn_seed = deadsync_gameplay::turn_seed_for_song(song);
+    let player_turn_options: [deadsync_gameplay::GameplayTurnOption; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if player < num_players {
+                gameplay_turn_option(player_profiles[player].turn_option)
+            } else {
+                deadsync_gameplay::GameplayTurnOption::None
+            }
+        });
     context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
         enabled: player < num_players,
         autoplay: 0.0,
+        turn_option: player_turn_options[player],
+        column_take_from: deadsync_gameplay::turn_column_mapping(
+            player_turn_options[player],
+            play_style.cols_per_player(),
+            turn_seed,
+        ),
         difficulty: if player < num_players {
             song_lua_difficulty_from_chart(&charts[player].difficulty)
         } else {

@@ -434,6 +434,20 @@ impl SongRuntime {
         if multitaps.is_empty() {
             return Ok(None);
         }
+        // The recognized factory implements these whole-column turns itself.
+        // Other authored turn handling must keep its chronological Lua updates.
+        if context.players.iter().any(|player| {
+            player.enabled
+                && !matches!(
+                    player.turn_option,
+                    deadsync_gameplay::GameplayTurnOption::None
+                        | deadsync_gameplay::GameplayTurnOption::Mirror
+                        | deadsync_gameplay::GameplayTurnOption::Left
+                        | deadsync_gameplay::GameplayTurnOption::Right
+                )
+        }) {
+            return Ok(None);
+        }
         // The analytic curves encode `beat > tap` with tap.next_up(). A float
         // seconds conversion can collapse that edge onto the tap itself. Replay
         // the authored Lua in that case, preserving its native frame predicates.
@@ -452,6 +466,24 @@ impl SongRuntime {
             if !context.players[player].enabled {
                 continue;
             }
+            // Note transforms store destination -> source. The factory's arrows
+            // and explosions need the inverse: where each chart lane landed.
+            let multitaps: Vec<_> = multitaps
+                .iter()
+                .map(|desc| {
+                    let source = desc.lane - 1;
+                    let destination = context.players[player]
+                        .column_take_from
+                        .iter()
+                        .take(song_lua_style_info(&context.style_name).columns)
+                        .position(|&column| column == source)
+                        .unwrap_or(source);
+                    MultitapDesc {
+                        lane: destination + 1,
+                        ..desc.clone()
+                    }
+                })
+                .collect();
             let pn = player + 1;
             if !overlay_indices.contains_key(format!("MultitapFrameP{pn}").as_str()) {
                 return Ok(None);

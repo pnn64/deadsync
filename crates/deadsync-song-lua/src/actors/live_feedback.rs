@@ -75,6 +75,30 @@ pub(super) fn analytic_multitap_fields(call: &mut HostCall<'_>) -> Result<bool, 
             let options = call.raw_table_get(levels, Value::Number(level))?;
             let state = raw(call, table(call, options)?, "__songlua_player_option_state")?;
             let state = table(call, state)?;
+            if let Some(initial) = call.store_ref().initial_turn_options {
+                use deadsync_gameplay::GameplayTurnOption as Turn;
+                // The note field keeps its load-time mapping. The factory reads
+                // Song options each update, so a changed turn must run its Lua.
+                for (key, turn) in [
+                    ("mirror", Turn::Mirror),
+                    ("left", Turn::Left),
+                    ("right", Turn::Right),
+                    ("lrmirror", Turn::LRMirror),
+                    ("udmirror", Turn::UDMirror),
+                    ("shuffle", Turn::Shuffle),
+                    ("supershuffle", Turn::Blender),
+                    ("hypershuffle", Turn::Random),
+                ] {
+                    if truthy(raw(call, state, key)?) != (initial[player] == turn) {
+                        return Ok(false);
+                    }
+                }
+                if truthy(raw(call, state, "backwards")?)
+                    || truthy(raw(call, state, "softshuffle")?)
+                {
+                    return Ok(false);
+                }
+            }
             for key in [
                 "mini",
                 "tilt",

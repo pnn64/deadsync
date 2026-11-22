@@ -298,9 +298,24 @@ struct Scene {
     initial_states: Option<super::song_layers::SongInitialStates>,
     song_session: Option<song_activation::Session>,
 }
+
+pub(crate) fn configure_column_turns(
+    call: &mut HostCall<'_>,
+    context: &crate::SongLuaCompileContext,
+) {
+    call.store().column_take_from = Some(std::array::from_fn(|player| {
+        context.players[player].column_take_from
+    }));
+    call.store().initial_turn_options = Some(std::array::from_fn(|player| {
+        context.players[player].turn_option
+    }));
+}
+
 #[derive(Default)]
 struct Store {
     clock: Arc<super::Clock>,
+    column_take_from: Option<[[usize; deadsync_core::input::MAX_COLS]; crate::LUA_PLAYERS]>,
+    initial_turn_options: Option<[deadsync_gameplay::GameplayTurnOption; crate::LUA_PLAYERS]>,
     playback: bool,
     replay_frame: Option<(u64, f64)>,
     replay_dispatch: Option<song_immediate::Dispatch>,
