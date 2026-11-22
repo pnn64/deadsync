@@ -1193,7 +1193,7 @@ mod byte_search_tests {
 
     #[test]
     fn ascii_whitespace_runs_match_bitmap_membership() {
-        let spaces = [ASCII_SPACE_BITS, 0, 0, 0];
+        let spaces = [super::ASCII_SPACE_BITS, 0, 0, 0];
         for (set, fill) in [(spaces, b' '), (spaces.map(|word| !word), b'x')] {
             let mut bytes = [fill; 65];
             for byte in 0..=u8::MAX {
