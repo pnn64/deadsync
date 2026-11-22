@@ -2273,6 +2273,7 @@ fn prepared_text_actor(
         jitter: false,
         distortion: 0.0,
         clip: None,
+        glyph_crop: [0.0; 2],
         mask_dest: false,
         blend,
         shadow_len,

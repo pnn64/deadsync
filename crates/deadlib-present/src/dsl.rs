@@ -1920,6 +1920,7 @@ impl TextBuilder {
             jitter: false,
             distortion: 0.0,
             clip: None,
+            glyph_crop: [0.0; 2],
             mask_dest: false,
             blend: self.blend,
             shadow_len: [self.shx, self.shy],

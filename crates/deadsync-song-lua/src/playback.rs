@@ -11542,6 +11542,11 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
             attributes,
             ..
         } => {
+            // BitmapText draws nothing once the vertical crops meet; the
+            // horizontal crops select glyphs when the text is composed.
+            if state.croptop + state.cropbottom >= 1.0 {
+                return None;
+            }
             let text_time = if *text_changes_in_seconds {
                 effect_time
             } else {
@@ -11686,6 +11691,7 @@ fn build_song_lua_overlay_actor_with_scratch<S: NoteskinSlot + Clone>(
                 jitter: state.text_jitter,
                 distortion: state.text_distortion,
                 clip: None,
+                glyph_crop: [state.cropleft, state.cropright],
                 mask_dest: state.mask_dest,
                 blend: overlay_blend,
                 shadow_len: [0.0, 0.0],
@@ -12565,6 +12571,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
             jitter: _,
             distortion,
             clip,
+            glyph_crop,
             mask_dest,
             effect,
             ..
@@ -12626,6 +12633,7 @@ fn song_lua_overlay_glow_actor_with_static_vertices(
                 jitter: false,
                 distortion: *distortion,
                 clip: *clip,
+                glyph_crop: *glyph_crop,
                 mask_dest: *mask_dest,
                 blend: BlendMode::Add,
                 shadow_len: [0.0, 0.0],
