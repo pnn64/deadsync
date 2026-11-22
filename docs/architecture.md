@@ -549,7 +549,8 @@ Course continuation and restart destinations, course progress, interruption,
 Endless renewal, course modes, life selection, difficulty availability, runtime
 stage preparation, and course score aggregation now have game owners.
 `CourseRunState` keeps application-owned result history and display metadata
-alongside the game run.
+alongside the game run. The app keeps Evaluation pages and their cursor with
+screen state. Course completion uses the stage results in the session.
 
 `deadsync-profile` decides whether a second player can join a one-player session
 and which Versus style applies. The shell handles the credit and session update.

@@ -6,10 +6,7 @@ use deadsync_score::stage_stats;
 use crate::CourseRunState;
 
 /// Session-wide values that survive screen swaps.
-///
-/// `EvaluationPage` remains opaque so the shell can own lifecycle policy
-/// without depending on the bundled theme's evaluation screen state.
-pub struct SessionState<EvaluationPage> {
+pub struct SessionState {
     pub preferred_difficulty_index: usize,
     pub session_start_time: Option<Instant>,
     pub played_stages: Vec<stage_stats::StageSummary>,
@@ -21,14 +18,11 @@ pub struct SessionState<EvaluationPage> {
     /// Preferred rate to restore after Practice and its editor options close.
     pub pre_practice_music_rate: Option<f32>,
     pub course_run: Option<CourseRunState>,
-    pub course_stage_eval_pages: Vec<EvaluationPage>,
-    pub course_eval_pages: Vec<EvaluationPage>,
-    pub course_eval_page_index: usize,
     pub last_course_wheel_path: Option<PathBuf>,
     pub last_course_wheel_difficulty_name: Option<String>,
 }
 
-impl<EvaluationPage> SessionState<EvaluationPage> {
+impl SessionState {
     pub const fn new(preferred_difficulty_index: usize, combo_carry: [u32; MAX_PLAYERS]) -> Self {
         Self {
             preferred_difficulty_index,
@@ -41,9 +35,6 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
             restart_pending: false,
             pre_practice_music_rate: None,
             course_run: None,
-            course_stage_eval_pages: Vec::new(),
-            course_eval_pages: Vec::new(),
-            course_eval_page_index: 0,
             last_course_wheel_path: None,
             last_course_wheel_difficulty_name: None,
         }
@@ -62,8 +53,6 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
 
     pub fn clear_course_runtime(&mut self) {
         self.course_run = None;
-        self.course_stage_eval_pages.clear();
-        self.clear_course_eval_pages();
     }
 
     /// Record authoritative data independently of any optional evaluation page.
@@ -81,37 +70,7 @@ impl<EvaluationPage> SessionState<EvaluationPage> {
         if !course.run.is_finished(failed) {
             return None;
         }
-        let course = self
-            .course_run
-            .take()
-            .expect("course presence checked before finalization");
-        self.clear_course_eval_pages();
-        Some(course)
-    }
-
-    pub fn clear_course_eval_pages(&mut self) {
-        self.course_eval_pages.clear();
-        self.course_eval_page_index = 0;
-    }
-
-    pub fn replace_course_eval_pages(&mut self, pages: Vec<EvaluationPage>) {
-        self.course_eval_pages = pages;
-        self.course_eval_page_index = 0;
-    }
-
-    pub fn step_course_eval_page(&mut self, delta: i32) -> Option<EvaluationPage>
-    where
-        EvaluationPage: Clone,
-    {
-        let len = self.course_eval_pages.len();
-        if len <= 1 || delta == 0 {
-            return None;
-        }
-        self.course_eval_page_index =
-            (self.course_eval_page_index as i32 + delta).rem_euclid(len as i32) as usize;
-        self.course_eval_pages
-            .get(self.course_eval_page_index)
-            .cloned()
+        self.course_run.take()
     }
 
     pub fn reset_for_menu(&mut self, combo_carry: [u32; MAX_PLAYERS]) {
@@ -132,7 +91,7 @@ mod tests {
 
     #[test]
     fn construction_preserves_preferences_and_starts_empty() {
-        let state = SessionState::<usize>::new(3, [12, 34]);
+        let state = SessionState::new(3, [12, 34]);
         assert_eq!(state.preferred_difficulty_index, 3);
         assert_eq!(state.combo_carry, [12, 34]);
         assert!(state.session_start_time.is_none());
@@ -143,7 +102,7 @@ mod tests {
 
     #[test]
     fn play_session_starts_once_and_clears_prior_lists() {
-        let mut state = SessionState::<usize>::new(0, [0; MAX_PLAYERS]);
+        let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
         state.course_individual_stage_indices.extend([1, 2]);
         let started = Instant::now();
         assert!(state.begin_play_session(started));
@@ -153,56 +112,23 @@ mod tests {
     }
 
     #[test]
-    fn course_cleanup_drops_pages_and_resets_index() {
-        let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
-        state.course_stage_eval_pages.extend([1, 2]);
-        state.course_eval_pages.push(3);
-        state.course_eval_page_index = 2;
-        state.clear_course_runtime();
-        assert!(state.course_stage_eval_pages.is_empty());
-        assert!(state.course_eval_pages.is_empty());
-        assert_eq!(state.course_eval_page_index, 0);
-    }
-
-    #[test]
     fn menu_reset_clears_session_and_course_navigation() {
-        let mut state = SessionState::<usize>::new(4, [1, 2]);
+        let mut state = SessionState::new(4, [1, 2]);
         state.session_start_time = Some(Instant::now());
-        state.course_stage_eval_pages.push(1);
         state.pre_practice_music_rate = Some(1.25);
         state.last_course_wheel_path = Some(PathBuf::from("course.crs"));
         state.last_course_wheel_difficulty_name = Some("Hard".to_string());
         state.reset_for_menu([8, 13]);
         assert!(state.session_start_time.is_none());
         assert_eq!(state.combo_carry, [8, 13]);
-        assert!(state.course_stage_eval_pages.is_empty());
         assert!(state.pre_practice_music_rate.is_none());
         assert!(state.last_course_wheel_path.is_none());
         assert!(state.last_course_wheel_difficulty_name.is_none());
     }
 
     #[test]
-    fn course_pages_record_clear_replace_and_wrap() {
-        let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
-        state.course_stage_eval_pages.push(10);
-        assert_eq!(state.course_stage_eval_pages, [10]);
-
-        state.replace_course_eval_pages(vec![20, 30, 40]);
-        assert_eq!(state.step_course_eval_page(-1), Some(40));
-        assert_eq!(state.course_eval_page_index, 2);
-        assert_eq!(state.step_course_eval_page(1), Some(20));
-        assert_eq!(state.course_eval_page_index, 0);
-
-        state.clear_course_eval_pages();
-        assert!(state.course_eval_pages.is_empty());
-        assert_eq!(state.course_eval_page_index, 0);
-    }
-
-    #[test]
     fn final_course_take_requires_an_active_course() {
-        let mut state = SessionState::<usize>::new(0, [0; MAX_PLAYERS]);
-        state.course_stage_eval_pages.push(1);
+        let mut state = SessionState::new(0, [0; MAX_PLAYERS]);
         assert!(state.take_final_course(false).is_none());
-        assert_eq!(state.course_stage_eval_pages, [1]);
     }
 }

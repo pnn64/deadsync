@@ -87,7 +87,7 @@ use crate::restart::{
 use crate::runtime::ShellState;
 use crate::screen_flow::evaluation_summary_return_to;
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
-use crate::session::SessionState as ShellSessionState;
+pub use crate::session::SessionState;
 use crate::session_results::{
     fill_stage_indices, post_select_display_stage_count, post_select_display_stages,
 };
@@ -645,12 +645,11 @@ pub struct ScreensState {
     select_course_state: select_course::State,
     sandbox_state: sandbox::State,
     evaluation_state: evaluation::State,
+    course_evaluation: evaluation_views::CourseEvaluationPages,
     evaluation_summary_state: evaluation_summary::State,
     initials_state: initials::State,
     gameover_state: gameover::State,
 }
-
-pub type SessionState = ShellSessionState<evaluation::State>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct InputRoutePolicy {
@@ -1327,6 +1326,7 @@ impl ScreensState {
             select_course_state,
             sandbox_state: sandbox::init(),
             evaluation_state,
+            course_evaluation: Default::default(),
             evaluation_summary_state,
             initials_state,
             gameover_state,
@@ -1552,6 +1552,11 @@ impl ScreensState {
 }
 
 impl AppState {
+    fn clear_course_runtime(&mut self) {
+        self.session.clear_course_runtime();
+        self.screens.course_evaluation.reset();
+    }
+
     fn new(
         dirs: &AppDirs,
         cfg: config::app_config::Config,
@@ -6723,9 +6728,7 @@ impl App {
         self.state.session.last_course_wheel_difficulty_name = Some(course_difficulty_name.clone());
         record_last_played_course(course_path.as_path(), course_difficulty_name.as_str());
         self.state.session.course_run = Some(course_run);
-        self.state.session.course_stage_eval_pages.clear();
-        self.state.session.course_eval_pages.clear();
-        self.state.session.course_eval_page_index = 0;
+        self.state.screens.course_evaluation.reset();
         true
     }
 
@@ -7136,6 +7139,7 @@ impl App {
         failed: bool,
     ) -> Option<(CourseRunState, stage_stats::StageSummary)> {
         let course = self.state.session.take_final_course(failed)?;
+        self.state.screens.course_evaluation.clear_pages();
         let summary = build_course_summary_stage(&course)?;
         let routine_shared =
             routine_shared_course_player(&course, &summary, profile::get_session_play_style());
@@ -7183,7 +7187,7 @@ impl App {
         }
 
         if let Some((course_run, course_stage)) = completed_course {
-            let per_song_pages = std::mem::take(&mut self.state.session.course_stage_eval_pages);
+            let per_song_pages = std::mem::take(&mut self.state.screens.course_evaluation.stages);
             let course_graph_stages = build_course_graph_stages(
                 &course_run,
                 profile::get_session_play_style().chart_type(),
@@ -7222,9 +7226,9 @@ impl App {
                 evaluation::sync_elapsed(&mut page, session_elapsed, gameplay_elapsed);
                 pages.push(page);
             }
-            self.state.session.replace_course_eval_pages(pages);
+            self.state.screens.course_evaluation.replace_pages(pages);
         } else {
-            self.state.session.clear_course_eval_pages();
+            self.state.screens.course_evaluation.clear_pages();
         }
 
         let (session_elapsed, _) = evaluation::elapsed_times(&self.state.screens.evaluation_state);
@@ -7295,7 +7299,7 @@ impl App {
     }
 
     fn step_course_eval_page(&mut self, delta: i32) {
-        let Some(mut page) = self.state.session.step_course_eval_page(delta) else {
+        let Some(mut page) = self.state.screens.course_evaluation.step(delta) else {
             return;
         };
         page.screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
@@ -7444,6 +7448,7 @@ impl App {
             .interaction
             .show_message(SERVICE_SWITCH_PRESSED.to_string(), Instant::now());
         self.state.session = reset_operator_profile_session();
+        self.state.screens.course_evaluation = Default::default();
         self.state.gameplay_offset_save_prompt = None;
         self.handle_navigation_action_after_prompt(CurrentScreen::Options);
         true
@@ -8668,7 +8673,7 @@ impl App {
                     screens::evaluation::submission_retry_available(
                         &self.state.screens.evaluation_state,
                     ),
-                    !self.state.session.course_eval_pages.is_empty(),
+                    !self.state.screens.course_evaluation.pages.is_empty(),
                 );
                 match shortcut {
                     Some(EvaluationRawKeyShortcut::GameplayRestart) => {
@@ -9064,6 +9069,7 @@ impl App {
 
         if target == CurrentScreen::Menu {
             self.state.session.reset_for_menu(profile::combo_carry());
+            self.state.screens.course_evaluation.reset();
             menu::reset_for_entry(&mut self.state.screens.menu_state);
         } else if target == CurrentScreen::Init {
             let active_color_index = self.state.screens.menu_state.active_color_index;
@@ -9357,7 +9363,7 @@ impl App {
                 .record_stage_result(stage, failed, &config::runtime::get(), true)
                 .is_some()
             {
-                self.state.session.course_stage_eval_pages.clear();
+                self.state.screens.course_evaluation.stages.clear();
             }
         }
         if target == CurrentScreen::Practice {
@@ -9657,7 +9663,7 @@ impl App {
                 eval_state.active_color_index = color_idx;
                 eval_state.return_to_course = true;
                 eval_state.auto_advance_seconds = None;
-                self.state.session.course_stage_eval_pages.push(eval_state);
+                self.state.screens.course_evaluation.stages.push(eval_state);
             }
 
             if let Some((mut start, options_screen)) = self.take_stage_start() {
@@ -10081,8 +10087,9 @@ impl App {
             );
             if in_course_run && gameplay_results.is_some() {
                 self.state
-                    .session
-                    .course_stage_eval_pages
+                    .screens
+                    .course_evaluation
+                    .stages
                     .push(self.state.screens.evaluation_state.clone());
             }
             self.finalize_entered_evaluation(&config, failed, completed_course);
@@ -10188,7 +10195,7 @@ impl App {
         }
 
         if target == CurrentScreen::SelectMusic {
-            self.state.session.clear_course_runtime();
+            self.state.clear_course_runtime();
             self.begin_play_session();
             let profile_session = profile::get_session_snapshot();
             if matches!(
@@ -10483,7 +10490,7 @@ impl App {
                             )
                         })
                 });
-            self.state.session.clear_course_runtime();
+            self.state.clear_course_runtime();
             self.begin_play_session();
 
             match prev {
@@ -12129,7 +12136,7 @@ mod tests {
             },
             stage_summaries: Vec::new(),
         };
-        let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
+        let mut session = SessionState::new(0, [0; MAX_PLAYERS]);
         session.course_run = Some(course.clone());
         session.record_stage_result(stages[0].clone());
         assert!(session.take_final_course(false).is_none());
@@ -12143,8 +12150,6 @@ mod tests {
         session.record_stage_result(stages[1].clone());
         let completed = session.take_final_course(false).expect("completed course");
         assert!(session.course_run.is_none());
-        assert!(session.course_stage_eval_pages.is_empty());
-        assert!(session.course_eval_pages.is_empty());
         assert_eq!(session.played_stages.len(), 2);
         assert_eq!(session.course_individual_stage_indices, [0, 1]);
         let summary = build_course_summary_stage(&completed).expect("canonical course result");
@@ -12171,12 +12176,11 @@ mod tests {
         assert_eq!(columns[2].early_w5, 3);
         assert_eq!(columns[2].early_total_w5, 4);
         // Early failure finalizes from the same data with no evaluation screen.
-        let mut failed = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
+        let mut failed = SessionState::new(0, [0; MAX_PLAYERS]);
         failed.course_run = Some(course);
         failed.record_stage_result(stages[0].clone());
         let completed = failed.take_final_course(true).expect("failed course");
         assert_eq!(completed.stage_summaries.len(), 1);
-        assert!(failed.course_stage_eval_pages.is_empty());
         assert!(build_course_summary_stage(&completed).is_some());
     }
 

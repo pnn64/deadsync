@@ -2956,10 +2956,9 @@ M000
                 assert!(!evaluation::all_joined_players_failed(&screen));
                 // Session storage does not need the screen and remains unchanged by it.
                 drop(screen);
-                let mut session = crate::session::SessionState::<()>::new(0, [0; MAX_PLAYERS]);
+                let mut session = crate::session::SessionState::new(0, [0; MAX_PLAYERS]);
                 session.record_stage_result(stage);
                 assert_eq!(session.played_stages.len(), 1);
-                assert!(session.course_stage_eval_pages.is_empty());
                 state.players_runtime.players[0].is_failing = true;
                 state.players_runtime.players[0].fail_time = Some(3.0);
                 let failed = stage_result(&state.gameplay, Default::default());

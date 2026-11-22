@@ -11,6 +11,40 @@ use std::{sync::Arc, time::Instant};
 
 type PlayerQueries<'a> = [Option<(profile_data::PlayerSide, &'a str)>; MAX_PLAYERS];
 
+/// Retains Evaluation screens during a course and supports paging through the results.
+#[derive(Default)]
+pub(super) struct CourseEvaluationPages {
+    pub(super) stages: Vec<evaluation::State>,
+    pub(super) pages: Vec<evaluation::State>,
+    index: usize,
+}
+
+impl CourseEvaluationPages {
+    pub(super) fn reset(&mut self) {
+        self.stages.clear();
+        self.clear_pages();
+    }
+
+    pub(super) fn clear_pages(&mut self) {
+        self.pages.clear();
+        self.index = 0;
+    }
+
+    pub(super) fn replace_pages(&mut self, pages: Vec<evaluation::State>) {
+        self.pages = pages;
+        self.index = 0;
+    }
+
+    pub(super) fn step(&mut self, delta: i32) -> Option<evaluation::State> {
+        let len = self.pages.len();
+        if len <= 1 || delta == 0 {
+            return None;
+        }
+        self.index = (self.index as i32 + delta).rem_euclid(len as i32) as usize;
+        self.pages.get(self.index).cloned()
+    }
+}
+
 /// Config-generation policy for Evaluation's retained runtime views.
 #[derive(Clone, Copy, Debug)]
 pub(super) struct EvaluationFramePolicy {

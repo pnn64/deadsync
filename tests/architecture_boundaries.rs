@@ -13754,6 +13754,11 @@ fn stage_results_are_independent_of_evaluation() {
     assert!(
         session.contains("pub fn record_stage_result(&mut self, stage: stage_stats::StageSummary)")
     );
+    assert!(session.contains("pub struct SessionState {"));
+    for presentation in ["EvaluationPage", "course_eval_page", "course_stage_eval_page", "deadsync_theme"] {
+        assert!(!session.contains(presentation), "session storage depends on {presentation}");
+    }
+    assert!(shell.contains("course_evaluation: evaluation_views::CourseEvaluationPages"));
     let adapter = read_source(root.join("crates/deadsync-shell/src/session_results.rs"))
         .expect("result view adapter");
     assert!(!adapter.contains("stage_summary_from_score_info"));

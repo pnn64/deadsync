@@ -63,8 +63,8 @@ pub const fn gameplay_combo_carry_updates(
     }
 }
 
-pub fn persist_gameplay_combo_carry<EvaluationPage>(
-    session: &mut SessionState<EvaluationPage>,
+pub fn persist_gameplay_combo_carry(
+    session: &mut SessionState,
     autoplay_used: bool,
     player_combos: [Option<u32>; MAX_PLAYERS],
 ) {
@@ -113,7 +113,7 @@ pub fn record_last_played_course(course_path: &Path, difficulty_name: &str) {
     }
 }
 
-pub fn reset_operator_profile_session<EvaluationPage>() -> SessionState<EvaluationPage> {
+pub fn reset_operator_profile_session() -> SessionState {
     profile::set_session_play_style(OPERATOR_RESET_STYLE);
     profile::set_session_play_mode(PlayMode::Regular);
     profile::set_session_player_side(PlayerSide::P1);
