@@ -252,6 +252,19 @@ pub fn init_for_gameplay(
     )
 }
 
+#[must_use]
+pub fn stage_options(state: &State) -> deadsync_profile_gameplay::stage_options::StageOptions {
+    deadsync_profile_gameplay::stage_options::StageOptions {
+        play_style: state.play_style(),
+        chart_steps_index: state.chart_steps_index,
+        music_rate: state.music_rate,
+        player_options: state.player_options.clone(),
+        scroll_speeds: state.speed_mod.each_ref().map(scroll_speed_for_mod),
+        judgment_palette_ids: state.judgment_palette_ids.clone(),
+        heart_rate_device_ids: state.heart_rate_device_ids.clone(),
+    }
+}
+
 /// Prepare the focused selection before other visible icons and nearby choices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NoteskinPreviewPriority {

@@ -2,13 +2,75 @@
 
 use deadsync_chart::{ChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_profile::{NoCmodAlternative, PlayStyle, PlayerOptionsData};
+use deadsync_profile::{
+    NoCmodAlternative, PlayStyle, PlayerOptionsData, Profile, migrate_noteskin_parts,
+};
 use deadsync_rules::scroll::{ScrollSpeedMode, ScrollSpeedSetting};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StageScrollMode {
     Live { enforce_tournament_mmod: bool },
     Replay,
+}
+
+/// The settings submitted to start a stage, including options edited for this play.
+#[derive(Debug, PartialEq)]
+pub struct StageOptions {
+    pub play_style: PlayStyle,
+    pub chart_steps_index: [usize; MAX_PLAYERS],
+    pub music_rate: f32,
+    pub player_options: [PlayerOptionsData; MAX_PLAYERS],
+    pub scroll_speeds: [ScrollSpeedSetting; MAX_PLAYERS],
+    pub judgment_palette_ids: [Option<String>; MAX_PLAYERS],
+    pub heart_rate_device_ids: [Option<String>; MAX_PLAYERS],
+}
+
+impl StageOptions {
+    #[must_use]
+    pub fn from_profiles(
+        play_style: PlayStyle,
+        chart_steps_index: [usize; MAX_PLAYERS],
+        music_rate: f32,
+        profiles: &[Profile; MAX_PLAYERS],
+    ) -> Self {
+        let player_options = profiles.each_ref().map(|profile| {
+            let mut options = profile.current_player_options();
+            migrate_noteskin_parts(&mut options);
+            options
+        });
+        Self {
+            play_style,
+            chart_steps_index,
+            music_rate,
+            scroll_speeds: player_options
+                .each_ref()
+                .map(|options| options.scroll_speed),
+            player_options,
+            judgment_palette_ids: profiles.each_ref().map(|p| p.judgment_palette_id.clone()),
+            heart_rate_device_ids: profiles.each_ref().map(|p| p.heart_rate_device_id.clone()),
+        }
+    }
+
+    /// Use the original selection to look up display BPM, even when the
+    /// stage enters a different style (for example, during a Lua reload).
+    pub fn resolve_scroll(
+        &mut self,
+        song: &SongData,
+        play_style: PlayStyle,
+        mode: StageScrollMode,
+    ) {
+        let reference_chart =
+            song.chart_for_steps_index(self.play_style.chart_type(), self.chart_steps_index[0]);
+        self.scroll_speeds = resolve_stage_scroll(
+            song,
+            reference_chart,
+            self.music_rate,
+            play_style,
+            &mut self.player_options,
+            self.scroll_speeds,
+            mode,
+        );
+    }
 }
 
 #[must_use]

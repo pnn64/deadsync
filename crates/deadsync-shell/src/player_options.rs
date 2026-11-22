@@ -1,9 +1,9 @@
+use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_profile_gameplay::stage_options::{StageScrollMode, resolve_stage_scroll};
+use deadsync_profile_gameplay::stage_options::{StageOptions, StageScrollMode};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_theme_simply_love::screens::player_options as screen;
 use deadsync_theme_simply_love::views::{
     JudgmentPaletteChoiceView, PlayerOptionsInitView, PlayerOptionsPlayerView,
     PlayerOptionsPolicyView,
@@ -55,8 +55,14 @@ pub(crate) fn init_view() -> PlayerOptionsInitView {
     }
 }
 
+pub(crate) fn active_profiles() -> [profile_data::Profile; MAX_PLAYERS] {
+    std::array::from_fn(|idx| profile::get_for_side(profile_data::player_side_for_index(idx)))
+}
+
 pub(crate) fn gameplay_profiles(
-    state: &screen::State,
+    mut profiles: [profile_data::Profile; MAX_PLAYERS],
+    song: &SongData,
+    mut stage: StageOptions,
     tournament: deadsync_config::theme::TournamentModeOptions,
     play_style: profile_data::PlayStyle,
     is_replay: bool,
@@ -65,7 +71,6 @@ pub(crate) fn gameplay_profiles(
     [ScrollSpeedSetting; MAX_PLAYERS],
 ) {
     let golf_enabled = deadsync_config::runtime::get().enable_golf;
-    let mut options = state.player_options.clone();
     let scroll_mode = if is_replay {
         StageScrollMode::Replay
     } else {
@@ -73,30 +78,18 @@ pub(crate) fn gameplay_profiles(
             enforce_tournament_mmod: tournament.enabled && tournament.enforce_no_cmod,
         }
     };
-    let scroll_speeds = resolve_stage_scroll(
-        &state.song,
-        state
-            .song
-            .chart_for_steps_index(state.play_style().chart_type(), state.chart_steps_index[0]),
-        state.music_rate,
-        play_style,
-        &mut options,
-        state.speed_mod.each_ref().map(screen::scroll_speed_for_mod),
-        scroll_mode,
-    );
-    let mut options = options.into_iter();
-    let profiles = std::array::from_fn(|idx| {
-        let mut options = options.next().expect("one options snapshot per player");
+    stage.resolve_scroll(song, play_style, scroll_mode);
+    for (idx, mut options) in stage.player_options.into_iter().enumerate() {
         apply_tournament_policy(&mut options, tournament, play_style);
         apply_golf_policy(&mut options, golf_enabled);
         gameplay_profile(
-            profile::get_for_side(profile_data::player_side_for_index(idx)),
+            &mut profiles[idx],
             options,
-            state.judgment_palette_ids[idx].clone(),
-            state.heart_rate_device_ids[idx].clone(),
-        )
-    });
-    (profiles, scroll_speeds)
+            stage.judgment_palette_ids[idx].take(),
+            stage.heart_rate_device_ids[idx].take(),
+        );
+    }
+    (profiles, stage.scroll_speeds)
 }
 
 fn apply_golf_policy(options: &mut profile_data::PlayerOptionsData, enabled: bool) {
@@ -131,15 +124,14 @@ fn apply_tournament_policy(
 }
 
 fn gameplay_profile(
-    mut profile: profile_data::Profile,
+    profile: &mut profile_data::Profile,
     options: profile_data::PlayerOptionsData,
     judgment_palette_id: Option<String>,
     heart_rate_device_id: Option<String>,
-) -> profile_data::Profile {
+) {
     profile.set_current_player_options(options);
     profile.judgment_palette_id = judgment_palette_id;
     profile.heart_rate_device_id = heart_rate_device_id;
-    profile
 }
 
 #[cfg(test)]
@@ -147,7 +139,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gameplay_profile_preserves_identity_while_applying_screen_edits() {
+    fn gameplay_profile_preserves_identity_while_applying_stage_options() {
         let mut profile = profile_data::Profile {
             display_name: "Alice".to_owned(),
             current_combo: 42,
@@ -159,18 +151,18 @@ mod tests {
             ..Default::default()
         };
 
-        let merged = gameplay_profile(
-            profile,
+        gameplay_profile(
+            &mut profile,
             options.clone(),
             Some("palette-1".to_owned()),
             Some("hrm-1".to_owned()),
         );
 
-        assert_eq!(merged.display_name, "Alice");
-        assert_eq!(merged.current_combo, 42);
-        assert_eq!(merged.current_player_options(), options);
-        assert_eq!(merged.judgment_palette_id.as_deref(), Some("palette-1"));
-        assert_eq!(merged.heart_rate_device_id.as_deref(), Some("hrm-1"));
+        assert_eq!(profile.display_name, "Alice");
+        assert_eq!(profile.current_combo, 42);
+        assert_eq!(profile.current_player_options(), options);
+        assert_eq!(profile.judgment_palette_id.as_deref(), Some("palette-1"));
+        assert_eq!(profile.heart_rate_device_id.as_deref(), Some("hrm-1"));
     }
 
     #[test]

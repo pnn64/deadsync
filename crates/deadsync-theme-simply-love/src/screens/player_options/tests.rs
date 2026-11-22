@@ -78,6 +78,57 @@ pub(super) mod tests {
         state.active
     }
 
+    #[test]
+    fn stage_options_from_profiles_match_the_unedited_screen() {
+        use crate::views::PlayerOptionsPlayerView;
+        use deadsync_profile::{NoteSkin, Profile};
+        use deadsync_profile_gameplay::stage_options::StageOptions;
+
+        ensure_i18n();
+        let profiles = [
+            Profile {
+                noteskin: NoteSkin::new("workshop?arrows=1&mine_size=80"),
+                judgment_palette_id: Some("palette-p1".to_owned()),
+                scroll_speed: ScrollSpeedSetting::CMod(630.0),
+                no_cmod_alternative: NoCmodAlternative::MMod,
+                ..Profile::default()
+            },
+            Profile {
+                heart_rate_device_id: Some("monitor-p2".to_owned()),
+                scroll_speed: ScrollSpeedSetting::XMod(2.375),
+                mini_percent: 20,
+                ..Profile::default()
+            },
+        ];
+        let steps = [2, 3];
+        let rate = 1.25;
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P2, [true, true]);
+        view.music_rate = rate;
+        view.players = profiles.each_ref().map(|profile| PlayerOptionsPlayerView {
+            options: profile.current_player_options(),
+            judgment_palette_id: profile.judgment_palette_id.clone(),
+            heart_rate_device_id: profile.heart_rate_device_id.clone(),
+            max_heart_rate: profile.max_heart_rate,
+        });
+        let screen = super::init(
+            test_song(),
+            steps,
+            steps,
+            0,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
+            super::HeartRateDevicesView::default(),
+            view,
+        );
+
+        assert_eq!(
+            StageOptions::from_profiles(PlayStyle::Versus, steps, rate, &profiles),
+            super::stage_options(&screen)
+        );
+    }
+
     fn music_rate_lines(state: &super::State) -> (String, Option<String>) {
         let presentation = super::super::music_rate_text(state);
         (

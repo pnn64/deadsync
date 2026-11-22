@@ -169,6 +169,11 @@ stage entry read the wheel through one adapter. The game validates Lua's
 replacement indices against the requested style and commits chart metadata,
 payloads, and session changes together after loading succeeds.
 
+`deadsync-profile-gameplay::stage_options` supplies the settings for stage
+startup, including legacy noteskin migration and effective scroll speed.
+Select Music preload reads the session and player profiles directly. Gameplay
+and Practice accept the same settings when Simply Love submits Player Options.
+
 `deadsync-song-lua::gameplay_session` owns the live song scene, callback setup,
 Update/input/Draw ordering, output buffering, deferred reloads, and exit clocks.
 The shell calls its controller directly. The statically bound host adapter

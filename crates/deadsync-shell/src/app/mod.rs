@@ -188,6 +188,7 @@ use deadsync_lights::cabinet_chart::{
 };
 use deadsync_lights::{self as lights, HideFlags};
 use deadsync_profile_gameplay::stage_charts::{apply_song_lua_reload, gameplay_chart_entry_plan};
+use deadsync_profile_gameplay::stage_options::StageOptions;
 #[cfg(test)]
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -2874,20 +2875,16 @@ impl App {
         let player_side = session.player_side;
         let plan = gameplay_chart_entry_plan(&song, steps, preferred, play_style, player_side);
         let cfg = config::runtime::get();
-        let options = player_options::init_for_gameplay(
-            Arc::clone(&song),
-            steps,
-            preferred,
-            self.state.screens.select_music_state.active_color_index,
-            CurrentScreen::SelectMusic,
-            None,
-            noteskin_catalog_view(&self.dirs),
-            crate::smx_config::smx_gif_catalog_view(),
-            crate::heart_rate::devices_view(),
-            crate::player_options::init_view(),
+        let profiles = crate::player_options::active_profiles();
+        let options = StageOptions::from_profiles(play_style, steps, session.music_rate, &profiles);
+        let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
+            profiles,
+            &song,
+            options,
+            cfg.tournament,
+            play_style,
+            false,
         );
-        let (player_profiles, scroll_speeds) =
-            crate::player_options::gameplay_profiles(&options, cfg.tournament, play_style, false);
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
             requested_chart_ixs.extend(light_plan.request_chart_ixs());
@@ -2900,11 +2897,12 @@ impl App {
         let display_size = space::current_window_px();
         let display_aspect_ratio = cfg.display_aspect_ratio;
         let gameplay_config = gameplay_config_from_config(&cfg);
-        let music_rate = options.music_rate;
+        let music_rate = session.music_rate;
         let video_renderer = cfg.video_renderer;
         let global_offset_seconds = cfg.global_offset_seconds;
         let song_lua_mode = cfg.song_lua_mode;
-        let loading = SongLuaLoading::for_song(&song, song_lua_mode, options.active_color_index);
+        let color_index = self.state.screens.select_music_state.active_color_index;
+        let loading = SongLuaLoading::for_song(&song, song_lua_mode, color_index);
         let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let spawn = std::thread::Builder::new()
@@ -9426,8 +9424,12 @@ impl App {
                         resolved_steps_index[last_played_idx];
                 }
 
+                let stage_options = player_options::stage_options(&po_state);
+                let music_rate = stage_options.music_rate;
                 let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
-                    &po_state,
+                    crate::player_options::active_profiles(),
+                    &song_arc,
+                    stage_options,
                     cfg.tournament,
                     play_style,
                     false,
@@ -9450,7 +9452,6 @@ impl App {
                 let metrics = self.state.shell.metrics;
                 let viewport = gameplay_viewport(metrics);
                 let display_size = space::current_window_px();
-                let music_rate = po_state.music_rate;
                 let color_index = po_state.active_color_index;
                 let loading = SongLuaLoading::for_song(&song_arc, cfg.song_lua_mode, color_index);
                 let bake_progress = loading.as_ref().map(|loading| loading.progress.clone());
@@ -9857,8 +9858,12 @@ impl App {
                     deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                 };
                 let combo_carry = self.state.session.combo_carry;
+                let stage_options = player_options::stage_options(&po_state);
+                let music_rate = stage_options.music_rate;
                 let (player_profiles, scroll_speeds) = crate::player_options::gameplay_profiles(
-                    &po_state,
+                    crate::player_options::active_profiles(),
+                    &song_arc,
+                    stage_options,
                     cfg.tournament,
                     play_style,
                     replay_pending.is_some(),
@@ -9885,7 +9890,6 @@ impl App {
                         .any(|change| change.path.is_file());
                 let viewport = gameplay_viewport(self.state.shell.metrics);
                 let gameplay_config = gameplay_config_from_config(&cfg);
-                let music_rate = po_state.music_rate;
                 let video_renderer = cfg.video_renderer;
                 let song_lua_prepared = prepared_song_lua.is_some();
                 let init_config = cfg.clone();

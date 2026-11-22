@@ -3785,6 +3785,11 @@ fn player_options_runtime_reads_are_shell_prepared() {
     let theme_profile = production_source(&player_options.join("profile.rs"));
     let shell = read_source(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let preload = shell
+        .split_once("fn preload_gameplay(")
+        .and_then(|(_, body)| body.split_once("fn defer_gameplay_entry("))
+        .map(|(body, _)| body)
+        .expect("shell gameplay preload should be readable");
     let profile_update = read_source(root.join("crates/deadsync-profile/src/update.rs"))
         .expect("profile update API should be readable");
     let profile_requests = read_source(root.join("crates/deadsync-profile/src/requests.rs"))
@@ -3801,9 +3806,17 @@ fn player_options_runtime_reads_are_shell_prepared() {
             && !state.contains("deadsync_profile::Profile")
             && shell.contains("crate::player_options::init_view()")
             && shell.contains("crate::player_options::gameplay_profiles(")
+            && preload.contains("StageOptions::from_profiles(")
+            && !preload.contains("player_options::init")
+            && !preload.contains("noteskin_catalog_view(")
+            && !preload.contains("smx_gif_catalog_view(")
+            && !preload.contains("heart_rate::devices_view(")
+            && shell.matches("player_options::stage_options(&po_state)").count() == 2
             && !shell.contains("player_options::apply_no_cmod_alternative(")
-            && contains_rust(&adapter, "resolve_stage_scroll(")
+            && contains_rust(&adapter, "stage.resolve_scroll(")
+            && !adapter.contains("screen::State")
             && !adapter.contains("apply_routine_master_options")
+            && contains_rust(&stage_options, "pub struct StageOptions")
             && contains_rust(&stage_options, "pub fn resolve_stage_scroll(")
             && contains_rust(&stage_options, "if play_style.is_routine()")
             && contains_rust(&theme_profile, "stage_options::apply_no_cmod_alternative(")
